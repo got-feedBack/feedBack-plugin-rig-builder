@@ -1,0 +1,160 @@
+<div class="max-w-5xl mx-auto px-6 pt-24 pb-16">
+    <button onclick="showScreen('home')" class="text-gray-500 hover:text-white text-sm mb-6 flex items-center gap-1">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg> Back
+    </button>
+    <h2 class="text-3xl font-bold text-white mb-2">NAM Rig Builder</h2>
+    <p class="text-gray-500 mb-6">Map Rocksmith tones to NAM captures from tone3000 and persist them as nam_tone presets.</p>
+
+    <!-- Setup status -->
+    <div id="tb-status" class="mb-6"></div>
+
+    <!-- Tab nav -->
+    <div class="flex gap-2 mb-6 border-b border-gray-800">
+        <button data-tb-tab="dashboard" onclick="tbShowTab('dashboard')"
+                class="tb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
+            Dashboard
+        </button>
+        <button data-tb-tab="pending" onclick="tbShowTab('pending')"
+                class="tb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
+            Pending
+        </button>
+        <button data-tb-tab="song" onclick="tbShowTab('song')"
+                class="tb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
+            By song
+        </button>
+        <button data-tb-tab="gear" onclick="tbShowTab('gear')"
+                class="tb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
+            Gear
+        </button>
+        <button data-tb-tab="settings" onclick="tbShowTab('settings')"
+                class="tb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
+            Settings
+        </button>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="tb-tab-dashboard" class="tb-tab-panel space-y-6">
+        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5">
+            <h3 class="text-white font-semibold mb-2">Map the entire library</h3>
+            <p class="text-gray-500 text-sm mb-4">
+                Parses every PSARC/sloppak and records the Rocksmith gear
+                as pending entries. If a tone3000 API key is configured,
+                it also suggests a capture per unique gear under the
+                conservative policy (CC0/CC-BY, minimum downloads).
+            </p>
+            <button id="tb-batch-btn" onclick="tbStartBatch()"
+                    class="bg-accent hover:bg-accent/80 text-white px-5 py-2 rounded-xl text-sm transition">
+                Start batch
+            </button>
+            <div id="tb-batch-progress" class="hidden mt-4">
+                <div class="flex items-center gap-3 mb-2 text-sm text-gray-400">
+                    <span id="tb-batch-pct">0%</span>
+                    <span id="tb-batch-count">0 / 0</span>
+                    <span id="tb-batch-assigned" class="text-green-400 hidden"></span>
+                </div>
+                <div class="h-2 bg-dark-800 rounded-full overflow-hidden">
+                    <div id="tb-batch-bar" class="h-full bg-accent transition-all" style="width:0%"></div>
+                </div>
+                <pre id="tb-batch-log" class="mt-3 text-xs text-gray-500 max-h-48 overflow-auto bg-dark-900/50 p-2 rounded"></pre>
+            </div>
+        </div>
+
+        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5">
+            <h3 class="text-white font-semibold mb-2">Gear map (rs_to_real.json)</h3>
+            <div id="tb-gear-coverage" class="text-sm text-gray-400">Loading…</div>
+        </div>
+    </div>
+
+    <!-- Pending -->
+    <div id="tb-tab-pending" class="tb-tab-panel hidden">
+        <p class="text-gray-500 text-sm mb-4">
+            Rocksmith gear referenced by at least one song but still without an
+            assigned file. Click "Search" to resolve via tone3000.
+        </p>
+        <div id="tb-pending-list" class="space-y-2 text-sm">Loading…</div>
+    </div>
+
+    <!-- By song -->
+    <div id="tb-tab-song" class="tb-tab-panel hidden">
+        <div class="flex gap-3 mb-6">
+            <input type="text" id="tb-song-search" placeholder="Filename (e.g. 2minutes_p.psarc)"
+                   onkeydown="if(event.key==='Enter')tbListSongs()"
+                   class="flex-1 bg-dark-700 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-300 placeholder-gray-600 focus:border-accent/50 outline-none">
+            <button onclick="tbListSongs()" class="bg-dark-600 hover:bg-dark-500 px-5 py-2.5 rounded-xl text-sm text-gray-300 transition">Search</button>
+        </div>
+        <div id="tb-song-list" class="space-y-1 mb-6"></div>
+        <div id="tb-song-tones" class="space-y-6"></div>
+    </div>
+
+    <!-- Gear catalog -->
+    <div id="tb-tab-gear" class="tb-tab-panel hidden">
+        <p class="text-gray-500 text-sm mb-4">
+            Rocksmith gear used by your mapped songs, grouped by type, showing
+            which NAM capture each is parented to and its photo. Press ▶ to
+            hear that gear in isolation through the engine.
+        </p>
+        <div id="tb-catalog" class="space-y-8 text-sm">Loading…</div>
+    </div>
+
+    <!-- Settings -->
+    <div id="tb-tab-settings" class="tb-tab-panel hidden">
+        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+            <h3 class="text-white font-semibold mb-3">tone3000 API key</h3>
+            <p class="text-gray-500 text-sm mb-3">
+                The tone3000.com REST API requires authentication. Without a key,
+                the plugin runs in deep-link mode (buttons that open tone3000 in
+                your browser). With a key, candidates are listed in-app and the
+                batch auto-download mode is unlocked.
+            </p>
+            <div class="flex gap-3 mb-3">
+                <input type="password" id="tb-api-key" placeholder="t3k_..."
+                       class="flex-1 bg-dark-800 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 placeholder-gray-600 focus:border-accent/50 outline-none">
+                <button onclick="tbSaveApiKey()" class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-sm transition">Save</button>
+            </div>
+            <div id="tb-api-key-status" class="text-xs text-gray-500"></div>
+        </div>
+
+        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+            <h3 class="text-white font-semibold mb-3">Auto-mode policy</h3>
+            <label class="flex items-center gap-2 text-sm text-gray-300 mb-3">
+                <input type="checkbox" id="tb-aggressive" onchange="tbSaveSettings()" class="rounded">
+                Aggressive mode (accept any license / popularity)
+            </label>
+            <label class="flex items-center gap-2 text-sm text-gray-300">
+                Min downloads: <input type="number" id="tb-min-downloads" min="0" value="50" onchange="tbSaveSettings()" class="w-20 bg-dark-800 border border-gray-800 rounded px-2 py-1 text-sm">
+            </label>
+        </div>
+
+        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+            <h3 class="text-white font-semibold mb-3">Regenerate gear map</h3>
+            <p class="text-gray-500 text-sm mb-3">
+                If Rocksmith ships new gear or you want to re-extract after
+                editing the overrides, point this at your
+                <code class="bg-dark-800 px-1 rounded">gears.psarc</code>.
+            </p>
+            <div class="flex gap-3 mb-2">
+                <input type="text" id="tb-gears-psarc" placeholder="/path/to/gears.psarc"
+                       class="flex-1 bg-dark-800 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 placeholder-gray-600 focus:border-accent/50 outline-none">
+                <button onclick="tbExtractGearMap()" class="bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Extract</button>
+            </div>
+            <div id="tb-extract-status" class="text-xs text-gray-500"></div>
+        </div>
+
+        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5">
+            <h3 class="text-white font-semibold mb-3">Extract Rocksmith IRs</h3>
+            <p class="text-gray-500 text-sm mb-3">
+                Pulls cab IRs out of the Wwise <code class="bg-dark-800 px-1 rounded">.bnk</code>
+                files inside your <code class="bg-dark-800 px-1 rounded">gears.psarc</code> and
+                saves them as 48 kHz float32 <code class="bg-dark-800 px-1 rounded">.wav</code>
+                files in <code class="bg-dark-800 px-1 rounded">nam_irs/rocksmith/</code>. The
+                auto-mode batch prefers these over tone3000 for cabs.
+            </p>
+            <div class="flex gap-3 mb-2">
+                <input type="text" id="tb-irs-psarc" placeholder="/path/to/gears.psarc"
+                       class="flex-1 bg-dark-800 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 placeholder-gray-600 focus:border-accent/50 outline-none">
+                <button onclick="tbExtractIRs()" class="bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Extract</button>
+            </div>
+            <div id="tb-extract-irs-status" class="text-xs text-gray-500"></div>
+        </div>
+    </div>
+</div>

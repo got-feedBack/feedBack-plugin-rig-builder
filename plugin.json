@@ -1,0 +1,10 @@
+{
+  "id": "nam_rig_builder",
+  "name": "NAM Rig Builder",
+  "version": "0.0.1",
+  "private": false,
+  "nav": { "label": "NAM Rig Builder", "screen": "nam_rig_builder" },
+  "screen": "screen.html",
+  "script": "screen.js",
+  "routes": "routes.py"
+}
