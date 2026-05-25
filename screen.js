@@ -823,27 +823,54 @@ function rbRenderPiece(p, toneIdx, pIdx) {
 // sliders for every parameter, drives setParameter live, lets you capture
 // state back into the piece. Sidesteps the 2-click path through 📚 Library
 // → Plugins tab → Load & Edit so the editor is a single click away.
+// VST hosts auto-expose ~128 "MIDI CC <n>" automation params (plus the odd
+// bypass/program meta param). They aren't real plugin controls and flood the
+// inline editor — show only the plugin's own parameters.
+function rbFilterVstParams(params) {
+    return (params || []).filter(p => {
+        const n = String(p.name ?? p.label ?? '').trim();
+        return !/^midi\s*cc\b/i.test(n);
+    });
+}
+
+// Tear down the currently-loaded inline-editor VST: close its native window
+// FIRST, then clear its slot. Skipping the close left an orphaned native
+// editor window pointing at a slot we then cleared — re-editing (or editing a
+// second piece) crashed the host. Resets the tracked slot so the next open
+// starts clean.
+async function rbTeardownVstEditor(api) {
+    const slot = rbState._vstEditorSlot;
+    rbState._vstEditorSlot = null;
+    if (slot == null || !api) return;
+    try { if (api.closePluginEditor) await api.closePluginEditor(slot); } catch (_) {}
+    try { if (api.clearChain) await api.clearChain(); } catch (_) {}
+}
+
 async function rbToneEditVst(toneIdx, pIdx) {
     const piece = rbState.songTones && rbState.songTones.tones[toneIdx] && rbState.songTones.tones[toneIdx].chain[pIdx];
     if (!piece) return;
     const editor = document.getElementById(`rb-tone-vst-editor-${toneIdx}-${pIdx}`);
     if (!editor) return;
-    // Toggle close if already open.
-    if (!editor.classList.contains('hidden') && piece._vst_slot_id != null) {
+    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    // Toggle close if already open — tear the editor VST down cleanly.
+    if (!editor.classList.contains('hidden')) {
         editor.classList.add('hidden');
         editor.innerHTML = '';
+        await rbTeardownVstEditor(api);
+        piece._vst_slot_id = null;
         return;
     }
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
     if (!api) return alert('Native VST hosting not available');
     const vstPath = piece._vst_path || (piece.assigned && piece.assigned.vst_path) || '';
     if (!vstPath) return alert('This piece has no VST assigned yet.');
+    if (rbState._vstEditorBusy) return;   // ignore rapid double-clicks while a load is in flight
+    rbState._vstEditorBusy = true;
     editor.classList.remove('hidden');
     editor.innerHTML = `<div class="text-xs text-gray-500">loading ${rbEsc(vstPath.split('/').pop())}…</div>`;
     try {
-        if (rbState._vstEditorSlot != null && api.clearChain) {
-            await api.clearChain().catch(() => {});
-        }
+        // Close + clear any previously-open editor (this or another piece)
+        // before loading — closing its native window first avoids the crash.
+        await rbTeardownVstEditor(api);
         await api.startAudio().catch(() => {});
         const slotId = await api.loadVST(vstPath);
         if (slotId == null || slotId < 0) {
@@ -885,6 +912,8 @@ async function rbToneEditVst(toneIdx, pIdx) {
         rbToneRenderInlineVstParams(toneIdx, pIdx);
     } catch (e) {
         editor.innerHTML = `<div class="text-xs text-red-400">load failed: ${rbEsc(e.message || e)}</div>`;
+    } finally {
+        rbState._vstEditorBusy = false;
     }
 }
 
@@ -892,7 +921,7 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
     const editor = document.getElementById(`rb-tone-vst-editor-${toneIdx}-${pIdx}`);
     if (!editor) return;
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
-    const params = (piece && piece._vst_param_meta) || [];
+    const params = rbFilterVstParams((piece && piece._vst_param_meta) || []);
     const effVstPath = piece._vst_path || (piece.assigned && piece.assigned.vst_path) || '';
     const vstName = effVstPath.split('/').pop().replace(/\.(vst3|component)$/i, '');
     const header = `
@@ -1413,13 +1442,15 @@ async function rbMasterEditVst(role, idx) {
     if (!piece) return;
     const editor = document.getElementById(`rb-master-${role}-editor-${idx}`);
     if (!editor) return;
-    // Toggle close if already open.
-    if (!editor.classList.contains('hidden') && piece._vst_slot_id != null) {
+    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    // Toggle close if already open — tear the editor VST down cleanly.
+    if (!editor.classList.contains('hidden')) {
         editor.classList.add('hidden');
         editor.innerHTML = '';
+        await rbTeardownVstEditor(api);
+        piece._vst_slot_id = null;
         return;
     }
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
     if (!api) {
         alert('Native VST hosting not available');
         return;
@@ -1429,14 +1460,14 @@ async function rbMasterEditVst(role, idx) {
         alert('This piece has no VST assigned yet — use Assign… first.');
         return;
     }
+    if (rbState._vstEditorBusy) return;   // ignore rapid double-clicks while a load is in flight
+    rbState._vstEditorBusy = true;
     editor.classList.remove('hidden');
     editor.innerHTML = `<div class="text-xs text-gray-500">loading ${rbEsc(vstPath.split('/').pop())}…</div>`;
     try {
-        // Clear any previous editor slot so they don't accumulate in the
-        // chain (same hygiene as rbLoadAndEditVst).
-        if (rbState._vstEditorSlot != null && api.clearChain) {
-            await api.clearChain().catch(() => {});
-        }
+        // Close + clear any previously-open editor (this or another piece)
+        // before loading — closing its native window first avoids the crash.
+        await rbTeardownVstEditor(api);
         await api.startAudio().catch(() => {});
         const slotId = await api.loadVST(vstPath);
         if (slotId == null || slotId < 0) {
@@ -1481,6 +1512,8 @@ async function rbMasterEditVst(role, idx) {
         rbMasterRenderInlineVstParams(role, idx);
     } catch (e) {
         editor.innerHTML = `<div class="text-xs text-red-400">load failed: ${rbEsc(e.message || e)}</div>`;
+    } finally {
+        rbState._vstEditorBusy = false;
     }
 }
 
@@ -1488,7 +1521,7 @@ function rbMasterRenderInlineVstParams(role, idx) {
     const editor = document.getElementById(`rb-master-${role}-editor-${idx}`);
     if (!editor) return;
     const piece = rbState.master[role][idx];
-    const params = (piece && piece._vst_param_meta) || [];
+    const params = rbFilterVstParams((piece && piece._vst_param_meta) || []);
     const vstName = (piece._vst_path || '').split('/').pop().replace(/\.(vst3|component)$/i, '');
     const header = `
         <div class="flex items-center justify-between">
@@ -2754,9 +2787,7 @@ async function rbLoadAndEditVst(toneIdx, pIdx) {
     if (statusEl) statusEl.textContent = `loading ${path.split('/').pop()}…`;
     try {
         // Clear any previous experimental load so the editor doesn't accumulate.
-        if (rbState._vstEditorSlot != null && api.clearChain) {
-            await api.clearChain().catch(() => {});
-        }
+        await rbTeardownVstEditor(api);
         await api.startAudio().catch(() => {});
         const slotId = await api.loadVST(path);
         if (slotId == null || slotId < 0) throw new Error('engine refused to load this plugin');
@@ -2862,7 +2893,7 @@ function rbParseVstStateParams(state) {
 // store the current values on the piece so Capture/Assign can read them.
 function rbRenderInlineVstParams(toneIdx, pIdx) {
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
-    const params = piece._vst_param_meta || [];
+    const params = rbFilterVstParams(piece._vst_param_meta || []);
     const containerId = `rb-vst-params-${toneIdx}-${pIdx}`;
     let host = document.getElementById(containerId);
     if (!host) {
@@ -3701,9 +3732,7 @@ async function rbCatalogLoadAndEdit(panelId) {
     const statusEl = document.getElementById(`${panelId}-status`);
     if (statusEl) statusEl.textContent = `loading ${path.split('/').pop()}…`;
     try {
-        if (rbState._vstEditorSlot != null && api.clearChain) {
-            await api.clearChain().catch(() => {});
-        }
+        await rbTeardownVstEditor(api);
         await api.startAudio().catch(() => {});
         const slotId = await api.loadVST(path);
         if (slotId == null || slotId < 0) throw new Error('engine refused to load this plugin');
