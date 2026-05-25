@@ -1,4 +1,4 @@
-# NAM Rig Builder
+# Rig Builder
 
 A [Slopsmith](https://slopsmith.app) plugin that turns **Rocksmith 2014
 tones** into **real neural-amp rigs**. It maps each song's amp + cab +
@@ -38,9 +38,9 @@ IRs, then chains them so the song plays through a realistic
 1. Install Slopsmith and run it once (it ships the `nam_tone` engine and
    creates the app-data folder). Quit Slopsmith.
 2. Drop this folder into the plugins directory so it lives at:
-   - **macOS:** `~/Library/Application Support/slopsmith-desktop/plugins/nam_rig_builder/`
-   - **Windows:** `%APPDATA%\slopsmith-desktop\plugins\nam_rig_builder\`
-3. Restart Slopsmith. **NAM Rig Builder** appears in the nav.
+   - **macOS:** `~/Library/Application Support/slopsmith-desktop/plugins/rig_builder/`
+   - **Windows:** `%APPDATA%\slopsmith-desktop\plugins\rig_builder\`
+3. Restart Slopsmith. **Rig Builder** appears in the nav.
 
 Optional: open **Settings** and paste a tone3000 API key (`t3k_…`) to unlock
 in-app candidate listing and auto-download. Without it, deep-link mode works
@@ -83,7 +83,7 @@ fully.
   plus a primary amp+cab (what the stock engine reads).
 - Real playback is upgraded to the full chain by transparently serving every
   stage to the audio engine — no changes to the Slopsmith app bundle, so it
-  survives app updates. (Kill-switch: `window.__tbChainPlayback = false`.)
+  survives app updates. (Kill-switch: `window.__rbChainPlayback = false`.)
 
 For the full design, internals, and contributor notes see **`HANDOFF.md`**
 and **`CLAUDE.md`** in this repo.

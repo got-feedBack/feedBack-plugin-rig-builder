@@ -1,0 +1,96 @@
+{
+  "_meta": {
+    "description": "Seed catalog: Rocksmith gear type → recommended VST3/AU plugins. Free plugins listed first. Used by /vst/suggest endpoint and the per-piece VST panel hint.",
+    "version": 1,
+    "updated": "2026-05-25"
+  },
+
+  "Pedal_Chorus": [
+    {"name": "TAL-Chorus-LX",       "manufacturer": "TAL Software",   "format": "VST3", "url": "https://tal-software.com/products/tal-chorus-lx",        "free": true,  "notes": "Juno-60 chorus emulation, simple knobs"},
+    {"name": "OrilRiver",            "manufacturer": "denis tihanov",   "format": "VST3", "url": "https://www.kvraudio.com/product/orilriver",            "free": true,  "notes": "Reverb with chorus mode"},
+    {"name": "TAL-Filter-2",         "manufacturer": "TAL Software",   "format": "VST3", "url": "https://tal-software.com",                              "free": true,  "notes": "Tempo-synced LFO filter; can do chorus-like motion"}
+  ],
+  "Pedal_Chorus20": [
+    {"name": "TAL-Chorus-LX",       "manufacturer": "TAL Software",   "format": "VST3", "url": "https://tal-software.com/products/tal-chorus-lx",        "free": true,  "notes": "Best free chorus emulation"}
+  ],
+  "Pedal_StereoChorus": [
+    {"name": "TAL-Chorus-LX",       "manufacturer": "TAL Software",   "format": "VST3", "url": "https://tal-software.com/products/tal-chorus-lx",        "free": true,  "notes": "Stereo output by default"}
+  ],
+
+  "Pedal_Flanger": [
+    {"name": "TAL-Flanger",          "manufacturer": "TAL Software",   "format": "VST3", "url": "https://tal-software.com/products/tal-flanger",          "free": true,  "notes": "Through-zero flanger, classic sound"},
+    {"name": "Blue Cat Flanger",     "manufacturer": "Blue Cat Audio", "format": "VST3", "url": "https://www.bluecataudio.com/Products/Product_Flanger/", "free": true,  "notes": "Very tweakable, free version available"}
+  ],
+
+  "Pedal_Phaser": [
+    {"name": "Airwindows Pitch",     "manufacturer": "Airwindows",      "format": "VST3", "url": "https://www.airwindows.com",                            "free": true,  "notes": "Multiple phaser variants in the suite"},
+    {"name": "RoughRider3",          "manufacturer": "Audio Damage",    "format": "VST3", "url": "https://www.audiodamage.com",                           "free": true,  "notes": "Free compressor but bundled DSP includes phase modules"}
+  ],
+
+  "Pedal_Tremolo": [
+    {"name": "BertomAudio FreeTremolo", "manufacturer": "Bertom Audio", "format": "VST3", "url": "https://www.bertomaudio.com",                          "free": true,  "notes": "Three tremolo modes (sine/square/random)"},
+    {"name": "ChowTape",             "manufacturer": "Chow DSP",       "format": "VST3", "url": "https://chowdsp.com/products.html",                     "free": true,  "notes": "Tape emulation with built-in tremolo"}
+  ],
+  "Pedal_AmpTrem": [
+    {"name": "BertomAudio FreeTremolo", "manufacturer": "Bertom Audio", "format": "VST3", "url": "https://www.bertomaudio.com",                          "free": true,  "notes": "Closest to a vintage amp tremolo"}
+  ],
+
+  "Pedal_BakedRotatoe": [
+    {"name": "TAL-Vocoder",          "manufacturer": "TAL Software",   "format": "VST3", "url": "https://tal-software.com",                              "free": true,  "notes": "Limited rotary, but free"},
+    {"name": "Boscomac IRotary",     "manufacturer": "Boscomac",       "format": "VST3", "url": "https://www.boscomac.com",                              "free": true,  "notes": "Free Leslie-style rotary"}
+  ],
+
+  "Pedal_ModernWah": [
+    {"name": "Audified MultiDrive",  "manufacturer": "Audified",       "format": "VST3", "url": "https://www.audified.com",                              "free": false, "notes": "Cry-baby style; auto-wah mode (paid)"},
+    {"name": "Nembrini PSA-1000",    "manufacturer": "Nembrini Audio", "format": "VST3", "url": "https://nembriniaudio.com",                             "free": false, "notes": "Has parametric overdrive that responds to dynamics"}
+  ],
+  "Pedal_USWah": [
+    {"name": "PG-8X Wah",            "manufacturer": "various",         "format": "VST3", "url": "https://www.kvraudio.com",                              "free": true,  "notes": "Various free wah VSTs on KVR"}
+  ],
+
+  "Pedal_AnalogueDelay": [
+    {"name": "Valhalla FreqEcho",    "manufacturer": "Valhalla DSP",   "format": "VST3", "url": "https://valhalladsp.com/shop/delay/valhalla-freq-echo/", "free": true,  "notes": "Free frequency-shifted delay, very musical"},
+    {"name": "TAL-Dub-III",          "manufacturer": "TAL Software",   "format": "VST3", "url": "https://tal-software.com",                              "free": true,  "notes": "Analog-style delay with feedback saturation"}
+  ],
+  "Pedal_ModDelay": [
+    {"name": "Valhalla SuperMassive", "manufacturer": "Valhalla DSP",  "format": "VST3", "url": "https://valhalladsp.com/shop/reverb/valhalla-supermassive/", "free": true, "notes": "Free, has modulated delays + ambient reverbs"}
+  ],
+  "Pedal_TapeDelay": [
+    {"name": "ChowTape",             "manufacturer": "Chow DSP",       "format": "VST3", "url": "https://chowdsp.com/products.html",                     "free": true,  "notes": "Tape emulation with delay modulation"}
+  ],
+  "Pedal_DigitalDelay": [
+    {"name": "Valhalla SuperMassive", "manufacturer": "Valhalla DSP",  "format": "VST3", "url": "https://valhalladsp.com/shop/reverb/valhalla-supermassive/", "free": true, "notes": "Clean digital echoes"}
+  ],
+  "Pedal_CosmicEcho": [
+    {"name": "Valhalla SuperMassive", "manufacturer": "Valhalla DSP",  "format": "VST3", "url": "https://valhalladsp.com/shop/reverb/valhalla-supermassive/", "free": true, "notes": "Reverb+delay hybrid, exactly the use case"}
+  ],
+
+  "Pedal_DigitalVerb": [
+    {"name": "OrilRiver",            "manufacturer": "denis tihanov",   "format": "VST3", "url": "https://www.kvraudio.com/product/orilriver",            "free": true,  "notes": "High-quality algorithmic reverb, free"},
+    {"name": "Valhalla SuperMassive", "manufacturer": "Valhalla DSP",  "format": "VST3", "url": "https://valhalladsp.com/shop/reverb/valhalla-supermassive/", "free": true, "notes": "Lush hall/plate/cloud modes"}
+  ],
+  "Pedal_SpringReverb": [
+    {"name": "OrilRiver",            "manufacturer": "denis tihanov",   "format": "VST3", "url": "https://www.kvraudio.com/product/orilriver",            "free": true,  "notes": "Has spring mode"},
+    {"name": "TAL-Reverb-4",         "manufacturer": "TAL Software",   "format": "VST3", "url": "https://tal-software.com/products/tal-reverb-4",        "free": true,  "notes": "Clean room/hall"}
+  ],
+
+  "Pedal_Compressor": [
+    {"name": "Klanghelm MJUC jr",    "manufacturer": "Klanghelm",      "format": "VST3", "url": "https://klanghelm.com/contents/products/mjucjr.php",    "free": true,  "notes": "Vari-mu compressor, smooth"},
+    {"name": "TDR Kotelnikov",       "manufacturer": "Tokyo Dawn",     "format": "VST3", "url": "https://www.tokyodawn.net/tdr-kotelnikov/",             "free": true,  "notes": "Mastering-grade compressor"}
+  ],
+
+  "Pedal_EQ5": [
+    {"name": "TDR Nova",             "manufacturer": "Tokyo Dawn",     "format": "VST3", "url": "https://www.tokyodawn.net/tdr-nova/",                   "free": true,  "notes": "Parallel dynamic EQ — overkill but free and great"},
+    {"name": "MEqualizer",           "manufacturer": "MeldaProduction","format": "VST3", "url": "https://www.meldaproduction.com",                       "free": true,  "notes": "From the MFreeBundle"}
+  ],
+  "Pedal_EQ8": [
+    {"name": "TDR Nova",             "manufacturer": "Tokyo Dawn",     "format": "VST3", "url": "https://www.tokyodawn.net/tdr-nova/",                   "free": true,  "notes": "More than enough bands"}
+  ],
+  "Pedal_AcousticEmulator": [
+    {"name": "TAL-Filter-2",         "manufacturer": "TAL Software",   "format": "VST3", "url": "https://tal-software.com",                              "free": true,  "notes": "Resonant filter to mimic body resonance"}
+  ],
+  "Pedal_LoFiFilter": [
+    {"name": "TAL-Filter-2",         "manufacturer": "TAL Software",   "format": "VST3", "url": "https://tal-software.com",                              "free": true,  "notes": "Lo-fi modes"},
+    {"name": "ChowTape",             "manufacturer": "Chow DSP",       "format": "VST3", "url": "https://chowdsp.com/products.html",                     "free": true,  "notes": "Tape lo-fi"}
+  ]
+}

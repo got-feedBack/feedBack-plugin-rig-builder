@@ -1,0 +1,32 @@
+{
+  "_meta": {
+    "description": "Manual translation table: Rocksmith gear knob → VST parameter mapping. Keyed by (rs_gear_type, vst_name_stem). Empty by default — curate as you learn what works for your preferred VSTs. The /vst/knob_mapping endpoint reads this; the 'Apply RS settings' button in the song-view panel uses it.",
+    "version": 1,
+    "updated": "2026-05-25",
+    "shape": {
+      "<rs_gear_type>": {
+        "<vst_name_stem (lowercased, no .vst3/.component)>": {
+          "<rs_knob_name>": {
+            "param": "<vst_param_name_or_int_index>",
+            "scale": "<float multiplier: rs_value * scale + offset = vst_normalised>",
+            "offset": "<float, default 0>",
+            "invert": "<bool, default false; sends 1 - vst_value>"
+          }
+        }
+      }
+    },
+    "rs_value_range": "Most RS knobs are 0-100 (use scale=0.01 to map → VST normalised 0-1). Some are 0-1 already (scale=1). A few are integer enums for waveform/mode selectors — handle case-by-case.",
+    "vst_param_range": "VSTs hosted by JUCE always expose params as normalised 0-1 floats."
+  },
+
+  "_example_curated_mapping_to_get_you_started": {
+    "_note": "This is what an entry looks like once curated. Move it to the top-level (drop the underscore prefix on rs_gear_type) when you've verified it sounds right.",
+    "Pedal_Chorus20": {
+      "uaudio_brigade_chorus": {
+        "Rate":  { "param": "Rate",  "scale": 0.01 },
+        "Depth": { "param": "Depth", "scale": 0.01 },
+        "Mix":   { "param": "Mix",   "scale": 0.01 }
+      }
+    }
+  }
+}

@@ -45,7 +45,11 @@
     "query_source": "override",
     "sound_bank": "amp_bt30",
     "tone3000_gears": "amp",
-    "tone3000_query": "Vox AC30"
+    "tone3000_query": "Vox AC30",
+    "dsp_load": "▢▢▢▢",
+    "zoom_rating": "***",
+    "zoom_notes": "VX JMI - simulates the sound of an early model of a class-A British combo amp",
+    "name_from_sheet": "Vintage VOX AC30 JMI 2x12 AMP"
   },
   "Amp_BT45": {
     "art_asset": "bt45",
@@ -69,7 +73,11 @@
     "query_source": "override",
     "sound_bank": "amp_ca100",
     "tone3000_gears": "amp",
-    "tone3000_query": "Mesa Boogie Dual Rectifier"
+    "tone3000_query": "Mesa Boogie Dual Rectifier",
+    "dsp_load": "▢▢▢",
+    "zoom_rating": "**",
+    "zoom_notes": "BG DRiVE ★ · The high gain sound of the Mesa Boogie Dual Rectifier red channel (Vintage mode)",
+    "name_from_sheet": "Mesaboogie Dual Rectifier"
   },
   "Amp_CA38": {
     "art_asset": "ca38",
@@ -81,7 +89,11 @@
     "query_source": "override",
     "sound_bank": "amp_ca38",
     "tone3000_gears": "amp",
-    "tone3000_query": "Mesa Boogie Mark III"
+    "tone3000_query": "Mesa Boogie Mark III",
+    "name_from_sheet": "1985 'Boogie' MkIII [crunch channel]",
+    "dsp_load": "▢▢▢",
+    "zoom_rating": "**",
+    "zoom_notes": "BG CRUNCH ★ — Crunch sound of a Mesa Boogie MkIII combo (the Zoom MultiStomp equivalent)"
   },
   "Amp_CA85": {
     "art_asset": "ca85",
@@ -141,7 +153,11 @@
     "query_source": "series",
     "sound_bank": "amp_en30",
     "tone3000_gears": "amp",
-    "tone3000_query": "ENGL"
+    "tone3000_query": "ENGL",
+    "dsp_load": "▢▢▢",
+    "zoom_rating": "**",
+    "zoom_notes": "VX COMBO ★ Modeled sound of a British combo amplifier representing the 1960s Liverpool sound",
+    "name_from_sheet": "Vox AC-30"
   },
   "Amp_EN50": {
     "art_asset": "en50",
@@ -321,7 +337,12 @@
     "query_source": "brand_name",
     "sound_bank": "amp_marshall1962bluesbreaker",
     "tone3000_gears": "amp",
-    "tone3000_query": "Marshall 1962Bluesbreaker"
+    "tone3000_query": "Marshall 1962Bluesbreaker",
+    "dsp_load": "▢▢▢▢",
+    "zoom_rating": "**",
+    "zoom_url": "Best BluesBreaker style pedals",
+    "zoom_notes": "B-BREAKER ★ This models the sound of a Marshall 1962 Bluesbreaker combo amp",
+    "name_from_sheet": "1962 \nMarshall \"BluesBreaker\""
   },
   "Amp_MarshallDSL100H": {
     "art_asset": "marshall-dsl100h",
@@ -357,7 +378,11 @@
     "query_source": "brand_name",
     "sound_bank": "amp_marshalljcm800",
     "tone3000_gears": "amp",
-    "tone3000_query": "Marshall JCM800"
+    "tone3000_query": "Marshall JCM800",
+    "dsp_load": "▢▢▢",
+    "zoom_rating": "**",
+    "zoom_notes": "MS DRIVE ★ The high gain sound of a JCM2000 Marshall stack amp",
+    "name_from_sheet": "Marshall JCM 800"
   },
   "Amp_MarshallJTM45": {
     "art_asset": "marshall-jtm45",
@@ -393,7 +418,11 @@
     "query_source": "brand_name",
     "sound_bank": "amp_marshallplexi",
     "tone3000_gears": "amp",
-    "tone3000_query": "Marshall Plexi"
+    "tone3000_query": "Marshall Plexi",
+    "name_from_sheet": "Marshall 1959 Plexi",
+    "dsp_load": "▢▢▢▢▢",
+    "zoom_rating": "**",
+    "zoom_notes": "MS 1959 — This models the sound of a Marshall 1959 Plexi made in 1969 (Zoom MultiStomp equivalent)"
   },
   "Amp_OrangeAD50": {
     "art_asset": "orange-custom-ad50",
@@ -429,7 +458,11 @@
     "query_source": "brand_name",
     "sound_bank": "amp_orangeor100",
     "tone3000_gears": "amp",
-    "tone3000_query": "Orange OR100"
+    "tone3000_query": "Orange OR100",
+    "dsp_load": "▢▢▢",
+    "zoom_rating": "**",
+    "zoom_notes": "Tangerine ★ This models the Orange Graphic 120 with its unique design and sound",
+    "name_from_sheet": "Orange 'Graphic' OR100"
   },
   "Amp_OrangeOR50H": {
     "art_asset": "orange-or50h",
@@ -477,7 +510,12 @@
     "query_source": "series",
     "sound_bank": "amp_tw22",
     "tone3000_gears": "amp",
-    "tone3000_query": "Fender Tweed"
+    "tone3000_query": "Fender Tweed",
+    "alternatives_from_sheet": "Fender Twin Reverb",
+    "dsp_load": "▢▢▢",
+    "zoom_rating": "***",
+    "zoom_notes": "FD COMBO - A Fender Twin Reverb ('65), which is loved by guitarists in various genres · (Very CLean with loads of headroom)",
+    "name_from_sheet": "Fender SuperSonic 22"
   },
   "Amp_TW26": {
     "art_asset": "tw26",
@@ -7041,7 +7079,11 @@
     "query_source": "art_asset",
     "sound_bank": "pedal_swole",
     "tone3000_gears": "pedal",
-    "tone3000_query": "Swole"
+    "tone3000_query": "Swole",
+    "dsp_load": "▢▢",
+    "zoom_rating": "****",
+    "zoom_notes": "OptComp – Based on an APHEX Punch FACTORY · A very transparent Optical Compressor, popular with bassists to emphasize their original sound",
+    "name_from_sheet": "2003\nAPHEX Punch FACTORY\n( Sonic Maximizer )"
   },
   "Pedal_TremOle": {
     "art_asset": "trem-ole",
@@ -7233,7 +7275,11 @@
     "query_source": "art_asset",
     "sound_bank": "rack_studiocompressor",
     "tone3000_gears": "outboard",
-    "tone3000_query": "Studio Compressor"
+    "tone3000_query": "Studio Compressor",
+    "dsp_load": "▢",
+    "zoom_rating": "****",
+    "zoom_notes": "RackComp - This VCA compressor allows more detailed adjustment than Comp",
+    "name_from_sheet": "1976\nDBX 160 - VCA compressor/limiter"
   },
   "Rack_StudioDelay": {
     "art_asset": "studio-delay",
@@ -7354,5 +7400,9 @@
     "sound_bank": "rack_tapeecho",
     "tone3000_gears": "outboard",
     "tone3000_query": "Tape Echo"
+  },
+  "_meta": {
+    "enriched_from_sheet": "1lRoIwHeoNjIUWMY7Tuwto8gQDuwIqi_4OJiL7cuoydo",
+    "enriched_manual_patches": 2
   }
 }

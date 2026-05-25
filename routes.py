@@ -28,12 +28,13 @@ import sys
 import threading
 import time
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import Body, UploadFile, File
 from fastapi.responses import JSONResponse, Response
 
-log = logging.getLogger("slopsmith.plugin.nam_rig_builder")
+log = logging.getLogger("slopsmith.plugin.rig_builder")
 
 _plugin_dir = Path(__file__).parent
 
@@ -80,7 +81,11 @@ _batch_thread: threading.Thread | None = None
 # Settings file inside the slopsmith config dir. Kept separate from
 # nam_tone.db because it's user preferences (with secrets) rather than
 # tone data, and so a corrupted DB doesn't lose the API key.
-_SETTINGS_FILENAME = "nam_rig_builder_settings.json"
+_SETTINGS_FILENAME = "rig_builder_settings.json"
+# Legacy filename — migrated to the new one on first init so users coming
+# from the old `nam_rig_builder` plugin keep their tone3000 API key,
+# preferred_size, disk budget, etc. without having to re-enter them.
+_LEGACY_SETTINGS_FILENAME = "nam_rig_builder_settings.json"
 
 _DEFAULT_SETTINGS = {
     "tone3000_api_key": "",
@@ -108,7 +113,7 @@ _PLATFORM_FOR_CATEGORY = {
 
 def _require_db_path() -> str:
     if _db_path is None:
-        raise RuntimeError("nam_rig_builder plugin not initialized")
+        raise RuntimeError("rig_builder plugin not initialized")
     return _db_path
 
 
@@ -149,6 +154,19 @@ def _get_conn() -> sqlite3.Connection:
             _conn.execute(
                 "ALTER TABLE preset_pieces ADD COLUMN bypassed INTEGER NOT NULL DEFAULT 0"
             )
+        # v0.1.0: VST3/AU plugin support. A piece with kind='vst' references a
+        # plugin on disk by absolute path, plus an optional opaque state blob
+        # captured from the engine via savePreset() (whole-chain state — only
+        # safe to restore when the chain in question is a single VST). For
+        # multi-stage chains we currently rely on the VST loading with its
+        # internal defaults and the user re-tweaking in the editor; this is
+        # documented as a v1 limitation in memory/12-rig-builder-vst.md.
+        if "vst_path" not in cols:
+            _conn.execute("ALTER TABLE preset_pieces ADD COLUMN vst_path TEXT")
+        if "vst_format" not in cols:
+            _conn.execute("ALTER TABLE preset_pieces ADD COLUMN vst_format TEXT")
+        if "vst_state" not in cols:
+            _conn.execute("ALTER TABLE preset_pieces ADD COLUMN vst_state TEXT")
         _conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_preset_pieces_preset "
             "ON preset_pieces(preset_id)"
@@ -168,6 +186,16 @@ def _load_settings() -> dict:
     if _config_dir is None:
         return dict(_DEFAULT_SETTINGS)
     path = _config_dir / _SETTINGS_FILENAME
+    # One-shot migration from the legacy filename. Only run when the new
+    # file is missing — once we write our own there's nothing to copy.
+    if not path.exists():
+        legacy = _config_dir / _LEGACY_SETTINGS_FILENAME
+        if legacy.exists():
+            try:
+                path.write_bytes(legacy.read_bytes())
+                log.info("migrated settings from %s to %s", legacy.name, path.name)
+            except OSError:
+                log.warning("legacy settings copy failed; using defaults", exc_info=True)
     if path.exists():
         try:
             loaded = json.loads(path.read_text())
@@ -205,7 +233,24 @@ def _get_t3k_client():
             sys.path.insert(0, str(_plugin_dir))
             from tone3000_client import Tone3000Client
             settings = _load_settings()
-            cache_path = str(_config_dir / "nam_rig_builder_cache.db") if _config_dir else "/tmp/nam_rig_builder_cache.db"
+            # Cache db lives next to the settings. Migrate the legacy name
+            # the same way as settings so the tone3000 search cache survives
+            # the rename.
+            cache_path = None
+            if _config_dir is not None:
+                new_cache = _config_dir / "rig_builder_cache.db"
+                legacy_cache = _config_dir / "nam_rig_builder_cache.db"
+                if not new_cache.exists() and legacy_cache.exists():
+                    try:
+                        new_cache.write_bytes(legacy_cache.read_bytes())
+                        log.info("migrated cache db from %s to %s",
+                                 legacy_cache.name, new_cache.name)
+                    except OSError:
+                        log.warning("legacy cache copy failed; rebuilding",
+                                    exc_info=True)
+                cache_path = str(new_cache)
+            else:
+                cache_path = "/tmp/rig_builder_cache.db"
             _t3k_client = Tone3000Client(
                 cache_path,
                 api_key=settings.get("tone3000_api_key") or None,
@@ -279,6 +324,53 @@ def _build_default_captures() -> dict:
             model_id = int(m.group(1))
         out[gear] = {"tone3000_id": int(t3kid), "kind": kind, "model_id": model_id}
     return out
+
+
+# ── VST seed catalog + RS-knob translation table (Fase E + knob mapping) ──
+
+_vst_seed_catalog: dict | None = None
+_knob_to_vst_table: dict | None = None
+
+
+def _load_knob_to_vst_table() -> dict:
+    """Load (and cache) the rs_knob_to_vst_param.json translation table.
+    Strips out the `_meta` / `_example_*` documentation keys so callers
+    don't have to filter. Missing file = empty (no auto-mapping available)."""
+    global _knob_to_vst_table
+    if _knob_to_vst_table is None:
+        path = _plugin_dir / "rs_knob_to_vst_param.json"
+        if path.exists():
+            try:
+                raw = json.loads(path.read_text())
+                _knob_to_vst_table = {
+                    k: v for k, v in raw.items()
+                    if not k.startswith("_") and isinstance(v, dict)
+                }
+            except json.JSONDecodeError:
+                log.error("rs_knob_to_vst_param.json is corrupt", exc_info=True)
+                _knob_to_vst_table = {}
+        else:
+            _knob_to_vst_table = {}
+    return _knob_to_vst_table
+
+
+def _load_vst_seed_catalog() -> dict:
+    """Load (and cache) the rs_gear_to_vst.json seed catalog: maps each
+    `rs_gear_type` to a list of recommended VST/AU plugins (free first).
+    Used by /vst/suggest. Missing file = empty dict (degrades to "no
+    suggestions, user picks manually from the full known list")."""
+    global _vst_seed_catalog
+    if _vst_seed_catalog is None:
+        path = _plugin_dir / "rs_gear_to_vst.json"
+        if path.exists():
+            try:
+                _vst_seed_catalog = json.loads(path.read_text())
+            except json.JSONDecodeError:
+                log.error("rs_gear_to_vst.json is corrupt", exc_info=True)
+                _vst_seed_catalog = {}
+        else:
+            _vst_seed_catalog = {}
+    return _vst_seed_catalog
 
 
 def _load_rs_cab_to_ir() -> dict:
@@ -390,9 +482,263 @@ def _parse_tone(tone_data: dict) -> dict:
     return {"name": name, "key": key, "chain": chain}
 
 
-def _enrich_chain_piece(piece: dict) -> dict:
+def _daw_category_for(rs_gear: str, rs_category: str) -> str:
+    """Bucket a Rocksmith gear into a DAW-style subcategory the user
+    recognises ('compression', 'modulation', 'delay', etc.) so the chain
+    editor's "Add piece" picker can group it the way any modern DAW
+    plugin browser does — instead of forcing the user to think in the
+    RS-coarse 'amp/pedal/rack' axis.
+
+    Heuristic over the rs_gear name; falls back to 'other' for stuff
+    the substring rules don't recognise. Returns one of:
+      amps, cabs, distortion, modulation, delay, reverb, compression,
+      eq, wah, pitch, filter, utility, other.
+    """
+    if rs_category == "amp":
+        return "amps"
+    if rs_category == "cab":
+        return "cabs"
+    name = (rs_gear or "").lower()
+    # Order matters: more-specific patterns first so e.g. "Pedal_LoFiFilter"
+    # doesn't get swallowed by the generic "filter" bucket before the
+    # "lofi" pattern hits.
+    BUCKETS = [
+        # (category, substrings — match if ANY are in the name)
+        ("compression", ("compres", "compr", "optcomp", "limit", "limiter",
+                         "punch", "swole", "sustain", "studiocomp")),
+        ("modulation",  ("chorus", "flanger", "phaser", "tremolo", "amptrem",
+                         "vibrato", "ringmod", "rotary", "rotatoe", "univibe",
+                         "ensemble")),
+        ("delay",       ("delay", "echo", "tapeecho", "slapback")),
+        ("reverb",      ("reverb", "spring", "platerev", "hallrev",
+                         "digitalverb", "ambient", "spaceverb", "cosmic")),
+        ("distortion",  ("dist", "fuzz", "rat", "tubescream", "ts9", "ts808",
+                         "overdrive", "screamer", "drive", "boost", "centaur",
+                         "muff", "octfuzz", "supacharger", "hotbox",
+                         "supercrunch", "redcrunch", "metalzone", "metal_zone")),
+        ("eq",          ("eq5", "eq8", "graphiceq", "studioeq",
+                         "studioparametriceq", "parametriceq")),
+        ("wah",         ("wah", "envelopefilter", "autowah")),
+        ("pitch",       ("octave", "octavius", "octaver", "pitchshift",
+                         "multipitch", "pitchdly", "harmony", "harmonist",
+                         "detune", "subocta")),
+        ("filter",      ("filter", "lofifilter", "acousticemulator",
+                         "rangebooster", "exciter", "monosynth")),
+        ("utility",     ("noisegate", "gate", "tuner", "noise", "znr",
+                         "hush", "silencer", "bitcrush", "sfx",
+                         "acoustic_emulator", "amplifier_simulator")),
+    ]
+    for cat, needles in BUCKETS:
+        for needle in needles:
+            if needle in name:
+                return cat
+    return "other"
+
+
+# DAW-style subcategories the chain picker uses. Order matches the order
+# of buttons in the UI so the user sees them in a predictable layout.
+_DAW_CATEGORIES_ORDER = [
+    "amps", "cabs", "distortion", "modulation", "delay", "reverb",
+    "compression", "eq", "wah", "pitch", "filter", "utility", "other",
+]
+
+
+# ── Master chain (global pre/post FX wrap around every tone) ──────────
+#
+# The plugin keeps two sentinel rows in the host's `presets` table that
+# never appear in the UI's per-song lookups: `__master_pre__` and
+# `__master_post__`. Their preset_pieces rows form a chain that
+# native_preset_full prepends + appends to every tone, so e.g. a global
+# input compressor + output limiter stay on regardless of which song /
+# tone is loaded.
+_MASTER_PRESET_NAMES = {
+    "pre":  "__rig_builder_master_pre__",
+    "post": "__rig_builder_master_post__",
+}
+
+
+def _get_master_preset_id(role: str) -> int | None:
+    """Return the sentinel preset id for the master pre/post chain,
+    creating it on first call so the rest of the code can assume it
+    exists. `role` is 'pre' or 'post'."""
+    name = _MASTER_PRESET_NAMES.get(role)
+    if not name:
+        return None
+    conn = _get_conn()
+    with _lock:
+        row = conn.execute(
+            "SELECT id FROM presets WHERE name = ?", (name,)
+        ).fetchone()
+        if row:
+            return int(row[0])
+        # Insert with empty model/IR/gain defaults — the sentinel never
+        # plays through the bundle's 2-stage path, only through
+        # native_preset_full where its pieces are read directly.
+        conn.execute(
+            "INSERT INTO presets (name, model_file, ir_file, input_gain, output_gain, gate_threshold, settings_json) "
+            "VALUES (?, '', '', 1.0, 1.0, -60.0, ?)",
+            (name, json.dumps({"master_role": role})),
+        )
+        conn.commit()
+        new_row = conn.execute(
+            "SELECT id FROM presets WHERE name = ?", (name,)
+        ).fetchone()
+        return int(new_row[0]) if new_row else None
+
+
+def _load_master_chain(role: str) -> list[dict]:
+    """Return the master pre or post chain as a list of enriched pieces
+    (same shape as _load_saved_chain). Empty list if the sentinel
+    preset has no pieces yet."""
+    pid = _get_master_preset_id(role)
+    if pid is None:
+        return []
+    conn = _get_conn()
+    return _load_saved_chain(conn, pid) or []
+
+
+def _build_master_stages(role: str, models_dir, irs_dir,
+                         output_gain: float, missing: list) -> list[dict]:
+    """Return native-engine stages (type:0/1/2) for the master pre or post
+    chain. Iterates preset_pieces rows for the sentinel preset and emits
+    one stage per piece that has an actual file/vst_path. Pieces lacking
+    an assignment (kind='none' or empty file) are silently skipped — the
+    user added them but hasn't picked a plugin yet."""
+    pid = _get_master_preset_id(role)
+    if pid is None:
+        return []
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT slot, kind, file, rs_gear_type, bypassed, slot_order, "
+        "       vst_path, vst_format, vst_state "
+        "FROM preset_pieces WHERE preset_id = ? "
+        "ORDER BY slot_order",
+        (pid,),
+    ).fetchall()
+    stages: list[dict] = []
+    for slot, kind, file, gear, bypassed, _slot_order, vst_path, vst_format, vst_state in rows:
+        bypassed = bool(bypassed)
+        slot_tag = f"master_{role}:{slot or 'unspecified'}"
+        if kind == "nam" and file:
+            path = _safe_child(models_dir, file)
+            if not path or not path.exists():
+                missing.append(file)
+                continue
+            stages.append({
+                "type": 1,
+                "name": Path(file).stem,
+                "path": str(path),
+                "bypassed": bypassed,
+                "slot": slot_tag,
+                "rs_gear": gear,
+                "state": _state_b64({
+                    "modelPath": str(path),
+                    "inputLevel": 1.0,
+                    "outputLevel": 1.0,
+                }),
+            })
+        elif kind in ("ir", "rs_ir") and file:
+            ir_path = _safe_child(irs_dir, file)
+            if not ir_path or not ir_path.exists():
+                missing.append(file)
+                continue
+            stages.append({
+                "type": 2,
+                "name": Path(file).stem,
+                "path": str(ir_path),
+                "bypassed": bypassed,
+                "slot": slot_tag,
+                "rs_gear": gear,
+                "state": _state_b64({"irPath": str(ir_path), "gain": float(output_gain)}),
+            })
+        elif kind == "vst" and vst_path:
+            vp = Path(vst_path)
+            stages.append({
+                "type": 0,
+                "name": vp.stem,
+                "path": str(vp),
+                "format": vst_format or "VST3",
+                "bypassed": bypassed,
+                "slot": slot_tag,
+                "rs_gear": gear,
+                # Opaque state blob (verbatim) so the master VST — e.g. a comp
+                # in master_post — comes up with its captured settings, not
+                # plugin defaults, during real song playback.
+                "state": _vst_stage_state(str(vp), vst_format, vst_state),
+            })
+        # else: kind == 'none' or no file → skip (user placeholder)
+    return stages
+
+
+def _load_saved_chain(conn: sqlite3.Connection, preset_id: int,
+                      img_idx: dict | None = None) -> list[dict] | None:
+    """Return the user-edited chain for a preset, rebuilt from preset_pieces
+    rows + enriched the same way as a PSARC-derived chain. Returns None if
+    the preset has no rows (yet), in which case the caller falls back to
+    the PSARC's GearList.
+
+    `img_idx` is the same pre-built tone-image lookup `_enrich_chain_piece`
+    takes; pass it from get_song to avoid hitting the search cache once
+    per piece. None = each enrich call builds its own (slow path, ok for
+    one-off uses).
+
+    Each row's fields surface as both the "piece" shape the UI expects AND
+    pre-populated `assigned` block so the UI immediately renders the saved
+    file / VST / bypass without round-tripping through the gear-global
+    assignment lookup.
+    """
+    rows = conn.execute(
+        "SELECT id, slot_order, slot, rs_gear_type, kind, file, params_json, "
+        "       tone3000_id, assigned_mode, bypassed, vst_path, vst_format, vst_state "
+        "FROM preset_pieces WHERE preset_id = ? ORDER BY slot_order",
+        (preset_id,),
+    ).fetchall()
+    if not rows:
+        return None
+    out: list[dict] = []
+    for r in rows:
+        (piece_id, slot_order, slot, rs_gear, kind, file, params_json,
+         t3kid, assigned_mode, bypassed, vst_path, vst_format, vst_state) = r
+        try:
+            knobs = json.loads(params_json) if params_json else {}
+        except json.JSONDecodeError:
+            knobs = {}
+        # Build the same "raw piece" shape _enrich_chain_piece expects.
+        piece = {
+            "type": rs_gear,
+            "slot": slot,
+            "category": _gear_category(rs_gear) or "",
+            "knobs": knobs,
+        }
+        enriched = _enrich_chain_piece(piece, img_idx)
+        # Override the gear-global `assigned` block with THIS preset's row
+        # so the UI shows the correct file/VST for this specific tone
+        # (otherwise a different tone using the same rs_gear could bleed in).
+        enriched["assigned"] = {
+            "preset_piece_id": piece_id,
+            "preset_id": preset_id,
+            "kind": kind,
+            "file": file,
+            "tone3000_id": t3kid,
+            "assigned_mode": assigned_mode,
+            "vst_path": vst_path,
+            "vst_format": vst_format,
+            "vst_state": vst_state,
+        }
+        enriched["bypassed"] = bool(bypassed)
+        enriched["_preset_piece_id"] = piece_id   # so the UI can reorder/remove by id
+        enriched["_slot_order"] = slot_order
+        out.append(enriched)
+    return out
+
+
+def _enrich_chain_piece(piece: dict, img_idx: dict | None = None) -> dict:
     """Add make/model + tone3000 hints + existing-assignment info to a
-    parsed chain piece. Returns a new dict, doesn't mutate input."""
+    parsed chain piece. Returns a new dict, doesn't mutate input.
+
+    `img_idx` is an optional pre-built `_tone_image_index()` (tone_id ->
+    {title,...}); pass it when enriching a whole chain so we read the
+    search cache once instead of per piece."""
     rs_type = piece["type"]
     rs_map = _load_rs_to_real()
     info = rs_map.get(rs_type) or {}
@@ -414,10 +760,18 @@ def _enrich_chain_piece(piece: dict) -> dict:
     # "(no file)" even though the capture is downloaded.
     assigned = None
     conn = _get_conn()
+    # A piece counts as "really assigned" when it has EITHER a NAM/IR file
+    # OR a vst_path. We want those rows surfaced over pending kind='none'
+    # rows for the same gear (e.g. left by a batch on another song that
+    # only mapped the gear without picking a file/VST).
     row = conn.execute(
-        "SELECT id, preset_id, kind, file, tone3000_id, assigned_mode "
+        "SELECT id, preset_id, kind, file, tone3000_id, assigned_mode, "
+        "       vst_path, vst_format, vst_state "
         "FROM preset_pieces WHERE rs_gear_type = ? "
-        "ORDER BY (CASE WHEN file IS NOT NULL AND file != '' THEN 0 ELSE 1 END), id DESC "
+        "ORDER BY (CASE "
+        "  WHEN (file IS NOT NULL AND file != '') "
+        "    OR (vst_path IS NOT NULL AND vst_path != '') "
+        "  THEN 0 ELSE 1 END), id DESC "
         "LIMIT 1",
         (rs_type,),
     ).fetchone()
@@ -429,7 +783,20 @@ def _enrich_chain_piece(piece: dict) -> dict:
             "file": row[3],
             "tone3000_id": row[4],
             "assigned_mode": row[5],
+            "vst_path": row[6],
+            "vst_format": row[7],
+            "vst_state": row[8],
         }
+        # Human tone3000 title (from the local search cache) so the UI can
+        # show e.g. "Two Rock Studio 22" instead of the technical
+        # tone3000_<id>_m<model>_<rs_gear> filename. None when the tone
+        # isn't cached (e.g. assigned via default_captures by id).
+        tid = row[4]
+        if tid is not None:
+            idx = img_idx if img_idx is not None else _tone_image_index()
+            assigned["tone3000_title"] = (idx.get(int(tid)) or {}).get("title")
+        else:
+            assigned["tone3000_title"] = None
 
     # Rocksmith-extracted IRs: only meaningful for cab slots. The map
     # is keyed by the same entity name we have in rs_to_real, so it's
@@ -560,18 +927,42 @@ def _read_tones_from_sloppak(filename: str, dlc: Path) -> list[dict]:
 
 
 def _resolve_song_file(filename: str) -> Path | None:
-    """Return the PSARC/sloppak path inside DLC_DIR, or None if invalid."""
+    """Return the PSARC/sloppak path inside DLC_DIR, or None if invalid.
+
+    Supports both:
+      - Plain basenames ("Reptilia_v1.psarc") — recursively searches the
+        DLC dir for a file with that name. Required for libraries that
+        organise songs in subfolders (by artist, album, etc.).
+      - Relative paths under the DLC dir ("TheStrokes/Reptilia_v1.psarc")
+        — used directly when present.
+
+    Either way the result is path-confined to the DLC tree so an
+    attacker can't escape via "../" in the filename param.
+    """
     dlc = _get_dlc_dir() if _get_dlc_dir else None
     if not dlc:
         return None
+    # First try as a direct path under the DLC dir (root file or
+    # relative subdir hit). This is the cheap path — no walk required.
     candidate = (dlc / filename).resolve()
     try:
         candidate.relative_to(dlc.resolve())
     except (OSError, ValueError):
         return None
-    if not candidate.exists():
-        return None
-    return candidate
+    if candidate.exists():
+        return candidate
+    # Fallback: recursive search for a basename match. Lets users keep
+    # their library organised in subfolders while the plugin keeps
+    # surfacing songs by basename only (which is what web_library.db
+    # and the meta lookups expect).
+    if "/" not in filename and "\\" not in filename:
+        try:
+            for p in dlc.rglob(filename):
+                if p.is_file() and p.suffix.lower() in (".psarc", ".sloppak"):
+                    return p
+        except OSError:
+            return None
+    return None
 
 
 # ── v3 auto-download: tone3000 model → nam_models/ or nam_irs/ ───────
@@ -829,8 +1220,9 @@ def _persist_preset_chain(
         for i, p in enumerate(pieces):
             conn.execute(
                 "INSERT INTO preset_pieces "
-                "(preset_id, slot_order, slot, rs_gear_type, kind, file, params_json, tone3000_id, assigned_mode, bypassed) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "(preset_id, slot_order, slot, rs_gear_type, kind, file, params_json, "
+                " tone3000_id, assigned_mode, bypassed, vst_path, vst_format, vst_state) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     preset_id,
                     i,
@@ -842,6 +1234,9 @@ def _persist_preset_chain(
                     p.get("tone3000_id"),
                     p.get("assigned_mode", assigned_mode),
                     1 if p.get("bypassed") else 0,
+                    p.get("vst_path"),
+                    p.get("vst_format"),
+                    p.get("vst_state"),
                 ),
             )
 
@@ -877,6 +1272,41 @@ def _state_b64(data: dict) -> str:
     return base64.b64encode(payload).decode("ascii")
 
 
+def _vst_stage_state(vst_path: str, vst_format: str | None, vst_state) -> str:
+    """Return the base64 `state` for a VST (type-0) chain stage.
+
+    The native engine restores a VST's settings during real song playback
+    ONLY from its opaque state blob — the exact value `savePreset()` produces
+    and `loadPreset()` round-trips (the UI also feeds it to `setSlotState`).
+    The client captures that blob and stores it under "opaque" in the
+    vst_state envelope `{"params": {...}, "opaque": "<base64>"}`; we emit it
+    verbatim so the plugin comes up with its captured parameters (e.g. a
+    compressor's makeup gain), not its defaults.
+
+    Legacy pieces saved before opaque-capture (vst_state is a bare
+    `{"params": {...}}` or empty) fall back to the old pluginPath/pluginState
+    wrapper. Those only re-apply via the preview's setParameter pass — they
+    play at plugin defaults in a real song until re-captured. See the
+    chain-editor VST notes in HANDOFF.md.
+    """
+    opaque = None
+    if vst_state:
+        try:
+            env = json.loads(vst_state)
+            if isinstance(env, dict):
+                blob = env.get("opaque")
+                if isinstance(blob, str) and blob:
+                    opaque = blob
+        except (ValueError, TypeError):
+            opaque = None
+    if opaque:
+        return opaque
+    state_obj = {"pluginPath": str(vst_path), "format": vst_format or "VST3"}
+    if vst_state:
+        state_obj["pluginState"] = vst_state
+    return _state_b64(state_obj)
+
+
 def _safe_child(root: Path | None, name: str | None) -> Path | None:
     """Resolve `name` under `root`, refusing path-escape. Mirrors
     nam_tone._safe_child so the engine gets the same absolute paths."""
@@ -899,9 +1329,15 @@ def _tone_image_index() -> dict:
     idx: dict[int, dict] = {}
     if _config_dir is None:
         return idx
-    cache = _config_dir / "nam_rig_builder_cache.db"
+    # Prefer the new filename; fall back to the legacy one if the t3k
+    # client hasn't been instantiated yet (which would have migrated it).
+    cache = _config_dir / "rig_builder_cache.db"
     if not cache.exists():
-        return idx
+        legacy = _config_dir / "nam_rig_builder_cache.db"
+        if legacy.exists():
+            cache = legacy
+        else:
+            return idx
     try:
         c = sqlite3.connect(f"file:{cache}?mode=ro", uri=True)
         try:
@@ -1032,6 +1468,11 @@ def _batch_log(msg: str) -> None:
 def _list_library_songs() -> tuple[list[Path], int]:
     """Return (parseable songs, count of cloud-only placeholders).
 
+    Walks the DLC dir RECURSIVELY so libraries organised in subfolders
+    (e.g. one folder per artist) get fully covered. Songs are surfaced
+    with their basename downstream, which matches Slopsmith's own
+    convention in web_library.db.
+
     Cloud-loader users have a DLC dir full of 0-byte PSARC stubs —
     metadata exists in Slopsmith's library DB, but the actual archive
     isn't on disk until the user plays the song (or runs cloud_loader's
@@ -1046,9 +1487,20 @@ def _list_library_songs() -> tuple[list[Path], int]:
         return [], 0
     songs: list[Path] = []
     cloud_only = 0
-    for p in sorted(dlc.iterdir()):
-        if p.suffix.lower() not in (".psarc", ".sloppak"):
-            continue
+    # rglob('*') is recursive. Filter to playable formats and skip the
+    # 0-byte cloud-loader stubs that would otherwise blow up the parser.
+    candidates = []
+    try:
+        for p in dlc.rglob("*"):
+            if not p.is_file():
+                continue
+            if p.suffix.lower() not in (".psarc", ".sloppak"):
+                continue
+            candidates.append(p)
+    except OSError:
+        return [], 0
+    candidates.sort()  # stable ordering for the batch + progress count
+    for p in candidates:
         try:
             if p.stat().st_size == 0:
                 cloud_only += 1
@@ -1311,6 +1763,36 @@ def _auto_download_for_song(filename: str, path: Path) -> dict:
             pieces: list[dict] = []
             conn = _get_conn()
 
+            # CRITICAL: never touch a tone the user has already edited.
+            # /save_preset writes a (filename, tone_key) row into
+            # tone_mappings the first time a chain is saved, so the
+            # presence of that row signals "user has customised this
+            # tone — leave it alone". Without this guard the auto-
+            # download flow would rebuild pieces[] from the PSARC's
+            # GearList and call _persist_preset_chain, which does
+            # DELETE+INSERT and wipes any added/reordered/removed
+            # pieces the user had saved.
+            # Match BOTH the canonical key (`key or name`) and the raw `key`
+            # form — which is "" for tones with an empty Key. Older saves were
+            # stored under the raw form (the frontend sent tone.key verbatim),
+            # so a tone with an empty Key had its chain saved under tone_key=""
+            # while this watcher looked it up under the name → guard missed →
+            # the chain got rebuilt + wiped on every re-materialization (e.g.
+            # each cloud_loader re-download). Checking both forms keeps those
+            # presets protected.
+            already_saved = conn.execute(
+                "SELECT 1 FROM tone_mappings WHERE filename = ? AND tone_key IN (?, ?) LIMIT 1",
+                (filename, tone_key, parsed["key"]),
+            ).fetchone()
+            if already_saved:
+                _batch_log(f"  skip {preset_name} — user-saved chain (preserved)")
+                # Count every piece as 'processed + skipped_assigned' so
+                # the UI's progress meter still moves the right number.
+                for _ in parsed["chain"]:
+                    counts["processed"] += 1
+                    counts["skipped_assigned"] += 1
+                continue
+
             for piece in parsed["chain"]:
                 rs_type = piece["type"]
                 info = rs_map.get(rs_type) or {}
@@ -1449,22 +1931,28 @@ _watcher_state: dict = {
 
 def _watch_scan_dlc() -> dict[str, int] | None:
     """Return {filename: size} for every PSARC/sloppak in the DLC dir,
-    or None if the dir isn't available."""
+    or None if the dir isn't available. RECURSIVE — picks up files
+    nested in subfolders (artist-based or any other organisation)."""
     dlc = _get_dlc_dir() if _get_dlc_dir else None
     if not dlc:
         return None
+    current: dict[str, int] = {}
     try:
-        entries = sorted(dlc.iterdir())
+        for p in dlc.rglob("*"):
+            if not p.is_file():
+                continue
+            if p.suffix.lower() not in (".psarc", ".sloppak"):
+                continue
+            try:
+                # Basename keys to stay consistent with web_library.db
+                # and _list_library_songs. Two subfolders with the same
+                # song basename would collide — first one wins, but that
+                # mirrors the host's own behaviour.
+                current[p.name] = p.stat().st_size
+            except OSError:
+                continue
     except OSError:
         return None
-    current: dict[str, int] = {}
-    for p in entries:
-        if p.suffix.lower() not in (".psarc", ".sloppak"):
-            continue
-        try:
-            current[p.name] = p.stat().st_size
-        except OSError:
-            continue
     return current
 
 
@@ -1514,14 +2002,14 @@ def _watch_tick() -> list[str]:
 
 
 def _watch_loop():
-    log.info("nam_rig_builder watcher started (interval=%ss)", _WATCH_INTERVAL_SEC)
+    log.info("rig_builder watcher started (interval=%ss)", _WATCH_INTERVAL_SEC)
     _watcher_state["running"] = True
     try:
         while not _watcher_stop.is_set():
             try:
                 to_fire = _watch_tick()
             except Exception:
-                log.exception("nam_rig_builder watcher tick failed")
+                log.exception("rig_builder watcher tick failed")
                 _watcher_state["last_error"] = "tick failed (see server log)"
                 to_fire = []
 
@@ -1559,9 +2047,9 @@ def _watch_fire(name: str) -> None:
             "processed": result.get("processed"),
             "downloaded": result.get("downloaded"),
         }
-        log.info("nam_rig_builder watcher auto-downloaded %s: %s", name, result)
+        log.info("rig_builder watcher auto-downloaded %s: %s", name, result)
     except Exception as e:
-        log.exception("nam_rig_builder watcher auto-download failed for %s", name)
+        log.exception("rig_builder watcher auto-download failed for %s", name)
         _watcher_state["last_error"] = f"{name}: {type(e).__name__}: {e}"
 
 
@@ -1571,7 +2059,7 @@ def _start_watcher() -> None:
         return
     _watcher_stop.clear()
     _watcher_thread = threading.Thread(
-        target=_watch_loop, name="nam_rig_builder_watcher", daemon=True,
+        target=_watch_loop, name="rig_builder_watcher", daemon=True,
     )
     _watcher_thread.start()
 
@@ -1600,7 +2088,7 @@ def setup(app, context):
 
     # ── Status / setup ────────────────────────────────────────────────
 
-    @app.get("/api/plugins/nam_rig_builder/status")
+    @app.get("/api/plugins/rig_builder/status")
     def status():
         rs_map = _load_rs_to_real()
         settings = _load_settings()
@@ -1655,7 +2143,7 @@ def setup(app, context):
             },
         }
 
-    @app.post("/api/plugins/nam_rig_builder/extract_irs")
+    @app.post("/api/plugins/rig_builder/extract_irs")
     def extract_irs(data: dict = Body(...)):
         """Run extract_irs.py against a user-supplied gears.psarc. The
         IRs are written into <config_dir>/nam_irs/rocksmith/ so the
@@ -1683,7 +2171,7 @@ def setup(app, context):
         _invalidate_rs_cab_to_ir()
         return {"ok": True, "stdout": result.stdout, "count": len(_load_rs_cab_to_ir())}
 
-    @app.post("/api/plugins/nam_rig_builder/extract_gear_map")
+    @app.post("/api/plugins/rig_builder/extract_gear_map")
     def extract_gear_map(data: dict = Body(...)):
         """Run extract_gear_map.py against a user-supplied gears.psarc.
         Returns the new entry count. The script lives in this plugin
@@ -1710,7 +2198,7 @@ def setup(app, context):
         _invalidate_rs_to_real()
         return {"ok": True, "stdout": result.stdout, "count": len(_load_rs_to_real())}
 
-    @app.get("/api/plugins/nam_rig_builder/settings")
+    @app.get("/api/plugins/rig_builder/settings")
     def get_settings():
         s = _load_settings()
         # Return the key truncated so we can show "configured" in the
@@ -1723,16 +2211,87 @@ def setup(app, context):
             "tone3000_api_key_preview": (key[:6] + "…") if key else "",
         }
 
-    @app.post("/api/plugins/nam_rig_builder/settings")
+    @app.post("/api/plugins/rig_builder/settings")
     def update_settings(data: dict = Body(...)):
         # Only persist known keys to avoid junk accumulating in the file.
         allowed = {k: data[k] for k in ("tone3000_api_key", "min_downloads", "aggressive") if k in data}
         _save_settings(allowed)
         return {"ok": True}
 
+    @app.get("/api/plugins/rig_builder/master_chain")
+    def get_master_chain():
+        """Return both halves of the global master chain (pre + post),
+        enriched the same way as a per-tone chain. The UI's Master Chain
+        tab uses this to render its two columns."""
+        return {
+            "pre":  _load_master_chain("pre"),
+            "post": _load_master_chain("post"),
+            "pre_preset_id":  _get_master_preset_id("pre"),
+            "post_preset_id": _get_master_preset_id("post"),
+        }
+
+    @app.post("/api/plugins/rig_builder/master_chain/save")
+    def save_master_chain(data: dict = Body(...)):
+        """Persist one half of the master chain (role='pre' or 'post').
+        Body: `{role, pieces: [...]}` — same piece shape /save_preset
+        accepts. Replaces the whole half; client sends the full ordered
+        list every time (just like rbPersistTone for a regular tone)."""
+        role = (data.get("role") or "").strip()
+        if role not in ("pre", "post"):
+            return JSONResponse({"error": "role must be 'pre' or 'post'"}, 400)
+        pieces = data.get("pieces") or []
+        if not isinstance(pieces, list):
+            return JSONResponse({"error": "pieces must be a list"}, 400)
+        pid = _get_master_preset_id(role)
+        if pid is None:
+            return JSONResponse({"error": "could not get master preset"}, 500)
+        name = _MASTER_PRESET_NAMES[role]
+        try:
+            preset_id = _persist_preset_chain(
+                filename="__master__",
+                tone_key=role,
+                name=name,
+                pieces=pieces,
+                input_gain=1.0,
+                output_gain=1.0,
+                gate_threshold=-60.0,
+                assigned_mode="master",
+            )
+        except Exception as e:
+            log.exception("save_master_chain failed")
+            return JSONResponse({"error": f"{type(e).__name__}: {e}"}, 500)
+        return {"ok": True, "preset_id": preset_id, "role": role,
+                "piece_count": len(pieces)}
+
+    @app.get("/api/plugins/rig_builder/gears_catalog")
+    def gears_catalog():
+        """Return the full rs_to_real catalog as a flat list of choices the
+        UI's chain editor uses to populate the 'Add piece' picker. Each
+        entry has: rs_gear (the key), name (display), category (RS coarse
+        bucket: amp/cab/pedal/rack/other), AND daw_category (DAW-style
+        subcategory: amps/cabs/distortion/modulation/delay/reverb/comp/
+        eq/wah/pitch/filter/utility/other) for finer-grained filtering in
+        the picker. Sorted by daw_category → name."""
+        rs_map = _load_rs_to_real()
+        out: list[dict] = []
+        for rs_gear, info in rs_map.items():
+            if rs_gear.startswith("_") or not isinstance(info, dict):
+                continue
+            category = info.get("category") or _gear_category(rs_gear) or "other"
+            out.append({
+                "rs_gear": rs_gear,
+                "name": info.get("name") or rs_gear,
+                "make": info.get("make", ""),
+                "model": info.get("model", ""),
+                "category": category,
+                "daw_category": _daw_category_for(rs_gear, category),
+            })
+        out.sort(key=lambda g: (g["daw_category"], (g["name"] or "").lower()))
+        return {"gears": out, "count": len(out)}
+
     # ── Song / chain inspection ───────────────────────────────────────
 
-    @app.get("/api/plugins/nam_rig_builder/song/{filename:path}")
+    @app.get("/api/plugins/rig_builder/song/{filename:path}")
     def get_song(filename: str):
         path = _resolve_song_file(filename)
         if path is None:
@@ -1777,32 +2336,45 @@ def setup(app, context):
         ).fetchall()
         existing_by_key = {r[0]: r[1] for r in existing_rows}
 
+        _img_idx = _tone_image_index()
         tones: list[dict] = []
         for raw in raw_tones:
             parsed = _parse_tone(raw)
-            enriched_chain = [_enrich_chain_piece(p) for p in parsed["chain"]]
             preset_id = existing_by_key.get(parsed["key"])
-            # Persisted per-piece bypass, scoped to THIS tone's preset so a
-            # bypass saved in another song doesn't bleed in (the gear-global
-            # `assigned` lookup can't distinguish songs; preset_id can).
-            if preset_id is not None:
-                bypass_map = {
-                    r[0]: bool(r[1]) for r in conn.execute(
-                        "SELECT rs_gear_type, bypassed FROM preset_pieces WHERE preset_id = ?",
-                        (preset_id,),
-                    )
-                }
-                for piece in enriched_chain:
-                    piece["bypassed"] = bypass_map.get(piece.get("type"), False)
+            # If the user has a saved chain for this tone, that's the
+            # source of truth — it can have pieces added by the user,
+            # original PSARC pieces removed, or any custom slot_order.
+            # Fall back to the PSARC's GearList only for tones the user
+            # has never touched (no preset yet).
+            saved_chain = _load_saved_chain(conn, preset_id, _img_idx) if preset_id is not None else None
+            if saved_chain:
+                enriched_chain = saved_chain
+            else:
+                enriched_chain = [_enrich_chain_piece(p, _img_idx) for p in parsed["chain"]]
+                # Persisted per-piece bypass, scoped to THIS tone's preset so a
+                # bypass saved in another song doesn't bleed in.
+                if preset_id is not None:
+                    bypass_map = {
+                        r[0]: bool(r[1]) for r in conn.execute(
+                            "SELECT rs_gear_type, bypassed FROM preset_pieces WHERE preset_id = ?",
+                            (preset_id,),
+                        )
+                    }
+                    for piece in enriched_chain:
+                        piece["bypassed"] = bypass_map.get(piece.get("type"), False)
             tones.append({
                 "name": parsed["name"],
                 "key": parsed["key"],
                 "chain": enriched_chain,
                 "preset_id": preset_id,
+                # When the chain is coming from preset_pieces (user-edited),
+                # tell the UI so it can show "edited" badge / skip the
+                # PSARC-defaults explainer.
+                "chain_source": "edited" if saved_chain else "psarc",
             })
         return {"filename": filename, "tones": tones}
 
-    @app.get("/api/plugins/nam_rig_builder/search")
+    @app.get("/api/plugins/rig_builder/search")
     def search(rs_gear: str, limit: int = 10, query_override: str = "", gears_override: str = ""):
         """Search tone3000 for a specific Rocksmith gear. Always returns
         a deep-link URL; the candidates list is populated only when the
@@ -1860,7 +2432,7 @@ def setup(app, context):
 
     # ── Per-gear query override (persist user discoveries) ──────────
 
-    @app.post("/api/plugins/nam_rig_builder/override_query")
+    @app.post("/api/plugins/rig_builder/override_query")
     def override_query(data: dict = Body(...)):
         """Persist a user-supplied tone3000 query/gears override for
         one rs_gear into rs_to_real.json.
@@ -1901,7 +2473,48 @@ def setup(app, context):
 
     # ── v3: per-gear manual auto-download (used from the Sugerir modal) ─
 
-    @app.post("/api/plugins/nam_rig_builder/download_for_gear")
+    @app.post("/api/plugins/rig_builder/use_local_for_gear")
+    def use_local_for_gear(data: dict = Body(...)):
+        """Bulk-assign a file already present in nam_models/ or nam_irs/
+        to every preset_pieces row for a given rs_gear_type. Mirrors the
+        post-download path of /download_for_gear (calls
+        _assign_file_to_gear), but skips the tone3000 round-trip — the
+        file is already local.
+
+        Body: `{rs_gear, local_file, local_kind}` where
+          - rs_gear:    e.g. "Amp_TW22"
+          - local_file: relative path under the kind's root
+                        (e.g. "Plexi 51.nam" or "rocksmith/cab_4x12_x.wav")
+          - local_kind: "nam" | "ir" | "rs_ir"
+
+        Returns `{ok, pieces_updated, presets_updated, kind, file}`.
+        """
+        rs_gear = (data.get("rs_gear") or "").strip()
+        local_file = (data.get("local_file") or "").strip()
+        local_kind = (data.get("local_kind") or "").strip().lower()
+        if not rs_gear or not local_file or not local_kind:
+            return JSONResponse(
+                {"error": "rs_gear, local_file, local_kind required"}, 400)
+        if local_kind not in ("nam", "ir", "rs_ir"):
+            return JSONResponse(
+                {"error": f"local_kind must be nam|ir|rs_ir, got {local_kind}"}, 400)
+        # Sanity-check the file actually exists on disk so we never bind
+        # phantom paths.
+        if _config_dir is None:
+            return JSONResponse({"error": "config_dir not initialized"}, 500)
+        root = _config_dir / ("nam_models" if local_kind == "nam" else "nam_irs")
+        target = _safe_child(root, local_file)
+        if target is None or not target.exists():
+            return JSONResponse(
+                {"error": f"file not found: {local_file}"}, 404)
+        # Detect whether the IR is one of the Rocksmith-extracted ones so
+        # the kind column matches what /batch + the catalog filter expect.
+        if local_kind == "ir" and local_file.startswith("rocksmith/"):
+            local_kind = "rs_ir"
+        assigned = _assign_file_to_gear(rs_gear, local_kind, local_file, None)
+        return {"ok": True, "kind": local_kind, "file": local_file, **assigned}
+
+    @app.post("/api/plugins/rig_builder/download_for_gear")
     def download_for_gear(data: dict = Body(...)):
         """Manually pull a tone3000 capture for a single Rocksmith gear.
 
@@ -1952,7 +2565,7 @@ def setup(app, context):
 
     # ── Auto-download for a single song (triggered on UI open) ──────
 
-    @app.post("/api/plugins/nam_rig_builder/auto_download_song")
+    @app.post("/api/plugins/rig_builder/auto_download_song")
     def auto_download_song(data: dict = Body(...)):
         """Run the same per-piece auto-download flow the batch worker
         does, but scoped to one song. Triggered by the UI when the
@@ -1997,7 +2610,7 @@ def setup(app, context):
 
     # ── Persist a preset (manual save from UI) ────────────────────────
 
-    @app.post("/api/plugins/nam_rig_builder/save_preset")
+    @app.post("/api/plugins/rig_builder/save_preset")
     def save_preset(data: dict = Body(...)):
         filename = data.get("filename")
         tone_key = data.get("tone_key", "")
@@ -2039,7 +2652,7 @@ def setup(app, context):
         return {"ok": True, "count": len(captures)}
 
     # ── Full-chain native preset (experimental multi-NAM preview) ─────
-    @app.get("/api/plugins/nam_rig_builder/native_preset_full/{preset_id}")
+    @app.get("/api/plugins/rig_builder/native_preset_full/{preset_id}")
     def native_preset_full(preset_id: int):
         """Build a native_preset that sends the WHOLE chain to the engine:
         every NAM piece as its own type-1 stage (in signal-flow order) plus
@@ -2061,7 +2674,9 @@ def setup(app, context):
         _, name, input_gain, output_gain, gate_threshold = prow
 
         rows = conn.execute(
-            "SELECT slot, kind, file, rs_gear_type, bypassed FROM preset_pieces WHERE preset_id = ? "
+            "SELECT slot, kind, file, rs_gear_type, bypassed, slot_order, "
+            "vst_path, vst_format, vst_state "
+            "FROM preset_pieces WHERE preset_id = ? "
             "ORDER BY slot_order",
             (preset_id,),
         ).fetchall()
@@ -2069,40 +2684,72 @@ def setup(app, context):
         models_dir = (_config_dir / "nam_models") if _config_dir else None
         irs_dir = (_config_dir / "nam_irs") if _config_dir else None
 
-        # (slot, file, rs_gear, bypassed) per NAM piece, ordered by signal flow.
-        nam_rows = [(r[0], r[2], r[3], bool(r[4])) for r in rows if r[1] == "nam" and r[2]]
-        # Order NAM stages by signal flow; unknown slots keep their stored
-        # order after the known ones.
+        # Pieces that produce an audio stage (NAM or VST), ordered by signal
+        # flow. IR (type 2) is handled separately at the tail of the chain.
         def _rank(slot: str) -> int:
             return _CHAIN_NAM_ORDER.index(slot) if slot in _CHAIN_NAM_ORDER else len(_CHAIN_NAM_ORDER)
-        nam_rows.sort(key=lambda sr: _rank(sr[0]))
+
+        # Build (rank, slot_order, kind, slot, payload, gear, bypassed) tuples
+        # so we can stable-sort everything (NAM + VST) by signal-flow first
+        # and stored slot_order within the same slot second.
+        audio_pieces = []
+        for slot, kind, file, gear, bypassed, slot_order, vst_path, vst_format, vst_state in rows:
+            if kind == "nam" and file:
+                audio_pieces.append((_rank(slot), slot_order, "nam", slot,
+                                     file, gear, bool(bypassed), None, None))
+            elif kind == "vst" and vst_path:
+                audio_pieces.append((_rank(slot), slot_order, "vst", slot,
+                                     vst_path, gear, bool(bypassed),
+                                     vst_format or "VST3", vst_state))
+        audio_pieces.sort(key=lambda t: (t[0], t[1]))
 
         chain: list[dict] = []
         missing: list[str] = []
-        for slot, file, gear, bypassed in nam_rows:
-            path = _safe_child(models_dir, file)
-            if not path or not path.exists():
-                missing.append(file)
-                continue
-            chain.append({
-                "type": 1,
-                "name": Path(file).stem,
-                "path": str(path),
-                # Persisted bypass = the engine passes signal THROUGH this
-                # stage (not silence). The UI can still flip it live.
-                "bypassed": bypassed,
-                "slot": slot,
-                "rs_gear": gear,
-                # Unity in/out for every NAM so intermediate stages feed the
-                # next at full level; final loudness is set on the IR.
-                "state": _state_b64({
-                    "modelPath": str(path),
-                    "inputLevel": 1.0,
-                    "outputLevel": 1.0,
-                }),
-            })
+        for _r, _o, kind, slot, payload, gear, bypassed, vst_format, vst_state in audio_pieces:
+            if kind == "nam":
+                path = _safe_child(models_dir, payload)
+                if not path or not path.exists():
+                    missing.append(payload)
+                    continue
+                chain.append({
+                    "type": 1,
+                    "name": Path(payload).stem,
+                    "path": str(path),
+                    # Persisted bypass = the engine passes signal THROUGH this
+                    # stage (not silence). The UI can still flip it live.
+                    "bypassed": bypassed,
+                    "slot": slot,
+                    "rs_gear": gear,
+                    # Unity in/out for every NAM so intermediate stages feed the
+                    # next at full level; final loudness is set on the IR.
+                    "state": _state_b64({
+                        "modelPath": str(path),
+                        "inputLevel": 1.0,
+                        "outputLevel": 1.0,
+                    }),
+                })
+            else:  # vst
+                # VST paths are absolute (no sandbox under models_dir). We
+                # don't .exists()-check on the backend because the engine
+                # also runs the load — easier to surface a real engine error
+                # than a stale stat() in case of bundles vs symlinks.
+                vst_path_p = Path(payload)
+                chain.append({
+                    "type": 0,
+                    "name": vst_path_p.stem,
+                    "path": str(vst_path_p),
+                    "format": vst_format,
+                    "bypassed": bypassed,
+                    "slot": slot,
+                    "rs_gear": gear,
+                    # Opaque state blob (verbatim) so the plugin restores its
+                    # captured params during real playback — not defaults.
+                    "state": _vst_stage_state(str(vst_path_p), vst_format, vst_state),
+                })
 
-        # One cab IR at the tail (prefer the cabinet slot).
+        # One cab IR at the tail (prefer the cabinet slot). Indexed in the
+        # original `rows` tuples — column order: slot, kind, file, rs_gear,
+        # bypassed, slot_order, vst_path, vst_format, vst_state.
         ir_rows = [(r[0], r[2], r[3], bool(r[4])) for r in rows if r[1] in ("ir", "rs_ir") and r[2]]
         ir_pick = next((row for row in ir_rows if row[0] == "cabinet"), None)
         if ir_pick is None and ir_rows:
@@ -2123,6 +2770,21 @@ def setup(app, context):
             else:
                 missing.append(ir_file)
 
+        # ── Master chain wrap (global pre + post FX) ──
+        # Prepend master_pre stages BEFORE the song's chain (sees the
+        # raw DI), append master_post AFTER the cab IR (sees the wet
+        # output). Bypass on a master piece survives just like any other.
+        #
+        # GUARD: if the caller asked for the master sentinel itself (e.g.
+        # the master-chain tab's "Listen master in isolation"), don't
+        # wrap again — that would double-stack pre/post around itself.
+        master_pre_stages: list[dict] = []
+        master_post_stages: list[dict] = []
+        if not (name or "").startswith("__rig_builder_master_"):
+            master_pre_stages  = _build_master_stages("pre",  models_dir, irs_dir, output_gain, missing)
+            master_post_stages = _build_master_stages("post", models_dir, irs_dir, output_gain, missing)
+            chain = master_pre_stages + chain + master_post_stages
+
         return {
             "id": preset_id,
             "name": name,
@@ -2131,17 +2793,37 @@ def setup(app, context):
             "gate_threshold": gate_threshold,
             "native_preset": {"version": 1, "chain": chain},
             "nam_stage_count": sum(1 for s in chain if s["type"] == 1),
+            "vst_stage_count": sum(1 for s in chain if s["type"] == 0),
+            "ir_stage_count": sum(1 for s in chain if s["type"] == 2),
+            "master_pre_count":  len(master_pre_stages),
+            "master_post_count": len(master_post_stages),
             "missing": missing,
         }
 
     # ── Single-stage audition (catalog "Escuchar") ────────────────────
-    @app.get("/api/plugins/nam_rig_builder/native_preset_one")
-    def native_preset_one(file: str, kind: str = "nam", gain: float = 0.5):
-        """A native_preset with ONE stage from a single file, to audition a
-        gear's capture in isolation."""
+    @app.get("/api/plugins/rig_builder/native_preset_one")
+    def native_preset_one(file: str = "", kind: str = "nam", gain: float = 0.5,
+                          vst_path: str = "", vst_format: str = "VST3"):
+        """A native_preset with ONE stage to audition a single gear in
+        isolation. `kind` selects the stage type:
+          - "nam"            → NAM model from nam_models/<file>
+          - "ir" / "rs_ir"   → IR from nam_irs/<file>
+          - "vst"            → VST3/AU at absolute `vst_path` (file ignored)
+        """
         models_dir = (_config_dir / "nam_models") if _config_dir else None
         irs_dir = (_config_dir / "nam_irs") if _config_dir else None
-        if kind in ("ir", "rs_ir"):
+        if kind == "vst":
+            if not vst_path:
+                return JSONResponse({"error": "vst_path required"}, 400)
+            vp = Path(vst_path)
+            stage = {
+                "type": 0, "name": vp.stem, "path": str(vp),
+                "format": vst_format or "VST3",
+                "bypassed": False,
+                "state": _state_b64({"pluginPath": str(vp),
+                                     "format": vst_format or "VST3"}),
+            }
+        elif kind in ("ir", "rs_ir"):
             p = _safe_child(irs_dir, file)
             if not p or not p.exists():
                 return JSONResponse({"error": "ir not found"}, 404)
@@ -2158,8 +2840,281 @@ def setup(app, context):
                                           "outputLevel": float(gain)})}
         return {"native_preset": {"version": 1, "chain": [stage]}}
 
+    # ── VST plugin endpoints (Fase C: known list + assign + state) ────
+    # The native engine owns the actual VST scan + load via the JS bridge
+    # (`window.slopsmithDesktop.audio.getKnownPlugins() / loadVST / ...`).
+    # The Python side just persists the user's choice per (song, gear) so
+    # we can rebuild the chain on Listen without re-scanning each time.
+
+    _KNOWN_VSTS_FILENAME = "rig_builder_known_vsts.json"
+
+    @app.get("/api/plugins/rig_builder/vst/known")
+    def vst_known():
+        """Return the last list of installed VST3/AU plugins as seen by the
+        engine. Populated by the frontend via POST /vst/sync_known after it
+        calls `getKnownPlugins()` on the native API. Empty list if the user
+        hasn't synced yet (we can't initiate a scan from Python — the engine
+        runs in the renderer's main process)."""
+        if _config_dir is None:
+            return {"plugins": []}
+        path = _config_dir / _KNOWN_VSTS_FILENAME
+        if not path.exists():
+            return {"plugins": []}
+        try:
+            data = json.loads(path.read_text())
+            if isinstance(data, list):
+                return {"plugins": data}
+            if isinstance(data, dict) and isinstance(data.get("plugins"), list):
+                return data
+        except (json.JSONDecodeError, OSError):
+            log.warning("known vsts file unreadable", exc_info=True)
+        return {"plugins": []}
+
+    @app.post("/api/plugins/rig_builder/vst/sync_known")
+    def vst_sync_known(data: dict = Body(...)):
+        """Frontend pushes the result of `getKnownPlugins()` so the Python
+        side can render the dropdown without round-tripping through JS.
+        Body: `{"plugins": [{name, manufacturer, format, category, path}, ...]}`.
+        """
+        plugins = data.get("plugins")
+        if not isinstance(plugins, list):
+            return JSONResponse({"error": "plugins must be a list"}, 400)
+        if _config_dir is None:
+            return JSONResponse({"error": "config_dir not initialized"}, 500)
+        path = _config_dir / _KNOWN_VSTS_FILENAME
+        try:
+            path.write_text(json.dumps({"plugins": plugins,
+                                        "synced_at": int(time.time())}, indent=2))
+        except OSError as e:
+            return JSONResponse({"error": f"write failed: {e}"}, 500)
+        return {"ok": True, "count": len(plugins)}
+
+    @app.post("/api/plugins/rig_builder/vst/assign")
+    def vst_assign(data: dict = Body(...)):
+        """Assign a VST to every preset_pieces row for a given rs_gear_type
+        (or to a single (preset_id, rs_gear_type) pair). Mirrors how
+        `/upload_for_gear` and `/download_for_gear` work for NAM/IR, but
+        writes the kind=vst columns instead.
+
+        Body:
+          - rs_gear_type:  required, e.g. "Pedal_Chorus20"
+          - vst_path:      required, absolute path to .vst3 / .component
+          - vst_format:    "VST3" | "AudioUnit" (default VST3)
+          - vst_state:     optional base64 plugin state (captured later)
+          - preset_id:     optional — if present, scope to one preset
+        """
+        rs_gear = (data.get("rs_gear_type") or "").strip()
+        vst_path = (data.get("vst_path") or "").strip()
+        vst_format = (data.get("vst_format") or "VST3").strip()
+        vst_state = data.get("vst_state")
+        preset_id = data.get("preset_id")
+        if not rs_gear or not vst_path:
+            return JSONResponse(
+                {"error": "rs_gear_type and vst_path required"}, 400)
+        conn = _get_conn()
+        with _lock:
+            if preset_id is not None:
+                where = "rs_gear_type = ? AND preset_id = ?"
+                params = (rs_gear, int(preset_id))
+            else:
+                where = "rs_gear_type = ?"
+                params = (rs_gear,)
+            cur = conn.execute(
+                f"UPDATE preset_pieces SET "
+                f"  kind = 'vst', file = NULL, "
+                f"  vst_path = ?, vst_format = ?, vst_state = ?, "
+                f"  assigned_mode = 'manual_vst' "
+                f"WHERE {where}",
+                (vst_path, vst_format, vst_state, *params),
+            )
+            pieces_updated = cur.rowcount
+            # Refresh primary model/IR for affected presets — a VST never
+            # becomes the primary `model_file` (that slot only takes NAM),
+            # but the recompute is safe and keeps consistency.
+            affected = [r[0] for r in conn.execute(
+                f"SELECT DISTINCT preset_id FROM preset_pieces WHERE {where}",
+                params,
+            ).fetchall()]
+            for pid in affected:
+                _recompute_preset_primaries(conn, pid)
+            conn.commit()
+        return {"ok": True, "pieces_updated": pieces_updated,
+                "presets_updated": len(affected)}
+
+    @app.post("/api/plugins/rig_builder/vst/capture_state")
+    def vst_capture_state(data: dict = Body(...)):
+        """Persist a captured plugin state blob for an existing VST piece.
+        The frontend obtains the blob via `api.savePreset()` (whole-chain
+        opaque format) or — better — via the future per-slot getState API.
+        Body: {rs_gear_type, vst_state, preset_id?}.
+        """
+        rs_gear = (data.get("rs_gear_type") or "").strip()
+        vst_state = data.get("vst_state")
+        preset_id = data.get("preset_id")
+        if not rs_gear or vst_state is None:
+            return JSONResponse(
+                {"error": "rs_gear_type and vst_state required"}, 400)
+        conn = _get_conn()
+        with _lock:
+            if preset_id is not None:
+                cur = conn.execute(
+                    "UPDATE preset_pieces SET vst_state = ? "
+                    "WHERE rs_gear_type = ? AND preset_id = ? AND kind = 'vst'",
+                    (vst_state, rs_gear, int(preset_id)),
+                )
+            else:
+                cur = conn.execute(
+                    "UPDATE preset_pieces SET vst_state = ? "
+                    "WHERE rs_gear_type = ? AND kind = 'vst'",
+                    (vst_state, rs_gear),
+                )
+            conn.commit()
+        return {"ok": True, "pieces_updated": cur.rowcount}
+
+    @app.get("/api/plugins/rig_builder/local_files")
+    def local_files(kind: str = "nam"):
+        """List all locally-available NAM models or IR WAVs that the user
+        could pick for a piece, with usage stats so the UI can sort by
+        most-used first.
+
+        Query:
+          - kind: "nam" → lists nam_models/*.nam
+                  "ir"  → lists nam_irs/**/*.wav (recursive, includes the
+                          extract_irs.py output under nam_irs/rocksmith/)
+
+        Returns:
+          {"files": [
+            {"name": str (relative to dir root),
+             "size_bytes": int,
+             "mtime_iso": str (ISO 8601),
+             "use_count": int (# of preset_pieces referencing it),
+             "used_for_gears": [rs_gear_type, ...] (distinct)},
+            ...]}
+
+        The list is sorted by use_count DESC then name ASC, so the
+        plugins the user has assigned most often surface to the top.
+        """
+        if _config_dir is None:
+            return JSONResponse({"error": "config_dir not initialized"}, 500)
+        kind = (kind or "nam").lower()
+        if kind == "nam":
+            root = _config_dir / "nam_models"
+            ext = ".nam"
+            recursive = False
+        elif kind in ("ir", "wav"):
+            root = _config_dir / "nam_irs"
+            ext = ".wav"
+            recursive = True
+        else:
+            return JSONResponse({"error": f"unknown kind: {kind}"}, 400)
+        if not root.exists():
+            return {"files": []}
+        # Walk filesystem.
+        paths: list = []
+        iterator = root.rglob(f"*{ext}") if recursive else root.glob(f"*{ext}")
+        for p in iterator:
+            if p.is_file():
+                paths.append(p)
+        # Build a single SQL query to fetch usage stats for ALL files at once
+        # (one round-trip beats N).
+        conn = _get_conn()
+        # Match preset_pieces.file against the relative name we present.
+        # For NAM models the file column stores the bare basename; for IRs
+        # under nam_irs/rocksmith/foo.wav it stores "rocksmith/foo.wav"
+        # (see _assign_file_to_gear and friends — same relative convention).
+        rel_names = [str(p.relative_to(root)) for p in paths]
+        usage: dict[str, dict] = {n: {"count": 0, "gears": []} for n in rel_names}
+        if rel_names:
+            placeholders = ",".join("?" for _ in rel_names)
+            rows = conn.execute(
+                f"SELECT file, COUNT(*), GROUP_CONCAT(DISTINCT rs_gear_type) "
+                f"FROM preset_pieces WHERE file IN ({placeholders}) GROUP BY file",
+                tuple(rel_names),
+            ).fetchall()
+            for fname, n, gears in rows:
+                usage[fname] = {
+                    "count": int(n),
+                    "gears": [g for g in (gears or "").split(",") if g],
+                }
+        # Map each tone3000 download back to its human title so the picker
+        # shows "Marshall JTM45" instead of tone3000_<id>_m<model>_<gear>.
+        # Best-effort: None when the tone isn't in the local search cache or
+        # the file isn't a tone3000 download (manual upload / RS-extracted IR).
+        img_idx = _tone_image_index()
+
+        def _title_for(relname: str):
+            m = re.match(r"tone3000_(\d+)_m\d+_", Path(relname).name)
+            return (img_idx.get(int(m.group(1))) or {}).get("title") if m else None
+
+        out = []
+        for p, n in zip(paths, rel_names):
+            try:
+                st = p.stat()
+                size_bytes = st.st_size
+                mtime_iso = datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds")
+            except OSError:
+                size_bytes = 0
+                mtime_iso = ""
+            u = usage[n]
+            out.append({
+                "name": n,
+                "title": _title_for(n),
+                "size_bytes": size_bytes,
+                "mtime_iso": mtime_iso,
+                "use_count": u["count"],
+                "used_for_gears": u["gears"],
+            })
+        # Sort: most-used first, then alphabetical.
+        out.sort(key=lambda f: (-f["use_count"], f["name"].lower()))
+        return {"files": out, "kind": kind, "total": len(out)}
+
+    @app.get("/api/plugins/rig_builder/vst/knob_mapping")
+    def vst_knob_mapping(rs_gear_type: str, vst_name: str):
+        """Lookup the per-VST translation table for a Rocksmith gear:
+        which RS knob maps to which VST parameter, plus scaling.
+
+        Query params:
+          - rs_gear_type: e.g. "Pedal_Chorus20"
+          - vst_name:     filename stem of the .vst3 / .component bundle
+                          (case-insensitive). E.g. "uaudio_brigade_chorus".
+
+        Returns: {"mapping": {<rs_knob>: {param, scale, offset?, invert?}}, ...}
+        or {"mapping": null} if no curated mapping exists for this pair.
+        """
+        table = _load_knob_to_vst_table()
+        gear_entry = table.get(rs_gear_type) or {}
+        # Case-insensitive VST lookup so user typos / case differences don't
+        # silently miss a perfectly good mapping.
+        key = (vst_name or "").lower()
+        if not key:
+            return {"mapping": None}
+        for name, mapping in gear_entry.items():
+            if name.lower() == key:
+                return {"mapping": mapping, "matched_vst": name,
+                        "rs_gear_type": rs_gear_type}
+        return {"mapping": None}
+
+    @app.get("/api/plugins/rig_builder/vst/suggest/{rs_gear_type}")
+    def vst_suggest(rs_gear_type: str):
+        """Lookup the static rs_gear_to_vst.json seed catalog for VST
+        suggestions. Falls back to whatever is in the known list whose
+        category matches the gear's family (rough heuristic)."""
+        seeds = _load_vst_seed_catalog()
+        suggestions = seeds.get(rs_gear_type, [])
+        # Cross-reference suggestions with what's actually installed so the
+        # UI can disambiguate "you have it" vs "you'd need to install".
+        known = vst_known().get("plugins", [])
+        installed_names = {p.get("name", "").lower(): p for p in known}
+        for s in suggestions:
+            match = installed_names.get(s.get("name", "").lower())
+            s["installed"] = match is not None
+            if match:
+                s["installed_path"] = match.get("path")
+                s["installed_format"] = match.get("format")
+        return {"rs_gear_type": rs_gear_type, "suggestions": suggestions}
+
     # ── Gear catalog (grouped by type, with parenting + photo) ────────
-    @app.get("/api/plugins/nam_rig_builder/gear_catalog")
+    @app.get("/api/plugins/rig_builder/gear_catalog")
     def gear_catalog():
         """Every Rocksmith gear referenced by a mapped song, grouped by
         category, with what it's parented to (real make/model + assigned
@@ -2169,18 +3124,40 @@ def setup(app, context):
         rs_map = _load_rs_to_real()
         img_idx = _tone_image_index()
 
-        # Best preset_piece per gear: prefer a row with a file, else latest.
-        rows = conn.execute(
-            "SELECT rs_gear_type, kind, file, tone3000_id, id FROM preset_pieces "
-            "ORDER BY id DESC"
-        ).fetchall()
+        # Best preset_piece per gear: prefer a row with an effective
+        # assignment (NAM/IR file OR a VST path), else latest. Excludes
+        # the master-chain sentinel presets so adding a piece to the
+        # global master chain doesn't pollute the Gear catalog with
+        # synthetic rs_gear_types like "VST_…".
+        master_ids = [pid for pid in (_get_master_preset_id("pre"),
+                                      _get_master_preset_id("post"))
+                      if pid is not None]
+        if master_ids:
+            placeholders = ",".join("?" for _ in master_ids)
+            rows = conn.execute(
+                "SELECT rs_gear_type, kind, file, tone3000_id, id, "
+                "       vst_path, vst_format, vst_state "
+                f"FROM preset_pieces WHERE preset_id NOT IN ({placeholders}) "
+                "ORDER BY id DESC",
+                tuple(master_ids),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT rs_gear_type, kind, file, tone3000_id, id, "
+                "       vst_path, vst_format, vst_state "
+                "FROM preset_pieces ORDER BY id DESC"
+            ).fetchall()
         best: dict[str, dict] = {}
-        for gear, kind, file, t3kid, _id in rows:
-            has_file = bool(file)
+        for gear, kind, file, t3kid, _id, vst_path, vst_format, vst_state in rows:
+            has_assignment = bool(file) or (kind == "vst" and bool(vst_path))
             cur = best.get(gear)
-            if cur is None or (has_file and not cur["has_file"]):
-                best[gear] = {"kind": kind, "file": file,
-                              "tone3000_id": t3kid, "has_file": has_file}
+            if cur is None or (has_assignment and not cur["has_assignment"]):
+                best[gear] = {
+                    "kind": kind, "file": file,
+                    "tone3000_id": t3kid, "has_assignment": has_assignment,
+                    "vst_path": vst_path, "vst_format": vst_format,
+                    "vst_state": vst_state,
+                }
 
         cats: dict[str, list] = {}
         for gear, b in best.items():
@@ -2194,9 +3171,12 @@ def setup(app, context):
                 "make": info.get("make", ""),
                 "model": info.get("model", ""),
                 "category": category,
-                "assigned": b["has_file"],
+                "assigned": b["has_assignment"],
                 "kind": b["kind"],
                 "file": b["file"],
+                "vst_path": b["vst_path"],
+                "vst_format": b["vst_format"],
+                "vst_state": b["vst_state"],
                 "tone3000_id": t3kid,
                 "tone3000_title": (meta or {}).get("title"),
                 "image": (meta or {}).get("image"),
@@ -2213,7 +3193,7 @@ def setup(app, context):
                 "counts": {c: len(v) for c, v in ordered.items()}}
 
     # ── Download a candidate to audition it (no assign) ───────────────
-    @app.post("/api/plugins/nam_rig_builder/audition_candidate")
+    @app.post("/api/plugins/rig_builder/audition_candidate")
     def audition_candidate(data: dict = Body(...)):
         """Download the best model for a tone3000 tone_id into
         nam_models/nam_irs WITHOUT assigning, so the UI can audition a
@@ -2238,7 +3218,7 @@ def setup(app, context):
 
     # ── Batch ─────────────────────────────────────────────────────────
 
-    @app.post("/api/plugins/nam_rig_builder/batch_all")
+    @app.post("/api/plugins/rig_builder/batch_all")
     def batch_all(data: dict = Body(default={})):
         global _batch_thread
         mode = (data or {}).get("mode", "all")
@@ -2259,12 +3239,12 @@ def setup(app, context):
                 "finished_at": None,
             })
         _batch_thread = threading.Thread(
-            target=_batch_worker, args=(mode,), name="nam_rig_builder_batch", daemon=True
+            target=_batch_worker, args=(mode,), name="rig_builder_batch", daemon=True
         )
         _batch_thread.start()
         return {"ok": True, "mode": mode}
 
-    @app.get("/api/plugins/nam_rig_builder/batch_status")
+    @app.get("/api/plugins/rig_builder/batch_status")
     def batch_status():
         with _batch_lock:
             # Return a shallow copy so log list mutations during render
@@ -2273,17 +3253,38 @@ def setup(app, context):
 
     # ── Coverage / pendientes ─────────────────────────────────────────
 
-    @app.get("/api/plugins/nam_rig_builder/coverage")
+    @app.get("/api/plugins/rig_builder/coverage")
     def coverage():
-        """Pending = preset_pieces with kind='none' or missing file."""
+        """Pending = preset_pieces with kind='none' or missing file.
+
+        Excludes the master-chain sentinel presets so pieces added to the
+        global pre/post chain don't surface as "pending gears" — those
+        rows live outside any song. The Pending tab is the per-song to-do
+        list; master pieces are global and shouldn't pollute it.
+        """
         conn = _get_conn()
-        rows = conn.execute(
-            "SELECT rs_gear_type, COUNT(*) AS n, "
-            "  SUM(CASE WHEN kind='none' OR file IS NULL OR file='' THEN 1 ELSE 0 END) AS pending "
-            "FROM preset_pieces "
-            "GROUP BY rs_gear_type "
-            "ORDER BY pending DESC, n DESC"
-        ).fetchall()
+        master_ids = [pid for pid in (_get_master_preset_id("pre"),
+                                      _get_master_preset_id("post"))
+                      if pid is not None]
+        if master_ids:
+            placeholders = ",".join("?" for _ in master_ids)
+            rows = conn.execute(
+                "SELECT rs_gear_type, COUNT(*) AS n, "
+                "  SUM(CASE WHEN kind='none' OR file IS NULL OR file='' THEN 1 ELSE 0 END) AS pending "
+                "FROM preset_pieces "
+                f"WHERE preset_id NOT IN ({placeholders}) "
+                "GROUP BY rs_gear_type "
+                "ORDER BY pending DESC, n DESC",
+                tuple(master_ids),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT rs_gear_type, COUNT(*) AS n, "
+                "  SUM(CASE WHEN kind='none' OR file IS NULL OR file='' THEN 1 ELSE 0 END) AS pending "
+                "FROM preset_pieces "
+                "GROUP BY rs_gear_type "
+                "ORDER BY pending DESC, n DESC"
+            ).fetchall()
         rs_map = _load_rs_to_real()
         out = []
         for r in rows:
@@ -2299,23 +3300,86 @@ def setup(app, context):
             })
         return {"items": out}
 
-    @app.get("/api/plugins/nam_rig_builder/list_songs")
+    @app.get("/api/plugins/rig_builder/list_songs")
     def list_songs(q: str = "", limit: int = 50):
         """Return playable songs from DLC dir, optionally filtered by
-        substring on the filename. Each entry carries a `materialized`
-        flag so the UI can mark cloud-only stubs (0-byte placeholders
-        for files that still live in Google Drive) and trigger
-        cloud_loader/materialize on click.
+        substring on title / artist / filename. Each entry carries a
+        `materialized` flag (so the UI can mark cloud-only stubs and
+        trigger cloud_loader/materialize on click), plus `title` and
+        `artist` from Slopsmith's web_library.db cache if available.
+        Falls back to filename-only when the cache lacks an entry
+        (e.g. brand-new song the host hasn't indexed yet).
         """
         dlc = _get_dlc_dir() if _get_dlc_dir else None
         if not dlc:
             return {"songs": []}
-        q_lower = q.lower()
+        # Read the host's pre-parsed (title, artist, album, year) cache.
+        # web_library.db is the source of truth populated by Slopsmith's
+        # own library scanner — we just JOIN with it read-only so the
+        # rig_builder UI shows the same labels the user sees elsewhere
+        # in the app. Missing/old file = falls back to filename only.
+        meta_by_filename: dict[str, dict] = {}
+        if _config_dir is not None:
+            wl_path = _config_dir / "web_library.db"
+            if wl_path.exists():
+                try:
+                    c = sqlite3.connect(f"file:{wl_path}?mode=ro", uri=True)
+                    try:
+                        for fname, title, artist, album, year in c.execute(
+                            "SELECT filename, title, artist, album, year FROM songs"
+                        ):
+                            meta_by_filename[fname] = {
+                                "title": title or "",
+                                "artist": artist or "",
+                                "album": album or "",
+                                "year": year or "",
+                            }
+                    finally:
+                        c.close()
+                except sqlite3.Error:
+                    log.warning("could not read web_library.db", exc_info=True)
+
+        q_lower = (q or "").lower().strip()
+
+        def _matches(name: str, meta: dict) -> bool:
+            if not q_lower:
+                return True
+            if q_lower in name.lower():
+                return True
+            # Title / artist / album are user-facing; search them too so
+            # typing "strokes" finds Reptilia even though the filename is
+            # "Strokes-The_Reptilia_v1.psarc".
+            for k in ("title", "artist", "album"):
+                v = (meta.get(k) or "").lower()
+                if v and q_lower in v:
+                    return True
+            return False
+
         matches: list[dict] = []
-        for p in sorted(dlc.iterdir()):
-            if p.suffix.lower() not in (".psarc", ".sloppak"):
+        # rglob('*') walks the DLC dir recursively so a library
+        # organised in subfolders (e.g. one per artist) shows every
+        # song, not just the ones the user left at the root.
+        candidates = []
+        try:
+            for p in dlc.rglob("*"):
+                if not p.is_file():
+                    continue
+                if p.suffix.lower() not in (".psarc", ".sloppak"):
+                    continue
+                candidates.append(p)
+        except OSError:
+            return {"songs": []}
+        candidates.sort()
+        # Track basename collisions across subfolders. The host's
+        # web_library.db is keyed by basename so collisions would already
+        # be a host-side ambiguity; we just keep the first hit.
+        seen_basenames = set()
+        for p in candidates:
+            if p.name in seen_basenames:
                 continue
-            if q_lower and q_lower not in p.name.lower():
+            seen_basenames.add(p.name)
+            meta = meta_by_filename.get(p.name, {})
+            if not _matches(p.name, meta):
                 continue
             try:
                 size = p.stat().st_size
@@ -2325,7 +3389,23 @@ def setup(app, context):
                 "name": p.name,
                 "size": size,
                 "materialized": size > 0,
+                "title": meta.get("title", ""),
+                "artist": meta.get("artist", ""),
+                "album": meta.get("album", ""),
+                "year": meta.get("year", ""),
             })
             if len(matches) >= limit:
                 break
+
+        # Sort: songs with metadata first (sorted by artist then title),
+        # then the unmatched filename-only ones (alphabetical) as fallback.
+        def _key(entry):
+            has_meta = bool(entry["title"] or entry["artist"])
+            return (
+                0 if has_meta else 1,
+                (entry["artist"] or "").lower(),
+                (entry["title"] or "").lower(),
+                entry["name"].lower(),
+            )
+        matches.sort(key=_key)
         return {"songs": matches}

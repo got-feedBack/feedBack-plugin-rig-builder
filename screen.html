@@ -2,38 +2,42 @@
     <button onclick="showScreen('home')" class="text-gray-500 hover:text-white text-sm mb-6 flex items-center gap-1">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg> Back
     </button>
-    <h2 class="text-3xl font-bold text-white mb-2">NAM Rig Builder</h2>
-    <p class="text-gray-500 mb-6">Map Rocksmith tones to NAM captures from tone3000 and persist them as nam_tone presets.</p>
+    <h2 class="text-3xl font-bold text-white mb-2">Rig Builder</h2>
+    <p class="text-gray-500 mb-6">Map Rocksmith tones to NAM captures + VST3/AU plugins, persisted as nam_tone presets.</p>
 
     <!-- Setup status -->
-    <div id="tb-status" class="mb-6"></div>
+    <div id="rb-status" class="mb-6"></div>
 
     <!-- Tab nav -->
     <div class="flex gap-2 mb-6 border-b border-gray-800">
-        <button data-tb-tab="dashboard" onclick="tbShowTab('dashboard')"
-                class="tb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
+        <button data-rb-tab="dashboard" onclick="rbShowTab('dashboard')"
+                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
             Dashboard
         </button>
-        <button data-tb-tab="pending" onclick="tbShowTab('pending')"
-                class="tb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
+        <button data-rb-tab="pending" onclick="rbShowTab('pending')"
+                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
             Pending
         </button>
-        <button data-tb-tab="song" onclick="tbShowTab('song')"
-                class="tb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
+        <button data-rb-tab="song" onclick="rbShowTab('song')"
+                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
             By song
         </button>
-        <button data-tb-tab="gear" onclick="tbShowTab('gear')"
-                class="tb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
+        <button data-rb-tab="gear" onclick="rbShowTab('gear')"
+                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
             Gear
         </button>
-        <button data-tb-tab="settings" onclick="tbShowTab('settings')"
-                class="tb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
+        <button data-rb-tab="master" onclick="rbShowTab('master')"
+                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
+            Master chain
+        </button>
+        <button data-rb-tab="settings" onclick="rbShowTab('settings')"
+                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
             Settings
         </button>
     </div>
 
     <!-- Dashboard -->
-    <div id="tb-tab-dashboard" class="tb-tab-panel space-y-6">
+    <div id="rb-tab-dashboard" class="rb-tab-panel space-y-6">
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5">
             <h3 class="text-white font-semibold mb-2">Map the entire library</h3>
             <p class="text-gray-500 text-sm mb-4">
@@ -42,69 +46,117 @@
                 treats songs you've already set up:
             </p>
             <div class="flex flex-wrap gap-3">
-                <button class="tb-batch-btn bg-dark-600 hover:bg-dark-500 text-gray-200 px-5 py-2 rounded-xl text-sm transition"
-                        onclick="tbStartBatch('new')"
+                <button class="rb-batch-btn bg-dark-600 hover:bg-dark-500 text-gray-200 px-5 py-2 rounded-xl text-sm transition"
+                        onclick="rbStartBatch('new')"
                         title="Only map songs that have no preset yet — never touches what you've already configured">
                     Map new songs only
                 </button>
-                <button class="tb-batch-btn bg-accent hover:bg-accent/80 text-white px-5 py-2 rounded-xl text-sm transition"
-                        onclick="tbStartBatch('all')"
+                <button class="rb-batch-btn bg-accent hover:bg-accent/80 text-white px-5 py-2 rounded-xl text-sm transition"
+                        onclick="rbStartBatch('all')"
                         title="(Re)map every song with the current/default presets. Re-resolves captures but keeps each tone's bypass and chosen cab-IR variant">
                     Remap all
                 </button>
             </div>
-            <div id="tb-batch-progress" class="hidden mt-4">
+            <div id="rb-batch-progress" class="hidden mt-4">
                 <div class="flex items-center gap-3 mb-2 text-sm text-gray-400">
-                    <span id="tb-batch-pct">0%</span>
-                    <span id="tb-batch-count">0 / 0</span>
-                    <span id="tb-batch-assigned" class="text-green-400 hidden"></span>
+                    <span id="rb-batch-pct">0%</span>
+                    <span id="rb-batch-count">0 / 0</span>
+                    <span id="rb-batch-assigned" class="text-green-400 hidden"></span>
                 </div>
                 <div class="h-2 bg-dark-800 rounded-full overflow-hidden">
-                    <div id="tb-batch-bar" class="h-full bg-accent transition-all" style="width:0%"></div>
+                    <div id="rb-batch-bar" class="h-full bg-accent transition-all" style="width:0%"></div>
                 </div>
-                <pre id="tb-batch-log" class="mt-3 text-xs text-gray-500 max-h-48 overflow-auto bg-dark-900/50 p-2 rounded"></pre>
+                <pre id="rb-batch-log" class="mt-3 text-xs text-gray-500 max-h-48 overflow-auto bg-dark-900/50 p-2 rounded"></pre>
             </div>
         </div>
 
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5">
             <h3 class="text-white font-semibold mb-2">Gear map (rs_to_real.json)</h3>
-            <div id="tb-gear-coverage" class="text-sm text-gray-400">Loading…</div>
+            <div id="rb-gear-coverage" class="text-sm text-gray-400">Loading…</div>
         </div>
     </div>
 
     <!-- Pending -->
-    <div id="tb-tab-pending" class="tb-tab-panel hidden">
+    <div id="rb-tab-pending" class="rb-tab-panel hidden">
         <p class="text-gray-500 text-sm mb-4">
             Rocksmith gear referenced by at least one song but still without an
             assigned file. Click "Search" to resolve via tone3000.
         </p>
-        <div id="tb-pending-list" class="space-y-2 text-sm">Loading…</div>
+        <div id="rb-pending-list" class="space-y-2 text-sm">Loading…</div>
     </div>
 
     <!-- By song -->
-    <div id="tb-tab-song" class="tb-tab-panel hidden">
+    <div id="rb-tab-song" class="rb-tab-panel hidden">
         <div class="flex gap-3 mb-6">
-            <input type="text" id="tb-song-search" placeholder="Filename (e.g. 2minutes_p.psarc)"
-                   onkeydown="if(event.key==='Enter')tbListSongs()"
+            <input type="text" id="rb-song-search" placeholder="Filename (e.g. 2minutes_p.psarc)"
+                   onkeydown="if(event.key==='Enter')rbListSongs()"
                    class="flex-1 bg-dark-700 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-300 placeholder-gray-600 focus:border-accent/50 outline-none">
-            <button onclick="tbListSongs()" class="bg-dark-600 hover:bg-dark-500 px-5 py-2.5 rounded-xl text-sm text-gray-300 transition">Search</button>
+            <button onclick="rbListSongs()" class="bg-dark-600 hover:bg-dark-500 px-5 py-2.5 rounded-xl text-sm text-gray-300 transition">Search</button>
         </div>
-        <div id="tb-song-list" class="space-y-1 mb-6"></div>
-        <div id="tb-song-tones" class="space-y-6"></div>
+        <div id="rb-song-list" class="space-y-1 mb-6"></div>
+        <div id="rb-song-tones" class="space-y-6"></div>
     </div>
 
     <!-- Gear catalog -->
-    <div id="tb-tab-gear" class="tb-tab-panel hidden">
+    <div id="rb-tab-gear" class="rb-tab-panel hidden">
         <p class="text-gray-500 text-sm mb-4">
             Rocksmith gear used by your mapped songs, grouped by type, showing
             which NAM capture each is parented to and its photo. Press ▶ to
             hear that gear in isolation through the engine.
         </p>
-        <div id="tb-catalog" class="space-y-8 text-sm">Loading…</div>
+        <div id="rb-catalog" class="space-y-8 text-sm">Loading…</div>
+    </div>
+
+    <!-- Master chain — global pre/post FX wrapper -->
+    <div id="rb-tab-master" class="rb-tab-panel hidden">
+        <p class="text-gray-500 text-sm mb-4">
+            Global FX layered around every tone of every song. <span class="text-emerald-300">Pre</span>
+            runs first (sees the raw DI — typical place for input gate / compressor / tuner).
+            <span class="text-cyan-300">Post</span> runs after the cab IR (typical place for limiter / room
+            reverb / headphone EQ). Each piece supports the same Library / VST / Bypass / reorder
+            controls as a song chain. Signal flow:
+            <code class="bg-dark-800 px-1 rounded text-gray-300">guitar → master_pre → song → master_post → output</code>.
+        </p>
+        <div class="text-xs text-gray-400 bg-dark-800/50 border border-gray-800/50 rounded p-2 mb-4 leading-snug">
+            <strong class="text-gray-300">How to use:</strong>
+            (1) <span class="text-gray-200">＋ Add piece</span> &rarr; pick a Rocksmith effect OR a VST plug-in.
+            VST pieces are <strong class="text-purple-300">ready to use immediately</strong> —
+            just hit <span class="text-purple-300">🎛 Edit VST</span> to tweak its parameters.
+            Rocksmith pieces start <em>unassigned</em>: click <span class="text-emerald-300">Assign…</span>
+            then pick a NAM/IR from your library or paste a VST plug-in path.
+            (2) Master pieces are <strong>global</strong> — they don't appear on the Pending or Gear catalog tabs.
+        </div>
+        <div id="rb-master-status" class="text-xs text-gray-500 mb-4">Loading…</div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+                <div class="flex items-baseline justify-between mb-2">
+                    <h3 class="text-emerald-300 font-semibold">Pre (before song)</h3>
+                    <span id="rb-master-pre-count" class="text-xs text-gray-500"></span>
+                </div>
+                <div id="rb-master-pre-chain" class="space-y-3"></div>
+                <button onclick="rbOpenMasterAddPiecePicker('pre')"
+                        class="mt-3 bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-800/40 px-3 py-1.5 rounded text-xs transition">
+                    ＋ Add pre piece
+                </button>
+                <div id="rb-master-pre-picker" class="hidden mt-2 bg-emerald-900/10 border border-emerald-800/30 rounded p-3"></div>
+            </div>
+            <div>
+                <div class="flex items-baseline justify-between mb-2">
+                    <h3 class="text-cyan-300 font-semibold">Post (after song)</h3>
+                    <span id="rb-master-post-count" class="text-xs text-gray-500"></span>
+                </div>
+                <div id="rb-master-post-chain" class="space-y-3"></div>
+                <button onclick="rbOpenMasterAddPiecePicker('post')"
+                        class="mt-3 bg-cyan-900/30 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-800/40 px-3 py-1.5 rounded text-xs transition">
+                    ＋ Add post piece
+                </button>
+                <div id="rb-master-post-picker" class="hidden mt-2 bg-cyan-900/10 border border-cyan-800/30 rounded p-3"></div>
+            </div>
+        </div>
     </div>
 
     <!-- Settings -->
-    <div id="tb-tab-settings" class="tb-tab-panel hidden">
+    <div id="rb-tab-settings" class="rb-tab-panel hidden">
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
             <h3 class="text-white font-semibold mb-3">tone3000 API key</h3>
             <p class="text-gray-500 text-sm mb-3">
@@ -114,21 +166,39 @@
                 batch auto-download mode is unlocked.
             </p>
             <div class="flex gap-3 mb-3">
-                <input type="password" id="tb-api-key" placeholder="t3k_..."
+                <input type="password" id="rb-api-key" placeholder="t3k_..."
                        class="flex-1 bg-dark-800 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 placeholder-gray-600 focus:border-accent/50 outline-none">
-                <button onclick="tbSaveApiKey()" class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-sm transition">Save</button>
+                <button onclick="rbSaveApiKey()" class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-sm transition">Save</button>
             </div>
-            <div id="tb-api-key-status" class="text-xs text-gray-500"></div>
+            <div id="rb-api-key-status" class="text-xs text-gray-500"></div>
+        </div>
+
+        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+            <h3 class="text-white font-semibold mb-3">VST / Audio Unit plugins</h3>
+            <p class="text-gray-500 text-sm mb-3">
+                Scan your installed VST3 / Audio Unit plugins once here — the
+                results feed the 📚 Library picker (Plugins tab) on every gear.
+                Scanning instantiates each plugin to validate it, so it can take
+                up to a minute; a broken plugin may make it time out (check the
+                console for the offending path).
+            </p>
+            <div class="flex gap-3 items-center">
+                <button id="rb-settings-scan-btn" onclick="rbScanFromSettings()"
+                        class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-sm transition">
+                    Scan for plugins
+                </button>
+                <span id="rb-settings-scan-status" class="text-xs text-gray-500"></span>
+            </div>
         </div>
 
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
             <h3 class="text-white font-semibold mb-3">Auto-mode policy</h3>
             <label class="flex items-center gap-2 text-sm text-gray-300 mb-3">
-                <input type="checkbox" id="tb-aggressive" onchange="tbSaveSettings()" class="rounded">
+                <input type="checkbox" id="rb-aggressive" onchange="rbSaveSettings()" class="rounded">
                 Aggressive mode (accept any license / popularity)
             </label>
             <label class="flex items-center gap-2 text-sm text-gray-300">
-                Min downloads: <input type="number" id="tb-min-downloads" min="0" value="50" onchange="tbSaveSettings()" class="w-20 bg-dark-800 border border-gray-800 rounded px-2 py-1 text-sm">
+                Min downloads: <input type="number" id="rb-min-downloads" min="0" value="50" onchange="rbSaveSettings()" class="w-20 bg-dark-800 border border-gray-800 rounded px-2 py-1 text-sm">
             </label>
         </div>
 
@@ -140,11 +210,11 @@
                 <code class="bg-dark-800 px-1 rounded">gears.psarc</code>.
             </p>
             <div class="flex gap-3 mb-2">
-                <input type="text" id="tb-gears-psarc" placeholder="/path/to/gears.psarc"
+                <input type="text" id="rb-gears-psarc" placeholder="/path/to/gears.psarc"
                        class="flex-1 bg-dark-800 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 placeholder-gray-600 focus:border-accent/50 outline-none">
-                <button onclick="tbExtractGearMap()" class="bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Extract</button>
+                <button onclick="rbExtractGearMap()" class="bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Extract</button>
             </div>
-            <div id="tb-extract-status" class="text-xs text-gray-500"></div>
+            <div id="rb-extract-status" class="text-xs text-gray-500"></div>
         </div>
 
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5">
@@ -157,11 +227,11 @@
                 auto-mode batch prefers these over tone3000 for cabs.
             </p>
             <div class="flex gap-3 mb-2">
-                <input type="text" id="tb-irs-psarc" placeholder="/path/to/gears.psarc"
+                <input type="text" id="rb-irs-psarc" placeholder="/path/to/gears.psarc"
                        class="flex-1 bg-dark-800 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 placeholder-gray-600 focus:border-accent/50 outline-none">
-                <button onclick="tbExtractIRs()" class="bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Extract</button>
+                <button onclick="rbExtractIRs()" class="bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Extract</button>
             </div>
-            <div id="tb-extract-irs-status" class="text-xs text-gray-500"></div>
+            <div id="rb-extract-irs-status" class="text-xs text-gray-500"></div>
         </div>
 
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mt-6">
@@ -172,8 +242,8 @@
                 with the plugin). A fresh install then auto-downloads these exact
                 captures during batch / auto-download instead of searching tone3000.
             </p>
-            <button onclick="tbExportDefaults()" class="bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Export defaults</button>
-            <div id="tb-export-defaults-status" class="text-xs text-gray-500 mt-2"></div>
+            <button onclick="rbExportDefaults()" class="bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Export defaults</button>
+            <div id="rb-export-defaults-status" class="text-xs text-gray-500 mt-2"></div>
         </div>
     </div>
 </div>

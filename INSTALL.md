@@ -12,7 +12,7 @@ the generic engine sounds.
 
    ```bash
    cd ~/Library/Application\ Support/slopsmith-desktop/plugins/
-   unzip ~/Downloads/nam_rig_builder.zip
+   unzip ~/Downloads/rig_builder.zip
    ```
 3. Open Slopsmith. **"NAM Rig Builder"** appears in the side nav.
 
@@ -55,7 +55,8 @@ Two modes:
 
 **Note:** Keys are personal. Don't share yours — each tester should get
 their own. The plugin stores the key only in
-`~/Library/Application Support/slopsmith-desktop/slopsmith-config/nam_rig_builder_settings.json`
+`~/Library/Application Support/slopsmith-desktop/slopsmith-config/rig_builder_settings.json`
+(the plugin auto-migrates the old `nam_rig_builder_settings.json` if you came from that version)
 on the local machine.
 
 ## Optional: extract Rocksmith's own cab IRs

@@ -1,9 +1,9 @@
 {
-  "id": "nam_rig_builder",
-  "name": "NAM Rig Builder",
-  "version": "0.0.1",
+  "id": "rig_builder",
+  "name": "Rig Builder",
+  "version": "0.1.0",
   "private": false,
-  "nav": { "label": "NAM Rig Builder", "screen": "nam_rig_builder" },
+  "nav": { "label": "Rig Builder", "screen": "rig_builder" },
   "screen": "screen.html",
   "script": "screen.js",
   "routes": "routes.py"
