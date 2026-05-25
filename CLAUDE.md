@@ -91,7 +91,7 @@ Key paths:
 
 ---
 
-## Current feature state (as of 2026-05-24)
+## Current feature state (as of 2026-05-25)
 
 All of the below is **plugin-only — no bundle edits**, so install is just
 "drop the folder + restart". See `HANDOFF.md` sections v3.5–v3.8 for detail.
@@ -149,6 +149,22 @@ multiple same-slot pedals in order) + the cab IR as type-2, with each stage
 carrying `slot`/`rs_gear` (for the UI bypass map; the engine ignores them)
 and persisted `bypassed`. `_state_b64` / `_safe_child` are byte-identical
 copies of nam_tone's.
+
+8. **Per-song persistence + cab + batch (2026-05-24/25).**
+   - Re-assigning an already-assigned gear now **replaces** the file
+     (`_assign_file_to_gear` updates all rows, not just pending).
+   - Bypass + gear changes **auto-save** (`tbToggleBypass` /
+     `tbAfterGearChange` call `tbPersistTone`); `tbSeedBypass` restores the
+     bypass UI after every `/song` fetch (incl. the auto-download re-fetch).
+   - Catch-all gears (`Cabinets`, `Pedals`) are categorized via
+     `_gear_category` so cabs search/download as IRs; IR download falls back
+     to a raw copy if ffmpeg fails.
+   - **`default_captures.json`** ships curated `gear → tone3000_id`; batch /
+     auto-download prefer it. Regenerate via Settings → "Export defaults".
+   - **Two batch modes** (`POST /batch_all {mode}`): `new` = only unmapped
+     tones; `all` = remap all but preserve per-tone bypass + cab-IR variant.
+
+See `HANDOFF.md` for the full detail and the route table.
 
 ---
 

@@ -328,12 +328,17 @@ The script's top of file adds `slopsmith/lib` to `sys.path` so the
 | GET | `/api/plugins/nam_rig_builder/song/{filename:path}` | Parse + enrich a PSARC/sloppak. Returns each tone with its chain plus per-piece deep-links and existing assignments. |
 | GET | `/api/plugins/nam_rig_builder/search?rs_gear=...` | Per-gear candidates (when API key) + deep-link |
 | POST | `/api/plugins/nam_rig_builder/save_preset` | Persists preset + preset_pieces + tone_mapping for a single tone |
-| POST | `/api/plugins/nam_rig_builder/download_for_gear` | (v3) Pull a specific tone3000 capture for one rs_gear, save into nam_models/ or normalize into nam_irs/. Body `{rs_gear, tone3000_id}`. **(v3.3)** After downloading it now calls `_assign_file_to_gear` to stamp the file onto every *pending* `preset_pieces` row for that gear and recompute each affected preset's `model_file`/`ir_file` — so the gear actually leaves the Pendientes tab and the song plays through it. Before v3.3 the endpoint only downloaded the file and returned it; the Pendientes "Search → Download and assign" flow had no persist step (only the song-view "Save preset" did), so the gear stayed pending forever. Returns `{kind, file, pieces_updated, presets_updated}`. |
+| POST | `/api/plugins/nam_rig_builder/download_for_gear` | (v3) Pull a specific tone3000 capture for one rs_gear, save into nam_models/ or normalize into nam_irs/. Body `{rs_gear, tone3000_id}`. **(v3.3)** After downloading it calls `_assign_file_to_gear` to stamp the file onto **every** `preset_pieces` row for that gear (replacing any prior assignment — fixed 2026-05-24; it used to touch only *pending* rows, so re-picking a capture for an already-assigned gear was a no-op) and recompute each affected preset's `model_file`/`ir_file` — so the gear actually leaves the Pendientes tab and the song plays through it. Before v3.3 the endpoint only downloaded the file and returned it; the Pendientes "Search → Download and assign" flow had no persist step (only the song-view "Save preset" did), so the gear stayed pending forever. Returns `{kind, file, pieces_updated, presets_updated}`. |
 | POST | `/api/plugins/nam_rig_builder/auto_download_song` | (v3.1) Same as the batch worker but scoped to one filename. Triggered automatically by `screen.js:tbAutoDownloadSong` when the user opens a song with an API key configured **and** by the background materialization watcher (v3.2, see below). The HTTP handler validates then delegates to the module-level `_auto_download_for_song(filename, path)` — the watcher calls that helper directly. Pieces already on disk are skipped (idempotent), so re-opening a fully-mapped song is essentially free. Returns `{processed, downloaded, rs_ir_used, skipped_assigned, skipped_no_candidate, failed}`. |
-| POST | `/api/plugins/nam_rig_builder/batch_all` | Kicks off the library-wide background worker |
+| POST | `/api/plugins/nam_rig_builder/batch_all` | Kicks off the library-wide worker. Body `{mode}`: `new` = map only tones without a preset; `all` = remap every tone (re-resolves captures, preserves per-tone bypass + cab-IR variant). |
 | GET | `/api/plugins/nam_rig_builder/batch_status` | Progress + log (polled by UI every 1s while running) |
 | GET | `/api/plugins/nam_rig_builder/coverage` | Aggregates preset_pieces — pending vs assigned per rs_gear |
 | GET | `/api/plugins/nam_rig_builder/list_songs?q=...` | DLC dir listing for the per-song drill-down |
+| GET | `/api/plugins/nam_rig_builder/native_preset_full/{preset_id}` | Full multi-NAM chain (every NAM stage + cab IR, honouring bypass) in nam_tone's native_preset shape. The fetch redirect points nam_tone's `native-preset/{id}` here for full-chain playback; also used by the per-tone ▶ Listen preview. |
+| GET | `/api/plugins/nam_rig_builder/native_preset_one?file=&kind=` | One-stage native_preset from a single file — the Gear-tab / candidate ▶ audition (hear a gear in isolation). |
+| GET | `/api/plugins/nam_rig_builder/gear_catalog` | Gears grouped by category with parenting (real make/model + assigned capture/file) + a tone3000 photo (from the local cache via `_tone_image_index`). Powers the Gear tab. |
+| POST | `/api/plugins/nam_rig_builder/audition_candidate` | Body `{rs_gear, tone3000_id}`. Downloads a candidate (no assign) so the Suggest modal's ▶ can audition it. Returns `{kind, file}`. |
+| POST | `/api/plugins/nam_rig_builder/export_default_captures` | Snapshots the current DB's gear→capture choices into `default_captures.json`. Returns `{count}`. (Settings → "Export defaults".) |
 
 UI files (`screen.html` + `screen.js`) use the standard slopsmith
 patterns: tailwind-like dark theme classes, `window.showScreen` hook
@@ -716,10 +721,37 @@ via Settings → "Export defaults" (`POST /export_default_captures` →
 `_build_default_captures()`), or it's a one-off snapshot. Gears not in the
 map fall back to search/pick as before.
 
-NOTE: the batch (`_batch_worker`) still **replaces** each tone's chain
-(DELETE+INSERT in `_persist_preset_chain`) and does NOT preserve per-tone
-bypass or RS-IR variant picks — running it over a hand-tuned library resets
-those. Making the batch skip already-mapped tones is a proposed follow-up.
+## Two batch modes + cab fixes (2026-05-25)
+
+**Batch modes.** The Dashboard has two buttons; `POST /batch_all` takes
+`{mode}` and `_batch_worker(mode)` honours it:
+- `new` — **Map new songs only.** Skips any tone that already has a preset
+  (`tone_mappings` row) → never touches existing config. Use it to fill in
+  newly-added songs.
+- `all` — **Remap all.** (Re)maps every tone, re-resolving captures
+  (preferring `default_captures.json`), but **preserves each tone's saved
+  bypass and chosen cab-IR variant** (it loads the existing pieces into
+  `existing_by_gear` first and carries `bypassed` + the rs_ir variant into
+  the rebuilt chain). Caveat: a manually-chosen capture for a gear NOT in
+  `default_captures.json` IS re-resolved by search.
+
+**Cab categorization (`_gear_category`).** Catch-all entities (`Cabinets`,
+`Pedals`, `DI_Amp_*`) aren't in `rs_to_real.json`, so `/search` and
+`download_for_gear` used to default them to category `amp` — the cab's
+Suggest searched amp NAMs and downloaded cabs as NAMs. `_gear_category(rs_gear)`
+now guesses cab/pedal/rack from the entity name, so cabs search the IR
+platform and download as IRs.
+
+**Raw-IR fallback.** `_download_candidate`'s IR path now falls back to a raw
+file copy when ffmpeg normalization fails (matches nam_tone's IR upload),
+instead of dropping the assignment — so a cab still gets assigned even
+without a working ffmpeg.
+
+**Bypass display on reload (`tbSeedBypass`).** `/song` returns the persisted
+`bypassed` correctly, but the auto-download re-fetch used to re-render
+without re-seeding the UI flag, so bypass looked off after reload on songs
+with unmapped pieces. `tbSeedBypass(data)` is now called after every `/song`
+fetch (initial load + the auto-download re-fetch).
 
 ## What is **not** done (v3+)
 
