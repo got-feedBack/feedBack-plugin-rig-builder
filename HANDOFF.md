@@ -1,4 +1,4 @@
-# NAM Rig Builder — handoff doc
+# Rig Builder — handoff doc
 
 A Slopsmith plugin that maps **Rocksmith 2014 tones** (amp + cab + pedals + racks)
 to **NAM captures and IRs from tone3000.com**, persisting per-song mappings in
@@ -39,8 +39,8 @@ Confirmed design decisions (in conversation, before code):
 ## Plugin layout
 
 ```
-plugins/nam_rig_builder/
-├── plugin.json              # nav: "NAM Rig Builder", screen, script, routes
+plugins/rig_builder/
+├── plugin.json              # nav: "Rig Builder", screen, script, routes
 ├── extract_gear_map.py      # standalone script: gears.psarc → rs_to_real.json
 ├── extract_irs.py           # standalone script: gears.psarc → 444 cab IRs as .wav
 ├── rs_to_real.json          # 613 entries: pseudonym/real RS gear → make/model + tone3000 search hints
@@ -108,7 +108,7 @@ It owns:
   IR). Multi-stage pedal/rack support would need changes inside the app
   bundle, not in this plugin.
 
-`nam_rig_builder` **does not duplicate** any of nam_tone's tables or
+`rig_builder` **does not duplicate** any of nam_tone's tables or
 endpoints — it writes into the same `presets` / `tone_mappings` rows
 and uploads files through nam_tone's upload endpoints from the UI.
 
@@ -173,7 +173,7 @@ It uses three signal sources, in priority order:
 The output is **plain JSON** — editable by hand to fix any specific
 mapping. To regenerate after editing the script's overrides, use the
 "Regenerate gear map" button in the Settings tab (calls
-`/api/plugins/nam_rig_builder/extract_gear_map`).
+`/api/plugins/rig_builder/extract_gear_map`).
 
 **Query-tier strategy (v3.5).** `build_mapping` now separates `model`
 (display only) from `tone3000_query` (what we search), and records which
@@ -243,7 +243,7 @@ TS client at https://github.com/tone-3000/api confirms self-service
 is now available. **Do not draft a support email for the user — they
 just create it on the site.**
 
-So `nam_rig_builder` operates in **two modes**:
+So `rig_builder` operates in **two modes**:
 
 ### Deep-link mode (no key, default)
 
@@ -258,18 +258,18 @@ These return HTML pages (200 OK) that the user opens in their browser,
 picks a capture, downloads the `.nam`, then drops it into the upload
 input in the "Por canción" tab. The plugin proxies that upload to
 `POST /api/plugins/nam_tone/models` (or `/irs` for cabs), then
-`POST /api/plugins/nam_rig_builder/save_preset` writes the chain.
+`POST /api/plugins/rig_builder/save_preset` writes the chain.
 
 ### API mode (with key)
 
 User pastes a key in Settings → stored in
-`slopsmith-config/nam_rig_builder_settings.json` → `Tone3000Client.has_api_access`
+`slopsmith-config/rig_builder_settings.json` → `Tone3000Client.has_api_access`
 flips to `True` → the "Sugerir" modal lists actual candidates inline,
 and the batch worker can score top candidates per gear (still doesn't
 auto-download in v0 — the batch only registers entries, the user
 provides files via the UI).
 
-The client caches responses in `slopsmith-config/nam_rig_builder_cache.db`
+The client caches responses in `slopsmith-config/rig_builder_cache.db`
 with a 7-day TTL so the 100 req/min rate limit isn't a concern when
 the user later runs library-wide batches.
 
@@ -301,7 +301,7 @@ The user's system `python3` (especially conda envs) may fail with
 `_cffi_backend` version mismatches if it tries to import `Crypto`.
 
 When `extract_gear_map.py` is invoked from `routes.py` via
-`/api/plugins/nam_rig_builder/extract_gear_map`, it uses `sys.executable`
+`/api/plugins/rig_builder/extract_gear_map`, it uses `sys.executable`
 to inherit the host's interpreter — that's the bundled one when
 running inside Slopsmith, so it always works.
 
@@ -321,24 +321,33 @@ The script's top of file adds `slopsmith/lib` to `sys.path` so the
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/api/plugins/nam_rig_builder/status` | Setup status + coverage stats + API-access state + rs_cab_to_ir state |
-| POST | `/api/plugins/nam_rig_builder/extract_gear_map` | Runs `extract_gear_map.py` against a user-supplied `gears.psarc` |
-| POST | `/api/plugins/nam_rig_builder/extract_irs` | Runs `extract_irs.py` against a user-supplied `gears.psarc` |
-| GET / POST | `/api/plugins/nam_rig_builder/settings` | Get / update plugin settings (API key, policy) |
-| GET | `/api/plugins/nam_rig_builder/song/{filename:path}` | Parse + enrich a PSARC/sloppak. Returns each tone with its chain plus per-piece deep-links and existing assignments. |
-| GET | `/api/plugins/nam_rig_builder/search?rs_gear=...` | Per-gear candidates (when API key) + deep-link |
-| POST | `/api/plugins/nam_rig_builder/save_preset` | Persists preset + preset_pieces + tone_mapping for a single tone |
-| POST | `/api/plugins/nam_rig_builder/download_for_gear` | (v3) Pull a specific tone3000 capture for one rs_gear, save into nam_models/ or normalize into nam_irs/. Body `{rs_gear, tone3000_id}`. **(v3.3)** After downloading it calls `_assign_file_to_gear` to stamp the file onto **every** `preset_pieces` row for that gear (replacing any prior assignment — fixed 2026-05-24; it used to touch only *pending* rows, so re-picking a capture for an already-assigned gear was a no-op) and recompute each affected preset's `model_file`/`ir_file` — so the gear actually leaves the Pendientes tab and the song plays through it. Before v3.3 the endpoint only downloaded the file and returned it; the Pendientes "Search → Download and assign" flow had no persist step (only the song-view "Save preset" did), so the gear stayed pending forever. Returns `{kind, file, pieces_updated, presets_updated}`. |
-| POST | `/api/plugins/nam_rig_builder/auto_download_song` | (v3.1) Same as the batch worker but scoped to one filename. Triggered automatically by `screen.js:tbAutoDownloadSong` when the user opens a song with an API key configured **and** by the background materialization watcher (v3.2, see below). The HTTP handler validates then delegates to the module-level `_auto_download_for_song(filename, path)` — the watcher calls that helper directly. Pieces already on disk are skipped (idempotent), so re-opening a fully-mapped song is essentially free. Returns `{processed, downloaded, rs_ir_used, skipped_assigned, skipped_no_candidate, failed}`. |
-| POST | `/api/plugins/nam_rig_builder/batch_all` | Kicks off the library-wide worker. Body `{mode}`: `new` = map only tones without a preset; `all` = remap every tone (re-resolves captures, preserves per-tone bypass + cab-IR variant). |
-| GET | `/api/plugins/nam_rig_builder/batch_status` | Progress + log (polled by UI every 1s while running) |
-| GET | `/api/plugins/nam_rig_builder/coverage` | Aggregates preset_pieces — pending vs assigned per rs_gear |
-| GET | `/api/plugins/nam_rig_builder/list_songs?q=...` | DLC dir listing for the per-song drill-down |
-| GET | `/api/plugins/nam_rig_builder/native_preset_full/{preset_id}` | Full multi-NAM chain (every NAM stage + cab IR, honouring bypass) in nam_tone's native_preset shape. The fetch redirect points nam_tone's `native-preset/{id}` here for full-chain playback; also used by the per-tone ▶ Listen preview. |
-| GET | `/api/plugins/nam_rig_builder/native_preset_one?file=&kind=` | One-stage native_preset from a single file — the Gear-tab / candidate ▶ audition (hear a gear in isolation). |
-| GET | `/api/plugins/nam_rig_builder/gear_catalog` | Gears grouped by category with parenting (real make/model + assigned capture/file) + a tone3000 photo (from the local cache via `_tone_image_index`). Powers the Gear tab. |
-| POST | `/api/plugins/nam_rig_builder/audition_candidate` | Body `{rs_gear, tone3000_id}`. Downloads a candidate (no assign) so the Suggest modal's ▶ can audition it. Returns `{kind, file}`. |
-| POST | `/api/plugins/nam_rig_builder/export_default_captures` | Snapshots the current DB's gear→capture choices into `default_captures.json`. Returns `{count}`. (Settings → "Export defaults".) |
+| GET | `/api/plugins/rig_builder/status` | Setup status + coverage stats + API-access state + rs_cab_to_ir state |
+| POST | `/api/plugins/rig_builder/extract_gear_map` | Runs `extract_gear_map.py` against a user-supplied `gears.psarc` |
+| POST | `/api/plugins/rig_builder/extract_irs` | Runs `extract_irs.py` against a user-supplied `gears.psarc` |
+| GET / POST | `/api/plugins/rig_builder/settings` | Get / update plugin settings (API key, policy) |
+| GET | `/api/plugins/rig_builder/song/{filename:path}` | Parse + enrich a PSARC/sloppak. Returns each tone with its chain plus per-piece deep-links and existing assignments. |
+| GET | `/api/plugins/rig_builder/search?rs_gear=...` | Per-gear candidates (when API key) + deep-link |
+| POST | `/api/plugins/rig_builder/save_preset` | Persists preset + preset_pieces + tone_mapping for a single tone |
+| POST | `/api/plugins/rig_builder/download_for_gear` | (v3.3) Pull a specific tone3000 capture for one rs_gear, save into nam_models/ or normalize into nam_irs/. Body `{rs_gear, tone3000_id}`. After downloading it calls `_assign_file_to_gear` to stamp the file onto every `preset_pieces` row for that gear and recompute primaries. Returns `{kind, file, pieces_updated, presets_updated}`. |
+| POST | `/api/plugins/rig_builder/auto_download_song` | (v3.1) Same as the batch worker but scoped to one filename. Triggered by `screen.js:rbAutoDownloadSong` when the user opens a song with an API key configured **and** by the background materialization watcher (v3.2). Returns `{processed, downloaded, rs_ir_used, skipped_assigned, skipped_no_candidate, failed}`. |
+| POST | `/api/plugins/rig_builder/batch_all` | Kicks off the library-wide worker. Body `{mode}`: `new` = map only tones without a preset; `all` = remap every tone (re-resolves captures, preserves per-tone bypass + cab-IR variant). |
+| GET | `/api/plugins/rig_builder/batch_status` | Progress + log (polled by UI every 1s while running) |
+| GET | `/api/plugins/rig_builder/coverage` | Aggregates preset_pieces — pending vs assigned per rs_gear |
+| GET | `/api/plugins/rig_builder/list_songs?q=...` | DLC dir listing (recursive) — joins with web_library.db so titles/artists/years from the host's library cache surface to the UI. Search matches title/artist/album/filename. |
+| GET | `/api/plugins/rig_builder/native_preset_full/{preset_id}` | Full multi-stage chain (every NAM + VST + cab IR, honouring bypass) in nam_tone's native_preset shape. The fetch redirect points nam_tone's `native-preset/{id}` here for full-chain playback. |
+| GET | `/api/plugins/rig_builder/native_preset_one?file=&kind=` | One-stage native_preset from a single file — Gear-tab / candidate ▶ audition. Now also supports `kind=vst&vst_path=...` for VST audition. |
+| GET | `/api/plugins/rig_builder/gear_catalog` | Gears grouped by category with parenting (real make/model + assigned capture/VST) + a tone3000 photo. Powers the Gear tab. |
+| POST | `/api/plugins/rig_builder/audition_candidate` | Body `{rs_gear, tone3000_id}`. Downloads a candidate (no assign) so the Suggest modal's ▶ can audition it. Returns `{kind, file}`. |
+| POST | `/api/plugins/rig_builder/export_default_captures` | Snapshots the current DB's gear→capture choices into `default_captures.json`. Returns `{count}`. (Settings → "Export defaults".) |
+| GET | `/api/plugins/rig_builder/local_files?kind=nam\|ir` | Lists locally-downloaded NAMs (`nam_models/*.nam`) or IRs (`nam_irs/**/*.wav` recursive, so the 888 Rocksmith-extracted cab IRs are included). Each entry has `use_count` + `used_for_gears` so the UI can sort by most-used. Powers the Library picker in both Songs and Gear tabs. |
+| POST | `/api/plugins/rig_builder/use_local_for_gear` | Bulk-assign an already-local file to every `preset_pieces` row for an rs_gear_type. Skips the tone3000 round-trip. Body `{rs_gear, local_file, local_kind}`. |
+| GET | `/api/plugins/rig_builder/vst/known` | Returns the cached list of installed VST3/AU plugins (populated by the frontend after a successful `scanPlugins()`). |
+| POST | `/api/plugins/rig_builder/vst/sync_known` | Frontend pushes the result of `getKnownPlugins()` so the dropdown survives a server restart. Body `{plugins: [...]}`. |
+| POST | `/api/plugins/rig_builder/vst/scan` | Triggers the native engine's `scanPlugins()` via JS bridge (proxied — can crash if user has a malformed VST, the UI prefers the file-picker / paste-path flow). |
+| POST | `/api/plugins/rig_builder/vst/assign` | Bulk-assign a VST3/AU plugin to every `preset_pieces` row for a given rs_gear_type. Body `{rs_gear_type, vst_path, vst_format, vst_state?}`. |
+| POST | `/api/plugins/rig_builder/vst/capture_state` | Persist a captured plugin state blob for an existing VST piece. Body `{rs_gear_type, vst_state, preset_id?}`. |
+| GET | `/api/plugins/rig_builder/vst/knob_mapping?rs_gear_type=&vst_name=` | Looks up `rs_knob_to_vst_param.json` for the curated translation table between a Rocksmith gear's knobs and a specific VST's params. Used by the "⇶ Apply RS settings" button. |
+| GET | `/api/plugins/rig_builder/vst/suggest/{rs_gear_type}` | Returns suggested VSTs (from `rs_gear_to_vst.json`) cross-referenced with the user's installed list so the UI can mark `✓ installed` vs `↓ download`. |
 
 UI files (`screen.html` + `screen.js`) use the standard slopsmith
 patterns: tailwind-like dark theme classes, `window.showScreen` hook
@@ -350,14 +359,14 @@ guarded by `__slopsmithNamRigBuilderInstalled`, fetch-based async.
 
 Users running `cloud_loader` keep most of their DLC dir as 0-byte
 placeholders — actual PSARC content lives in Google Drive and only
-gets pulled when needed. nam_rig_builder handles this:
+gets pulled when needed. rig_builder handles this:
 
 - `list_songs` now returns `[{name, size, materialized}, …]` so the
   UI can render a `☁ cloud` chip next to unmaterialized songs.
 - `GET /song/{filename}` returns HTTP 409 + `{error: "cloud_only",
   filename, hint}` when the file is 0 bytes, instead of trying to
   parse and failing with a noisy ValueError.
-- `screen.js`'s `tbLoadSongTones` reacts to the 409 by calling
+- `screen.js`'s `rbLoadSongTones` reacts to the 409 by calling
   `POST /api/cloud_loader/materialize?filename=…`, showing a
   "Descargando desde Google Drive…" status, then retrying `/song`
   once the Drive download finishes. The user clicks the song, the
@@ -367,7 +376,7 @@ gets pulled when needed. nam_rig_builder handles this:
   cloud-heavy library doesn't drown the log in parser errors.
 
 Trade-off documented for the user: large libraries can't be batch-
-materialized from nam_rig_builder (would download GB from Drive without
+materialized from rig_builder (would download GB from Drive without
 explicit consent). The recommended flow is materialize-on-demand:
 click songs you actually want to map, and the chain unlocks one at
 a time as Drive downloads complete.
@@ -396,9 +405,9 @@ to a 0-byte stub) and later re-materialized:
 Closes the last gap in the "download and just play" flow. Before this,
 auto-download only fired when the user opened a song **from the Tone
 Bridge tab**. Playing a song from Slopsmith's main view only triggers
-`cloud_loader` to drop the real PSARC on disk — `nam_rig_builder` never
+`cloud_loader` to drop the real PSARC on disk — `rig_builder` never
 heard about it, so the song played with the generic synth until the
-user later visited NAM Rig Builder.
+user later visited Rig Builder.
 
 The watcher is a daemon thread started in `setup()` (`_start_watcher`)
 that polls the DLC dir every `_WATCH_INTERVAL_SEC` (5s):
@@ -563,18 +572,18 @@ not-done #1), so this only changes *which* NAM, never the count.
 ## Per-tone live preview "Listen" + full-chain test (v3.6 — DONE)
 
 The per-song tone cards have a `▶ Listen` button left of `Save preset`
-(`tbRenderTone` → `tbListenTone` in `screen.js`). It persists the tone's
-current selection (shared `tbPersistTone`, returns the `preset_id` from
+(`rbRenderTone` → `rbListenTone` in `screen.js`). It persists the tone's
+current selection (shared `rbPersistTone`, returns the `preset_id` from
 `save_preset`) then previews it as a **live input monitor** (play your
 guitar, hear it through the chain).
 
 **It sends the WHOLE chain, on purpose** — this is the direct multi-NAM
-experiment. `GET /api/plugins/nam_rig_builder/native_preset_full/{preset_id}`
+experiment. `GET /api/plugins/rig_builder/native_preset_full/{preset_id}`
 builds a native_preset with **every** NAM piece as its own type-1 stage
 (ordered by `_CHAIN_NAM_ORDER` = pre_pedal → amp → post_pedal → rack; a
 *stable* sort preserves the original `slot_order` among multiple pedals in
 the same slot, e.g. Reptilia_dist's 2 pre-pedals) plus the cab IR as
-type-2. `tbListenTone` loads it straight into the native engine
+type-2. `rbListenTone` loads it straight into the native engine
 (`window.slopsmithDesktop.audio`: clearChain → loadPreset → setGain →
 setMonitorMute(false) → startAudio) and **logs `slotsLoaded`** to the
 console. That number vs the chain length is the verdict on whether the
@@ -590,7 +599,7 @@ engine chains multiple NAMs:
 
 Notes / gotchas:
 - This bypasses nam_tone's preview, driving the native engine directly, so
-  it owns audio while active. `tbStopPreview()` (called on toggle-off, tone
+  it owns audio while active. `rbStopPreview()` (called on toggle-off, tone
   re-render, and leaving the screen) mutes + clears + stops audio it
   started. If there's **no** native engine (browser/WASM-only), it falls
   back to `window.namStartPresetTest` (single NAM).
@@ -601,11 +610,11 @@ Notes / gotchas:
 
 ## Per-stage bypass + immediate gear refresh (v3.7 — DONE)
 
-- **Per-piece Bypass button** on each tone card (`tbToggleBypass`). Sets
+- **Per-piece Bypass button** on each tone card (`rbToggleBypass`). Sets
   the chain stage's `bypassed=true`, which makes the engine **pass the
   signal through** that stage (NOT silence it) — so you can audition each
   amp/pedal in or out without breaking the chain. While previewing, a
-  toggle reloads the chain live (`tbReloadPreview`, no audio restart).
+  toggle reloads the chain live (`rbReloadPreview`, no audio restart).
 - **Bypass is persisted** (`preset_pieces.bypassed`, migrated via guarded
   `ALTER TABLE`). `save_preset`/`_persist_preset_chain` store it,
   `native_preset_full` and `/song` read it back (the `/song` read is
@@ -614,16 +623,16 @@ Notes / gotchas:
   songs). A bypassed amp/rack/cab is also excluded from the bundle's
   single-NAM `model_file`/`ir_file` (`_persist_preset_chain` +
   `_recompute_preset_primaries`), keeping real-playback consistent.
-- **Immediate gear refresh** (`tbAfterGearChange`): uploading a file,
+- **Immediate gear refresh** (`rbAfterGearChange`): uploading a file,
   assigning a Rocksmith IR, or download-and-assign now re-render the open
   song from in-memory state and (if that tone is previewing) re-save +
-  reload the chain — no more re-selecting the song. `tbRenderPiece` reads
+  reload the chain — no more re-selecting the song. `rbRenderPiece` reads
   `_uploaded_file` (pending change) before `assigned.file`.
 
-**Regression watch (fixed 2026-05-23):** `tbRenderPiece` once referenced a
+**Regression watch (fixed 2026-05-23):** `rbRenderPiece` once referenced a
 removed `assigned` local in the file-label `title=` after the `_uploaded_file`
 refactor → it threw inside `tones.map()` → `el.innerHTML` never set → the
-song panel hung on "Loading…" forever. `tbLoadSongTones` now wraps the
+song panel hung on "Loading…" forever. `rbLoadSongTones` now wraps the
 render in try/catch so a render throw shows an error instead of hanging.
 Lesson: this UI builds HTML via template strings in `.map()`; one
 `ReferenceError` there silently kills the whole list.
@@ -634,9 +643,9 @@ The remaining gap (chain only in preview, amp+cab in real play) is closed
 **without editing the bundle**. Real playback resolves tone → preset_id →
 `_namApplyNativePreset` (nam_tone/screen.js, module-scoped) which does
 `fetch('/api/plugins/nam_tone/native-preset/{id}')` — the bundle's 2-stage
-builder. nam_rig_builder's screen.js (loads globally) **monkey-patches
+builder. rig_builder's screen.js (loads globally) **monkey-patches
 `window.fetch`** to redirect *only* that exact URL to
-`/api/plugins/nam_rig_builder/native_preset_full/{id}` (identical response
+`/api/plugins/rig_builder/native_preset_full/{id}` (identical response
 shape), so the engine receives every NAM stage.
 
 Why this way: the bundle is code-signed and wiped on update, and
@@ -645,7 +654,7 @@ plugin-only, update-proof, and the single seam both preview and playback
 share. Safety: the patch is scoped to a strict regex, passes every other
 request straight through, and falls back to the original 2-stage endpoint if
 the full-chain build is not-ok / empty / unparseable / throws. Kill-switch:
-`window.__tbChainPlayback = false` (console) disables the redirect.
+`window.__rbChainPlayback = false` (console) disables the redirect.
 
 Caveat: depends on the native engine accepting multiple type-1 stages
 (verified via the preview `slotsLoaded` test). WASM-only installs stay
@@ -656,13 +665,13 @@ working preview.
 
 ## Gear catalog "Gear" + single-stage audition + photos (v3.9 — DONE)
 
-New tab **Gear** (`tbLoadCatalog` / `tbRenderCatalogCard`, nav + panel
-in `screen.html`, case in `tbShowTab`). Backend `GET /gear_catalog`
+New tab **Gear** (`rbLoadCatalog` / `rbRenderCatalogCard`, nav + panel
+in `screen.html`, case in `rbShowTab`). Backend `GET /gear_catalog`
 aggregates `preset_pieces` per gear (best row: file-bearing > latest),
 enriches via `rs_to_real.json` (real make/model + category), groups by
 category (amp / pedal / cab / rack / other), and resolves a **photo** from
 the tone3000 capture (`_tone_image_index` reads the local
-`nam_rig_builder_cache.db` → each Tone's `images[0]`). Each card shows what the
+`rig_builder_cache.db` → each Tone's `images[0]`). Each card shows what the
 gear is parented to (real name + assigned capture/file), the photo, a
 tone3000 link, and ▶ to audition.
 
@@ -671,16 +680,16 @@ tone3000 link, and ▶ to audition.
   "sin foto" placeholder. Rocksmith's own gear art is NOT used (3D assets,
   not locally extractable; `art_cache/` holds only song cover art).
 - **Single-stage audition:** `GET /native_preset_one?file=&kind=` builds a
-  one-stage native_preset; `tbAuditionFile` loads it into the engine to
+  one-stage native_preset; `rbAuditionFile` loads it into the engine to
   hear that gear **in isolation**. The catalog ▶ uses it directly.
 - **Search-candidate audition:** the Suggest modal now shows each
   candidate's photo (from `/search`'s `images`) + a ▶ that calls
   `POST /audition_candidate` → `_download_candidate` (download to
-  nam_models/nam_irs, **no assign**) → `tbAuditionFile`. tone3000's API has
+  nam_models/nam_irs, **no assign**) → `rbAuditionFile`. tone3000's API has
   no audio clip field, so "listen" = download-then-audition (user's choice).
 - Audition shares the native engine with the tone preview via
-  `tbStopPreview` (now resets both the per-tone listen button and the
-  audition button; `tbState._auditionId` tracks the active ▶).
+  `rbStopPreview` (now resets both the per-tone listen button and the
+  audition button; `rbState._auditionId` tracks the active ▶).
 - Catch-all RS entities not in `rs_to_real` (`Cabinets`, `Pedals`,
   `DI_Amp_TubePre`) fall under "Otros" — expected; many CDLC use the
   generic `Cabinets` entity rather than a specific cab.
@@ -694,7 +703,7 @@ changed nothing — it kept the previous NAM (visible in the Gear tab). It now
 updates **every** row for that gear (replacing the file across all presets
 that use it) and recomputes their primaries. Auto/batch flows are unaffected
 (they use `_persist_preset_chain` / `_download_candidate`, not this). The Gear
-tab also reloads after a download (`tbDownloadForGear` → `tbLoadCatalog` when
+tab also reloads after a download (`rbDownloadForGear` → `rbLoadCatalog` when
 `currentTab === 'gear'`).
 
 ## Fix: per-song bypass + gear changes auto-save (2026-05-24)
@@ -702,8 +711,8 @@ tab also reloads after a download (`tbDownloadForGear` → `tbLoadCatalog` when
 Per-song **Bypass** toggles and gear swaps (upload / RS-IR assign) used to
 live only in memory (`_bypassed` / `_uploaded_file`) and persist **only** on
 the explicit "Save preset" (or ▶ Listen) — so toggling Bypass or swapping a
-file then navigating away/restarting lost the change. Now `tbToggleBypass`
-and `tbAfterGearChange` call `tbPersistTone` immediately, so per-song changes
+file then navigating away/restarting lost the change. Now `rbToggleBypass`
+and `rbAfterGearChange` call `rbPersistTone` immediately, so per-song changes
 auto-save. (Round-trip verified: persisted `bypassed` reads back via
 `/song`'s preset-scoped `bypass_map`.) The "Save preset" button still exists
 (explicit save + confirmation).
@@ -747,10 +756,10 @@ file copy when ffmpeg normalization fails (matches nam_tone's IR upload),
 instead of dropping the assignment — so a cab still gets assigned even
 without a working ffmpeg.
 
-**Bypass display on reload (`tbSeedBypass`).** `/song` returns the persisted
+**Bypass display on reload (`rbSeedBypass`).** `/song` returns the persisted
 `bypassed` correctly, but the auto-download re-fetch used to re-render
 without re-seeding the UI flag, so bypass looked off after reload on songs
-with unmapped pieces. `tbSeedBypass(data)` is now called after every `/song`
+with unmapped pieces. `rbSeedBypass(data)` is now called after every `/song`
 fetch (initial load + the auto-download re-fetch).
 
 ## What is **not** done (v3+)
@@ -779,7 +788,7 @@ fetch (initial load + the auto-download re-fetch).
      is code-signed (`com.byron.slopsmith-desktop`, Team 573MF8LBVN), so
      editing bundle files breaks the signature, the change is wiped on
      every app update, and the compiled engine still can't be touched.
-   - Preview (Listen) drives `loadPreset` directly from nam_rig_builder, so
+   - Preview (Listen) drives `loadPreset` directly from rig_builder, so
      *if* the native engine chains NAMs, multi-NAM **preview** is
      possible with zero bundle edits; real-play multi-NAM still needs
      `get_native_preset` (bundle) or upstream engine support.
@@ -844,12 +853,12 @@ fetch (initial load + the auto-download re-fetch).
 | Sister plugin | `/Applications/Slopsmith.app/Contents/Resources/slopsmith/plugins/nam_tone/` |
 | User config dir | `~/Library/Application Support/slopsmith-desktop/slopsmith-config/` |
 | User plugins dir | `~/Library/Application Support/slopsmith-desktop/plugins/` |
-| This plugin | `~/Library/Application Support/slopsmith-desktop/plugins/nam_rig_builder/` |
+| This plugin | `~/Library/Application Support/slopsmith-desktop/plugins/rig_builder/` |
 | NAM models on disk | `slopsmith-config/nam_models/*.nam` |
 | NAM IRs on disk | `slopsmith-config/nam_irs/*.wav` |
 | NAM database | `slopsmith-config/nam_tone.db` |
-| Plugin settings | `slopsmith-config/nam_rig_builder_settings.json` |
-| tone3000 cache | `slopsmith-config/nam_rig_builder_cache.db` |
+| Plugin settings | `slopsmith-config/rig_builder_settings.json` |
+| tone3000 cache | `slopsmith-config/rig_builder_cache.db` |
 
 ---
 
@@ -859,12 +868,12 @@ fetch (initial load + the auto-download re-fetch).
    `~/Library/Application Support/slopsmith-desktop/`.
 2. Quit Slopsmith.
 3. Unzip this plugin into
-   `~/Library/Application Support/slopsmith-desktop/plugins/nam_rig_builder/`.
+   `~/Library/Application Support/slopsmith-desktop/plugins/rig_builder/`.
 4. The included `rs_to_real.json` was generated from one specific
    Rocksmith install; if the new Mac has DLC the first one didn't (or
    vice-versa), regenerate via Settings → "Regenerate gear map" with
    that machine's `gears.psarc`.
-5. Open Slopsmith. "NAM Rig Builder" appears in the nav.
+5. Open Slopsmith. "Rig Builder" appears in the nav.
 
 Optional: tone3000 API key → Settings → paste → "Guardar". Without it,
 deep-link mode works fully.
