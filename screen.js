@@ -668,7 +668,7 @@ function rbRenderPiece(p, toneIdx, pIdx) {
         // showing the assigned capture (a manual upload keeps its filename).
         const a = p.assigned;
         const title = (!p._uploaded_file && a && a.file === effFile && a.tone3000_title) ? a.tone3000_title : '';
-        stageLabel = `✓ ${title || effFile}`;
+        stageLabel = `✓ ${title || rbLibShortName(effFile)}`;
         stageClass = 'text-green-400';
     } else {
         stageLabel = '(unassigned)';
@@ -1969,7 +1969,7 @@ function rbRenderCatalogCard(g) {
         const vstName = g.vst_path.split('/').pop();
         parent = `<span class="text-purple-300" title="${rbEsc(g.vst_path)}">✓ VST: ${rbEsc(vstName)}</span>`;
     } else if (g.assigned) {
-        parent = `<span class="text-green-400" title="${rbEsc(g.file || '')}">✓ ${rbEsc(g.tone3000_title || g.file || 'assigned')}</span>`;
+        parent = `<span class="text-green-400" title="${rbEsc(g.file || '')}">✓ ${rbEsc(g.tone3000_title || rbLibShortName(g.file) || 'assigned')}</span>`;
     } else {
         parent = `<span class="text-gray-500">(unassigned)</span>`;
     }
