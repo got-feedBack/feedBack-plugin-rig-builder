@@ -670,11 +670,17 @@ def _build_master_stages(role: str, models_dir, irs_dir,
     return stages
 
 
-def _load_saved_chain(conn: sqlite3.Connection, preset_id: int) -> list[dict] | None:
+def _load_saved_chain(conn: sqlite3.Connection, preset_id: int,
+                      img_idx: dict | None = None) -> list[dict] | None:
     """Return the user-edited chain for a preset, rebuilt from preset_pieces
     rows + enriched the same way as a PSARC-derived chain. Returns None if
     the preset has no rows (yet), in which case the caller falls back to
     the PSARC's GearList.
+
+    `img_idx` is the same pre-built tone-image lookup `_enrich_chain_piece`
+    takes; pass it from get_song to avoid hitting the search cache once
+    per piece. None = each enrich call builds its own (slow path, ok for
+    one-off uses).
 
     Each row's fields surface as both the "piece" shape the UI expects AND
     pre-populated `assigned` block so the UI immediately renders the saved
@@ -704,7 +710,7 @@ def _load_saved_chain(conn: sqlite3.Connection, preset_id: int) -> list[dict] | 
             "category": _gear_category(rs_gear) or "",
             "knobs": knobs,
         }
-        enriched = _enrich_chain_piece(piece)
+        enriched = _enrich_chain_piece(piece, img_idx)
         # Override the gear-global `assigned` block with THIS preset's row
         # so the UI shows the correct file/VST for this specific tone
         # (otherwise a different tone using the same rs_gear could bleed in).
@@ -2275,7 +2281,7 @@ def setup(app, context):
             # original PSARC pieces removed, or any custom slot_order.
             # Fall back to the PSARC's GearList only for tones the user
             # has never touched (no preset yet).
-            saved_chain = _load_saved_chain(conn, preset_id) if preset_id is not None else None
+            saved_chain = _load_saved_chain(conn, preset_id, _img_idx) if preset_id is not None else None
             if saved_chain:
                 enriched_chain = saved_chain
             else:

@@ -2142,19 +2142,6 @@ async function rbPickVstFile(toneIdx, pIdx) {
     }
 }
 
-function rbToggleVstPanel(toneIdx, pIdx) {
-    const el = document.getElementById(`rb-vst-panel-${toneIdx}-${pIdx}`);
-    if (!el) return;
-    el.classList.toggle('hidden');
-    // First open: fetch suggestions for this gear so the user sees a hint
-    // about which free VSTs typically work for this rs_gear_type.
-    if (!el.classList.contains('hidden') && !el.dataset.suggestionsLoaded) {
-        el.dataset.suggestionsLoaded = '1';
-        const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
-        rbLoadVstSuggestions(piece.type, toneIdx, pIdx);
-    }
-}
-
 async function rbLoadKnownVsts() {
     // Three sources, in order of preference:
     //   1. Engine's own cache via loadPluginList() — fastest, no scan.
@@ -2588,24 +2575,6 @@ async function rbAssignVst(toneIdx, pIdx) {
     rbAfterGearChange(toneIdx);
     const statusEl = document.getElementById(`rb-vst-status-${toneIdx}-${pIdx}`);
     if (statusEl) statusEl.textContent = `assigned. Click "Save preset" or "Listen" to persist.`;
-}
-
-async function rbLoadVstSuggestions(rsGearType, toneIdx, pIdx) {
-    try {
-        const r = await fetch(`${RB_API}/vst/suggest/${encodeURIComponent(rsGearType)}`);
-        if (!r.ok) return;
-        const data = await r.json();
-        const suggestions = (data && data.suggestions) || [];
-        if (suggestions.length === 0) return;
-        const statusEl = document.getElementById(`rb-vst-status-${toneIdx}-${pIdx}`);
-        if (!statusEl) return;
-        // Pretty hint: list 1-3 suggested VSTs with installed badge.
-        const parts = suggestions.slice(0, 3).map(s => {
-            const badge = s.installed ? '✓' : '↓';
-            return `${badge} ${rbEsc(s.name)}`;
-        }).join(' · ');
-        statusEl.innerHTML = `Hint: ${parts}`;
-    } catch (_) { /* best-effort */ }
 }
 
 function rbPickRsIr(select, toneIdx, pIdx) {
