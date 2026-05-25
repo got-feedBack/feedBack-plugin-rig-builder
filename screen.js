@@ -50,6 +50,9 @@
                 const data = JSON.parse(txt);
                 const chain = data && data.native_preset && data.native_preset.chain;
                 if (!Array.isArray(chain) || chain.length === 0) return origFetch(input, init);
+                console.log(`[nam_rig_builder] full-chain playback: preset ${m[1]} → ${chain.length} stages`
+                    + ` (${data.nam_stage_count} NAM + ${chain.length - data.nam_stage_count} IR)`
+                    + (data.missing && data.missing.length ? ` · missing files: ${data.missing.join(', ')}` : ''));
             } catch (_) {
                 return origFetch(input, init);
             }
