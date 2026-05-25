@@ -816,6 +816,9 @@ function tbToggleBypass(toneIdx, pIdx, btn) {
     const piece = tbState.songTones.tones[toneIdx].chain[pIdx];
     piece._bypassed = !piece._bypassed;
     tbUpdateBypassBtn(btn, piece._bypassed);
+    // Persist the bypass for this song right away so it survives reload /
+    // restart (it used to live only in memory until "Save preset").
+    if (tbState.currentSongFile) tbPersistTone(toneIdx, tbState.currentSongFile);
     // If this tone is previewing, reload now. "bypassed" makes the engine
     // pass the signal THROUGH the stage (not silence it), so the rest of
     // the chain keeps working — exactly the requested behaviour.
@@ -873,11 +876,15 @@ function tbRerenderSong() {
 // re-save + reload the chain so the new gear is audible at once.
 async function tbAfterGearChange(toneIdx) {
     tbRerenderSong();
-    if (tbState.listeningTone !== null
-        && (toneIdx == null || toneIdx === tbState.listeningTone)
-        && tbState.currentSongFile) {
-        const pid = await tbPersistTone(tbState.listeningTone, tbState.currentSongFile);
-        if (pid !== null) await tbReloadPreview(pid);
+    // Auto-persist so per-song gear changes survive reload: an upload /
+    // RS-IR assign used to live only in memory until "Save preset". For the
+    // download path (toneIdx == null) the global _assign_file_to_gear already
+    // wrote the DB, but we still persist the listening tone to capture any
+    // in-memory edits and to reload its preview.
+    const idx = (toneIdx != null) ? toneIdx : tbState.listeningTone;
+    if (idx != null && tbState.currentSongFile) {
+        const pid = await tbPersistTone(idx, tbState.currentSongFile);
+        if (pid !== null && tbState.listeningTone === idx) await tbReloadPreview(pid);
     }
 }
 

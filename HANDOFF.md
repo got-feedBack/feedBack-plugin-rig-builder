@@ -692,6 +692,17 @@ that use it) and recomputes their primaries. Auto/batch flows are unaffected
 tab also reloads after a download (`tbDownloadForGear` → `tbLoadCatalog` when
 `currentTab === 'gear'`).
 
+## Fix: per-song bypass + gear changes auto-save (2026-05-24)
+
+Per-song **Bypass** toggles and gear swaps (upload / RS-IR assign) used to
+live only in memory (`_bypassed` / `_uploaded_file`) and persist **only** on
+the explicit "Save preset" (or ▶ Listen) — so toggling Bypass or swapping a
+file then navigating away/restarting lost the change. Now `tbToggleBypass`
+and `tbAfterGearChange` call `tbPersistTone` immediately, so per-song changes
+auto-save. (Round-trip verified: persisted `bypassed` reads back via
+`/song`'s preset-scoped `bypass_map`.) The "Save preset" button still exists
+(explicit save + confirmation).
+
 ## What is **not** done (v3+)
 
 1. **Multi-stage chain playback — RESOLVED in v3.8** (full-chain fetch
