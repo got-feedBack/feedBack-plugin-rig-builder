@@ -122,6 +122,24 @@
         </div>
 
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+            <h3 class="text-white font-semibold mb-3">VST / Audio Unit plugins</h3>
+            <p class="text-gray-500 text-sm mb-3">
+                Scan your installed VST3 / Audio Unit plugins once here — the
+                results feed the 📚 Library picker (Plugins tab) on every gear.
+                Scanning instantiates each plugin to validate it, so it can take
+                up to a minute; a broken plugin may make it time out (check the
+                console for the offending path).
+            </p>
+            <div class="flex gap-3 items-center">
+                <button id="rb-settings-scan-btn" onclick="rbScanFromSettings()"
+                        class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-sm transition">
+                    Scan for plugins
+                </button>
+                <span id="rb-settings-scan-status" class="text-xs text-gray-500"></span>
+            </div>
+        </div>
+
+        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
             <h3 class="text-white font-semibold mb-3">Auto-mode policy</h3>
             <label class="flex items-center gap-2 text-sm text-gray-300 mb-3">
                 <input type="checkbox" id="rb-aggressive" onchange="rbSaveSettings()" class="rounded">

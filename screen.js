@@ -178,7 +178,7 @@ function rbShowTab(name) {
     if (name === 'dashboard') rbLoadCoverage();
     if (name === 'pending') rbLoadPending();
     if (name === 'gear') rbLoadCatalog();
-    if (name === 'settings') rbLoadSettings();
+    if (name === 'settings') { rbLoadSettings(); rbUpdateScanStatus(); }
 }
 
 // ── Dashboard: coverage stats ──────────────────────────────────────
@@ -973,7 +973,7 @@ function rbRenderVstPanelBody(toneIdx, pIdx, currentVstPath, currentFormat) {
     if (known.length === 0) {
         pluginSelector = `
             <div class="text-xs text-gray-400">
-                No scanned plugin list. Use 📁 Pick file (safe) or 🔍 Scan (may crash if a plugin is malformed).
+                No plugins scanned yet — scan in <span class="text-gray-300">Settings → VST / Audio Unit plugins</span>, or use 📁 Pick file below.
             </div>`;
     } else {
         const selId = `rb-vst-select-${toneIdx}-${pIdx}`;
@@ -988,14 +988,9 @@ function rbRenderVstPanelBody(toneIdx, pIdx, currentVstPath, currentFormat) {
                            onchange="rbFilterVstSelect('${selId}')"> hide instruments
                 </label>
             </div>
-            <div class="flex items-center gap-2">
-                <select id="${selId}" data-staged="${rbEsc(stagedPath)}"
-                        onchange="rbStagePath(${toneIdx}, ${pIdx}, this.value)"
-                        class="flex-1 bg-dark-800 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1">${opts}</select>
-                <button onclick="rbScanForVsts(${toneIdx}, ${pIdx})"
-                        title="Re-scan installed plugins (may crash Slopsmith if a plugin is malformed — use Pick file if so)"
-                        class="text-xs text-gray-400 hover:text-gray-200 px-1">🔄</button>
-            </div>`;
+            <select id="${selId}" data-staged="${rbEsc(stagedPath)}"
+                    onchange="rbStagePath(${toneIdx}, ${pIdx}, this.value)"
+                    class="w-full bg-dark-800 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1">${opts}</select>`;
     }
     return `
         <div class="text-xs text-purple-300 font-semibold">VST3 / Audio Unit</div>
@@ -1006,12 +1001,6 @@ function rbRenderVstPanelBody(toneIdx, pIdx, currentVstPath, currentFormat) {
                     class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-2 py-1 rounded">
                 📁 Pick file
             </button>
-            ${known.length === 0 ? `
-                <button onclick="rbScanForVsts(${toneIdx}, ${pIdx})"
-                        title="Try a full scan (may crash if a plugin is malformed)"
-                        class="bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs px-2 py-1 rounded">
-                    🔍 Try scan
-                </button>` : ''}
         </div>
         <div class="flex items-center gap-2">
             <input id="rb-vst-path-${toneIdx}-${pIdx}" type="text"
@@ -1323,6 +1312,33 @@ async function rbScanForVsts(toneIdx, pIdx) {
     } catch (e) {
         setStatus(`scan failed: ${e.message || e}`);
     }
+}
+
+// Scan triggered from the Settings tab — the single place to (re)scan
+// installed VST3/AU plugins. Populates rbState.knownVsts, which feeds the
+// 📚 Library "Plugins" tab and the per-piece VST dropdowns everywhere.
+async function rbScanFromSettings() {
+    const btn = document.getElementById('rb-settings-scan-btn');
+    const setStatus = (m) => {
+        const s = document.getElementById('rb-settings-scan-status');
+        if (s) s.textContent = m;
+    };
+    if (btn) btn.disabled = true;
+    try {
+        await rbDoVstScan(setStatus);
+    } catch (e) {
+        setStatus(`scan failed: ${e.message || e}`);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// Show the current known-plugin count in the Settings scan status line.
+function rbUpdateScanStatus() {
+    const s = document.getElementById('rb-settings-scan-status');
+    if (!s) return;
+    const n = (rbState.knownVsts || []).length;
+    s.textContent = n > 0 ? `${n} plugins known` : 'no plugins scanned yet';
 }
 
 // Resolve the current "pending" VST path for a piece — prefers an explicit
@@ -2159,7 +2175,7 @@ function rbRenderCatalogVstPanelBody(panelId, rsGear, currentVstPath, currentFor
     if (known.length === 0) {
         pluginSelector = `
             <div class="text-xs text-gray-400">
-                No scanned plugin list. Use 📁 Pick file (safe) or 🔍 Scan (may crash Slopsmith if a plugin is malformed).
+                No plugins scanned yet — scan in <span class="text-gray-300">Settings → VST / Audio Unit plugins</span>, or use 📁 Pick file below.
             </div>`;
     } else {
         const selId = `${panelId}-select`;
@@ -2174,14 +2190,9 @@ function rbRenderCatalogVstPanelBody(panelId, rsGear, currentVstPath, currentFor
                            onchange="rbFilterVstSelect('${rbEsc(selId)}')"> hide instruments
                 </label>
             </div>
-            <div class="flex items-center gap-2">
-                <select id="${selId}" data-staged="${rbEsc(stagedPath)}"
-                        onchange="rbCatalogStagePath('${rbEsc(panelId)}', this.value)"
-                        class="flex-1 bg-dark-800 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1">${opts}</select>
-                <button onclick="rbCatalogScanVsts('${rbEsc(panelId)}','${rbEsc(rsGear)}','${rbEsc(stagedPath)}','${rbEsc(currentFormat)}')"
-                        title="Re-scan installed plugins (may crash)"
-                        class="text-xs text-gray-400 hover:text-gray-200 px-1">🔄</button>
-            </div>`;
+            <select id="${selId}" data-staged="${rbEsc(stagedPath)}"
+                    onchange="rbCatalogStagePath('${rbEsc(panelId)}', this.value)"
+                    class="w-full bg-dark-800 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1">${opts}</select>`;
     }
     return `
         <div class="text-xs text-purple-300 font-semibold">VST3 / Audio Unit</div>
@@ -2192,12 +2203,6 @@ function rbRenderCatalogVstPanelBody(panelId, rsGear, currentVstPath, currentFor
                     class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-2 py-1 rounded">
                 📁 Pick file
             </button>
-            ${known.length === 0 ? `
-                <button onclick="rbCatalogScanVsts('${rbEsc(panelId)}','${rbEsc(rsGear)}','${rbEsc(stagedPath)}','${rbEsc(currentFormat)}')"
-                        title="Try a full scan (may crash)"
-                        class="bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs px-2 py-1 rounded">
-                    🔍 Try scan
-                </button>` : ''}
         </div>
         <div class="flex items-center gap-2">
             <input type="text"
