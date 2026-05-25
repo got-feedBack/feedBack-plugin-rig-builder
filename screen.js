@@ -747,6 +747,58 @@ function rbRenderPiece(p, toneIdx, pIdx) {
 
 // ── VST panel rendering + handlers ────────────────────────────────────
 
+// ── Shared VST picker helpers (search + category groups + hide instruments) ──
+// Derive a short, human group label from the VST3/AU category. VST3 reports
+// pipe-delimited categories like "Fx|Reverb" or "Fx|Dynamics|Compressor";
+// we drop the leading "Fx" and group by the first meaningful segment.
+function rbVstCategoryLabel(p) {
+    if (p.isInstrument) return 'Instruments';
+    const parts = (p.category || '').split('|')
+        .map(s => s.trim()).filter(s => s && s.toLowerCase() !== 'fx');
+    return parts[0] || 'Other';
+}
+
+// Build <optgroup>-grouped <option>s from rbState.knownVsts, applying a text
+// filter (name / manufacturer / category) and the hide-instruments flag.
+// Shared by both pickers so the Songs and Gear panels stay in sync.
+function rbBuildVstOptions(stagedPath, filter, hideInstruments) {
+    const known = rbState.knownVsts || [];
+    const q = (filter || '').trim().toLowerCase();
+    const matches = known.filter(p => {
+        if (hideInstruments && p.isInstrument) return false;
+        if (!q) return true;
+        return ((p.name || '') + ' ' + (p.manufacturer || '') + ' ' + (p.category || ''))
+            .toLowerCase().includes(q);
+    });
+    if (matches.length === 0) return '<option value="" disabled>(no plugins match)</option>';
+    const groups = {};
+    for (const p of matches) {
+        const cat = rbVstCategoryLabel(p);
+        (groups[cat] = groups[cat] || []).push(p);
+    }
+    return Object.keys(groups).sort().map(cat => {
+        const opts = groups[cat]
+            .slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+            .map(p => {
+                const sel = (p.path === stagedPath) ? ' selected' : '';
+                const tag = p.format ? ` [${rbEsc(p.format)}]` : '';
+                return `<option value="${rbEsc(p.path)}"${sel}>${rbEsc(p.name || p.path.split('/').pop())}${tag}</option>`;
+            }).join('');
+        return `<optgroup label="${rbEsc(cat)}">${opts}</optgroup>`;
+    }).join('');
+}
+
+// Re-render a picker's <select> options live from its search box + checkbox.
+// `selectId` is the <select> id; the search/toggle share it as a prefix.
+function rbFilterVstSelect(selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const input = document.getElementById(selectId + '-search');
+    const cb = document.getElementById(selectId + '-hideinst');
+    const staged = sel.value || sel.getAttribute('data-staged') || '';
+    sel.innerHTML = rbBuildVstOptions(staged, input ? input.value : '', cb ? cb.checked : true);
+}
+
 function rbRenderVstPanelBody(toneIdx, pIdx, currentVstPath, currentFormat) {
     const known = rbState.knownVsts || [];
     // The current selection lives on the piece object (so closing/opening
@@ -763,14 +815,20 @@ function rbRenderVstPanelBody(toneIdx, pIdx, currentVstPath, currentFormat) {
                 No scanned plugin list. Use 📁 Pick file (safe) or 🔍 Scan (may crash if a plugin is malformed).
             </div>`;
     } else {
-        const opts = known.map(p => {
-            const sel = (p.path === stagedPath) ? 'selected' : '';
-            const tag = p.format ? `[${rbEsc(p.format)}]` : '';
-            return `<option value="${rbEsc(p.path)}" ${sel}>${rbEsc(p.name || p.path.split('/').pop())} ${tag}</option>`;
-        }).join('');
+        const selId = `rb-vst-select-${toneIdx}-${pIdx}`;
+        const opts = rbBuildVstOptions(stagedPath, '', true);
         pluginSelector = `
+            <div class="flex items-center gap-2 mb-1">
+                <input id="${selId}-search" type="text" placeholder="🔍 filter by name / brand / category"
+                       oninput="rbFilterVstSelect('${selId}')"
+                       class="flex-1 bg-dark-900 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1">
+                <label class="text-[10px] text-gray-400 flex items-center gap-1 whitespace-nowrap">
+                    <input id="${selId}-hideinst" type="checkbox" checked
+                           onchange="rbFilterVstSelect('${selId}')"> hide instruments
+                </label>
+            </div>
             <div class="flex items-center gap-2">
-                <select id="rb-vst-select-${toneIdx}-${pIdx}"
+                <select id="${selId}" data-staged="${rbEsc(stagedPath)}"
                         onchange="rbStagePath(${toneIdx}, ${pIdx}, this.value)"
                         class="flex-1 bg-dark-800 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1">${opts}</select>
                 <button onclick="rbScanForVsts(${toneIdx}, ${pIdx})"
@@ -1822,14 +1880,20 @@ function rbRenderCatalogVstPanelBody(panelId, rsGear, currentVstPath, currentFor
                 No scanned plugin list. Use 📁 Pick file (safe) or 🔍 Scan (may crash Slopsmith if a plugin is malformed).
             </div>`;
     } else {
-        const opts = known.map(p => {
-            const sel = (p.path === stagedPath) ? 'selected' : '';
-            const tag = p.format ? `[${rbEsc(p.format)}]` : '';
-            return `<option value="${rbEsc(p.path)}" ${sel}>${rbEsc(p.name || p.path.split('/').pop())} ${tag}</option>`;
-        }).join('');
+        const selId = `${panelId}-select`;
+        const opts = rbBuildVstOptions(stagedPath, '', true);
         pluginSelector = `
+            <div class="flex items-center gap-2 mb-1">
+                <input id="${selId}-search" type="text" placeholder="🔍 filter by name / brand / category"
+                       oninput="rbFilterVstSelect('${rbEsc(selId)}')"
+                       class="flex-1 bg-dark-900 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1">
+                <label class="text-[10px] text-gray-400 flex items-center gap-1 whitespace-nowrap">
+                    <input id="${selId}-hideinst" type="checkbox" checked
+                           onchange="rbFilterVstSelect('${rbEsc(selId)}')"> hide instruments
+                </label>
+            </div>
             <div class="flex items-center gap-2">
-                <select id="${panelId}-select"
+                <select id="${selId}" data-staged="${rbEsc(stagedPath)}"
                         onchange="rbCatalogStagePath('${rbEsc(panelId)}', this.value)"
                         class="flex-1 bg-dark-800 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1">${opts}</select>
                 <button onclick="rbCatalogScanVsts('${rbEsc(panelId)}','${rbEsc(rsGear)}','${rbEsc(stagedPath)}','${rbEsc(currentFormat)}')"
