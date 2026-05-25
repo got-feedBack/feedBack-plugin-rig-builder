@@ -178,6 +178,7 @@ function rbShowTab(name) {
     if (name === 'dashboard') rbLoadCoverage();
     if (name === 'pending') rbLoadPending();
     if (name === 'gear') rbLoadCatalog();
+    if (name === 'master') rbLoadMasterChain();
     if (name === 'settings') { rbLoadSettings(); rbUpdateScanStatus(); }
 }
 
@@ -615,26 +616,65 @@ async function rbMaterializeFromCloud(filename, statusEl) {
 
 function rbRenderTone(tone, toneIdx, filename) {
     const pieces = tone.chain.map((p, pIdx) => rbRenderPiece(p, toneIdx, pIdx)).join('');
+    // Badge that flags whether this chain has been edited (saved preset_pieces
+    // overriding PSARC) vs still the original PSARC default.
+    const sourceBadge = tone.chain_source === 'edited'
+        ? `<span class="text-[10px] text-purple-300/80 bg-purple-900/20 border border-purple-800/30 rounded px-1.5 py-0.5"
+                  title="This tone's chain has been edited from the PSARC default">✎ edited</span>`
+        : `<span class="text-[10px] text-gray-500" title="Untouched — pieces still match the PSARC's GearList">PSARC default</span>`;
     return `
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-4">
             <div class="flex items-baseline justify-between mb-3">
                 <h3 class="text-white font-semibold">${rbEsc(tone.name)}</h3>
-                <span class="text-xs text-gray-500">${rbEsc(tone.key)}</span>
+                <div class="flex items-center gap-2">
+                    ${sourceBadge}
+                    <span class="text-xs text-gray-500">${rbEsc(tone.key)}</span>
+                </div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">${pieces}</div>
-            <div class="flex justify-end gap-2">
-                <button id="rb-listen-${toneIdx}"
-                        onclick="rbListenTone(${toneIdx}, '${rbEsc(filename).replace(/'/g,"\\'")}')"
-                        title="Saves the tone and plays it live through the NAM engine (monitors your guitar input)"
-                        class="bg-dark-600 hover:bg-dark-500 text-gray-200 px-4 py-2 rounded-lg text-xs transition">
-                    ▶ Listen
-                </button>
-                <button onclick="rbSaveTonePreset(${toneIdx}, '${rbEsc(filename).replace(/'/g,"\\'")}')"
-                        class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-xs transition">
-                    Save preset
-                </button>
+            <div class="text-[10px] text-gray-500 mb-2">
+                Signal flow: ${tone.chain.length} stage${tone.chain.length === 1 ? '' : 's'} ·
+                drag through ▲ ▼ to reorder, ✗ to remove
             </div>
+            <div id="rb-chain-${toneIdx}" class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">${pieces}</div>
+            <div class="flex justify-between items-center gap-2">
+                <button onclick="rbOpenAddPiecePicker(${toneIdx}, '${rbEsc(filename).replace(/'/g,"\\'")}')"
+                        title="Insert a new gear at the end of this tone's chain"
+                        class="bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-800/40 px-3 py-1.5 rounded text-xs transition">
+                    ＋ Add piece to chain
+                </button>
+                <div class="flex gap-2">
+                    <button id="rb-listen-${toneIdx}"
+                            onclick="rbListenTone(${toneIdx}, '${rbEsc(filename).replace(/'/g,"\\'")}')"
+                            title="Saves the tone and plays it live through the NAM engine (monitors your guitar input)"
+                            class="bg-dark-600 hover:bg-dark-500 text-gray-200 px-4 py-2 rounded-lg text-xs transition">
+                        ▶ Listen
+                    </button>
+                    <button onclick="rbSaveTonePreset(${toneIdx}, '${rbEsc(filename).replace(/'/g,"\\'")}')"
+                            class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-xs transition">
+                        Save preset
+                    </button>
+                </div>
+            </div>
+            <div id="rb-addpiece-modal-${toneIdx}" class="hidden mt-3 bg-emerald-900/10 border border-emerald-800/30 rounded p-3"></div>
         </div>`;
+}
+
+// Re-render JUST the chain grid for one tone after a reorder / add / remove
+// (avoids a full song refetch). Position numbers, slot badges, and the
+// chain-length copy all come from the live tone.chain so it's enough to
+// rebuild the inner grid.
+function rbReRenderToneChain(toneIdx, filename) {
+    const tone = rbState.songTones.tones[toneIdx];
+    if (!tone) return;
+    const grid = document.getElementById(`rb-chain-${toneIdx}`);
+    if (grid) {
+        grid.innerHTML = tone.chain.map((p, pIdx) => rbRenderPiece(p, toneIdx, pIdx)).join('');
+    }
+    // Update the stages count copy too.
+    const headerCopy = grid?.previousElementSibling;
+    if (headerCopy) {
+        headerCopy.innerHTML = `Signal flow: ${tone.chain.length} stage${tone.chain.length === 1 ? '' : 's'} · drag through ▲ ▼ to reorder, ✗ to remove`;
+    }
 }
 
 function rbRenderPiece(p, toneIdx, pIdx) {
@@ -713,16 +753,35 @@ function rbRenderPiece(p, toneIdx, pIdx) {
             </div>`;
     }
 
+    // Chain editor controls (auto-save on click): position number + ▲ ▼ ✗
+    const total = (rbState.songTones && rbState.songTones.tones[toneIdx] && rbState.songTones.tones[toneIdx].chain.length) || 1;
+    const isFirst = pIdx === 0;
+    const isLast  = pIdx === total - 1;
     return `
         <div class="bg-dark-800 border border-gray-800/50 rounded-lg p-3" data-tone="${toneIdx}" data-piece="${pIdx}">
             <div class="flex items-center justify-between mb-2">
-                <div>
-                    <div class="text-sm text-gray-200">${rbEsc(p.real_name || p.type)}</div>
-                    <div class="text-xs text-gray-500">
-                        ${rbEsc(p.slot)} · ${rbEsc(p.rs_category)} · ${rbEsc(p.type)}
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="flex-shrink-0 w-6 h-6 rounded-full bg-dark-900 border border-gray-700 text-[11px] text-gray-300 flex items-center justify-center font-mono"
+                          title="Position in the signal flow (1 = first, N = last before output)">${pIdx + 1}</span>
+                    <div class="min-w-0">
+                        <div class="text-sm text-gray-200 truncate">${rbEsc(p.real_name || p.type)}</div>
+                        <div class="text-xs text-gray-500 truncate">
+                            ${rbEsc(p.slot)} · ${rbEsc(p.rs_category)} · ${rbEsc(p.type)}
+                        </div>
                     </div>
                 </div>
-                <div class="flex items-center gap-1">
+                <div class="flex items-center gap-1 flex-shrink-0">
+                    <button onclick="rbMovePiece(${toneIdx}, ${pIdx}, -1)"
+                            title="Move earlier in the signal flow"
+                            ${isFirst ? 'disabled' : ''}
+                            class="px-1.5 py-1 rounded text-xs transition ${isFirst ? 'bg-dark-700/40 text-gray-700 cursor-not-allowed' : 'bg-dark-600 hover:bg-dark-500 text-gray-300'}">▲</button>
+                    <button onclick="rbMovePiece(${toneIdx}, ${pIdx}, 1)"
+                            title="Move later in the signal flow"
+                            ${isLast ? 'disabled' : ''}
+                            class="px-1.5 py-1 rounded text-xs transition ${isLast ? 'bg-dark-700/40 text-gray-700 cursor-not-allowed' : 'bg-dark-600 hover:bg-dark-500 text-gray-300'}">▼</button>
+                    <button onclick="rbRemovePiece(${toneIdx}, ${pIdx})"
+                            title="Remove this piece from the chain (the rs_to_real entry stays — you can re-add later)"
+                            class="px-1.5 py-1 rounded text-xs bg-red-900/40 hover:bg-red-900/60 text-red-300 border border-red-800/40 transition">✗</button>
                     <button id="rb-bypass-${toneIdx}-${pIdx}" onclick="rbToggleBypass(${toneIdx}, ${pIdx}, this)"
                             title="Bypass: skips this stage in the preview (signal passes through unprocessed — it isn't muted, the chain keeps working)"
                             class="px-2 py-1 rounded text-xs transition ${bypassed ? 'bg-amber-700/40 text-amber-300 border border-amber-600/40' : 'bg-dark-600 hover:bg-dark-500 text-gray-300'}">
@@ -921,6 +980,899 @@ function rbPickFromLibrary(toneIdx, pIdx, fileName, kind) {
     const lib = document.getElementById(`rb-lib-${toneIdx}-${pIdx}`);
     if (lib) lib.classList.add('hidden');
     rbAfterGearChange(toneIdx);
+}
+
+// ── Master chain (global pre/post FX) ──────────────────────────────────
+//
+// The "Master Chain" tab edits two sentinel chains kept in preset_pieces
+// under reserved preset names (`__rig_builder_master_pre__` /
+// `__rig_builder_master_post__`). The backend's native_preset_full
+// prepends master_pre stages + appends master_post stages around every
+// per-tone chain, so e.g. an input gate + output limiter stay applied
+// regardless of which song / tone is loaded.
+
+rbState.master = { pre: [], post: [] };
+
+async function rbLoadMasterChain() {
+    const statusEl = document.getElementById('rb-master-status');
+    if (statusEl) statusEl.textContent = 'Loading master chain…';
+    try {
+        const r = await fetch(`${RB_API}/master_chain`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        rbState.master.pre  = Array.isArray(data.pre)  ? data.pre  : [];
+        rbState.master.post = Array.isArray(data.post) ? data.post : [];
+        if (statusEl) {
+            const n = rbState.master.pre.length + rbState.master.post.length;
+            statusEl.textContent = n > 0
+                ? `${rbState.master.pre.length} pre · ${rbState.master.post.length} post`
+                : 'No master pieces configured yet — every song uses just its own chain.';
+        }
+    } catch (e) {
+        if (statusEl) statusEl.textContent = `Failed to load master chain: ${e.message || e}`;
+        rbState.master.pre = [];
+        rbState.master.post = [];
+    }
+    rbRenderMasterChain('pre');
+    rbRenderMasterChain('post');
+}
+
+function rbRenderMasterChain(role) {
+    const list = rbState.master[role] || [];
+    const container = document.getElementById(`rb-master-${role}-chain`);
+    const counter   = document.getElementById(`rb-master-${role}-count`);
+    if (!container) return;
+    if (counter) counter.textContent = `${list.length} piece${list.length === 1 ? '' : 's'}`;
+    if (list.length === 0) {
+        container.innerHTML = `
+            <div class="text-xs text-gray-500 italic bg-dark-800/40 border border-dashed border-gray-800/50 rounded p-3">
+                No ${role}-FX yet. Use "＋ Add ${role} piece" below to start.
+            </div>`;
+        return;
+    }
+    container.innerHTML = list.map((p, i) => rbRenderMasterPiece(role, i, p, list.length)).join('');
+}
+
+function rbRenderMasterPiece(role, idx, p, total) {
+    const isFirst = idx === 0;
+    const isLast  = idx === total - 1;
+    const accent  = role === 'pre' ? 'emerald' : 'cyan';
+    // Effective assignment label.
+    const pendingKind = p._uploaded_kind || p._vst_kind;
+    const assignedKind = p.assigned && p.assigned.kind;
+    const effKind = pendingKind || assignedKind || 'none';
+    const effVstPath = p._vst_path || (p.assigned && p.assigned.vst_path) || '';
+    const effFile = p._uploaded_file || (p.assigned && p.assigned.file) || null;
+    let label, labelClass;
+    if (effKind === 'vst' && effVstPath) {
+        label = `✓ VST: ${effVstPath.split('/').pop()}`;
+        labelClass = 'text-purple-300';
+    } else if (effFile) {
+        label = `✓ ${effFile}`;
+        labelClass = 'text-green-400';
+    } else {
+        label = '(unassigned — click Assign to pick a file or VST)';
+        labelClass = 'text-gray-500';
+    }
+    const bypassed = !!p._bypassed || !!(p.assigned && p.assigned.bypassed);
+    const pickerId = `rb-master-${role}-picker-piece-${idx}`;
+    return `
+        <div class="bg-dark-800 border border-${accent}-900/30 rounded-lg p-3" data-role="${role}" data-idx="${idx}">
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="flex-shrink-0 w-6 h-6 rounded-full bg-dark-900 border border-${accent}-800/40 text-[11px] text-${accent}-300 flex items-center justify-center font-mono">
+                        ${idx + 1}
+                    </span>
+                    <div class="min-w-0">
+                        <div class="text-sm text-gray-200 truncate">${rbEsc(p.real_name || p.type)}</div>
+                        <div class="text-xs text-gray-500 truncate">${rbEsc(p.rs_category || p.category || 'other')} · ${rbEsc(p.type)}</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1 flex-shrink-0">
+                    <button onclick="rbMasterMovePiece('${role}', ${idx}, -1)" ${isFirst ? 'disabled' : ''}
+                            class="px-1.5 py-1 rounded text-xs transition ${isFirst ? 'bg-dark-700/40 text-gray-700 cursor-not-allowed' : 'bg-dark-600 hover:bg-dark-500 text-gray-300'}">▲</button>
+                    <button onclick="rbMasterMovePiece('${role}', ${idx}, 1)" ${isLast ? 'disabled' : ''}
+                            class="px-1.5 py-1 rounded text-xs transition ${isLast ? 'bg-dark-700/40 text-gray-700 cursor-not-allowed' : 'bg-dark-600 hover:bg-dark-500 text-gray-300'}">▼</button>
+                    <button onclick="rbMasterRemovePiece('${role}', ${idx})"
+                            class="px-1.5 py-1 rounded text-xs bg-red-900/40 hover:bg-red-900/60 text-red-300 border border-red-800/40 transition">✗</button>
+                    <button onclick="rbMasterToggleBypass('${role}', ${idx}, this)"
+                            class="px-2 py-1 rounded text-xs transition ${bypassed ? 'bg-amber-700/40 text-amber-300 border border-amber-600/40' : 'bg-dark-600 hover:bg-dark-500 text-gray-300'}">
+                        ${bypassed ? '⤳ Bypassed' : 'Bypass'}
+                    </button>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="flex-1 text-xs ${labelClass} truncate" title="${rbEsc(effVstPath || effFile || '')}">${rbEsc(label)}</span>
+                <button onclick="rbMasterOpenAssignPicker('${role}', ${idx})"
+                        class="bg-${accent}-900/30 hover:bg-${accent}-900/50 text-${accent}-300 border border-${accent}-800/40 px-2 py-1 rounded text-xs transition">
+                    Assign…
+                </button>
+            </div>
+            <div id="${pickerId}" class="hidden mt-2 bg-dark-900/40 border border-gray-800/40 rounded p-2 space-y-2"></div>
+        </div>`;
+}
+
+// State mutation helpers — all auto-save via rbPersistMasterChain.
+
+function rbMasterMovePiece(role, idx, direction) {
+    const arr = rbState.master[role];
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= arr.length) return;
+    const tmp = arr[idx];
+    arr[idx] = arr[newIdx];
+    arr[newIdx] = tmp;
+    rbAfterMasterEdit(role);
+}
+
+async function rbMasterRemovePiece(role, idx) {
+    const arr = rbState.master[role];
+    const piece = arr[idx];
+    const name = piece?.real_name || piece?.type || 'piece';
+    if (!confirm(`Remove "${name}" from master ${role} chain?`)) return;
+    arr.splice(idx, 1);
+    rbAfterMasterEdit(role);
+}
+
+function rbMasterToggleBypass(role, idx, btn) {
+    const arr = rbState.master[role];
+    const p = arr[idx];
+    if (!p) return;
+    p._bypassed = !p._bypassed;
+    rbAfterMasterEdit(role);
+}
+
+async function rbAfterMasterEdit(role) {
+    await rbPersistMasterChain(role).catch(() => null);
+    rbRenderMasterChain(role);
+    // If a tone preview is running, reload it so the new master wrap is heard live.
+    if (rbState.listeningTone !== null && rbState._previewPayload?.id) {
+        await rbReloadPreview(rbState._previewPayload.id).catch(() => {});
+    }
+}
+
+async function rbPersistMasterChain(role) {
+    const arr = rbState.master[role] || [];
+    const pieces = arr.map(p => {
+        const isVst = p._vst_kind === 'vst' || (p.assigned && p.assigned.kind === 'vst' && p.assigned.vst_path);
+        if (isVst) {
+            return {
+                slot: p.slot || `master_${role}`,
+                rs_gear_type: p.type,
+                kind: 'vst',
+                file: null,
+                vst_path: p._vst_path || (p.assigned && p.assigned.vst_path) || '',
+                vst_format: p._vst_format || (p.assigned && p.assigned.vst_format) || 'VST3',
+                vst_state: p._vst_state ?? (p.assigned && p.assigned.vst_state) ?? null,
+                params: {},
+                assigned_mode: 'master',
+                bypassed: !!p._bypassed,
+            };
+        }
+        const file = p._uploaded_file || (p.assigned && p.assigned.file) || null;
+        const kindRaw = p._uploaded_kind || (p.assigned && p.assigned.kind) || null;
+        const kind = kindRaw || (file ? (p.rs_category === 'cab' ? 'ir' : 'nam') : 'none');
+        return {
+            slot: p.slot || `master_${role}`,
+            rs_gear_type: p.type,
+            kind,
+            file,
+            params: {},
+            assigned_mode: 'master',
+            bypassed: !!p._bypassed,
+        };
+    });
+    try {
+        const r = await fetch(`${RB_API}/master_chain/save`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role, pieces }),
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            alert(`Save master ${role} failed: ${err.error || r.status}`);
+            return null;
+        }
+        return await r.json();
+    } catch (e) {
+        alert(`Save master ${role} failed: ${e.message || e}`);
+        return null;
+    }
+}
+
+// ── Master Add-piece picker ──
+async function rbOpenMasterAddPiecePicker(role) {
+    const picker = document.getElementById(`rb-master-${role}-picker`);
+    if (!picker) return;
+    if (!picker.classList.contains('hidden')) {
+        picker.classList.add('hidden');
+        picker.innerHTML = '';
+        return;
+    }
+    picker.classList.remove('hidden');
+    picker.innerHTML = `<div class="text-xs text-gray-500">Loading gear catalog…</div>`;
+    if (_rbGearsCatalog === null) {
+        try {
+            const r = await fetch(`${RB_API}/gears_catalog`);
+            const data = await r.json();
+            _rbGearsCatalog = (data && data.gears) || [];
+        } catch (_) { _rbGearsCatalog = []; }
+    }
+    // Initialise per-picker state. Defaults: Rocksmith section, DAW
+    // category that makes sense for each master role.
+    picker._rbSection = 'rocksmith';
+    picker._rbDawCat = role === 'pre' ? 'compression' : 'reverb';
+    picker._rbRsFilter = '';
+    picker._rbVstFilter = '';
+    rbRenderMasterAddPicker(role, picker);
+}
+
+function rbRenderMasterAddPicker(role, picker) {
+    const accent = role === 'pre' ? 'emerald' : 'cyan';
+    const accentVst = 'purple';
+    const section  = picker._rbSection  || 'rocksmith';
+    const dawCat   = picker._rbDawCat   || (role === 'pre' ? 'compression' : 'reverb');
+    const rsFilter = picker._rbRsFilter || '';
+    const vstFilter = picker._rbVstFilter || '';
+    const sectionTabs = `
+        <div class="flex items-center gap-1 mb-3 border-b border-gray-800/40 pb-2">
+            <button onclick="rbMasterAddPickerSetSection('${role}', 'rocksmith')"
+                    class="px-3 py-1 rounded text-xs transition ${section === 'rocksmith'
+                        ? `bg-${accent}-700 text-white` : 'bg-dark-700 hover:bg-dark-600 text-gray-300'}">
+                🎸 Rocksmith gear <span class="opacity-60 ml-1">${(_rbGearsCatalog || []).length}</span>
+            </button>
+            <button onclick="rbMasterAddPickerSetSection('${role}', 'vst')"
+                    class="px-3 py-1 rounded text-xs transition ${section === 'vst'
+                        ? `bg-${accentVst}-700 text-white` : 'bg-dark-700 hover:bg-dark-600 text-gray-300'}">
+                🎛 VST / AU <span class="opacity-60 ml-1">${(rbState.knownVsts || []).length}</span>
+            </button>
+            <span class="flex-1"></span>
+            <button onclick="rbOpenMasterAddPiecePicker('${role}')" class="text-[10px] text-gray-400 hover:text-gray-200 px-1">✕</button>
+        </div>`;
+    let body;
+    if (section === 'rocksmith') {
+        body = rbBuildRocksmithPickerBody({
+            dawCat, filter: rsFilter,
+            onCategoryCall: (k) => `rbMasterAddPickerSetDawCat('${role}', '${rbEsc(k)}')`,
+            onFilterCall:   `rbMasterAddPickerSetRsFilter('${role}', this.value)`,
+            onAddCall:      (g) => `rbMasterAddPiece('${role}', '${rbEsc(g.rs_gear)}', '${rbEsc(g.category)}')`,
+            searchId: `rb-master-${role}-rs-search`,
+        });
+    } else {
+        body = rbBuildVstPickerBody({
+            filter: vstFilter,
+            onFilterCall: `rbMasterAddPickerSetVstFilter('${role}', this.value)`,
+            onPickKnownCall: (v) => `rbMasterAddPieceVst('${role}', '${rbEscPath(v.path)}', '${rbEsc(v.format || 'VST3')}', '${rbEsc(v.name || '')}')`,
+            onPickPathCall:  `rbMasterAddPieceVstFromPath('${role}', this.previousElementSibling.value)`,
+            searchId: `rb-master-${role}-vst-search`,
+        });
+    }
+    picker.innerHTML = `
+        <div class="text-xs text-${accent}-300 font-semibold mb-2">Add ${role} piece</div>
+        ${sectionTabs}
+        ${body}`;
+    const searchEl = document.getElementById(
+        section === 'rocksmith' ? `rb-master-${role}-rs-search` : `rb-master-${role}-vst-search`);
+    if (searchEl) {
+        const v = section === 'rocksmith' ? rsFilter : vstFilter;
+        if (v) { searchEl.focus(); searchEl.setSelectionRange(v.length, v.length); }
+    }
+}
+
+function rbMasterAddPickerSetSection(role, section) {
+    const picker = document.getElementById(`rb-master-${role}-picker`);
+    if (!picker) return;
+    picker._rbSection = section;
+    rbRenderMasterAddPicker(role, picker);
+}
+function rbMasterAddPickerSetDawCat(role, daw) {
+    const picker = document.getElementById(`rb-master-${role}-picker`);
+    if (!picker) return;
+    picker._rbDawCat = daw;
+    rbRenderMasterAddPicker(role, picker);
+}
+function rbMasterAddPickerSetRsFilter(role, value) {
+    const picker = document.getElementById(`rb-master-${role}-picker`);
+    if (!picker) return;
+    picker._rbRsFilter = value;
+    rbRenderMasterAddPicker(role, picker);
+}
+function rbMasterAddPickerSetVstFilter(role, value) {
+    const picker = document.getElementById(`rb-master-${role}-picker`);
+    if (!picker) return;
+    picker._rbVstFilter = value;
+    rbRenderMasterAddPicker(role, picker);
+}
+
+// Master-chain VST add. Same logic as rbAddPieceVst but pushes onto
+// rbState.master[role] instead of a tone.chain.
+function rbMasterAddPieceVst(role, vstPath, vstFormat, displayName) {
+    if (!vstPath) return;
+    const dawCat = rbDawCategoryForVst({ name: displayName, manufacturer: '' });
+    const synthName = displayName || vstPath.split('/').pop().replace(/\.(vst3|component)$/i, '');
+    const synthGear = 'VST_' + synthName.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60);
+    rbState.master[role].push({
+        type: synthGear,
+        slot: `master_${role}`,
+        rs_category: dawCat === 'amps' ? 'amp' : (dawCat === 'cabs' ? 'cab' : 'pedal'),
+        category: dawCat,
+        real_name: synthName,
+        make: '', model: '',
+        assigned: null,
+        _bypassed: false,
+        _vst_path: vstPath,
+        _vst_format: vstFormat || 'VST3',
+        _vst_kind: 'vst',
+    });
+    const picker = document.getElementById(`rb-master-${role}-picker`);
+    if (picker) { picker.classList.add('hidden'); picker.innerHTML = ''; }
+    rbAfterMasterEdit(role);
+}
+
+function rbMasterAddPieceVstFromPath(role, vstPath) {
+    if (!vstPath || !vstPath.trim()) return;
+    const path = vstPath.trim();
+    const fmt = path.toLowerCase().endsWith('.component') ? 'AudioUnit' : 'VST3';
+    const name = path.split('/').pop().replace(/\.(vst3|component)$/i, '');
+    return rbMasterAddPieceVst(role, path, fmt, name);
+}
+
+function rbMasterAddPiece(role, rsGearType, category) {
+    const catalogEntry = (_rbGearsCatalog || []).find(g => g.rs_gear === rsGearType) || {};
+    rbState.master[role].push({
+        type: rsGearType,
+        slot: `master_${role}`,
+        rs_category: category,
+        category,
+        real_name: catalogEntry.name || rsGearType,
+        make: catalogEntry.make || '',
+        model: catalogEntry.model || '',
+        assigned: null,
+        _bypassed: false,
+    });
+    // Close picker.
+    const picker = document.getElementById(`rb-master-${role}-picker`);
+    if (picker) { picker.classList.add('hidden'); picker.innerHTML = ''; }
+    rbAfterMasterEdit(role);
+}
+
+// ── Master Assign picker (per-piece NAM library / VST file) ──
+async function rbMasterOpenAssignPicker(role, idx) {
+    const pickerId = `rb-master-${role}-picker-piece-${idx}`;
+    const picker = document.getElementById(pickerId);
+    if (!picker) return;
+    if (!picker.classList.contains('hidden')) {
+        picker.classList.add('hidden');
+        picker.innerHTML = '';
+        return;
+    }
+    picker.classList.remove('hidden');
+    const p = rbState.master[role][idx];
+    const category = p?.rs_category || p?.category || 'pedal';
+    const kind = category === 'cab' ? 'ir' : 'nam';
+    picker.innerHTML = `
+        <div class="flex items-center gap-2 flex-wrap">
+            <button onclick="rbMasterAssignFromLibrary('${role}', ${idx}, '${kind}')"
+                    class="bg-indigo-900/30 hover:bg-indigo-900/50 text-indigo-300 border border-indigo-800/40 px-2 py-1 rounded text-xs">📚 Library (${kind.toUpperCase()})</button>
+            <button onclick="rbMasterAssignVstPick('${role}', ${idx})"
+                    class="bg-purple-900/30 hover:bg-purple-900/50 text-purple-300 border border-purple-800/40 px-2 py-1 rounded text-xs">📁 Pick VST file…</button>
+            <input id="rb-master-${role}-${idx}-vstpath" type="text"
+                   placeholder="Or paste VST path: /Library/Audio/Plug-Ins/VST3/..."
+                   onchange="rbMasterAssignVstPath('${role}', ${idx}, this.value)"
+                   class="flex-1 bg-dark-800 border border-gray-800 rounded text-[11px] text-gray-300 px-2 py-1 font-mono">
+        </div>
+        <div id="rb-master-${role}-${idx}-libpanel" class="hidden mt-1"></div>
+        <div id="rb-master-${role}-${idx}-status" class="text-[10px] text-gray-500"></div>`;
+}
+
+async function rbMasterAssignFromLibrary(role, idx, kind) {
+    const panel = document.getElementById(`rb-master-${role}-${idx}-libpanel`);
+    if (!panel) return;
+    panel.classList.remove('hidden');
+    panel.innerHTML = `<div class="text-xs text-gray-500">Loading library…</div>`;
+    try {
+        const r = await fetch(`${RB_API}/local_files?kind=${kind}`);
+        const data = await r.json();
+        const files = data.files || [];
+        const inputId = `rb-master-${role}-${idx}-libsearch`;
+        const rowsId  = `rb-master-${role}-${idx}-librows`;
+        panel.innerHTML = `
+            <div class="flex items-center gap-2 mb-1">
+                <input id="${inputId}" type="text" placeholder="🔍 Filter ${kind.toUpperCase()}…"
+                       oninput="rbMasterLibraryFilter('${role}', ${idx}, '${kind}', this.value)"
+                       class="flex-1 bg-dark-800 border border-gray-800 rounded text-[11px] text-gray-200 px-2 py-1">
+                <span id="${rowsId}-count" class="text-[10px] text-gray-500">${files.length}/${files.length}</span>
+            </div>
+            <div id="${rowsId}" class="max-h-48 overflow-y-auto"></div>`;
+        panel._rbAllFiles = files;
+        rbMasterLibraryRender(role, idx, kind, files, '');
+    } catch (e) {
+        panel.innerHTML = `<div class="text-xs text-red-400">Failed: ${rbEsc(e.message || e)}</div>`;
+    }
+}
+
+function rbMasterLibraryFilter(role, idx, kind, q) {
+    const panel = document.getElementById(`rb-master-${role}-${idx}-libpanel`);
+    if (!panel || !panel._rbAllFiles) return;
+    rbMasterLibraryRender(role, idx, kind, panel._rbAllFiles, q);
+}
+
+function rbMasterLibraryRender(role, idx, kind, files, filter) {
+    const rowsEl = document.getElementById(`rb-master-${role}-${idx}-librows`);
+    const countEl = document.getElementById(`rb-master-${role}-${idx}-librows-count`);
+    if (!rowsEl) return;
+    const f = (filter || '').toLowerCase().trim();
+    const filtered = f ? files.filter(x => x.name.toLowerCase().includes(f)) : files;
+    if (countEl) countEl.textContent = `${filtered.length}/${files.length}`;
+    const rows = filtered.slice(0, 30).map(file => `
+        <div class="flex items-center gap-2 px-2 py-1 hover:bg-indigo-900/20 rounded cursor-pointer"
+             onclick="rbMasterApplyLibrary('${role}', ${idx}, '${rbEsc(file.name).replace(/'/g, "\\'")}', '${kind}')">
+            <span class="flex-1 text-[11px] text-gray-200 truncate">${rbEsc(file.name)}</span>
+            <span class="text-[10px] text-amber-300/80">used ${file.use_count}×</span>
+        </div>`).join('');
+    rowsEl.innerHTML = rows || '<div class="text-xs text-gray-500 italic">no matches</div>';
+}
+
+function rbMasterApplyLibrary(role, idx, fileName, kind) {
+    const p = rbState.master[role][idx];
+    if (!p) return;
+    p._uploaded_file = fileName;
+    p._uploaded_kind = kind;
+    p._vst_path = null;
+    p._vst_kind = null;
+    rbAfterMasterEdit(role);
+}
+
+async function rbMasterAssignVstPick(role, idx) {
+    const host = window.slopsmithDesktop;
+    if (!host || typeof host.pickFile !== 'function') {
+        return alert('File picker not available — paste the path manually instead.');
+    }
+    try {
+        const picked = await host.pickFile([
+            { name: 'VST3 plugin', extensions: ['vst3'] },
+            { name: 'Audio Unit',  extensions: ['component'] },
+            { name: 'All Files',   extensions: ['*'] },
+        ]);
+        if (!picked) return;
+        const path = Array.isArray(picked) ? picked[0] : picked;
+        if (path) rbMasterAssignVstPath(role, idx, path);
+    } catch (e) {
+        alert(`Pick failed: ${e.message || e}`);
+    }
+}
+
+function rbMasterAssignVstPath(role, idx, path) {
+    if (!path) return;
+    const p = rbState.master[role][idx];
+    if (!p) return;
+    const fmt = path.toLowerCase().endsWith('.component') ? 'AudioUnit' : 'VST3';
+    p._vst_path = path;
+    p._vst_format = fmt;
+    p._vst_kind = 'vst';
+    p._uploaded_file = null;
+    p._uploaded_kind = null;
+    rbAfterMasterEdit(role);
+}
+
+// ── Chain editor: reorder / add / remove pieces ────────────────────────
+//
+// All three operations mutate the in-memory `tone.chain` array, persist
+// via /save_preset (rbPersistTone) so the new state survives reload,
+// and re-render the chain grid in place. The backend's `get_song` will
+// then return the saved chain (chain_source='edited') instead of the
+// PSARC's GearList for that tone the next time the user opens the song.
+
+function rbMovePiece(toneIdx, pIdx, direction) {
+    const tone = rbState.songTones && rbState.songTones.tones[toneIdx];
+    if (!tone) return;
+    const newIdx = pIdx + direction;
+    if (newIdx < 0 || newIdx >= tone.chain.length) return;
+    // Swap in place — simple, no copy.
+    const tmp = tone.chain[pIdx];
+    tone.chain[pIdx] = tone.chain[newIdx];
+    tone.chain[newIdx] = tmp;
+    // Persist + re-render.
+    tone.chain_source = 'edited';
+    rbAfterChainEdit(toneIdx);
+}
+
+async function rbRemovePiece(toneIdx, pIdx) {
+    const tone = rbState.songTones && rbState.songTones.tones[toneIdx];
+    if (!tone || !tone.chain[pIdx]) return;
+    const piece = tone.chain[pIdx];
+    const name = piece.real_name || piece.type;
+    if (!confirm(`Remove "${name}" from this tone's chain?`)) return;
+    tone.chain.splice(pIdx, 1);
+    tone.chain_source = 'edited';
+    rbAfterChainEdit(toneIdx);
+}
+
+// Auto-save the chain after a structural edit (reorder / add / remove).
+// Re-renders the grid so position numbers + ▲ ▼ ✗ button states refresh.
+// Also reloads the preview if this tone is currently being listened to.
+async function rbAfterChainEdit(toneIdx) {
+    const filename = rbState.currentSongFile;
+    if (!filename) return;
+    // Persist first so the new chain is on disk.
+    await rbPersistTone(toneIdx, filename).catch(() => null);
+    // Update the visual chain grid.
+    rbReRenderToneChain(toneIdx, filename);
+    // Update the "edited" badge in the tone header (the badge is part of
+    // the parent tone block, not the chain grid). Easiest: just update its
+    // class/text based on tone.chain_source.
+    // Live preview reload if this tone is being auditioned.
+    if (rbState.listeningTone === toneIdx) {
+        await rbReloadPreview(rbState._previewPayload?.id).catch(() => {});
+    }
+}
+
+// ── Add piece modal ──
+// Opens an inline picker that lets the user choose a slot + an rs_gear_type
+// from the catalog. Click "Add" → pushes a piece onto tone.chain with
+// kind='none' (unassigned). The user then uses the normal upload / Library /
+// VST flow to fill it in.
+
+let _rbGearsCatalog = null;   // cached after first fetch
+
+async function rbOpenAddPiecePicker(toneIdx, filename) {
+    const modal = document.getElementById(`rb-addpiece-modal-${toneIdx}`);
+    if (!modal) return;
+    if (!modal.classList.contains('hidden')) {
+        modal.classList.add('hidden');
+        modal.innerHTML = '';
+        return;
+    }
+    modal.classList.remove('hidden');
+    modal.innerHTML = `<div class="text-xs text-gray-500">Loading gear catalog…</div>`;
+    if (_rbGearsCatalog === null) {
+        try {
+            const r = await fetch(`${RB_API}/gears_catalog`);
+            const data = await r.json();
+            _rbGearsCatalog = (data && data.gears) || [];
+        } catch (_) {
+            _rbGearsCatalog = [];
+        }
+    }
+    // Initialise the per-modal picker state. Default section and default
+    // DAW category are stored on the modal element so a re-render keeps
+    // the user's place.
+    modal._rbSection  = 'rocksmith';
+    modal._rbDawCat   = 'amps';
+    modal._rbRsFilter = '';
+    modal._rbVstFilter = '';
+    rbRenderAddPiecePicker(modal, toneIdx, filename);
+}
+
+// DAW-style subcategories the chain picker uses. Same order/labels as the
+// backend's _DAW_CATEGORIES_ORDER. Each entry has a key (used to match
+// gear.daw_category from /gears_catalog) + a display label.
+const RB_DAW_CATEGORIES = [
+    { key: 'amps',        label: 'Amps' },
+    { key: 'cabs',        label: 'Cabs' },
+    { key: 'distortion',  label: 'Distortion' },
+    { key: 'modulation',  label: 'Modulation' },
+    { key: 'delay',       label: 'Delay' },
+    { key: 'reverb',      label: 'Reverb' },
+    { key: 'compression', label: 'Compression' },
+    { key: 'eq',          label: 'EQ' },
+    { key: 'wah',         label: 'Wah' },
+    { key: 'pitch',       label: 'Pitch' },
+    { key: 'filter',      label: 'Filter' },
+    { key: 'utility',     label: 'Utility' },
+    { key: 'other',       label: 'Other' },
+];
+
+// Heuristic DAW-category guess for an installed VST by its name +
+// manufacturer. Used so the VST tab can also be filtered by Compression,
+// Modulation, etc. Returns 'other' for plugins we can't classify.
+function rbDawCategoryForVst(p) {
+    const hay = `${p.name || ''} ${p.manufacturer || ''} ${p.category || ''}`.toLowerCase();
+    if (/\b(comp|limit|maxim|punch|optcomp)\b/.test(hay))           return 'compression';
+    if (/\b(chorus|flang|phas|trem|vibrato|rotar|ensemble|leslie)\b/.test(hay)) return 'modulation';
+    if (/\b(delay|echo|tape|slap)\b/.test(hay))                     return 'delay';
+    if (/\b(reverb|verb|spring|plate|hall|room|chamber|shimmer)\b/.test(hay))   return 'reverb';
+    if (/\b(dist|fuzz|drive|overdrive|crunch|metal|amp[^a-z]?\s*sim|amplifier|preamp|cabinet|cab[^a-z])/.test(hay)) {
+        if (/(cab|cabinet|ir loader|impulse)/.test(hay)) return 'cabs';
+        if (/(amp[^a-z]|amplifier|preamp)/.test(hay))   return 'amps';
+        return 'distortion';
+    }
+    if (/\beq\b|equalizer|parametric/.test(hay))                    return 'eq';
+    if (/\bwah\b|envelope filter|cry baby|autowah/.test(hay))       return 'wah';
+    if (/pitch|octave|harmoni|detune/.test(hay))                    return 'pitch';
+    if (/filter|mu(-|tron)|moog/.test(hay))                         return 'filter';
+    if (/gate|tuner|noise|hush|silencer|bitcrush|util/.test(hay))   return 'utility';
+    return 'other';
+}
+
+// Per-tone Add picker — now with two top sections: Rocksmith vs VST.
+//
+// The Rocksmith section browses rs_to_real.json grouped by DAW-style
+// subcategories so users find pieces the way they'd look in any DAW
+// plugin browser. The VST section lists installed plugins from the
+// engine's scan + a paste-path input, so the user can drop a "pure VST"
+// (e.g. a limiter) straight into the chain without having to first
+// map it to some Rocksmith pedal.
+//
+// State stored on the modal element so the picker survives re-renders
+// (used by the filter inputs which re-render the whole picker on every
+// keystroke).
+function rbRenderAddPiecePicker(modal, toneIdx, filename) {
+    const safeFile = filename.replace(/'/g, "\\'");
+    const section  = modal._rbSection  || 'rocksmith';
+    const dawCat   = modal._rbDawCat   || 'amps';
+    const rsFilter = modal._rbRsFilter || '';
+    const vstFilter = modal._rbVstFilter || '';
+    const sectionTabs = `
+        <div class="flex items-center gap-1 mb-3 border-b border-gray-800/40 pb-2">
+            <button onclick="rbAddPickerSetSection(${toneIdx}, '${rbEsc(safeFile)}', 'rocksmith')"
+                    class="px-3 py-1 rounded text-xs transition ${section === 'rocksmith'
+                        ? 'bg-emerald-700 text-white' : 'bg-dark-700 hover:bg-dark-600 text-gray-300'}">
+                🎸 Rocksmith gear <span class="opacity-60 ml-1">${(_rbGearsCatalog || []).length}</span>
+            </button>
+            <button onclick="rbAddPickerSetSection(${toneIdx}, '${rbEsc(safeFile)}', 'vst')"
+                    class="px-3 py-1 rounded text-xs transition ${section === 'vst'
+                        ? 'bg-purple-700 text-white' : 'bg-dark-700 hover:bg-dark-600 text-gray-300'}">
+                🎛 VST / AU <span class="opacity-60 ml-1">${(rbState.knownVsts || []).length}</span>
+            </button>
+            <span class="flex-1"></span>
+            <button onclick="rbOpenAddPiecePicker(${toneIdx}, '${rbEsc(safeFile)}')"
+                    title="Close" class="text-[10px] text-gray-400 hover:text-gray-200 px-1">✕</button>
+        </div>`;
+    let body;
+    if (section === 'rocksmith') {
+        body = rbBuildRocksmithPickerBody({
+            dawCat, filter: rsFilter,
+            onCategoryCall: (k) => `rbAddPickerSetDawCat(${toneIdx}, '${rbEsc(safeFile)}', '${rbEsc(k)}')`,
+            onFilterCall:   `rbAddPickerSetRsFilter(${toneIdx}, '${rbEsc(safeFile)}', this.value)`,
+            onAddCall:      (g) => `rbAddPiece(${toneIdx}, '${rbEsc(safeFile)}', '${rbEsc(g.rs_gear)}', '${rbEsc(g.category)}')`,
+            searchId: `rb-addpiece-rs-search-${toneIdx}`,
+        });
+    } else {
+        body = rbBuildVstPickerBody({
+            filter: vstFilter,
+            onFilterCall: `rbAddPickerSetVstFilter(${toneIdx}, '${rbEsc(safeFile)}', this.value)`,
+            onPickKnownCall: (v) => `rbAddPieceVst(${toneIdx}, '${rbEsc(safeFile)}', '${rbEscPath(v.path)}', '${rbEsc(v.format || 'VST3')}', '${rbEsc(v.name || '')}')`,
+            onPickPathCall:  `rbAddPieceVstFromPath(${toneIdx}, '${rbEsc(safeFile)}', this.previousElementSibling.value)`,
+            searchId: `rb-addpiece-vst-search-${toneIdx}`,
+        });
+    }
+    modal.innerHTML = `
+        <div class="text-xs text-gray-400 mb-1">Add piece to <span class="text-gray-200">"${rbEsc(rbState.songTones.tones[toneIdx].name)}"</span></div>
+        ${sectionTabs}
+        ${body}`;
+    // Restore focus on whichever input was active.
+    const searchEl = document.getElementById(
+        section === 'rocksmith' ? `rb-addpiece-rs-search-${toneIdx}` : `rb-addpiece-vst-search-${toneIdx}`);
+    if (searchEl && (rsFilter || vstFilter)) {
+        const v = section === 'rocksmith' ? rsFilter : vstFilter;
+        searchEl.focus();
+        searchEl.setSelectionRange(v.length, v.length);
+    }
+}
+
+// Escape a path so it can be embedded inline in an onclick="" attribute.
+// Single-quotes and backslashes need escaping; we already escape HTML
+// via rbEsc, but onclick strings need extra care for JS literal syntax.
+function rbEscPath(s) {
+    return String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+// Section / filter / category mutators — store on the modal element so
+// the picker remembers them across re-renders.
+function rbAddPickerSetSection(toneIdx, filename, section) {
+    const modal = document.getElementById(`rb-addpiece-modal-${toneIdx}`);
+    if (!modal) return;
+    modal._rbSection = section;
+    rbRenderAddPiecePicker(modal, toneIdx, filename);
+}
+function rbAddPickerSetDawCat(toneIdx, filename, daw) {
+    const modal = document.getElementById(`rb-addpiece-modal-${toneIdx}`);
+    if (!modal) return;
+    modal._rbDawCat = daw;
+    rbRenderAddPiecePicker(modal, toneIdx, filename);
+}
+function rbAddPickerSetRsFilter(toneIdx, filename, value) {
+    const modal = document.getElementById(`rb-addpiece-modal-${toneIdx}`);
+    if (!modal) return;
+    modal._rbRsFilter = value;
+    rbRenderAddPiecePicker(modal, toneIdx, filename);
+}
+function rbAddPickerSetVstFilter(toneIdx, filename, value) {
+    const modal = document.getElementById(`rb-addpiece-modal-${toneIdx}`);
+    if (!modal) return;
+    modal._rbVstFilter = value;
+    rbRenderAddPiecePicker(modal, toneIdx, filename);
+}
+
+// ── Shared section bodies (Rocksmith + VST) ──
+// Both bodies receive the rendering context as inline onclick strings
+// so they work in the per-tone picker AND the master-chain picker
+// without needing closures over the caller.
+
+function rbBuildRocksmithPickerBody({ dawCat, filter, onCategoryCall, onFilterCall, onAddCall, searchId }) {
+    const f = (filter || '').toLowerCase().trim();
+    const matches = (_rbGearsCatalog || []).filter(g => {
+        if ((g.daw_category || 'other') !== dawCat) return false;
+        if (!f) return true;
+        return (g.name || '').toLowerCase().includes(f)
+            || (g.rs_gear || '').toLowerCase().includes(f)
+            || (g.make || '').toLowerCase().includes(f);
+    });
+    const catButtons = RB_DAW_CATEGORIES.map(c => `
+        <button onclick="${onCategoryCall(c.key)}"
+                class="px-2 py-0.5 rounded text-[11px] transition ${c.key === dawCat
+                    ? 'bg-emerald-700 text-white'
+                    : 'bg-dark-700 hover:bg-dark-600 text-gray-300'}">${rbEsc(c.label)}</button>`).join('');
+    const rows = matches.slice(0, 40).map(g => `
+        <div class="flex items-center gap-2 px-2 py-1 hover:bg-emerald-900/20 rounded">
+            <span class="flex-1 text-[11px] text-gray-200 truncate" title="${rbEsc(g.rs_gear)}">
+                ${rbEsc(g.name)} <span class="text-gray-600">(${rbEsc(g.rs_gear)})</span>
+            </span>
+            <button onclick="${onAddCall(g)}"
+                    class="bg-emerald-700 hover:bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded">＋ Add</button>
+        </div>`).join('');
+    const moreNote = matches.length > 40
+        ? `<div class="text-[10px] text-gray-500 italic mt-1">…and ${matches.length - 40} more (refine search)</div>`
+        : '';
+    return `
+        <div class="flex flex-wrap items-center gap-1 mb-2">${catButtons}</div>
+        <div class="flex items-center gap-2 mb-2">
+            <input id="${rbEsc(searchId)}" type="text"
+                   placeholder="🔍 Filter ${rbEsc(dawCat)} by name / make / code…"
+                   value="${rbEsc(filter || '')}"
+                   oninput="${onFilterCall}"
+                   class="flex-1 bg-dark-800 border border-gray-800 rounded text-[11px] text-gray-200 px-2 py-1">
+            <span class="text-[10px] text-gray-500">${matches.length}</span>
+        </div>
+        <div class="max-h-64 overflow-y-auto">${rows || '<div class="text-xs text-gray-500 italic">no matches in this category</div>'}</div>
+        ${moreNote}`;
+}
+
+function rbBuildVstPickerBody({ filter, onFilterCall, onPickKnownCall, onPickPathCall, searchId }) {
+    const known = rbState.knownVsts || [];
+    const f = (filter || '').toLowerCase().trim();
+    const matches = known.filter(p => {
+        if (p.isInstrument) return false;   // chain pieces are FX, not synths
+        if (!f) return true;
+        return (p.name || '').toLowerCase().includes(f)
+            || (p.manufacturer || '').toLowerCase().includes(f)
+            || (p.category || '').toLowerCase().includes(f)
+            || (p.path || '').toLowerCase().includes(f)
+            || rbDawCategoryForVst(p).includes(f);
+    });
+    const rows = matches.slice(0, 40).map(v => {
+        const tag = rbDawCategoryForVst(v);
+        return `
+            <div class="flex items-center gap-2 px-2 py-1 hover:bg-purple-900/20 rounded">
+                <span class="text-[9px] text-purple-300/80 uppercase tracking-wide px-1 rounded bg-purple-900/30 flex-shrink-0">${rbEsc(tag)}</span>
+                <span class="flex-1 text-[11px] text-gray-200 truncate" title="${rbEsc(v.path || '')}">
+                    ${rbEsc(v.name || v.path)} <span class="text-gray-600">${rbEsc(v.manufacturer || '')} · ${rbEsc(v.format || 'VST3')}</span>
+                </span>
+                <button onclick="${onPickKnownCall(v)}"
+                        class="bg-purple-700 hover:bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded">＋ Add</button>
+            </div>`;
+    }).join('');
+    const moreNote = matches.length > 40
+        ? `<div class="text-[10px] text-gray-500 italic mt-1">…and ${matches.length - 40} more (refine search)</div>`
+        : '';
+    const emptyState = known.length === 0
+        ? `<div class="text-[11px] text-amber-200/80 bg-amber-900/10 border border-amber-800/30 rounded p-2 mb-2">
+              No scanned VSTs yet. Either scan from any gear row's ⚙ VST… panel, or paste a path below to bypass scanning entirely.
+           </div>`
+        : '';
+    return `
+        ${emptyState}
+        <div class="flex items-center gap-2 mb-2">
+            <input id="${rbEsc(searchId)}" type="text"
+                   placeholder="🔍 Filter by name, manufacturer, category (limiter, comp, chorus…)"
+                   value="${rbEsc(filter || '')}"
+                   oninput="${onFilterCall}"
+                   class="flex-1 bg-dark-800 border border-gray-800 rounded text-[11px] text-gray-200 px-2 py-1">
+            <span class="text-[10px] text-gray-500">${matches.length}/${known.length}</span>
+        </div>
+        <div class="max-h-64 overflow-y-auto">${rows || '<div class="text-xs text-gray-500 italic">no matches</div>'}</div>
+        ${moreNote}
+        <div class="mt-3 pt-2 border-t border-gray-800/40">
+            <div class="text-[10px] text-gray-500 mb-1">Or paste a path (works without a scan):</div>
+            <div class="flex items-center gap-2">
+                <input type="text"
+                       placeholder="/Library/Audio/Plug-Ins/VST3/MyLimiter.vst3"
+                       class="flex-1 bg-dark-800 border border-gray-800 rounded text-[11px] text-gray-300 px-2 py-1 font-mono">
+                <button onclick="${onPickPathCall}"
+                        class="bg-purple-700 hover:bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded">Use this VST</button>
+            </div>
+        </div>`;
+}
+
+function _rbSlotForCategory(category) {
+    // Heuristic default slot for a freshly-added piece. The user can re-order
+    // afterwards if they want a different signal-flow placement.
+    if (category === 'amp')   return 'amp';
+    if (category === 'cab')   return 'cabinet';
+    if (category === 'rack')  return 'rack';
+    if (category === 'pedal') return 'pre_pedal';
+    return 'pre_pedal';
+}
+
+async function rbAddPiece(toneIdx, filename, rsGearType, category) {
+    const tone = rbState.songTones && rbState.songTones.tones[toneIdx];
+    if (!tone) return;
+    // Pull the display name + make from the cached catalog so the freshly
+    // added row doesn't show the raw rs_gear_type as its title. Once the
+    // user reloads the song, the backend's _enrich_chain_piece replaces
+    // these with the canonical values anyway, but starting from the right
+    // string avoids a flicker.
+    const catalogEntry = (_rbGearsCatalog || []).find(g => g.rs_gear === rsGearType) || {};
+    const newPiece = {
+        type: rsGearType,
+        slot: _rbSlotForCategory(category),
+        rs_category: category,
+        category: category,
+        real_name: catalogEntry.name || rsGearType,
+        make: catalogEntry.make || '',
+        model: catalogEntry.model || '',
+        knobs: {},
+        assigned: null,
+        bypassed: false,
+        rs_irs: [],
+    };
+    tone.chain.push(newPiece);
+    tone.chain_source = 'edited';
+    // Close the modal so the user sees the freshly-added piece.
+    const modal = document.getElementById(`rb-addpiece-modal-${toneIdx}`);
+    if (modal) { modal.classList.add('hidden'); modal.innerHTML = ''; }
+    rbAfterChainEdit(toneIdx);
+}
+
+// Add a "pure VST" piece — no Rocksmith mapping required. Generates a
+// synthetic rs_gear_type from the plugin name so the row still has a
+// unique identifier downstream (preset_pieces.rs_gear_type is NOT NULL),
+// and pre-fills the VST assignment so the user doesn't need to click
+// through the ⚙ VST… panel afterwards. The piece category becomes the
+// heuristic DAW classification ('compression', 'modulation', etc.) so
+// the UI labels it sensibly.
+async function rbAddPieceVst(toneIdx, filename, vstPath, vstFormat, displayName) {
+    const tone = rbState.songTones && rbState.songTones.tones[toneIdx];
+    if (!tone || !vstPath) return;
+    const dawCat = rbDawCategoryForVst({ name: displayName, manufacturer: '' });
+    const synthName = displayName || vstPath.split('/').pop().replace(/\.(vst3|component)$/i, '');
+    // Synthetic rs_gear_type: stable for a given VST so re-adding the
+    // same plugin twice produces the same key (and dedup would land
+    // sensibly if we ever want N:1 mapping later).
+    const synthGear = 'VST_' + synthName.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 60);
+    const newPiece = {
+        type: synthGear,
+        slot: dawCat === 'amps' ? 'amp' : (dawCat === 'cabs' ? 'cabinet' : 'post_pedal'),
+        rs_category: dawCat === 'amps' ? 'amp' : (dawCat === 'cabs' ? 'cab' : 'pedal'),
+        category: dawCat,
+        real_name: synthName,
+        make: '',
+        model: '',
+        knobs: {},
+        assigned: null,
+        bypassed: false,
+        rs_irs: [],
+        // Pre-fill the VST assignment so the row shows up already loaded
+        // — no second click needed in the ⚙ VST… panel.
+        _vst_path: vstPath,
+        _vst_format: vstFormat || 'VST3',
+        _vst_kind: 'vst',
+    };
+    tone.chain.push(newPiece);
+    tone.chain_source = 'edited';
+    const modal = document.getElementById(`rb-addpiece-modal-${toneIdx}`);
+    if (modal) { modal.classList.add('hidden'); modal.innerHTML = ''; }
+    rbAfterChainEdit(toneIdx);
+}
+
+// Paste-path variant — accepts a raw filesystem path the user typed in.
+// Detects format from the extension (.vst3 → VST3, .component → AudioUnit).
+function rbAddPieceVstFromPath(toneIdx, filename, vstPath) {
+    if (!vstPath || !vstPath.trim()) return;
+    const path = vstPath.trim();
+    const fmt = path.toLowerCase().endsWith('.component') ? 'AudioUnit' : 'VST3';
+    const name = path.split('/').pop().replace(/\.(vst3|component)$/i, '');
+    return rbAddPieceVst(toneIdx, filename, path, fmt, name);
 }
 
 // ── VST panel rendering + handlers ────────────────────────────────────

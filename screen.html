@@ -26,6 +26,10 @@
                 class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
             Gear
         </button>
+        <button data-rb-tab="master" onclick="rbShowTab('master')"
+                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
+            Master chain
+        </button>
         <button data-rb-tab="settings" onclick="rbShowTab('settings')"
                 class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
             Settings
@@ -101,6 +105,45 @@
             hear that gear in isolation through the engine.
         </p>
         <div id="rb-catalog" class="space-y-8 text-sm">Loading…</div>
+    </div>
+
+    <!-- Master chain — global pre/post FX wrapper -->
+    <div id="rb-tab-master" class="rb-tab-panel hidden">
+        <p class="text-gray-500 text-sm mb-4">
+            Global FX layered around every tone of every song. <span class="text-emerald-300">Pre</span>
+            runs first (sees the raw DI — typical place for input gate / compressor / tuner).
+            <span class="text-cyan-300">Post</span> runs after the cab IR (typical place for limiter / room
+            reverb / headphone EQ). Each piece supports the same Library / VST / Bypass / reorder
+            controls as a song chain. Signal flow:
+            <code class="bg-dark-800 px-1 rounded text-gray-300">guitar → master_pre → song → master_post → output</code>.
+        </p>
+        <div id="rb-master-status" class="text-xs text-gray-500 mb-4">Loading…</div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+                <div class="flex items-baseline justify-between mb-2">
+                    <h3 class="text-emerald-300 font-semibold">Pre (before song)</h3>
+                    <span id="rb-master-pre-count" class="text-xs text-gray-500"></span>
+                </div>
+                <div id="rb-master-pre-chain" class="space-y-3"></div>
+                <button onclick="rbOpenMasterAddPiecePicker('pre')"
+                        class="mt-3 bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-800/40 px-3 py-1.5 rounded text-xs transition">
+                    ＋ Add pre piece
+                </button>
+                <div id="rb-master-pre-picker" class="hidden mt-2 bg-emerald-900/10 border border-emerald-800/30 rounded p-3"></div>
+            </div>
+            <div>
+                <div class="flex items-baseline justify-between mb-2">
+                    <h3 class="text-cyan-300 font-semibold">Post (after song)</h3>
+                    <span id="rb-master-post-count" class="text-xs text-gray-500"></span>
+                </div>
+                <div id="rb-master-post-chain" class="space-y-3"></div>
+                <button onclick="rbOpenMasterAddPiecePicker('post')"
+                        class="mt-3 bg-cyan-900/30 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-800/40 px-3 py-1.5 rounded text-xs transition">
+                    ＋ Add post piece
+                </button>
+                <div id="rb-master-post-picker" class="hidden mt-2 bg-cyan-900/10 border border-cyan-800/30 rounded p-3"></div>
+            </div>
+        </div>
     </div>
 
     <!-- Settings -->

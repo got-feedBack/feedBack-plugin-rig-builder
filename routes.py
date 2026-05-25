@@ -482,6 +482,250 @@ def _parse_tone(tone_data: dict) -> dict:
     return {"name": name, "key": key, "chain": chain}
 
 
+def _daw_category_for(rs_gear: str, rs_category: str) -> str:
+    """Bucket a Rocksmith gear into a DAW-style subcategory the user
+    recognises ('compression', 'modulation', 'delay', etc.) so the chain
+    editor's "Add piece" picker can group it the way any modern DAW
+    plugin browser does — instead of forcing the user to think in the
+    RS-coarse 'amp/pedal/rack' axis.
+
+    Heuristic over the rs_gear name; falls back to 'other' for stuff
+    the substring rules don't recognise. Returns one of:
+      amps, cabs, distortion, modulation, delay, reverb, compression,
+      eq, wah, pitch, filter, utility, other.
+    """
+    if rs_category == "amp":
+        return "amps"
+    if rs_category == "cab":
+        return "cabs"
+    name = (rs_gear or "").lower()
+    # Order matters: more-specific patterns first so e.g. "Pedal_LoFiFilter"
+    # doesn't get swallowed by the generic "filter" bucket before the
+    # "lofi" pattern hits.
+    BUCKETS = [
+        # (category, substrings — match if ANY are in the name)
+        ("compression", ("compres", "compr", "optcomp", "limit", "limiter",
+                         "punch", "swole", "sustain", "studiocomp")),
+        ("modulation",  ("chorus", "flanger", "phaser", "tremolo", "amptrem",
+                         "vibrato", "ringmod", "rotary", "rotatoe", "univibe",
+                         "ensemble")),
+        ("delay",       ("delay", "echo", "tapeecho", "slapback")),
+        ("reverb",      ("reverb", "spring", "platerev", "hallrev",
+                         "digitalverb", "ambient", "spaceverb", "cosmic")),
+        ("distortion",  ("dist", "fuzz", "rat", "tubescream", "ts9", "ts808",
+                         "overdrive", "screamer", "drive", "boost", "centaur",
+                         "muff", "octfuzz", "supacharger", "hotbox",
+                         "supercrunch", "redcrunch", "metalzone", "metal_zone")),
+        ("eq",          ("eq5", "eq8", "graphiceq", "studioeq",
+                         "studioparametriceq", "parametriceq")),
+        ("wah",         ("wah", "envelopefilter", "autowah")),
+        ("pitch",       ("octave", "octavius", "octaver", "pitchshift",
+                         "multipitch", "pitchdly", "harmony", "harmonist",
+                         "detune", "subocta")),
+        ("filter",      ("filter", "lofifilter", "acousticemulator",
+                         "rangebooster", "exciter", "monosynth")),
+        ("utility",     ("noisegate", "gate", "tuner", "noise", "znr",
+                         "hush", "silencer", "bitcrush", "sfx",
+                         "acoustic_emulator", "amplifier_simulator")),
+    ]
+    for cat, needles in BUCKETS:
+        for needle in needles:
+            if needle in name:
+                return cat
+    return "other"
+
+
+# DAW-style subcategories the chain picker uses. Order matches the order
+# of buttons in the UI so the user sees them in a predictable layout.
+_DAW_CATEGORIES_ORDER = [
+    "amps", "cabs", "distortion", "modulation", "delay", "reverb",
+    "compression", "eq", "wah", "pitch", "filter", "utility", "other",
+]
+
+
+# ── Master chain (global pre/post FX wrap around every tone) ──────────
+#
+# The plugin keeps two sentinel rows in the host's `presets` table that
+# never appear in the UI's per-song lookups: `__master_pre__` and
+# `__master_post__`. Their preset_pieces rows form a chain that
+# native_preset_full prepends + appends to every tone, so e.g. a global
+# input compressor + output limiter stay on regardless of which song /
+# tone is loaded.
+_MASTER_PRESET_NAMES = {
+    "pre":  "__rig_builder_master_pre__",
+    "post": "__rig_builder_master_post__",
+}
+
+
+def _get_master_preset_id(role: str) -> int | None:
+    """Return the sentinel preset id for the master pre/post chain,
+    creating it on first call so the rest of the code can assume it
+    exists. `role` is 'pre' or 'post'."""
+    name = _MASTER_PRESET_NAMES.get(role)
+    if not name:
+        return None
+    conn = _get_conn()
+    with _lock:
+        row = conn.execute(
+            "SELECT id FROM presets WHERE name = ?", (name,)
+        ).fetchone()
+        if row:
+            return int(row[0])
+        # Insert with empty model/IR/gain defaults — the sentinel never
+        # plays through the bundle's 2-stage path, only through
+        # native_preset_full where its pieces are read directly.
+        conn.execute(
+            "INSERT INTO presets (name, model_file, ir_file, input_gain, output_gain, gate_threshold, settings_json) "
+            "VALUES (?, '', '', 1.0, 1.0, -60.0, ?)",
+            (name, json.dumps({"master_role": role})),
+        )
+        conn.commit()
+        new_row = conn.execute(
+            "SELECT id FROM presets WHERE name = ?", (name,)
+        ).fetchone()
+        return int(new_row[0]) if new_row else None
+
+
+def _load_master_chain(role: str) -> list[dict]:
+    """Return the master pre or post chain as a list of enriched pieces
+    (same shape as _load_saved_chain). Empty list if the sentinel
+    preset has no pieces yet."""
+    pid = _get_master_preset_id(role)
+    if pid is None:
+        return []
+    conn = _get_conn()
+    return _load_saved_chain(conn, pid) or []
+
+
+def _build_master_stages(role: str, models_dir, irs_dir,
+                         output_gain: float, missing: list) -> list[dict]:
+    """Return native-engine stages (type:0/1/2) for the master pre or post
+    chain. Iterates preset_pieces rows for the sentinel preset and emits
+    one stage per piece that has an actual file/vst_path. Pieces lacking
+    an assignment (kind='none' or empty file) are silently skipped — the
+    user added them but hasn't picked a plugin yet."""
+    pid = _get_master_preset_id(role)
+    if pid is None:
+        return []
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT slot, kind, file, rs_gear_type, bypassed, slot_order, "
+        "       vst_path, vst_format, vst_state "
+        "FROM preset_pieces WHERE preset_id = ? "
+        "ORDER BY slot_order",
+        (pid,),
+    ).fetchall()
+    stages: list[dict] = []
+    for slot, kind, file, gear, bypassed, _slot_order, vst_path, vst_format, vst_state in rows:
+        bypassed = bool(bypassed)
+        slot_tag = f"master_{role}:{slot or 'unspecified'}"
+        if kind == "nam" and file:
+            path = _safe_child(models_dir, file)
+            if not path or not path.exists():
+                missing.append(file)
+                continue
+            stages.append({
+                "type": 1,
+                "name": Path(file).stem,
+                "path": str(path),
+                "bypassed": bypassed,
+                "slot": slot_tag,
+                "rs_gear": gear,
+                "state": _state_b64({
+                    "modelPath": str(path),
+                    "inputLevel": 1.0,
+                    "outputLevel": 1.0,
+                }),
+            })
+        elif kind in ("ir", "rs_ir") and file:
+            ir_path = _safe_child(irs_dir, file)
+            if not ir_path or not ir_path.exists():
+                missing.append(file)
+                continue
+            stages.append({
+                "type": 2,
+                "name": Path(file).stem,
+                "path": str(ir_path),
+                "bypassed": bypassed,
+                "slot": slot_tag,
+                "rs_gear": gear,
+                "state": _state_b64({"irPath": str(ir_path), "gain": float(output_gain)}),
+            })
+        elif kind == "vst" and vst_path:
+            vp = Path(vst_path)
+            state_obj = {"pluginPath": str(vp), "format": vst_format or "VST3"}
+            if vst_state:
+                state_obj["pluginState"] = vst_state
+            stages.append({
+                "type": 0,
+                "name": vp.stem,
+                "path": str(vp),
+                "format": vst_format or "VST3",
+                "bypassed": bypassed,
+                "slot": slot_tag,
+                "rs_gear": gear,
+                "state": _state_b64(state_obj),
+            })
+        # else: kind == 'none' or no file → skip (user placeholder)
+    return stages
+
+
+def _load_saved_chain(conn: sqlite3.Connection, preset_id: int) -> list[dict] | None:
+    """Return the user-edited chain for a preset, rebuilt from preset_pieces
+    rows + enriched the same way as a PSARC-derived chain. Returns None if
+    the preset has no rows (yet), in which case the caller falls back to
+    the PSARC's GearList.
+
+    Each row's fields surface as both the "piece" shape the UI expects AND
+    pre-populated `assigned` block so the UI immediately renders the saved
+    file / VST / bypass without round-tripping through the gear-global
+    assignment lookup.
+    """
+    rows = conn.execute(
+        "SELECT id, slot_order, slot, rs_gear_type, kind, file, params_json, "
+        "       tone3000_id, assigned_mode, bypassed, vst_path, vst_format, vst_state "
+        "FROM preset_pieces WHERE preset_id = ? ORDER BY slot_order",
+        (preset_id,),
+    ).fetchall()
+    if not rows:
+        return None
+    out: list[dict] = []
+    for r in rows:
+        (piece_id, slot_order, slot, rs_gear, kind, file, params_json,
+         t3kid, assigned_mode, bypassed, vst_path, vst_format, vst_state) = r
+        try:
+            knobs = json.loads(params_json) if params_json else {}
+        except json.JSONDecodeError:
+            knobs = {}
+        # Build the same "raw piece" shape _enrich_chain_piece expects.
+        piece = {
+            "type": rs_gear,
+            "slot": slot,
+            "category": _gear_category(rs_gear) or "",
+            "knobs": knobs,
+        }
+        enriched = _enrich_chain_piece(piece)
+        # Override the gear-global `assigned` block with THIS preset's row
+        # so the UI shows the correct file/VST for this specific tone
+        # (otherwise a different tone using the same rs_gear could bleed in).
+        enriched["assigned"] = {
+            "preset_piece_id": piece_id,
+            "preset_id": preset_id,
+            "kind": kind,
+            "file": file,
+            "tone3000_id": t3kid,
+            "assigned_mode": assigned_mode,
+            "vst_path": vst_path,
+            "vst_format": vst_format,
+            "vst_state": vst_state,
+        }
+        enriched["bypassed"] = bool(bypassed)
+        enriched["_preset_piece_id"] = piece_id   # so the UI can reorder/remove by id
+        enriched["_slot_order"] = slot_order
+        out.append(enriched)
+    return out
+
+
 def _enrich_chain_piece(piece: dict, img_idx: dict | None = None) -> dict:
     """Add make/model + tone3000 hints + existing-assignment info to a
     parsed chain piece. Returns a new dict, doesn't mutate input.
@@ -1903,6 +2147,77 @@ def setup(app, context):
         _save_settings(allowed)
         return {"ok": True}
 
+    @app.get("/api/plugins/rig_builder/master_chain")
+    def get_master_chain():
+        """Return both halves of the global master chain (pre + post),
+        enriched the same way as a per-tone chain. The UI's Master Chain
+        tab uses this to render its two columns."""
+        return {
+            "pre":  _load_master_chain("pre"),
+            "post": _load_master_chain("post"),
+            "pre_preset_id":  _get_master_preset_id("pre"),
+            "post_preset_id": _get_master_preset_id("post"),
+        }
+
+    @app.post("/api/plugins/rig_builder/master_chain/save")
+    def save_master_chain(data: dict = Body(...)):
+        """Persist one half of the master chain (role='pre' or 'post').
+        Body: `{role, pieces: [...]}` — same piece shape /save_preset
+        accepts. Replaces the whole half; client sends the full ordered
+        list every time (just like rbPersistTone for a regular tone)."""
+        role = (data.get("role") or "").strip()
+        if role not in ("pre", "post"):
+            return JSONResponse({"error": "role must be 'pre' or 'post'"}, 400)
+        pieces = data.get("pieces") or []
+        if not isinstance(pieces, list):
+            return JSONResponse({"error": "pieces must be a list"}, 400)
+        pid = _get_master_preset_id(role)
+        if pid is None:
+            return JSONResponse({"error": "could not get master preset"}, 500)
+        name = _MASTER_PRESET_NAMES[role]
+        try:
+            preset_id = _persist_preset_chain(
+                filename="__master__",
+                tone_key=role,
+                name=name,
+                pieces=pieces,
+                input_gain=1.0,
+                output_gain=1.0,
+                gate_threshold=-60.0,
+                assigned_mode="master",
+            )
+        except Exception as e:
+            log.exception("save_master_chain failed")
+            return JSONResponse({"error": f"{type(e).__name__}: {e}"}, 500)
+        return {"ok": True, "preset_id": preset_id, "role": role,
+                "piece_count": len(pieces)}
+
+    @app.get("/api/plugins/rig_builder/gears_catalog")
+    def gears_catalog():
+        """Return the full rs_to_real catalog as a flat list of choices the
+        UI's chain editor uses to populate the 'Add piece' picker. Each
+        entry has: rs_gear (the key), name (display), category (RS coarse
+        bucket: amp/cab/pedal/rack/other), AND daw_category (DAW-style
+        subcategory: amps/cabs/distortion/modulation/delay/reverb/comp/
+        eq/wah/pitch/filter/utility/other) for finer-grained filtering in
+        the picker. Sorted by daw_category → name."""
+        rs_map = _load_rs_to_real()
+        out: list[dict] = []
+        for rs_gear, info in rs_map.items():
+            if rs_gear.startswith("_") or not isinstance(info, dict):
+                continue
+            category = info.get("category") or _gear_category(rs_gear) or "other"
+            out.append({
+                "rs_gear": rs_gear,
+                "name": info.get("name") or rs_gear,
+                "make": info.get("make", ""),
+                "model": info.get("model", ""),
+                "category": category,
+                "daw_category": _daw_category_for(rs_gear, category),
+            })
+        out.sort(key=lambda g: (g["daw_category"], (g["name"] or "").lower()))
+        return {"gears": out, "count": len(out)}
+
     # ── Song / chain inspection ───────────────────────────────────────
 
     @app.get("/api/plugins/rig_builder/song/{filename:path}")
@@ -1954,25 +2269,37 @@ def setup(app, context):
         tones: list[dict] = []
         for raw in raw_tones:
             parsed = _parse_tone(raw)
-            enriched_chain = [_enrich_chain_piece(p, _img_idx) for p in parsed["chain"]]
             preset_id = existing_by_key.get(parsed["key"])
-            # Persisted per-piece bypass, scoped to THIS tone's preset so a
-            # bypass saved in another song doesn't bleed in (the gear-global
-            # `assigned` lookup can't distinguish songs; preset_id can).
-            if preset_id is not None:
-                bypass_map = {
-                    r[0]: bool(r[1]) for r in conn.execute(
-                        "SELECT rs_gear_type, bypassed FROM preset_pieces WHERE preset_id = ?",
-                        (preset_id,),
-                    )
-                }
-                for piece in enriched_chain:
-                    piece["bypassed"] = bypass_map.get(piece.get("type"), False)
+            # If the user has a saved chain for this tone, that's the
+            # source of truth — it can have pieces added by the user,
+            # original PSARC pieces removed, or any custom slot_order.
+            # Fall back to the PSARC's GearList only for tones the user
+            # has never touched (no preset yet).
+            saved_chain = _load_saved_chain(conn, preset_id) if preset_id is not None else None
+            if saved_chain:
+                enriched_chain = saved_chain
+            else:
+                enriched_chain = [_enrich_chain_piece(p, _img_idx) for p in parsed["chain"]]
+                # Persisted per-piece bypass, scoped to THIS tone's preset so a
+                # bypass saved in another song doesn't bleed in.
+                if preset_id is not None:
+                    bypass_map = {
+                        r[0]: bool(r[1]) for r in conn.execute(
+                            "SELECT rs_gear_type, bypassed FROM preset_pieces WHERE preset_id = ?",
+                            (preset_id,),
+                        )
+                    }
+                    for piece in enriched_chain:
+                        piece["bypassed"] = bypass_map.get(piece.get("type"), False)
             tones.append({
                 "name": parsed["name"],
                 "key": parsed["key"],
                 "chain": enriched_chain,
                 "preset_id": preset_id,
+                # When the chain is coming from preset_pieces (user-edited),
+                # tell the UI so it can show "edited" badge / skip the
+                # PSARC-defaults explainer.
+                "chain_source": "edited" if saved_chain else "psarc",
             })
         return {"filename": filename, "tones": tones}
 
@@ -2379,6 +2706,21 @@ def setup(app, context):
             else:
                 missing.append(ir_file)
 
+        # ── Master chain wrap (global pre + post FX) ──
+        # Prepend master_pre stages BEFORE the song's chain (sees the
+        # raw DI), append master_post AFTER the cab IR (sees the wet
+        # output). Bypass on a master piece survives just like any other.
+        #
+        # GUARD: if the caller asked for the master sentinel itself (e.g.
+        # the master-chain tab's "Listen master in isolation"), don't
+        # wrap again — that would double-stack pre/post around itself.
+        master_pre_stages: list[dict] = []
+        master_post_stages: list[dict] = []
+        if not (name or "").startswith("__rig_builder_master_"):
+            master_pre_stages  = _build_master_stages("pre",  models_dir, irs_dir, output_gain, missing)
+            master_post_stages = _build_master_stages("post", models_dir, irs_dir, output_gain, missing)
+            chain = master_pre_stages + chain + master_post_stages
+
         return {
             "id": preset_id,
             "name": name,
@@ -2389,6 +2731,8 @@ def setup(app, context):
             "nam_stage_count": sum(1 for s in chain if s["type"] == 1),
             "vst_stage_count": sum(1 for s in chain if s["type"] == 0),
             "ir_stage_count": sum(1 for s in chain if s["type"] == 2),
+            "master_pre_count":  len(master_pre_stages),
+            "master_post_count": len(master_post_stages),
             "missing": missing,
         }
 
