@@ -442,6 +442,16 @@ async function tbListSongs() {
     }).join('');
 }
 
+// Seed each piece's _bypassed (the UI/persist flag) from the persisted
+// `bypassed` returned by /song, so the Bypass buttons reflect what was
+// saved. MUST run after every /song fetch (initial load AND the
+// auto-download re-fetch) or a re-render shows bypass as off.
+function tbSeedBypass(data) {
+    if (data && Array.isArray(data.tones)) {
+        data.tones.forEach(t => (t.chain || []).forEach(p => { p._bypassed = !!p.bypassed; }));
+    }
+}
+
 async function tbLoadSongTones(filename) {
     const el = document.getElementById('tb-song-tones');
     tbState.currentSongFile = filename;
@@ -470,9 +480,7 @@ async function tbLoadSongTones(filename) {
         tbStopPreview();
     }
     tbState.songTones = data;
-    // Seed the per-piece bypass UI state from the persisted value so the
-    // Bypass buttons reflect what was saved for this song.
-    data.tones.forEach(t => (t.chain || []).forEach(p => { p._bypassed = !!p.bypassed; }));
+    tbSeedBypass(data);
     try {
         el.innerHTML = data.tones.map((t, idx) => tbRenderTone(t, idx, filename)).join('');
     } catch (e) {
@@ -526,6 +534,7 @@ async function tbAutoDownloadSong(filename, unmappedCount, container) {
         const refreshed = await tbFetchSong(filename);
         if (refreshed && !refreshed.error) {
             tbState.songTones = refreshed;
+            tbSeedBypass(refreshed);   // re-seed bypass after the re-fetch (was the bug)
             // Wipe out the previous chain HTML and re-render under the banner.
             const stillBanner = banner.cloneNode(true);
             container.innerHTML = '';
