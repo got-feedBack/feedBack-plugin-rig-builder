@@ -671,9 +671,13 @@ const RbMegaChain = (function () {
             return;
         }
         window.slopsmith.on('song:loaded', (info) => {
-            const filename = info && info.filename;
+            // Some Slopsmith builds emit song:loaded with no payload (or a
+            // payload missing `filename`). Fall back to currentSong before
+            // giving up — same info, different source.
+            const filename = (info && info.filename)
+                || (window.slopsmith.currentSong && window.slopsmith.currentSong.filename);
             _lastSeenFile = filename;
-            triggerBuild(filename, 'song:loaded event');
+            triggerBuild(filename, info && info.filename ? 'song:loaded event' : 'song:loaded event (fallback to currentSong)');
         });
         window.slopsmith.on('song:unloaded', () => {
             _lastSeenFile = null;
