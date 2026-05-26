@@ -126,11 +126,11 @@
             then pick a NAM/IR from your library or paste a VST plug-in path.
             (2) Master pieces are <strong>global</strong> — they don't appear on the Pending or Gear catalog tabs.
         </div>
-        <div class="text-xs text-amber-300 bg-amber-900/20 border border-amber-800/40 rounded p-2 mb-4 leading-snug">
-            ⚠️ <strong>Important:</strong> The <strong class="text-green-300">AMP</strong> button on the song
-            player must be <strong>ON before you load the song</strong> for the master chain (and per-song chains)
-            to apply during playback. If you forgot, the workaround is: <em>turn AMP on → leave the song → re-enter
-            the song</em>. We're working on auto-applying when AMP toggles mid-song.
+        <div class="text-xs text-gray-400 bg-dark-800/50 border border-gray-800/50 rounded p-2 mb-4 leading-snug">
+            🎸 <strong class="text-gray-300">AMP must be on for master to apply.</strong> If you flip the
+            <strong class="text-green-300">AMP</strong> button mid-song, Rig Builder now auto-reloads the
+            chain (including master pre/post) ~1 second later — no need to leave and re-enter. Disable with
+            <code class="bg-dark-900 px-1 rounded">window.__rbAmpAutoApply = false</code> if it ever misfires.
         </div>
         <div id="rb-master-status" class="text-xs text-gray-500 mb-4">Loading…</div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">

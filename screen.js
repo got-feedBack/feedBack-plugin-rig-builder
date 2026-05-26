@@ -85,15 +85,23 @@
 
 // ── Click-suppression on chain reloads ─────────────────────────────────
 // During real song playback `nam_tone` re-loads the chain on every tone
-// change (clearChain → loadPreset) WITHOUT muting the monitor between
-// them. With the full chain (multi-NAM + master pre/post) the gap +
-// re-attack of every NAM produces an audible click / volume spike on
-// each tone change. The bundle is signed (we can't edit it), so we
-// monkey-patch `slopsmithDesktop.audio.loadPreset` to wrap every load
-// in a mute → load → restore-mute sequence. Safe for every caller
-// (Listen mode, audio_engine, etc.): when the monitor was already
-// muted on entry, we leave it muted on exit. Kill-switch:
-// `window.__rbLoadPresetWrap = false`.
+// change (clearChain → loadPreset) WITHOUT muting anything between
+// them. With the full chain (multi-NAM + master pre/post) two
+// transients compound: (a) the silence gap of clearChain, and (b) the
+// first-attack spike from each NAM the moment it starts processing
+// audio after load. setMonitorMute only kills (a) — the input monitor —
+// not (b), which travels through the chain output ('chain' gain).
+// We attack both: mute monitor + zero the 'chain' gain for the
+// duration of the load, then restore.
+//
+// The bundle is signed (we can't edit it), so we monkey-patch
+// `slopsmithDesktop.audio.loadPreset`. Safe for every caller (Listen
+// mode, audio_engine, etc.): when the monitor was muted on entry, we
+// leave it muted on exit. The chain gain we restore to 1.0 because
+// every known caller (nam_tone bundle line 613, rig_builder Listen,
+// audio_engine applyPresetGainLevels) sets its own chain gain right
+// after loadPreset returns — our 1.0 is just a sane intermediate.
+// Kill-switch: `window.__rbLoadPresetWrap = false`.
 (function () {
     if (window.__rbLoadPresetPatched) return;
     function tryPatch() {
@@ -112,11 +120,25 @@
             } catch (_) {}
             try {
                 if (typeof api.setMonitorMute === 'function') await api.setMonitorMute(true);
+                // Kill the chain output too — `setMonitorMute` only mutes
+                // the input monitor, it doesn't catch the first-attack
+                // transient that the NAM stages produce as soon as the
+                // engine starts running them post-load. Zeroing 'chain'
+                // gain swallows that spike entirely.
+                if (typeof api.setGain === 'function') await api.setGain('chain', 0);
             } catch (_) {}
             let res;
             try {
                 res = await orig(presetJson);
             } finally {
+                // Tiny settle delay so the first audio buffer after load
+                // (which carries the attack transient) runs while chain
+                // gain is still at 0. Without this, on fast machines the
+                // restore can win the race and the spike leaks.
+                await new Promise(r => setTimeout(r, 30));
+                try {
+                    if (typeof api.setGain === 'function') await api.setGain('chain', 1.0);
+                } catch (_) {}
                 // Only un-mute if the caller didn't have it muted on entry —
                 // respect explicit mute state from other plugins.
                 if (!wasMuted) {
@@ -136,6 +158,119 @@
         // Stop polling after 30 s either way (no audio engine on this build).
         setTimeout(() => clearInterval(t), 30000);
     }
+})();
+
+// ── AMP-toggle auto-apply ──────────────────────────────────────────────
+// `nam_tone` only applies the chain (with our master pre/post) when AMP
+// is on AT SONG LOAD TIME (line 1061 of nam_tone/screen.js gates the
+// `_namApplyCurrentSongTone` call on `_namEnabled`). If the user loads a
+// song with AMP off and turns it on mid-song, no chain is ever pushed —
+// the workaround is "leave + re-enter the song". We can't patch the
+// signed bundle, so we replicate the flow ourselves: watch the AMP
+// button (`#btn-nam`), and on each OFF→ON edge, look up the song's
+// active-tone mapping and call `loadPreset` ourselves with the master-
+// wrapped chain. Kill-switch: `window.__rbAmpAutoApply = false`.
+//
+// The bundle's own `_namBuildGraph` will also run on the toggle — we
+// wait ~1200 ms so its build settles first, and then our loadPreset is
+// the *last* one to run, winning the chain state.
+(function () {
+    if (window.__rbAmpHookInstalled) return;
+    window.__rbAmpHookInstalled = true;
+
+    let lastEnabled = false;
+    let inFlight = false;
+
+    function isAmpEnabled() {
+        const btn = document.getElementById('btn-nam');
+        if (!btn) return false;
+        // Bundle's `_namUpdateAmpButton` sets bg-green-700 when enabled.
+        return /(?:^|\s)bg-green-/.test(btn.className);
+    }
+
+    function resolveActiveTone() {
+        try {
+            const hw = window.highway;
+            if (!hw || typeof hw.getTime !== 'function') return null;
+            const t = hw.getTime();
+            const changes = hw.getToneChanges ? hw.getToneChanges() : [];
+            const base = hw.getToneBase ? hw.getToneBase() : '';
+            let active = base;
+            if (Array.isArray(changes)) {
+                for (const tc of changes) {
+                    if (tc && tc.t <= t) active = tc.name;
+                    else break;
+                }
+            }
+            return (active && String(active).trim()) || null;
+        } catch (_) { return null; }
+    }
+
+    function findMappingForTone(mappings, toneName) {
+        if (!Array.isArray(mappings) || !mappings.length) return null;
+        if (!toneName) return mappings[0];   // fallback
+        const exact = mappings.find(m => m && m.tone_key === toneName);
+        if (exact) return exact;
+        const wanted = String(toneName).trim().toLowerCase();
+        return mappings.find(m =>
+            m && String(m.tone_key || '').trim().toLowerCase() === wanted
+        ) || mappings[0];
+    }
+
+    async function autoApplyChain() {
+        if (window.__rbAmpAutoApply === false) return;
+        if (inFlight) return;
+        inFlight = true;
+        try {
+            const filename = window.slopsmith
+                && window.slopsmith.currentSong
+                && window.slopsmith.currentSong.filename;
+            if (!filename) return;
+            const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+            if (!api || typeof api.loadPreset !== 'function') return;
+
+            const r = await fetch(`/api/plugins/nam_tone/mappings/${encodeURIComponent(filename)}`);
+            if (!r.ok) return;
+            const mappings = await r.json();
+            const tone = resolveActiveTone();
+            const mapping = findMappingForTone(mappings, tone);
+            if (!mapping) return;
+            const presetId = mapping.preset_id ?? mapping.id;
+            if (presetId == null) return;
+
+            // Goes through our redirected fetch → master pre+post included.
+            const fr = await fetch(`/api/plugins/rig_builder/native_preset_full/${presetId}`);
+            if (!fr.ok) return;
+            const full = await fr.json();
+            const chain = full && full.native_preset && full.native_preset.chain;
+            if (!Array.isArray(chain) || chain.length === 0) return;
+
+            // Goes through our patched loadPreset (mute + chain-gain 0)
+            // so the AMP-on transient is suppressed just like a tone change.
+            await api.loadPreset(JSON.stringify(full.native_preset));
+            console.log(`[rig_builder] AMP auto-apply: ${chain.length} stages for tone "${tone || '(base)'}"`
+                + ` (master ${full.master_pre_count || 0}+${full.master_post_count || 0})`);
+        } catch (e) {
+            console.warn('[rig_builder] AMP auto-apply failed:', e);
+        } finally {
+            inFlight = false;
+        }
+    }
+
+    function checkAmp() {
+        const enabled = isAmpEnabled();
+        if (enabled && !lastEnabled) {
+            // OFF → ON edge. Wait for the bundle's own _namBuildGraph to
+            // finish its load (it's ~600-900 ms with a multi-NAM chain on
+            // an M1); ours runs after, so we land last and master wins.
+            setTimeout(autoApplyChain, 1200);
+        }
+        lastEnabled = enabled;
+    }
+
+    // Poll every 500 ms — the AMP button is injected by the bundle when
+    // a song loads, so it may not exist at page-init time.
+    setInterval(checkAmp, 500);
 })();
 
 // ── Shared state ────────────────────────────────────────────────────

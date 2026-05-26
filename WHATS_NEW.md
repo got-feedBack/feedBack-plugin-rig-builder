@@ -45,14 +45,17 @@ a CDLC in Slopsmith uses the full, realistic chain instead of generic sounds.
 > Re-open each VST editor once and save (Capture state or any slider drag) to
 > grab the new opaque state blob. DB migrations run automatically on first boot.
 
-## Known limitation: AMP must be on before loading the song
+## AMP toggle now auto-applies the chain mid-song
 
-The host's NAM **AMP** button needs to be **on before the song loads** for
-your chain (per-song and master) to actually apply during playback. If you
-load a song with AMP off, then toggle it on, the master chain won't engage
-on the running song. Workaround: turn AMP on → leave the song → re-enter
-the song (the `playSong` re-entry triggers the chain apply with master).
-Auto-applying on AMP toggle is on the short list for the next patch.
+Previously, if you loaded a song with **AMP off** and turned it on later,
+the master chain (and per-song chain) wouldn't engage — the bundle gates
+its chain push on AMP being on at song-load time. Rig Builder now watches
+the AMP button and, on every OFF → ON flip, replicates the chain push
+itself ~1 second after the toggle so master is included. No more
+"leave the song and come back" workaround.
+
+Kill-switch if it ever misfires: `window.__rbAmpAutoApply = false` in the
+DevTools console.
 
 ---
 
