@@ -292,6 +292,283 @@ let rbState = {
 const RB_API = '/api/plugins/rig_builder';
 const NAM_API = '/api/plugins/nam_tone';
 
+// ── RbMegaChain: pre-loaded whole-song chain with bypass-flip switching
+//
+// EXPERIMENTAL — guarded by `mega_chain_mode` Setting + runtime kill-switch
+// `window.__rbMegaChain = false`. Replaces the bundle's clearChain +
+// loadPreset cycle on every tone change with a single loadPreset at song
+// load + setBypass(slot_range, on/off) on each tone change. Result: zero
+// tone-change transient (no spike, no mute parche needed) at the cost of
+// every NAM staying in memory + processing (bypassed = passthrough,
+// still costs a fraction of CPU each).
+//
+// Coordination with the bundle:
+//   - When mega-chain mode is ON, we automatically force the bundle's
+//     AMP button OFF (the bundle's _namApplyCurrentSongTone would call
+//     clearChain + loadPreset on every tone change, destroying our
+//     mega-chain). We drive startAudio + monitor un-mute ourselves.
+//   - The fetch interceptor that redirects /native-preset/{id} stops
+//     firing in this mode (bundle won't fetch with AMP off).
+//   - We replicate _namDuckGuitarStem so the song's stem guitar gets
+//     muted just like the bundle would have done.
+//
+// Lifecycle:
+//   - song:loaded → RbMegaChain.buildForSong(filename)
+//   - polling-based tone-change detection via window.highway
+//   - song:unloaded / song change → RbMegaChain.teardown()
+const RbMegaChain = (function () {
+    let _active = false;       // are we currently driving the engine for a song
+    let _mega = null;          // last fetched /mega_chain response
+    let _activeToneKey = null; // tone_key currently un-bypassed
+    let _pollHandle = null;    // setInterval handle watching highway tone changes
+    let _duckedStems = null;   // saved gain nodes to restore on teardown
+
+    function _settingOn() {
+        if (window.__rbMegaChain === false) return false;
+        // Mirror written by rbSaveSettings; falls back to false until
+        // /settings has been fetched at least once.
+        return !!window.__rbMegaChainSetting;
+    }
+
+    function _api() {
+        const a = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        return (a && typeof a.loadPreset === 'function') ? a : null;
+    }
+
+    function _resolveActiveToneKey() {
+        try {
+            const hw = window.highway;
+            if (!hw || typeof hw.getTime !== 'function') return null;
+            const t = hw.getTime();
+            const changes = hw.getToneChanges ? hw.getToneChanges() : [];
+            const base = hw.getToneBase ? hw.getToneBase() : '';
+            let active = base;
+            if (Array.isArray(changes)) {
+                for (const tc of changes) {
+                    if (tc && tc.t <= t) active = tc.name;
+                    else break;
+                }
+            }
+            return (active && String(active).trim()) || null;
+        } catch (_) { return null; }
+    }
+
+    function _findToneByKey(toneKey) {
+        if (!_mega || !Array.isArray(_mega.tones) || !toneKey) return null;
+        const exact = _mega.tones.find(t => t.tone_key === toneKey);
+        if (exact) return exact;
+        const wanted = String(toneKey).trim().toLowerCase();
+        return _mega.tones.find(t =>
+            String(t.tone_key || '').trim().toLowerCase() === wanted
+        ) || null;
+    }
+
+    // Mute the song's "guitar" stem so the original DI doesn't double up
+    // with our chain output — same job the bundle's _namDuckGuitarStem
+    // does when AMP is on. Saves the previous gain values for teardown.
+    function _duckGuitarStem() {
+        const stems = window._stemsState;
+        if (!stems || !Array.isArray(stems)) return;
+        _duckedStems = [];
+        for (const s of stems) {
+            if (/guitar/i.test(s.id || '') && s.gain && s.gain.gain) {
+                _duckedStems.push({ stem: s, prevGain: s.gain.gain.value });
+                try { s.gain.gain.value = 0; } catch (_) {}
+            }
+        }
+    }
+    function _restoreGuitarStem() {
+        if (!_duckedStems) return;
+        for (const d of _duckedStems) {
+            try { if (d.stem && d.stem.gain && d.stem.gain.gain) d.stem.gain.gain.value = d.prevGain; } catch (_) {}
+        }
+        _duckedStems = null;
+    }
+
+    // If the bundle's AMP is on, click it off so it stops doing its own
+    // clearChain+loadPreset on every tone change.
+    function _forceBundleAmpOff() {
+        const btn = document.getElementById('btn-nam');
+        if (!btn) return;
+        const isOn = /(?:^|\s)bg-green-/.test(btn.className);
+        if (isOn) {
+            try { btn.click(); } catch (_) {}
+        }
+    }
+
+    // Apply bypass state across the chain so only `activeToneKey` runs.
+    // Uses setMultiBypass when available (one IPC call) — otherwise falls
+    // back to per-slot setBypass.
+    async function _applyActiveTone(activeToneKey) {
+        const api = _api();
+        if (!api || !_mega) return;
+        const changes = [];
+        for (const tone of _mega.tones) {
+            const shouldBypass = tone.tone_key !== activeToneKey;
+            const [start, end] = tone.slot_range;
+            for (let slot = start; slot < end; slot++) {
+                changes.push({ slotId: slot, bypassed: shouldBypass });
+            }
+        }
+        try {
+            if (typeof api.setMultiBypass === 'function') {
+                await api.setMultiBypass(changes);
+            } else if (typeof api.setBypass === 'function') {
+                for (const c of changes) await api.setBypass(c.slotId, c.bypassed);
+            }
+        } catch (e) {
+            console.warn('[rig_builder mega-chain] applyActiveTone failed:', e);
+        }
+        _activeToneKey = activeToneKey;
+    }
+
+    async function buildForSong(filename) {
+        if (!_settingOn()) return false;
+        const api = _api();
+        if (!api || !filename) return false;
+        // Tear down any previous session before starting a fresh one.
+        await teardown(true);   // silent — no stem restore on chained calls
+
+        let resp;
+        try {
+            resp = await fetch(`${RB_API}/mega_chain/${encodeURIComponent(filename)}`);
+        } catch (e) {
+            console.warn('[rig_builder mega-chain] fetch failed:', e);
+            return false;
+        }
+        if (!resp.ok) {
+            // No mappings for this song, or backend error → silently fall
+            // back to the cooperative path. The bundle will still work.
+            return false;
+        }
+        const mega = await resp.json();
+        if (!mega || !mega.native_preset
+            || !Array.isArray(mega.native_preset.chain)
+            || mega.native_preset.chain.length === 0) {
+            return false;
+        }
+        _mega = mega;
+
+        // 1. Force the bundle's AMP off so it stops fighting us.
+        _forceBundleAmpOff();
+
+        // 2. Mute the bundle's guitar stem so the song's DI doesn't
+        //    play through alongside our chain.
+        _duckGuitarStem();
+
+        // 3. Load the mega-chain into the engine — single loadPreset call.
+        //    Pre-load mute lives in rbPreLoadMute (called for free here).
+        rbPreLoadMute(mega.native_preset.chain.length).catch(() => {});
+        try {
+            if (api.clearChain) await api.clearChain().catch(() => {});
+            const res = await api.loadPreset(JSON.stringify(mega.native_preset));
+            if (!res || res.success === false) {
+                throw new Error((res && res.error) || 'loadPreset failed');
+            }
+            console.log(`[rig_builder mega-chain] loaded ${mega.total_stages} stages`
+                + ` for "${filename}" — ${mega.tones.length} tones, master ${mega.master_pre_count}+${mega.master_post_count}`,
+                res);
+        } catch (e) {
+            console.warn('[rig_builder mega-chain] loadPreset failed, falling back:', e);
+            _mega = null;
+            _restoreGuitarStem();
+            return false;
+        }
+
+        // 4. Set initial bypass: only the song's first / current tone runs.
+        const initialKey = _resolveActiveToneKey() || mega.active_tone_key;
+        const initialTone = _findToneByKey(initialKey) || mega.tones[0];
+        await _applyActiveTone(initialTone ? initialTone.tone_key : null);
+
+        // 5. Start audio if it isn't running yet (bundle would have done this).
+        try {
+            const wasRunning = api.isAudioRunning ? await api.isAudioRunning().catch(() => true) : true;
+            if (!wasRunning && api.startAudio) await api.startAudio();
+            if (api.setMonitorMute) await api.setMonitorMute(false).catch(() => {});
+            if (api.setGain) {
+                await api.setGain('input', 1.0).catch(() => {});
+                await api.setGain('chain', 1.0).catch(() => {});
+            }
+        } catch (e) { console.warn('[rig_builder mega-chain] startAudio failed:', e); }
+
+        // 6. Start watching highway for tone changes.
+        _startPolling();
+
+        _active = true;
+        return true;
+    }
+
+    function _startPolling() {
+        _stopPolling();
+        let lastKey = _activeToneKey;
+        _pollHandle = setInterval(async () => {
+            if (!_active || !_mega) return;
+            const key = _resolveActiveToneKey();
+            if (!key || key === lastKey) return;
+            const tone = _findToneByKey(key);
+            if (!tone) return;
+            lastKey = key;
+            await _applyActiveTone(tone.tone_key);
+            console.log(`[rig_builder mega-chain] switch → "${tone.tone_key}" (slots ${tone.slot_range[0]}-${tone.slot_range[1]-1})`);
+        }, 200);
+    }
+
+    function _stopPolling() {
+        if (_pollHandle) { clearInterval(_pollHandle); _pollHandle = null; }
+    }
+
+    async function teardown(silent) {
+        _stopPolling();
+        if (!silent) _restoreGuitarStem();
+        if (_active) {
+            const api = _api();
+            if (api && api.clearChain) {
+                try { await api.clearChain(); } catch (_) {}
+            }
+        }
+        _active = false;
+        _mega = null;
+        _activeToneKey = null;
+    }
+
+    function isActive() { return _active; }
+    function settingOn() { return _settingOn(); }
+
+    return { buildForSong, teardown, isActive, settingOn };
+})();
+
+// Hook into the slopsmith song lifecycle. `song:loaded` fires from
+// highway.js whenever the in-game player has fully loaded a CDLC.
+// `song:unloaded` doesn't appear to fire reliably across all builds, so
+// we also tear down whenever buildForSong is called again (the body of
+// buildForSong does teardown(true) before starting a new session).
+(function () {
+    if (window.__rbMegaChainHookInstalled) return;
+    window.__rbMegaChainHookInstalled = true;
+    function hook() {
+        if (!window.slopsmith || typeof window.slopsmith.on !== 'function') {
+            setTimeout(hook, 500);
+            return;
+        }
+        window.slopsmith.on('song:loaded', async (info) => {
+            if (!RbMegaChain.settingOn()) return;
+            const filename = info && info.filename;
+            if (!filename) return;
+            // Give the bundle ~600 ms to inject its #btn-nam etc. so our
+            // AMP-off click hits a real button. Also lets the highway
+            // stabilise so resolveActiveToneKey reads a sensible value.
+            setTimeout(() => {
+                RbMegaChain.buildForSong(filename).catch(e =>
+                    console.warn('[rig_builder mega-chain] buildForSong threw:', e));
+            }, 600);
+        });
+        window.slopsmith.on('song:unloaded', () => {
+            if (RbMegaChain.isActive()) RbMegaChain.teardown(false).catch(() => {});
+        });
+    }
+    hook();
+})();
+
 // ── HTML helper ─────────────────────────────────────────────────────
 
 function rbEsc(s) {
@@ -4354,6 +4631,10 @@ async function rbLoadSettings() {
     if (sizeSel) sizeSel.value = s.preferred_size || 'standard';
     const megaCb = document.getElementById('rb-mega-chain-mode');
     if (megaCb) megaCb.checked = !!s.mega_chain_mode;
+    // Mirror the persisted flag onto the runtime mirror so RbMegaChain
+    // sees it even if the user never opens Settings. rbLoadSettings is
+    // called from rbInit so this runs at page-load.
+    window.__rbMegaChainSetting = !!s.mega_chain_mode;
     const status = document.getElementById('rb-api-key-status');
     if (s.has_tone3000_key) {
         status.innerHTML = `<span class="text-green-400">Key configured (${rbEsc(s.tone3000_api_key_preview)})</span>`;
