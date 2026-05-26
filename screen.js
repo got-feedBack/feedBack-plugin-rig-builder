@@ -628,6 +628,20 @@ const RbMegaChain = (function () {
     if (window.__rbMegaChainHookInstalled) return;
     window.__rbMegaChainHookInstalled = true;
 
+    // Initialise window.__rbMegaChainSetting from the persisted /settings
+    // value AS EARLY AS POSSIBLE. rbLoadSettings (called from rbInit when
+    // the user opens the Rig Builder plugin) is normally what writes this
+    // flag, but if the user loads a song before ever opening Rig Builder
+    // the flag stays undefined and the hook below thinks the setting is
+    // off. Fire-and-forget — the polling fallback will pick up the song
+    // as soon as the flag flips.
+    fetch(`${RB_API}/settings`).then(r => r.json()).then(s => {
+        if (s && typeof s.mega_chain_mode !== 'undefined') {
+            window.__rbMegaChainSetting = !!s.mega_chain_mode;
+            console.log(`[rig_builder mega-chain] boot setting=${window.__rbMegaChainSetting} (read from /settings)`);
+        }
+    }).catch(() => {});
+
     function triggerBuild(filename, source) {
         if (!RbMegaChain.settingOn()) {
             console.log('[rig_builder mega-chain] skip — setting off');
