@@ -261,30 +261,24 @@
         </div>
 
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
-            <h3 class="text-white font-semibold mb-3">NAM model size (CPU vs realism)</h3>
+            <h3 class="text-white font-semibold mb-3">Cab makeup gain</h3>
             <p class="text-gray-500 text-sm mb-3">
-                Picks which variant tone3000 downloads serve when multiple sizes
-                exist for the same capture. Smaller sizes load and render
-                <strong class="text-gray-300">much faster</strong> — relevant
-                because every mid-song tone change reloads the whole chain. If
-                you see audio spikes or lag on tone changes, switch to
-                <code class="bg-dark-800 px-1 rounded">feather</code> and
-                re-run <em>Batch all (mode: all)</em> on the Dashboard so the
-                existing songs grab the lighter models.
+                Cab simulations (IRs) naturally attenuate the amp signal by 10-15 dB —
+                that's the cab absorbing energy + rolling off highs, same as a real cab.
+                This slider boosts the IR stage's output to compensate so bypassing the
+                cab vs leaving it active feels closer in level. <strong class="text-gray-300">+6 dB</strong>
+                is a good starting point; raise it if your cabs still feel quiet.
             </p>
-            <label class="flex items-center gap-2 text-sm text-gray-300">
-                Preferred size:
-                <select id="rb-preferred-size" onchange="rbSaveSettings()"
-                        class="bg-dark-800 border border-gray-800 rounded px-2 py-1 text-sm">
-                    <option value="standard">standard (~12 MB · most realistic)</option>
-                    <option value="lite">lite (~3 MB · balanced)</option>
-                    <option value="feather">feather (~800 KB · fast tone switches)</option>
-                    <option value="nano">nano (~50 KB · lowest CPU, may sound thin)</option>
-                </select>
+            <label class="flex items-center gap-3 text-sm text-gray-300">
+                <input type="range" id="rb-cab-makeup-gain" min="1.0" max="4.0" step="0.1" value="2.0"
+                       oninput="document.getElementById('rb-cab-makeup-gain-label').textContent = '+' + (20*Math.log10(parseFloat(this.value))).toFixed(1) + ' dB (×' + parseFloat(this.value).toFixed(2) + ')';"
+                       onchange="rbSaveSettings()"
+                       class="flex-1">
+                <span id="rb-cab-makeup-gain-label" class="text-xs text-gray-400 w-32 text-right">+6.0 dB (×2.00)</span>
             </label>
             <p class="text-[11px] text-gray-500 mt-2 leading-snug">
-                Existing downloaded models are not changed. Only newly downloaded
-                captures (auto-download or batch) honour the new setting.
+                Applies to every IR / Rocksmith-IR stage in your chains. Takes effect on the
+                next song-load / Listen-tap (chain JSON is rebuilt with the new gain).
             </p>
         </div>
 

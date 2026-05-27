@@ -4955,6 +4955,16 @@ async function rbLoadSettings() {
     if (sizeSel) sizeSel.value = s.preferred_size || 'standard';
     const megaCb = document.getElementById('rb-mega-chain-mode');
     if (megaCb) megaCb.checked = !!s.mega_chain_mode;
+    const cabSlider = document.getElementById('rb-cab-makeup-gain');
+    const cabLabel  = document.getElementById('rb-cab-makeup-gain-label');
+    if (cabSlider) {
+        const g = (typeof s.cab_makeup_gain === 'number') ? s.cab_makeup_gain : 2.0;
+        cabSlider.value = g;
+        if (cabLabel) {
+            const db = 20 * Math.log10(g);
+            cabLabel.textContent = `${db >= 0 ? '+' : ''}${db.toFixed(1)} dB (×${g.toFixed(2)})`;
+        }
+    }
     // Mirror the persisted flag onto the runtime mirror so RbMegaChain
     // sees it even if the user never opens Settings. rbLoadSettings is
     // called from rbInit so this runs at page-load.
@@ -5027,10 +5037,12 @@ async function rbSaveSettings() {
     const preferred_size = sizeSel ? sizeSel.value : 'standard';
     const megaCb = document.getElementById('rb-mega-chain-mode');
     const mega_chain_mode = megaCb ? !!megaCb.checked : false;
+    const cabSlider = document.getElementById('rb-cab-makeup-gain');
+    const cab_makeup_gain = cabSlider ? parseFloat(cabSlider.value) : 2.0;
     await fetch(`${RB_API}/settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ aggressive, min_downloads, preferred_size, mega_chain_mode }),
+        body: JSON.stringify({ aggressive, min_downloads, preferred_size, mega_chain_mode, cab_makeup_gain }),
     });
     // Mirror to the runtime so RbMegaChain picks it up without a restart.
     window.__rbMegaChainSetting = mega_chain_mode;

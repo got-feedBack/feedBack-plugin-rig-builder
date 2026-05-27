@@ -123,6 +123,14 @@ _DEFAULT_SETTINGS = {
     # ourselves). Roll out only after the cooperative mute-parche flow is
     # confirmed stable on the user's hardware.
     "mega_chain_mode": False,
+    # Cab makeup gain — multiplier applied to the cab IR stage's gain so
+    # the user doesn't have to manually compensate for the natural
+    # attenuation of a cab simulation (typically -10 to -15 dB vs the
+    # raw amp output). 2.0 ≈ +6 dB. Range clamped to [1.0, 4.0] when
+    # persisted. Applies to every IR/RS-IR stage emitted by the backend
+    # (per-tone chain + mega-chain). The user controls it from Settings
+    # with a dB-labelled slider.
+    "cab_makeup_gain": 2.0,
 }
 
 # Tone3000 platform value to request per Rocksmith category. Amps and
@@ -691,6 +699,18 @@ def _get_master_preset_id(role: str) -> int | None:
         return int(new_row[0]) if new_row else None
 
 
+def _cab_makeup_gain() -> float:
+    """Read the user's cab-makeup-gain setting, clamped to [1.0, 4.0].
+    Multiplier applied to every IR/RS-IR stage's gain so the user
+    doesn't have to compensate per-preset for the natural cab-sim
+    attenuation. Default 2.0 ≈ +6 dB."""
+    try:
+        g = float(_load_settings().get("cab_makeup_gain", 2.0))
+    except (TypeError, ValueError):
+        g = 2.0
+    return max(1.0, min(4.0, g))
+
+
 def _load_master_chain(role: str) -> list[dict]:
     """Return the master pre or post chain as a list of enriched pieces
     (same shape as _load_saved_chain). Empty list if the sentinel
@@ -754,7 +774,7 @@ def _build_master_stages(role: str, models_dir, irs_dir,
                 "bypassed": bypassed,
                 "slot": slot_tag,
                 "rs_gear": gear,
-                "state": _state_b64({"irPath": str(ir_path), "gain": float(output_gain)}),
+                "state": _state_b64({"irPath": str(ir_path), "gain": float(output_gain) * _cab_makeup_gain()}),
             })
         elif kind == "vst" and vst_path:
             vp = Path(vst_path)
@@ -2515,6 +2535,7 @@ def setup(app, context):
             "aggressive": s.get("aggressive", False),
             "preferred_size": s.get("preferred_size", "standard"),
             "mega_chain_mode": s.get("mega_chain_mode", False),
+            "cab_makeup_gain": s.get("cab_makeup_gain", 2.0),
             "has_tone3000_key": bool(key),
             "tone3000_api_key_preview": (key[:6] + "…") if key else "",
             "tone3000_connected": bool(s.get("tone3000_access_token")),
@@ -2533,6 +2554,15 @@ def setup(app, context):
                 allowed["preferred_size"] = size
         if "mega_chain_mode" in data:
             allowed["mega_chain_mode"] = bool(data["mega_chain_mode"])
+        if "cab_makeup_gain" in data:
+            # Clamp to [1.0, 4.0] = 0 to +12 dB so a typo can't push the
+            # chain into hard clipping. 1.0 = no compensation (raw IR
+            # response, the historical default before this knob existed).
+            try:
+                g = float(data["cab_makeup_gain"])
+                allowed["cab_makeup_gain"] = max(1.0, min(4.0, g))
+            except (TypeError, ValueError):
+                pass
         _save_settings(allowed)
         return {"ok": True}
 
@@ -3172,7 +3202,7 @@ def setup(app, context):
                     "bypassed": ir_bypassed,
                     "slot": ir_slot,
                     "rs_gear": ir_gear,
-                    "state": _state_b64({"irPath": str(ir_path), "gain": float(output_gain)}),
+                    "state": _state_b64({"irPath": str(ir_path), "gain": float(output_gain) * _cab_makeup_gain()}),
                 })
             else:
                 missing.append(ir_file)
@@ -3332,7 +3362,7 @@ def setup(app, context):
                         "slot": ir_slot,
                         "rs_gear": ir_gear,
                         "tone_key": tone_key,
-                        "state": _state_b64({"irPath": str(ir_path), "gain": float(out_gain)}),
+                        "state": _state_b64({"irPath": str(ir_path), "gain": float(out_gain) * _cab_makeup_gain()}),
                     })
                 else:
                     missing.append(ir_file)
