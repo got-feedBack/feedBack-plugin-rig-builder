@@ -517,8 +517,12 @@ const RbMegaChain = (function () {
         _duckGuitarStem();
 
         // 3. Load the mega-chain into the engine — single loadPreset call.
-        //    Pre-load mute lives in rbPreLoadMute (called for free here).
-        rbPreLoadMute(mega.native_preset.chain.length).catch(() => {});
+        //    AWAIT the pre-load mute so the chain output is actually at 0
+        //    before clearChain+loadPreset run. Earlier this was a fire-and-
+        //    forget call, which raced the loadPreset and let the attack
+        //    transient leak through ("still gives feedback sometimes on
+        //    initial song load" — Discord report).
+        await rbPreLoadMute(mega.native_preset.chain.length).catch(() => {});
         try {
             if (api.clearChain) await api.clearChain().catch(() => {});
             const res = await api.loadPreset(JSON.stringify(mega.native_preset));
@@ -589,13 +593,17 @@ const RbMegaChain = (function () {
         console.log(`[rig_builder mega-chain] initial tone → "${initialTone && initialTone.tone_key}"`);
 
         // 5. Start audio if it isn't running yet (bundle would have done this).
+        // DO NOT manually un-mute chain/monitor here — rbPreLoadMute's
+        // setTimeout will fade chain gain 0→1 + un-mute monitor on its
+        // own timer. Doing setGain('chain', 1.0) here would defeat the
+        // mute, letting the first-buffer attack of the freshly-loaded
+        // NAMs leak through.
         try {
             const wasRunning = api.isAudioRunning ? await api.isAudioRunning().catch(() => true) : true;
             if (!wasRunning && api.startAudio) await api.startAudio();
-            if (api.setMonitorMute) await api.setMonitorMute(false).catch(() => {});
+            // Input gain is safe to set — it's pre-chain, doesn't bypass mute.
             if (api.setGain) {
                 await api.setGain('input', 1.0).catch(() => {});
-                await api.setGain('chain', 1.0).catch(() => {});
             }
         } catch (e) { console.warn('[rig_builder mega-chain] startAudio failed:', e); }
 
@@ -4185,12 +4193,12 @@ async function rbReloadPreview(refetchPresetId) {
     const chainArr = payload.native_preset.chain || [];
     const chainLen = chainArr.length || 1;
     try {
-        // Same pre-load mute used by the fetch interceptor for the bundle's
-        // tone-change path: zero chain gain + mute monitor BEFORE clearChain,
-        // so the first audio buffer after loadPreset (which carries the NAM
-        // attack transient) runs silently. The chain gain restores itself
-        // to 1.0 inside rbPreLoadMute on a timer scaled to chain length.
-        rbPreLoadMute(chainLen).catch(() => {});
+        // AWAIT the pre-load mute so chain gain is genuinely at 0 before
+        // clearChain+loadPreset run. Previously fire-and-forget, racing
+        // the loadPreset and letting the attack transient leak through.
+        // rbPreLoadMute returns once mute is applied; the un-mute happens
+        // on its own internal timer with a fade-in so we don't pop.
+        await rbPreLoadMute(chainLen).catch(() => {});
         if (api.clearChain) await api.clearChain().catch(() => {});
         await api.loadPreset(JSON.stringify(payload.native_preset));
         // Engine sometimes leaves a slot bypassed across reloads — force each
@@ -4201,10 +4209,8 @@ async function rbReloadPreview(refetchPresetId) {
         // explicitly so VSTs come up at their saved values, not defaults.
         await rbReapplyVstParamsToChain(api, chainArr).catch((e) =>
             console.warn('[rig_builder] reload re-apply VST params:', e));
-        // Note: rbPreLoadMute restores setMonitorMute(false) on its own
-        // timer, but we also explicitly unmute here in case the timer
-        // hasn't fired yet — the chain is now safely loaded.
-        if (api.setMonitorMute) await api.setMonitorMute(false).catch(() => {});
+        // Don't manually un-mute here — rbPreLoadMute does it with a fade
+        // on its own timer. Forcing un-mute now would defeat the fade.
     } catch (e) { console.warn('[rig_builder] reload preview failed', e); }
 }
 
@@ -4880,12 +4886,10 @@ async function rbListenTone(toneIdx, filename) {
             }
             rbState._previewPayload = payload;
             rbApplyBypassToChain(payload, toneIdx);   // honour any pre-set bypasses
-            // Pre-load mute (same as the fetch interceptor uses for the
-            // bundle's tone-change path): zero chain gain + mute monitor
-            // BEFORE clearChain so the loadPreset attack transient runs
-            // silently. rbPreLoadMute restores on its own timer scaled
-            // to chain length.
-            rbPreLoadMute(chain.length).catch(() => {});
+            // AWAIT pre-load mute so chain gain is at 0 before clearChain+
+            // loadPreset run. Fire-and-forget race let the attack transient
+            // leak through (Discord report: "feedback on initial song load").
+            await rbPreLoadMute(chain.length).catch(() => {});
             if (api.clearChain) await api.clearChain().catch(() => {});
             const res = await api.loadPreset(JSON.stringify(payload.native_preset));
             const got = res && res.slotsLoaded;
@@ -4900,8 +4904,12 @@ async function rbListenTone(toneIdx, filename) {
             // setParameter for each saved {paramId: value} entry.
             await rbReapplyVstParamsToChain(api, chain).catch((e) =>
                 console.warn('[rig_builder] re-apply VST params:', e));
-            if (api.setGain) { await api.setGain('input', 1.0).catch(() => {}); await api.setGain('chain', 1.0).catch(() => {}); }
-            if (api.setMonitorMute) await api.setMonitorMute(false).catch(() => {});
+            // Input gain to unity is safe (pre-chain). Don't touch chain
+            // gain or monitor mute — rbPreLoadMute fades chain back to 1.0
+            // and un-mutes on its own timer with a smooth ramp. Forcing
+            // them here defeats the fade and lets the attack transient
+            // leak through.
+            if (api.setGain) { await api.setGain('input', 1.0).catch(() => {}); }
             const wasRunning = api.isAudioRunning ? await api.isAudioRunning().catch(() => true) : true;
             await api.startAudio();
             rbState._previewStartedAudio = !wasRunning;
