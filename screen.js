@@ -325,7 +325,8 @@ let rbState = {
     status: null,
     songTones: null,        // currently inspected song
     batchPoll: null,        // setInterval handle while batch is running
-    currentTab: 'dashboard',
+    currentTab: 'song',        // post-restructure default (Songs is the working tab)
+    currentGearFilter: 'all',  // chip filter inside the Gear tab
     currentSongFile: null,  // filename of the song open in the per-song view
     listeningTone: null,    // toneIdx currently previewed, or null
     _previewMode: null,     // 'native' (full chain) | 'nam' (WASM fallback)
@@ -984,11 +985,278 @@ function rbShowTab(name) {
         b.classList.toggle('border-transparent', !active);
     });
 
-    if (name === 'dashboard') rbLoadCoverage();
-    if (name === 'pending') rbLoadPending();
-    if (name === 'gear') rbLoadCatalog();
+    // Post-restructure: only 4 active tabs. The old dashboard/pending/
+    // manage are absorbed — dashboard → settings (top), pending and
+    // manage → gear (chip-filtered sub-views).
+    if (name === 'gear') rbGearFilter(rbState.currentGearFilter || 'all');
     if (name === 'master') rbLoadMasterChain();
-    if (name === 'settings') { rbLoadSettings(); rbUpdateScanStatus(); }
+    if (name === 'settings') {
+        rbLoadCoverage();        // batch / coverage panel (was dashboard)
+        rbLoadSettings();        // tone3000 + prefs
+        rbUpdateScanStatus();
+    }
+}
+
+// Chip filter inside the Gear tab. Toggles between the catalog, the
+// pending list, and the file inventory — all three share the same
+// top-level tab so the user doesn't ping-pong between two tabs to
+// resolve a gear and inspect its file.
+function rbGearFilter(filter) {
+    if (!['all', 'pending', 'files'].includes(filter)) filter = 'all';
+    rbState.currentGearFilter = filter;
+    document.querySelectorAll('.rb-gear-view').forEach(v => v.classList.add('hidden'));
+    const view = document.getElementById(`rb-gear-view-${filter}`);
+    if (view) view.classList.remove('hidden');
+    document.querySelectorAll('.rb-gear-filter-btn').forEach(b => {
+        const active = b.dataset.rbGearFilter === filter;
+        b.classList.toggle('bg-dark-700', active);
+        b.classList.toggle('text-white', active);
+        b.classList.toggle('text-gray-400', !active);
+    });
+    if (filter === 'all') rbLoadCatalog();
+    else if (filter === 'pending') rbLoadPending();
+    else if (filter === 'files') rbLoadManageTab();
+}
+
+// ── Manage tab: inventory of downloaded NAM/IR files ────────────────
+//
+// Lists every file currently on disk under nam_models/* and nam_irs/*,
+// grouped by category subdir (amps/pedals/racks/cabs/other). Each row
+// shows the file's gear assignment(s), size, and how many presets
+// reference it. The user can delete a single file or purge a whole
+// bucket from here.
+
+const RB_BUCKET_META = {
+    amps:   { label: 'Amps',   icon: '🎛️', color: 'bg-orange-900/20 border-orange-700/40' },
+    pedals: { label: 'Pedals', icon: '🎚️', color: 'bg-blue-900/20 border-blue-700/40' },
+    racks:  { label: 'Racks',  icon: '🗄️', color: 'bg-purple-900/20 border-purple-700/40' },
+    cabs:   { label: 'Cabs',   icon: '📦', color: 'bg-yellow-900/20 border-yellow-700/40' },
+    other:  { label: 'Other',  icon: '❓', color: 'bg-gray-700/30 border-gray-600/40' },
+};
+
+function rbFmtBytes(n) {
+    if (!n) return '0 B';
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+    return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
+async function rbLoadManageTab() {
+    const summary = document.getElementById('rb-manage-summary');
+    const root = document.getElementById('rb-manage-buckets');
+    if (!summary || !root) return;
+    // If a preload is in flight, latch onto its polling instead of
+    // overwriting the live progress line with a "Loading inventory…"
+    // flash. The poll will fill `summary` on the next tick.
+    try {
+        const st = await (await fetch(`${RB_API}/preload_status`)).json();
+        if (st && st.running) {
+            rbPreloadStartPolling();
+        }
+    } catch (_) { /* non-fatal */ }
+    summary.textContent = 'Loading inventory…';
+    root.innerHTML = '';
+    let data;
+    try {
+        const r = await fetch(`${RB_API}/nam_inventory`);
+        data = await r.json();
+        if (!r.ok) throw new Error(data.error || r.status);
+    } catch (e) {
+        summary.textContent = `Inventory failed: ${e.message || e}`;
+        summary.className = 'text-red-400 text-sm mt-1';
+        return;
+    }
+    const totals = data.totals || { count: 0, total_bytes: 0 };
+    summary.textContent = `${totals.count} files, ${rbFmtBytes(totals.total_bytes)} total on disk`;
+    summary.className = 'text-gray-500 text-sm mt-1';
+
+    const buckets = data.buckets || {};
+    const order = ['amps', 'pedals', 'racks', 'cabs', 'other'];
+    const ordered = [
+        ...order.filter(k => k in buckets).map(k => [k, buckets[k]]),
+        ...Object.entries(buckets).filter(([k]) => !order.includes(k)),
+    ];
+    if (!ordered.length) {
+        root.innerHTML = `<div class="text-center text-gray-500 py-8">
+            No downloaded files yet.</div>`;
+        return;
+    }
+    root.innerHTML = ordered.map(([bucket, b]) => rbRenderManageBucket(bucket, b)).join('');
+}
+
+function rbRenderManageBucket(bucket, b) {
+    const meta = RB_BUCKET_META[bucket] || RB_BUCKET_META.other;
+    const filesHtml = b.files.map(f => rbRenderManageFile(f)).join('');
+    return `<div class="rounded-xl border ${meta.color}">
+        <div class="flex items-center justify-between p-4 border-b border-gray-800/40">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">${meta.icon}</span>
+                <div>
+                    <div class="text-white font-semibold">${meta.label}</div>
+                    <div class="text-xs text-gray-500">
+                        ${b.count} files · ${rbFmtBytes(b.total_bytes)}
+                    </div>
+                </div>
+            </div>
+            <button onclick="rbPurgeNams({bucket: ${JSON.stringify(bucket)}}, ${JSON.stringify(meta.label + ' (' + b.count + ' files)')})"
+                    class="bg-red-900/20 hover:bg-red-900/50 text-red-300 border border-red-800/30 px-2.5 py-1 rounded text-xs transition">
+                🗑 Delete all
+            </button>
+        </div>
+        <div class="divide-y divide-gray-800/30">${filesHtml}</div>
+    </div>`;
+}
+
+function rbRenderManageFile(f) {
+    const gears = (f.real_names && f.real_names.length)
+        ? f.real_names.map(rbEsc).join(', ')
+        : '<span class="text-gray-600 italic">orphan</span>';
+    const presetHint = f.preset_count
+        ? `<span class="text-xs text-gray-500">used by ${f.preset_count} preset${f.preset_count === 1 ? '' : 's'}</span>`
+        : '<span class="text-xs text-gray-600 italic">no preset references this file</span>';
+    const tone3000 = (f.tone3000_ids && f.tone3000_ids.length)
+        ? `<a href="https://www.tone3000.com/tones/${f.tone3000_ids[0]}" target="_blank"
+              class="text-xs text-cyan-500 hover:text-cyan-300">tone ${f.tone3000_ids[0]}</a>`
+        : '';
+    const orphanClass = f.orphan ? 'bg-amber-900/10' : '';
+    return `<div class="flex items-center justify-between gap-3 p-3 hover:bg-gray-800/30 ${orphanClass}">
+        <div class="min-w-0 flex-1">
+            <div class="text-sm text-gray-200 truncate" title="${rbEsc(f.name)}">${gears}</div>
+            <div class="text-xs text-gray-500 truncate font-mono" title="${rbEsc(f.name)}">${rbEsc(f.name)}</div>
+            <div class="flex items-center gap-3 mt-0.5">
+                <span class="text-xs text-gray-500">${rbFmtBytes(f.size_bytes)}</span>
+                ${presetHint}
+                ${tone3000}
+            </div>
+        </div>
+        <button onclick="rbDeleteNamFile(${JSON.stringify(f.name)})"
+                class="bg-red-900/20 hover:bg-red-900/50 text-red-300 border border-red-800/30 px-2.5 py-1 rounded text-xs transition shrink-0">
+            🗑
+        </button>
+    </div>`;
+}
+
+async function rbDeleteNamFile(path) {
+    if (!confirm(`Delete this file?\n\n${path}\n\nGears using it will revert to Pending. (The download can be re-fetched anytime.)`)) {
+        return;
+    }
+    try {
+        const r = await fetch(`${RB_API}/nam_file?path=${encodeURIComponent(path)}`, {
+            method: 'DELETE',
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || r.status);
+        rbLoadManageTab();
+    } catch (e) {
+        alert(`Delete failed: ${e.message || e}`);
+    }
+}
+
+async function rbPreloadCuratedVariants() {
+    if (!confirm('One-click curate:\n\n'
+               + '1. Rename any legacy cryptic filenames to readable titles\n'
+               + '2. Download every curated amp variant from rs_to_real.json\n'
+               + '   (files already on disk skip the network)\n'
+               + '3. Wire each variant to the preset rows that need it\n\n'
+               + 'Live progress shown below. Continue?')) {
+        return;
+    }
+    try {
+        const r = await fetch(`${RB_API}/preload_curated_variants`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || r.status);
+        if (d.started === false) {
+            alert('Already running — current progress is shown live in the Manage tab.');
+            rbPreloadStartPolling();
+            return;
+        }
+        rbPreloadStartPolling();
+    } catch (e) {
+        alert(`Could not start preload: ${e.message || e}`);
+    }
+}
+
+// Live progress polling for the curated-variants preload. Polls the
+// backend's /preload_status every 500ms while a run is in flight,
+// stops automatically when `running` flips to false, and surfaces the
+// final summary in an alert.
+let _rbPreloadPollTimer = null;
+
+function rbPreloadStartPolling() {
+    if (_rbPreloadPollTimer) return;   // already polling
+    rbPreloadPollOnce();
+    _rbPreloadPollTimer = setInterval(rbPreloadPollOnce, 500);
+}
+
+function rbPreloadStopPolling() {
+    if (_rbPreloadPollTimer) {
+        clearInterval(_rbPreloadPollTimer);
+        _rbPreloadPollTimer = null;
+    }
+}
+
+async function rbPreloadPollOnce() {
+    let st;
+    try {
+        st = await (await fetch(`${RB_API}/preload_status`)).json();
+    } catch (e) {
+        return;
+    }
+    const summary = document.getElementById('rb-manage-summary');
+    const total = st.total || 0;
+    const done = st.done || 0;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    if (st.running) {
+        if (summary) {
+            summary.className = 'text-emerald-300 text-sm mt-1';
+            summary.innerHTML = `Downloading ${done} / ${total} (${pct}%) — `
+                              + `<span class="text-gray-400">${rbEsc(st.current || '…')}</span>`;
+        }
+    } else if (st.started_at) {
+        // Finished. Stop polling, refresh manage list, show final tally.
+        rbPreloadStopPolling();
+        rbLoadManageTab();
+        const lines = [
+            `${st.downloaded} newly downloaded`,
+            `${st.already_present} already cached`,
+        ];
+        if ((st.failed || []).length) {
+            lines.push(`${st.failed.length} failed:\n  ` + st.failed.slice(0, 5).join('\n  '));
+        }
+        if ((st.errors || []).length) {
+            lines.push(`${st.errors.length} errors:\n  ` + st.errors.slice(0, 5).join('\n  '));
+        }
+        const elapsed = ((st.finished_at - st.started_at) || 0).toFixed(1);
+        lines.push(`\nElapsed: ${elapsed}s`);
+        alert('Done.\n\n' + lines.join('\n'));
+    }
+}
+
+async function rbPurgeNams(filter, label) {
+    if (!confirm(`Purge ${label}?\n\nThis deletes the file(s) AND reverts every gear using them to Pending. Cannot be undone.`)) {
+        return;
+    }
+    try {
+        const r = await fetch(`${RB_API}/nam_purge`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...filter, confirm: true }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || r.status);
+        rbLoadManageTab();
+        if ((d.errors || []).length) {
+            alert(`Purged ${d.deleted_count} files. ${d.errors.length} errors:\n` +
+                  d.errors.slice(0, 5).join('\n'));
+        }
+    } catch (e) {
+        alert(`Purge failed: ${e.message || e}`);
+    }
 }
 
 // ── Dashboard: coverage stats ──────────────────────────────────────
@@ -1076,6 +1344,17 @@ async function rbLoadPending() {
         return;
     }
     const pending = (data.items || []).filter(i => i.pending_chain_slots > 0);
+    // Update the chip badge so the user sees the count without leaving the
+    // current sub-view. Hidden when zero so it doesn't add visual noise.
+    const badge = document.getElementById('rb-gear-pending-badge');
+    if (badge) {
+        if (pending.length) {
+            badge.textContent = pending.length;
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
     if (!pending.length) {
         el.innerHTML = '<p class="text-gray-500">No pending gear. (Have you run the batch yet?)</p>';
         return;
@@ -4407,6 +4686,19 @@ async function rbAuditionCandidate(btn, rsGear, toneId) {
 
 // ── Gear catalog grouped by type ─────────────────────────────
 let _rbCatalogSeq = 0;
+// Gear-tab nav state. Lives on rbState so toggling filters mid-session
+// doesn't lose the user's setup, and so tab switches re-apply the same
+// filters when they come back. The Set is rebuilt fresh per session.
+if (!rbState.gearCollapsedCats) rbState.gearCollapsedCats = new Set();
+
+const RB_GEAR_LABEL = {
+    amp:   'Amplifiers',
+    pedal: 'Pedals',
+    cab:   'Cabinets',
+    rack:  'Racks',
+    other: 'Other',
+};
+
 async function rbLoadCatalog() {
     const el = document.getElementById('rb-catalog');
     if (!el) return;
@@ -4415,27 +4707,176 @@ async function rbLoadCatalog() {
     let data;
     try { data = await (await fetch(`${RB_API}/gear_catalog`)).json(); }
     catch (e) { el.innerHTML = `<p class="text-red-400">Error: ${rbEsc(e.message)}</p>`; return; }
-    const cats = (data && data.categories) || {};
-    const keys = Object.keys(cats);
-    if (!keys.length) {
-        el.innerHTML = '<p class="text-gray-500">No gear yet. Map a song first (the “By song” tab or the Dashboard batch).</p>';
+    rbState.gearCatalog = (data && data.categories) || {};
+    if (!Object.keys(rbState.gearCatalog).length) {
+        el.innerHTML = '<p class="text-gray-500">No gear yet. Map a song first.</p>';
         return;
     }
-    const LABEL = { amp: 'Amplifiers', pedal: 'Pedals', cab: 'Cabinets', rack: 'Racks', other: 'Other' };
+    rbApplyGearFilters();
+}
+
+// 150 ms debounce on search input so we don't re-render the whole
+// catalog on every keystroke. Re-renders are cheap (~150 cards) but
+// the network of nested template literals adds up if you spam it.
+let _rbGearSearchTimer = null;
+function rbDebouncedGearFilter() {
+    if (_rbGearSearchTimer) clearTimeout(_rbGearSearchTimer);
+    _rbGearSearchTimer = setTimeout(() => rbApplyGearFilters(), 150);
+}
+
+function rbApplyGearFilters() {
+    const el = document.getElementById('rb-catalog');
+    if (!el || !rbState.gearCatalog) return;
+    const search = ((document.getElementById('rb-gear-search') || {}).value || '')
+        .toLowerCase().trim();
+    const onlyUnassigned = !!((document.getElementById('rb-gear-only-unassigned') || {}).checked);
+    const compact = !!((document.getElementById('rb-gear-compact') || {}).checked);
+
+    // Filter items per category based on search + status. Empty
+    // categories drop out so we don't render an empty header.
+    const filtered = {};
+    let total = 0;
+    for (const cat in rbState.gearCatalog) {
+        const items = rbState.gearCatalog[cat].filter(g => {
+            if (onlyUnassigned && g.assigned) return false;
+            if (!search) return true;
+            const hay = (
+                (g.real_name || '') + ' ' +
+                (g.make || '') + ' ' +
+                (g.model || '') + ' ' +
+                (g.rs_gear || '') + ' ' +
+                (g.tone3000_title || '')
+            ).toLowerCase();
+            return hay.includes(search);
+        });
+        if (items.length) {
+            filtered[cat] = items;
+            total += items.length;
+        }
+    }
+
+    // Jump pills — one per category, with the FILTERED count so the
+    // user knows how many matches landed in each. Active pill = the
+    // category currently scrolled-to is not tracked (it'd need a
+    // scroll observer); just style them all uniformly.
+    const pillsEl = document.getElementById('rb-gear-jump-pills');
+    if (pillsEl) {
+        if (Object.keys(filtered).length <= 1) {
+            pillsEl.innerHTML = '';   // no point in pills for one section
+        } else {
+            pillsEl.innerHTML = Object.keys(filtered).map(cat => {
+                const collapsed = rbState.gearCollapsedCats.has(cat);
+                return `<button onclick="rbScrollToCategory('${cat}')"
+                        class="text-xs px-2 py-1 rounded-full transition
+                               ${collapsed ? 'bg-dark-800 text-gray-500' : 'bg-dark-600 text-gray-200 hover:bg-dark-500'}">
+                    ${rbEsc(RB_GEAR_LABEL[cat] || cat)}
+                    <span class="text-gray-400 ml-1">${filtered[cat].length}</span>
+                </button>`;
+            }).join('');
+        }
+    }
+
+    // Render sections. Each has a clickable header that toggles collapse.
+    if (!total) {
+        el.innerHTML = `<div class="text-center text-gray-500 py-10">
+            No matches.${search ? ` Try clearing the search.` : ''}</div>`;
+        return;
+    }
     try {
-        el.innerHTML = keys.map(cat => {
-            const items = cats[cat] || [];
-            const cards = items.map(g => rbRenderCatalogCard(g)).join('');
-            return `
-                <div>
-                    <h3 class="text-white font-semibold mb-3">${rbEsc(LABEL[cat] || cat)} <span class="text-gray-500 text-xs">(${items.length})</span></h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${cards}</div>
-                </div>`;
+        el.innerHTML = Object.keys(filtered).map(cat => {
+            const items = filtered[cat];
+            const collapsed = rbState.gearCollapsedCats.has(cat);
+            const label = RB_GEAR_LABEL[cat] || cat;
+            const body = collapsed ? '' :
+                (compact
+                    ? `<div class="bg-dark-800/30 border border-gray-800/30 rounded-lg divide-y divide-gray-800/30">
+                          ${items.map(rbRenderCatalogCardCompact).join('')}
+                       </div>`
+                    : `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          ${items.map(rbRenderCatalogCard).join('')}
+                       </div>`);
+            return `<div id="rb-cat-${cat}" class="scroll-mt-4">
+                <h3 onclick="rbToggleCategoryCollapse('${cat}')"
+                    class="text-white font-semibold mb-3 cursor-pointer select-none flex items-center gap-2 hover:text-accent transition">
+                    <span class="text-gray-500 text-xs w-3 inline-block">${collapsed ? '▶' : '▼'}</span>
+                    ${rbEsc(label)}
+                    <span class="text-gray-500 text-xs font-normal">(${items.length})</span>
+                </h3>
+                ${body}
+            </div>`;
         }).join('');
     } catch (e) {
         console.error('[rig_builder] catalog render failed', e);
         el.innerHTML = `<p class="text-red-400">Error rendering: ${rbEsc(e.message)}</p>`;
     }
+}
+
+function rbScrollToCategory(cat) {
+    const target = document.getElementById(`rb-cat-${cat}`);
+    if (!target) return;
+    // Expand if collapsed so the user actually sees the cards.
+    if (rbState.gearCollapsedCats.has(cat)) {
+        rbState.gearCollapsedCats.delete(cat);
+        rbApplyGearFilters();
+        // Wait for the re-render to land before scrolling.
+        setTimeout(() => {
+            document.getElementById(`rb-cat-${cat}`)?.scrollIntoView({behavior: 'smooth', block: 'start'});
+        }, 30);
+    } else {
+        target.scrollIntoView({behavior: 'smooth', block: 'start'});
+    }
+}
+
+function rbToggleCategoryCollapse(cat) {
+    if (rbState.gearCollapsedCats.has(cat)) rbState.gearCollapsedCats.delete(cat);
+    else rbState.gearCollapsedCats.add(cat);
+    rbApplyGearFilters();
+}
+
+function rbClearGearFilters() {
+    const s = document.getElementById('rb-gear-search');
+    const u = document.getElementById('rb-gear-only-unassigned');
+    const c = document.getElementById('rb-gear-compact');
+    if (s) s.value = '';
+    if (u) u.checked = false;
+    if (c) c.checked = false;
+    rbState.gearCollapsedCats.clear();
+    rbApplyGearFilters();
+}
+
+// One-line card used in compact mode. Drops the photo to a thumbnail
+// and skips the controls panel — click ▶ still works, and the rs_gear
+// name is shown small for quick scanning at scale (100+ gears).
+function rbRenderCatalogCardCompact(g) {
+    const btnId = `rb-aud-${_rbCatalogSeq++}`;
+    const photo = g.image
+        ? `<img src="${rbEsc(g.image)}" alt="" loading="lazy"
+               class="w-8 h-8 rounded object-cover bg-dark-900 flex-shrink-0"
+               onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'w-8 h-8 rounded bg-dark-900 flex-shrink-0'}))">`
+        : `<div class="w-8 h-8 rounded bg-dark-900 flex-shrink-0"></div>`;
+    const status = g.assigned
+        ? `<span class="text-emerald-400 text-xs" title="Assigned">●</span>`
+        : `<span class="text-amber-400 text-xs" title="Pending">●</span>`;
+    // Compact rows still let you audition. Suggest / library picker
+    // are one step away: clicking anywhere else on the row toggles
+    // back to a full card for that single gear (planned).
+    const file = g.file
+        ? `<span class="text-xs text-gray-500 truncate font-mono" title="${rbEsc(g.file)}">${rbEsc(g.file.split('/').pop())}</span>`
+        : (g.vst_path
+            ? `<span class="text-xs text-purple-400 truncate" title="${rbEsc(g.vst_path)}">VST: ${rbEsc(g.vst_path.split('/').pop())}</span>`
+            : `<span class="text-xs text-gray-600 italic">unassigned</span>`);
+    return `<div class="flex items-center gap-2 px-3 py-2 hover:bg-dark-700/30">
+        ${photo}
+        ${status}
+        <div class="min-w-0 flex-1">
+            <div class="text-gray-200 truncate text-xs"><strong>${rbEsc(g.real_name)}</strong>
+                <span class="text-gray-500 text-[10px]">${rbEsc(g.rs_gear)}</span>
+            </div>
+            ${file}
+        </div>
+        ${g.file ? `<button id="${btnId}" onclick="rbAuditionFile(${JSON.stringify(g.file)},${JSON.stringify(g.kind || 'nam')},'${btnId}')"
+                            class="text-gray-400 hover:text-emerald-300 px-1.5 py-0.5 text-xs">▶</button>` : ''}
+    </div>`;
 }
 
 function rbRenderCatalogCard(g) {
@@ -4617,8 +5058,16 @@ async function rbInspectAmpVariant(rsGear, level) {
         }
         // Build options. Add a sentinel "(auto: best by size)" at top
         // so the user can explicitly let pick_best_model decide.
+        //
+        // Order matters here: the capture's title (which encodes knob
+        // settings like "G7 B5 M5 T5 P5 V5") is what the user reads to
+        // match a Rocksmith gain level — put it first. Size/license
+        // are secondary metadata tail-tagged at the end.
         select.innerHTML = `<option value="">(auto: best by size)</option>` +
-            caps.map(c => `<option value="${c.model_id}">${c.size || '?'} · ${rbEsc(c.name)} · ${rbEsc(c.license || '')}</option>`).join('');
+            caps.map(c => {
+                const meta = [c.size || '?', c.license || ''].filter(Boolean).join(' · ');
+                return `<option value="${c.model_id}">${rbEsc(c.name)} — ${rbEsc(meta)}</option>`;
+            }).join('');
         capsRow.classList.remove('hidden');
         statusEl.textContent = `${caps.length} capture${caps.length === 1 ? '' : 's'} loaded — pick one and Save`;
         statusEl.className = 'text-[10px] text-emerald-400';
@@ -5404,10 +5853,11 @@ async function rbDownloadForGear(btn, rsGear, toneId) {
         }
         // The backend already stamped the file onto pending preset_pieces
         // and refreshed the affected presets, so refresh whichever view
-        // is open to reflect that the gear is no longer pending.
-        if (rbState.currentTab === 'pending') rbLoadPending();
-        else if (rbState.currentTab === 'dashboard') rbLoadCoverage();
-        else if (rbState.currentTab === 'gear') rbLoadCatalog();
+        // is open to reflect that the gear is no longer pending. Post-
+        // restructure the dashboard + pending tabs are gone; Setup now
+        // owns coverage, and Gear owns the pending sub-view.
+        if (rbState.currentTab === 'settings') rbLoadCoverage();
+        else if (rbState.currentTab === 'gear') rbGearFilter(rbState.currentGearFilter || 'all');
         // Reflect the new assignment in the open song view now (and
         // re-audition if a tone using this gear is currently previewing) —
         // no need to re-select the song.

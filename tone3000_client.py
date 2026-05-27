@@ -320,8 +320,49 @@ class Tone3000Client:
         return self._cached_get(f"{BASE_URL}/tones/search?{qs}")
 
     def list_models(self, tone_id: int) -> dict:
-        """List downloadable .nam models attached to a tone."""
-        return self._cached_get(f"{BASE_URL}/models?tone_id={tone_id}")
+        """List downloadable .nam models attached to a tone.
+
+        The `/models` endpoint paginates at 10 per page by default and
+        caps at 25 even with `page_size` — a tone like the Gallien
+        Krueger RB800 (19 captures, one per gain step) silently drops
+        captures past the first page if you don't iterate. Loop until
+        we get a short page; combine all `data` arrays into one
+        payload so callers see the full list.
+
+        The combined payload preserves any top-level metadata from the
+        first page (`title`, `total_count`, etc.) so downstream code
+        that reads those keys still works.
+        """
+        per_page = 25  # tone3000's max page_size for this endpoint
+        first = self._cached_get(
+            f"{BASE_URL}/models?tone_id={tone_id}&page=1&page_size={per_page}")
+        if not isinstance(first, dict):
+            return first
+        first_data = list(first.get("data") or [])
+        all_data = list(first_data)
+        # Loop pages 2..N. Stop when a page comes back short — that
+        # means we've reached the last one. The 40-page cap is a sanity
+        # ceiling so a buggy API can't spin forever (40 × 25 = 1000
+        # captures, way past any real tone).
+        if len(first_data) == per_page:
+            page = 2
+            while page <= 40:
+                extra = self._cached_get(
+                    f"{BASE_URL}/models?tone_id={tone_id}&page={page}&page_size={per_page}")
+                if not isinstance(extra, dict):
+                    break
+                extra_data = extra.get("data") or []
+                if not extra_data:
+                    break
+                all_data.extend(extra_data)
+                if len(extra_data) < per_page:
+                    break
+                page += 1
+        # Return the first-page payload with the union of `data`. We
+        # use dict(first) so the cached entry isn't mutated.
+        merged = dict(first)
+        merged["data"] = all_data
+        return merged
 
     def get_model(self, model_id: int) -> dict:
         return self._cached_get(f"{BASE_URL}/models/{model_id}")
@@ -347,32 +388,64 @@ class Tone3000Client:
         import os
         if os.path.exists(dest_path):
             return os.path.getsize(dest_path)
-        self._ensure_fresh_token()
-        req = urllib.request.Request(model_url)
-        req.add_header("User-Agent", _USER_AGENT)
-        bearer = self._bearer()
-        if bearer:
-            req.add_header("Authorization", f"Bearer {bearer}")
-        # Stream to a temp path first; only rename into the final
-        # name on success so a partial download doesn't leave a
-        # corrupted file the dedup check would later accept.
-        tmp_path = dest_path + ".part"
-        total = 0
-        try:
-            with urllib.request.urlopen(req, timeout=120.0) as resp, open(tmp_path, "wb") as out:
-                while True:
-                    chunk = resp.read(64 * 1024)
-                    if not chunk:
-                        break
-                    out.write(chunk)
-                    total += len(chunk)
-            os.replace(tmp_path, dest_path)
-        except Exception:
+
+        # Retry policy for HTTP 429 (tone3000 enforces ~100 req/min).
+        # Exponential backoff with jitter so a parallel client hitting
+        # the same limit doesn't synchronise their retries on the same
+        # tick. Honour the `Retry-After` header when present — that's
+        # the API's own hint about when it's safe to come back. We cap
+        # retries to 4 attempts so a sustained outage (auth revoked
+        # mid-batch, server down) still surfaces as a real exception
+        # instead of looping forever.
+        max_attempts = 4
+        last_exc = None
+        for attempt in range(max_attempts):
+            self._ensure_fresh_token()
+            req = urllib.request.Request(model_url)
+            req.add_header("User-Agent", _USER_AGENT)
+            bearer = self._bearer()
+            if bearer:
+                req.add_header("Authorization", f"Bearer {bearer}")
+            tmp_path = dest_path + ".part"
+            total = 0
             try:
-                os.remove(tmp_path)
-            except FileNotFoundError:
-                pass
-            raise
+                with urllib.request.urlopen(req, timeout=120.0) as resp, open(tmp_path, "wb") as out:
+                    while True:
+                        chunk = resp.read(64 * 1024)
+                        if not chunk:
+                            break
+                        out.write(chunk)
+                        total += len(chunk)
+                os.replace(tmp_path, dest_path)
+                return total
+            except urllib.error.HTTPError as e:
+                last_exc = e
+                try:
+                    os.remove(tmp_path)
+                except FileNotFoundError:
+                    pass
+                if e.code != 429 or attempt == max_attempts - 1:
+                    raise
+                # Backoff: prefer Retry-After if the server hinted one,
+                # otherwise 2^attempt + jitter so successive retries
+                # spread out. tone3000's 100-req/min budget refills
+                # every ~0.6s, so even a single 8s pause clears the
+                # window comfortably.
+                retry_after = 0
+                try:
+                    retry_after = int(e.headers.get("Retry-After", "0"))
+                except (TypeError, ValueError):
+                    retry_after = 0
+                sleep_s = retry_after if retry_after > 0 else (2 ** attempt + 0.5 * attempt)
+                time.sleep(sleep_s)
+            except Exception:
+                try:
+                    os.remove(tmp_path)
+                except FileNotFoundError:
+                    pass
+                raise
+        if last_exc:
+            raise last_exc
         return total
 
     @staticmethod

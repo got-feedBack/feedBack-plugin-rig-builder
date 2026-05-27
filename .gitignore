@@ -4,3 +4,12 @@ __pycache__/
 .DS_Store
 *.part
 *.raw
+
+# Derived from gears.psarc — regenerate locally via
+# `python3 extract_amp_photos.py /path/to/gears.psarc`.
+# Not redistributed because the art belongs to Rocksmith.
+guitar_amp_photos/
+bass_amp_photos/
+
+# JSON backups created by migration helpers.
+*.json.bak

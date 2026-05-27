@@ -87,14 +87,23 @@ def main():
         sys.exit(1)
     settings = json.loads(settings_path.read_text())
 
-    access_token = settings.get("tone3000_access_token")
-    refresh_token = settings.get("tone3000_refresh_token")
-    if not access_token:
-        print("error: no OAuth access token in settings. Sign in via Settings → Connect with tone3000.", file=sys.stderr)
+    access_token = settings.get("tone3000_access_token") or None
+    refresh_token = settings.get("tone3000_refresh_token") or None
+    api_key = settings.get("tone3000_api_key") or ""
+    if not access_token and not api_key:
+        print("error: no tone3000 credentials in settings. Sign in via "
+              "Settings → Connect with tone3000, or paste an API key.",
+              file=sys.stderr)
         sys.exit(1)
 
+    # Tone3000Client requires a cache_db_path (it caches API JSON in
+    # SQLite). Use a throwaway under /tmp so this CLI doesn't pollute
+    # the real plugin cache.
+    import tempfile
+    cache_db = Path(tempfile.gettempdir()) / "rig_builder_inspect_tone3000_cache.sqlite"
     client = Tone3000Client(
-        api_key=settings.get("tone3000_api_key", ""),
+        cache_db_path=str(cache_db),
+        api_key=api_key,
         access_token=access_token,
         refresh_token=refresh_token,
     )
@@ -118,20 +127,30 @@ def main():
     else:
         print(f"\ntone3000_id: {tone_id}")
     print("─" * 70)
-    print(f"{'model_id':<10}  {'size':<10}  {'license':<14}  name")
+    print(f"{'model_id':<10}  {'size':<10}  {'license':<14}  title")
     print("─" * 70)
     for m in models:
         mid = m.get("id") or "?"
         size = (m.get("size") or "?").lower()
         license_name = (m.get("license") or "")[:14]
-        # Filename clues: model_url is usually a signed S3-ish URL with
-        # the original name in the path.
-        url = m.get("model_url") or m.get("url") or ""
-        name = url.split("/")[-1].split("?")[0] if url else (m.get("name") or "?")
-        # Trim very long signed URLs in the display.
-        if len(name) > 50:
-            name = name[:47] + "..."
-        print(f"{mid:<10}  {size:<10}  {license_name:<14}  {name}")
+        # Prefer the human-readable title — that's what tone3000's web
+        # UI shows and it encodes the knob settings ("G7 B5 M5 T5 P5
+        # V5 - STD" where G7 = Gain=7), which is the whole point of
+        # picking a capture by variant. Fall back to URL-derived
+        # filename only when the API gave us nothing.
+        title = ""
+        for k in ("title", "name", "display_name", "description"):
+            v = m.get(k)
+            if isinstance(v, str) and v.strip():
+                title = v.strip()
+                break
+        if not title:
+            url = m.get("model_url") or m.get("url") or ""
+            title = (url.split("/")[-1].split("?")[0]
+                     if url else f"model_{mid}")
+        if len(title) > 70:
+            title = title[:67] + "..."
+        print(f"{mid:<10}  {size:<10}  {license_name:<14}  {title}")
     print("─" * 70)
     print(f"\nTo pin a specific capture, add the `model_id` column to your")
     print(f"curation CSV row. Leave it blank to let the plugin auto-pick by")

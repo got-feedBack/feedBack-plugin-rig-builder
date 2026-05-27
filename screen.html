@@ -8,19 +8,15 @@
     <!-- Setup status -->
     <div id="rb-status" class="mb-6"></div>
 
-    <!-- Tab nav -->
+    <!-- Tab nav — simplified from 7 → 4 tabs (2026-05-27):
+         · Songs  (per-song chain editor — was "By song")
+         · Gear   (catalog + Pending + Files merged into chip-filtered views)
+         · Master (global pre/post FX — unchanged)
+         · Setup  (was Dashboard + Settings — batch ops + tone3000 + prefs) -->
     <div class="flex gap-2 mb-6 border-b border-gray-800">
-        <button data-rb-tab="dashboard" onclick="rbShowTab('dashboard')"
-                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
-            Dashboard
-        </button>
-        <button data-rb-tab="pending" onclick="rbShowTab('pending')"
-                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
-            Pending
-        </button>
         <button data-rb-tab="song" onclick="rbShowTab('song')"
                 class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
-            By song
+            Songs
         </button>
         <button data-rb-tab="gear" onclick="rbShowTab('gear')"
                 class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
@@ -32,60 +28,11 @@
         </button>
         <button data-rb-tab="settings" onclick="rbShowTab('settings')"
                 class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
-            Settings
+            Setup
         </button>
     </div>
 
-    <!-- Dashboard -->
-    <div id="rb-tab-dashboard" class="rb-tab-panel space-y-6">
-        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5">
-            <h3 class="text-white font-semibold mb-2">Map the entire library</h3>
-            <p class="text-gray-500 text-sm mb-4">
-                Parses every PSARC/sloppak and maps each gear to a tone3000
-                capture (preferring your default-capture map). Choose how it
-                treats songs you've already set up:
-            </p>
-            <div class="flex flex-wrap gap-3">
-                <button class="rb-batch-btn bg-dark-600 hover:bg-dark-500 text-gray-200 px-5 py-2 rounded-xl text-sm transition"
-                        onclick="rbStartBatch('new')"
-                        title="Only map songs that have no preset yet — never touches what you've already configured">
-                    Map new songs only
-                </button>
-                <button class="rb-batch-btn bg-accent hover:bg-accent/80 text-white px-5 py-2 rounded-xl text-sm transition"
-                        onclick="rbStartBatch('all')"
-                        title="(Re)map every song with the current/default presets. Re-resolves captures but keeps each tone's bypass and chosen cab-IR variant">
-                    Remap all
-                </button>
-            </div>
-            <div id="rb-batch-progress" class="hidden mt-4">
-                <div class="flex items-center gap-3 mb-2 text-sm text-gray-400">
-                    <span id="rb-batch-pct">0%</span>
-                    <span id="rb-batch-count">0 / 0</span>
-                    <span id="rb-batch-assigned" class="text-green-400 hidden"></span>
-                </div>
-                <div class="h-2 bg-dark-800 rounded-full overflow-hidden">
-                    <div id="rb-batch-bar" class="h-full bg-accent transition-all" style="width:0%"></div>
-                </div>
-                <pre id="rb-batch-log" class="mt-3 text-xs text-gray-500 max-h-48 overflow-auto bg-dark-900/50 p-2 rounded"></pre>
-            </div>
-        </div>
-
-        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5">
-            <h3 class="text-white font-semibold mb-2">Gear map (rs_to_real.json)</h3>
-            <div id="rb-gear-coverage" class="text-sm text-gray-400">Loading…</div>
-        </div>
-    </div>
-
-    <!-- Pending -->
-    <div id="rb-tab-pending" class="rb-tab-panel hidden">
-        <p class="text-gray-500 text-sm mb-4">
-            Rocksmith gear referenced by at least one song but still without an
-            assigned file. Click "Search" to resolve via tone3000.
-        </p>
-        <div id="rb-pending-list" class="space-y-2 text-sm">Loading…</div>
-    </div>
-
-    <!-- By song -->
+    <!-- Songs (per-song chain editor) -->
     <div id="rb-tab-song" class="rb-tab-panel hidden">
         <div class="flex gap-3 mb-6">
             <input type="text" id="rb-song-search" placeholder="Filename (e.g. 2minutes_p.psarc)"
@@ -97,14 +44,89 @@
         <div id="rb-song-tones" class="space-y-6"></div>
     </div>
 
-    <!-- Gear catalog -->
+    <!-- Gear (catalog + Pending + Files merged with chip filter) -->
     <div id="rb-tab-gear" class="rb-tab-panel hidden">
-        <p class="text-gray-500 text-sm mb-4">
-            Rocksmith gear used by your mapped songs, grouped by type, showing
-            which NAM capture each is parented to and its photo. Press ▶ to
-            hear that gear in isolation through the engine.
-        </p>
-        <div id="rb-catalog" class="space-y-8 text-sm">Loading…</div>
+        <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+            <div class="inline-flex gap-1 bg-dark-800/50 border border-gray-800/50 rounded-lg p-1">
+                <button onclick="rbGearFilter('all')" data-rb-gear-filter="all"
+                        class="rb-gear-filter-btn px-3 py-1.5 rounded text-xs text-gray-300 transition">
+                    All gear
+                </button>
+                <button onclick="rbGearFilter('pending')" data-rb-gear-filter="pending"
+                        class="rb-gear-filter-btn px-3 py-1.5 rounded text-xs text-gray-300 transition">
+                    Pending
+                    <span id="rb-gear-pending-badge" class="ml-1 px-1.5 py-0.5 rounded-full bg-amber-900/40 text-amber-300 text-[10px] hidden"></span>
+                </button>
+                <button onclick="rbGearFilter('files')" data-rb-gear-filter="files"
+                        class="rb-gear-filter-btn px-3 py-1.5 rounded text-xs text-gray-300 transition">
+                    Files
+                </button>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+                <button onclick="rbPreloadCuratedVariants()"
+                        title="Single action: rename any cryptic legacy files to readable names, download every gain_variants entry curated in rs_to_real.json, then wire each one back to the preset_pieces rows that need it."
+                        class="bg-emerald-900/30 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/40 px-3 py-1.5 rounded text-xs transition">
+                    ⬇ Download all curated variants
+                </button>
+                <button onclick="rbPurgeNams({}, 'EVERYTHING — every NAM and IR')"
+                        class="bg-red-900/30 hover:bg-red-900/60 text-red-300 border border-red-800/40 px-3 py-1.5 rounded text-xs transition">
+                    🗑 Purge all
+                </button>
+            </div>
+        </div>
+
+        <!-- View: All gear (catalog) — with search, jump pills, status
+             filter, compact view, and collapsible category sections. -->
+        <div id="rb-gear-view-all" class="rb-gear-view">
+            <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-3 mb-4 space-y-2">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <input id="rb-gear-search" type="text"
+                           placeholder="Search gear by name, make, model, codename…"
+                           oninput="rbDebouncedGearFilter()"
+                           class="flex-1 min-w-[220px] bg-dark-800 border border-gray-800 rounded-lg px-3 py-1.5 text-sm text-gray-200 placeholder-gray-600 focus:border-accent/50 outline-none">
+                    <label class="text-xs text-gray-400 flex items-center gap-1.5 whitespace-nowrap cursor-pointer hover:text-gray-200 transition">
+                        <input type="checkbox" id="rb-gear-only-unassigned" onchange="rbApplyGearFilters()" class="rounded">
+                        Only unassigned
+                    </label>
+                    <label class="text-xs text-gray-400 flex items-center gap-1.5 whitespace-nowrap cursor-pointer hover:text-gray-200 transition">
+                        <input type="checkbox" id="rb-gear-compact" onchange="rbApplyGearFilters()" class="rounded">
+                        Compact
+                    </label>
+                    <button onclick="rbClearGearFilters()"
+                            class="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 transition" title="Reset search + filters">
+                        ✕ Clear
+                    </button>
+                </div>
+                <div id="rb-gear-jump-pills" class="flex gap-1 flex-wrap"></div>
+            </div>
+            <div id="rb-catalog" class="space-y-6 text-sm">Loading…</div>
+        </div>
+
+        <!-- View: Pending (unassigned gears) -->
+        <div id="rb-gear-view-pending" class="rb-gear-view hidden">
+            <p class="text-gray-500 text-sm mb-4">
+                Gears referenced by at least one song but still without an assigned
+                file. Click "Search" to resolve via tone3000.
+            </p>
+            <div id="rb-pending-list" class="space-y-2 text-sm">Loading…</div>
+        </div>
+
+        <!-- View: Files (downloaded NAM/IR inventory) -->
+        <div id="rb-gear-view-files" class="rb-gear-view hidden">
+            <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-4 mb-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                        <h3 class="text-white font-semibold text-sm">Downloaded captures</h3>
+                        <p class="text-gray-500 text-xs mt-1" id="rb-manage-summary">Loading inventory…</p>
+                    </div>
+                    <button onclick="rbLoadManageTab()"
+                            class="bg-dark-600 hover:bg-dark-500 text-gray-200 px-3 py-1.5 rounded text-xs transition">
+                        ↻ Refresh
+                    </button>
+                </div>
+            </div>
+            <div id="rb-manage-buckets" class="space-y-4"></div>
+        </div>
     </div>
 
     <!-- Master chain — global pre/post FX wrapper -->
@@ -124,7 +146,7 @@
             just hit <span class="text-purple-300">🎛 Edit VST</span> to tweak its parameters.
             Rocksmith pieces start <em>unassigned</em>: click <span class="text-emerald-300">Assign…</span>
             then pick a NAM/IR from your library or paste a VST plug-in path.
-            (2) Master pieces are <strong>global</strong> — they don't appear on the Pending or Gear catalog tabs.
+            (2) Master pieces are <strong>global</strong> — they don't appear on the Gear tab.
         </div>
         <div class="text-xs text-gray-400 bg-dark-800/50 border border-gray-800/50 rounded p-2 mb-4 leading-snug">
             🎸 <strong class="text-gray-300">AMP must be on for master to apply.</strong> If you flip the
@@ -161,8 +183,50 @@
         </div>
     </div>
 
-    <!-- Settings -->
+    <!-- Setup (was Dashboard + Settings merged). Top half = library-
+         wide batch ops + coverage stats; bottom half = tone3000 + VST
+         scan + preferences + extract tools + export defaults. Same
+         DOM ids used by JS — only the layout was reorganised. -->
     <div id="rb-tab-settings" class="rb-tab-panel hidden">
+        <!-- Batch operations (was Dashboard) -->
+        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+            <h3 class="text-white font-semibold mb-2">Map the entire library</h3>
+            <p class="text-gray-500 text-sm mb-4">
+                Parses every PSARC/sloppak and maps each gear to a tone3000
+                capture (preferring your default-capture map). Choose how it
+                treats songs you've already set up:
+            </p>
+            <div class="flex flex-wrap gap-3">
+                <button class="rb-batch-btn bg-dark-600 hover:bg-dark-500 text-gray-200 px-5 py-2 rounded-xl text-sm transition"
+                        onclick="rbStartBatch('new')"
+                        title="Only map songs that have no preset yet — never touches what you've already configured">
+                    Map new songs only
+                </button>
+                <button class="rb-batch-btn bg-accent hover:bg-accent/80 text-white px-5 py-2 rounded-xl text-sm transition"
+                        onclick="rbStartBatch('all')"
+                        title="(Re)map every song with the current/default presets. Re-resolves captures but keeps each tone's bypass and chosen cab-IR variant">
+                    Remap all
+                </button>
+            </div>
+            <div id="rb-batch-progress" class="hidden mt-4">
+                <div class="flex items-center gap-3 mb-2 text-sm text-gray-400">
+                    <span id="rb-batch-pct">0%</span>
+                    <span id="rb-batch-count">0 / 0</span>
+                    <span id="rb-batch-assigned" class="text-green-400 hidden"></span>
+                </div>
+                <div class="h-2 bg-dark-800 rounded-full overflow-hidden">
+                    <div id="rb-batch-bar" class="h-full bg-accent transition-all" style="width:0%"></div>
+                </div>
+                <pre id="rb-batch-log" class="mt-3 text-xs text-gray-500 max-h-48 overflow-auto bg-dark-900/50 p-2 rounded"></pre>
+            </div>
+        </div>
+
+        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+            <h3 class="text-white font-semibold mb-2">Gear map (rs_to_real.json)</h3>
+            <div id="rb-gear-coverage" class="text-sm text-gray-400">Loading…</div>
+        </div>
+
+        <!-- Original Settings panels below -->
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
             <h3 class="text-white font-semibold mb-3">Connect tone3000 account</h3>
             <p class="text-gray-500 text-sm mb-3">
@@ -182,7 +246,7 @@
             <h3 class="text-white font-semibold mb-3">VST / Audio Unit plugins</h3>
             <p class="text-gray-500 text-sm mb-3">
                 Scan your installed VST3 / Audio Unit plugins once here — the
-                results feed the 📚 Library picker (Plugins tab) on every gear.
+                results feed the 📚 Library picker that appears on every gear.
                 Scanning instantiates each plugin to validate it, so it can take
                 up to a minute; a broken plugin may make it time out (check the
                 console for the offending path).
