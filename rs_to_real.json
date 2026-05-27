@@ -9,7 +9,18 @@
     "query_source": "override",
     "sound_bank": "amp_at120",
     "tone3000_gears": "amp",
-    "tone3000_query": "Marshall JCM 800"
+    "tone3000_query": "Marshall JCM 800",
+    "gain_variants": {
+      "crunch": {
+        "tone3000_id": 37987,
+        "rs_gain_range": [
+          35.0,
+          70.0
+        ],
+        "notes": "Confirmed great",
+        "curator": "Nacho"
+      }
+    }
   },
   "Amp_AT20": {
     "art_asset": "at20",
