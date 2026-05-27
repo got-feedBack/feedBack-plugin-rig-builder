@@ -95,6 +95,14 @@
                 // rbPreLoadMute's new 100 + 50/stage baseline.
                 const reapplyDelay = (100 + 50 * Math.max(1, chain.length | 0)) + 50;
                 rbReapplyVstParamsAfterLoad(chain, reapplyDelay);
+                // Re-apply the chain-input drive after the bundle's
+                // loadPreset finishes. The engine resets `input` to 1.0
+                // on every chain reload — without this re-apply, amp
+                // NAMs sit in their clean operating region and the
+                // entire library sounds "very clean and similar".
+                // Same delay strategy as the VST param re-apply so it
+                // lands after the chain has settled in the engine.
+                setTimeout(() => { rbApplyChainInputDrive(); }, reapplyDelay);
             } catch (_) {
                 return origFetch(input, init);
             }
@@ -102,6 +110,35 @@
         }).catch(() => origFetch(input, init));               // any error → original
     };
 })();
+
+// Engine input drive — pre-NAM gain set via setGain('input', X). The
+// audio engine's `state.inputLevel` on each NAM stage was empirically
+// confirmed to be a no-op (raising it from 1.0 to 8.0 had zero effect
+// on tone). The chain-level input gain DOES work: setting it to 8.0
+// (≈+18 dB) drives the amp NAMs from their clean operating region into
+// the saturation captured at -3 dBFS test tones, restoring the actual
+// "JCM800 at gain 10" character the captures contain.
+//
+// Read from /settings (`nam_chain_input_drive`, default 8.0). Cached
+// in `window.__rbChainInputDrive` so repeated calls (4 hooks below)
+// don't all refetch — the boot-time fetch in rbInit / mega-chain hook
+// populates it. Falls back to 8.0 if the cache hasn't loaded yet.
+//
+// The engine resets input gain to 1.0 on every chain reload, so we
+// have to re-apply after each loadPreset. Hooks:
+//   - fetch interceptor (bundle's chain load)
+//   - mega-chain build (initial preload at song start)
+//   - rbListenTone (Listen ▶ in per-song view)
+//   - rbAuditionFile (▶ in Gear catalog)
+function rbApplyChainInputDrive() {
+    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    if (!audio || typeof audio.setGain !== 'function') return;
+    const drive = (typeof window.__rbChainInputDrive === 'number' && window.__rbChainInputDrive > 0)
+        ? window.__rbChainInputDrive : 8.0;
+    return audio.setGain('input', drive).catch((e) => {
+        console.warn('[rig_builder] setGain(input,', drive, ') failed:', e);
+    });
+}
 
 // Compute the chain-gain target for a given chain spec: looks at what's
 // actually active to estimate how much output level the chain will
@@ -687,10 +724,10 @@ const RbMegaChain = (function () {
         try {
             const wasRunning = api.isAudioRunning ? await api.isAudioRunning().catch(() => true) : true;
             if (!wasRunning && api.startAudio) await api.startAudio();
-            // Input gain is safe to set — it's pre-chain, doesn't bypass mute.
-            if (api.setGain) {
-                await api.setGain('input', 1.0).catch(() => {});
-            }
+            // Input gain to chain-input-drive — pre-NAM, drives the amp
+            // captures from clean region into their saturation operating
+            // point (see rbApplyChainInputDrive comment).
+            await rbApplyChainInputDrive();
         } catch (e) { console.warn('[rig_builder mega-chain] startAudio failed:', e); }
 
         // 6. Start watching highway for tone changes AND the bundle's
@@ -842,6 +879,12 @@ const RbMegaChain = (function () {
         if (s && typeof s.mega_chain_mode !== 'undefined') {
             window.__rbMegaChainSetting = !!s.mega_chain_mode;
             console.log(`[rig_builder mega-chain] boot setting=${window.__rbMegaChainSetting} (read from /settings)`);
+        }
+        // Cache the chain-input drive so rbApplyChainInputDrive (called
+        // from many hooks) doesn't have to refetch /settings every time.
+        if (s && typeof s.nam_chain_input_drive === 'number') {
+            window.__rbChainInputDrive = s.nam_chain_input_drive;
+            console.log(`[rig_builder] chain input drive = ${window.__rbChainInputDrive} (read from /settings)`);
         }
     }).catch(() => {});
 
@@ -4672,7 +4715,7 @@ async function rbAuditionFile(file, kind, btnId) {
         if (api.clearChain) await api.clearChain().catch(() => {});
         const res = await api.loadPreset(JSON.stringify(payload.native_preset));
         if (!res || res.success === false) throw new Error((res && res.error) || 'loadPreset failed');
-        if (api.setGain) { await api.setGain('input', 1.0).catch(() => {}); await api.setGain('chain', 1.0).catch(() => {}); }
+        if (api.setGain) { await rbApplyChainInputDrive(); await api.setGain('chain', 1.0).catch(() => {}); }
         if (api.setMonitorMute) await api.setMonitorMute(false).catch(() => {});
         const wasRunning = api.isAudioRunning ? await api.isAudioRunning().catch(() => true) : true;
         await api.startAudio();
@@ -5707,12 +5750,11 @@ async function rbListenTone(toneIdx, filename) {
             // setParameter for each saved {paramId: value} entry.
             await rbReapplyVstParamsToChain(api, chain).catch((e) =>
                 console.warn('[rig_builder] re-apply VST params:', e));
-            // Input gain to unity is safe (pre-chain). Don't touch chain
-            // gain or monitor mute — rbPreLoadMute fades chain back to 1.0
-            // and un-mutes on its own timer with a smooth ramp. Forcing
-            // them here defeats the fade and lets the attack transient
-            // leak through.
-            if (api.setGain) { await api.setGain('input', 1.0).catch(() => {}); }
+            // Input gain to chain-input-drive (pre-chain, safe to set).
+            // Don't touch chain gain or monitor mute — rbPreLoadMute fades
+            // chain back to its target and un-mutes on its own timer
+            // with a smooth ramp. Forcing them here defeats the fade.
+            if (api.setGain) { await rbApplyChainInputDrive(); }
             const wasRunning = api.isAudioRunning ? await api.isAudioRunning().catch(() => true) : true;
             await api.startAudio();
             rbState._previewStartedAudio = !wasRunning;
@@ -5762,6 +5804,11 @@ async function rbLoadSettings() {
     // sees it even if the user never opens Settings. rbLoadSettings is
     // called from rbInit so this runs at page-load.
     window.__rbMegaChainSetting = !!s.mega_chain_mode;
+    // Refresh the chain-input drive cache too — picks up any change the
+    // user made via Settings (or via a direct settings POST in DevTools).
+    if (typeof s.nam_chain_input_drive === 'number') {
+        window.__rbChainInputDrive = s.nam_chain_input_drive;
+    }
     // OAuth (Connect with tone3000) state.
     const oauthStatus = document.getElementById('rb-oauth-status');
     const oauthBtn = document.getElementById('rb-oauth-btn');

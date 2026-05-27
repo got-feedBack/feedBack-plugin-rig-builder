@@ -178,7 +178,19 @@ _DEFAULT_SETTINGS = {
     # actually kicks in. The accompanying outputLevel adjustment
     # (`_nam_normalized_output_level`) divides this back out so the
     # perceived volume stays at the loudness target.
-    "nam_input_drive": 2.5,
+    # Per-NAM-stage input drive (state.inputLevel). Verified empirically
+    # to be IGNORED by the current audio engine — left at 1.0 so we
+    # don't double-drive on a future engine version that does honour it.
+    # The actual drive that reaches the NAMs is the chain-input gain
+    # below (set via setGain('input', X) from the frontend).
+    "nam_input_drive": 1.0,
+    # Engine input gain (pre-NAM) applied via setGain('input', X) every
+    # time a chain loads. The audio engine respects this — confirmed by
+    # the user: setting it to 8.0 turns a "clean" amp NAM into a properly
+    # saturated one. Default 8.0 (≈+18 dB) matches typical NAM capture
+    # input levels (-3 dBFS test tone vs a live guitar peaking ~-18 dBFS).
+    # Lower if you hear digital clipping or harshness on hot pickups.
+    "nam_chain_input_drive": 8.0,
     # When toggled, bypasses (or un-bypasses) the cabinet slot on EVERY song's
     # tones in one shot — for users who'd rather run no cab (raw amp) or their
     # own external cab sim. Stored just for the checkbox state; the actual
@@ -3729,6 +3741,10 @@ def setup(app, context):
             "preferred_size": s.get("preferred_size", "standard"),
             "mega_chain_mode": s.get("mega_chain_mode", True),
             "bypass_all_cabs": s.get("bypass_all_cabs", False),
+            # Chain-input drive (engine setGain('input', X)). Read by JS
+            # at every chain load — value of 8.0 = +18 dB feeds NAM amps
+            # at capture-time levels so they actually saturate.
+            "nam_chain_input_drive": float(s.get("nam_chain_input_drive", 8.0)),
             "has_tone3000_key": bool(key),
             "tone3000_api_key_preview": (key[:6] + "…") if key else "",
             "tone3000_connected": bool(s.get("tone3000_access_token")),
@@ -3747,6 +3763,14 @@ def setup(app, context):
                 allowed["preferred_size"] = size
         if "mega_chain_mode" in data:
             allowed["mega_chain_mode"] = bool(data["mega_chain_mode"])
+        if "nam_chain_input_drive" in data:
+            try:
+                v = float(data["nam_chain_input_drive"])
+                # Clamp 0.1..16. 8.0 default is already aggressive;
+                # >16 is asking for digital clipping on hot pickups.
+                allowed["nam_chain_input_drive"] = max(0.1, min(16.0, v))
+            except (TypeError, ValueError):
+                pass
         if "bypass_all_cabs" in data:
             want = bool(data["bypass_all_cabs"])
             allowed["bypass_all_cabs"] = want
