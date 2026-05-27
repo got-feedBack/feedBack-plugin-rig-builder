@@ -408,6 +408,99 @@ def _invalidate_default_captures() -> None:
     _default_captures = None
 
 
+# ── Amp gain variants (clean / crunch / dist) ──────────────────────────
+#
+# Real amps respond very differently at different gain settings: a Twin
+# at gain=10 is sparkling clean; at gain=80 it's snarling. Tone3000
+# captures are FIXED-setting snapshots — one NAM is one (amp + knob
+# position). So if our `default_captures.json` ships a single "Twin
+# clean" capture for `Amp_Twin`, every Twin tone in every song uses that
+# clean character even when the song's amp knob is at 80.
+#
+# `gain_variants` in rs_to_real.json (or default_captures.json) lets a
+# curator ship up to 3 captures per amp, tagged by what RS-gain range
+# each one models. At download/assign time we look at the actual Gain
+# knob value for that amp instance in that tone and pick the matching
+# variant. Schema:
+#
+#   "Amp_Twin": {
+#     "name": "Fender Twin Reverb",
+#     "category": "amp",
+#     "tone3000_query": "fender twin reverb",
+#     "gain_variants": {
+#       "clean":  { "tone3000_id": 12345, "rs_gain_range": [0, 35] },
+#       "crunch": { "tone3000_id": 12346, "rs_gain_range": [35, 70] },
+#       "dist":   { "tone3000_id": 12347, "rs_gain_range": [70, 100] }
+#     }
+#   }
+#
+# Amps without `gain_variants` keep the single-NAM behaviour exactly as
+# before — this is purely additive.
+
+
+def _gear_rs_gain(piece: dict) -> float:
+    """Read the RS Gain knob value (0-100) from a parsed piece's knobs
+    dict. Returns 50.0 (centre) if no Gain knob is present, which lands
+    in 'crunch' territory for a typical 3-variant schema."""
+    knobs = piece.get("knobs") or {}
+    g = knobs.get("Gain")
+    if g is None:
+        return 50.0
+    try:
+        return float(g)
+    except (TypeError, ValueError):
+        return 50.0
+
+
+def _pick_amp_gain_variant(gear_def: dict, rs_gain: float) -> dict | None:
+    """Pick the `gain_variants` entry whose `rs_gain_range` contains
+    `rs_gain`, or the closest-by-centre fallback if nothing covers it.
+
+    Returns the variant dict augmented with `_picked_level` (the key it
+    came from — "clean"/"crunch"/"dist"/whatever the curator named it)
+    for diagnostics + UI. Returns None when `gear_def` has no variants
+    defined, signalling the caller to use the legacy single-NAM path.
+    """
+    variants = (gear_def or {}).get("gain_variants") or {}
+    if not variants:
+        return None
+    try:
+        g = float(rs_gain)
+    except (TypeError, ValueError):
+        g = 50.0
+    # Pass 1: explicit range match.
+    for level, v in variants.items():
+        if not isinstance(v, dict):
+            continue
+        rng = v.get("rs_gain_range")
+        if not (isinstance(rng, (list, tuple)) and len(rng) == 2):
+            continue
+        try:
+            lo, hi = float(rng[0]), float(rng[1])
+        except (TypeError, ValueError):
+            continue
+        if lo <= g <= hi:
+            return {**v, "_picked_level": level}
+    # Pass 2: closest range centre (lets a curator define only 2 variants
+    # with non-adjacent ranges and still get a sensible pick for gain
+    # values that fall between them).
+    best_level, best_v, best_dist = None, None, float("inf")
+    for level, v in variants.items():
+        if not isinstance(v, dict):
+            continue
+        rng = v.get("rs_gain_range")
+        if not (isinstance(rng, (list, tuple)) and len(rng) == 2):
+            continue
+        try:
+            mid = (float(rng[0]) + float(rng[1])) / 2.0
+        except (TypeError, ValueError):
+            continue
+        d = abs(g - mid)
+        if d < best_dist:
+            best_level, best_v, best_dist = level, v, d
+    return {**best_v, "_picked_level": best_level} if best_v else None
+
+
 def _build_default_captures() -> dict:
     """Snapshot the current DB's gear -> capture assignments into the
     shippable map. Picks, per gear, the most recent row that has a
