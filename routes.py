@@ -142,6 +142,13 @@ _DEFAULT_SETTINGS = {
     # ourselves). Roll out only after the cooperative mute-parche flow is
     # confirmed stable on the user's hardware.
     "mega_chain_mode": False,
+    # NAM loudness normalization. Each .nam carries an integrated LUFS
+    # value in its JSON header; we read it and apply a per-stage
+    # `outputLevel` so every NAM lands at `target_lufs`, eliminating
+    # the volume jumps when switching between amps captured at
+    # different levels. Capped to ±12 dB inside `_nam_normalized_output_level`.
+    "normalize_nam_loudness": True,
+    "nam_loudness_target_lufs": -18.0,
 }
 
 # Tone3000 platform value to request per Rocksmith category. Amps and
@@ -463,6 +470,93 @@ def _invalidate_default_captures() -> None:
 #
 # Amps without `gain_variants` keep the single-NAM behaviour exactly as
 # before — this is purely additive.
+
+
+# ── NAM loudness normalization ───────────────────────────────────────
+#
+# NAM model files (v0.5+) embed a `loudness` field in their JSON header
+# — the integrated LUFS value the capture was authored at. Different
+# captures land at wildly different LUFS (we've seen -10 to -26 across
+# the same library), which translates into a perceived volume jump
+# whenever the user switches songs that use different amps.
+#
+# We read that field once per file (cached), compute a per-NAM makeup
+# `outputLevel = 10^((target - lufs) / 20)` and stamp it into each
+# stage's state. Result: every NAM stage outputs at roughly the same
+# loudness regardless of who captured it.
+#
+# Configurable target via settings (`nam_loudness_target_lufs`); default
+# -18 LUFS is a comfortable middle ground (loud enough to drive the
+# cab IR + master chain without clipping, quiet enough to leave
+# headroom for transients). The ±12 dB cap prevents pathological
+# captures (a -40 LUFS NAM) from blowing up the chain.
+
+_nam_loudness_cache: dict[str, float | None] = {}
+_nam_loudness_lock = threading.Lock()
+
+
+def _read_nam_loudness(file_path: Path) -> float | None:
+    """Pull the `loudness` field out of a NAM v0.5+ file's JSON header.
+
+    NAM files start with a JSON object containing
+    `{"version": "0.5.x", "metadata": {"loudness": -18.3, ...}, ...}`
+    followed by the weights array. We only need the first ~4 KB to
+    catch the loudness; reading more is wasteful. Returns None when
+    the file is non-NAM, pre-v0.5 (no loudness), or unreadable —
+    callers fall back to unity outputLevel.
+    """
+    try:
+        with open(file_path, "rb") as fp:
+            head = fp.read(4096).decode("utf-8", errors="ignore")
+    except OSError:
+        return None
+    import re as _re
+    m = _re.search(r'"loudness"\s*:\s*(-?\d+(?:\.\d+)?)', head)
+    if not m:
+        return None
+    try:
+        return float(m.group(1))
+    except ValueError:
+        return None
+
+
+def _nam_loudness_for_path(path: Path) -> float | None:
+    """Cached wrapper around `_read_nam_loudness`. The cache is keyed
+    by absolute path; we never invalidate within a session because a
+    NAM file's loudness is baked-in metadata that doesn't change after
+    download (and the user restarts the plugin to pick up new files
+    anyway).
+    """
+    key = str(path)
+    with _nam_loudness_lock:
+        if key in _nam_loudness_cache:
+            return _nam_loudness_cache[key]
+    val = _read_nam_loudness(path)
+    with _nam_loudness_lock:
+        _nam_loudness_cache[key] = val
+    return val
+
+
+def _nam_normalized_output_level(path: Path) -> float:
+    """Compute the `outputLevel` to send to the engine for a NAM stage
+    so the captured loudness lands at the configured target.
+
+    Falls back to 1.0 when the file lacks metadata (pre-v0.5 captures
+    or hand-authored files). Clamped to ±12 dB so a noisy header value
+    can't translate to ×16 gain. When the user disables normalization
+    via settings, we also return 1.0 — that path matches the legacy
+    behaviour exactly.
+    """
+    settings = _load_settings()
+    if not settings.get("normalize_nam_loudness", True):
+        return 1.0
+    loudness = _nam_loudness_for_path(path)
+    if loudness is None:
+        return 1.0
+    target = float(settings.get("nam_loudness_target_lufs", -18.0))
+    makeup_db = target - loudness
+    makeup_db = max(-12.0, min(12.0, makeup_db))
+    return 10.0 ** (makeup_db / 20.0)
 
 
 def _gear_rs_gain(piece: dict, gear_def: dict | None = None) -> float:
@@ -1076,7 +1170,10 @@ def _build_master_stages(role: str, models_dir, irs_dir,
                 "state": _state_b64({
                     "modelPath": str(path),
                     "inputLevel": 1.0,
-                    "outputLevel": 1.0,
+                    # Per-NAM loudness normalization — see
+                    # `_nam_normalized_output_level`. Unity when
+                    # disabled or when the file has no loudness tag.
+                    "outputLevel": _nam_normalized_output_level(path),
                 }),
             })
         elif kind in ("ir", "rs_ir") and file:
@@ -4174,12 +4271,14 @@ def setup(app, context):
                     "bypassed": bypassed,
                     "slot": slot,
                     "rs_gear": gear,
-                    # Unity in/out for every NAM so intermediate stages feed the
-                    # next at full level; final loudness is set on the IR.
+                    # Unity input for every NAM so intermediate stages feed
+                    # the next at full level. outputLevel is per-NAM loudness-
+                    # normalised — eliminates the volume jumps across songs
+                    # that use captures authored at different LUFS targets.
                     "state": _state_b64({
                         "modelPath": str(path),
                         "inputLevel": 1.0,
-                        "outputLevel": 1.0,
+                        "outputLevel": _nam_normalized_output_level(path),
                     }),
                 })
             else:  # vst
@@ -4341,7 +4440,7 @@ def setup(app, context):
                         "state": _state_b64({
                             "modelPath": str(path),
                             "inputLevel": 1.0,
-                            "outputLevel": 1.0,
+                            "outputLevel": _nam_normalized_output_level(path),
                         }),
                     })
                 else:  # vst
@@ -4565,8 +4664,14 @@ def setup(app, context):
                 return JSONResponse({"error": "model not found"}, 404)
             stage = {"type": 1, "name": Path(file).stem, "path": str(p),
                      "bypassed": False,
+                     # Single-NAM audition (▶ button) — apply the same
+                     # loudness normalisation as the full-chain path so
+                     # previews match what the song will sound like.
+                     # The caller-provided `gain` (defaults to 1.0)
+                     # multiplies the normalised level so user overrides
+                     # still work.
                      "state": _state_b64({"modelPath": str(p), "inputLevel": 1.0,
-                                          "outputLevel": float(gain)})}
+                                          "outputLevel": float(gain) * _nam_normalized_output_level(p)})}
         return {"native_preset": {"version": 1, "chain": [stage]}}
 
     # ── VST plugin endpoints (Fase C: known list + assign + state) ────
