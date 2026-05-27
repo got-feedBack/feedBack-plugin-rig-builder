@@ -1250,9 +1250,17 @@ def _download_candidate(
     is_ir: bool,
     rs_gear: str,
     settings: dict,
+    model_id_override: int | None = None,
 ) -> tuple[str, str] | None:
-    """Download the best model for a tone3000 tone id and stage it in
-    the right nam_tone directory.
+    """Download a model for a tone3000 tone id and stage it in the
+    right nam_tone directory.
+
+    `model_id_override`: pin a SPECIFIC capture inside the tone (a
+    tone3000 page can host multiple NAMs — different sizes, different
+    mic positions, sometimes alternate gain settings). When provided,
+    we look up that exact model in the list_models response and
+    download it; when missing or not found, we fall back to
+    pick_best_model (current behaviour: best match for preferred_size).
 
     Returns `(kind, relative_path)` to put into a preset_piece, or
     None if no model was available, the download failed, or the disk
@@ -1282,7 +1290,23 @@ def _download_candidate(
         return None
 
     from tone3000_client import pick_best_model
-    model = pick_best_model(models_payload, preferred_size=settings.get("preferred_size", "standard"))
+    model = None
+    if model_id_override is not None:
+        # Curator pinned a specific capture inside this tone. Find it
+        # by id in the `data` array; fall back to pick_best_model with
+        # a warning if it's missing (e.g. the capture was deleted from
+        # tone3000 after curation).
+        for m in (models_payload.get("data") or []):
+            if m.get("id") == model_id_override:
+                model = m
+                break
+        if model is None:
+            log.warning(
+                "model_id_override=%s not found in tone_id=%s — falling "
+                "back to pick_best_model (capture may have been removed "
+                "from tone3000)", model_id_override, tone3000_id)
+    if model is None:
+        model = pick_best_model(models_payload, preferred_size=settings.get("preferred_size", "standard"))
     if not model:
         return None
 
@@ -2028,12 +2052,16 @@ def _batch_worker(mode: str = "all"):
                                     # Result is cached per rs_gear so the
                                     # second song that uses this gear hits the
                                     # cache, not the network.
+                                    # `model_id_override`: variant curators
+                                    # can pin a SPECIFIC capture inside the
+                                    # tone3000 page (see _pick_amp_gain_variant).
                                     if settings.get("auto_download", True):
                                         downloaded = _download_candidate(
                                             tone3000_id=top.get("id"),
                                             is_ir=(category == "cab"),
                                             rs_gear=rs_type,
                                             settings=settings,
+                                            model_id_override=(amp_variant.get("model_id") if amp_variant else None),
                                         )
                                         if downloaded:
                                             kind, fname = downloaded
@@ -2271,6 +2299,7 @@ def _auto_download_for_song(filename: str, path: Path) -> dict:
                                 is_ir=(category == "cab"),
                                 rs_gear=rs_type,
                                 settings=settings,
+                                model_id_override=(amp_variant.get("model_id") if amp_variant else None),
                             )
                             if downloaded:
                                 cached["kind"], cached["file"] = downloaded

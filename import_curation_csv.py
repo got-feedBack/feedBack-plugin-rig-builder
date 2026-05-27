@@ -106,6 +106,7 @@ def merge_csv_into_rs_map(csv_path: Path, rs_map_path: Path, defaults_path: Path
             by_gear.setdefault(rs_gear, []).append({
                 "level": (row.get("level") or "").strip().lower(),
                 "tone3000_id": tid,
+                "model_id": parse_int(row.get("model_id")),     # optional — pins a SPECIFIC capture inside the tone
                 "rs_gain_lo": parse_range_bound(row.get("rs_gain_lo")),
                 "rs_gain_hi": parse_range_bound(row.get("rs_gain_hi")),
                 "notes": (row.get("notes") or "").strip(),
@@ -131,6 +132,8 @@ def merge_csv_into_rs_map(csv_path: Path, rs_map_path: Path, defaults_path: Path
                     "tone3000_id": r["tone3000_id"],
                     "rs_gain_range": [lo, hi],
                 }
+                if r["model_id"] is not None:
+                    variants[lvl]["model_id"] = r["model_id"]
                 if r["notes"]:
                     variants[lvl]["notes"] = r["notes"]
                 if r["curator"]:
@@ -145,7 +148,7 @@ def merge_csv_into_rs_map(csv_path: Path, rs_map_path: Path, defaults_path: Path
             defaults[rs_gear] = {
                 "tone3000_id": r["tone3000_id"],
                 "kind": "ir" if rs_map[rs_gear].get("category") == "cab" else "nam",
-                "model_id": None,
+                "model_id": r["model_id"],   # optional; None lets pick_best_model decide by size
             }
             if r["notes"]:
                 defaults[rs_gear]["notes"] = r["notes"]
