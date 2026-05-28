@@ -34,8 +34,8 @@
       "EQ pedals (EQ5/EQ8/BassEQ8): knobs are absolute frequencies (e.g. '5700': 5 = +5 dB at 5700 Hz). Verified band layouts (from inspect_rs_knobs.py against a real library): EQ5 = 63/250/750/2200/5700 Hz; EQ8 = 50/100/200/400/800/1600/3200/6400 Hz; BassEQ8 = 30/75/185/460/1100/2700/6800/16000 Hz. kHs 3-Band EQ absorbs three of those \u2014 the entries below pick the most musical bands per pedal. The other RS frequencies are silently dropped (lossy). For lossless mapping, switch the gear to Voxengo Marvel GEQ (16-band) and add a per-pedal entry under 'voxengo marvel geq'.",
       "Rack_StudioEQ (4-band parametric: Bass/LoMid/HiMid/Treble with Q + Freq knobs) is the highest-coverage EQ in the library. Currently lossy-mapped to kHs 3-Band (gain bands only \u2014 Q/Freq dropped). For full fidelity switch the gear to TDR Nova (4-band parametric, free) and add a 'tdr nova' entry mapping <Band>+<BandFreq>+<BandQ> per band.",
       "Melda free (MFreeFXBundle): MTremolo, MVibrato, MFlanger, MPhaser, MRingModulator, MEqualizer, MCompressor are now PRIMARY for those categories alongside the existing KHS entries. Melda paramId convention is consistent across the family \u2014 verifying one editor (e.g. MTremolo) validates all 7 Melda mappings.",
-      "_static block: a VST entry may include `\"_static\": {\"<vst_param_name>\": <normalized_value>, ...}` to apply UNCONDITIONAL params regardless of RS knobs. Used to pin curated character knobs (e.g. kHs Distortion Mode + Dynamics) so every fuzz pedal sounds like a fuzz, every overdrive sounds like an overdrive. Values are normalized [0,1]; for stepped/enum params, snap to (step_index / (step_count - 1)) \u2014 kHs Distortion's `Type` param has 11 modes so Saturate \u2248 0.7, Overdrive \u2248 0.8, Hard Clip \u2248 0.9.",
-      "kHs Distortion subtype convention (user-curated): fuzz pedals use Type=Saturate (0.7); overdrive pedals use Type=Overdrive (0.8); distortion pedals use Type=Hard Clip (0.9); all three pin Dynamics=1.0 (max) so the pedal's response tracks the player's pick attack."
+      "_static block: a VST entry may include `\"_static\": {\"<vst_param_name>\": <normalized_value>, ...}` to apply UNCONDITIONAL params regardless of RS knobs. Used to pin curated character knobs (e.g. kHs Distortion Type + Dynamics) so every fuzz pedal sounds like a fuzz, every overdrive sounds like an overdrive. Values are normalized [0,1]. For stepped/enum params, verify the dropdown order via `await window.rbSweepParam(slotId, paramName)` from DevTools \u2014 names + numeric ranges differ across plugins.",
+      "kHs Distortion subtype convention (user-curated, verified via rbSweepParam): the `Type` param has 6 discrete modes \u2014 Overdrive (0.0), Saturate (0.2), Foldback (0.4), Sine (0.6), Hard Clip (0.8), Quantize (1.0). Fuzz pedals \u2192 Type=0.2 (Saturate); overdrive pedals \u2192 Type=0.0 (Overdrive); distortion pedals \u2192 Type=0.8 (Hard Clip). All three pin Dynamics=1.0 so the pedal's response tracks the player's pick attack."
     ]
   },
   "Pedal_Chorus": {
@@ -798,7 +798,7 @@
       },
       "_static": {
         "Dynamics": 1.0,
-        "Type": 0.8
+        "Type": 0.0
       }
     }
   },
@@ -814,7 +814,7 @@
       },
       "_static": {
         "Dynamics": 1.0,
-        "Type": 0.8
+        "Type": 0.0
       }
     }
   },
@@ -830,7 +830,7 @@
       },
       "_static": {
         "Dynamics": 1.0,
-        "Type": 0.8
+        "Type": 0.0
       }
     }
   },
@@ -846,7 +846,7 @@
       },
       "_static": {
         "Dynamics": 1.0,
-        "Type": 0.8
+        "Type": 0.0
       }
     }
   },
@@ -863,7 +863,7 @@
       },
       "_static": {
         "Dynamics": 1.0,
-        "Type": 0.8
+        "Type": 0.0
       }
     }
   },
@@ -875,7 +875,7 @@
       },
       "_static": {
         "Dynamics": 1.0,
-        "Type": 0.8
+        "Type": 0.0
       }
     }
   },
@@ -887,7 +887,7 @@
       },
       "_static": {
         "Dynamics": 1.0,
-        "Type": 0.9
+        "Type": 0.8
       }
     }
   },
@@ -899,7 +899,7 @@
       },
       "_static": {
         "Dynamics": 1.0,
-        "Type": 0.9
+        "Type": 0.8
       }
     }
   },
@@ -911,7 +911,7 @@
       },
       "_static": {
         "Dynamics": 1.0,
-        "Type": 0.9
+        "Type": 0.8
       }
     }
   },
@@ -923,7 +923,7 @@
       },
       "_static": {
         "Dynamics": 1.0,
-        "Type": 0.9
+        "Type": 0.8
       }
     }
   },
@@ -935,7 +935,7 @@
       },
       "_static": {
         "Dynamics": 1.0,
-        "Type": 0.7
+        "Type": 0.2
       }
     }
   },
@@ -947,7 +947,7 @@
       },
       "_static": {
         "Dynamics": 1.0,
-        "Type": 0.7
+        "Type": 0.2
       }
     }
   },
@@ -967,7 +967,7 @@
       },
       "_static": {
         "Dynamics": 1.0,
-        "Type": 0.7
+        "Type": 0.2
       }
     }
   },
@@ -979,7 +979,7 @@
       },
       "_static": {
         "Dynamics": 1.0,
-        "Type": 0.7
+        "Type": 0.2
       }
     }
   },
@@ -1723,7 +1723,7 @@
     "khs distortion": {
       "_static": {
         "Dynamics": 1.0,
-        "Type": 0.9
+        "Type": 0.8
       },
       "Gain": {
         "param": "Drive",
