@@ -1,3 +1,154 @@
+# Rig Builder 1.3.0 — full VST chain for pedals/comp/EQ, bass-aware audio, cab self-heal (2026-05-28)
+
+A **pedals + modulation + EQ + comp overhaul**: every distortion / fuzz /
+overdrive / chorus / flanger / EQ / comp / reverb / delay pedal-and-rack now
+maps to a real free VST plugin with its RS knobs translated to the plugin's
+actual parameter names and ranges. Bass songs no longer over-saturate guitar-
+amp captures. Cabs self-heal automatically. Tone switching survives songs
+that ship with no schedule.
+
+## Required plugins (free, install once)
+
+The mappings target two free VST bundles. Install both before opening Rig
+Builder — once installed, every pedal/rack/comp/EQ in your library will Just
+Work without you picking VSTs per gear.
+
+| Bundle | What you get | Download |
+|---|---|---|
+| **Kilohearts Essentials** | kHs Distortion (Saturate/Overdrive/HardClip), kHs Chorus, kHs Flanger, kHs Phaser, kHs Delay, kHs Reverb, kHs Compressor, kHs Bitcrush, kHs Filter, kHs 3-Band EQ, …35 free FX | <https://kilohearts.com/products/kilohearts_essentials> |
+| **Melda MFreeFXBundle** | MEqualizer (16-band parametric), MCompressor (full-featured), MTremolo, MVibrato, MFlanger, MPhaser, MRingModulator | <https://www.meldaproduction.com/MFreeFXBundle> |
+
+Both bundles ship VST3 + AU and run unrestricted on every desktop platform
+Slopsmith supports. We picked these specifically for their consistent param-
+naming conventions — that's what lets us auto-map every RS knob to its right
+VST param across the full library.
+
+After installing them, **open Rig Builder → Settings → Scan installed VSTs**
+once so the plugin discovers the new files; then **Setup → Rescan all** to
+re-attach every preset to its primary VST.
+
+## Headline changes
+
+### 🎛 Pedals, mod, EQ, comp — full VST primary across the board (NEW)
+
+Until 1.3.0 most pedals/racks ran as NAM captures alongside the amp. 1.3.0
+promotes every effect type to its native free VST equivalent, with curator-
+verified knob → param mappings:
+
+- **Distortion / fuzz / overdrive (16 gears) → kHs Distortion** with per-
+  subtype `Type` pinned (fuzz=Saturate, OD=Overdrive, dist=HardClip),
+  `Dynamics`=max, and curator mappings for Tone (→ Bias), Filter (→ Dynamics),
+  Blend (→ Dry/Wet), Gain (→ Drive). Verified via in-app sweep diagnostic —
+  `window.rbSweepParam` is permanent in screen.js for future curators.
+- **EQ (6 gears: EQ5/EQ8/BassEQ8/AmpEQ/StudioEQ/StudioGraphicEQ) →
+  MEqualizer** with correct band naming (`Frequency N (EQ N)`,
+  `Gain N (EQ N)`, `Q N (EQ N)`) AND auto-enabled bands per gear.
+- **Compressor (4 gears: MBComp/Compression/Compressor/StudioCompressor) →
+  kHs Compressor** (Threshold/Attack/Release/Ratio + Makeup) — 1-to-1 with
+  RS knobs, vs MCompressor's 20-param wall.
+- **Chorus (6 gears) → kHs Chorus** with Rate (slider position), Depth,
+  Delay, Stereo, Mix.
+- **Flanger / phaser / tremolo / vibrato → kHs Flanger / kHs Phaser /
+  MTremolo / MVibrato**.
+- **Reverb / delay (8 racks: StudioVerb/Plate/Chamber/StereoAnalogVibe/
+  StudioDelay/TapeEcho/StudioFlanger/StudioChorus) → kHs Reverb / kHs Delay**.
+
+Total: **51 distinct mappings**, **580+ preset_piece rows** repopulated in
+the live DB. Already-📸 Captured states are sacred — those keep their
+hand-saved opaque blobs across migrations.
+
+### 🔊 Bass-amp playback no longer over-saturated (FIX)
+
+Guitar amps need a +18 dB chain-input boost to drive the captured model into
+saturation (live pickup signal arrives quieter than capture-time DI). Bass
+captures — Gallien-Krueger RB800 G1.0/G3.0/G5.0, Bassman, CS75B, etc. — are
+authored at clean gain and the same boost over-saturates them. Two-layer fix:
+
+- **Catalog audition** uses `rs_gear.startsWith('Bass_')` to pick unity
+  (1.0×) drive for bass amps. Now matches the tone3000 web preview.
+- **Song playback** reads `window.highway.getStringCount()` — 4 strings →
+  unity drive; 6+ strings → guitar drive. Re-polls at +1.5s/+3.5s because
+  the highway publishes string count after the chain loads.
+
+Guitar amps unchanged.
+
+### 🎚 Cab self-heal (NEW — merged from amp-remap-library-overhaul)
+
+Cabs whose IR went missing on disk now auto-reassign the right replacement
+on every song open + on the watcher's periodic scan. No more "open the cab
+editor and re-pick" workflow. Mic-position variants (Dynamic Cone / Condenser
+Edge / etc.) audition inline on each cab card.
+
+### 🎯 Curated-only mode + Quick start workflow (NEW)
+
+A first-run Quick start card walks Extract from gears.psarc → Scan library →
+Download all curated variants → Play. The `🎯 Curated only` checkbox is the
+new default — only the 1-to-1 curated mappings in `rs_to_real.json` +
+`default_captures.json` are used; gears without a curated default land in
+Pending for manual assignment instead of triggering a tone3000 fuzzy search.
+
+### ✅ Pending tab excludes VST-assigned pieces (FIX)
+
+The coverage SQL flagged every VST piece as pending because VST rows
+legitimately have `file=NULL`. New criterion: pending = no file AND no
+vst_path. Effect on a typical library: 660 → 109 pending pieces.
+
+### ⬇ Map all also downloads every curated variant (FIX)
+
+Running Setup → Rescan all now auto-downloads any curated amp variant whose
+NAM is missing from disk, regardless of whether a song currently uses it.
+Idempotent (skip-if-on-disk + rate-gated). The standalone "⬇ Download all
+curated variants" button in Gear still works for explicit one-off runs.
+
+### 🎛 Inline VST editor — junk params hidden, name resolution fixed (FIX)
+
+The HTML slider editor for VSTs now filters out Melda's `Param 1..4` /
+`(Preset trigger)` / `Bypass` / `Program` rows and any `MIDI` entries.
+MCompressor's ~20-param editor shrinks to ~6 musical sliders; MEqualizer
+to its actual band controls. The Library/Plugins panel also got a cleanup.
+
+Additionally: the chain walker (real-song playback) now resolves saved
+param keys by NAME — previously it only matched numeric IDs, so the bulk-
+populated states from the script silently no-op'd at load time and editors
+opened with plugin defaults. The walker also clamps values to [0,1]
+defensively. Editor-open paths share the same helper so the inline view
+matches what playback uses.
+
+### 🎵 Tone switching survives unmapped songs (FIX)
+
+Songs with no PSARC tone schedule (Message in a Bottle, Livin' on a Prayer,
+older CDLC) used to land on a heuristic "first guitar tone" after a 10 s
+scary `FALLBACK` warning. Three-step fix:
+1. Accept the first scheduled tone-change as the intro when the base is
+   empty (covers songs that publish the schedule but no base).
+2. Detect "no schedule at all" at t+1.5 s and apply the default tone
+   immediately with an INFO log (not a WARN).
+3. The default tone now matches the user's instrument — bass arrangement
+   → bass-flavored tone; guitar → guitar tone — based on `getStringCount()`.
+
+### 📊 Perceptual A/B level-match for amp variant audition (NEW)
+
+LUFS normalization already matches integrated loudness across captures, but
+distortion captures still sound louder than clean ones at the same LUFS
+(harmonic density). Variant audition buttons now apply a perceptual trim per
+level — clean=0 dB, crunch=-3 dB, dist=-6 dB — so clicking the 3 ▶ buttons
+on a curated amp gives a fair A/B at matched loudness.
+
+## Internal / dev
+
+- `window.rbSweepParam(slot, paramName)` — permanent DevTools diagnostic
+  that maps a stepped/enum VST param's display ↔ normalized values without
+  guessing from docs.
+- `[rig_builder restore] verify: want=X got=Y` — every editor-open path
+  now logs whether the post-set values match what was requested.
+- `apply_vst_state.py` carries a `_VST_PARAM_RANGES` table for dB/Hz-domain
+  params, so future curated mappings can output display values and the
+  script normalizes correctly per plugin.
+- 43-commit merge of `feat/amp-remap-library-overhaul` (the parallel branch:
+  cab self-heal, mic positions, curated-only mode, swap-replace).
+
+---
+
 # Rig Builder 1.2.0 — amp variants, instant tone switching, louder & cleaner (2026-05-27)
 
 A big **amp + library overhaul**: per-gain-stage amp captures, a real library
