@@ -6601,6 +6601,8 @@ async function rbLoadSettings() {
     if (megaCb) megaCb.checked = !!s.mega_chain_mode;
     const bac = document.getElementById('rb-bypass-all-cabs');
     if (bac) bac.checked = !!s.bypass_all_cabs;
+    const curOnly = document.getElementById('rb-curated-only');
+    if (curOnly) curOnly.checked = !!s.curated_only;
     // Mirror the persisted flag onto the runtime mirror so RbMegaChain
     // sees it even if the user never opens Settings. rbLoadSettings is
     // called from rbInit so this runs at page-load.
@@ -6685,6 +6687,20 @@ async function rbSaveSettings() {
     });
     // Mirror to the runtime so RbMegaChain picks it up without a restart.
     window.__rbMegaChainSetting = mega_chain_mode;
+}
+
+// Toggle "🎯 Curated only" mode from the Setup tab. Persists the
+// flag so both the batch worker and the per-song auto-download
+// honour it on the next run. No alert/confirmation — the next batch
+// click acts on the new value.
+async function rbSetCuratedOnly(on) {
+    try {
+        await fetch(`${RB_API}/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ curated_only: !!on }),
+        });
+    } catch (e) { /* best-effort */ }
 }
 
 // Open a native file picker (Electron desktop bridge) and drop the chosen

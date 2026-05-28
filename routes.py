@@ -191,6 +191,17 @@ _DEFAULT_SETTINGS = {
     "tone3000_username": "",
     "min_downloads": 50,
     "aggressive": False,
+    # Curated-only mode. When True, the batch + per-song auto-assign
+    # ONLY pull captures from the user's curated 1-to-1 mappings
+    # (rs_to_real.json `gain_variants` for amps + default_captures.json
+    # for everything else). Existing assignments are still reused so a
+    # manual swap propagates across the library. Anything without a
+    # curated pick lands in "pending" instead of triggering a tone3000
+    # search — the curator picks it later via Gear → 📚 Library or
+    # 🎚 Variants. Default False so existing installs keep the
+    # search-based fallback that bootstrapped them; curators can flip
+    # it on from Setup once their library is fully covered.
+    "curated_only": False,
     # v3 auto-download knobs.
     "preferred_size": "standard",       # standard | lite | feather | nano
     "auto_download": True,              # batch downloads files instead of just recording IDs
@@ -3270,6 +3281,7 @@ def _batch_worker(mode: str = "all"):
                         elif client.has_api_access and query:
                             try:
                                 from tone3000_client import pick_top_candidate
+                                top = None
                                 if amp_variant:
                                     # Curated variant wins: use its
                                     # tone3000_id directly. No search.
@@ -3282,6 +3294,12 @@ def _batch_worker(mode: str = "all"):
                                     _dflt = _load_default_captures().get(rs_type)
                                     if _dflt and _dflt.get("tone3000_id"):
                                         top = {"id": _dflt["tone3000_id"], "title": "default"}
+                                    elif settings.get("curated_only", False):
+                                        # Curator mode: no fuzzy search.
+                                        # Without a curated default or an
+                                        # existing assignment, the gear
+                                        # is left for the curator to pick.
+                                        top = None
                                     else:
                                         resp = client.search_tones(query, gears=gears or None, platform=platform, page_size=5)
                                         top = pick_top_candidate(
@@ -3530,6 +3548,7 @@ def _auto_download_for_song(filename: str, path: Path) -> dict:
                     cached = {}
                     try:
                         from tone3000_client import pick_top_candidate
+                        top = None
                         if amp_variant:
                             # Curated variant wins: no search, just use
                             # the tone3000_id the curator chose for this
@@ -3543,6 +3562,12 @@ def _auto_download_for_song(filename: str, path: Path) -> dict:
                             _dflt = _load_default_captures().get(rs_type)
                             if _dflt and _dflt.get("tone3000_id"):
                                 top = {"id": _dflt["tone3000_id"], "title": "default"}
+                            elif settings.get("curated_only", False):
+                                # Curated-only: skip tone3000 fuzzy search.
+                                # The piece will land in pending — the
+                                # curator picks it manually via
+                                # Gear → 📚 Library / 🎚 Variants.
+                                top = None
                             else:
                                 resp = client.search_tones(
                                     query, gears=gears or None, platform=platform, page_size=5,
@@ -4078,6 +4103,7 @@ def setup(app, context):
         return {
             "min_downloads": s.get("min_downloads", 50),
             "aggressive": s.get("aggressive", False),
+            "curated_only": s.get("curated_only", False),
             "preferred_size": s.get("preferred_size", "standard"),
             "mega_chain_mode": s.get("mega_chain_mode", True),
             "bypass_all_cabs": s.get("bypass_all_cabs", False),
@@ -4097,6 +4123,8 @@ def setup(app, context):
         # `preferred_size` is restricted to the 4 valid sizes — anything else
         # falls back to "standard" so a typo can't break model picking.
         allowed = {k: data[k] for k in ("tone3000_api_key", "min_downloads", "aggressive") if k in data}
+        if "curated_only" in data:
+            allowed["curated_only"] = bool(data["curated_only"])
         if "preferred_size" in data:
             size = str(data["preferred_size"]).strip().lower()
             if size in ("standard", "lite", "feather", "nano"):
