@@ -1,17 +1,17 @@
 {
   "_meta": {
     "description": "Seed catalog: Rocksmith gear type → recommended VST3/AU plugins. Free plugins only. Used by /vst/suggest endpoint and the per-piece VST panel hint.",
-    "version": 3,
+    "version": 4,
     "updated": "2026-05-28",
-    "notes": "v3: standardise on Kilohearts Essentials. ONE free installer (https://kilohearts.com/products/essentials) gives you 30+ modular FX plug-ins with consistent param naming — way cleaner than the patchwork of vendor-specific frees. Tremolo is the only category where KHS doesn't ship a dedicated module; we keep Bertom FreeTremolo for that."
+    "notes": "v4: add Voxengo Marvel GEQ as a third install — fills the only fidelity gap KHS Essentials has (graphic-style 5/8-band EQ). v3: standardise on Kilohearts Essentials. ONE free installer gives 30+ modular FX plug-ins with consistent param naming — way cleaner than the patchwork of vendor-specific frees. Tremolo is the only category where KHS doesn't ship a dedicated module; we keep Bertom FreeTremolo for that."
   },
 
   "__free_vst_install_guide": {
-    "_note": "Just two installs cover the entire library.",
+    "_note": "Three free installs cover the entire library.",
     "essential": [
       {
         "name": "Kilohearts Essentials",
-        "covers": "Chorus, Flanger, Phaser, Delay, Reverb, Filter/Wah, Compressor, Limiter, Gate, EQ, Distortion/Drive, Bitcrusher, Pitch Shifter (octavers!), Ring Mod — every category except Tremolo",
+        "covers": "Chorus, Flanger, Phaser, Delay, Reverb, Filter/Wah, Compressor, Limiter, Gate, 3-Band EQ, Distortion/Drive, Bitcrusher, Pitch Shifter (octavers!), Ring Mod — every category except Tremolo and multi-band EQ",
         "url": "https://kilohearts.com/products/essentials",
         "install_notes": "Run the installer once. Each module ships as an individual VST3 (kHs Chorus.vst3, kHs Delay.vst3, etc.) in /Library/Audio/Plug-Ins/VST3 on macOS. After install, run Settings → Scan for plugins."
       },
@@ -19,6 +19,12 @@
         "name": "Bertom FreeTremolo",
         "covers": "Tremolo, AmpTrem, MultiTrem, AmpVibe, MultiVibe (KHS has no dedicated tremolo)",
         "url": "https://www.bertomaudio.com/freetremolo.html"
+      },
+      {
+        "name": "Voxengo Marvel GEQ",
+        "covers": "Pedal_EQ5 + Pedal_EQ8 (RS graphic-EQ pedals). 16-band linear-phase graphic EQ — absorbs the 5/8 RS bands cleanly. kHs 3-Band EQ is the lossy fallback if you don't want a third install.",
+        "url": "https://www.voxengo.com/product/marvelgeq/",
+        "install_notes": "Free download, no registration required. VST3 + AU on macOS/Windows."
       }
     ]
   },
@@ -148,16 +154,27 @@
   ],
 
   "Pedal_EQ5": [
-    {"name": "kHs 3-Band EQ",       "manufacturer": "Kilohearts",  "format": "VST3", "url": "https://kilohearts.com/products/essentials", "free": true, "notes": "Lossy: KHS Essentials only ships a 3-band EQ. RS EQ5 has 5 bands — 3 are mapped, others ignored"}
+    {"name": "Voxengo Marvel GEQ",  "manufacturer": "Voxengo",     "format": "VST3", "url": "https://www.voxengo.com/product/marvelgeq/", "free": true, "notes": "16-band linear-phase graphic EQ — RS EQ5's 5 bands map 1:1 onto 5 of the 16 Marvel bands (curator picks which 5 based on RS knob frequencies)"},
+    {"name": "kHs 3-Band EQ",       "manufacturer": "Kilohearts",  "format": "VST3", "url": "https://kilohearts.com/products/essentials", "free": true, "notes": "Lossy fallback: KHS Essentials only ships a 3-band EQ. 3 of 5 RS bands mapped, others dropped. Install Marvel GEQ for full fidelity."}
   ],
   "Pedal_EQ8": [
-    {"name": "kHs 3-Band EQ",       "manufacturer": "Kilohearts",  "format": "VST3", "url": "https://kilohearts.com/products/essentials", "free": true, "notes": "Lossy. For 8-band fidelity install Voxengo Marvel GEQ as a supplement"}
+    {"name": "Voxengo Marvel GEQ",  "manufacturer": "Voxengo",     "format": "VST3", "url": "https://www.voxengo.com/product/marvelgeq/", "free": true, "notes": "16-band linear-phase graphic EQ — RS EQ8's 8 bands map cleanly onto 8 of the 16 Marvel bands. Best fidelity option."},
+    {"name": "kHs 3-Band EQ",       "manufacturer": "Kilohearts",  "format": "VST3", "url": "https://kilohearts.com/products/essentials", "free": true, "notes": "Lossy fallback. Install Marvel GEQ for full 8-band fidelity."}
   ],
   "Pedal_AmpEQ": [
-    {"name": "kHs 3-Band EQ",       "manufacturer": "Kilohearts",  "format": "VST3", "url": "https://kilohearts.com/products/essentials", "free": true, "notes": "Bass/Mid/Treble matches amp EQ perfectly"}
+    {"name": "kHs 3-Band EQ",       "manufacturer": "Kilohearts",  "format": "VST3", "url": "https://kilohearts.com/products/essentials", "free": true, "notes": "Bass/Mid/Treble matches amp EQ perfectly — no need for Marvel GEQ here"}
   ],
   "Bass_Pedal_BassEQ8": [
-    {"name": "kHs 3-Band EQ",       "manufacturer": "Kilohearts",  "format": "VST3", "url": "https://kilohearts.com/products/essentials", "free": true, "notes": "Lossy 8→3 mapping"}
+    {"name": "Voxengo Marvel GEQ",  "manufacturer": "Voxengo",     "format": "VST3", "url": "https://www.voxengo.com/product/marvelgeq/", "free": true, "notes": "Bass-EQ8 — 8 RS bands → 8 of 16 Marvel bands (curator selects which Marvel bands match RS frequencies). kHs 3-Band would lose 5 of 8 bands."},
+    {"name": "kHs 3-Band EQ",       "manufacturer": "Kilohearts",  "format": "VST3", "url": "https://kilohearts.com/products/essentials", "free": true, "notes": "Lossy 8→3 fallback"}
+  ],
+  "Rack_StudioEQ": [
+    {"name": "TDR Nova",            "manufacturer": "Tokyo Dawn Records", "format": "VST3", "url": "https://www.tokyodawn.net/tdr-nova/", "free": true, "notes": "4-band parametric (dynamic) — direct fit for RS Rack_StudioEQ's Bass/LoMid/HiMid/Treble + Q + Freq layout. Free. Most-used EQ in the library (154 songs)."},
+    {"name": "kHs 3-Band EQ",       "manufacturer": "Kilohearts",         "format": "VST3", "url": "https://kilohearts.com/products/essentials", "free": true, "notes": "Lossy 4→3 fallback (gain knobs only; HiMid + Q + Freq are dropped)."}
+  ],
+  "Rack_StudioGraphicEQ": [
+    {"name": "TDR Nova",            "manufacturer": "Tokyo Dawn Records", "format": "VST3", "url": "https://www.tokyodawn.net/tdr-nova/", "free": true, "notes": "5-band parametric (Bass/LoMid/Mid/HiMid/Treble + Freq). Use TDR Nova's 4 bands; one mid drops."},
+    {"name": "kHs 3-Band EQ",       "manufacturer": "Kilohearts",         "format": "VST3", "url": "https://kilohearts.com/products/essentials", "free": true, "notes": "Lossy 5→3 fallback."}
   ],
 
   "Pedal_NoiseGate": [

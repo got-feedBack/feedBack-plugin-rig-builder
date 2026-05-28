@@ -31,7 +31,8 @@
     "notes": [
       "If a param name doesn't match, open the in-app VST editor for that gear, copy the exact label from a slider, and paste here. The lookup is case-insensitive but otherwise exact.",
       "VST name stems below are lowercased to match the case-insensitive lookup. Plugin files on disk are 'kHs Chorus.vst3' etc. — the matcher strips '.vst3' and lowercases automatically.",
-      "EQ pedals (EQ5/EQ8/BassEQ8): knobs are absolute frequencies (e.g. '5700': 5 = +5 dB at 5700 Hz). kHs 3-Band EQ can absorb three of those — the entries below pick the most musical bands. The other RS frequencies are silently dropped."
+      "EQ pedals (EQ5/EQ8/BassEQ8): knobs are absolute frequencies (e.g. '5700': 5 = +5 dB at 5700 Hz). Verified band layouts (from inspect_rs_knobs.py against a real library): EQ5 = 63/250/750/2200/5700 Hz; EQ8 = 50/100/200/400/800/1600/3200/6400 Hz; BassEQ8 = 30/75/185/460/1100/2700/6800/16000 Hz. kHs 3-Band EQ absorbs three of those — the entries below pick the most musical bands per pedal. The other RS frequencies are silently dropped (lossy). For lossless mapping, switch the gear to Voxengo Marvel GEQ (16-band) and add a per-pedal entry under 'voxengo marvel geq'.",
+      "Rack_StudioEQ (4-band parametric: Bass/LoMid/HiMid/Treble with Q + Freq knobs) is the highest-coverage EQ in the library. Currently lossy-mapped to kHs 3-Band (gain bands only — Q/Freq dropped). For full fidelity switch the gear to TDR Nova (4-band parametric, free) and add a 'tdr nova' entry mapping <Band>+<BandFreq>+<BandQ> per band."
     ]
   },
 
@@ -402,6 +403,35 @@
   "Pedal_AcousticEmulator": {
     "khs filter": {
       "Mix": {"param": "Cutoff", "scale": 0.01}
+    }
+  },
+
+  "Pedal_EQ5": {
+    "khs 3-band eq": {
+      "63":   {"param": "Low Gain",  "scale": 1.0, "_hint": "RS EQ5 63Hz → KHS Low band. Value is dB direct. Verify paramId in inline editor — may be 'Low Gain', 'Low', or similar. Lossy: bands 250, 2200 are dropped."},
+      "750":  {"param": "Mid Gain",  "scale": 1.0, "_hint": "RS EQ5 750Hz → KHS Mid band."},
+      "5700": {"param": "High Gain", "scale": 1.0, "_hint": "RS EQ5 5700Hz → KHS High band."}
+    }
+  },
+  "Pedal_EQ8": {
+    "khs 3-band eq": {
+      "100":  {"param": "Low Gain",  "scale": 1.0, "_hint": "RS EQ8 100Hz → KHS Low band. dB direct. Lossy: bands 50, 200, 400, 1600, 6400 are dropped — install Voxengo Marvel GEQ for full 8-band fidelity."},
+      "800":  {"param": "Mid Gain",  "scale": 1.0, "_hint": "RS EQ8 800Hz → KHS Mid band."},
+      "3200": {"param": "High Gain", "scale": 1.0, "_hint": "RS EQ8 3200Hz → KHS High band."}
+    }
+  },
+  "Bass_Pedal_BassEQ8": {
+    "khs 3-band eq": {
+      "75":   {"param": "Low Gain",  "scale": 1.0, "_hint": "Bass EQ8 75Hz → KHS Low band. dB direct. Lossy: bands 30, 185, 1100, 6800, 16000 dropped."},
+      "460":  {"param": "Mid Gain",  "scale": 1.0, "_hint": "Bass EQ8 460Hz → KHS Mid band."},
+      "2700": {"param": "High Gain", "scale": 1.0, "_hint": "Bass EQ8 2700Hz → KHS High band."}
+    }
+  },
+  "Rack_StudioEQ": {
+    "khs 3-band eq": {
+      "Bass":   {"param": "Low Gain",  "scale": 1.0, "_hint": "4-band parametric — value is dB direct. Q + Freq knobs (BassFreq, LoMidFreq, HiMidFreq, TrebleFreq, LoMidQ, HiMidQ) are ignored. Lossy 4→3 (HiMid combined out). For lossless, switch the gear to TDR Nova (free 4-band parametric)."},
+      "LoMid":  {"param": "Mid Gain",  "scale": 1.0, "_hint": "Mapped as the single mid; HiMid silently dropped."},
+      "Treble": {"param": "High Gain", "scale": 1.0}
     }
   },
 
