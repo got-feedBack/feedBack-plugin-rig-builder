@@ -3822,19 +3822,31 @@ def setup(app, context):
         script = _plugin_dir / "extract_gear_photos.py"
         if not script.exists():
             return JSONResponse({"error": "extract_gear_photos.py missing"}, 500)
+        # Two things matter for the script to resolve cleanly when launched
+        # by the FastAPI host (whose CWD is wherever the user launched
+        # Slopsmith from — usually `/`):
+        #   - pass --rs-map ABSOLUTE so the script doesn't look for
+        #     `./rs_to_real.json` in CWD and bail.
+        #   - cwd=_plugin_dir as a belt-and-braces fallback for any
+        #     other relative path the script might use later.
+        rs_map_path = _plugin_dir / "rs_to_real.json"
         try:
             result = subprocess.run(
                 [sys.executable, str(script), gears_psarc,
+                 "--rs-map", str(rs_map_path),
                  "--out", str(_plugin_dir)],
                 capture_output=True,
                 timeout=600,
                 text=True,
+                cwd=str(_plugin_dir),
             )
         except subprocess.TimeoutExpired:
             return JSONResponse({"error": "extractor timed out"}, 500)
         if result.returncode != 0:
             return JSONResponse(
-                {"error": "extractor failed", "stderr": result.stderr[-2000:]},
+                {"error": "extractor failed",
+                 "stderr": result.stderr[-2000:] if result.stderr else "",
+                 "stdout_tail": result.stdout[-1000:] if result.stdout else ""},
                 500,
             )
         # Count what's on disk so the UI can show a sensible summary.

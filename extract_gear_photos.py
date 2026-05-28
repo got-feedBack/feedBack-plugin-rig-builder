@@ -202,8 +202,10 @@ def main():
                     help="Output folder. Default: <category>_photos/ per "
                          "category (e.g. pedal_photos/). With --category all, "
                          "each category gets its own subfolder.")
-    ap.add_argument("--rs-map", default="rs_to_real.json",
-                    help="Path to rs_to_real.json (default: ./rs_to_real.json).")
+    ap.add_argument("--rs-map",
+                    default=str(Path(__file__).parent / "rs_to_real.json"),
+                    help="Path to rs_to_real.json (default: rs_to_real.json "
+                         "next to this script — works regardless of CWD).")
     ap.add_argument("--variant", type=int, default=0, choices=(0, 1, 2),
                     help="Art variant (0=primary, 1/2=alternate angles).")
     ap.add_argument("--size", default="hero",
