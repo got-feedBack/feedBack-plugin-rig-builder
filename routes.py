@@ -3801,6 +3801,58 @@ def setup(app, context):
         _invalidate_rs_to_real()
         return {"ok": True, "stdout": result.stdout, "count": len(_load_rs_to_real())}
 
+    @app.post("/api/plugins/rig_builder/extract_gear_photos")
+    def extract_gear_photos(data: dict = Body(...)):
+        """Run extract_gear_photos.py against a user-supplied gears.psarc.
+
+        Pulls every amp / pedal / rack / cab texture out of the PSARC
+        and writes them into <plugin_dir>/{amp,pedal,rack,cab}_photos/ —
+        the same dirs `_find_gear_photo` walks when serving
+        GET /gear_photo. Re-run any time `rs_to_real.json` is rebuilt
+        so the photo set tracks the gear-map.
+
+        Pillow is the one external dep; if it's missing in the bundled
+        Python we surface the stderr so the user can spot the
+        `error: Pillow not installed` line. Otherwise this is fast
+        (~5-15 s on M1).
+        """
+        gears_psarc = data.get("gears_psarc")
+        if not gears_psarc or not Path(gears_psarc).exists():
+            return JSONResponse({"error": "gears_psarc not found"}, 400)
+        script = _plugin_dir / "extract_gear_photos.py"
+        if not script.exists():
+            return JSONResponse({"error": "extract_gear_photos.py missing"}, 500)
+        try:
+            result = subprocess.run(
+                [sys.executable, str(script), gears_psarc,
+                 "--out", str(_plugin_dir)],
+                capture_output=True,
+                timeout=600,
+                text=True,
+            )
+        except subprocess.TimeoutExpired:
+            return JSONResponse({"error": "extractor timed out"}, 500)
+        if result.returncode != 0:
+            return JSONResponse(
+                {"error": "extractor failed", "stderr": result.stderr[-2000:]},
+                500,
+            )
+        # Count what's on disk so the UI can show a sensible summary.
+        counts: dict[str, int] = {}
+        total = 0
+        for sub in ("amp_photos", "pedal_photos", "rack_photos", "cab_photos"):
+            d = _plugin_dir / sub
+            n = len(list(d.glob("*.png"))) if d.exists() else 0
+            counts[sub] = n
+            total += n
+        return {
+            "ok": True,
+            "stdout": result.stdout,
+            "stderr_tail": result.stderr[-500:] if result.stderr else "",
+            "counts": counts,
+            "total": total,
+        }
+
     @app.get("/api/plugins/rig_builder/settings")
     def get_settings():
         s = _load_settings()
