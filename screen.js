@@ -5446,19 +5446,22 @@ function rbRenderCatalogCard(g) {
                             title="Listen to this gear in isolation"
                             class="bg-dark-600 hover:bg-dark-500 text-gray-200 px-3 py-1.5 rounded text-xs">▶ Listen</button>`;
     }
-    const t3kLink = g.tone3000_url
+    // tone3000 link → small icon in the card header, not a competing
+    // button. Reduces the action-row noise.
+    const t3kHeaderLink = g.tone3000_url
         ? `<a href="${rbEsc(g.tone3000_url)}" target="_blank" onclick="event.stopPropagation()"
-              title="Ver en tone3000" class="text-xs text-gray-500 hover:text-gray-300 px-2 py-1.5">↗ tone3000</a>` : '';
+              title="View on tone3000" aria-label="View on tone3000"
+              class="text-gray-500 hover:text-accent text-base px-1 leading-none">↗</a>` : '';
     const variantsBtn = g.category === 'amp' ? `
         <button onclick="event.stopPropagation(); rbToggleAmpVariants('${rbEsc(g.rs_gear)}')"
-                title="Set clean / crunch / dist captures so the song's Gain knob picks the right one"
+                title="Map clean / crunch / dist captures so the song's Gain knob picks the right one"
                 class="bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-800/40 px-3 py-1.5 rounded text-xs">🎚 Variants</button>` : '';
     const libraryBtn = `<button onclick="event.stopPropagation(); rbToggleCatalogLibrary('${rbEsc(g.rs_gear)}','${rbEsc(g.category || '')}','${rbEsc(g.vst_path || '')}','${rbEsc(g.vst_format || 'VST3')}')"
                                 title="Pick a downloaded NAM/IR or an installed VST/AU and bulk-assign to every preset using this gear"
                                 class="bg-indigo-900/30 hover:bg-indigo-900/50 text-indigo-300 border border-indigo-800/40 px-3 py-1.5 rounded text-xs">📚 Library</button>`;
     const searchBtn = `<button onclick="event.stopPropagation(); rbOpenSuggest('${rbEsc(g.rs_gear)}')"
                                 title="Search tone3000 for more candidate captures for this gear"
-                                class="bg-dark-600 hover:bg-dark-500 text-gray-200 px-3 py-1.5 rounded text-xs">🔍 Search</button>`;
+                                class="text-gray-400 hover:text-gray-200 text-xs px-2 py-1.5">🔍 Search tone3000</button>`;
 
     // Audition row for curated multi-NAM amps — one mini ▶ per variant
     // (clean/crunch/dist). A/B the captures without leaving the catalog.
@@ -5502,22 +5505,31 @@ function rbRenderCatalogCard(g) {
         </div>`;
     }
 
-    // The action panel only renders into the DOM when the card is
-    // expanded. Keeping the existing rb-cat-lib-* / rb-cat-variants-*
-    // panel IDs even when collapsed means hiding+collapsing don't fight
-    // each other — they stay hidden by class.
+    // Layout (expanded):
+    //   1. Current assignment line (what's loaded now)
+    //   2. A/B variant audition row (the most useful interactive bit on
+    //      amp cards — promoted to the TOP so the user can sample
+    //      without scrolling past 5 buttons)
+    //   3. Mic-position row (cabs)
+    //   4. Primary actions: ▶ Listen · 🎚 Variants (amps) · 📚 Library
+    //   5. Secondary: 🔍 Search (small, low-contrast)
+    //   6. Sub-panels — stopPropagation on the wrapper so any click
+    //      inside (input, list item, dropdown) doesn't bubble up to
+    //      the card's collapse handler. That was the bug where opening
+    //      Library/Variants and then touching the panel collapsed it.
     const actionsPanel = expanded ? `
-        <div class="border-t border-gray-800/50 mt-2 pt-2 space-y-2">
+        <div class="border-t border-gray-800/50 mt-2 pt-2 space-y-2"
+             onclick="event.stopPropagation()">
             ${assignedLine}
+            ${variantAuditionRow}
+            ${micVariantAuditionRow}
             <div class="flex flex-wrap items-center gap-1.5">
                 ${listenBtn}
                 ${variantsBtn}
                 ${libraryBtn}
+                <div class="flex-1"></div>
                 ${searchBtn}
-                ${t3kLink}
             </div>
-            ${variantAuditionRow}
-            ${micVariantAuditionRow}
             <div id="rb-cat-lib-${safeId}" class="hidden bg-indigo-900/10 border border-indigo-800/30 rounded p-2"></div>
             <div id="rb-cat-variants-${safeId}" class="hidden bg-emerald-900/10 border border-emerald-800/30 rounded p-2"></div>
         </div>` : '';
@@ -5536,7 +5548,10 @@ function rbRenderCatalogCard(g) {
                     <div class="text-gray-100 font-medium leading-tight break-words" title="${rbEsc(g.real_name)}">${rbEsc(g.real_name)}</div>
                     <div class="text-[11px] text-gray-500 font-mono break-all">${rbEsc(g.rs_gear)}</div>
                 </div>
-                <span class="text-gray-500 text-xs select-none flex-shrink-0 mt-0.5" aria-hidden="true">${chevron}</span>
+                <div class="flex items-center gap-1 flex-shrink-0 mt-0.5">
+                    ${t3kHeaderLink}
+                    <span class="text-gray-500 text-xs select-none" aria-hidden="true">${chevron}</span>
+                </div>
             </div>
             ${actionsPanel}
         </div>`;
