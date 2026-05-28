@@ -1927,12 +1927,15 @@ function rbRenderPieceCard(p, toneIdx, pIdx, isSelected, total) {
         ? 'border-accent ring-2 ring-accent/40 bg-dark-700'
         : 'border-gray-800 hover:border-gray-600 bg-dark-800/70';
     const bypassedOverlay = bypassed
-        ? '<div class="absolute inset-0 bg-dark-900/40 pointer-events-none"></div>'
+        ? '<div class="absolute inset-0 bg-dark-900/40 pointer-events-none rounded-lg"></div>'
         : '';
-    // Picture URL: backend returns 404 → onerror swaps for placeholder.
+    // Photo lookup: backend returns 404 when no Rocksmith art exists for
+    // this rs_gear. The onerror swaps the broken <img> for the sibling
+    // placeholder via plain DOM properties — avoids any HTML-in-attribute
+    // escaping problems (which earlier broke the chain layout by leaking
+    // a stray placeholder div into the card body).
     const imgUrl = `${RB_API}/gear_photo/${encodeURIComponent(p.type)}`;
-    const placeholder =
-        `<div class='w-20 h-20 rounded bg-dark-900 flex items-center justify-center text-[9px] text-gray-600 text-center px-1 leading-tight'>${rbEsc(p.rs_category || 'gear')}</div>`;
+    const onerr = "this.style.display='none'; var n=this.nextElementSibling; if(n) n.classList.remove('hidden');";
     return `
         <button onclick="rbSelectPiece(${toneIdx}, ${pIdx})"
                 class="relative flex-shrink-0 w-28 rounded-lg border ${selCls} p-2 text-left transition focus:outline-none">
@@ -1940,10 +1943,13 @@ function rbRenderPieceCard(p, toneIdx, pIdx, isSelected, total) {
                 <span class="font-mono">${pIdx + 1}/${total}</span>
                 <span class="uppercase tracking-wide">${rbEsc(p.rs_category || '')}</span>
             </div>
-            <div class="flex justify-center mb-1.5">
+            <div class="flex justify-center items-center mb-1.5 h-20">
                 <img src="${imgUrl}" alt="" loading="lazy"
-                     class="w-20 h-20 rounded object-contain bg-dark-900"
-                     onerror="this.outerHTML = ${JSON.stringify(placeholder)};">
+                     class="max-w-full max-h-full rounded object-contain bg-dark-900"
+                     onerror="${onerr}">
+                <div class="hidden w-full h-full rounded bg-dark-900 flex items-center justify-center text-[10px] text-gray-600 text-center px-1 leading-tight">
+                    ${rbEsc(p.rs_category || 'gear')}
+                </div>
             </div>
             <div class="text-[11px] text-gray-200 leading-tight line-clamp-2 min-h-[2.2em]" title="${rbEsc(p.real_name || p.type)}">
                 ${rbEsc(p.real_name || p.type)}
@@ -2076,16 +2082,22 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
     const bypassLabel = bypassed ? '⤳ Bypassed (signal passes through)' : 'Bypass this stage';
 
     // Big photo for the editor (same source as the chain cards).
+    // Same sibling-swap pattern as rbRenderPieceCard — see comment there
+    // for why we avoid the `JSON.stringify` inside an attribute approach.
     const imgUrl = `${RB_API}/gear_photo/${encodeURIComponent(p.type)}`;
-    const placeholderBig =
-        `<div class='w-32 h-32 rounded bg-dark-900 flex items-center justify-center text-xs text-gray-600 text-center px-2'>${rbEsc(p.rs_category || 'gear')}</div>`;
+    const onerrBig = "this.style.display='none'; var n=this.nextElementSibling; if(n) n.classList.remove('hidden');";
 
     return `
         <div class="bg-dark-800/40 border-y border-gray-800/40 p-4 space-y-3" data-tone="${toneIdx}" data-piece="${pIdx}">
             <div class="flex items-start gap-4">
-                <img src="${imgUrl}" alt="" loading="lazy"
-                     class="flex-shrink-0 w-32 h-32 rounded object-contain bg-dark-900"
-                     onerror="this.outerHTML = ${JSON.stringify(placeholderBig)};">
+                <div class="flex-shrink-0 w-32 h-32 flex items-center justify-center">
+                    <img src="${imgUrl}" alt="" loading="lazy"
+                         class="max-w-full max-h-full rounded object-contain bg-dark-900"
+                         onerror="${onerrBig}">
+                    <div class="hidden w-full h-full rounded bg-dark-900 flex items-center justify-center text-xs text-gray-600 text-center px-2">
+                        ${rbEsc(p.rs_category || 'gear')}
+                    </div>
+                </div>
                 <div class="min-w-0 flex-1">
                     <div class="flex items-baseline justify-between gap-2 mb-1">
                         <div class="min-w-0">
