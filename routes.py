@@ -4235,6 +4235,38 @@ def _auto_download_for_song(filename: str, path: Path) -> dict:
                     amp_variant = _pick_amp_gain_variant(info, _gear_rs_gain(piece, info))
                 cache_key = (rs_type, amp_variant["tone3000_id"]) if amp_variant else rs_type
 
+                # Promote to the installed primary VST (rs_gear_to_vst.json)
+                # BEFORE the existing-assignment reuse below — mirrors the
+                # batch worker's order (manual guard → VST primary → reuse/NAM).
+                # Bug fixed: a pedal/rack/EQ that was ever auto-assigned a
+                # tone3000 NAM in a PRIOR song would be matched by the reuse
+                # query (file IS NOT NULL) and re-used as that NAM here, never
+                # reaching the VST primary — so cloud-downloaded songs landed on
+                # NAMs and needed a manual "remap all". Computing the VST first
+                # means pedals/racks/EQ get their VST + RS-knob vst_state on
+                # download. Skip amps (NAM-capture pipeline) + cabs (IRs); those
+                # fall through to the reuse/IR/NAM paths below.
+                if category not in ("amp", "cab"):
+                    _vst_pick = _pick_installed_primary_vst(rs_type, known_vst_lookup)
+                    if _vst_pick:
+                        _vst_state = _compute_vst_state_for_piece(
+                            rs_type, _vst_pick["vst_path"], piece["knobs"]
+                        )
+                        pieces.append({
+                            "slot": piece["slot"],
+                            "rs_gear_type": rs_type,
+                            "kind": "vst",
+                            "file": None,
+                            "params": piece["knobs"],
+                            "tone3000_id": None,
+                            "assigned_mode": "auto",
+                            "vst_path": _vst_pick["vst_path"],
+                            "vst_format": _vst_pick["vst_format"],
+                            "vst_state": _vst_state,
+                        })
+                        counts["processed"] += 1
+                        continue
+
                 # Skip pieces that already have a usable assignment in
                 # the DB (re-opening a song shouldn't re-download). For
                 # amps with curated variants we look for the SPECIFIC
@@ -4269,32 +4301,6 @@ def _auto_download_for_song(filename: str, path: Path) -> dict:
                     counts["skipped_assigned"] += 1
                     counts["processed"] += 1
                     continue
-
-                # Promote to the installed primary VST (rs_gear_to_vst.json)
-                # before any tone3000 NAM search — mirrors the batch worker so
-                # cloud-materialized / per-song downloads assign pedal/rack/EQ
-                # VSTs (with the RS-knob → param vst_state) instead of a NAM.
-                # Skip amps (NAM-capture pipeline) + cabs (IRs).
-                if category not in ("amp", "cab"):
-                    _vst_pick = _pick_installed_primary_vst(rs_type, known_vst_lookup)
-                    if _vst_pick:
-                        _vst_state = _compute_vst_state_for_piece(
-                            rs_type, _vst_pick["vst_path"], piece["knobs"]
-                        )
-                        pieces.append({
-                            "slot": piece["slot"],
-                            "rs_gear_type": rs_type,
-                            "kind": "vst",
-                            "file": None,
-                            "params": piece["knobs"],
-                            "tone3000_id": None,
-                            "assigned_mode": "auto",
-                            "vst_path": _vst_pick["vst_path"],
-                            "vst_format": _vst_pick["vst_format"],
-                            "vst_state": _vst_state,
-                        })
-                        counts["processed"] += 1
-                        continue
 
                 # Cab fast-path: prefer the Rocksmith IR when on disk.
                 # Use the song's `Cabinet.Key` (the Wwise Effect name —
