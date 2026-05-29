@@ -124,14 +124,17 @@ _VST_PARAM_RANGES: dict[str, dict[str, tuple[str, float, float]]] = {
     # 0..100% sliders already, so most curated mappings (scale=0.01) land in
     # [0,1] without help. Only the dB/Hz params need ranges here.
     "khs compressor": {
-        # Threshold + Makeup are dB so range them. Ratio gets a log range
-        # (mirrors mcompressor) so a literal RS ratio (1..4) normalizes
-        # correctly — without it, scale=1.0 passed the raw ratio straight
-        # through as a 0-1 value, so RS Ratio 1 → 1.0 → "Inf:1". Attack /
-        # Release still rely on the curator's normalized scale (no range).
-        "Threshold":   ("linear", -60.0, 0.0),
+        # Ranges reverse-engineered from in-plugin readouts (RS value with the
+        # given scale → displayed value), so a literal RS value maps 1:1 to the
+        # display when the curator scale is 1.0:
+        #   Threshold linear: norm 0.166→-32.33 dB, 0.7→-7.80 dB ⇒ [-40, +6].
+        #   Attack/Release log: norm 0.22→3.92 ms, 0.50→22.4 ms ⇒ [1, 500] ms.
+        #   Ratio log [1,100]: literal RS ratio (1→1:1, was passing 1.0→"Inf:1").
+        "Threshold":   ("linear", -40.0, 6.0),
         "Makeup gain": ("linear", -24.0, 24.0),
         "Ratio":       ("log",     1.0, 100.0),
+        "Attack":      ("log",     1.0, 500.0),
+        "Release":     ("log",     1.0, 500.0),
     },
     "khs 3-band eq": {
         "Low Gain":    ("linear", -24.0, 24.0),

@@ -1198,15 +1198,7 @@
         "param": "Threshold",
         "scale": -1.0,
         "offset": 0,
-        "_hint": "RS 'Comp' 0-100 \u2192 KHS Threshold roughly -60 to 0 dB. Higher RS Comp = lower threshold (more compression)"
-      },
-      "Attack": {
-        "param": "Attack",
-        "scale": 0.01
-      },
-      "Release": {
-        "param": "Release",
-        "scale": 0.01
+        "_hint": "RS 'Comp' 0-100 \u2192 KHS Threshold (range [-40,6] dB via _VST_PARAM_RANGES). Higher Comp = lower threshold. Pedal maps Comp\u2192Threshold only."
       }
     },
     "mcompressor": {
@@ -1919,12 +1911,12 @@
       },
       "Attack": {
         "param": "Attack",
-        "scale": 0.01,
-        "_hint": "KHS Attack is 0-1 normalized; halve scaling if RS values exceed."
+        "scale": 1.0,
+        "_hint": "Literal ms; kHs Attack range is log [1,500] ms (see _VST_PARAM_RANGES)."
       },
       "Release": {
         "param": "Release",
-        "scale": 0.01
+        "scale": 1.0
       }
     }
   },
