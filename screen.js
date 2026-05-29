@@ -7325,6 +7325,41 @@ async function rbDownloadForGear(btn, rsGear, toneId) {
 // are tolerant of soft failures (e.g. Pillow missing for photos) so a
 // partial setup isn't fatal — the user still gets a usable gear map +
 // IRs, and the catalog falls back to placeholders.
+// Distill a useful one-line reason out of an extractor's failure payload.
+// The backend (extract_gear_map / extract_gear_photos / extract_irs) returns
+// `{error: "extractor failed", stderr: "...", stdout_tail: "..."}` on a
+// non-zero subprocess exit, but the script's ACTUAL reason (e.g.
+// "error: Pillow not installed", an ImportError, a traceback) lives in
+// stderr. Surface the most informative line so the user/tester sees WHY
+// instead of a generic "extractor failed", and dump the full stderr to the
+// console for deeper debugging.
+function rbExtractErrDetail(data, fallback) {
+    const base = (data && data.error) ? String(data.error) : String(fallback);
+    const stderr = (data && typeof data.stderr === 'string') ? data.stderr.trim() : '';
+    const stdoutTail = (data && typeof data.stdout_tail === 'string') ? data.stdout_tail.trim() : '';
+    let detail = '';
+    if (stderr) {
+        const lines = stderr.split('\n').map(s => s.trim()).filter(Boolean);
+        // Prefer an explicit error/exception line (scan from the end — the
+        // real cause is usually the last such line); else fall back to the
+        // very last non-empty stderr line.
+        const reversed = [...lines].reverse();
+        detail = reversed.find(l =>
+            /error|exception|traceback|not installed|no module|importerror|modulenotfound|permission|not found/i.test(l)
+        ) || lines[lines.length - 1] || '';
+        // Full stderr to the console so a tester can copy/paste it to us.
+        console.error('[rig_builder extractor stderr]\n' + stderr);
+    }
+    if (!detail && stdoutTail) {
+        const lines = stdoutTail.split('\n').map(s => s.trim()).filter(Boolean);
+        detail = lines[lines.length - 1] || '';
+    }
+    if (!detail) return base;
+    // Cap so a stray long line / traceback frame doesn't blow up the layout.
+    if (detail.length > 300) detail = detail.slice(0, 300) + '…';
+    return `${base}: ${detail}`;
+}
+
 async function rbExtractAll() {
     const path = document.getElementById('rb-all-psarc').value.trim();
     if (!path) return;
@@ -7338,7 +7373,7 @@ async function rbExtractAll() {
         });
         let data = await r.json();
         if (!r.ok) {
-            status.innerHTML = `<span class="text-red-400">Gear map failed: ${rbEsc(data.error || r.status)} — is this really gears.psarc?</span>`;
+            status.innerHTML = `<span class="text-red-400">Gear map failed: ${rbEsc(rbExtractErrDetail(data, r.status))} — is this really gears.psarc?</span>`;
             return;
         }
         const gearCount = data.count;
@@ -7355,7 +7390,7 @@ async function rbExtractAll() {
             });
             const photoData = await r.json();
             if (!r.ok) {
-                photosNote = ` <span class="text-yellow-400">(photos skipped: ${rbEsc(photoData.error || r.status)})</span>`;
+                photosNote = ` <span class="text-yellow-400">(photos skipped: ${rbEsc(rbExtractErrDetail(photoData, r.status))})</span>`;
             } else {
                 photosNote = ` <span class="text-gray-500">(photos: ${photoData.total} PNGs)</span>`;
             }
@@ -7372,7 +7407,7 @@ async function rbExtractAll() {
         });
         data = await r.json();
         if (!r.ok) {
-            status.innerHTML = `<span class="text-yellow-400">Gear map OK (${gearCount})${photosNote}, but IR extraction failed: ${rbEsc(data.error || r.status)}</span>`;
+            status.innerHTML = `<span class="text-yellow-400">Gear map OK (${gearCount})${photosNote}, but IR extraction failed: ${rbEsc(rbExtractErrDetail(data, r.status))}</span>`;
             return;
         }
         status.innerHTML = `<span class="text-green-400">Done: ${gearCount} gear entries${photosNote} + ${data.count} cabs with IR. Reloading…</span>`;
