@@ -253,6 +253,14 @@ def _build_params_for_piece(
                 v = float(pvalue)
             except (ValueError, TypeError):
                 continue
+            # If the param has a declared display-domain range (e.g. a graphic
+            # EQ band Frequency in Hz), normalize it the same way RS-knob values
+            # are. Otherwise it's already a normalized [0,1] value (Enable,
+            # Mode, Dynamics…) and passes through clamped.
+            rng = _VST_PARAM_RANGES.get(stem, {}).get(pname)
+            if rng:
+                kind, lo, hi = rng
+                v = _normalize_display(v, kind, lo, hi)
             out[pname] = max(0.0, min(1.0, v))
     for rs_knob, rs_value in knobs.items():
         m = vst_block.get(rs_knob)
