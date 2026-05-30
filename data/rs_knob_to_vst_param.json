@@ -1365,29 +1365,28 @@
  "Pedal_AutoFilter": {
   "autosweep": {
    "FilterType": {
-    "param": "Mode",
+    "param": "FilterType",
     "scale": 0.5,
     "_hint": "0/1/2 → LP/BP/HP"
    },
    "Res": {
-    "param": "Peak",
+    "param": "Res",
     "scale": 0.01
    },
    "Sens": {
-    "param": "Gain",
+    "param": "Sens",
     "scale": 0.006,
     "offset": 0.3,
-    "_hint": "RS Sens → sensitivity (Gain), floored so low Sens isn't inaudible"
+    "_hint": "floored so low Sens isn't inaudible"
    },
    "Attack": {
     "param": "Attack",
     "scale": 0.001,
-    "_hint": "RS Attack /1000 → param (empirical: RS 128 → 0.128 ≈ 2ms, snappy)"
+    "_hint": "RS Attack /1000 (RS 128 → 0.128 ≈ 2ms)"
    },
    "Release": {
     "param": "Release",
-    "scale": 0.001,
-    "_hint": "RS Release /1000 → param"
+    "scale": 0.001
    },
    "_static": {
     "Range": 0.9,

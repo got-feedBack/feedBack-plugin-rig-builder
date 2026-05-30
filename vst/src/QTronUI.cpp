@@ -10,7 +10,7 @@
 START_NAMESPACE_DISTRHO
 
 static const char* const kQTronDesc[kParamCount] = {
-    "Filter type", "Attack time", "Release time", "Sweep range",
+    "Filter type", "Envelope attack", "Envelope release", "Sweep range",
     "Resonance", "Dry / wet", "Sensitivity", "Output boost",
 };
 
