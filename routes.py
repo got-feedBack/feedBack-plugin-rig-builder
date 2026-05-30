@@ -5080,7 +5080,7 @@ def setup(app, context):
             try:
                 # User cab/chain volume trim — multiplies the auto chain-gain
                 # target (setGain('chain',X), the only level the engine respects).
-                allowed["chain_makeup"] = max(0.1, min(4.0, float(data["chain_makeup"])))
+                allowed["chain_makeup"] = max(0.1, min(8.0, float(data["chain_makeup"])))
             except (TypeError, ValueError):
                 pass
         if "bypass_all_cabs" in data:

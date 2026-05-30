@@ -226,7 +226,7 @@ function rbChainGainTargetFor(chainSpec) {
 // User cab/chain volume trim. Persists to /settings and applies LIVE via
 // setGain('chain', base × trim) — the only gain the engine honours.
 async function rbSetChainMakeup(v) {
-    const val = Math.max(0.1, Math.min(4.0, parseFloat(v) || 1.0));
+    const val = Math.max(0.1, Math.min(8.0, parseFloat(v) || 1.0));
     window.__rbChainMakeup = val;
     const cmVal = document.getElementById('rb-chain-makeup-val');
     if (cmVal) cmVal.textContent = val.toFixed(2) + '×';
@@ -265,7 +265,7 @@ async function rbPreLoadMute(chainLen, targetGain) {
     const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
     if (!audio) { _rbMuteInFlight = false; return; }
     const target = (typeof targetGain === 'number' && isFinite(targetGain) && targetGain >= 0)
-        ? Math.max(0, Math.min(4, targetGain))
+        ? Math.max(0, Math.min(32, targetGain))   // was 4 — clamped the auto-level + user makeup; chains can need ~20×
         : 1.0;
     const hold = (typeof window.__rbMutePreLoadHold === 'number')
         ? Math.max(20, window.__rbMutePreLoadHold | 0)
