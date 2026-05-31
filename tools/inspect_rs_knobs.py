@@ -39,20 +39,10 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from common import default_db_path
 
-def _default_db_path() -> Path | None:
-    """Locate the user's nam_tone.db across the supported OSes."""
-    system = platform.system()
-    if system == "Darwin":
-        return Path.home() / "Library/Application Support/slopsmith-desktop/slopsmith-config/nam_tone.db"
-    if system == "Windows":
-        appdata = os.environ.get("APPDATA")
-        if appdata:
-            return Path(appdata) / "slopsmith-desktop/slopsmith-config/nam_tone.db"
-        return None
-    # Linux / fallback
-    xdg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(xdg) / "slopsmith-desktop/slopsmith-config/nam_tone.db"
+
+_default_db_path = default_db_path
 
 
 def _collect(db_path: Path, gear_filter: str | None) -> dict:

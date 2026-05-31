@@ -59,24 +59,14 @@ import sqlite3
 import sys
 from pathlib import Path
 
+from common import PLUGIN_ROOT, DATA_DIR, default_db_path
 
-_PLUGIN_DIR = Path(__file__).parent
+
+_PLUGIN_DIR = PLUGIN_ROOT
+_default_db_path = default_db_path
 
 
 # ── Path helpers ────────────────────────────────────────────────────────
-
-def _default_db_path() -> Path | None:
-    system = platform.system()
-    if system == "Darwin":
-        return Path.home() / "Library/Application Support/slopsmith-desktop/slopsmith-config/nam_tone.db"
-    if system == "Windows":
-        appdata = os.environ.get("APPDATA")
-        if appdata:
-            return Path(appdata) / "slopsmith-desktop/slopsmith-config/nam_tone.db"
-        return None
-    xdg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(xdg) / "slopsmith-desktop/slopsmith-config/nam_tone.db"
-
 
 def _vst_search_roots() -> list[Path]:
     """Standard VST3 + AU install locations per platform."""
@@ -124,12 +114,12 @@ def _find_vst(name: str, roots: list[Path]) -> tuple[Path, str] | None:
 # ── Catalog loaders ─────────────────────────────────────────────────────
 
 def _load_rs_map() -> dict:
-    with open(_PLUGIN_DIR / "rs_to_real.json") as f:
+    with open(DATA_DIR / "rs_to_real.json") as f:
         return json.load(f)
 
 
 def _load_vst_catalog() -> dict:
-    with open(_PLUGIN_DIR / "rs_gear_to_vst.json") as f:
+    with open(DATA_DIR / "rs_gear_to_vst.json") as f:
         return json.load(f)
 
 

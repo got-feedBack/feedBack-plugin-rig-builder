@@ -40,6 +40,11 @@ import re
 import sys
 from pathlib import Path
 
+from common import PLUGIN_ROOT, DATA_DIR, safe_filename
+
+
+_safe_filename = safe_filename
+
 
 # Which psarc subdir(s) hold the art for each category. Some categories
 # split across multiple subdirs in Rocksmith's tree: guitar amps live in
@@ -60,18 +65,6 @@ _OUT_SUBDIR = {
     "rack":  "rack_photos",
     "cab":   "cab_photos",
 }
-
-
-def _safe_filename(s: str) -> str:
-    """Convert a free-text gear name to a Finder-friendly filename.
-
-    Strips path separators and collapses runs of weird chars to a single
-    space. Accented letters survive (macOS/APFS handles them fine and
-    they're more readable than ASCII transliteration).
-    """
-    s = re.sub(r"[\\/:*?\"<>|]+", " ", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    return s or "unnamed"
 
 
 def _gear_matches_category(rs_gear_type: str, rs_info: dict,
@@ -199,11 +192,12 @@ def main():
                     choices=("all", "amp", "pedal", "rack", "cab"),
                     help="Which gear category to extract (default: all).")
     ap.add_argument("--out", default=None,
-                    help="Output folder. Default: <category>_photos/ per "
-                         "category (e.g. pedal_photos/). With --category all, "
-                         "each category gets its own subfolder.")
+                    help="Output folder. Default: assets/<category>_photos/ "
+                         "per category (e.g. assets/pedal_photos/). With "
+                         "--category all, each category gets its own subfolder "
+                         "under assets/.")
     ap.add_argument("--rs-map",
-                    default=str(Path(__file__).parent / "rs_to_real.json"),
+                    default=str(DATA_DIR / "rs_to_real.json"),
                     help="Path to rs_to_real.json (default: rs_to_real.json "
                          "next to this script — works regardless of CWD).")
     ap.add_argument("--variant", type=int, default=0, choices=(0, 1, 2),
@@ -246,14 +240,15 @@ def main():
     for cat in categories:
         # Resolve output directory. For --category all we want per-cat
         # subdirs under whatever --out the user passed (or under the
-        # default `gear_photos/`).
+        # default `assets/`).
         if args.category == "all":
             base = (Path(args.out).expanduser().resolve()
-                    if args.out else Path("gear_photos").resolve())
+                    if args.out else Path("assets").resolve())
             out_dir = base / _OUT_SUBDIR[cat]
         else:
-            out_dir = (Path(args.out).expanduser().resolve()
-                       if args.out else Path(_OUT_SUBDIR[cat]).resolve())
+            base = (Path(args.out).expanduser().resolve()
+                    if args.out else Path("assets").resolve())
+            out_dir = base / _OUT_SUBDIR[cat]
         written, missing = extract_category(
             cat, psarc_path, rs_map, out_dir, args.variant, args.size,
             read_psarc_entries)

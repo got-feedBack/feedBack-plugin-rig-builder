@@ -42,8 +42,11 @@ import argparse
 import json
 import re
 import sys
-import tempfile
 from pathlib import Path
+
+from common import (
+    PLUGIN_ROOT, extract_tone_id, capture_title, load_tone3000_client,
+)
 
 
 # Maps each level to the Rocksmith Gain knob range that triggers it.
@@ -54,15 +57,6 @@ LEVEL_RANGES = {
     "crunch": [35.0, 70.0],
     "dist":   [70.0, 100.0],
 }
-
-
-def extract_tone_id(s: str) -> int | None:
-    """Pull the trailing numeric id out of a tone3000 URL or bare id."""
-    s = str(s).strip()
-    m = re.search(r"(\d+)\s*$", s)
-    if not m:
-        m = re.search(r"(\d+)", s)
-    return int(m.group(1)) if m else None
 
 
 def parse_gain_from_title(title: str) -> float | None:
@@ -117,18 +111,6 @@ def auto_assign_levels(captures: list[dict]) -> dict[str, dict]:
     return out
 
 
-def capture_title(m: dict) -> str:
-    """Best-effort human title for a tone3000 model object."""
-    for k in ("title", "name", "display_name", "description"):
-        v = m.get(k)
-        if isinstance(v, str) and v.strip():
-            return v.strip()
-    url = m.get("model_url") or m.get("url") or ""
-    if url:
-        return url.split("/")[-1].split("?")[0]
-    return f"model_{m.get('id')}"
-
-
 def normalize_capture(m: dict) -> dict:
     """Pluck the bits we use from a raw tone3000 model object."""
     return {
@@ -171,7 +153,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("url_or_id",
                     help="tone3000 URL or bare tone_id.")
-    ap.add_argument("--plugin-dir", default=".",
+    ap.add_argument("--plugin-dir", default=str(PLUGIN_ROOT),
                     help="rig_builder plugin directory (default: cwd).")
     ap.add_argument("--curator", default="",
                     help="Stamp each variant's `curator` field with this name.")
@@ -189,38 +171,7 @@ def main():
         print(f"error: no numeric id in {args.url_or_id!r}", file=sys.stderr)
         sys.exit(1)
 
-    plugin_dir = Path(args.plugin_dir).resolve()
-    sys.path.insert(0, str(plugin_dir))
-    try:
-        from tone3000_client import Tone3000Client
-    except ImportError as e:
-        print(f"error: tone3000_client not importable from {plugin_dir}: {e}",
-              file=sys.stderr)
-        sys.exit(1)
-
-    config_dir = (Path.home() / "Library" / "Application Support"
-                  / "slopsmith-desktop" / "slopsmith-config")
-    settings_path = config_dir / "rig_builder_settings.json"
-    if not settings_path.exists():
-        print(f"error: settings file missing at {settings_path}",
-              file=sys.stderr)
-        sys.exit(1)
-    settings = json.loads(settings_path.read_text())
-    access_token = settings.get("tone3000_access_token") or None
-    refresh_token = settings.get("tone3000_refresh_token") or None
-    api_key = settings.get("tone3000_api_key") or ""
-    if not access_token and not api_key:
-        print("error: no tone3000 credentials in settings.", file=sys.stderr)
-        sys.exit(1)
-
-    cache_db = (Path(tempfile.gettempdir())
-                / "rig_builder_make_gain_variants_cache.sqlite")
-    client = Tone3000Client(
-        cache_db_path=str(cache_db),
-        api_key=api_key,
-        access_token=access_token,
-        refresh_token=refresh_token,
-    )
+    client = load_tone3000_client(args.plugin_dir, cache_name="rig_builder_make_gain_variants")
 
     try:
         payload = client.list_models(tone_id)

@@ -40,10 +40,10 @@ with tone3000 yet, do that first.
 """
 
 import argparse
-import json
-import re
 import sys
 from pathlib import Path
+
+from common import PLUGIN_ROOT, extract_tone_id, capture_title, load_tone3000_client
 
 
 def main():
@@ -51,62 +51,17 @@ def main():
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("tone_id_or_url",
                     help="The tone3000_id (e.g. 37987) or the full URL.")
-    ap.add_argument("--plugin-dir", default=".",
+    ap.add_argument("--plugin-dir", default=str(PLUGIN_ROOT),
                     help="rig_builder plugin directory (default: current dir).")
     args = ap.parse_args()
 
     # Extract a numeric ID from whatever the user passed.
-    s = str(args.tone_id_or_url).strip()
-    m = re.search(r"(\d+)\s*$", s)
-    if not m:
-        # Maybe a URL with the ID elsewhere — fall back to last number anywhere.
-        m = re.search(r"(\d+)", s)
-    if not m:
-        print(f"error: couldn't find a numeric tone3000_id in {s!r}", file=sys.stderr)
-        sys.exit(1)
-    tone_id = int(m.group(1))
-
-    plugin_dir = Path(args.plugin_dir).resolve()
-    # The OAuth token + settings are read by Tone3000Client from this dir.
-    # Import after sys.path tweak so the tone3000_client and settings logic
-    # resolves the same way the running plugin does.
-    sys.path.insert(0, str(plugin_dir))
-
-    try:
-        from tone3000_client import Tone3000Client
-    except ImportError as e:
-        print(f"error: couldn't import tone3000_client (--plugin-dir {plugin_dir}): {e}", file=sys.stderr)
+    tone_id = extract_tone_id(args.tone_id_or_url)
+    if tone_id is None:
+        print(f"error: couldn't find a numeric tone3000_id in {args.tone_id_or_url!r}", file=sys.stderr)
         sys.exit(1)
 
-    # Resolve the settings file the plugin uses.
-    config_dir = Path.home() / "Library" / "Application Support" / "slopsmith-desktop" / "slopsmith-config"
-    settings_path = config_dir / "rig_builder_settings.json"
-    if not settings_path.exists():
-        print(f"error: settings file not found at {settings_path}", file=sys.stderr)
-        print("Sign in to tone3000 from the plugin's Settings page first.", file=sys.stderr)
-        sys.exit(1)
-    settings = json.loads(settings_path.read_text())
-
-    access_token = settings.get("tone3000_access_token") or None
-    refresh_token = settings.get("tone3000_refresh_token") or None
-    api_key = settings.get("tone3000_api_key") or ""
-    if not access_token and not api_key:
-        print("error: no tone3000 credentials in settings. Sign in via "
-              "Settings → Connect with tone3000, or paste an API key.",
-              file=sys.stderr)
-        sys.exit(1)
-
-    # Tone3000Client requires a cache_db_path (it caches API JSON in
-    # SQLite). Use a throwaway under /tmp so this CLI doesn't pollute
-    # the real plugin cache.
-    import tempfile
-    cache_db = Path(tempfile.gettempdir()) / "rig_builder_inspect_tone3000_cache.sqlite"
-    client = Tone3000Client(
-        cache_db_path=str(cache_db),
-        api_key=api_key,
-        access_token=access_token,
-        refresh_token=refresh_token,
-    )
+    client = load_tone3000_client(args.plugin_dir, cache_name="rig_builder_inspect_tone3000")
 
     try:
         payload = client.list_models(tone_id)
@@ -138,16 +93,7 @@ def main():
         # V5 - STD" where G7 = Gain=7), which is the whole point of
         # picking a capture by variant. Fall back to URL-derived
         # filename only when the API gave us nothing.
-        title = ""
-        for k in ("title", "name", "display_name", "description"):
-            v = m.get(k)
-            if isinstance(v, str) and v.strip():
-                title = v.strip()
-                break
-        if not title:
-            url = m.get("model_url") or m.get("url") or ""
-            title = (url.split("/")[-1].split("?")[0]
-                     if url else f"model_{mid}")
+        title = capture_title(m)
         if len(title) > 70:
             title = title[:67] + "..."
         print(f"{mid:<10}  {size:<10}  {license_name:<14}  {title}")

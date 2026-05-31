@@ -1,0 +1,1185 @@
+{
+ "_meta": {
+  "description": "Seed catalog: Rocksmith gear type → recommended VST3/AU plugins. Free plugins only. Used by /vst/suggest endpoint and the per-piece VST panel hint.",
+  "version": 5,
+  "updated": "2026-05-28",
+  "notes": "v5: add MeldaProduction Free as a second core install — drops Bertom (MTremolo+MVibrato replace it) and upgrades multi-band EQ from 3 → 6 bands (MEqualizer beats kHs 3-Band for the EQ5/EQ8/StudioEQ family). Melda free covers tremolo/vibrato/flanger/phaser/ring-mod/EQ/comp as PRIMARY. KHS stays primary for chorus/limiter/gate/multi-band-comp/wah-filter (Melda's free bundle has no equivalent — its *MB, Turbo*, Vintage* etc. are paid demo and mute periodically). Marvel GEQ is an OPTIONAL third install for users who want true 16-band EQ on EQ5/EQ8."
+ },
+ "__free_vst_install_guide": {
+  "_note": "Two free installs cover the whole library. Optional third for max EQ fidelity.",
+  "essential": [
+   {
+    "name": "Kilohearts Essentials",
+    "covers": "Chorus, Delay, Reverb, Filter/Wah, Limiter, Gate, 3-Band EQ (fallback), Distortion/Drive, Bitcrusher, Pitch Shifter (octavers), Ring Mod (fallback)",
+    "url": "https://kilohearts.com/products/essentials",
+    "install_notes": "Each module ships as an individual VST3 (kHs Chorus.vst3, kHs Delay.vst3, etc.) in /Library/Audio/Plug-Ins/VST3 on macOS. After install, Settings → Scan plugins."
+   },
+   {
+    "name": "MeldaProduction Free (MFreeFXBundle)",
+    "covers": "Tremolo (MTremolo), Vibrato (MVibrato), Flanger (MFlanger), Phaser (MPhaser), Ring Mod (MRingModulator), 6-band EQ (MEqualizer), Compressor (MCompressor)",
+    "url": "https://www.meldaproduction.com/MFreeFXBundle",
+    "install_notes": "Install the FREE-ONLY bundle, not MCompleteBundle. Premium plugins (anything with *MB / Turbo* / Vintage* / MGuitarArchitect / MLimiterX etc.) run in demo mode with PERIODIC AUDIO MUTING — unusable for song playback. The catalog only ever points to verified-free plugins."
+   }
+  ],
+  "optional_for_eq_fidelity": [
+   {
+    "name": "Voxengo Marvel GEQ",
+    "covers": "Pedal_EQ5 + Pedal_EQ8 + Bass_Pedal_BassEQ8 — 16-band linear-phase graphic EQ. Lossless mapping vs MEqualizer's 6-band (which loses 2 of 8 for EQ8).",
+    "url": "https://www.voxengo.com/product/marvelgeq/",
+    "install_notes": "Free, no registration. VST3 + AU on macOS/Windows."
+   },
+   {
+    "name": "TDR Nova",
+    "covers": "Rack_StudioEQ (4-band parametric, 154 songs in the test library). MEqualizer also fits — Nova is just a cleaner musical match.",
+    "url": "https://www.tokyodawn.net/tdr-nova/",
+    "install_notes": "Free, no registration. VST3 + AU."
+   }
+  ]
+ },
+ "Pedal_Chorus": [
+  {
+   "name": "kHs Chorus",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Rate, Depth, Width, Dry/Wet"
+  }
+ ],
+ "Pedal_Chorus20": [
+  {
+   "name": "kHs Chorus",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Same as Pedal_Chorus"
+  }
+ ],
+ "Pedal_StereoChorus": [
+  {
+   "name": "kHs Chorus",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Stereo width param"
+  }
+ ],
+ "Pedal_DigitalChorus": [
+  {
+   "name": "kHs Chorus",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Pair with kHs Filter for the HiFilter/LoFilter controls"
+  }
+ ],
+ "Pedal_VintageChorus": [
+  {
+   "name": "kHs Chorus",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Lower rate + moderate depth"
+  }
+ ],
+ "Bass_Pedal_BassChorus": [
+  {
+   "name": "kHs Chorus",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Lower rate for bass"
+  }
+ ],
+ "Pedal_Flanger": [
+  {
+   "name": "MFlanger",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Rate, Depth, Feedback, Dry/Wet — Melda free"
+  },
+  {
+   "name": "kHs Flanger",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fallback"
+  }
+ ],
+ "Pedal_80sFlanger": [
+  {
+   "name": "MFlanger",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Higher feedback for jet sweep"
+  },
+  {
+   "name": "kHs Flanger",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fallback"
+  }
+ ],
+ "Pedal_ClassicFlanger": [
+  {
+   "name": "MFlanger",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Default settings"
+  },
+  {
+   "name": "kHs Flanger",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fallback"
+  }
+ ],
+ "Pedal_ModernFlanger": [
+  {
+   "name": "MFlanger",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Stereo width + high feedback"
+  },
+  {
+   "name": "kHs Flanger",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fallback"
+  }
+ ],
+ "Pedal_VintageFlanger": [
+  {
+   "name": "MFlanger",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "MXR-style — lower rate"
+  },
+  {
+   "name": "kHs Flanger",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fallback"
+  }
+ ],
+ "Bass_Pedal_BassFlanger": [
+  {
+   "name": "MFlanger",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Slow rate, low feedback"
+  },
+  {
+   "name": "kHs Flanger",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fallback"
+  }
+ ],
+ "Pedal_Phaser": [
+  {
+   "name": "MPhaser",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Rate, Depth, Feedback, Stages, Dry/Wet — Melda free"
+  },
+  {
+   "name": "kHs Phaser",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fallback"
+  }
+ ],
+ "Pedal_ShaverPhaser": [
+  {
+   "name": "MPhaser",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Two-stage phaser sound"
+  },
+  {
+   "name": "kHs Phaser",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fallback"
+  }
+ ],
+ "Pedal_PlanePhase": [
+  {
+   "name": "MPhaser",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Higher Stages + Feedback for jet"
+  },
+  {
+   "name": "kHs Phaser",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fallback"
+  }
+ ],
+ "Bass_Pedal_BassPhase": [
+  {
+   "name": "MPhaser",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Slow rate"
+  },
+  {
+   "name": "kHs Phaser",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fallback"
+  }
+ ],
+ "Pedal_Tremolo": [
+  {
+   "name": "MTremolo",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Rate, Depth, Dry/Wet — Melda free, multi-shape"
+  }
+ ],
+ "Pedal_AmpTrem": [
+  {
+   "name": "MTremolo",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Sine shape = vintage Fender amp tremolo"
+  }
+ ],
+ "Pedal_MultiTrem": [
+  {
+   "name": "MTremolo",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Switch shapes for variety"
+  }
+ ],
+ "Pedal_TremOle": [
+  {
+   "name": "MTremolo",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Square/triangle shape for hard chop"
+  }
+ ],
+ "Pedal_AmpVibe": [
+  {
+   "name": "MVibrato",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Rate, Depth, Dry/Wet — true vibrato (pitch-mod) not trem"
+  }
+ ],
+ "Pedal_MultiVibe": [
+  {
+   "name": "MVibrato",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Univibe-ish with medium rate"
+  }
+ ],
+ "Pedal_AutoVibe": [
+  {
+   "name": "MVibrato",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Auto-vibrato — set fixed rate/depth (no envelope)"
+  }
+ ],
+ "Pedal_MarshallSupervibe": [
+  {
+   "name": "MVibrato",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Slow rate for Leslie-ish vibe"
+  }
+ ],
+ "Pedal_BakedRotatoe": [
+  {
+   "name": "kHs Chorus",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Rotary speaker → wide stereo chorus approximation"
+  }
+ ],
+ "Pedal_OmniMod": [
+  {
+   "name": "kHs Chorus",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Generic modulation; chorus covers most use cases"
+  }
+ ],
+ "Pedal_AnalogueDelay": [
+  {
+   "name": "kHs Delay",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Time, Feedback, Lowcut, Highcut, Dry/Wet"
+  }
+ ],
+ "Pedal_ValveEcho": [
+  {
+   "name": "kHs Delay",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Pair with kHs Distortion for tube-style decay"
+  }
+ ],
+ "Pedal_NPNDelay": [
+  {
+   "name": "kHs Delay",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Lowcut/Highcut emulates BBD chip filtering"
+  }
+ ],
+ "Pedal_NoFiEcho": [
+  {
+   "name": "kHs Delay",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Stereo delay"
+  }
+ ],
+ "Pedal_OilCanEcho": [
+  {
+   "name": "kHs Delay",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Short time + high feedback for oil-can wobble"
+  }
+ ],
+ "Pedal_CosmicEcho": [
+  {
+   "name": "kHs Delay",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Long times, high feedback for ambient"
+  }
+ ],
+ "Pedal_ModDelay": [
+  {
+   "name": "kHs Delay",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Use chorus after delay for modulation. KHS Delay alone doesn't modulate"
+  }
+ ],
+ "Bass_Pedal_BassFilterDelay": [
+  {
+   "name": "kHs Delay",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Set Lowcut+Highcut narrow for filter-delay"
+  }
+ ],
+ "Pedal_SpringReverb": [
+  {
+   "name": "kHs Reverb",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Size, Damping, Predelay, Dry/Wet — small size + high damping = spring vibe"
+  }
+ ],
+ "Pedal_DigitalVerb": [
+  {
+   "name": "kHs Reverb",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Larger room, less damping"
+  }
+ ],
+ "Pedal_PlateVerb": [
+  {
+   "name": "kHs Reverb",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Medium size, low damping = plate"
+  }
+ ],
+ "Pedal_TubeSpring": [
+  {
+   "name": "kHs Reverb",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Small size + add kHs Distortion for the tube saturation"
+  }
+ ],
+ "Pedal_Compression": [
+  {
+   "name": "kHs Compressor",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fallback"
+  },
+  {
+   "name": "MCompressor",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Threshold, Ratio, Attack, Release, Knee, Output Gain, Dry/Wet — Melda free"
+  }
+ ],
+ "Pedal_Compressor": [
+  {
+   "name": "kHs Compressor",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fallback"
+  },
+  {
+   "name": "MCompressor",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Full-featured single-band comp — Melda free"
+  }
+ ],
+ "Bass_Pedal_MBComp": [
+  {
+   "name": "kHs Compressor",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Also single-band"
+  },
+  {
+   "name": "MCompressor",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Single-band fallback — Melda free MDynamicsMB doesn't exist in the free bundle; true multiband needs paid MDynamicsMB"
+  }
+ ],
+ "Pedal_EQ5": [
+  {
+   "name": "MEqualizer",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "6-band parametric (Melda free). Fits all 5 RS bands losslessly — curator sets Band 1-5 Frequency to RS freqs (63/250/750/2200/5700 Hz)"
+  },
+  {
+   "name": "Voxengo Marvel GEQ",
+   "manufacturer": "Voxengo",
+   "format": "VST3",
+   "url": "https://www.voxengo.com/product/marvelgeq/",
+   "free": true,
+   "notes": "16-band linear-phase upgrade — also lossless"
+  },
+  {
+   "name": "kHs 3-Band EQ",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Lossy 5→3 fallback"
+  }
+ ],
+ "Pedal_EQ8": [
+  {
+   "name": "MEqualizer",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "6-band parametric — fits 6 of 8 RS bands (loses 2). Better than kHs 3-Band. Install Marvel GEQ if you want all 8."
+  },
+  {
+   "name": "Voxengo Marvel GEQ",
+   "manufacturer": "Voxengo",
+   "format": "VST3",
+   "url": "https://www.voxengo.com/product/marvelgeq/",
+   "free": true,
+   "notes": "16-band — full 8/8 fidelity"
+  },
+  {
+   "name": "kHs 3-Band EQ",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Lossy 8→3 fallback"
+  }
+ ],
+ "Pedal_AmpEQ": [
+  {
+   "name": "MEqualizer",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "3 bands suffice for Bass/Mid/Treble tone stack — use Band 1-3"
+  },
+  {
+   "name": "kHs 3-Band EQ",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Bass/Mid/Treble fixed crossovers"
+  }
+ ],
+ "Bass_Pedal_BassEQ8": [
+  {
+   "name": "MEqualizer",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "6 of 8 RS bands; curator sets Band 1-6 Frequency to RS freqs (e.g. 75/185/460/1100/2700/6800 Hz)"
+  },
+  {
+   "name": "Voxengo Marvel GEQ",
+   "manufacturer": "Voxengo",
+   "format": "VST3",
+   "url": "https://www.voxengo.com/product/marvelgeq/",
+   "free": true,
+   "notes": "16-band — full 8/8 fidelity"
+  },
+  {
+   "name": "kHs 3-Band EQ",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Lossy 8→3 fallback"
+  }
+ ],
+ "Rack_StudioCompressor": [
+  {
+   "name": "kHs Compressor",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fallback"
+  },
+  {
+   "name": "MCompressor",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Threshold (dB direct), Ratio, Attack (ms), Release (ms) — RS values match MCompressor units 1:1. 40 songs use this rack."
+  }
+ ],
+ "Rack_StudioEQ": [
+  {
+   "name": "MEqualizer",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "6-band parametric — fits all 4 RS bands with Q + Freq from MEqualizer's own Band N Q / Band N Frequency knobs. Most-used EQ (154 songs)."
+  },
+  {
+   "name": "TDR Nova",
+   "manufacturer": "Tokyo Dawn Records",
+   "format": "VST3",
+   "url": "https://www.tokyodawn.net/tdr-nova/",
+   "free": true,
+   "notes": "4-band parametric (dynamic) — direct 1:1 fit if you prefer Nova's musical voicing"
+  },
+  {
+   "name": "kHs 3-Band EQ",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Lossy 4→3 fallback (Q + Freq dropped)"
+  }
+ ],
+ "Rack_StudioGraphicEQ": [
+  {
+   "name": "MEqualizer",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "6-band parametric — covers all 5 RS bands"
+  },
+  {
+   "name": "TDR Nova",
+   "manufacturer": "Tokyo Dawn Records",
+   "format": "VST3",
+   "url": "https://www.tokyodawn.net/tdr-nova/",
+   "free": true,
+   "notes": "4-band parametric (one RS mid drops)"
+  },
+  {
+   "name": "kHs 3-Band EQ",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Lossy 5→3 fallback"
+  }
+ ],
+ "Pedal_NoiseGate": [
+  {
+   "name": "kHs Gate",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Threshold, Attack, Release, Hold, Range — dedicated gate module"
+  }
+ ],
+ "Pedal_Limiter": [
+  {
+   "name": "kHs Limiter",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Threshold, Release, Output"
+  }
+ ],
+ "Pedal_USWah": [
+  {
+   "name": "kHs Filter",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Cutoff + Resonance; envelope follower in kHs Resonator if needed"
+  }
+ ],
+ "Pedal_UKWah": [
+  {
+   "name": "kHs Filter",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Tweak cutoff for UK voicing"
+  }
+ ],
+ "Bass_Pedal_BassWah": [
+  {
+   "name": "kHs Filter",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Lower cutoff range"
+  }
+ ],
+ "Pedal_ModernWah": [
+  {
+   "name": "kHs Filter",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Resonant LPF behaves as a wah"
+  }
+ ],
+ "Pedal_LoFiFilter": [
+  {
+   "name": "kHs Filter",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Pair with kHs Bitcrush for proper lo-fi"
+  }
+ ],
+ "Pedal_BobFilter": [
+  {
+   "name": "kHs Filter",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Cutoff + Resonance sweep"
+  }
+ ],
+ "Pedal_AutoFilter": [
+  {
+   "name": "AutoSweep",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "bundled": "vst/AutoSweep.vst3",
+   "free": true,
+   "notes": "Bundled envelope filter / auto-wah — ships with Rig Builder, no install"
+  },
+  {
+   "name": "kHs Filter",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Envelope-driven filter"
+  }
+ ],
+ "Bass_Pedal_BassAutoFilter": [
+  {
+   "name": "kHs Filter",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Bass-range cutoff"
+  }
+ ],
+ "Pedal_GermaniumDrive": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Drive + Mix + Type — switch to 'Soft' or 'Diode' for germanium character"
+  }
+ ],
+ "Pedal_CustomDrive": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Tweak Drive + Type"
+  }
+ ],
+ "Pedal_LineDrive": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Low drive + clean type for clean boost"
+  }
+ ],
+ "Pedal_SuperDrive": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Harder type, high drive"
+  }
+ ],
+ "Pedal_RangeBooster": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Drive at minimum + add HPF in kHs 3-Band EQ for treble boost"
+  }
+ ],
+ "Pedal_Distortion": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Hard or Tube type"
+  }
+ ],
+ "Pedal_VintageDistortion": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Tube or Diode type for vintage character"
+  }
+ ],
+ "Pedal_MetalDistortion": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Hard type + max drive; pair with kHs 3-Band EQ for metal scoop"
+  }
+ ],
+ "Bass_Pedal_BassDistortion": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Use Mix knob to blend dry bass back in"
+  }
+ ],
+ "Bass_Pedal_BassOverdrive": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Soft type, moderate drive"
+  }
+ ],
+ "Pedal_FuzzWasHe": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fuzz Face style — Hard type, high drive"
+  }
+ ],
+ "Pedal_CaptFuzzle": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Hard / Fuzz character"
+  }
+ ],
+ "Pedal_BuzzOne": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Buzz-style fuzz"
+  }
+ ],
+ "Pedal_BuzzToo": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Variant of BuzzOne"
+  }
+ ],
+ "Bass_Pedal_BassFuzz": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fuzz Face module with Mix to blend dry"
+  }
+ ],
+ "Pedal_OctaveUp": [
+  {
+   "name": "kHs Pitch Shifter",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Pitch +12 (one octave up), Mix"
+  }
+ ],
+ "Pedal_Octavius": [
+  {
+   "name": "kHs Pitch Shifter",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Generic octaver"
+  }
+ ],
+ "Pedal_MultiPitch": [
+  {
+   "name": "kHs Pitch Shifter",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Tweak Pitch ± semitones"
+  }
+ ],
+ "Bass_Pedal_BassSubOctave": [
+  {
+   "name": "kHs Pitch Shifter",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Pitch -12 (one octave down)"
+  }
+ ],
+ "Pedal_BitCruncher": [
+  {
+   "name": "kHs Bitcrush",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Bits + Sample Rate + Mix"
+  }
+ ],
+ "Pedal_RingMod": [
+  {
+   "name": "MRingModulator",
+   "manufacturer": "MeldaProduction",
+   "format": "VST3",
+   "url": "https://www.meldaproduction.com/MFreeFXBundle",
+   "free": true,
+   "notes": "Frequency, Depth, Dry/Wet — Melda free (yes, the free bundle ships this; *MB variant is the paid one)"
+  },
+  {
+   "name": "kHs Ring Mod",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Fallback"
+  }
+ ],
+ "Pedal_Swole": [
+  {
+   "name": "kHs Filter",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Swell envelope filter"
+  }
+ ],
+ "Pedal_ShredZone": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "High-gain distortion for shred"
+  }
+ ],
+ "Pedal_Enbiggenator": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Low drive + soft type for 'embiggen' saturation"
+  }
+ ],
+ "Bass_Pedal_BassEnbig": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Bass saturation"
+  }
+ ],
+ "Pedal_SendInTheClones": [
+  {
+   "name": "kHs Chorus",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Doubling/clones = thick stereo chorus"
+  }
+ ],
+ "Bass_Pedal_EdenWTDI": [
+  {
+   "name": "kHs Distortion",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/essentials",
+   "free": true,
+   "notes": "Low drive + clean type for DI saturation"
+  }
+ ],
+ "Rack_StereoAnalogVibe": [
+  {
+   "name": "kHs Chorus",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/kilohearts_essentials",
+   "free": true,
+   "notes": "Stereo analog vibrato — kHs Chorus's modulated delay covers the wobble character"
+  }
+ ],
+ "Rack_StudioChamber": [
+  {
+   "name": "kHs Reverb",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/kilohearts_essentials",
+   "free": true,
+   "notes": "Chamber-style reverb mapped to generic kHs Reverb"
+  }
+ ],
+ "Rack_StudioChorus": [
+  {
+   "name": "kHs Chorus",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/kilohearts_essentials",
+   "free": true,
+   "notes": "Multi-knob studio chorus → kHs Chorus (LoFilter/HiFilter dropped, Delay→Delay, Stereo→Stereo)"
+  }
+ ],
+ "Rack_StudioDelay": [
+  {
+   "name": "kHs Delay",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/kilohearts_essentials",
+   "free": true,
+   "notes": "Studio stereo delay → kHs Delay. RS TimeL/TimeR averaged into Time."
+  }
+ ],
+ "Rack_StudioFlanger": [
+  {
+   "name": "kHs Flanger",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/kilohearts_essentials",
+   "free": true,
+   "notes": "Studio flanger → kHs Flanger (Regen→Feedback, Tone dropped)"
+  }
+ ],
+ "Rack_StudioPlate": [
+  {
+   "name": "kHs Reverb",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/kilohearts_essentials",
+   "free": true,
+   "notes": "Plate reverb mapped to kHs Reverb (no dedicated plate algo in free)"
+  }
+ ],
+ "Rack_StudioVerb": [
+  {
+   "name": "kHs Reverb",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/kilohearts_essentials",
+   "free": true,
+   "notes": "Generic studio reverb → kHs Reverb"
+  }
+ ],
+ "Rack_TapeEcho": [
+  {
+   "name": "kHs Delay",
+   "manufacturer": "Kilohearts",
+   "format": "VST3",
+   "url": "https://kilohearts.com/products/kilohearts_essentials",
+   "free": true,
+   "notes": "Tape echo → kHs Delay (no dedicated tape-saturation in free; the comp pre-stage covers some)"
+  }
+ ]
+}

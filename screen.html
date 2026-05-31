@@ -191,6 +191,23 @@
          DOM ids used by JS — only the layout was reorganised. -->
     <div id="rb-tab-settings" class="rb-tab-panel hidden">
 
+        <!-- Connect tone3000 first — it's the prerequisite for in-app
+             candidate listing and automatic downloads, so it leads Settings. -->
+        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+            <h3 class="text-white font-semibold mb-3">Connect tone3000 account</h3>
+            <p class="text-gray-500 text-sm mb-3">
+                Sign in to tone3000 to list candidates in-app and unlock
+                automatic downloads — <strong>no API key to paste</strong>.
+                This opens tone3000 in your browser; you approve once and come
+                back. The plugin only receives a temporary, revocable token.
+            </p>
+            <div class="flex gap-3 items-center">
+                <button id="rb-oauth-btn" onclick="rbOauthConnect()" class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-sm transition">Connect with tone3000</button>
+                <button id="rb-oauth-disconnect" onclick="rbOauthDisconnect()" class="hidden bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Disconnect</button>
+                <span id="rb-oauth-status" class="text-xs text-gray-500"></span>
+            </div>
+        </div>
+
         <!-- Quick start — the recommended workflow for a fresh install or
              a library that's just been re-extracted. Kept at the top of
              Setup so the user always sees the 3 ordered steps before the
@@ -326,27 +343,7 @@
             <div id="rb-extract-all-status" class="text-xs text-gray-500"></div>
         </div>
 
-        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
-            <h3 class="text-white font-semibold mb-2">Gear map (rs_to_real.json)</h3>
-            <div id="rb-gear-coverage" class="text-sm text-gray-400">Loading…</div>
-        </div>
-
         <!-- Original Settings panels below -->
-        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
-            <h3 class="text-white font-semibold mb-3">Connect tone3000 account</h3>
-            <p class="text-gray-500 text-sm mb-3">
-                Sign in to tone3000 to list candidates in-app and unlock
-                automatic downloads — <strong>no API key to paste</strong>.
-                This opens tone3000 in your browser; you approve once and come
-                back. The plugin only receives a temporary, revocable token.
-            </p>
-            <div class="flex gap-3 items-center">
-                <button id="rb-oauth-btn" onclick="rbOauthConnect()" class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-sm transition">Connect with tone3000</button>
-                <button id="rb-oauth-disconnect" onclick="rbOauthDisconnect()" class="hidden bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Disconnect</button>
-                <span id="rb-oauth-status" class="text-xs text-gray-500"></span>
-            </div>
-        </div>
-
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
             <h3 class="text-white font-semibold mb-3">VST / Audio Unit plugins</h3>
             <p class="text-gray-500 text-sm mb-3">
@@ -363,17 +360,6 @@
                 </button>
                 <span id="rb-settings-scan-status" class="text-xs text-gray-500"></span>
             </div>
-        </div>
-
-        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
-            <h3 class="text-white font-semibold mb-3">Auto-mode policy</h3>
-            <label class="flex items-center gap-2 text-sm text-gray-300 mb-3">
-                <input type="checkbox" id="rb-aggressive" onchange="rbSaveSettings()" class="rounded">
-                Aggressive mode (accept any license / popularity)
-            </label>
-            <label class="flex items-center gap-2 text-sm text-gray-300">
-                Min downloads: <input type="number" id="rb-min-downloads" min="0" value="50" onchange="rbSaveSettings()" class="w-20 bg-dark-800 border border-gray-800 rounded px-2 py-1 text-sm">
-            </label>
         </div>
 
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
@@ -406,6 +392,19 @@
                 Disable cabinets on all songs (bypass — raw amp, e.g. for your own cab sim)
             </label>
             <p class="text-[11px] text-gray-500 mt-2 leading-snug">Takes effect when you (re)open or replay a song.</p>
+            <div class="mt-4">
+                <label class="flex items-center justify-between text-sm text-gray-300">
+                    <span>Chain volume (makeup)</span>
+                    <span id="rb-chain-makeup-val" class="text-xs text-purple-300">4.00×</span>
+                </label>
+                <input type="range" id="rb-chain-makeup" min="0.25" max="8" step="0.05" value="4"
+                       oninput="rbSetChainMakeup(this.value)"
+                       class="w-full mt-1 accent-purple-500">
+                <p class="text-[11px] text-gray-500 mt-1 leading-snug">
+                    Raises / lowers the whole guitar chain — the only level the engine respects.
+                    Use it if the guitar sits too quiet under the backing track. Applies live.
+                </p>
+            </div>
         </div>
 
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5">

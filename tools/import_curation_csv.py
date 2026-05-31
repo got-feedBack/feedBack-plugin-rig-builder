@@ -41,6 +41,8 @@ import json
 import sys
 from pathlib import Path
 
+from common import PLUGIN_ROOT
+
 
 def parse_int(s):
     try:
@@ -163,7 +165,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("csv_path", help="Path to the exported curation CSV.")
-    ap.add_argument("--plugin-dir", default=".",
+    ap.add_argument("--plugin-dir", default=str(PLUGIN_ROOT),
                     help="rig_builder plugin directory (default: current dir).")
     ap.add_argument("--dry-run", action="store_true",
                     help="Print what would change without writing.")
@@ -175,8 +177,8 @@ def main():
         sys.exit(1)
 
     plugin_dir = Path(args.plugin_dir).resolve()
-    rs_map_path = plugin_dir / "rs_to_real.json"
-    defaults_path = plugin_dir / "default_captures.json"
+    rs_map_path = plugin_dir / "data" / "rs_to_real.json"
+    defaults_path = plugin_dir / "data" / "default_captures.json"
     if not rs_map_path.exists():
         print(f"error: {rs_map_path} not found (run with --plugin-dir?)", file=sys.stderr)
         sys.exit(1)
@@ -203,6 +205,7 @@ def main():
         return
 
     # Backup + write.
+    (plugin_dir / "data").mkdir(parents=True, exist_ok=True)
     if summary["amps_with_variants"]:
         rs_map_path.rename(rs_map_path.with_suffix(".json.bak"))
         rs_map_path.write_text(json.dumps(rs_map, indent=2, ensure_ascii=False) + "\n")

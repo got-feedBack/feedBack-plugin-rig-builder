@@ -23,6 +23,8 @@ import os
 import struct
 import sys
 
+from common import PLUGIN_ROOT
+
 TARGET_L2 = 2.4    # match tone3000 cab IRs' broadband convolution gain
 PEAK_CAP = 2.0     # never let an IR's peak exceed this (clip safety)
 
@@ -135,7 +137,7 @@ def _default_ir_dir():
             "~/AppData/Roaming/slopsmith-desktop/slopsmith-config/nam_irs/rocksmith"),
         # 4. Legacy fallback: relative to the script (developer setup
         #    with the dir copied in).
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "rocksmith"),
+        os.path.join(str(PLUGIN_ROOT), "rocksmith"),
     ]
     for path in candidates:
         if os.path.isdir(path):

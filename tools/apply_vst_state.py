@@ -58,8 +58,11 @@ import sqlite3
 import sys
 from pathlib import Path
 
+from common import PLUGIN_ROOT, DATA_DIR, default_db_path
 
-_PLUGIN_DIR = Path(__file__).parent
+
+_PLUGIN_DIR = PLUGIN_ROOT
+_default_db_path = default_db_path
 
 
 # VST param display-value ranges, used to convert curated dB/Hz/etc values to
@@ -107,7 +110,18 @@ _VST_PARAM_RANGES: dict[str, dict[str, tuple[str, float, float]]] = {
         **{f"Frequency {i} (EQ {i})": ("log",     20.0, 20000.0) for i in range(1, 17)},
         **{f"Q {i} (EQ {i})":         ("log",      0.1,   100.0) for i in range(1, 17)},
     },
-    # Melda effects (MTremolo, MFlanger, MChorus, MFreqShifter, MReverb) —
+    "mtremolo": {
+        # Rate is the ONE mtremolo param using display-domain (Hz) scaling:
+        # the curated Speed→Rate rule outputs Hz (scale 0.09, offset 1.0) and
+        # this range normalizes it. Reverse-engineered from the in-plugin
+        # readout (normalized 0.60 → 0.9564 Hz ⇒ log[0.01, 20] Hz). Depth /
+        # Dry-Wet stay scale=0.01 (already normalized) — deliberately NOT here.
+        "Rate": ("log", 0.01, 20.0),
+    },
+    # AutoSweep (bundled envelope filter): NO ranges — its curated rules emit
+    # already-normalized [0,1] param values directly (Attack/Release use the
+    # empirical RS-value/1000 scale, not ms; verified: RS Attack 128 → 0.128).
+    # Other Melda effects (MFlanger, MChorus, MFreqShifter, MReverb) —
     # intentionally NO entries here. Every curated rs_knob_to_vst_param.json
     # rule for these uses `scale: 0.01` (RS 0-100 → 0-1) which already
     # produces normalized values. Adding a display-range here would
@@ -121,11 +135,17 @@ _VST_PARAM_RANGES: dict[str, dict[str, tuple[str, float, float]]] = {
     # 0..100% sliders already, so most curated mappings (scale=0.01) land in
     # [0,1] without help. Only the dB/Hz params need ranges here.
     "khs compressor": {
-        # Same convention as mcompressor: Threshold + Makeup are dB so range
-        # them; Attack / Release / Ratio rely on the curator's normalized
-        # mapping (scale=0.01) so no range here (range would double-normalize).
-        "Threshold":   ("linear", -60.0, 0.0),
+        # Ranges reverse-engineered from in-plugin readouts (RS value with the
+        # given scale → displayed value), so a literal RS value maps 1:1 to the
+        # display when the curator scale is 1.0:
+        #   Threshold linear: norm 0.166→-32.33 dB, 0.7→-7.80 dB ⇒ [-40, +6].
+        #   Attack/Release log: norm 0.22→3.92 ms, 0.50→22.4 ms ⇒ [1, 500] ms.
+        #   Ratio log [1,100]: literal RS ratio (1→1:1, was passing 1.0→"Inf:1").
+        "Threshold":   ("linear", -40.0, 6.0),
         "Makeup gain": ("linear", -24.0, 24.0),
+        "Ratio":       ("log",     1.0, 100.0),
+        "Attack":      ("log",     1.0, 500.0),
+        "Release":     ("log",     1.0, 500.0),
     },
     "khs 3-band eq": {
         "Low Gain":    ("linear", -24.0, 24.0),
@@ -156,19 +176,6 @@ def _normalize_display(value: float, kind: str, lo: float, hi: float) -> float:
     if hi == lo:
         return 0.0
     return (value - lo) / (hi - lo)
-
-
-def _default_db_path() -> Path | None:
-    system = platform.system()
-    if system == "Darwin":
-        return Path.home() / "Library/Application Support/slopsmith-desktop/slopsmith-config/nam_tone.db"
-    if system == "Windows":
-        appdata = os.environ.get("APPDATA")
-        if appdata:
-            return Path(appdata) / "slopsmith-desktop/slopsmith-config/nam_tone.db"
-        return None
-    xdg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(xdg) / "slopsmith-desktop/slopsmith-config/nam_tone.db"
 
 
 def _vst_stem(vst_path: str) -> str:
@@ -244,6 +251,32 @@ def _build_params_for_piece(
         return None
     out: dict = {}
     skipped: list = []
+    # Graphic-EQ fold — MEqualizer (free) has only 6 bands, but RS graphic EQs
+    # (EQ8 / Bass EQ8) carry up to 8 fixed-frequency bands. A `_graphic_eq`
+    # block folds them into <=6 target bands: each target pins a center
+    # Frequency (Hz) and takes the AVERAGE gain of the RS knobs assigned to it
+    # (so a merged pair lands at their geometric-mean freq with mean gain).
+    # This fully defines the MEqualizer output; the per-knob loop is skipped.
+    geq = vst_block.get("_graphic_eq")
+    if isinstance(geq, list) and geq:
+        frng = _VST_PARAM_RANGES.get(stem, {}).get("Frequency 1 (EQ 1)") or ("log", 20.0, 20000.0)
+        grng = _VST_PARAM_RANGES.get(stem, {}).get("Gain 1 (EQ 1)") or ("linear", -24.0, 24.0)
+        for i, band in enumerate(geq[:16], 1):
+            try:
+                freq = float(band.get("freq"))
+            except (ValueError, TypeError):
+                continue
+            gains = []
+            for k in (band.get("rs") or []):
+                try:
+                    gains.append(float(knobs[k]))
+                except (KeyError, ValueError, TypeError):
+                    pass
+            avg = sum(gains) / len(gains) if gains else 0.0
+            out[f"Frequency {i} (EQ {i})"] = _normalize_display(freq, *frng)
+            out[f"Gain {i} (EQ {i})"] = _normalize_display(avg, *grng)
+            out[f"Enable {i} (EQ {i})"] = 1.0
+        return (out, skipped)
     # Static defaults first — `_static` block in the mapping holds
     # curator-pinned params applied regardless of RS knobs (e.g.
     # kHs Distortion Mode + Dynamics, so every fuzz pedal sounds fuzzy
@@ -257,6 +290,14 @@ def _build_params_for_piece(
                 v = float(pvalue)
             except (ValueError, TypeError):
                 continue
+            # If the param has a declared display-domain range (e.g. a graphic
+            # EQ band Frequency in Hz), normalize it the same way RS-knob values
+            # are. Otherwise it's already a normalized [0,1] value (Enable,
+            # Mode, Dynamics…) and passes through clamped.
+            rng = _VST_PARAM_RANGES.get(stem, {}).get(pname)
+            if rng:
+                kind, lo, hi = rng
+                v = _normalize_display(v, kind, lo, hi)
             out[pname] = max(0.0, min(1.0, v))
     for rs_knob, rs_value in knobs.items():
         m = vst_block.get(rs_knob)
@@ -296,9 +337,9 @@ def main() -> int:
         print(f"nam_tone.db not found at {db_path}.", file=sys.stderr)
         return 1
 
-    knob_table = json.loads((_PLUGIN_DIR / "rs_knob_to_vst_param.json").read_text())
+    knob_table = json.loads((DATA_DIR / "rs_knob_to_vst_param.json").read_text())
     knob_table = {k: v for k, v in knob_table.items() if not k.startswith("_")}
-    rs_map = json.loads((_PLUGIN_DIR / "rs_to_real.json").read_text())
+    rs_map = json.loads((DATA_DIR / "rs_to_real.json").read_text())
 
     # Filter to gears matching --category (or --rs-gear)
     if args.rs_gear:

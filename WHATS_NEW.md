@@ -1,3 +1,55 @@
+# Rig Builder 1.3.2 — Chain volume, bundled AutoSweep wah, and VST-mapping fixes (2026-05-30)
+
+The big one is **loudness**: the guitar was sitting far below the backing
+track, and the engine ignored every per-stage gain. This release adds the one
+gain the engine *does* respect, plus a pile of VST-mapping corrections and a
+new bundled effect.
+
+- **"Chain volume" control (the only gain the engine honors).** The native
+  engine ignores per-stage NAM/IR gain — the sole lever is `setGain('chain')`.
+  There's now a user **Chain volume (makeup)** slider in Settings → Cabinets
+  (default **4×**) that drives it, persisted across restarts and re-applied on
+  every song load. Fixes the "I had to drop the song to 25% to hear myself"
+  problem. (Also fixed: `get_settings` was dropping the saved value, and the
+  pre-load gain clamp capped it at 4× — raised to 32×.)
+
+- **Killed the −12 dB volume drop on song load.** A double-attenuation in the
+  chain preloader was quietly knocking 12 dB off every tone the moment a song
+  loaded. Gone.
+
+- **Bundled AutoSweep envelope filter — no install needed.** Rocksmith's
+  **Auto Tone** (auto-wah) pedal now maps to a bundled `AutoSweep.vst3`
+  (a real envelope follower → biquad sweep, ported from the user's hardware
+  design). Per-song downloads auto-assign it; the UI shows only the
+  RS-driven knobs (FilterType / Resonance / Sensitivity / Attack / Release +
+  Mix) with the Rocksmith names, and Attack/Release/Sens scaling is calibrated
+  to the RS values.
+
+- **VST-mapping corrections across many gears** (curated against real songs):
+  - **Compressor pedals** — RS *Compress* amount now drives a proportional,
+    full-range *Threshold* curve (was clamping at the floor).
+  - **Graphic EQ pedals** — band centers pinned to the real RS frequencies,
+    and the 8 RS bands now fold cleanly into MEqualizer's 6.
+  - **Tremolo** — RS *Mix* → *Depth* (not Dry/Wet) + a musical *Rate*.
+  - **Spring / kHs reverbs** — real Kilohearts Reverb param names
+    (*Time → Decay*, *Depth → Size*) and consistent mapping across all
+    reverb gears.
+  - **Lo-Fi filter** param fix; **Acoustic Emulator** routed to a NAM.
+  - **kHs Compressor** calibrated so RS knobs map 1:1.
+
+- **Per-song / cloud downloads auto-assign the VST primary** *before* falling
+  back to NAM-reuse, so a freshly downloaded song comes up with its pedals
+  already on the right plugins.
+
+- **Repo restructure** — code reorganized into `rb_core/` + `tools/` +
+  `data/` + `assets/` with de-duplication (no behavior change; easier to
+  maintain). Rocksmith cab IRs get a +1.5× make-up; tone3000 IRs unchanged.
+
+- **Clearer setup errors** — a failed `gears.psarc` extraction now surfaces
+  the real underlying error instead of a generic "extractor failed".
+
+---
+
 # Rig Builder 1.3.1 — VST primary auto-assign + cab IRs wire on extract (2026-05-28)
 
 Two fresh-install fixes flagged by users who ran the documented 1.3.0

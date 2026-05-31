@@ -194,45 +194,51 @@ function rbApplyChainInputDrive(opts) {
 //   active amp + no cab IR     → ×0.5 (knock the raw-amp spike down)
 //   no active amp / fallback   → ×1.0 (don't change anything)
 function rbChainGainTargetFor(chainSpec) {
-    if (!Array.isArray(chainSpec)) return 1.0;
-    let hasActiveAmp = false;
-    let hasActiveCab = false;
-    let activeNamCount = 0;     // total NAM stages (amp + pedals + racks)
-    for (const stage of chainSpec) {
-        if (!stage || stage.bypassed) continue;
-        if (stage.type === 1) {
-            activeNamCount++;
-            if (stage.slot === 'amp') hasActiveAmp = true;
+    // User "Chain volume" trim (chain_makeup, default 1.0) — the ONLY level
+    // the engine respects (per-stage IR gain is ignored). Multiplies the
+    // auto-leveled base below.
+    const makeup = (typeof window.__rbChainMakeup === 'number') ? window.__rbChainMakeup : 4.0;
+    let base = 1.0;
+    if (Array.isArray(chainSpec)) {
+        let hasActiveAmp = false, hasActiveCab = false, activeNamCount = 0;
+        for (const stage of chainSpec) {
+            if (!stage || stage.bypassed) continue;
+            if (stage.type === 1) {
+                activeNamCount++;
+                if (stage.slot === 'amp') hasActiveAmp = true;
+            }
+            // type 2 = IR; ANY active IR counts as a cab (rs_ir master_pre etc.).
+            if (stage.type === 2) hasActiveCab = true;
         }
-        // type 2 = IR; we treat ANY active IR as a cab even if slot is
-        // tagged differently (rs_ir master_pre, etc.) because the
-        // attenuation profile is similar.
-        if (stage.type === 2) hasActiveCab = true;
+        // Auto makeup (dB): +6 if a cab IR is active, -6 if amp-only; +2 per
+        // extra NAM beyond the first; capped at +18. (Each NAM loses ~2-3 dB;
+        // the cab IR ~6 dB.) Only when an amp is active — otherwise leave at 1.
+        if (hasActiveAmp) {
+            let dB = (hasActiveCab ? 6 : -6) + 2 * Math.max(0, activeNamCount - 1);
+            dB = Math.max(-12, Math.min(18, dB));
+            base = Math.pow(10, dB / 20);
+        }
     }
-    // Scale the makeup gain by chain length. Background: every NAM
-    // capture was authored at unity in/out, but in practice each one
-    // introduces ~2–3 dB of cumulative loss (pedal NAMs especially —
-    // they were often captured at -3 dB headroom). The cab IR adds
-    // another ~6 dB attenuation via its `gain: 0.5` state.
-    //
-    // nam_tone's 2-stage path (1 NAM + IR) gets +6 dB (×2.0) and
-    // sounds about right. Our full-chain path with 3–5 NAMs needs
-    // proportionally more makeup or it lands noticeably quieter than
-    // a song loaded via the bundle's 2-stage flow.
-    //
-    // Formula (in dB):
-    //   base = +6 dB if a cab IR is active, -6 dB if amp-only.
-    //   + 2 dB per additional NAM beyond the first.
-    //   capped at +18 dB total so a buggy 10-stage chain can't blow up.
-    if (!hasActiveAmp) return 1.0;
-    let dB;
-    if (hasActiveCab) {
-        dB = 6 + 2 * Math.max(0, activeNamCount - 1);
-    } else {
-        dB = -6 + 2 * Math.max(0, activeNamCount - 1);
+    window.__rbChainBaseTarget = base;   // remember (pre-trim) for live makeup changes
+    return base * makeup;
+}
+
+// User cab/chain volume trim. Persists to /settings and applies LIVE via
+// setGain('chain', base × trim) — the only gain the engine honours.
+async function rbSetChainMakeup(v) {
+    const val = Math.max(0.1, Math.min(8.0, parseFloat(v) || 1.0));
+    window.__rbChainMakeup = val;
+    const cmVal = document.getElementById('rb-chain-makeup-val');
+    if (cmVal) cmVal.textContent = val.toFixed(2) + '×';
+    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    if (audio && typeof audio.setGain === 'function') {
+        const base = (typeof window.__rbChainBaseTarget === 'number') ? window.__rbChainBaseTarget : 1.0;
+        audio.setGain('chain', base * val).catch(() => {});
     }
-    dB = Math.max(-12, Math.min(18, dB));
-    return Math.pow(10, dB / 20);
+    fetch(`${RB_API}/settings`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chain_makeup: val }),
+    }).catch(() => {});
 }
 
 // Mute everything the engine can mute just long enough that the bundle's
@@ -259,7 +265,7 @@ async function rbPreLoadMute(chainLen, targetGain) {
     const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
     if (!audio) { _rbMuteInFlight = false; return; }
     const target = (typeof targetGain === 'number' && isFinite(targetGain) && targetGain >= 0)
-        ? Math.max(0, Math.min(4, targetGain))
+        ? Math.max(0, Math.min(32, targetGain))   // was 4 — clamped the auto-level + user makeup; chains can need ~20×
         : 1.0;
     const hold = (typeof window.__rbMutePreLoadHold === 'number')
         ? Math.max(20, window.__rbMutePreLoadHold | 0)
@@ -441,6 +447,19 @@ let rbState = {
     _vstScanInProgress: false,
     _vstEditorSlot: null,   // engine slotId currently being edited (for Capture State)
 };
+
+// ── Effective-assignment readers ────────────────────────────────────
+// A chain piece carries two layers: the persisted `assigned` (from the DB)
+// and optional in-memory edits (`_uploaded_file`, `_vst_path`, …) staged in
+// the editor before save. "Effective" = the staged edit if present, else the
+// persisted value. These five helpers replace the same nullish-coalescing
+// expression that was copy-pasted ~20× across the song editor, master chain
+// and catalog — one place to read "what does this piece actually play?".
+function rbEffFile(p)     { return p._uploaded_file || (p.assigned && p.assigned.file) || null; }
+function rbEffKind(p)     { return p._uploaded_kind || (p.assigned && p.assigned.kind) || null; }
+function rbEffVstPath(p)  { return p._vst_path || (p.assigned && p.assigned.vst_path) || ''; }
+function rbEffVstFormat(p){ return p._vst_format || (p.assigned && p.assigned.vst_format) || 'VST3'; }
+function rbEffVstState(p) { return p._vst_state ?? (p.assigned && p.assigned.vst_state) ?? null; }
 
 const RB_API = '/api/plugins/rig_builder';
 
@@ -1085,6 +1104,9 @@ const RbMegaChain = (function () {
             window.__rbChainInputDrive = s.nam_chain_input_drive;
             console.log(`[rig_builder] chain input drive = ${window.__rbChainInputDrive} (read from /settings)`);
         }
+        if (s && typeof s.chain_makeup === 'number') {
+            window.__rbChainMakeup = s.chain_makeup;
+        }
     }).catch(() => {});
 
     function triggerBuild(filename, source) {
@@ -1530,6 +1552,7 @@ async function rbPurgeNams(filter, label) {
 
 async function rbLoadCoverage() {
     const el = document.getElementById('rb-gear-coverage');
+    if (!el) return;   // coverage card removed from Settings
     const s = rbState.status;
     if (!s || !s.rs_to_real_loaded) {
         el.innerHTML = '<span class="text-yellow-500">rs_to_real.json no cargado.</span>';
@@ -2261,9 +2284,9 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
     const pendingKind = p._uploaded_kind || p._vst_kind;
     const assignedKind = p.assigned && p.assigned.kind;
     const effKind = pendingKind || assignedKind || (isCab ? 'ir' : 'nam');
-    const effVstPath = p._vst_path || (p.assigned && p.assigned.vst_path) || '';
-    const effVstFormat = p._vst_format || (p.assigned && p.assigned.vst_format) || 'VST3';
-    const effFile = p._uploaded_file || (p.assigned && p.assigned.file) || null;
+    const effVstPath = rbEffVstPath(p);
+    const effVstFormat = rbEffVstFormat(p);
+    const effFile = rbEffFile(p);
     const hasVst = effKind === 'vst' && !!effVstPath;
     const hasFile = !hasVst && !!effFile;
     const mode = (p.assigned && p.assigned.assigned_mode) || (p._uploaded_file ? 'manual' : '');
@@ -2640,7 +2663,7 @@ async function rbToneEditVst(toneIdx, pIdx) {
         return;
     }
     if (!api) return alert('Native VST hosting not available');
-    const vstPath = piece._vst_path || (piece.assigned && piece.assigned.vst_path) || '';
+    const vstPath = rbEffVstPath(piece);
     if (!vstPath) return alert('This piece has no VST assigned yet.');
     if (rbState._vstEditorBusy) return;   // ignore rapid double-clicks while a load is in flight
     rbState._vstEditorBusy = true;
@@ -2683,10 +2706,17 @@ async function rbToneEditVst(toneIdx, pIdx) {
             const v  = param.value ?? param.current;
             if (id != null && typeof v === 'number') piece._vst_params[id] = v;
         }
-        if (api.openPluginEditor) {
-            api.openPluginEditor(slotId).catch(() => {});
-        }
+        // Render the inline slider panel FIRST so a headless plugin (no GUI —
+        // e.g. the bundled QTron envelope filter) still gets an editable
+        // panel even if openPluginEditor misbehaves for a UI-less plugin
+        // (returns non-promise / throws). Native-window plugins are unaffected.
         rbToneRenderInlineVstParams(toneIdx, pIdx);
+        if (api.openPluginEditor) {
+            try {
+                const _ed = api.openPluginEditor(slotId);
+                if (_ed && typeof _ed.catch === 'function') _ed.catch(() => {});
+            } catch (_) { /* UI-less plugin: no native editor view to open */ }
+        }
     } catch (e) {
         editor.innerHTML = `<div class="text-xs text-red-400">load failed: ${rbEsc(e.message || e)}</div>`;
     } finally {
@@ -2699,7 +2729,7 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
     if (!editor) return;
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
     const params = rbFilterVstParams((piece && piece._vst_param_meta) || []);
-    const effVstPath = piece._vst_path || (piece.assigned && piece.assigned.vst_path) || '';
+    const effVstPath = rbEffVstPath(piece);
     const vstName = effVstPath.split('/').pop().replace(/\.(vst3|component)$/i, '');
     const header = `
         <div class="flex items-center justify-between">
@@ -3154,8 +3184,8 @@ function rbRenderMasterPiece(role, idx, p, total) {
     const pendingKind = p._uploaded_kind || p._vst_kind;
     const assignedKind = p.assigned && p.assigned.kind;
     const effKind = pendingKind || assignedKind || 'none';
-    const effVstPath = p._vst_path || (p.assigned && p.assigned.vst_path) || '';
-    const effFile = p._uploaded_file || (p.assigned && p.assigned.file) || null;
+    const effVstPath = rbEffVstPath(p);
+    const effFile = rbEffFile(p);
     let label, labelClass;
     if (effKind === 'vst' && effVstPath) {
         label = `✓ VST: ${effVstPath.split('/').pop()}`;
@@ -3260,16 +3290,16 @@ async function rbPersistMasterChain(role) {
                 rs_gear_type: p.type,
                 kind: 'vst',
                 file: null,
-                vst_path: p._vst_path || (p.assigned && p.assigned.vst_path) || '',
-                vst_format: p._vst_format || (p.assigned && p.assigned.vst_format) || 'VST3',
-                vst_state: p._vst_state ?? (p.assigned && p.assigned.vst_state) ?? null,
+                vst_path: rbEffVstPath(p),
+                vst_format: rbEffVstFormat(p),
+                vst_state: rbEffVstState(p),
                 params: {},
                 assigned_mode: 'master',
                 bypassed: !!p._bypassed,
             };
         }
-        const file = p._uploaded_file || (p.assigned && p.assigned.file) || null;
-        const kindRaw = p._uploaded_kind || (p.assigned && p.assigned.kind) || null;
+        const file = rbEffFile(p);
+        const kindRaw = rbEffKind(p);
         const kind = kindRaw || (file ? (p.rs_category === 'cab' ? 'ir' : 'nam') : 'none');
         return {
             slot: p.slot || `master_${role}`,
@@ -3326,7 +3356,7 @@ async function rbMasterEditVst(role, idx) {
         alert('Native VST hosting not available');
         return;
     }
-    const vstPath = piece._vst_path || (piece.assigned && piece.assigned.vst_path) || '';
+    const vstPath = rbEffVstPath(piece);
     if (!vstPath) {
         alert('This piece has no VST assigned yet — use Assign… first.');
         return;
@@ -3370,12 +3400,16 @@ async function rbMasterEditVst(role, idx) {
             const v  = param.value ?? param.current;
             if (id != null && typeof v === 'number') piece._vst_params[id] = v;
         }
-        // Open the plugin's own editor window too as an optional visual
-        // — the inline sliders still drive everything.
-        if (api.openPluginEditor) {
-            api.openPluginEditor(slotId).catch(() => {});
-        }
+        // Render inline sliders FIRST (headless plugins like the bundled QTron
+        // have no native window); then open the plugin's own editor window as
+        // an optional visual. The inline sliders drive everything regardless.
         rbMasterRenderInlineVstParams(role, idx);
+        if (api.openPluginEditor) {
+            try {
+                const _ed = api.openPluginEditor(slotId);
+                if (_ed && typeof _ed.catch === 'function') _ed.catch(() => {});
+            } catch (_) { /* UI-less plugin: no native editor view to open */ }
+        }
     } catch (e) {
         editor.innerHTML = `<div class="text-xs text-red-400">load failed: ${rbEsc(e.message || e)}</div>`;
     } finally {
@@ -4673,8 +4707,8 @@ async function rbScanForVsts(toneIdx, pIdx) {
         const panel = document.getElementById(`rb-vst-panel-${toneIdx}-${pIdx}`);
         if (panel) {
             const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
-            const cur = piece._vst_path || (piece.assigned && piece.assigned.vst_path) || '';
-            const fmt = piece._vst_format || (piece.assigned && piece.assigned.vst_format) || 'VST3';
+            const cur = rbEffVstPath(piece);
+            const fmt = rbEffVstFormat(piece);
             panel.innerHTML = rbRenderVstPanelBody(toneIdx, pIdx, cur, fmt);
         }
     } catch (e) {
@@ -5147,7 +5181,7 @@ async function rbAssignVst(toneIdx, pIdx) {
     piece._vst_kind = 'vst';
     // Capture state (if any) was set by rbCaptureVstState; leave it.
     // Trigger the standard "gear changed" flow so the row re-renders and
-    // any live preview reloads.
+    // any live preview reloads. (Per-song — global propagation was removed.)
     rbAfterGearChange(toneIdx);
     const statusEl = document.getElementById(`rb-vst-status-${toneIdx}-${pIdx}`);
     if (statusEl) statusEl.textContent = `assigned. Click "Save preset" or "Listen" to persist.`;
@@ -5233,16 +5267,16 @@ async function rbPersistTone(toneIdx, filename) {
                 rs_gear_type: p.type,
                 kind: 'vst',
                 file: null,
-                vst_path: p._vst_path || (p.assigned && p.assigned.vst_path) || '',
-                vst_format: p._vst_format || (p.assigned && p.assigned.vst_format) || 'VST3',
-                vst_state: p._vst_state ?? (p.assigned && p.assigned.vst_state) ?? null,
+                vst_path: rbEffVstPath(p),
+                vst_format: rbEffVstFormat(p),
+                vst_state: rbEffVstState(p),
                 params: p.knobs || {},
                 assigned_mode: p._vst_kind ? 'manual_vst' : (p.assigned && p.assigned.assigned_mode) || 'manual_vst',
                 bypassed: !!p._bypassed,
             };
         }
-        const file = p._uploaded_file || (p.assigned && p.assigned.file) || null;
-        const kindRaw = p._uploaded_kind || (p.assigned && p.assigned.kind) || null;
+        const file = rbEffFile(p);
+        const kindRaw = rbEffKind(p);
         const kind = kindRaw || (file ? (p.rs_category === 'cab' ? 'ir' : 'nam') : 'none');
         return {
             slot: p.slot,
@@ -7119,8 +7153,6 @@ async function rbLoadSettings() {
     } catch (e) {
         return;
     }
-    document.getElementById('rb-aggressive').checked = !!s.aggressive;
-    document.getElementById('rb-min-downloads').value = s.min_downloads;
     const megaCb = document.getElementById('rb-mega-chain-mode');
     if (megaCb) megaCb.checked = !!s.mega_chain_mode;
     const bac = document.getElementById('rb-bypass-all-cabs');
@@ -7139,6 +7171,12 @@ async function rbLoadSettings() {
     if (typeof s.nam_chain_input_drive === 'number') {
         window.__rbChainInputDrive = s.nam_chain_input_drive;
     }
+    // Chain volume trim (user cab/chain makeup). Default 4.0.
+    window.__rbChainMakeup = (typeof s.chain_makeup === 'number') ? s.chain_makeup : 4.0;
+    const cmSlider = document.getElementById('rb-chain-makeup');
+    const cmVal = document.getElementById('rb-chain-makeup-val');
+    if (cmSlider) cmSlider.value = String(window.__rbChainMakeup);
+    if (cmVal) cmVal.textContent = window.__rbChainMakeup.toFixed(2) + '×';
     // OAuth (Connect with tone3000) state.
     const oauthStatus = document.getElementById('rb-oauth-status');
     const oauthBtn = document.getElementById('rb-oauth-btn');
@@ -7201,8 +7239,6 @@ async function rbOauthDisconnect() {
 }
 
 async function rbSaveSettings() {
-    const aggressive = document.getElementById('rb-aggressive').checked;
-    const min_downloads = parseInt(document.getElementById('rb-min-downloads').value, 10) || 0;
     const megaCb = document.getElementById('rb-mega-chain-mode');
     const mega_chain_mode = megaCb ? !!megaCb.checked : false;
     const bac = document.getElementById('rb-bypass-all-cabs');
@@ -7210,7 +7246,7 @@ async function rbSaveSettings() {
     await fetch(`${RB_API}/settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ aggressive, min_downloads, mega_chain_mode, bypass_all_cabs }),
+        body: JSON.stringify({ mega_chain_mode, bypass_all_cabs }),
     });
     // Mirror to the runtime so RbMegaChain picks it up without a restart.
     window.__rbMegaChainSetting = mega_chain_mode;
@@ -7325,6 +7361,41 @@ async function rbDownloadForGear(btn, rsGear, toneId) {
 // are tolerant of soft failures (e.g. Pillow missing for photos) so a
 // partial setup isn't fatal — the user still gets a usable gear map +
 // IRs, and the catalog falls back to placeholders.
+// Distill a useful one-line reason out of an extractor's failure payload.
+// The backend (extract_gear_map / extract_gear_photos / extract_irs) returns
+// `{error: "extractor failed", stderr: "...", stdout_tail: "..."}` on a
+// non-zero subprocess exit, but the script's ACTUAL reason (e.g.
+// "error: Pillow not installed", an ImportError, a traceback) lives in
+// stderr. Surface the most informative line so the user/tester sees WHY
+// instead of a generic "extractor failed", and dump the full stderr to the
+// console for deeper debugging.
+function rbExtractErrDetail(data, fallback) {
+    const base = (data && data.error) ? String(data.error) : String(fallback);
+    const stderr = (data && typeof data.stderr === 'string') ? data.stderr.trim() : '';
+    const stdoutTail = (data && typeof data.stdout_tail === 'string') ? data.stdout_tail.trim() : '';
+    let detail = '';
+    if (stderr) {
+        const lines = stderr.split('\n').map(s => s.trim()).filter(Boolean);
+        // Prefer an explicit error/exception line (scan from the end — the
+        // real cause is usually the last such line); else fall back to the
+        // very last non-empty stderr line.
+        const reversed = [...lines].reverse();
+        detail = reversed.find(l =>
+            /error|exception|traceback|not installed|no module|importerror|modulenotfound|permission|not found/i.test(l)
+        ) || lines[lines.length - 1] || '';
+        // Full stderr to the console so a tester can copy/paste it to us.
+        console.error('[rig_builder extractor stderr]\n' + stderr);
+    }
+    if (!detail && stdoutTail) {
+        const lines = stdoutTail.split('\n').map(s => s.trim()).filter(Boolean);
+        detail = lines[lines.length - 1] || '';
+    }
+    if (!detail) return base;
+    // Cap so a stray long line / traceback frame doesn't blow up the layout.
+    if (detail.length > 300) detail = detail.slice(0, 300) + '…';
+    return `${base}: ${detail}`;
+}
+
 async function rbExtractAll() {
     const path = document.getElementById('rb-all-psarc').value.trim();
     if (!path) return;
@@ -7338,7 +7409,7 @@ async function rbExtractAll() {
         });
         let data = await r.json();
         if (!r.ok) {
-            status.innerHTML = `<span class="text-red-400">Gear map failed: ${rbEsc(data.error || r.status)} — is this really gears.psarc?</span>`;
+            status.innerHTML = `<span class="text-red-400">Gear map failed: ${rbEsc(rbExtractErrDetail(data, r.status))} — is this really gears.psarc?</span>`;
             return;
         }
         const gearCount = data.count;
@@ -7355,7 +7426,7 @@ async function rbExtractAll() {
             });
             const photoData = await r.json();
             if (!r.ok) {
-                photosNote = ` <span class="text-yellow-400">(photos skipped: ${rbEsc(photoData.error || r.status)})</span>`;
+                photosNote = ` <span class="text-yellow-400">(photos skipped: ${rbEsc(rbExtractErrDetail(photoData, r.status))})</span>`;
             } else {
                 photosNote = ` <span class="text-gray-500">(photos: ${photoData.total} PNGs)</span>`;
             }
@@ -7372,7 +7443,7 @@ async function rbExtractAll() {
         });
         data = await r.json();
         if (!r.ok) {
-            status.innerHTML = `<span class="text-yellow-400">Gear map OK (${gearCount})${photosNote}, but IR extraction failed: ${rbEsc(data.error || r.status)}</span>`;
+            status.innerHTML = `<span class="text-yellow-400">Gear map OK (${gearCount})${photosNote}, but IR extraction failed: ${rbEsc(rbExtractErrDetail(data, r.status))}</span>`;
             return;
         }
         status.innerHTML = `<span class="text-green-400">Done: ${gearCount} gear entries${photosNote} + ${data.count} cabs with IR. Reloading…</span>`;

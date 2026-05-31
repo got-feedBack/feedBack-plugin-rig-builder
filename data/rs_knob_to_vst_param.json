@@ -1,0 +1,2167 @@
+{
+ "_meta": {
+  "description": "Translation table: Rocksmith gear knob → VST parameter. Curated around Kilohearts Essentials (free) — consistent param names across the entire bundle.",
+  "version": 4,
+  "updated": "2026-05-28",
+  "schema": {
+   "<rs_gear_type>": {
+    "<vst_name_stem_lowercased>": {
+     "<rs_knob_name>": {
+      "param": "<exact VST param name as shown in the in-app editor>",
+      "scale": "<float, multiply RS value by this. 0.01 for 0-100 → 0-1; 0.0005 for ms 0-2000; 1.0 for direct dB / semitones>",
+      "offset": "<optional float, added after scale>",
+      "invert": "<optional bool, replaces v with (1-v) after scale>"
+     }
+    }
+   }
+  },
+  "kilohearts_param_naming_convention": {
+   "_note": "KHS modules use consistent param names across the entire Essentials bundle. Common params you'll see in every module:",
+   "rate": "Rate (Hz, 0-1 internal)",
+   "depth": "Depth (0-1)",
+   "feedback": "Feedback (0-1)",
+   "mix": "Dry/Wet (0-1) — some older docs show 'Mix'; the in-app editor will show the real name",
+   "cutoff": "Cutoff (0-1, log freq)",
+   "drive": "Drive (0-1)",
+   "threshold": "Threshold (dB)",
+   "ratio": "Ratio (1:N)",
+   "time": "Time (s or 0-1 normalised)",
+   "pitch": "Pitch (semitones)"
+  },
+  "notes": [
+   "If a param name doesn't match, open the in-app VST editor for that gear, copy the exact label from a slider, and paste here. The lookup is case-insensitive but otherwise exact.",
+   "VST name stems below are lowercased to match the case-insensitive lookup. Plugin files on disk are 'kHs Chorus.vst3' etc. — the matcher strips '.vst3' and lowercases automatically.",
+   "EQ pedals (EQ5/EQ8/BassEQ8): knobs are absolute frequencies (e.g. '5700': 5 = +5 dB at 5700 Hz). Verified band layouts (from inspect_rs_knobs.py against a real library): EQ5 = 63/250/750/2200/5700 Hz; EQ8 = 50/100/200/400/800/1600/3200/6400 Hz; BassEQ8 = 30/75/185/460/1100/2700/6800/16000 Hz. kHs 3-Band EQ absorbs three of those — the entries below pick the most musical bands per pedal. The other RS frequencies are silently dropped (lossy). For lossless mapping, switch the gear to Voxengo Marvel GEQ (16-band) and add a per-pedal entry under 'voxengo marvel geq'.",
+   "Rack_StudioEQ (4-band parametric: Bass/LoMid/HiMid/Treble with Q + Freq knobs) is the highest-coverage EQ in the library. Currently lossy-mapped to kHs 3-Band (gain bands only — Q/Freq dropped). For full fidelity switch the gear to TDR Nova (4-band parametric, free) and add a 'tdr nova' entry mapping <Band>+<BandFreq>+<BandQ> per band.",
+   "Melda free (MFreeFXBundle): MTremolo, MVibrato, MFlanger, MPhaser, MRingModulator, MEqualizer, MCompressor are now PRIMARY for those categories alongside the existing KHS entries. Melda paramId convention is consistent across the family — verifying one editor (e.g. MTremolo) validates all 7 Melda mappings.",
+   "_static block: a VST entry may include `\"_static\": {\"<vst_param_name>\": <normalized_value>, ...}` to apply UNCONDITIONAL params regardless of RS knobs. Used to pin curated character knobs (e.g. kHs Distortion Type + Dynamics) so every fuzz pedal sounds like a fuzz, every overdrive sounds like an overdrive. Values are normalized [0,1]. For stepped/enum params, verify the dropdown order via `await window.rbSweepParam(slotId, paramName)` from DevTools — names + numeric ranges differ across plugins.",
+   "kHs Distortion subtype convention (user-curated, verified via rbSweepParam): the `Type` param has 6 discrete modes — Overdrive (0.0), Saturate (0.2), Foldback (0.4), Sine (0.6), Hard Clip (0.8), Quantize (1.0). Fuzz pedals → Type=0.2 (Saturate); overdrive pedals → Type=0.0 (Overdrive); distortion pedals → Type=0.8 (Hard Clip). All three pin Dynamics=1.0 so the pedal's response tracks the player's pick attack."
+  ]
+ },
+ "Pedal_Chorus": {
+  "khs chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_Chorus20": {
+  "khs chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_DigitalChorus": {
+  "khs chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_VintageChorus": {
+  "khs chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Bass_Pedal_BassChorus": {
+  "khs chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_Flanger": {
+  "khs flanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   }
+  },
+  "mflanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_80sFlanger": {
+  "khs flanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mflanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_ClassicFlanger": {
+  "khs flanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mflanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_ModernFlanger": {
+  "khs flanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mflanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_VintageFlanger": {
+  "khs flanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mflanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Bass_Pedal_BassFlanger": {
+  "khs flanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mflanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_Phaser": {
+  "khs phaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mphaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_ShaverPhaser": {
+  "khs phaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mphaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_PlanePhase": {
+  "khs phaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mphaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Bass_Pedal_BassPhase": {
+  "khs phaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mphaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_Tremolo": {
+  "bertom_freetremolo": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS 'Mix' on a tremolo is effectively depth"
+   }
+  },
+  "mtremolo": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.09,
+    "offset": 1.0,
+    "_hint": "RS Speed 0-100 → 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
+   }
+  }
+ },
+ "Pedal_AmpTrem": {
+  "bertom_freetremolo": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   }
+  },
+  "mtremolo": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.09,
+    "offset": 1.0,
+    "_hint": "RS Speed 0-100 → 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
+   }
+  }
+ },
+ "Pedal_MultiTrem": {
+  "bertom_freetremolo": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   }
+  },
+  "mtremolo": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.09,
+    "offset": 1.0,
+    "_hint": "RS Speed 0-100 → 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
+   }
+  }
+ },
+ "Pedal_SpringReverb": {
+  "khs reverb": {
+   "Time": {
+    "param": "Decay",
+    "scale": 0.0065,
+    "_hint": "RS Time → Decay (0.5-30s log). Time 0≈0.5s, 78≈4s, 100≈7s."
+   },
+   "Depth": {
+    "param": "Size",
+    "scale": 0.01,
+    "_hint": "RS Depth → Size (50-200%). 0→50%, 100→200%."
+   },
+   "Tone": {
+    "param": "Dampen",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "RS Tone (brightness) → less Dampen. Inverted."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_DigitalVerb": {
+  "khs reverb": {
+   "Time": {
+    "param": "Decay",
+    "scale": 0.0065,
+    "_hint": "RS Time → Decay (0.5-30s log). Time 0≈0.5s, 78≈4s, 100≈7s."
+   },
+   "Depth": {
+    "param": "Size",
+    "scale": 0.01,
+    "_hint": "RS Depth → Size (50-200%). 0→50%, 100→200%."
+   },
+   "Tone": {
+    "param": "Dampen",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "RS Tone (brightness) → less Dampen. Inverted."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_PlateVerb": {
+  "khs reverb": {
+   "Time": {
+    "param": "Decay",
+    "scale": 0.0065,
+    "_hint": "RS Time → Decay (0.5-30s log). Time 0≈0.5s, 78≈4s, 100≈7s."
+   },
+   "Depth": {
+    "param": "Size",
+    "scale": 0.01,
+    "_hint": "RS Depth → Size (50-200%). 0→50%, 100→200%."
+   },
+   "Tone": {
+    "param": "Dampen",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "RS Tone (brightness) → less Dampen. Inverted."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_TubeSpring": {
+  "khs reverb": {
+   "Time": {
+    "param": "Size",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_AnalogueDelay": {
+  "khs delay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005,
+    "_hint": "RS 'Time' is ms (100-2000). KHS Time is 0-1 over ~2000ms max"
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_ValveEcho": {
+  "khs delay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_NPNDelay": {
+  "khs delay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_NoFiEcho": {
+  "khs delay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_OilCanEcho": {
+  "khs delay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_CosmicEcho": {
+  "khs delay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_ModDelay": {
+  "khs delay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Bass_Pedal_BassFilterDelay": {
+  "khs delay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_GermaniumDrive": {
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.0
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Pedal_CustomDrive": {
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.0
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Pedal_LineDrive": {
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.0
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Bass_Pedal_BassOverdrive": {
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.0
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Pedal_RangeBooster": {
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.005,
+    "_hint": "Halve scale — booster shouldn't fully saturate"
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.0
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Pedal_SuperDrive": {
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.0
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Pedal_Distortion": {
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.8
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Pedal_VintageDistortion": {
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.8
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Pedal_MetalDistortion": {
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.8
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Bass_Pedal_BassDistortion": {
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.8
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Pedal_FuzzWasHe": {
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.2
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Pedal_CaptFuzzle": {
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.2
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Pedal_BuzzOne": {
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Pedal_BuzzToo": {
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.2
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Bass_Pedal_BassFuzz": {
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.2
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Pedal_Compression": {
+  "khs compressor": {
+   "Comp": {
+    "param": "Threshold",
+    "scale": -0.46,
+    "offset": 6.0,
+    "_hint": "RS Compress amount 0-100 → Threshold full range: 0→+6dB (no comp), 100→-40dB (max)."
+   }
+  },
+  "mcompressor": {
+   "Comp": {
+    "param": "Threshold",
+    "scale": -1.0,
+    "offset": 0,
+    "_hint": "RS 'Comp' 0-100 → MCompressor Threshold roughly -100 to 0 dB. Higher RS Comp = lower threshold = more compression"
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.01
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_Compressor": {
+  "khs compressor": {
+   "Comp": {
+    "param": "Threshold",
+    "scale": -1.0,
+    "offset": 0
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.01
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.01
+   }
+  },
+  "mcompressor": {
+   "Comp": {
+    "param": "Threshold",
+    "scale": -1.0,
+    "offset": 0,
+    "_hint": "RS 'Comp' 0-100 → MCompressor Threshold roughly -100 to 0 dB. Higher RS Comp = lower threshold = more compression"
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.01
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.01
+   }
+  }
+ },
+ "Bass_Pedal_MBComp": {
+  "khs compressor": {
+   "Compress": {
+    "param": "Threshold",
+    "scale": -0.46,
+    "offset": 6.0,
+    "_hint": "RS Compress amount 0-100 → Threshold full range: 0→+6dB (no comp), 100→-40dB (max)."
+   }
+  },
+  "mcompressor": {
+   "Compress": {
+    "param": "Threshold",
+    "scale": -1.0,
+    "offset": 0,
+    "_hint": "Single-band fallback — RS MBComp's multiband info is lost (Melda free has no MDynamicsMB)"
+   }
+  }
+ },
+ "Pedal_USWah": {
+  "khs filter": {
+   "Pedal": {
+    "param": "Cutoff",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Resonance",
+    "scale": 0.01,
+    "_hint": "Wah sensitivity → resonance peak"
+   }
+  }
+ },
+ "Pedal_UKWah": {
+  "khs filter": {
+   "Pedal": {
+    "param": "Cutoff",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Resonance",
+    "scale": 0.01
+   }
+  }
+ },
+ "Bass_Pedal_BassWah": {
+  "khs filter": {
+   "Pedal": {
+    "param": "Cutoff",
+    "scale": 0.005
+   },
+   "Sens": {
+    "param": "Resonance",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_ModernWah": {
+  "khs filter": {
+   "Pedal": {
+    "param": "Cutoff",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Resonance",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_LoFiFilter": {
+  "khs filter": {
+   "FilterType": {
+    "param": "Cutoff",
+    "scale": 0.01,
+    "_hint": "RS FilterType sweeps the low-pass cutoff (low=darker/lo-fi)"
+   },
+   "Mix": {
+    "param": "Q",
+    "scale": 0.01,
+    "_hint": "RS Mix → resonance/Q for lo-fi colour (kHs Filter has no dry/wet)"
+   }
+  }
+ },
+ "Pedal_BobFilter": {
+  "khs filter": {
+   "Cutoff": {
+    "param": "Cutoff",
+    "scale": 0.01
+   },
+   "Resonance": {
+    "param": "Resonance",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_AutoFilter": {
+  "autosweep": {
+   "FilterType": {
+    "param": "FilterType",
+    "scale": 0.5,
+    "_hint": "0/1/2 → LP/BP/HP"
+   },
+   "Res": {
+    "param": "Res",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.006,
+    "offset": 0.3,
+    "_hint": "floored so low Sens isn't inaudible"
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.001,
+    "_hint": "RS Attack /1000 (RS 128 → 0.128 ≈ 2ms)"
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.001
+   },
+   "_static": {
+    "Range": 0.9,
+    "Mix": 0.5,
+    "Boost": 0.2
+   }
+  },
+  "khs filter": {
+   "FilterType": {
+    "param": "Cutoff",
+    "scale": 0.01
+   },
+   "Res": {
+    "param": "Q",
+    "scale": 0.01
+   }
+  }
+ },
+ "Bass_Pedal_BassAutoFilter": {
+  "khs filter": {
+   "Speed": {
+    "param": "Cutoff",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Resonance",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_EQ5": {
+  "khs 3-band eq": {
+   "63": {
+    "param": "Low Gain",
+    "scale": 1.0,
+    "_hint": "RS EQ5 63Hz → KHS Low band. Value is dB direct. Verify paramId in inline editor — may be 'Low Gain', 'Low', or similar. Lossy: bands 250, 2200 are dropped."
+   },
+   "750": {
+    "param": "Mid Gain",
+    "scale": 1.0,
+    "_hint": "RS EQ5 750Hz → KHS Mid band."
+   },
+   "5700": {
+    "param": "High Gain",
+    "scale": 1.0,
+    "_hint": "RS EQ5 5700Hz → KHS High band."
+   }
+  },
+  "mequalizer": {
+   "_graphic_eq": [
+    {
+     "freq": 63,
+     "rs": [
+      "63"
+     ]
+    },
+    {
+     "freq": 250,
+     "rs": [
+      "250"
+     ]
+    },
+    {
+     "freq": 750,
+     "rs": [
+      "750"
+     ]
+    },
+    {
+     "freq": 2200,
+     "rs": [
+      "2200"
+     ]
+    },
+    {
+     "freq": 5700,
+     "rs": [
+      "5700"
+     ]
+    }
+   ]
+  }
+ },
+ "Pedal_EQ8": {
+  "khs 3-band eq": {
+   "100": {
+    "param": "Low Gain",
+    "scale": 1.0,
+    "_hint": "RS EQ8 100Hz → KHS Low band. dB direct. Lossy: bands 50, 200, 400, 1600, 6400 are dropped — install Voxengo Marvel GEQ for full 8-band fidelity."
+   },
+   "800": {
+    "param": "Mid Gain",
+    "scale": 1.0,
+    "_hint": "RS EQ8 800Hz → KHS Mid band."
+   },
+   "3200": {
+    "param": "High Gain",
+    "scale": 1.0,
+    "_hint": "RS EQ8 3200Hz → KHS High band."
+   }
+  },
+  "mequalizer": {
+   "_graphic_eq": [
+    {
+     "freq": 71,
+     "rs": [
+      "50",
+      "100"
+     ]
+    },
+    {
+     "freq": 283,
+     "rs": [
+      "200",
+      "400"
+     ]
+    },
+    {
+     "freq": 800,
+     "rs": [
+      "800"
+     ]
+    },
+    {
+     "freq": 1600,
+     "rs": [
+      "1600"
+     ]
+    },
+    {
+     "freq": 3200,
+     "rs": [
+      "3200"
+     ]
+    },
+    {
+     "freq": 6400,
+     "rs": [
+      "6400"
+     ]
+    }
+   ]
+  }
+ },
+ "Bass_Pedal_BassEQ8": {
+  "khs 3-band eq": {
+   "75": {
+    "param": "Low Gain",
+    "scale": 1.0,
+    "_hint": "Bass EQ8 75Hz → KHS Low band. dB direct. Lossy: bands 30, 185, 1100, 6800, 16000 dropped."
+   },
+   "460": {
+    "param": "Mid Gain",
+    "scale": 1.0,
+    "_hint": "Bass EQ8 460Hz → KHS Mid band."
+   },
+   "2700": {
+    "param": "High Gain",
+    "scale": 1.0,
+    "_hint": "Bass EQ8 2700Hz → KHS High band."
+   }
+  },
+  "mequalizer": {
+   "_graphic_eq": [
+    {
+     "freq": 30,
+     "rs": [
+      "30"
+     ]
+    },
+    {
+     "freq": 75,
+     "rs": [
+      "75"
+     ]
+    },
+    {
+     "freq": 185,
+     "rs": [
+      "185"
+     ]
+    },
+    {
+     "freq": 460,
+     "rs": [
+      "460"
+     ]
+    },
+    {
+     "freq": 1723,
+     "rs": [
+      "1100",
+      "2700"
+     ]
+    },
+    {
+     "freq": 10431,
+     "rs": [
+      "6800",
+      "16000"
+     ]
+    }
+   ]
+  }
+ },
+ "Rack_StudioEQ": {
+  "khs 3-band eq": {
+   "Bass": {
+    "param": "Low Gain",
+    "scale": 1.0,
+    "_hint": "4-band parametric — value is dB direct. Q + Freq knobs (BassFreq, LoMidFreq, HiMidFreq, TrebleFreq, LoMidQ, HiMidQ) are ignored. Lossy 4→3 (HiMid combined out). For lossless, switch the gear to TDR Nova (free 4-band parametric)."
+   },
+   "LoMid": {
+    "param": "Mid Gain",
+    "scale": 1.0,
+    "_hint": "Mapped as the single mid; HiMid silently dropped."
+   },
+   "Treble": {
+    "param": "High Gain",
+    "scale": 1.0
+   }
+  },
+  "mequalizer": {
+   "Bass": {
+    "param": "Gain 1 (EQ 1)",
+    "scale": 1.0,
+    "_hint": "Set Band 1 On = true. dB direct."
+   },
+   "BassFreq": {
+    "param": "Frequency 1 (EQ 1)",
+    "scale": 1.0,
+    "_hint": "RS BassFreq is Hz direct (e.g. 65-485)"
+   },
+   "LoMid": {
+    "param": "Gain 2 (EQ 2)",
+    "scale": 1.0
+   },
+   "LoMidFreq": {
+    "param": "Frequency 2 (EQ 2)",
+    "scale": 1.0,
+    "_hint": "RS LoMidFreq is Hz direct (120-2000)"
+   },
+   "LoMidQ": {
+    "param": "Q 2 (EQ 2)",
+    "scale": 1.0,
+    "_hint": "RS LoMidQ ~0-4 — verify Melda Q range matches"
+   },
+   "HiMid": {
+    "param": "Gain 3 (EQ 3)",
+    "scale": 1.0
+   },
+   "HiMidFreq": {
+    "param": "Frequency 3 (EQ 3)",
+    "scale": 1000.0,
+    "_hint": "RS HiMidFreq is in kHz (0.3-8) — multiply by 1000 to land in Hz"
+   },
+   "HiMidQ": {
+    "param": "Q 3 (EQ 3)",
+    "scale": 1.0,
+    "_hint": "RS HiMidQ ~0-1"
+   },
+   "Treble": {
+    "param": "Gain 4 (EQ 4)",
+    "scale": 1.0
+   },
+   "TrebleFreq": {
+    "param": "Frequency 4 (EQ 4)",
+    "scale": 1000.0,
+    "_hint": "RS TrebleFreq is in kHz (2-13) — multiply by 1000"
+   },
+   "_static": {
+    "Enable 1 (EQ 1)": 1.0,
+    "Enable 2 (EQ 2)": 1.0,
+    "Enable 3 (EQ 3)": 1.0,
+    "Enable 4 (EQ 4)": 1.0
+   }
+  }
+ },
+ "Pedal_NoiseGate": {
+  "khs gate": {
+   "Thresh": {
+    "param": "Threshold",
+    "scale": 1.0,
+    "_hint": "RS Thresh in dB (-66 typical) maps direct to KHS Threshold"
+   },
+   "Rate": {
+    "param": "Range",
+    "scale": 0.01,
+    "_hint": "Higher RS Rate = more aggressive gating = larger range"
+   }
+  }
+ },
+ "Pedal_OctaveUp": {
+  "khs pitch shifter": {
+   "Tone": {
+    "param": "Pitch",
+    "scale": 0.12,
+    "_hint": "Scale 0.12 lands roughly at +12 semitones (one octave up) for full Tone=100"
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_Octavius": {
+  "khs pitch shifter": {
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_MultiPitch": {
+  "khs pitch shifter": {
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Bass_Pedal_BassSubOctave": {
+  "khs pitch shifter": {
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "Set Pitch manually to -12 in the VST editor for sub-octave"
+   }
+  }
+ },
+ "Pedal_BitCruncher": {
+  "khs bitcrush": {
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_RingMod": {
+  "khs ring mod": {
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mringmodulator": {
+   "Freq": {
+    "param": "Frequency",
+    "scale": 0.01,
+    "_hint": "RS RingMod Freq → Melda Frequency. Both likely 0-1 normalized; verify range"
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_Limiter": {
+  "khs limiter": {}
+ },
+ "Pedal_TremOle": {
+  "mtremolo": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.09,
+    "offset": 1.0,
+    "_hint": "RS Speed 0-100 → 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
+   }
+  }
+ },
+ "Pedal_AmpVibe": {
+  "mvibrato": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_MultiVibe": {
+  "mvibrato": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_MarshallSupervibe": {
+  "mvibrato": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_AutoVibe": {
+  "mvibrato": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_AmpEQ": {
+  "mequalizer": {
+   "Bass": {
+    "param": "Gain 1 (EQ 1)",
+    "scale": 1.0,
+    "_hint": "RS Bass knob → MEqualizer Band 1. Curator: set Band 1 Frequency ≈ 80 Hz, On = true. dB direct."
+   },
+   "Mid": {
+    "param": "Gain 2 (EQ 2)",
+    "scale": 1.0,
+    "_hint": "RS Mid → Band 2. Frequency ≈ 800 Hz."
+   },
+   "Treble": {
+    "param": "Gain 3 (EQ 3)",
+    "scale": 1.0,
+    "_hint": "RS Treble → Band 3. Frequency ≈ 6 kHz."
+   },
+   "_static": {
+    "Enable 1 (EQ 1)": 1.0,
+    "Enable 2 (EQ 2)": 1.0,
+    "Enable 3 (EQ 3)": 1.0
+   }
+  }
+ },
+ "Rack_StudioGraphicEQ": {
+  "mequalizer": {
+   "Bass": {
+    "param": "Gain 1 (EQ 1)",
+    "scale": 1.0
+   },
+   "BassFreq": {
+    "param": "Frequency 1 (EQ 1)",
+    "scale": 1.0
+   },
+   "LoMid": {
+    "param": "Gain 2 (EQ 2)",
+    "scale": 1.0
+   },
+   "LoMidFreq": {
+    "param": "Frequency 2 (EQ 2)",
+    "scale": 1.0
+   },
+   "Mid": {
+    "param": "Gain 3 (EQ 3)",
+    "scale": 1.0
+   },
+   "MidFreq": {
+    "param": "Frequency 3 (EQ 3)",
+    "scale": 1000.0,
+    "_hint": "RS MidFreq is kHz"
+   },
+   "HiMid": {
+    "param": "Gain 4 (EQ 4)",
+    "scale": 1.0
+   },
+   "HiMidFreq": {
+    "param": "Frequency 4 (EQ 4)",
+    "scale": 1000.0,
+    "_hint": "kHz"
+   },
+   "Treble": {
+    "param": "Gain 5 (EQ 5)",
+    "scale": 1.0
+   },
+   "TrebleFreq": {
+    "param": "Frequency 5 (EQ 5)",
+    "scale": 1000.0,
+    "_hint": "kHz"
+   },
+   "_static": {
+    "Enable 1 (EQ 1)": 1.0,
+    "Enable 2 (EQ 2)": 1.0,
+    "Enable 3 (EQ 3)": 1.0,
+    "Enable 4 (EQ 4)": 1.0,
+    "Enable 5 (EQ 5)": 1.0
+   }
+  }
+ },
+ "Rack_StudioCompressor": {
+  "mcompressor": {
+   "Threshold": {
+    "param": "Threshold",
+    "scale": 1.0,
+    "_hint": "RS Threshold is dB direct (-27.5..-0.5). Maps 1:1."
+   },
+   "Ratio": {
+    "param": "Ratio",
+    "scale": 1.0,
+    "_hint": "RS Ratio 1..4 = literal ratio. MCompressor Ratio is the same."
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 1.0,
+    "_hint": "RS Attack 0..92 ≈ ms direct (Melda Attack is ms). Verify range — may need 0.01 scale if Melda normalizes."
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 1.0,
+    "_hint": "RS Release 50..260 ms direct. MCompressor Release is ms."
+   }
+  },
+  "khs compressor": {
+   "Threshold": {
+    "param": "Threshold",
+    "scale": 1.0
+   },
+   "Ratio": {
+    "param": "Ratio",
+    "scale": 1.0
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 1.0,
+    "_hint": "Literal ms; kHs Attack range is log [1,500] ms (see _VST_PARAM_RANGES)."
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 1.0
+   }
+  }
+ },
+ "Pedal_ShredZone": {
+  "khs distortion": {
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.8
+   },
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Rack_StereoAnalogVibe": {
+  "khs chorus": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_StudioChamber": {
+  "khs reverb": {
+   "Time": {
+    "param": "Decay",
+    "scale": 0.0065,
+    "_hint": "RS Time → Decay (0.5-30s log). Time 0≈0.5s, 78≈4s, 100≈7s."
+   },
+   "Depth": {
+    "param": "Size",
+    "scale": 0.01,
+    "_hint": "RS Depth → Size (50-200%). 0→50%, 100→200%."
+   },
+   "Tone": {
+    "param": "Dampen",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "RS Tone (brightness) → less Dampen. Inverted."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_StudioChorus": {
+  "khs chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Delay": {
+    "param": "Delay",
+    "scale": 0.01,
+    "_hint": "Both kHs Chorus and RS use 'Delay' for the base offset"
+   },
+   "Stereo": {
+    "param": "Stereo",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_StudioDelay": {
+  "khs delay": {
+   "TimeL": {
+    "param": "Time",
+    "scale": 0.005,
+    "_hint": "RS TimeL+TimeR are in ms (0-1000); use TimeL alone, scaled 0-500ms→0-1"
+   },
+   "Filter": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Filter on a delay is a feedback tone control"
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_StudioFlanger": {
+  "khs flanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Regen": {
+    "param": "Feedback",
+    "scale": 0.01,
+    "_hint": "RS Regen IS feedback in kHs vocabulary"
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_StudioPlate": {
+  "khs reverb": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Damping",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Predelay",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_StudioVerb": {
+  "khs reverb": {
+   "Time": {
+    "param": "Decay",
+    "scale": 0.0065,
+    "_hint": "RS Time → Decay (0.5-30s log). Time 0≈0.5s, 78≈4s, 100≈7s."
+   },
+   "Depth": {
+    "param": "Size",
+    "scale": 0.01,
+    "_hint": "RS Depth → Size (50-200%). 0→50%, 100→200%."
+   },
+   "Tone": {
+    "param": "Dampen",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "RS Tone (brightness) → less Dampen. Inverted."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_TapeEcho": {
+  "khs delay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.005,
+    "_hint": "RS Time in ms"
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Filter": {
+    "param": "Tone",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ }
+}

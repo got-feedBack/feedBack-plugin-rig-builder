@@ -23,6 +23,8 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from common import PLUGIN_ROOT, DATA_DIR
+
 # When run standalone, ensure slopsmith's lib is importable so we can
 # reach the psarc reader. The bundled Python already has pycryptodome.
 _SLOP_LIB = "/Applications/Slopsmith.app/Contents/Resources/slopsmith/lib"
@@ -382,7 +384,8 @@ def main():
             file=sys.stderr,
         )
         sys.exit(3)
-    out_path = Path(__file__).parent / "rs_to_real.json"
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = DATA_DIR / "rs_to_real.json"
     # Preserve curator-only fields when overwriting an existing file.
     # The PSARC walk reproduces everything we derive from the archive
     # (manifest, make/model, name, category, sound_bank, tone3000_query,

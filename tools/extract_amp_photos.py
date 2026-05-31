@@ -29,17 +29,10 @@ import re
 import sys
 from pathlib import Path
 
+from common import PLUGIN_ROOT, DATA_DIR, safe_filename
 
-def _safe_filename(s: str) -> str:
-    """Convert a free-text amp name to a Finder-friendly filename.
 
-    Strips path separators and collapses runs of weird chars to a single
-    space. We keep accented letters intact because macOS handles them
-    fine and they're more readable than ASCII transliteration.
-    """
-    s = re.sub(r"[\\/:*?\"<>|]+", " ", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    return s or "unnamed"
+_safe_filename = safe_filename
 
 
 def main():
@@ -48,9 +41,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("psarc_path",
                     help="Path to Rocksmith's gears.psarc.")
-    ap.add_argument("--out", default="guitar_amp_photos",
-                    help="Output folder (default: ./guitar_amp_photos).")
-    ap.add_argument("--rs-map", default="rs_to_real.json",
+    ap.add_argument("--out", default="assets/guitar_amp_photos",
+                    help="Output folder (default: ./assets/guitar_amp_photos).")
+    ap.add_argument("--rs-map", default=str(DATA_DIR / "rs_to_real.json"),
                     help="Path to rs_to_real.json (default: ./rs_to_real.json).")
     ap.add_argument("--variant", type=int, default=0, choices=(0, 1, 2),
                     help="Art variant (0=primary, 1/2=alternate angles).")

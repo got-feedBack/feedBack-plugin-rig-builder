@@ -37,6 +37,8 @@ import struct
 import sys
 from pathlib import Path
 
+from common import PLUGIN_ROOT, DATA_DIR
+
 # psarc.py lives inside the slopsmith bundle; add it to the path so
 # this script works both standalone and when invoked from routes.py.
 _SLOP_LIB = "/Applications/Slopsmith.app/Contents/Resources/slopsmith/lib"
@@ -456,8 +458,9 @@ def main():
     irs_root.mkdir(parents=True, exist_ok=True)
 
     summary = extract_all(gears_psarc, irs_root)
-    rs_cab_to_ir = build_rs_cab_to_ir(summary["bank_to_irs"], Path(__file__).parent / "rs_to_real.json")
-    out_json = Path(__file__).parent / "rs_cab_to_ir.json"
+    rs_cab_to_ir = build_rs_cab_to_ir(summary["bank_to_irs"], DATA_DIR / "rs_to_real.json")
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    out_json = DATA_DIR / "rs_cab_to_ir.json"
     out_json.write_text(json.dumps(rs_cab_to_ir, indent=2, sort_keys=True))
 
     # Cab mic-position map — maps each cab's mic-position suffix (`5c`,
@@ -471,7 +474,7 @@ def main():
         summary["bank_to_effect_media"],
         summary["bank_to_irs"],
     )
-    mic_json = Path(__file__).parent / "rs_cab_mic_map.json"
+    mic_json = DATA_DIR / "rs_cab_mic_map.json"
     mic_json.write_text(json.dumps(mic_map, indent=2, sort_keys=True))
 
     print(f"Extracted {summary['total_irs']} IRs into {summary['irs_root']}")
