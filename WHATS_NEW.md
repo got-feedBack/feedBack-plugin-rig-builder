@@ -1,3 +1,21 @@
+# Rig Builder 1.3.4 — Windows extractor + gear-photo size fixes (2026-05-31)
+
+Two Windows-only fixes on top of 1.3.3.
+
+- **Fixed: gear-photo extraction aborted with "UnicodeEncodeError: 'charmap'".**
+  After the 1.3.3 "No module named 'common'" fix, extracting photos still died
+  on Windows because the extractor prints box-drawing/em-dash/ellipsis/×
+  characters and the Windows console + subprocess pipe default to cp1252.
+  The tools now force UTF-8 output (and the backend decodes it as UTF-8), so
+  extraction completes.
+
+- **Fixed: gear photos shown huge in the Gear and Songs tabs.** The thumbnails
+  size themselves with CSS utility classes; on builds where those classes get
+  purged the raw ~512px art rendered full size. Image dimensions are now set
+  inline so the thumbnails stay small everywhere.
+
+---
+
 # Rig Builder 1.3.3 — Songs-tab render + gears.psarc extractor fixes (2026-05-31)
 
 A small bug-fix release on top of 1.3.2.

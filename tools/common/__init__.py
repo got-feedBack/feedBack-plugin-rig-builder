@@ -20,6 +20,18 @@ import sys
 import tempfile
 from pathlib import Path
 
+# Windows consoles AND subprocess pipes default to the cp1252 ("charmap")
+# locale encoding, which can't encode the box-drawing (──), em-dash (—),
+# ellipsis (…) and × characters the extractor CLIs print — that raised
+# "UnicodeEncodeError: 'charmap' codec can't encode characters" and aborted
+# extraction on Windows. Every tool imports `common`, so forcing UTF-8 here
+# (errors='replace' as a belt-and-braces) fixes them all at once.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # tools/common/__init__.py → parents[2] is the plugin root (…/nam_rig_builder).
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 

@@ -1,7 +1,7 @@
 {
   "id": "rig_builder",
   "name": "Rig Builder",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "private": false,
   "nav": { "label": "Rig Builder", "screen": "rig_builder" },
   "screen": "screen.html",
