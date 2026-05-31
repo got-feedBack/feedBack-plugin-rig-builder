@@ -23,6 +23,11 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+# Make this script's own dir (tools/) importable so `common` resolves even when
+# launched as a subprocess whose sys.path[0] isn't tools/ — the packaged app's
+# embedded Python does that on some platforms (the "No module named 'common'"
+# extractor error reported on Windows).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import PLUGIN_ROOT, DATA_DIR
 
 # When run standalone, ensure slopsmith's lib is importable so we can

@@ -37,6 +37,10 @@ import struct
 import sys
 from pathlib import Path
 
+# Make this script's own dir (tools/) importable so `common` resolves even when
+# launched as a subprocess whose sys.path[0] isn't tools/ (the "No module named
+# 'common'" extractor error reported on Windows).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import PLUGIN_ROOT, DATA_DIR
 
 # psarc.py lives inside the slopsmith bundle; add it to the path so
