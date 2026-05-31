@@ -89,7 +89,10 @@ public:
     PedalUI() : UI(DISTRHO_UI_DEFAULT_WIDTH, DISTRHO_UI_DEFAULT_HEIGHT), fDrag(-1), fLastY(0), fDragVal(0.5f) {
         loadSharedResources();
         for (int i = 0; i < kParamCount; ++i) fValues[i] = PEDAL_DEFS[i];
-        setGeometryConstraints(PEDAL_W * 3 / 4, PEDAL_H * 3 / 4, true, true);
+        // keepAspectRatio = true, automaticallyScale = FALSE — DPF must NOT
+        // bitmap-scale the canvas (that's what made it blurry); we redraw
+        // vector-crisp at any size off getWidth()/getHeight(), like the EQ UIs.
+        setGeometryConstraints(PEDAL_W * 3 / 4, PEDAL_H * 3 / 4, true, false);
     }
 protected:
     void parameterChanged(uint32_t i, float v) override { if (i < (uint32_t)kParamCount) { fValues[i] = v; repaint(); } }
@@ -125,9 +128,6 @@ protected:
         beginPath(); circle(W*0.5f, H*0.84f, 26*f); fillColor(Color(200,205,210)); fill();
         beginPath(); circle(W*0.5f, H*0.84f, 26*f); strokeColor(Color(120,124,130)); strokeWidth(3*f); stroke();
         beginPath(); circle(W*0.5f, H*0.84f, 17*f); fillColor(Color(150,155,162)); fill();
-        // brand
-        textAlign(ALIGN_CENTER | ALIGN_BOTTOM);
-        fontSize(11*f); fillColor(Color(20,22,26,170)); text(W*0.5f, H - 14*f, "Rig Builder", NULL);
     }
 
     bool onMouse(const MouseEvent& ev) override {
