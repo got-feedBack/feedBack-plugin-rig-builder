@@ -4475,12 +4475,12 @@ async function rbApplyRsSettingsToVst(toneIdx, pIdx) {
         if (typeof rule.param === 'number') {
             targetId = rule.param;
         } else if (typeof rule.param === 'string') {
-            // Try direct index parse first (e.g. param: "5"), then name match.
-            const asInt = parseInt(rule.param, 10);
-            if (!isNaN(asInt) && String(asInt) === rule.param.trim()) {
-                targetId = asInt;
-            } else {
-                targetId = nameToId[rule.param.toLowerCase()];
+            // NAME first (graphic-EQ params are named by band frequency, e.g.
+            // "50"); fall back to a numeric index only if no name matches.
+            targetId = nameToId[rule.param.toLowerCase()];
+            if (targetId == null) {
+                const asInt = parseInt(rule.param, 10);
+                if (!isNaN(asInt) && String(asInt) === rule.param.trim()) targetId = asInt;
             }
         }
         if (targetId == null) { skipped.push(`${rsKnobName} → ${rule.param} (param not found on VST)`); continue; }
@@ -4816,11 +4816,20 @@ async function rbRestoreSavedParamsToSlot(api, slotId, savedParams) {
     const failed = [];
     const appliedDetail = [];
     for (const [pid, v] of Object.entries(savedParams)) {
-        let targetId = parseInt(pid, 10);
-        let resolvedBy = 'numeric';
-        if (isNaN(targetId) || String(targetId) !== String(pid).trim()) {
-            targetId = nameToId[String(pid).toLowerCase()];
-            resolvedBy = (targetId != null) ? 'name' : 'unresolved';
+        // Resolve by NAME first — graphic-EQ params are NAMED by band
+        // frequency ("50","100",…), which would otherwise be misread as a
+        // numeric paramId (50) that doesn't exist → silent no-op. Fall back
+        // to numeric paramId only when no param name matches.
+        let targetId = nameToId[String(pid).toLowerCase()];
+        let resolvedBy = (targetId != null) ? 'name' : null;
+        if (targetId == null) {
+            const asNum = parseInt(pid, 10);
+            if (!isNaN(asNum) && String(asNum) === String(pid).trim()) {
+                targetId = asNum;
+                resolvedBy = 'numeric';
+            } else {
+                resolvedBy = 'unresolved';
+            }
         }
         if (targetId == null || isNaN(targetId)) {
             failed.push(`${pid}(${resolvedBy})`);
@@ -4953,10 +4962,13 @@ async function rbReapplyVstParamsToChain(api, chainSpec) {
         // This makes bulk-populated vst_states (apply_vst_state.py writes
         // {paramName: value}) restore correctly on real song playback.
         let nameToId = null;
-        const needsResolve = Object.keys(params).some(
-            k => isNaN(parseInt(k, 10)) || String(parseInt(k, 10)) !== String(k).trim()
-        );
-        if (needsResolve && typeof api.getParameters === 'function') {
+        // ALWAYS build the name→id map: some plugins NAME their params with
+        // numeric strings (the bundled graphic EQs name each band by its
+        // frequency, e.g. "50","100","6400"). Those keys must resolve by
+        // NAME — reading "50" as numeric paramId 50 targets a nonexistent id
+        // and silently no-ops, leaving the band at its 0.5 default (the
+        // "EQ8/Bass EQ8 didn't map" bug).
+        if (typeof api.getParameters === 'function') {
             try {
                 const paramList = await api.getParameters(slotId);
                 if (Array.isArray(paramList)) {
@@ -4978,9 +4990,13 @@ async function rbReapplyVstParamsToChain(api, chainSpec) {
         let appliedCount = 0;
         const failed = [];
         for (const [pid, v] of Object.entries(params)) {
-            let targetId = parseInt(pid, 10);
-            if ((isNaN(targetId) || String(targetId) !== String(pid).trim()) && nameToId) {
-                targetId = nameToId[String(pid).toLowerCase()];
+            // Resolve by NAME first (handles numeric-named params like the
+            // graphic-EQ bands); fall back to a numeric paramId only when no
+            // param name matches the key.
+            let targetId = nameToId ? nameToId[String(pid).toLowerCase()] : undefined;
+            if (targetId == null) {
+                const asNum = parseInt(pid, 10);
+                if (!isNaN(asNum) && String(asNum) === String(pid).trim()) targetId = asNum;
             }
             if (targetId == null || isNaN(targetId)) {
                 failed.push(pid);

@@ -1463,6 +1463,33 @@
   }
  },
  "Pedal_EQ5": {
+  "eq5": {
+   "63": {
+    "param": "63",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "250": {
+    "param": "250",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "750": {
+    "param": "750",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "2200": {
+    "param": "2200",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "5700": {
+    "param": "5700",
+    "scale": 0.033333,
+    "offset": 0.5
+   }
+  },
   "khs 3-band eq": {
    "63": {
     "param": "Low Gain",
@@ -1516,6 +1543,48 @@
   }
  },
  "Pedal_EQ8": {
+  "eq8": {
+   "50": {
+    "param": "50",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "100": {
+    "param": "100",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "200": {
+    "param": "200",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "400": {
+    "param": "400",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "800": {
+    "param": "800",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "1600": {
+    "param": "1600",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "3200": {
+    "param": "3200",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "6400": {
+    "param": "6400",
+    "scale": 0.033333,
+    "offset": 0.5
+   }
+  },
   "khs 3-band eq": {
    "100": {
     "param": "Low Gain",
@@ -1577,6 +1646,48 @@
   }
  },
  "Bass_Pedal_BassEQ8": {
+  "basseq8": {
+   "30": {
+    "param": "30",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "75": {
+    "param": "75",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "185": {
+    "param": "185",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "460": {
+    "param": "460",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "1100": {
+    "param": "1100",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "2700": {
+    "param": "2700",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "6800": {
+    "param": "6800",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "16000": {
+    "param": "16000",
+    "scale": 0.033333,
+    "offset": 0.5
+   }
+  },
   "khs 3-band eq": {
    "75": {
     "param": "Low Gain",
@@ -1638,6 +1749,57 @@
   }
  },
  "Rack_StudioEQ": {
+  "studioeq": {
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "BassFreq": {
+    "param": "BassFreq",
+    "scale": 1.0,
+    "_hint": "Hz, log[30,300]"
+   },
+   "LoMid": {
+    "param": "LoMid",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "LoMidFreq": {
+    "param": "LoMidFreq",
+    "scale": 1.0,
+    "_hint": "Hz, log[120,2000]"
+   },
+   "LoMidQ": {
+    "param": "LoMidQ",
+    "scale": 1.0,
+    "_hint": "Q, log[0.3,4]"
+   },
+   "HiMid": {
+    "param": "HiMid",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "HiMidFreq": {
+    "param": "HiMidFreq",
+    "scale": 1000.0,
+    "_hint": "RS kHz→Hz, log[400,8000]"
+   },
+   "HiMidQ": {
+    "param": "HiMidQ",
+    "scale": 1.0
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "TrebleFreq": {
+    "param": "TrebleFreq",
+    "scale": 1000.0,
+    "_hint": "RS kHz→Hz, log[1500,16000]"
+   }
+  },
   "khs 3-band eq": {
    "Bass": {
     "param": "Low Gain",
@@ -1892,6 +2054,38 @@
   }
  },
  "Pedal_AmpEQ": {
+  "ampeq": {
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass pot 0-100 → tone-stack bass pot 0..1 (l). 50 = noon."
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.01,
+    "_hint": "RS Mid pot 0-100 → tone-stack mid pot 0..1 (m). 50 = noon."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble pot 0-100 → tone-stack treble pot 0..1 (t). 50 = noon."
+   },
+   "BassFreq": {
+    "param": "BassFreq",
+    "scale": 0.5,
+    "_hint": "RS BassFreq (nominal 1.0) → VST 0.5 = stock bass cap. Scales C2 ±1 octave."
+   },
+   "MidShift": {
+    "param": "MidShift",
+    "scale": 0.5,
+    "_hint": "RS MidShift (nominal 1.0) → VST 0.5 = stock mid cap. Scales C3 to move the scoop ±1 octave."
+   },
+   "TrebleFreq": {
+    "param": "TrebleFreq",
+    "scale": 0.5,
+    "_hint": "RS TrebleFreq (nominal 1.0) → VST 0.5 = stock treble cap. Scales C1 ±1 octave."
+   }
+  },
   "mequalizer": {
    "Bass": {
     "param": "Gain 1 (EQ 1)",
@@ -1916,6 +2110,56 @@
   }
  },
  "Rack_StudioGraphicEQ": {
+  "studiographiceq": {
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "BassFreq": {
+    "param": "BassFreq",
+    "scale": 1.0
+   },
+   "LoMid": {
+    "param": "LoMid",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "LoMidFreq": {
+    "param": "LoMidFreq",
+    "scale": 1.0
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "MidFreq": {
+    "param": "MidFreq",
+    "scale": 1000.0,
+    "_hint": "RS kHz→Hz"
+   },
+   "HiMid": {
+    "param": "HiMid",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "HiMidFreq": {
+    "param": "HiMidFreq",
+    "scale": 1000.0,
+    "_hint": "RS kHz→Hz"
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "TrebleFreq": {
+    "param": "TrebleFreq",
+    "scale": 1000.0,
+    "_hint": "RS kHz→Hz"
+   }
+  },
   "mequalizer": {
    "Bass": {
     "param": "Gain 1 (EQ 1)",
@@ -1970,6 +2214,28 @@
   }
  },
  "Rack_StudioCompressor": {
+  "studiocomp": {
+   "Threshold": {
+    "param": "Threshold",
+    "scale": 1.0,
+    "_hint": "RS Threshold dB (-27.5..-0.5) → normalized via studiocomp range [-40,0]."
+   },
+   "Ratio": {
+    "param": "Ratio",
+    "scale": 1.0,
+    "_hint": "RS Ratio 1..4 literal → normalized via range [1,12]."
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 1.0,
+    "_hint": "RS Attack 0..92 ms → normalized via range [0,150]."
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 1.0,
+    "_hint": "RS Release 50..260 ms → normalized via range [20,500]."
+   }
+  },
   "mcompressor": {
    "Threshold": {
     "param": "Threshold",

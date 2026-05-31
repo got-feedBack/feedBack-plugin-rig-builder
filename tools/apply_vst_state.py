@@ -97,6 +97,15 @@ _VST_PARAM_RANGES: dict[str, dict[str, tuple[str, float, float]]] = {
         "Ratio":       ("log",     1.0, 100.0),
         "Knee size":   ("linear",  0.0, 100.0),
     },
+    # Bundled Studio Comp (dbx 160 model). Ranges MUST match the param helpers
+    # in StudioCompParams.h (sc*Db / scRatio / sc*Ms) so RS real-unit values
+    # (Threshold dB, Ratio, Attack ms, Release ms) normalize to the same scale.
+    "studiocomp": {
+        "Threshold": ("linear", -40.0,   0.0),
+        "Ratio":     ("linear",   1.0,  12.0),
+        "Attack":    ("linear",   0.0, 150.0),
+        "Release":   ("linear",  20.0, 500.0),
+    },
     "mequalizer": {
         # Top-level (band-agnostic) params
         "Gain":          ("linear", -24.0, 24.0),
@@ -153,6 +162,29 @@ _VST_PARAM_RANGES: dict[str, dict[str, tuple[str, float, float]]] = {
         "High Gain":   ("linear", -24.0, 24.0),
         "Low Freq":    ("log",    20.0, 1000.0),
         "High Freq":   ("log",   1000.0, 20000.0),
+    },
+    "studioeq": {
+        # Bundled Studio EQ (GML-style parametric). Freq params are display-Hz
+        # (the curated rule passes Hz, ×1000 for the kHz HiMid/Treble knobs) and
+        # Q is the raw value; these log ranges MUST match the DSP helpers in
+        # StudioEqParams.h so RS values reproduce exactly. Gains use scale=
+        # 1/30 + offset 0.5 (already normalized) — no range here.
+        "BassFreq":   ("log",   30.0,   300.0),
+        "LoMidFreq":  ("log",  120.0,  2000.0),
+        "HiMidFreq":  ("log",  400.0,  8000.0),
+        "TrebleFreq": ("log", 1500.0, 16000.0),
+        "LoMidQ":     ("log",    0.3,     4.0),
+        "HiMidQ":     ("log",    0.3,     4.0),
+    },
+    "studiographiceq": {
+        # Bundled Studio Graphic EQ (API-550-style, proportional Q, no Q knob).
+        # Freq params display-Hz (kHz Mid/HiMid/Treble ×1000); ranges MUST match
+        # SGEqParams.h. Gains use scale 1/30 + offset 0.5 — no range here.
+        "BassFreq":   ("log",   40.0,   400.0),
+        "LoMidFreq":  ("log",  200.0,  2000.0),
+        "MidFreq":    ("log",  300.0,  3000.0),
+        "HiMidFreq":  ("log",  800.0,  8000.0),
+        "TrebleFreq": ("log", 2000.0, 16000.0),
     },
     # No khs chorus entries — RS Rate maps directly via curator scale=0.01
     # (RS 0-100 → 0-1 normalized). User wants the slider POSITION to track

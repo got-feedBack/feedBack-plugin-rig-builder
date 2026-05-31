@@ -561,6 +561,14 @@
  ],
  "Pedal_EQ5": [
   {
+   "name": "EQ5",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "bundled": "vst/EQ5.vst3",
+   "free": true,
+   "notes": "Bundled 5-band graphic EQ, Mesa Boogie 5-band model, RS bands"
+  },
+  {
    "name": "MEqualizer",
    "manufacturer": "MeldaProduction",
    "format": "VST3",
@@ -586,6 +594,14 @@
   }
  ],
  "Pedal_EQ8": [
+  {
+   "name": "EQ8",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "bundled": "vst/EQ8.vst3",
+   "free": true,
+   "notes": "Bundled 8-band graphic EQ clone of Rocksmith EQ8"
+  },
   {
    "name": "MEqualizer",
    "manufacturer": "MeldaProduction",
@@ -613,6 +629,14 @@
  ],
  "Pedal_AmpEQ": [
   {
+   "name": "Amp EQ",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "bundled": "vst/AmpEQ.vst3",
+   "free": true,
+   "notes": "Bundled Fender '59 Bassman 5F6-A passive FMV tone stack (Yeh & Smith DAFx-06 model). Bass/Mid/Treble interact with the real mid scoop; BassFreq/MidShift/TrebleFreq scale the tone-stack caps."
+  },
+  {
    "name": "MEqualizer",
    "manufacturer": "MeldaProduction",
    "format": "VST3",
@@ -630,6 +654,14 @@
   }
  ],
  "Bass_Pedal_BassEQ8": [
+  {
+   "name": "Bass EQ8",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "bundled": "vst/BassEQ8.vst3",
+   "free": true,
+   "notes": "Bundled 8-band bass graphic EQ, Boss GE-7B gyrator model, RS bands"
+  },
   {
    "name": "MEqualizer",
    "manufacturer": "MeldaProduction",
@@ -657,6 +689,14 @@
  ],
  "Rack_StudioCompressor": [
   {
+   "name": "Studio Comp",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "bundled": "vst/StudioComp.vst3",
+   "free": true,
+   "notes": "Bundled dbx 160 model — true-RMS feed-forward VCA compressor (dbx 202 RMS detector + log VCA, OverEasy soft knee). Threshold/Ratio/Attack/Release map 1:1 to RS."
+  },
+  {
    "name": "kHs Compressor",
    "manufacturer": "Kilohearts",
    "format": "VST3",
@@ -674,6 +714,14 @@
   }
  ],
  "Rack_StudioEQ": [
+  {
+   "name": "Studio EQ",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "bundled": "vst/StudioEQ.vst3",
+   "free": true,
+   "notes": "Bundled 4-band parametric EQ, GML-style clean"
+  },
   {
    "name": "MEqualizer",
    "manufacturer": "MeldaProduction",
@@ -700,6 +748,14 @@
   }
  ],
  "Rack_StudioGraphicEQ": [
+  {
+   "name": "Studio Graphic EQ",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "bundled": "vst/StudioGraphicEQ.vst3",
+   "free": true,
+   "notes": "Bundled 5-band sweepable EQ, API-550 proportional-Q style"
+  },
   {
    "name": "MEqualizer",
    "manufacturer": "MeldaProduction",
