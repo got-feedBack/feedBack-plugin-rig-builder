@@ -2206,21 +2206,15 @@ function rbRenderPieceCard(p, toneIdx, pIdx, isSelected, total) {
     // Status dot at the top-right. When bypassed, the dot "turns off":
     // a small ringed gray pip mirroring the unassigned style, so the
     // user knows the stage is dark even when it's still wired up.
-    let dotColor, dotTitle;
-    if (bypassed) {
-        dotColor = 'bg-gray-800 ring-1 ring-gray-700';
-        dotTitle = 'Bypassed — stage skipped (signal passes through)';
-    } else if (hasVst) {
-        dotColor = 'bg-purple-400';
-        dotTitle = 'VST plugin loaded';
-    } else if (hasFile) {
-        dotColor = 'bg-green-400';
-        dotTitle = 'NAM/IR assigned';
-    } else {
-        dotColor = 'bg-gray-600 ring-1 ring-gray-700';
-        dotTitle = 'Unassigned';
-    }
-    const statusDot = `<span class="absolute top-1 right-1 w-2 h-2 rounded-full ${dotColor}" title="${rbEsc(dotTitle)}"></span>`;
+    // Inline colour (not just a Tailwind class) so the dot is always visible
+    // even if a purged/older CSS build drops the bg-* utility — and z-10 keeps
+    // it above the thumbnail. This is the "missing status dot" fix.
+    let dotHex, dotTitle;
+    if (bypassed)      { dotHex = '#374151'; dotTitle = 'Bypassed — stage skipped (signal passes through)'; }
+    else if (hasVst)   { dotHex = '#c084fc'; dotTitle = 'VST plugin loaded'; }
+    else if (hasFile)  { dotHex = '#4ade80'; dotTitle = 'NAM/IR assigned'; }
+    else               { dotHex = '#4b5563'; dotTitle = 'Unassigned'; }
+    const statusDot = `<span class="absolute top-1 right-1 w-2 h-2 rounded-full z-10 ring-1 ring-black/30" style="background-color:${dotHex}" title="${rbEsc(dotTitle)}"></span>`;
     const selCls = isSelected
         ? 'border-accent ring-2 ring-accent/40 bg-dark-700'
         : 'border-gray-800 hover:border-gray-600 bg-dark-800/70';
@@ -2240,13 +2234,13 @@ function rbRenderPieceCard(p, toneIdx, pIdx, isSelected, total) {
                 <span class="font-mono">${pIdx + 1}/${total}</span>
                 <span class="uppercase tracking-wide">${rbEsc(p.rs_category || '')}</span>
             </div>
-            <div class="flex justify-center items-center mb-1.5 h-20">
-                <img src="${imgUrl}" alt="" loading="lazy"
-                     class="max-w-full max-h-full rounded object-contain bg-dark-900 transition ${imgBypassCls}"
-                     onerror="${onerr}">
-                <div class="hidden w-full h-full rounded bg-dark-900 flex items-center justify-center text-[10px] text-gray-600 text-center px-1 leading-tight ${imgBypassCls}">
+            <div class="relative flex justify-center items-center mb-1.5 h-20 rounded bg-dark-900 overflow-hidden">
+                <div class="absolute inset-0 flex items-center justify-center text-[10px] text-gray-600 text-center px-1 leading-tight ${imgBypassCls}">
                     ${rbEsc(p.rs_category || 'gear')}
                 </div>
+                <img src="${imgUrl}" alt="" loading="lazy"
+                     class="relative max-w-full max-h-full object-contain transition ${imgBypassCls}"
+                     onerror="this.style.display='none';">
             </div>
             <div class="text-[11px] ${bypassed ? 'text-gray-500' : 'text-gray-200'} leading-tight line-clamp-2 min-h-[2.2em]" title="${rbEsc(p.real_name || p.type)}">
                 ${rbEsc(p.real_name || p.type)}

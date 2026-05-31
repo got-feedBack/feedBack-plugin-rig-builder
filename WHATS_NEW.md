@@ -1,3 +1,27 @@
+# Rig Builder 1.3.3 — Songs-tab render + gears.psarc extractor fixes (2026-05-31)
+
+A small bug-fix release on top of 1.3.2.
+
+- **Fixed: extracting `gears.psarc` failed with "No module named 'common'".**
+  The extractor scripts (`extract_gear_map` / `extract_gear_photos` /
+  `extract_irs`) import a shared `common` helper. When the packaged app ran
+  them as a subprocess (notably on Windows) the script's own folder wasn't on
+  Python's import path, so the import blew up and extraction died with
+  *"extractor failed: ModuleNotFoundError: No module named 'common' — is this
+  really gears.psarc?"*. Each extractor now puts its own folder on the path
+  before importing.
+
+- **Fixed: Songs-tab chain piece showing a blank white box.** A gear whose
+  photo failed to load (or had a white background) rendered as a white
+  rectangle that could also swallow the card border and the status dot. The
+  thumbnail now sits on a dark tile with the gear-category label behind it, so
+  a missing/odd photo falls back cleanly.
+
+- **Fixed: missing NAM/VST status dot.** The little corner dot that shows
+  whether a piece has a NAM, a VST, or nothing now always renders.
+
+---
+
 # Rig Builder 1.3.2 — Chain volume, bundled AutoSweep wah, and VST-mapping fixes (2026-05-30)
 
 The big one is **loudness**: the guitar was sitting far below the backing
