@@ -1704,7 +1704,7 @@ async function rbOpenSuggest(rsGear, queryOverride = '', gearsOverride = '') {
     } else {
         candidatesHtml = data.candidates.map(c => {
             const photo = (c.images && c.images[0])
-                ? `<img src="${rbEsc(c.images[0])}" alt="" loading="lazy" class="w-12 h-12 rounded object-cover bg-dark-900 flex-shrink-0" onerror="this.style.visibility='hidden'">`
+                ? `<img src="${rbEsc(c.images[0])}" alt="" loading="lazy" style="width:48px;height:48px;object-fit:cover" class="w-12 h-12 rounded object-cover bg-dark-900 flex-shrink-0" onerror="this.style.visibility='hidden'">`
                 : `<div class="w-12 h-12 rounded bg-dark-900 flex items-center justify-center text-gray-700 text-[10px] flex-shrink-0">no photo</div>`;
             return `
             <div class="bg-dark-800 border border-gray-800 rounded-lg p-3 flex items-center gap-3">
@@ -2229,16 +2229,18 @@ function rbRenderPieceCard(p, toneIdx, pIdx, isSelected, total) {
     const onerr = "this.style.display='none'; var n=this.nextElementSibling; if(n) n.classList.remove('hidden');";
     return `
         <button onclick="rbSelectPiece(${toneIdx}, ${pIdx})"
-                class="relative flex-shrink-0 w-28 rounded-lg border ${selCls} p-2 text-left transition focus:outline-none">
+                class="relative flex-shrink-0 w-28 rounded-lg border ${selCls} p-2 text-left transition focus:outline-none"
+                style="width:112px">
             <div class="text-[9px] text-gray-500 mb-1 flex items-center justify-between">
                 <span class="font-mono">${pIdx + 1}/${total}</span>
                 <span class="uppercase tracking-wide">${rbEsc(p.rs_category || '')}</span>
             </div>
-            <div class="relative flex justify-center items-center mb-1.5 h-20 rounded bg-dark-900 overflow-hidden">
+            <div class="relative flex justify-center items-center mb-1.5 h-20 rounded bg-dark-900 overflow-hidden" style="height:80px">
                 <div class="absolute inset-0 flex items-center justify-center text-[10px] text-gray-600 text-center px-1 leading-tight ${imgBypassCls}">
                     ${rbEsc(p.rs_category || 'gear')}
                 </div>
                 <img src="${imgUrl}" alt="" loading="lazy"
+                     style="max-width:100%;max-height:100%;object-fit:contain"
                      class="relative max-w-full max-h-full object-contain transition ${imgBypassCls}"
                      onerror="this.style.display='none';">
             </div>
@@ -2405,8 +2407,9 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
     return `
         <div class="bg-dark-800/40 border-y border-gray-800/40 p-4 space-y-3" data-tone="${toneIdx}" data-piece="${pIdx}">
             <div class="flex items-start gap-4">
-                <div class="flex-shrink-0 w-32 h-32 flex items-center justify-center">
+                <div class="flex-shrink-0 w-32 h-32 flex items-center justify-center overflow-hidden" style="width:128px;height:128px">
                     <img src="${imgUrl}" alt="" loading="lazy"
+                         style="max-width:100%;max-height:100%;object-fit:contain"
                          class="max-w-full max-h-full rounded object-contain bg-dark-900"
                          onerror="${onerrBig}">
                     <div class="hidden w-full h-full rounded bg-dark-900 flex items-center justify-center text-xs text-gray-600 text-center px-2">
@@ -2990,7 +2993,7 @@ function rbRenderGearSwapPanel(panel, gears, piece, toneIdx, pIdx) {
     const cards = gears.map(g => {
         const dim = g.rs_gear === fromGear ? 'opacity-40 cursor-not-allowed' : 'hover:bg-amber-900/30 cursor-pointer';
         const img = g.image
-            ? `<img src="${rbEsc(g.image)}" alt="" loading="lazy" class="w-9 h-9 rounded object-cover bg-dark-900 flex-shrink-0">`
+            ? `<img src="${rbEsc(g.image)}" alt="" loading="lazy" style="width:36px;height:36px;object-fit:cover" class="w-9 h-9 rounded object-cover bg-dark-900 flex-shrink-0">`
             : `<div class="w-9 h-9 rounded bg-dark-900 flex items-center justify-center text-gray-700 text-[9px] flex-shrink-0">no photo</div>`;
         const variantBadge = g.variant_count > 0
             ? `<span class="text-[9px] text-emerald-400 bg-emerald-900/30 border border-emerald-800/40 rounded px-1">${g.variant_count}×</span>`
@@ -3038,7 +3041,7 @@ function rbFilterGearSwap(toneIdx, pIdx) {
     rows.innerHTML = filtered.map(g => {
         const dim = g.rs_gear === fromGear ? 'opacity-40 cursor-not-allowed' : 'hover:bg-amber-900/30 cursor-pointer';
         const img = g.image
-            ? `<img src="${rbEsc(g.image)}" alt="" loading="lazy" class="w-9 h-9 rounded object-cover bg-dark-900 flex-shrink-0">`
+            ? `<img src="${rbEsc(g.image)}" alt="" loading="lazy" style="width:36px;height:36px;object-fit:cover" class="w-9 h-9 rounded object-cover bg-dark-900 flex-shrink-0">`
             : `<div class="w-9 h-9 rounded bg-dark-900 flex items-center justify-center text-gray-700 text-[9px] flex-shrink-0">no photo</div>`;
         const variantBadge = g.variant_count > 0
             ? `<span class="text-[9px] text-emerald-400 bg-emerald-900/30 border border-emerald-800/40 rounded px-1">${g.variant_count}×</span>`
@@ -5789,6 +5792,7 @@ function rbRenderCatalogCardCompact(g) {
     const btnId = `rb-aud-${_rbCatalogSeq++}`;
     const photo = g.image
         ? `<img src="${rbEsc(g.image)}" alt="" loading="lazy"
+               style="width:32px;height:32px;object-fit:cover"
                class="w-8 h-8 rounded object-cover bg-dark-900 flex-shrink-0"
                onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'w-8 h-8 rounded bg-dark-900 flex-shrink-0'}))">`
         : `<div class="w-8 h-8 rounded bg-dark-900 flex-shrink-0"></div>`;
@@ -5862,15 +5866,22 @@ function rbRenderCatalogCard(g) {
     // sibling, which is the next photo source down the chain.
     const rsArt = `${RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}${_RB_GEAR_PHOTO_CB}`;
     const onerrChain = "this.style.display='none'; var n=this.nextElementSibling; if(n){ if(n.tagName==='IMG'){n.style.display=''} else {n.classList.remove('hidden')} }";
+    // Inline width/height/object-fit (not just Tailwind w-16 etc.) so the
+    // thumbnail stays small even where the host's purged CSS build drops the
+    // plugin-only sizing utilities — without it the raw ~512px art renders
+    // full size (the "gear photos huge on Windows" bug).
     const t3kImgTag = g.image
-        ? `<img src="${rbEsc(g.image)}" alt="" loading="lazy" style="display:none"
+        ? `<img src="${rbEsc(g.image)}" alt="" loading="lazy"
+               style="display:none;max-width:100%;max-height:100%;object-fit:cover"
                class="max-w-full max-h-full rounded object-cover bg-dark-900"
                onerror="${onerrChain}">`
         : '';
     const photoBlock = `
         <div class="flex-shrink-0 w-16 h-16 flex items-center justify-center rounded bg-dark-900 overflow-hidden transition ${photoOff}"
+             style="width:64px;height:64px"
              title="${isAssigned ? '' : 'Unassigned — no NAM/IR/VST mapped yet'}">
             <img src="${rsArt}" alt="" loading="lazy"
+                 style="max-width:100%;max-height:100%;object-fit:contain"
                  class="max-w-full max-h-full rounded object-contain"
                  onerror="${onerrChain}">
             ${t3kImgTag}
