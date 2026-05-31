@@ -2169,6 +2169,28 @@
   }
  },
  "Rack_StudioCompressor": {
+  "studiocomp": {
+   "Threshold": {
+    "param": "Threshold",
+    "scale": 1.0,
+    "_hint": "RS Threshold dB (-27.5..-0.5) → normalized via studiocomp range [-40,0]."
+   },
+   "Ratio": {
+    "param": "Ratio",
+    "scale": 1.0,
+    "_hint": "RS Ratio 1..4 literal → normalized via range [1,12]."
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 1.0,
+    "_hint": "RS Attack 0..92 ms → normalized via range [0,150]."
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 1.0,
+    "_hint": "RS Release 50..260 ms → normalized via range [20,500]."
+   }
+  },
   "mcompressor": {
    "Threshold": {
     "param": "Threshold",

@@ -680,6 +680,14 @@
  ],
  "Rack_StudioCompressor": [
   {
+   "name": "Studio Comp",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "bundled": "vst/StudioComp.vst3",
+   "free": true,
+   "notes": "Bundled dbx 160 model — true-RMS feed-forward VCA compressor (dbx 202 RMS detector + log VCA, OverEasy soft knee). Threshold/Ratio/Attack/Release map 1:1 to RS."
+  },
+  {
    "name": "kHs Compressor",
    "manufacturer": "Kilohearts",
    "format": "VST3",

@@ -97,6 +97,15 @@ _VST_PARAM_RANGES: dict[str, dict[str, tuple[str, float, float]]] = {
         "Ratio":       ("log",     1.0, 100.0),
         "Knee size":   ("linear",  0.0, 100.0),
     },
+    # Bundled Studio Comp (dbx 160 model). Ranges MUST match the param helpers
+    # in StudioCompParams.h (sc*Db / scRatio / sc*Ms) so RS real-unit values
+    # (Threshold dB, Ratio, Attack ms, Release ms) normalize to the same scale.
+    "studiocomp": {
+        "Threshold": ("linear", -40.0,   0.0),
+        "Ratio":     ("linear",   1.0,  12.0),
+        "Attack":    ("linear",   0.0, 150.0),
+        "Release":   ("linear",  20.0, 500.0),
+    },
     "mequalizer": {
         # Top-level (band-agnostic) params
         "Gain":          ("linear", -24.0, 24.0),
