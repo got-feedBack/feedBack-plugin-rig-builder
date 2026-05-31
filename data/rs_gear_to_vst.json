@@ -49,6 +49,15 @@
  ],
  "Pedal_Chorus": [
   {
+   "name": "Chorus",
+   "manufacturer": "Rig Builder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/Chorus.vst3",
+   "notes": "Bundled Boss CE-2 style BBD chorus based on the local schematic, using Rocksmith's Rate, Depth, and Mix knobs."
+  },
+  {
    "name": "kHs Chorus",
    "manufacturer": "Kilohearts",
    "format": "VST3",
@@ -299,6 +308,15 @@
  ],
  "Pedal_AmpTrem": [
   {
+   "name": "AmpTrem",
+   "manufacturer": "Rig Builder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/AmpTrem.vst3",
+   "notes": "Bundled Demeter Tremulator-style optical amp tremolo based on the local schematic, using Rocksmith's Speed and Depth knobs."
+  },
+  {
    "name": "MTremolo",
    "manufacturer": "MeldaProduction",
    "format": "VST3",
@@ -308,6 +326,15 @@
   }
  ],
  "Pedal_MultiTrem": [
+  {
+   "name": "MultiTrem",
+   "manufacturer": "Rig Builder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/MultiTrem.vst3",
+   "notes": "Bundled Boss TR-2 style multi-wave tremolo based on the local schematic, using Rocksmith's Speed, Mix, and Waveform knobs."
+  },
   {
    "name": "MTremolo",
    "manufacturer": "MeldaProduction",
@@ -328,6 +355,15 @@
   }
  ],
  "Pedal_AmpVibe": [
+  {
+   "name": "AmpVibe",
+   "manufacturer": "Rig Builder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/AmpVibe.vst3",
+   "notes": "Bundled Uni-Vibe style four-stage phase modulation based on the local schematic, using Rocksmith's Speed and Mix knobs."
+  },
   {
    "name": "MVibrato",
    "manufacturer": "MeldaProduction",
@@ -821,6 +857,15 @@
  ],
  "Pedal_NoiseGate": [
   {
+   "name": "NoiseGate",
+   "manufacturer": "Rig Builder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/NoiseGate.vst3",
+   "notes": "Bundled ET-45C/default-gate style gate using Rocksmith's Thresh and Rate knobs"
+  },
+  {
    "name": "kHs Gate",
    "manufacturer": "Kilohearts",
    "format": "VST3",
@@ -1111,6 +1156,15 @@
   }
  ],
  "Pedal_BuzzOne": [
+  {
+   "name": "BuzzOne",
+   "manufacturer": "Rig Builder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/BuzzOne.vst3",
+   "notes": "Bundled Univox Super-Fuzz style octave fuzz based on the local Buzz 1 schematic, using Rocksmith's Gain and Tone knobs."
+  },
   {
    "name": "kHs Distortion",
    "manufacturer": "Kilohearts",

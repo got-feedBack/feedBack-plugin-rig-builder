@@ -61,6 +61,21 @@
   }
  },
  "Pedal_Chorus": {
+  "chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.1666666667,
+    "_hint": "Rocksmith base Chorus Rate is stored around 0..6; normalize that to the CE-2 style LFO range."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
   "khs chorus": {
    "Rate": {
     "param": "Rate",
@@ -560,6 +575,17 @@
   }
  },
  "Pedal_AmpTrem": {
+  "amptrem": {
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "Rocksmith Amp Trem Depth maps directly to the optical gain-reduction depth."
+   }
+  },
   "bertom_freetremolo": {
    "Speed": {
     "param": "Rate",
@@ -589,6 +615,22 @@
   }
  },
  "Pedal_MultiTrem": {
+  "multitrem": {
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "Rocksmith Multi Trem Mix is tremolo depth."
+   },
+   "Waveform": {
+    "param": "Waveform",
+    "scale": 0.5,
+    "_hint": "RS Waveform 0/1/2 maps to triangle/rounded/square."
+   }
+  },
   "bertom_freetremolo": {
    "Speed": {
     "param": "Rate",
@@ -1248,6 +1290,17 @@
   }
  },
  "Pedal_BuzzOne": {
+  "buzzone": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "Continuous Super-Fuzz tone-switch balance: lower is thicker/nasal, higher is brighter and more scooped."
+   }
+  },
   "khs distortion": {
    "Gain": {
     "param": "Drive",
@@ -2013,6 +2066,19 @@
   }
  },
  "Pedal_NoiseGate": {
+  "noisegate": {
+   "Thresh": {
+    "param": "Thresh",
+    "scale": 0.02,
+    "offset": 2.0,
+    "_hint": "RS Thresh is stored in dB. Map roughly -100..-50 dB into the bundled gate's normalized threshold."
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "Higher RS Rate tightens the gate decay and increases attenuation range."
+   }
+  },
   "khs gate": {
    "Thresh": {
     "param": "Threshold",
@@ -2124,6 +2190,17 @@
   }
  },
  "Pedal_AmpVibe": {
+  "ampvibe": {
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Mix controls the chorus/vibe dry-phase blend and modulation depth."
+   }
+  },
   "mvibrato": {
    "Speed": {
     "param": "Rate",
