@@ -373,7 +373,7 @@
       textC(d,.30*W,.525*H,F.crete,34,rgb(16,20,14),'bass');
       // LED at top-centre (above the knobs), clear of the FUZZ wordmark
       ledDot(d,W*.5,H*.105,true,224,60,52); footRound(d,W*.5,H*.77,21*s);
-      textC(d,.5*W,.855*H,F.crete,15,rgb(16,20,14),'quimical-harmony');   // brand (Big Muff = E-H at the bottom)
+      textC(d,.5*W,.875*H,F.crete,15,rgb(16,20,14),'quimical-harmony');   // brand (Big Muff = E-H at the bottom)
     } };
 
   // Big Buzz — silver/red vintage fuzz face inspired by a triangle-era fuzz box.
@@ -996,7 +996,7 @@
       let x = .5*W - (wq + gap + wt) / 2;
       setFont(d, F.graffiti, qSize); c.fillStyle = rgb(244,150,46); c.fillText('Q', x, by);
       setFont(d, F.graffiti, tSize); c.fillStyle = rgb(152,88,208); c.fillText('TRIX', x + wq + gap, by);
-      textC(d, W*0.10, H*0.44, F.crete, 14, rgb(206,208,214), 'quimical-harmony', 'left');  // brand: above TRIX, below the knobs, left
+      textC(d, W*0.90, H*0.44, F.crete, 14, rgb(206,208,214), 'quimical-harmony', 'right');  // brand: above TRIX, below the knobs, right
       ledDot(d, W*0.5, H*0.10, true, 255,80,70);
       footRound(d, W*0.5, H*0.89, 16);   // footswitch centred at the bottom (over the logo if needed)
     } };
