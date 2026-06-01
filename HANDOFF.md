@@ -43,6 +43,121 @@ database schema, API quirks, what's done, what isn't, and why.
 
 ---
 
+## Slopsmith capability migration (2026-06-01)
+
+`plugin.json` now declares the current capability standards:
+`capability-pipelines.v1` and `plugin-runtime-idempotent.v1`. The frontend
+keeps the old working paths, but also registers native capability
+participants at runtime when `rbInit()` runs:
+
+- `ui.navigation` / `ui.plugin-screens`: native registration for
+  `plugin-rig_builder` and the Rig Builder nav entry.
+- `library`: `rig_builder` is a requester/observer for provider listing,
+  source selection, and `song.sync`. It should appear in the inspector under
+  `library`, but it is not a provider because it does not register a browsable
+  library source.
+- `audio-effects`: `rig_builder.effects` reports the current NAM/VST/IR
+  chain route (`desktop-main`) using only safe summaries: stage counts,
+  type buckets, bypass counts, master pre/post counts, dependency status.
+- `jobs`: `rig_builder.jobs` wraps batch mapping, curated preloads,
+  candidate downloads, extraction, export, purge, and similar long-running
+  backend work with safe job labels/progress/completion. The real work still
+  lives in existing FastAPI routes.
+- `privileged-capabilities`: manifest + runtime participants inventory
+  backend routes, tone3000 external-service access, media import/export, and
+  subprocess-backed Rocksmith extractors.
+
+Privacy rule: diagnostics must never include local paths, filenames, NAM/IR
+model names, preset names, VST paths/state, OAuth tokens, tone3000 URLs, raw
+route payloads, audio buffers, or user-entered PSARC paths. Use
+`rbChainCapabilitySummary()` and `rbShortSafeText()` for any new capability
+reporting; do not pass raw `native_preset`, route responses, `rs_gear`, file
+fields, or settings objects into capability hosts.
+
+Migration gates still expected:
+
+- The fetch patch for `nam_tone/native-preset/{id}` records the
+  `audio-effects.legacy-nam-routing` bridge until Slopsmith has a native
+  effects-route selection point for the NAM player.
+- Long-running routes are attributed through `jobs` but not moved into a
+  first-class job queue yet; removing `jobs.legacy-*` bridge hits requires the
+  backend routes to accept job IDs / cancellation directly.
+- tone3000 OAuth/downloads and extractors are visible user-triggered flows;
+  keep any future background automation behind explicit approval or safe
+  diagnostics-only bridge accounting.
+
+## Total capability migration path (Rig Builder)
+
+Goal: Rig Builder should become a native participant in Slopsmith's capability
+graph while keeping its DSP/domain logic private. "Fully migrated" does not
+mean deleting `routes.py`; it means browser code and other plugins no longer
+depend on ad hoc globals, monkey-patches, direct legacy UI surfaces, or raw
+backend-route semantics for cross-plugin coordination. Existing FastAPI routes
+may remain as the implementation behind native capability handlers.
+
+### Current migration state
+
+| Surface | Current state | Target state |
+|---|---|---|
+| UI navigation/screens | Manifest + runtime native `ui.navigation` / `ui.plugin-screens` records exist. | Legacy `nav`/`screen` fields are compatibility only, with native records owning inspector output. |
+| Library | Manifest + runtime `library` requester/observer exists; Songs tab uses `/api/library?provider=...`. | All song search/sync flows use the library owner/provider contract; delete Rig Builder local song scanner fallback. |
+| Audio effects | `audio-effects` participant reports safe chain summaries; full-chain playback still uses the `nam_tone/native-preset` fetch redirect bridge. | NAM player asks `audio-effects` for the active Rig Builder chain/route directly; no fetch monkey-patch. |
+| Jobs | Long-running UI actions are wrapped with job labels/progress where possible; backend routes still execute the real work. | Batch, preload, extraction, export, purge, and downloads are dispatched through `jobs` provider handlers with job IDs, cancellation, and safe recovery refs. |
+| Privileged work | Backend routes, tone3000, media import/export, and extractors are inventoried in `privileged-capabilities`. | Privileged operations are authorized and audited through the host before route execution, then linked to `jobs` when long-running. |
+| Diagnostics | Safe summaries are emitted for chains/jobs/privileged outcomes; avoid paths, filenames, tokens, model names, route payloads. | Support snapshots explain all capability state and bridge hits without exposing provider-private data. |
+
+### Migration phases
+
+1. **Stabilize native inventory.** Keep `plugin.json` and `rbRegisterCapabilities()` in lockstep for `library`, `audio-effects`, `jobs`, `privileged-capabilities`, `ui.navigation`, and `ui.plugin-screens`. Inspector smoke should show `rig_builder` in each domain with no duplicate participants after repeated screen opens/restarts.
+
+2. **Finish library migration.** Keep Songs tab search on `/api/library?provider=<id>` for local and remote sources. Use library `sync-song` for remote rows, and require providers to return a local `filename` / `localFilename` before Rig Builder parses tones. Once the minimum Slopsmith host has `/api/library` provider support, remove `rbListSongsLegacy()` and the `/api/plugins/rig_builder/list_songs` UI dependency. The backend route can remain only for old hosts or be deleted in a breaking plugin release.
+
+3. **Replace the NAM fetch bridge.** Add a core/native audio-effects selection point used by `nam_tone` playback. Rig Builder should expose a route/provider handler that returns the full NAM/VST/IR chain for a preset or current song tone, and `nam_tone` should request that handler instead of Rig Builder monkey-patching `window.fetch`. Removal gate: normal song playback, Listen preview, mega-chain/preloader mode, bypass toggles, and fallback-to-2-stage all work with zero `audio-effects.legacy-nam-routing` bridge hits.
+
+4. **Move long-running work behind `jobs`.** Convert each expensive action into a job-capable backend entry point: batch map, curated preload, candidate download/audition, song auto-download, Rocksmith extraction, default export, library purge, and any future VST scan/import work. The UI should enqueue through `jobs`, receive a job ID, update progress through the host, and support cancellation where the backend can safely stop. Route responses should expose safe summaries only, never raw file paths, tone3000 URLs, model names, or subprocess command lines.
+
+5. **Put privileged actions behind policy.** tone3000 OAuth/request/download, native file pickers, PSARC/IR extraction, DB writes, media import/export, and subprocess execution should check the privileged host before they run. Long-running privileged actions must link the authorization record to the `jobs` job ID. Removal gate: background/unconfirmed execution is blocked, user-action flows are accepted, and diagnostics show authorized/blocked/degraded outcomes without raw payloads.
+
+6. **Retire legacy UI compatibility.** When Slopsmith's UI hosts are the only supported path, remove reliance on legacy manifest `nav`/`screen` behavior and any direct DOM/global registrations that duplicate native contributions. Native records must continue to mount exactly once after reload, plugin screen navigation, and repeated plugin script hydration.
+
+7. **Tighten diagnostics and tests.** Add focused smoke tests or manual release checks for: provider selector local/remote search; remote sync to local filename; multi-NAM playback chain; bypass persistence; mega-chain mode; batch map progress/failure; tone3000 disconnected/offline; extraction failure; app restart/reload idempotency; and Capability Inspector output. Support snapshots must remain under the host caps and exclude local paths, filenames, tokens, URLs, model/IR names, VST paths/state, raw chain payloads, recordings, and subprocess details.
+
+### Done definition
+
+Rig Builder is considered totally migrated when normal use produces native
+participants and outcomes for every surface above, all compatibility bridge hits
+are either expected diagnostics-only records or gone, and the following legacy
+dependencies are absent from the normal path:
+
+- No `window.fetch` interception for NAM playback routing.
+- No direct local-library scanner from the Songs tab when the core library
+  provider endpoint is available.
+- No long-running action that bypasses `jobs` attribution.
+- No privileged route execution without a privileged-capabilities outcome.
+- No duplicate UI/navigation/screen participants after repeated hydration.
+- No support diagnostic containing raw paths, song filenames, model names,
+  tone3000 secrets/URLs, VST state, route payloads, subprocess args/output, or
+  provider-private data.
+
+## Songs tab library provider routing (2026-06-01)
+
+The Songs tab search has a Slopsmith library-source selector before the search
+box. On current Slopsmith builds, `rbListSongs()` always searches through the
+core provider endpoint, including the local library:
+`GET /api/library?provider=local&...` or `provider=<remote-id>`. The old
+Rig Builder `/list_songs` route is only a compatibility fallback if the core
+library provider endpoint itself is unavailable.
+
+Remote rows must resolve to a real local filename before tone parsing. If a
+remote result already includes `localFilename` / `local_filename` /
+`playFilename`, Rig Builder opens that file directly. Otherwise, rows from a
+provider with `song.sync` call the provider sync endpoint first, then open the
+returned `filename` / `localFilename`. If sync succeeds without a local filename
+(remote-cache only), the Songs tab leaves the row unavailable because
+`/api/plugins/rig_builder/song/{filename}` can only parse local DLC files.
+
+---
+
 ## Amp gain variants (`feat/amp-gain-variants` — experimental)
 
 Rocksmith amps respond to their Gain knob (a Twin at gain=10 is sparkling

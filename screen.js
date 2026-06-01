@@ -74,6 +74,7 @@
                 const data = JSON.parse(txt);
                 const chain = data && data.native_preset && data.native_preset.chain;
                 if (!Array.isArray(chain) || chain.length === 0) return origFetch(input, init);
+                void rbSyncAudioEffectsCapability('full-chain-playback', { chain, mode: 'song-playback', bridge: true });
                 // Including how many master_pre / master_post stages were
                 // injected — handy for the "master chain not heard in song
                 // playback" diagnostic. If both counts are zero here but
@@ -633,6 +634,504 @@ function rbEffVstFormat(p){ return p._vst_format || (p.assigned && p.assigned.vs
 function rbEffVstState(p) { return p._vst_state ?? (p.assigned && p.assigned.vst_state) ?? null; }
 
 const RB_API = '/api/plugins/rig_builder';
+const RB_PLUGIN_ID = 'rig_builder';
+const RB_EFFECTS_PARTICIPANT_ID = 'rig_builder.effects';
+const RB_EFFECTS_ROUTE_KEY = 'desktop-main';
+const RB_JOBS_PROVIDER_ID = 'rig_builder.jobs';
+
+function rbSlopsmith() { return window.slopsmith || null; }
+function rbCapabilitiesApi() { const s = rbSlopsmith(); return s && s.capabilities; }
+function rbCandidateDomainsApi() { const s = rbSlopsmith(); return s && s.candidateDomains; }
+function rbJobsApi() { const s = rbSlopsmith(); return s && s.jobs; }
+function rbLibraryProvidersApi() {
+    const s = rbSlopsmith();
+    const api = s && s.libraryProviders;
+    return api && typeof api === 'object' ? api : null;
+}
+
+let _rbLibraryProvidersLoaded = false;
+
+function rbSafeCapabilityId(value, fallback) {
+    return String(value == null ? '' : value)
+        .replace(/[^A-Za-z0-9_.:-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 96) || fallback || 'unknown';
+}
+
+function rbShortSafeText(value, fallback) {
+    const text = String(value == null ? '' : value)
+        .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+        .replace(/https?:\/\/[^\s?#]+[^\s]*/gi, '[url]')
+        .replace(/file:\/\/[^\s]+/gi, '[path]')
+        .replace(/\/Users\/[^\s]+/g, '[path]')
+        .replace(/[A-Za-z]:\\[^\s]+/g, '[path]')
+        .replace(/\b[^\s]+\.(psarc|sloppak|wav|flac|ogg|mp3|nam|json|db|sqlite)\b/gi, '[file]')
+        .replace(/\b(token|secret|password|api[_-]?key)=([^\s&]+)/gi, '$1=[redacted]')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return (text || fallback || '').slice(0, 180);
+}
+
+function rbChainCapabilitySummary(chain, extra) {
+    const stages = Array.isArray(chain) ? chain : [];
+    const typeCounts = { vst: 0, nam: 0, ir: 0, other: 0 };
+    let bypassedCount = 0;
+    let masterPreCount = 0;
+    let masterPostCount = 0;
+    for (const stage of stages) {
+        if (stage && stage.bypassed) bypassedCount += 1;
+        if (stage && stage.type === 0) typeCounts.vst += 1;
+        else if (stage && stage.type === 1) typeCounts.nam += 1;
+        else if (stage && stage.type === 2) typeCounts.ir += 1;
+        else typeCounts.other += 1;
+        const slot = String((stage && stage.slot) || '');
+        if (slot.indexOf('master_pre') === 0) masterPreCount += 1;
+        if (slot.indexOf('master_post') === 0) masterPostCount += 1;
+    }
+    return {
+        routeKey: RB_EFFECTS_ROUTE_KEY,
+        provider: 'rig-builder',
+        processorCount: stages.length,
+        bypassedCount,
+        activeCount: Math.max(0, stages.length - bypassedCount),
+        typeCounts,
+        masterPreCount,
+        masterPostCount,
+        hasNativeChain: stages.length > 0,
+        allBypassed: stages.length > 0 && bypassedCount === stages.length,
+        ...(extra || {}),
+    };
+}
+
+function rbCapabilityCommand(capability, command, payload) {
+    const api = rbCapabilitiesApi();
+    if (!api || typeof api.command !== 'function') return Promise.resolve(null);
+    try {
+        return Promise.resolve(api.command(capability, command, {
+            requester: RB_PLUGIN_ID,
+            payload: payload || {},
+        })).catch((e) => {
+            console.warn(`[rig_builder] ${capability}.${command} failed:`, e);
+            return null;
+        });
+    } catch (e) {
+        console.warn(`[rig_builder] ${capability}.${command} failed:`, e);
+        return Promise.resolve(null);
+    }
+}
+
+function rbRegisterUiCapabilities() {
+    const nav = rbSlopsmith() && rbSlopsmith().uiNavigation;
+    if (!nav || typeof nav.registerScreen !== 'function') return;
+    nav.registerScreen({
+        pluginId: RB_PLUGIN_ID,
+        screenId: 'plugin-rig_builder',
+        label: 'Rig Builder',
+        lifecyclePolicy: 'mounted-hidden',
+        compatibilityMode: 'native',
+        logicalKey: 'rig_builder:screen',
+        fallbackScreenId: 'home',
+    });
+    if (typeof nav.registerEntry === 'function') {
+        nav.registerEntry({
+            pluginId: RB_PLUGIN_ID,
+            entryId: 'rig-builder-nav',
+            targetScreenId: 'plugin-rig_builder',
+            label: 'Rig Builder',
+            region: 'primary-nav.plugins',
+            lifecyclePolicy: 'mounted-hidden',
+            compatibilityMode: 'native',
+            logicalKey: 'rig_builder:navigation',
+            fallbackScreenId: 'home',
+        });
+    }
+}
+
+function rbRegisterAudioEffectsCapability() {
+    const candidates = rbCandidateDomainsApi();
+    if (!candidates || typeof candidates.registerParticipant !== 'function') return;
+    candidates.registerParticipant({
+        domain: 'audio-effects',
+        pluginId: RB_PLUGIN_ID,
+        participantId: RB_EFFECTS_PARTICIPANT_ID,
+        role: 'provider',
+        roles: ['provider', 'requester', 'observer'],
+        label: 'Rig Builder effects chains',
+        availability: 'available',
+        sourceMode: 'native',
+        logicalKey: 'rig-builder-effects',
+        routeKey: RB_EFFECTS_ROUTE_KEY,
+        priority: 40,
+        capabilities: ['select-chain', 'bypass', 'restore', 'fallback', 'inspect-route'],
+        dependencies: {
+            audioEngine: rbNativeAudio() ? 'available' : 'degraded',
+            namTone: 'available',
+        },
+        summary: { routeKey: RB_EFFECTS_ROUTE_KEY, provider: 'rig-builder' },
+    });
+}
+
+function rbRegisterJobsCapability() {
+    const jobs = rbJobsApi();
+    if (!jobs || typeof jobs.registerProvider !== 'function') return;
+    jobs.registerProvider({
+        providerId: RB_JOBS_PROVIDER_ID,
+        pluginId: RB_PLUGIN_ID,
+        label: 'Rig Builder jobs',
+        jobTypes: [
+            'rig-builder.batch-map',
+            'rig-builder.curated-preload',
+            'rig-builder.download-capture',
+            'rig-builder.auto-download-song',
+            'rig-builder.extract-rocksmith',
+            'rig-builder.export-defaults',
+            'rig-builder.purge-library',
+        ],
+        actions: ['enqueue', 'inspect', 'cancel'],
+        availability: 'available',
+        capacity: { maxRunning: 2, maxQueued: 20 },
+        recoverySupport: { queued: false, running: false, paused: false },
+        operationHandlers: {
+            'job.enqueue': () => ({ progress: { mode: 'indeterminate', step: 'delegated', message: 'Rig Builder backend route is running' } }),
+            'job.status': () => ({ outcome: 'handled', status: 'delegated' }),
+            'job.cancel': () => ({ outcome: 'unsupported-operation', status: 'unsupported' }),
+        },
+    });
+}
+
+function rbRegisterLibraryCapability() {
+    const caps = rbCapabilitiesApi();
+    if (!caps || typeof caps.registerParticipant !== 'function') return;
+    caps.registerParticipant(RB_PLUGIN_ID, {
+        library: {
+            roles: ['requester', 'observer'],
+            requests: ['list-providers', 'refresh-providers', 'get-current', 'select-provider', 'sync-song', 'inspect'],
+            observes: ['providers-refreshed', 'source-changed', 'song-sync-started', 'song-sync-succeeded', 'song-sync-failed'],
+            mode: 'active',
+            compatibility: 'none',
+            ownership: 'requester-only',
+            safety: 'safe',
+            version: 1,
+            runtime: true,
+            description: 'Uses Slopsmith library providers for Rig Builder song search and remote song sync.',
+        },
+    });
+}
+
+function rbRegisterPrivilegedCapabilities() {
+    const participants = [
+        { participantId: 'rig_builder.backend_routes', surface: 'backend-route', roles: ['provider', 'observer'], operationClasses: ['route.inspect', 'route.mutate', 'status'], riskClasses: ['local-data', 'external-service', 'subprocess'], label: 'Rig Builder backend routes', confirmationRequirement: 'not-required-for-inspection', compatibilityMode: 'native' },
+        { participantId: 'rig_builder.tone3000_service', surface: 'external-service', roles: ['provider', 'observer'], operationClasses: ['service.request', 'service.download', 'status'], riskClasses: ['external-service'], label: 'tone3000 search and download', confirmationRequirement: 'required', compatibilityMode: 'native' },
+        { participantId: 'rig_builder.media_import_export', surface: 'media-import-export', roles: ['provider', 'observer'], operationClasses: ['media.import', 'media.export', 'status'], riskClasses: ['local-data', 'subprocess'], label: 'Rocksmith gear map and IR import/export', confirmationRequirement: 'required', compatibilityMode: 'native' },
+        { participantId: 'rig_builder.extractors', surface: 'subprocess', roles: ['provider', 'observer'], operationClasses: ['subprocess.run', 'subprocess.status'], riskClasses: ['subprocess', 'local-data'], label: 'Rocksmith extractor subprocesses', confirmationRequirement: 'required', compatibilityMode: 'native' },
+    ];
+    participants.forEach(participant => {
+        void rbCapabilityCommand('privileged-capabilities', 'register-participant', {
+            participant: { ...participant, pluginId: RB_PLUGIN_ID },
+        });
+    });
+}
+
+function rbRegisterCapabilities() {
+    try {
+        const caps = rbCapabilitiesApi();
+        if (caps && typeof caps.registerParticipant === 'function') {
+            caps.registerParticipant(RB_PLUGIN_ID, {
+                'audio-effects': { roles: ['provider', 'requester', 'observer'], commands: ['select-chain', 'bypass', 'restore', 'fallback', 'inspect-route'], safety: 'sensitive', compatibility: 'shim-allowed', ownership: 'multi-provider', version: 1, runtime: true },
+                jobs: { roles: ['provider', 'observer'], operations: ['job.enqueue', 'job.status', 'job.cancel'], safety: 'privileged', compatibility: 'shim-allowed', ownership: 'multi-provider', version: 1, runtime: true },
+                'privileged-capabilities': { roles: ['provider', 'requester', 'observer'], requests: ['inspect', 'record-outcome', 'record-bridge-hit', 'link-job'], safety: 'privileged', compatibility: 'shim-allowed', ownership: 'privileged', version: 1, runtime: true },
+            });
+        }
+        rbRegisterUiCapabilities();
+        rbRegisterLibraryCapability();
+        rbRegisterAudioEffectsCapability();
+        rbRegisterJobsCapability();
+        rbRegisterPrivilegedCapabilities();
+    } catch (e) {
+        console.warn('[rig_builder] capability registration failed:', e);
+    }
+}
+
+function rbRecordAudioEffectsBridge(reason) {
+    const candidates = rbCandidateDomainsApi();
+    if (!candidates || typeof candidates.recordBridgeHit !== 'function') return;
+    candidates.recordBridgeHit({
+        domain: 'audio-effects',
+        bridgeId: 'audio-effects.legacy-nam-routing',
+        pluginId: RB_PLUGIN_ID,
+        legacySurface: 'nam_tone.native-preset-fetch',
+        status: 'used',
+        reason: rbShortSafeText(reason || 'Rig Builder chain routing bridge used'),
+    });
+}
+
+async function rbSyncAudioEffectsCapability(reason, options) {
+    try {
+        rbRegisterAudioEffectsCapability();
+        const candidates = rbCandidateDomainsApi();
+        if (!candidates) return;
+        const chainSummary = rbChainCapabilitySummary(options && options.chain, {
+            reason: rbSafeCapabilityId(reason || 'chain-updated', 'chain-updated'),
+            mode: rbSafeCapabilityId(options && options.mode, 'native'),
+            fallback: !!(options && options.fallback),
+        });
+        const payload = {
+            providerId: RB_EFFECTS_PARTICIPANT_ID,
+            requesterId: RB_PLUGIN_ID,
+            routeKey: RB_EFFECTS_ROUTE_KEY,
+            chainSummary,
+            dependencies: {
+                audioEngine: rbNativeAudio() ? 'available' : 'degraded',
+                namTone: 'available',
+            },
+        };
+        if (options && options.userAction && typeof candidates.dispatch === 'function') {
+            await candidates.dispatch({
+                domain: 'audio-effects',
+                command: 'select-chain',
+                requester: RB_PLUGIN_ID,
+                payload: { ...payload, authorization: 'user-action' },
+            });
+        } else if (typeof candidates.recordOutcome === 'function') {
+            candidates.recordOutcome('audio-effects', {
+                operation: rbSafeCapabilityId(reason || 'chain-updated', 'chain-updated'),
+                status: options && options.fallback ? 'degraded' : 'handled',
+                participantId: RB_EFFECTS_PARTICIPANT_ID,
+                pluginId: RB_PLUGIN_ID,
+                details: { chainSummary },
+            });
+        }
+        if (options && options.bridge) rbRecordAudioEffectsBridge(reason);
+    } catch (e) {
+        console.warn('[rig_builder] audio-effects capability sync failed:', e);
+    }
+}
+
+async function rbStartCapabilityJob(jobType, safeLabel, options) {
+    rbRegisterJobsCapability();
+    const type = rbSafeCapabilityId(jobType, 'rig-builder.job');
+    const jobId = rbSafeCapabilityId((options && options.jobId) || `${type}-${Date.now()}`, type);
+    const logicalJobKey = rbSafeCapabilityId((options && options.logicalJobKey) || jobId, jobId);
+    const result = await rbCapabilityCommand('jobs', 'enqueue', {
+        providerId: RB_JOBS_PROVIDER_ID,
+        jobId,
+        logicalJobKey,
+        jobType: type,
+        requester: RB_PLUGIN_ID,
+        authorization: options && options.background ? 'background' : 'user-action',
+        priority: options && options.background ? 'background-maintenance' : 'user-approved-interactive',
+        safeLabel: rbShortSafeText(safeLabel, type),
+        target: { kind: rbSafeCapabilityId(options && options.targetKind, type), safeRef: rbSafeCapabilityId(options && options.targetRef, logicalJobKey) },
+        inputs: { safeFingerprint: rbSafeCapabilityId(options && options.fingerprint, logicalJobKey) },
+    });
+    const job = result && result.payload && result.payload.job;
+    if (job && job.jobId) return job.jobId;
+    rbRecordJobsBridgeHit('jobs.legacy-plugin-queue', type, logicalJobKey, 'Capability job enqueue did not take ownership');
+    return null;
+}
+
+function rbRecordJobsBridgeHit(bridgeId, operation, logicalJobKey, reason) {
+    void rbCapabilityCommand('jobs', 'record-bridge-hit', {
+        bridgeId: bridgeId || 'jobs.legacy-backend-route',
+        legacySurface: 'rig_builder.backend-route',
+        pluginId: RB_PLUGIN_ID,
+        providerId: RB_JOBS_PROVIDER_ID,
+        operation: rbSafeCapabilityId(operation || 'job', 'job'),
+        logicalJobKey: rbSafeCapabilityId(logicalJobKey || operation || 'job', 'job'),
+        safeReason: rbShortSafeText(reason || 'Rig Builder legacy route delegated work during capability migration'),
+    });
+}
+
+function rbUpdateCapabilityJob(jobId, progress) {
+    const jobs = rbJobsApi();
+    if (!jobId || !jobs || typeof jobs.updateProgress !== 'function') return;
+    jobs.updateProgress(RB_JOBS_PROVIDER_ID, jobId, progress || {});
+}
+
+function rbFinishCapabilityJob(jobId, ok, summary, category) {
+    const jobs = rbJobsApi();
+    if (!jobId || !jobs) return;
+    if (ok && typeof jobs.complete === 'function') {
+        jobs.complete(RB_JOBS_PROVIDER_ID, jobId, { resultSummary: rbShortSafeText(summary || 'Completed', 'Completed') });
+    } else if (!ok && typeof jobs.fail === 'function') {
+        jobs.fail(RB_JOBS_PROVIDER_ID, jobId, { category: rbSafeCapabilityId(category || 'provider-failure', 'provider-failure'), safeReason: rbShortSafeText(summary || 'Failed', 'Failed'), retryable: false });
+    }
+}
+
+function rbRecordPrivilegedOutcome(operation, status, reason) {
+    void rbCapabilityCommand('privileged-capabilities', 'record-outcome', {
+        operation: rbSafeCapabilityId(operation || 'operation', 'operation'),
+        status: rbSafeCapabilityId(status || 'handled', 'handled'),
+        safeReason: rbShortSafeText(reason || ''),
+    });
+}
+
+function rbLibraryProviderSnapshot() {
+    const api = rbLibraryProvidersApi();
+    if (api && typeof api.snapshot === 'function') return api.snapshot();
+    return { current: 'local', providers: [{ id: 'local', label: 'My Library', kind: 'local', capabilities: ['library.read'], default: true }] };
+}
+
+function rbLibraryProviderById(providerId) {
+    const api = rbLibraryProvidersApi();
+    if (api && typeof api.providerById === 'function') return api.providerById(providerId);
+    return (rbLibraryProviderSnapshot().providers || []).find(provider => provider.id === providerId) || null;
+}
+
+function rbLibraryProviderIdForSong(song, fallbackProviderId) {
+    return String(
+        (song && (song.provider_id || song.providerId || song.library_provider_id ||
+        song.libraryProviderId || song.provider)) || fallbackProviderId || 'local'
+    );
+}
+
+function rbLibrarySongId(song) {
+    return String((song && (song.song_id || song.songId || song.remote_id || song.remoteId || song.id || song.filename)) || '');
+}
+
+function rbLibraryLocalFilename(song, providerId) {
+    if (!song) return '';
+    if (rbIsLocalLibraryProvider(providerId)) return song.filename ? String(song.filename) : '';
+    return String(song.local_filename || song.localFilename || song.synced_filename ||
+        song.syncedFilename || song.play_filename || song.playFilename || '');
+}
+
+function rbLibraryDisplayFilename(song, providerId) {
+    return rbLibraryLocalFilename(song, providerId) || rbLibrarySongId(song) || 'Unknown song';
+}
+
+function rbLibrarySongTitle(song, providerId) {
+    const fallback = rbLibraryDisplayFilename(song, providerId);
+    return (song && song.title) || fallback.replace(/_p\.psarc$/i, '').replace(/_/g, ' ');
+}
+
+function rbActiveLibraryProviderId() {
+    const select = document.getElementById('rb-library-provider');
+    if (select && select.value) return select.value;
+    const api = rbLibraryProvidersApi();
+    if (api && typeof api.activeProviderId === 'function') return api.activeProviderId();
+    return rbLibraryProviderSnapshot().current || 'local';
+}
+
+function rbIsLocalLibraryProvider(providerId) {
+    const api = rbLibraryProvidersApi();
+    if (api && typeof api.isLocal === 'function') return api.isLocal(providerId);
+    const provider = rbLibraryProviderById(providerId);
+    return providerId === 'local' || (provider && provider.kind === 'local');
+}
+
+function rbLibraryProviderSupports(providerId, capability) {
+    const api = rbLibraryProvidersApi();
+    if (api && typeof api.supports === 'function') return api.supports(providerId, capability);
+    const provider = rbLibraryProviderById(providerId);
+    return !!provider && Array.isArray(provider.capabilities) && provider.capabilities.includes(capability);
+}
+
+async function rbRefreshLibraryProviderSelector() {
+    const api = rbLibraryProvidersApi();
+    if (api && typeof api.refresh === 'function') {
+        await api.refresh({ restoreSaved: true }).catch(() => null);
+    }
+    _rbLibraryProvidersLoaded = true;
+    const select = document.getElementById('rb-library-provider');
+    if (!select) return;
+    const snapshot = rbLibraryProviderSnapshot();
+    const providers = (snapshot.providers || []).filter(provider =>
+        Array.isArray(provider.capabilities) && provider.capabilities.includes('library.read'));
+    select.innerHTML = providers.map(provider =>
+        `<option value="${rbEsc(provider.id)}">${rbEsc(provider.label || provider.id)}</option>`
+    ).join('') || '<option value="local">My Library</option>';
+    select.value = providers.some(provider => provider.id === snapshot.current) ? snapshot.current : 'local';
+    select.classList.toggle('hidden', providers.length <= 1);
+}
+
+async function rbSetLibraryProvider(providerId) {
+    const id = String(providerId || 'local');
+    const caps = rbCapabilitiesApi();
+    if (caps && typeof caps.command === 'function') {
+        await caps.command('library', 'select-provider', {
+            requester: RB_PLUGIN_ID,
+            target: { providerId: id },
+        }).catch(() => null);
+    }
+    const api = rbLibraryProvidersApi();
+    if (api && typeof api.activeProviderId === 'function' && api.activeProviderId() !== id && typeof api.select === 'function') {
+        api.select(id);
+    }
+    await rbRefreshLibraryProviderSelector();
+    rbShowSongList();
+    rbListSongs();
+}
+
+function rbExtractSyncLocalFilename(result) {
+    const payload = result && result.result && typeof result.result === 'object' ? result.result : result;
+    if (!payload || typeof payload !== 'object') return '';
+    return String(payload.filename || payload.localFilename || payload.local_filename ||
+        payload.playFilename || payload.play_filename || payload.libraryRelativePath || '');
+}
+
+async function rbSyncLibrarySong(providerId, songId, statusEl) {
+    if (!providerId || !songId) throw new Error('Missing provider song id');
+    if (statusEl) {
+        statusEl.className = 'text-xs text-blue-300 ml-2';
+        statusEl.textContent = 'syncing...';
+    }
+    const api = rbLibraryProvidersApi();
+    let result;
+    if (api && typeof api.syncSong === 'function') {
+        result = await api.syncSong(providerId, songId);
+    } else {
+        const response = await fetch(`/api/library/providers/${encodeURIComponent(providerId)}/songs/${encodeURIComponent(songId)}/sync`, { method: 'POST' });
+        result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.detail || result.error || `HTTP ${response.status}`);
+    }
+    const localFilename = rbExtractSyncLocalFilename(result);
+    if (statusEl) {
+        if (localFilename) {
+            statusEl.className = 'text-xs text-green-300 ml-2';
+            statusEl.textContent = 'synced';
+        } else {
+            statusEl.className = 'text-xs text-yellow-300 ml-2';
+            statusEl.textContent = 'synced, but no local file returned';
+        }
+    }
+    return { result, localFilename };
+}
+
+async function rbOpenLibrarySongFromList(row) {
+    const el = row && row.closest ? row.closest('[data-rb-library-song]') : row;
+    if (!el) return;
+    const providerId = el.dataset.rbProvider || rbActiveLibraryProviderId();
+    let filename = el.dataset.rbFilename || '';
+    if (filename) {
+        await rbLoadSongTones(filename);
+        return;
+    }
+    const songId = el.dataset.rbSongId || '';
+    const statusEl = el.querySelector('[data-rb-sync-status]');
+    if (!songId || el.dataset.rbCanSync !== '1') {
+        if (statusEl) {
+            statusEl.className = 'text-xs text-yellow-300 ml-2';
+            statusEl.textContent = 'not available locally';
+        }
+        return;
+    }
+    try {
+        el.classList.add('opacity-70', 'pointer-events-none');
+        const synced = await rbSyncLibrarySong(providerId, songId, statusEl);
+        filename = synced.localFilename;
+        if (!filename) return;
+        el.dataset.rbFilename = filename;
+        await rbLoadSongTones(filename);
+    } catch (e) {
+        if (statusEl) {
+            statusEl.className = 'text-xs text-red-300 ml-2';
+            statusEl.textContent = `sync failed: ${e.message || e}`;
+        }
+    } finally {
+        el.classList.remove('opacity-70', 'pointer-events-none');
+    }
+}
 
 // Cache-bust query for gear-photo URLs. Set once per session so:
 //   - 200 responses still ETag-validate on each refresh (no extra
@@ -911,6 +1410,7 @@ const RbMegaChain = (function () {
             if (!res || res.success === false) {
                 throw new Error((res && res.error) || 'loadPreset failed');
             }
+            void rbSyncAudioEffectsCapability('mega-chain-loaded', { chain: mega.native_preset.chain, mode: 'mega-chain', bridge: true });
             // Compute dedupe savings: total active_slot entries across
             // all tones vs unique stages in the chain. A 4-tone song that
             // shares one amp + one cab across all four tones reports
@@ -1369,6 +1869,8 @@ function rbEsc(s) {
 // ── Init / status ───────────────────────────────────────────────────
 
 async function rbInit() {
+    rbRegisterCapabilities();
+    rbRefreshLibraryProviderSelector().catch(() => null);
     try {
         const r = await fetch(`${RB_API}/status`);
         rbState.status = await r.json();
@@ -1636,7 +2138,14 @@ async function rbPreloadCuratedVariants() {
                + 'Live progress shown below. Continue?')) {
         return;
     }
+    let jobId = null;
     try {
+        jobId = await rbStartCapabilityJob('rig-builder.curated-preload', 'Download curated Rig Builder variants', {
+            logicalJobKey: 'rig-builder.curated-preload',
+            targetKind: 'curated-captures',
+            targetRef: 'all-curated-variants',
+        });
+        rbState._preloadJobId = jobId;
         const r = await fetch(`${RB_API}/preload_curated_variants`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1645,12 +2154,14 @@ async function rbPreloadCuratedVariants() {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || r.status);
         if (d.started === false) {
+            rbFinishCapabilityJob(jobId, true, 'Curated preload was already running');
             alert('Already running — current progress is shown live in the Manage tab.');
             rbPreloadStartPolling();
             return;
         }
         rbPreloadStartPolling();
     } catch (e) {
+        rbFinishCapabilityJob(jobId, false, e.message || e, 'external-dependency');
         alert(`Could not start preload: ${e.message || e}`);
     }
 }
@@ -1686,6 +2197,7 @@ async function rbPreloadPollOnce() {
     const done = st.done || 0;
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     if (st.running) {
+        rbUpdateCapabilityJob(rbState._preloadJobId, { mode: total > 0 ? 'determinate' : 'indeterminate', percent: pct, step: 'download', message: `${done} / ${total}` });
         if (summary) {
             summary.className = 'text-emerald-300 text-sm mt-1';
             summary.innerHTML = `Downloading ${done} / ${total} (${pct}%) — `
@@ -1707,6 +2219,8 @@ async function rbPreloadPollOnce() {
         }
         const elapsed = ((st.finished_at - st.started_at) || 0).toFixed(1);
         lines.push(`\nElapsed: ${elapsed}s`);
+        rbFinishCapabilityJob(rbState._preloadJobId, !(st.failed || []).length && !(st.errors || []).length, `Curated preload finished in ${elapsed}s`, (st.failed || []).length ? 'external-dependency' : 'provider-failure');
+        rbState._preloadJobId = null;
         alert('Done.\n\n' + lines.join('\n'));
     }
 }
@@ -1715,7 +2229,13 @@ async function rbPurgeNams(filter, label) {
     if (!confirm(`Purge ${label}?\n\nThis deletes the file(s) AND reverts every gear using them to Pending. Cannot be undone.`)) {
         return;
     }
+    let jobId = null;
     try {
+        jobId = await rbStartCapabilityJob('rig-builder.purge-library', 'Purge Rig Builder downloaded captures', {
+            logicalJobKey: `rig-builder.purge-${rbSafeCapabilityId(label, 'library')}`,
+            targetKind: 'capture-library',
+            targetRef: rbSafeCapabilityId(label, 'library'),
+        });
         const r = await fetch(`${RB_API}/nam_purge`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1724,11 +2244,13 @@ async function rbPurgeNams(filter, label) {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || r.status);
         rbLoadManageTab();
+        rbFinishCapabilityJob(jobId, true, `Purged ${d.deleted_count || 0} cached capture files`);
         if ((d.errors || []).length) {
             alert(`Purged ${d.deleted_count} files. ${d.errors.length} errors:\n` +
                   d.errors.slice(0, 5).join('\n'));
         }
     } catch (e) {
+        rbFinishCapabilityJob(jobId, false, e.message || e, 'storage');
         alert(`Purge failed: ${e.message || e}`);
     }
 }
@@ -1756,7 +2278,14 @@ async function rbStartBatch(mode) {
     mode = mode || 'all';
     const btns = document.querySelectorAll('.rb-batch-btn');
     btns.forEach(b => { b.disabled = true; });
+    let jobId = null;
     try {
+        jobId = await rbStartCapabilityJob('rig-builder.batch-map', `Rig Builder batch map (${mode})`, {
+            logicalJobKey: `rig-builder.batch-${rbSafeCapabilityId(mode, 'all')}`,
+            targetKind: 'song-library',
+            targetRef: rbSafeCapabilityId(mode, 'all'),
+        });
+        rbState._batchJobId = jobId;
         const r = await fetch(`${RB_API}/batch_all`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1764,9 +2293,14 @@ async function rbStartBatch(mode) {
         });
         if (!r.ok) {
             const err = await r.json().catch(() => ({}));
+            rbFinishCapabilityJob(jobId, false, err.error || `HTTP ${r.status}`, 'provider-failure');
             alert(`Couldn't start batch: ${err.error || r.status}`);
             return;
         }
+    } catch (e) {
+        rbFinishCapabilityJob(jobId, false, e.message || e, 'provider-failure');
+        alert(`Couldn't start batch: ${e.message || e}`);
+        return;
     } finally {
         btns.forEach(b => { b.disabled = false; });
     }
@@ -1785,6 +2319,7 @@ async function rbPollBatch() {
         return;
     }
     const pct = st.total ? Math.round(100 * st.progress / st.total) : 0;
+    rbUpdateCapabilityJob(rbState._batchJobId, { mode: st.total ? 'determinate' : 'indeterminate', percent: pct, step: 'mapping', message: `${st.progress || 0} / ${st.total || 0}` });
     document.getElementById('rb-batch-pct').textContent = `${pct}%`;
     document.getElementById('rb-batch-count').textContent = `${st.progress} / ${st.total}`;
     document.getElementById('rb-batch-bar').style.width = `${pct}%`;
@@ -1802,6 +2337,8 @@ async function rbPollBatch() {
     if (!st.running && rbState.batchPoll) {
         clearInterval(rbState.batchPoll);
         rbState.batchPoll = null;
+        rbFinishCapabilityJob(rbState._batchJobId, true, `${st.assigned || 0} tones persisted`);
+        rbState._batchJobId = null;
     }
 }
 
@@ -2007,8 +2544,8 @@ function rbShowSongList() {
 
 // Called from the search input's oninput. Shows the list right away
 // (the user just started typing — they expect to see candidates) and
-// debounces an actual /list_songs hit so we don't spam the backend on
-// every keystroke. 250 ms is the sweet spot between "feels live" and
+// debounces the provider-backed library query so we don't spam the backend
+// on every keystroke. 250 ms is the sweet spot between "feels live" and
 // "doesn't fire 8 fetches for a single word".
 let _rbSongSearchDebounce = null;
 function rbOnSongSearchInput() {
@@ -2022,26 +2559,46 @@ function rbOnSongSearchInput() {
 
 async function rbListSongs() {
     const q = document.getElementById('rb-song-search').value.trim();
+    const el = document.getElementById('rb-song-list');
+    const api = rbLibraryProvidersApi();
+    if (api && !_rbLibraryProvidersLoaded) {
+        await rbRefreshLibraryProviderSelector();
+    }
+    const providerId = api ? rbActiveLibraryProviderId() : 'local';
+    const params = new URLSearchParams({ q, page: '0', size: '50', sort: 'artist', provider: providerId });
+    let data;
+    try {
+        const r = await fetch(`/api/library?${params}`);
+        data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`);
+    } catch (e) {
+        if (!api) return rbListSongsLegacy(q, el);
+        el.innerHTML = `<p class="text-red-400 text-sm">Library search failed: ${rbEsc(e.message || e)}</p>`;
+        return;
+    }
+    const songs = Array.isArray(data.songs) ? data.songs : [];
+    if (!songs.length) {
+        el.innerHTML = '<p class="text-gray-500 text-sm">No matches</p>';
+        return;
+    }
+    el.innerHTML = songs.map(song => rbRenderLibrarySongListItem(song, providerId)).join('');
+}
+
+async function rbListSongsLegacy(q, el) {
     const r = await fetch(`${RB_API}/list_songs?q=${encodeURIComponent(q)}`);
     const data = await r.json();
-    const el = document.getElementById('rb-song-list');
     if (!data.songs.length) {
         el.innerHTML = '<p class="text-gray-500 text-sm">No matches</p>';
         return;
     }
-    // Materialized vs cloud-only: cloud songs get a small icon and a
-    // dimmer text color so the user knows clicking will trigger a
-    // Drive download before the chain becomes available.
     el.innerHTML = data.songs.map(s => {
         const name = typeof s === 'string' ? s : s.name;
         const mat = typeof s === 'string' ? true : s.materialized;
         const title = (typeof s === 'object' && s.title) || '';
         const artist = (typeof s === 'object' && s.artist) || '';
         const year = (typeof s === 'object' && s.year) || '';
-        const cloudTag = mat ? '' : '<span class="text-xs text-blue-400 ml-2">☁ cloud</span>';
+        const cloudTag = mat ? '' : '<span class="text-xs text-blue-400 ml-2">cloud</span>';
         const textColor = mat ? 'text-gray-300' : 'text-gray-500';
-        // Two-line display when metadata is available, otherwise just the
-        // filename (older library that hasn't been re-scanned by Slopsmith).
         let label;
         if (title || artist) {
             const yearTag = year ? ` <span class="text-gray-600">(${rbEsc(year)})</span>` : '';
@@ -2054,12 +2611,54 @@ async function rbListSongs() {
             label = `<span class="flex-1 truncate" title="${rbEsc(name)}">${rbEsc(name)}</span>`;
         }
         return `
-            <div onclick="rbLoadSongTones('${rbEsc(name).replace(/'/g,"\\'")}')"
+            <div onclick="rbLoadSongTones(this.dataset.rbFilename)" data-rb-filename="${rbEsc(name)}"
                  class="cursor-pointer hover:bg-dark-700/50 px-3 py-2 rounded text-sm ${textColor} flex items-center">
                 ${label}
                 ${cloudTag}
             </div>`;
     }).join('');
+}
+
+function rbRenderLibrarySongListItem(song, fallbackProviderId) {
+    const providerId = rbLibraryProviderIdForSong(song, fallbackProviderId);
+    const provider = rbLibraryProviderById(providerId);
+    const localFilename = rbLibraryLocalFilename(song, providerId);
+    const songId = rbLibrarySongId(song);
+    const title = rbLibrarySongTitle(song, providerId);
+    const artist = (song && song.artist) || '';
+    const album = (song && song.album) || '';
+    const year = (song && song.year) || '';
+    const format = ((song && song.format) || '').toUpperCase();
+    const canSync = !localFilename && !rbIsLocalLibraryProvider(providerId) && rbLibraryProviderSupports(providerId, 'song.sync');
+    const interactive = !!localFilename || canSync;
+    const textColor = interactive ? 'text-gray-300' : 'text-gray-500';
+    const cursor = interactive ? 'cursor-pointer' : 'cursor-not-allowed';
+    const sourceLabel = providerId === 'local' ? '' : (provider && provider.label) || providerId;
+    const yearTag = year ? ` <span class="text-gray-600">(${rbEsc(year)})</span>` : '';
+    const secondary = [artist || '(unknown artist)', album].filter(Boolean).join(' / ');
+    const syncLabel = localFilename
+        ? ''
+        : canSync
+            ? '<span data-rb-sync-status class="text-xs text-blue-300 ml-2">sync on open</span>'
+            : '<span data-rb-sync-status class="text-xs text-yellow-300 ml-2">remote only</span>';
+    return `
+        <div onclick="rbOpenLibrarySongFromList(this)"
+             data-rb-library-song="1"
+             data-rb-provider="${rbEsc(providerId)}"
+             data-rb-song-id="${rbEsc(songId)}"
+             data-rb-filename="${rbEsc(localFilename)}"
+             data-rb-can-sync="${canSync ? '1' : '0'}"
+             class="${cursor} hover:bg-dark-700/50 px-3 py-2 rounded text-sm ${textColor} flex items-center gap-3">
+            <div class="flex-1 min-w-0">
+                <div class="truncate">${rbEsc(title)}${yearTag}</div>
+                <div class="text-xs text-gray-500 truncate" title="${rbEsc(rbLibraryDisplayFilename(song, providerId))}">${rbEsc(secondary)}</div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+                ${format ? `<span class="text-[10px] text-gray-500 border border-gray-800 rounded px-1.5 py-0.5">${rbEsc(format)}</span>` : ''}
+                ${sourceLabel ? `<span class="text-[10px] text-cyan-300 border border-cyan-900/50 rounded px-1.5 py-0.5">${rbEsc(sourceLabel)}</span>` : ''}
+                ${syncLabel}
+            </div>
+        </div>`;
 }
 
 // Seed each piece's _bypassed (the UI/persist flag) from the persisted
@@ -2142,6 +2741,8 @@ async function rbLoadSongTones(filename) {
 // so the new file assignments are visible without the user having to
 // click anything.
 async function rbAutoDownloadSong(filename, unmappedCount, container) {
+    rbRecordJobsBridgeHit('jobs.legacy-backend-route', 'rig-builder.auto-download-song', 'rig-builder.auto-download-song', 'Song-scoped auto-download is delegated to the plugin backend after the user opens a song.');
+    rbRecordPrivilegedOutcome('service.download', 'handled', 'Song-scoped tone3000 auto-download delegated to Rig Builder backend');
     const banner = document.createElement('div');
     banner.className = 'rb-autodl-banner bg-blue-900/15 border border-blue-800/30 rounded-lg p-3 text-sm mb-4';
     banner.innerHTML = `<p class="text-blue-400">⬇ Auto-downloading ${unmappedCount} unassigned piece(s) from tone3000…</p>`;
@@ -5961,6 +6562,15 @@ function rbToggleBypass(toneIdx, pIdx, btn) {
     // Persist the bypass for this song right away so it survives reload /
     // restart (it used to live only in memory until "Save preset").
     if (rbState.currentSongFile) rbPersistTone(toneIdx, rbState.currentSongFile);
+    const candidates = rbCandidateDomainsApi();
+    if (candidates && typeof candidates.dispatch === 'function') {
+        void candidates.dispatch({
+            domain: 'audio-effects',
+            command: piece._bypassed ? 'bypass' : 'restore',
+            requester: RB_PLUGIN_ID,
+            payload: { routeKey: RB_EFFECTS_ROUTE_KEY, authorization: 'user-action' },
+        });
+    }
     // If this tone is previewing, reload now. "bypassed" makes the engine
     // pass the signal THROUGH the stage (not silence it), so the rest of
     // the chain keeps working — exactly the requested behaviour.
@@ -6037,6 +6647,7 @@ async function rbReloadPreview(refetchPresetId) {
         await rbPreLoadMute(chainLen, rbChainGainTargetFor(chainArr)).catch(() => {});
         if (api.clearChain) await api.clearChain().catch(() => {});
         await api.loadPreset(JSON.stringify(payload.native_preset));
+        await rbSyncAudioEffectsCapability('preview-reloaded', { chain: chainArr, mode: 'preview' });
         // Engine sometimes leaves a slot bypassed across reloads — force each
         // slot's bypass to match the spec so toggling un-bypass actually un-bypasses.
         await rbReapplyBypassToChain(api, chainArr);
@@ -6133,6 +6744,7 @@ async function rbAuditionFile(file, kind, btnId, gain, rsGear) {
         if (api.clearChain) await api.clearChain().catch(() => {});
         const res = await api.loadPreset(JSON.stringify(payload.native_preset));
         if (!res || res.success === false) throw new Error((res && res.error) || 'loadPreset failed');
+        await rbSyncAudioEffectsCapability('audition-file', { chain, mode: 'audition', userAction: true });
         if (api.setGain) {
             // Chain-level drive matched to the audition target. Bass
             // amps (rs_gear starts with 'Bass_') use unity to avoid
@@ -6178,16 +6790,24 @@ async function rbAuditionCandidate(btn, rsGear, toneId) {
     // assigns origLabel if missing) doesn't pick up the ⏳ marker.
     if (!btn.dataset.origLabel) btn.dataset.origLabel = old;
     btn.disabled = true; btn.textContent = '⏳';
+    let jobId = null;
     try {
+        jobId = await rbStartCapabilityJob('rig-builder.download-capture', 'Download candidate for audition', {
+            logicalJobKey: `rig-builder.audition-candidate-${Date.now()}`,
+            targetKind: 'tone3000-candidate',
+            targetRef: 'candidate-audition',
+        });
         const r = await fetch(`${RB_API}/audition_candidate`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ rs_gear: rsGear, tone3000_id: toneId }),
         });
         const data = await r.json();
-        if (!r.ok) { alert(data.error || `HTTP ${r.status}`); btn.disabled = false; btn.textContent = old; return; }
+        if (!r.ok) { rbFinishCapabilityJob(jobId, false, data.error || `HTTP ${r.status}`, 'external-dependency'); alert(data.error || `HTTP ${r.status}`); btn.disabled = false; btn.textContent = old; return; }
+        rbFinishCapabilityJob(jobId, true, 'Candidate downloaded for audition');
         btn.disabled = false;
         await rbAuditionFile(data.file, data.kind, btnId);
     } catch (e) {
+        rbFinishCapabilityJob(jobId, false, e.message || e, 'external-dependency');
         btn.disabled = false; btn.textContent = old;
         alert(`Could not download/listen: ${e && e.message ? e.message : e}`);
     }
@@ -7806,6 +8426,7 @@ async function rbListenTone(toneIdx, filename) {
             const got = res && res.slotsLoaded;
             console.log(`[rig_builder] chain sent=${chain.length} (NAM=${payload.nam_stage_count}) · slotsLoaded=${got}`, res);
             if (!res || res.success === false) throw new Error((res && res.error) || 'loadPreset failed');
+            await rbSyncAudioEffectsCapability('listen-tone', { chain, mode: 'preview', userAction: true });
             // Force bypass to match the spec: engine sometimes keeps a slot
             // bypassed across reloads (the "bypass stuck" Discord report).
             await rbReapplyBypassToChain(api, chain);
@@ -7838,6 +8459,7 @@ async function rbListenTone(toneIdx, filename) {
             }
         } else if (typeof window.namStartPresetTest === 'function') {
             await window.namStartPresetTest(presetId);   // WASM fallback: single NAM
+            await rbSyncAudioEffectsCapability('listen-tone-fallback', { chain: [], mode: 'wasm-fallback', fallback: true });
             rbState._previewMode = 'nam';
             rbState.listeningTone = toneIdx;
             if (btn) { btn.disabled = false; btn.textContent = '⏸ Stop'; btn.title = '1-NAM preview (WASM engine, no chaining)'; }
@@ -7917,6 +8539,7 @@ async function rbOauthConnect() {
         const d = await r.json();
         if (!d.authorize_url) throw new Error('no authorize URL');
         window.open(d.authorize_url, '_blank');  // → system browser
+        rbRecordPrivilegedOutcome('service.request', 'handled', 'Started tone3000 OAuth sign-in');
         if (statusEl) statusEl.textContent = 'Waiting for tone3000 sign-in in your browser…';
         rbOauthPoll(0);
     } catch (e) {
@@ -7946,6 +8569,7 @@ async function rbOauthPoll(n) {
 
 async function rbOauthDisconnect() {
     await fetch(`${RB_API}/oauth/disconnect`, { method: 'POST' });
+    rbRecordPrivilegedOutcome('service.request', 'completed', 'Disconnected tone3000 account');
     rbLoadSettings();
     rbInit();
 }
@@ -8010,7 +8634,13 @@ async function rbDownloadForGear(btn, rsGear, toneId) {
     // into a visible error instead of a button stuck on "Downloading…".
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 180000);
+    let jobId = null;
     try {
+        jobId = await rbStartCapabilityJob('rig-builder.download-capture', 'Download and assign tone3000 capture', {
+            logicalJobKey: `rig-builder.download-capture-${Date.now()}`,
+            targetKind: 'tone3000-capture',
+            targetRef: 'capture-assignment',
+        });
         const r = await fetch(`${RB_API}/download_for_gear`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -8019,6 +8649,7 @@ async function rbDownloadForGear(btn, rsGear, toneId) {
         });
         const data = await r.json();
         if (!r.ok) {
+            rbFinishCapabilityJob(jobId, false, data.error || `HTTP ${r.status}`, 'external-dependency');
             btn.textContent = 'Failed';
             btn.classList.add('bg-red-700');
             alert(data.error || `HTTP ${r.status}`);
@@ -8028,6 +8659,7 @@ async function rbDownloadForGear(btn, rsGear, toneId) {
             ? ` (${data.presets_updated} preset${data.presets_updated === 1 ? '' : 's'})`
             : '';
         btn.textContent = `✓ assigned${assignedNote}`;
+        rbFinishCapabilityJob(jobId, true, `Assigned capture to ${data.presets_updated || 0} preset rows`);
         btn.classList.remove('bg-green-700', 'hover:bg-green-600');
         btn.classList.add('bg-dark-600');
         // If the song view is open and any piece matches this rs_gear,
@@ -8054,6 +8686,7 @@ async function rbDownloadForGear(btn, rsGear, toneId) {
         // no need to re-select the song.
         rbAfterGearChange(null);
     } catch (e) {
+        rbFinishCapabilityJob(jobId, false, e.name === 'AbortError' ? 'Download timed out' : (e.message || e), e.name === 'AbortError' ? 'timeout' : 'external-dependency');
         btn.textContent = e.name === 'AbortError' ? 'Timed out' : 'Error';
         btn.classList.add('bg-red-700');
         alert(e.name === 'AbortError'
@@ -8111,7 +8744,14 @@ async function rbExtractAll() {
     if (!path) return;
     const status = document.getElementById('rb-extract-all-status');
     status.textContent = 'Step 1/3: rebuilding gear map…';
+    let jobId = null;
     try {
+        jobId = await rbStartCapabilityJob('rig-builder.extract-rocksmith', 'Extract Rocksmith gear map, photos, and IRs', {
+            logicalJobKey: 'rig-builder.extract-all',
+            targetKind: 'rocksmith-gears-archive',
+            targetRef: 'gears-psarc',
+        });
+        rbUpdateCapabilityJob(jobId, { mode: 'determinate', percent: 5, step: 'gear-map', message: 'Rebuilding gear map' });
         let r = await fetch(`${RB_API}/extract_gear_map`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -8119,6 +8759,7 @@ async function rbExtractAll() {
         });
         let data = await r.json();
         if (!r.ok) {
+            rbFinishCapabilityJob(jobId, false, rbExtractErrDetail(data, r.status), 'provider-failure');
             status.innerHTML = `<span class="text-red-400">Gear map failed: ${rbEsc(rbExtractErrDetail(data, r.status))} — is this really gears.psarc?</span>`;
             return;
         }
@@ -8127,6 +8768,7 @@ async function rbExtractAll() {
         // Step 2 — gear photos. Soft failure: a missing Pillow leaves
         // the catalog using placeholders, which is still useful.
         status.innerHTML = `<span class="text-gray-400">Gear map: ${gearCount} entries. Step 2/3: extracting gear photos (~10-20s)…</span>`;
+        rbUpdateCapabilityJob(jobId, { mode: 'determinate', percent: 40, step: 'gear-photos', message: 'Extracting gear photos' });
         let photosNote = '';
         try {
             r = await fetch(`${RB_API}/extract_gear_photos`, {
@@ -8146,6 +8788,7 @@ async function rbExtractAll() {
 
         // Step 3 — cab IRs.
         status.innerHTML = `<span class="text-gray-400">Gear map: ${gearCount}${photosNote}. Step 3/3: extracting cab IRs (30-60s)…</span>`;
+        rbUpdateCapabilityJob(jobId, { mode: 'determinate', percent: 75, step: 'cab-irs', message: 'Extracting cab IRs' });
         r = await fetch(`${RB_API}/extract_irs`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -8153,12 +8796,15 @@ async function rbExtractAll() {
         });
         data = await r.json();
         if (!r.ok) {
+            rbFinishCapabilityJob(jobId, false, rbExtractErrDetail(data, r.status), 'provider-failure');
             status.innerHTML = `<span class="text-yellow-400">Gear map OK (${gearCount})${photosNote}, but IR extraction failed: ${rbEsc(rbExtractErrDetail(data, r.status))}</span>`;
             return;
         }
         status.innerHTML = `<span class="text-green-400">Done: ${gearCount} gear entries${photosNote} + ${data.count} cabs with IR. Reloading…</span>`;
+        rbFinishCapabilityJob(jobId, true, `Extracted ${gearCount} gear entries and ${data.count || 0} cab IR mappings`);
         rbInit();
     } catch (e) {
+        rbFinishCapabilityJob(jobId, false, e.message || e, 'provider-failure');
         status.innerHTML = `<span class="text-red-400">${rbEsc(e.message)}</span>`;
     }
 }
@@ -8180,14 +8826,22 @@ async function rbExtractAll() {
 async function rbExportDefaults() {
     const status = document.getElementById('rb-export-defaults-status');
     status.textContent = 'Exporting…';
+    let jobId = null;
     try {
+        jobId = await rbStartCapabilityJob('rig-builder.export-defaults', 'Export Rig Builder curated defaults', {
+            logicalJobKey: 'rig-builder.export-defaults',
+            targetKind: 'curated-defaults',
+            targetRef: 'default-captures',
+        });
         const r = await fetch(`${RB_API}/export_default_captures`, { method: 'POST' });
         const data = await r.json();
         if (!r.ok) {
+            rbFinishCapabilityJob(jobId, false, data.error || `HTTP ${r.status}`, 'storage');
             status.innerHTML = `<span class="text-red-400">Error: ${rbEsc(data.error || r.status)}</span>`;
             return;
         }
         status.innerHTML = `<span class="text-green-400">Saved ${data.count} gear → capture defaults to default_captures.json.</span>`;
+        rbFinishCapabilityJob(jobId, true, `Exported ${data.count || 0} default captures`);
     } catch (e) {
         status.innerHTML = `<span class="text-red-400">${rbEsc(e.message)}</span>`;
     }
