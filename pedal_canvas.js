@@ -1146,6 +1146,69 @@
           textC(d, k.cxPx, k.cyPx + k.rPx * 1.5 + 13, F.barlow, 10.5, rgb(202, 204, 210), lbl); }); } };
   }
 
+  // ── Studio racks: shared 1U faceplate (mirrors _shared/rack_ui.hpp) ─────────
+  // rackSpec({title, accent:[r,g,b], names:[...]}) — brushed dark-metal face with
+  // rack ears + screws, POWER button, accent knob sub-panel (knobs auto-laid in
+  // 1–2 rows), green LCD nameplate with the title, and a decorative INPUT knob.
+  function rackFace(d, o, knobs) {
+    const c=d.ctx, W=d.W, H=d.H, A=o.accent, ew=W*0.06;
+    const face=c.createLinearGradient(0,0,0,H); face.addColorStop(0,rgb(58,60,66)); face.addColorStop(1,rgb(34,35,40));
+    c.fillStyle=face; c.fillRect(0,0,W,H);
+    c.strokeStyle=rgb(12,13,15); c.lineWidth=3; c.strokeRect(1.5,1.5,W-3,H-3);
+    [0, W-ew].forEach(ex=>{ c.fillStyle=rgb(26,27,31); c.fillRect(ex,0,ew,H);
+      screw(d, ex+ew*0.5, H*0.17); screw(d, ex+ew*0.5, H*0.83); });
+    // POWER button
+    c.beginPath(); c.arc(ew+18,H*0.30,9,0,7); c.fillStyle=rgb(22,23,27); c.fill();
+    c.strokeStyle=rgb(90,92,98); c.lineWidth=2; c.stroke();
+    textC(d, ew+18, H*0.30+16, F.barlow, 7.5, rgb(150,152,158), 'POWER');
+    // accent knob sub-panel + knob labels
+    const pX=ew+36, pY=H*0.12, pW=W*0.42, pH=H*0.76;
+    rr(c,pX,pY,pW,pH,6); c.fillStyle=rgb(A[0],A[1],A[2]); c.fill();
+    rr(c,pX,pY,pW,pH,6); c.strokeStyle='rgba(0,0,0,0.28)'; c.lineWidth=1.5; c.stroke();
+    const lum=0.299*A[0]+0.587*A[1]+0.114*A[2], lc=lum>140?rgb(28,28,32):rgb(238,240,244);
+    knobs.forEach(k=>{ let l=k._lbl; if(l.length>9) l=l.slice(0,9);
+      textC(d, k.cx*W, k.cy*H + k.r*W + 11, F.barlow, 7.5, lc, l); });
+    // green LCD nameplate
+    const lX=pX+pW+22, lY=H*0.22, lW=W*0.30, lH=H*0.56;
+    rr(c,lX,lY,lW,lH,4); c.fillStyle=rgb(8,20,10); c.fill();
+    rr(c,lX,lY,lW,lH,4); c.strokeStyle=rgb(40,90,45); c.lineWidth=1.5; c.stroke();
+    textC(d, lX+10, lY+15, F.bebas, 17, rgb(120,255,130), o.title, 'left');
+    textC(d, lX+10, lY+lH-12, F.barlow, 8, rgb(70,180,80), 'USER PROG · CHIEF', 'left');
+    // decorative INPUT knob (far right)
+    const ix=W-ew-30, iy=H*0.5, iR=H*0.26;
+    c.beginPath(); c.arc(ix,iy,iR,0,7); c.fillStyle=rgb(24,25,29); c.fill();
+    c.strokeStyle=rgb(80,82,88); c.lineWidth=2; c.stroke();
+    c.beginPath(); c.arc(ix,iy,iR*0.55,0,7); c.fillStyle=rgb(40,42,48); c.fill();
+    textC(d, ix-iR-6, iy, F.barlow, 8, rgb(150,152,158), 'INPUT', 'right');
+  }
+  function rackSpec(o) {
+    const n=o.names.length, ew=0.06, pXf=ew+0.047, pWf=0.42, pYf=0.12, pHf=0.76;
+    const cols=n<=5?n:Math.ceil(n/2), rows=n<=5?1:2;
+    const r=Math.max(0.016, Math.min(0.030, pWf/cols*0.30));
+    const knobs=o.names.map((nm,i)=>{ const cc=i%cols, rw=Math.floor(i/cols);
+      return { id:i, cx:pXf+pWf*((cc+0.5)/cols),
+        cy: rows===1 ? pYf+pHf*0.40 : (rw===0 ? pYf+pHf*0.28 : pYf+pHf*0.66),
+        r, style:'boss', _lbl:nm }; });
+    return { w:760, h:172, knobs, ptr:rgb(238,240,242), draw(d){ rackFace(d,o,knobs); } };
+  }
+  P.rotavibe        = rackSpec({title:'ROTA VIBE',         accent:[205,135,120], names:['Rate','Depth','Mix','Balance']});
+  P.stereoanalogvibe= rackSpec({title:'STEREO VIBRATO',    accent:[140,135,195], names:['Speed','Waveform','Mix']});
+  P.stereophaser    = rackSpec({title:'STEREO PHASER',     accent:[90,175,178],  names:['Rate','Depth','Mix']});
+  P.stereotubetrem  = rackSpec({title:'STEREO TUBE TREM',  accent:[150,180,160], names:['Speed','Mix','Waveform']});
+  P.studiochamber   = rackSpec({title:'STUDIO CHAMBER',    accent:[140,175,200], names:['Time','Tone','Depth','Mix']});
+  P.studiochorus    = rackSpec({title:'STUDIO CHORUS',     accent:[120,165,205], names:['Rate','Depth','Mix','Lo Filter','Hi Filter','Stereo','Delay']});
+  P.studiocomp      = rackSpec({title:'STUDIO COMP',       accent:[226,150,28],  names:['Threshold','Ratio','Attack','Release','Output']});
+  P.studiodelay     = rackSpec({title:'STUDIO DELAY',      accent:[105,135,205], names:['Time L','Time R','Feedback','Filter','Mix']});
+  P.studioeq        = rackSpec({title:'PARAMETRIC EQ',     accent:[168,30,120],  names:['Bass','BassFreq','LoMid','LoMidFreq','LoMidQ','HiMid','HiMidFreq','HiMidQ','Treble','TrebleFreq']});
+  P.studiographiceq = rackSpec({title:'GRAPHIC EQ',        accent:[40,110,160],  names:['Bass','BassFreq','LoMid','LoMidFreq','Mid','MidFreq','HiMid','HiMidFreq','Treble','TrebleFreq']});
+  P.studiopitch     = rackSpec({title:'STUDIO PITCH',      accent:[160,185,150], names:['Pitch','Tone','Mix','Pan']});
+  P.studioplate     = rackSpec({title:'STUDIO PLATE',      accent:[200,180,168], names:['Time','Tone','Depth','Mix']});
+  P.studioverb      = rackSpec({title:'STUDIO VERB',       accent:[120,195,175], names:['Time','Tone','Depth','Mix']});
+  P.studioflanger   = rackSpec({title:'STUDIO FLANGER',    accent:[205,170,75],  names:['Rate','Depth','Regen','Tone','Mix']});
+  P.studiowahfilter = rackSpec({title:'STUDIO WAH FILTER', accent:[130,180,155], names:['Sens','Attack','Release','Pedal','Auto']});
+  P.synthfilter     = rackSpec({title:'SYNTH FILTER',      accent:[150,185,130], names:['Sens','Attack','Release','Type','Mix']});
+  P.tapeecho        = rackSpec({title:'TAPE ECHO',         accent:[135,170,130], names:['Time','Feedback','Filter','Stereo','Mix']});
+
   // ── render / attach ────────────────────────────────────────────────────
   function makeCtx(canvas, spec) {
     const dpr = window.devicePixelRatio || 1;
