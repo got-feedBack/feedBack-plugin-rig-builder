@@ -379,16 +379,27 @@
       {id:2,cx:.733,cy:.26,r:.052,style:'boss'},  // RELEASE
       {id:5,cx:.890,cy:.26,r:.052,style:'boss'}], // MIX
     ptr:rgb(238,240,244),
-    draw(d){ const {ctx:c,W,H}=d; const w=rgb(228,230,236);
-      box(d,24,24,28);                                     // black body + screws
+    draw(d){ const {ctx:c,W,H}=d; const w=rgb(228,230,236), m=7;
+      // black body, NO screws, with a very subtle metallic rim (Big-Muff-style frame)
+      c.fillStyle=rgb(8,8,10); c.fillRect(0,0,W,H);
+      const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(44,44,48)); bg.addColorStop(1,rgb(20,20,24));
+      rr(c,m,m,W-2*m,H-2*m,14); c.fillStyle=bg; c.fill();
+      const mb=c.createLinearGradient(0,m,0,H-m); mb.addColorStop(0,rgb(178,180,186)); mb.addColorStop(0.5,rgb(108,110,116)); mb.addColorStop(1,rgb(72,74,80));
+      rr(c,m,m,W-2*m,H-2*m,14); c.strokeStyle=mb; c.lineWidth=2.5; c.stroke();
       const names=['MODE','PEAK','GAIN','ATTACK','RELEASE','MIX'], cxs=[.105,.262,.419,.576,.733,.890];
       cxs.forEach((cx,i)=> textC(d, cx*W, .26*H + .052*W + 12, F.barlow, 11, w, names[i]));
-      // two-colour graffiti logo: 'Q' orange + '-TRIX' purple, centred as a group
-      setFont(d, F.graffiti, 62); c.textBaseline='middle'; c.textAlign='left';
-      const q='Q', t='-TRIX', wq=c.measureText(q).width, wt=c.measureText(t).width;
-      let x=.5*W-(wq+wt)/2;
-      c.fillStyle=rgb(244,150,46); c.fillText(q, x, .60*H);
-      c.fillStyle=rgb(152,88,208); c.fillText(t, x+wq, .60*H);
+      // two-colour graffiti logo: big 'Q' orange + slightly smaller 'TRIX' purple,
+      // no hyphen, scaled to fill most of the bottom width (capped so it fits).
+      c.textAlign='left'; c.textBaseline='alphabetic';
+      setFont(d, F.graffiti, 100); const refQ = c.measureText('Q').width;
+      setFont(d, F.graffiti, 72);  const refT = c.measureText('TRIX').width;
+      const qSize = Math.min(134, 100 * (0.82*W) / (refQ + refT)), tSize = qSize * 0.72;
+      setFont(d, F.graffiti, qSize); const wq = c.measureText('Q').width;
+      setFont(d, F.graffiti, tSize); const wt = c.measureText('TRIX').width;
+      const gap = qSize * 0.04, by = .68*H;
+      let x = .5*W - (wq + gap + wt) / 2;
+      setFont(d, F.graffiti, qSize); c.fillStyle = rgb(244,150,46); c.fillText('Q', x, by);
+      setFont(d, F.graffiti, tSize); c.fillStyle = rgb(152,88,208); c.fillText('TRIX', x + wq + gap, by);
       ledDot(d, W*0.5, H*0.10, true, 255,80,70);
       footRound(d, W*0.5, H*0.85, 18); } };
 
