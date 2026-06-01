@@ -580,12 +580,34 @@
       if(sub) textC(d,.5*d.W,.68*d.H,F.barlow,10,rgb(170,170,176),sub);
       ledDot(d,d.W*.5,d.H*.77,true,210,70,58); footRound(d,d.W*.5,d.H*.88,23*d.s); } }; }
 
-  P.bassphase = boxSpec(320,470,[124,92,68],
-    [{id:0,cx:.20,lbl:'RATE'},{id:1,cx:.40,lbl:'DEPTH'},{id:2,cx:.60,lbl:'MIX'},{id:3,cx:.80,lbl:'FILTER'}],
-    'PHASE','BASS  PHASER',[244,236,220]);
-  P.bassfilterecho = boxSpec(320,470,[96,58,42],
-    [{id:0,cx:.20,lbl:'TIME'},{id:1,cx:.40,lbl:'FEEDBACK'},{id:2,cx:.60,lbl:'MIX'},{id:3,cx:.80,lbl:'FILTER'}],
-    'ECHO','TAPE  ECHO',[212,176,104]);
+  // Bass Phase — MXR-style orange box (NYR parody, matches the Dyna Comp).
+  // RS params (4 knobs): Rate0 Depth1 Mix2 Filter3.
+  P.bassphase = { w:300,h:460,
+    knobs:[
+      {id:0,cx:.155,cy:.175,r:.072,style:'davies'},  // RATE
+      {id:1,cx:.385,cy:.175,r:.072,style:'davies'},  // DEPTH
+      {id:2,cx:.615,cy:.175,r:.072,style:'davies'},  // MIX
+      {id:3,cx:.845,cy:.175,r:.072,style:'davies'}], // FILTER
+    tick:rgb(46,24,4), ptr:rgb(244,244,240),
+    draw(d){ const {ctx:c,W,H,s}=d; const ink=rgb(42,22,6), m=7*s;
+      c.fillStyle=rgb(10,8,6); c.fillRect(0,0,W,H);
+      const g=c.createLinearGradient(0,m,0,H-m); g.addColorStop(0,rgb(240,134,32)); g.addColorStop(1,rgb(210,96,14));
+      rr(c,m,m,W-2*m,H-2*m,13*s); c.fillStyle=g; c.fill();
+      rr(c,m,m,W-2*m,H-2*m,13*s); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=2*s; c.stroke();
+      textSpaced(d,.155*W,.285*H,F.barlow,9.5,ink,'RATE',0.4);
+      textSpaced(d,.385*W,.285*H,F.barlow,9.5,ink,'DEPTH',0.4);
+      textSpaced(d,.615*W,.285*H,F.barlow,9.5,ink,'MIX',0.4);
+      textSpaced(d,.845*W,.285*H,F.barlow,9,ink,'FILTER',0.3);
+      rr(c,W*.06,H*.735,W*.215,H*.155,8*s); c.strokeStyle=ink; c.lineWidth=2.6*s; c.stroke();
+      textC(d,W*.1675,H*.815,F.anton,30,ink,'NYR');
+      footRound(d,W*.50,H*.805,16*s);
+      textC(d,W*.755,H*.775,F.crete,24,ink,'bass');
+      textC(d,W*.755,H*.850,F.crete,24,ink,'phase'); } };
+  // Bass Filter Echo — Boss-compact (chief) echo, like the Bass Delay but tape
+  // 'Echo'. Roland Space Echo will be a rack, so this is the Boss-style pedal.
+  P.bassfilterecho = chiefSpec(300,480,[74,92,112],
+    [{id:0,cx:.205,lbl:'TIME'},{id:1,cx:.40,lbl:'FEEDBACK',lblPx:7.5},{id:2,cx:.595,lbl:'MIX'},{id:3,cx:.79,lbl:'FILTER',lblPx:8}],
+    'Bass','Echo','DM-3');
   P.bassenbig = boxSpec(320,470,[58,64,72],
     [{id:0,cx:.20,lbl:'RATE'},{id:1,cx:.40,lbl:'DEPTH'},{id:2,cx:.60,lbl:'MIX'},{id:3,cx:.80,lbl:'FILTER'}],
     'ENBIGGEN','MOD  FILTER',[110,210,224]);
