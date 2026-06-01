@@ -2983,9 +2983,12 @@ function rbHasCanvasUI(piece) {
 function rbCanvasDisplayWidth(stem) {
     const sp = window.RBPedalCanvas && window.RBPedalCanvas.specs && window.RBPedalCanvas.specs[stem];
     if (!sp || sp.w <= sp.h * 1.15) return 240;          // portrait
-    // Landscape: scale width with the aspect (wider pedals get more width so
-    // their lettering stays legible), capped so it can't overflow the panel.
-    return Math.max(360, Math.min(440, Math.round(sp.w / sp.h * 256)));
+    const aspect = sp.w / sp.h;
+    // Very wide (1U racks ≈ 4.4:1) need more width so the small labels stay
+    // legible; moderate landscape (Eden/Q-Tron) scales with the aspect.
+    // max-width:100% in the markup keeps it from overflowing a narrow panel.
+    if (aspect > 3) return 600;
+    return Math.max(360, Math.min(440, Math.round(aspect * 256)));
 }
 
 // Build the {key: value} map the canvas reads, keyed BOTH by numeric paramId
