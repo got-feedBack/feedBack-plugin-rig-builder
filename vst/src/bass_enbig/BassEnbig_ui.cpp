@@ -1,18 +1,30 @@
-/* BassEnbig stompbox UI — shared pedal_ui template. Colour/knob layout from the
- * Rocksmith "Bass Enbiggenator" art: dark blue-grey body, 4 knobs in a top row
- * (Rate / Depth / Mix / Filter), cyan value arcs for the sci-fi vibe. */
+/* BassEnbig UI — copyright-free 'Enbiggenator' (fictional RS pedal): dark
+ * blue-grey box, cyan accents, 4 knobs (Rate/Depth/Mix/Filter), sci-fi wordmark. */
 #include "BassEnbigParams.h"
-#define PEDAL_TITLE  "ENBIGGEN"
-#define PEDAL_NAMES  kBassEnbigNames
-#define PEDAL_DEFS   kBassEnbigDef
-#define PEDAL_ACR 81
-#define PEDAL_ACG 87
-#define PEDAL_ACB 95
-#define PEDAL_ARCR 110
-#define PEDAL_ARCG 215
-#define PEDAL_ARCB 230
-#define PEDAL_W 360
-#define PEDAL_H 440
-// index order: Rate, Depth, Mix, Filter -> evenly across the top row
-#define PEDAL_KNOBS { {0.17f,0.17f,0.085f}, {0.39f,0.17f,0.085f}, {0.61f,0.17f,0.085f}, {0.83f,0.17f,0.085f} }
-#include "../_shared/pedal_ui.hpp"
+#include "../_shared/pedalkit.hpp"
+START_NAMESPACE_DISTRHO
+class BassEnbigUI : public PedalKitUI {
+    static const int CR=110,CG=210,CB=224;       // cyan
+public:
+    BassEnbigUI() : PedalKitUI(320, 470, kParamCount, kBassEnbigDef) {
+        names_ = kBassEnbigNames; labelFont_ = fBarlow;
+        labelClr = Color(206,224,228); pointerClr = Color(150,225,235); tickClr = Color(70,120,128);
+        addKnob(kRate,   0.20f, 0.27f, 0.082f, 40,44,50, 0);
+        addKnob(kDepth,  0.40f, 0.27f, 0.082f, 40,44,50, 0);
+        addKnob(kMix,    0.60f, 0.27f, 0.082f, 40,44,50, 0);
+        addKnob(kFilter, 0.80f, 0.27f, 0.082f, 40,44,50, 0);
+    }
+protected:
+    void drawFace() override {
+        enclosure(58, 64, 72);                   // blue-grey
+        const float f = sc();
+        accentLine(W()*0.10f,H()*0.085f,W()*0.90f,H()*0.085f,Color(CR,CG,CB),1.4f);
+        title("ENBIGGEN", Color(CR,CG,CB), 0.585f, 30, fBebas);
+        textSpaced(0.5f,0.665f,9.5f,Color(120,160,168),"MOD  FILTER",fBarlow,2.0f);
+        ledDot(W()*0.5f,H()*0.77f,5*f,true,90,210,224);
+        footswitchRound(W()*0.5f,H()*0.88f,23*f);
+    }
+    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassEnbigUI)
+};
+UI* createUI(){ return new BassEnbigUI(); }
+END_NAMESPACE_DISTRHO
