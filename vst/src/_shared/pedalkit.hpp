@@ -1,0 +1,301 @@
+/*
+ * pedalkit.hpp — rich, skeuomorphic stompbox UI base for the bundled pedal VSTs.
+ *
+ * Copyright-free recreations: each pedal's UI captures the LOOK of the real
+ * pedal it models (enclosure colour, knob style, switches, footswitch, accent
+ * graphics) WITHOUT any real brand/model name or logo. A subclass registers its
+ * knobs/toggles + colours and draws the body in drawFace(); this base renders
+ * the controls on top and handles drag/click.
+ *
+ * Primitives provided (vector, crisp at any size — no bitmaps):
+ *   enclosure(), screw(), metalKnob(), batToggle(), footswitchRound(),
+ *   footswitchBar(), ledDot(), accentLine(), label()/title().
+ */
+#ifndef PEDALKIT_HPP
+#define PEDALKIT_HPP
+#include "DistrhoUI.hpp"
+#include "fonts_data.hpp"
+#include <cmath>
+#include <cstdio>
+
+START_NAMESPACE_DISTRHO
+
+class PedalKitUI : public UI
+{
+protected:
+    struct Ctl { int id; float cx, cy, r; int kind; float cr, cg, cb; }; // kind 0=knob,1=toggle2,2=toggle3
+    static const int kMaxCtl = 16;
+    Ctl  ctl[kMaxCtl];
+    int  nctl = 0;
+    const char* const* names_ = nullptr;
+    float fValues[kMaxCtl];
+    int  nParams_ = 0;
+    int  baseW_, baseH_;
+    int  fDrag = -1;
+    double fLastY = 0;
+    float fDragVal = 0.f;
+    // colours the subclass sets for control rendering — warm off-white, not
+    // pure white (more realistic). Pure black is likewise avoided in bodies.
+    Color labelClr = Color(206, 204, 194);
+    Color tickClr  = Color(150, 150, 150);
+    Color pointerClr = Color(214, 210, 198);
+    // embedded fonts (set in ctor): condensed-caps, modern-sans, heavy-display
+    int fBebas = -1, fBarlow = -1, fAnton = -1;
+    int labelFont_ = -1;   // font used for knob labels (defaults to modern sans)
+    bool knobLabels_ = true; // when false, metalKnob skips its auto label (subclass draws its own)
+    void face(int id) { if (id >= 0) fontFaceId(id); else fontFace(NANOVG_DEJAVU_SANS_TTF); }
+
+    // ── pre-generated wear (scratches + grime), stable across repaints ────
+    struct Scr { float x0, y0, x1, y1; bool light; int a; };
+    struct Dirt { float x, y, r; int a; };
+    Scr  scr_[28]; Dirt dirt_[16]; int nscr_ = 0, ndirt_ = 0;
+    uint32_t rng_ = 0x2545F491u;
+    float rnd() { rng_ = rng_ * 1664525u + 1013904223u; return ((rng_ >> 8) & 0xFFFFFF) / 16777216.0f; }
+    void setWearSeed(uint32_t s) { rng_ = s ? s : 1u; genWear(); }
+    void genWear() {
+        nscr_ = 14;
+        for (int i = 0; i < nscr_; ++i) {
+            float x0 = rnd(), y0 = rnd(), ang = rnd() * 6.2831853f, len = 0.025f + rnd() * 0.08f;
+            scr_[i] = { x0, y0, x0 + std::cos(ang) * len, y0 + std::sin(ang) * len, rnd() > 0.5f, 2 + (int)(rnd() * 3) };
+        }
+        ndirt_ = 7;
+        for (int i = 0; i < ndirt_; ++i)
+            dirt_[i] = { rnd(), rnd(), 0.012f + rnd() * 0.025f, 2 + (int)(rnd() * 3) };
+    }
+    bool wearOn_ = false;   // disabled by user request — clean bodies
+    void wear() {
+        if (!wearOn_) return;
+        const float f = sc();
+        // grime blobs
+        for (int i = 0; i < ndirt_; ++i)
+            { beginPath(); circle(W()*dirt_[i].x, H()*dirt_[i].y, W()*dirt_[i].r); fillColor(Color(0,0,0,dirt_[i].a)); fill(); }
+        // fine scratches
+        for (int i = 0; i < nscr_; ++i) {
+            beginPath(); moveTo(W()*scr_[i].x0, H()*scr_[i].y0); lineTo(W()*scr_[i].x1, H()*scr_[i].y1);
+            strokeColor(scr_[i].light ? Color(255,255,255,scr_[i].a) : Color(0,0,0,scr_[i].a+3));
+            strokeWidth(0.7f*f); stroke();
+        }
+        // corner vignette (barely-there, ~4%)
+        Paint v = radialGradient(W()*0.5f, H()*0.5f, W()*0.34f, W()*0.84f, Color(0,0,0,0), Color(0,0,0,11));
+        beginPath(); rect(0,0,W(),H()); fillPaint(v); fill();
+    }
+
+    float W() const { return getWidth(); }
+    float H() const { return getHeight(); }
+    float sc() const { return getWidth() / (float)baseW_; }
+    static float angleFor(float n) { return (135.f + n * 270.f) * 3.14159265f / 180.f; }
+    static int cl(int v) { return v < 0 ? 0 : (v > 255 ? 255 : v); }
+
+    void addKnob(int id, float cx, float cy, float r, int cr, int cg, int cb) {
+        if (nctl < kMaxCtl) ctl[nctl++] = { id, cx, cy, r, 0, (float)cr, (float)cg, (float)cb };
+    }
+    void addToggle(int id, float cx, float cy, float r, int states) {
+        if (nctl < kMaxCtl) ctl[nctl++] = { id, cx, cy, r, states >= 3 ? 2 : 1, 0, 0, 0 };
+    }
+
+    // ── primitives ───────────────────────────────────────────────────────
+    void screw(float cx, float cy, float r) {
+        const float f = sc();
+        Paint p = radialGradient(cx - r * 0.3f, cy - r * 0.3f, r * 0.15f, r * 1.2f,
+                                 Color(214, 216, 220), Color(120, 122, 128));
+        beginPath(); circle(cx, cy, r); fillPaint(p); fill();
+        beginPath(); circle(cx, cy, r); strokeColor(Color(64, 66, 72)); strokeWidth(1.f * f); stroke();
+        const float a = 0.6f; // fixed slot angle
+        beginPath();
+        moveTo(cx - r * 0.62f * std::cos(a), cy - r * 0.62f * std::sin(a));
+        lineTo(cx + r * 0.62f * std::cos(a), cy + r * 0.62f * std::sin(a));
+        strokeColor(Color(70, 72, 78)); strokeWidth(1.4f * f); stroke();
+    }
+
+    // enclosure with a soft vertical metallic gradient + bevel highlight
+    void enclosure(int r, int g, int b) {
+        const float f = sc(), w = W(), h = H();
+        beginPath(); rect(0, 0, w, h); fillColor(Color(10, 10, 12)); fill();
+        const float m = 8 * f;
+        Paint body = linearGradient(0, m, 0, h - m,
+                                    Color(cl(r + 22), cl(g + 22), cl(b + 22)),
+                                    Color(cl(r - 18), cl(g - 18), cl(b - 18)));
+        beginPath(); roundedRect(m, m, w - 2 * m, h - 2 * m, 14 * f); fillPaint(body); fill();
+        // top bevel highlight
+        beginPath(); roundedRect(m, m, w - 2 * m, (h - 2 * m) * 0.5f, 14 * f);
+        fillColor(Color(255, 255, 255, 16)); fill();
+        // edge
+        beginPath(); roundedRect(m, m, w - 2 * m, h - 2 * m, 14 * f);
+        strokeColor(Color(0, 0, 0, 120)); strokeWidth(2 * f); stroke();
+        // 4 screws
+        const float sr = 6 * f, off = 22 * f;
+        screw(m + off, m + off); screw(w - m - off, m + off);
+        screw(m + off, h - m - off); screw(w - m - off, h - m - off);
+        (void)sr;
+    }
+    void screw(float cx, float cy) { screw(cx, cy, 6 * sc()); }
+
+    // a thin accent line/stripe (silkscreen)
+    void accentLine(float x0, float y0, float x1, float y1, Color c, float wpx) {
+        beginPath(); moveTo(x0, y0); lineTo(x1, y1); strokeColor(c); strokeWidth(wpx * sc()); stroke();
+    }
+
+    void ledDot(float cx, float cy, float r, bool on, int cr, int cg, int cb) {
+        if (on) { beginPath(); circle(cx, cy, r * 2.0f); fillColor(Color(cr, cg, cb, 60)); fill(); }
+        beginPath(); circle(cx, cy, r);
+        fillColor(on ? Color(cr, cg, cb) : Color(60, 30, 28)); fill();
+        beginPath(); circle(cx - r*0.3f, cy - r*0.3f, r*0.35f); fillColor(Color(255,255,255, on?150:40)); fill();
+    }
+
+    void metalKnob(const Ctl& k) {
+        const float f = sc(), cx = W() * k.cx, cy = H() * k.cy, R = W() * k.r, n = fValues[k.id];
+        // plastic skirt base
+        beginPath(); circle(cx, cy, R * 1.16f); fillColor(Color(16, 16, 18)); fill();
+        beginPath(); circle(cx, cy, R * 1.16f); strokeColor(Color(0,0,0,140)); strokeWidth(1.5f*f); stroke();
+        // tick marks
+        strokeColor(tickClr); strokeWidth(1.4f * f);
+        for (int t = 0; t <= 10; ++t) {
+            const float a = angleFor(t / 10.f), r0 = R * 1.22f, r1 = R * 1.36f;
+            beginPath(); moveTo(cx + r0*std::cos(a), cy + r0*std::sin(a));
+            lineTo(cx + r1*std::cos(a), cy + r1*std::sin(a)); stroke();
+        }
+        // metal/plastic cap with radial sheen
+        Paint cap = radialGradient(cx - R*0.4f, cy - R*0.5f, R*0.1f, R*1.3f,
+            Color(cl((int)k.cr+45), cl((int)k.cg+45), cl((int)k.cb+45)),
+            Color((int)(k.cr*0.45f), (int)(k.cg*0.45f), (int)(k.cb*0.45f)));
+        beginPath(); circle(cx, cy, R); fillPaint(cap); fill();
+        beginPath(); circle(cx, cy, R); strokeColor(Color(8, 8, 10)); strokeWidth(1.5f*f); stroke();
+        // pointer
+        const float a = angleFor(n);
+        beginPath(); moveTo(cx + R*0.18f*std::cos(a), cy + R*0.18f*std::sin(a));
+        lineTo(cx + R*0.86f*std::cos(a), cy + R*0.86f*std::sin(a));
+        strokeColor(pointerClr); strokeWidth(3*f); stroke();
+        // label below
+        if (names_ && knobLabels_) {
+            face(labelFont_); textAlign(ALIGN_CENTER | ALIGN_TOP); fontSize(12.5f*f); fillColor(labelClr);
+            text(cx, cy + R*1.45f + 2*f, names_[k.id], NULL);
+        }
+    }
+
+    void batToggle(const Ctl& k) {
+        const float f = sc(), cx = W()*k.cx, cy = H()*k.cy, R = W()*k.r;
+        const int states = (k.kind == 2) ? 3 : 2;
+        // pos: 0 (up) .. states-1 (down)
+        int pos = (states == 3) ? (fValues[k.id] < 0.25f ? 0 : (fValues[k.id] < 0.75f ? 1 : 2))
+                                : (fValues[k.id] > 0.5f ? 0 : 1);
+        // body plate
+        beginPath(); roundedRect(cx - R*0.8f, cy - R*1.5f, R*1.6f, R*3.0f, R*0.5f);
+        fillColor(Color(30,30,34)); fill();
+        beginPath(); roundedRect(cx - R*0.8f, cy - R*1.5f, R*1.6f, R*3.0f, R*0.5f);
+        strokeColor(Color(0,0,0,140)); strokeWidth(1.2f*f); stroke();
+        // chrome bat in the selected position
+        float ty = cy + (pos - (states-1)*0.5f) * R*0.9f;
+        Paint bat = linearGradient(cx-R*0.4f, ty-R*0.6f, cx+R*0.4f, ty+R*0.6f, Color(235,237,240), Color(120,122,128));
+        beginPath(); roundedRect(cx - R*0.42f, ty - R*0.7f, R*0.84f, R*1.4f, R*0.3f); fillPaint(bat); fill();
+        beginPath(); roundedRect(cx - R*0.42f, ty - R*0.7f, R*0.84f, R*1.4f, R*0.3f); strokeColor(Color(70,72,78)); strokeWidth(1*f); stroke();
+        if (names_) { face(labelFont_); textAlign(ALIGN_CENTER|ALIGN_TOP); fontSize(11*f); fillColor(labelClr);
+            text(cx, cy + R*1.7f + 2*f, names_[k.id], NULL); }
+    }
+
+    void footswitchRound(float cx, float cy, float R) {
+        const float f = sc();
+        Paint ring = radialGradient(cx, cy, R*0.4f, R*1.15f, Color(176,178,184), Color(96,98,104));
+        beginPath(); circle(cx, cy, R*1.12f); fillPaint(ring); fill();
+        beginPath(); circle(cx, cy, R*1.12f); strokeColor(Color(40,42,46)); strokeWidth(2*f); stroke();
+        beginPath(); circle(cx, cy, R*0.78f); fillColor(Color(150,153,159)); fill();
+        beginPath(); circle(cx - R*0.25f, cy - R*0.3f, R*0.34f); fillColor(Color(255,255,255,70)); fill();
+    }
+    void footswitchBar(float cx, float cy, float w) {
+        const float f = sc();
+        Paint g = linearGradient(0, cy - w*0.28f, 0, cy + w*0.28f, Color(206,208,214), Color(120,122,128));
+        beginPath(); roundedRect(cx - w*0.5f, cy - w*0.28f, w, w*0.56f, w*0.12f); fillPaint(g); fill();
+        beginPath(); roundedRect(cx - w*0.5f, cy - w*0.28f, w, w*0.56f, w*0.12f); strokeColor(Color(60,62,66)); strokeWidth(2*f); stroke();
+    }
+
+    // text inside a thin outlined rectangle (the boxed labels on many pedals)
+    void boxedLabel(float cx, float cy, float hw, float hh, const char* s, float size,
+                    Color line, Color txt, int fid) {
+        const float f = sc();
+        const float x0 = (cx - hw) * W(), y0 = (cy - hh) * H(), w = 2*hw*W(), h = 2*hh*H();
+        beginPath(); roundedRect(x0, y0, w, h, 3*f); strokeColor(line); strokeWidth(1.6f*f); stroke();
+        face(fid); fontSize(size*f); fillColor(txt); textAlign(ALIGN_CENTER | ALIGN_MIDDLE);
+        text(cx*W(), cy*H(), s, NULL);
+    }
+    void title(const char* s, Color c, float cy, float size, int fid) {
+        face(fid); textAlign(ALIGN_CENTER | ALIGN_MIDDLE); fontSize(size * sc()); fillColor(c);
+        text(W()*0.5f, H()*cy, s, NULL);
+    }
+    void textC(float cx, float cy, float size, Color c, const char* s, int fid) {
+        face(fid); textAlign(ALIGN_CENTER | ALIGN_MIDDLE); fontSize(size * sc()); fillColor(c);
+        text(W()*cx, H()*cy, s, NULL);
+    }
+    // letter-spaced caps line (industrial label look)
+    void textSpaced(float cx, float cy, float size, Color c, const char* s, int fid, float spacing) {
+        face(fid); fontSize(size * sc()); fillColor(c);
+        textLetterSpacing(spacing * sc()); textAlign(ALIGN_CENTER | ALIGN_MIDDLE);
+        text(W()*cx, H()*cy, s, NULL); textLetterSpacing(0.f);
+    }
+
+    int knobAt(double px, double py) const {
+        for (int i = 0; i < nctl; ++i) {
+            const float dx = px - W()*ctl[i].cx, dy = py - H()*ctl[i].cy;
+            const float R = W()*ctl[i].r * (ctl[i].kind == 0 ? 1.2f : 1.6f) + 6;
+            if (dx*dx + dy*dy <= R*R) return i;
+        }
+        return -1;
+    }
+
+    virtual void drawFace() = 0;
+
+public:
+    PedalKitUI(int w, int h, int nparams, const float* defs)
+        : UI(w, h), baseW_(w), baseH_(h), nParams_(nparams) {
+        loadSharedResources();
+        fBebas  = createFontFromMemory("pk_bebas",  pk_bebas_ttf,  pk_bebas_ttf_len,  false);
+        fBarlow = createFontFromMemory("pk_barlow", pk_barlow_ttf, pk_barlow_ttf_len, false);
+        fAnton  = createFontFromMemory("pk_anton",  pk_anton_ttf,  pk_anton_ttf_len,  false);
+        labelFont_ = fBarlow;
+        for (int i = 0; i < nparams && i < kMaxCtl; ++i) fValues[i] = defs[i];
+        genWear();
+        setGeometryConstraints(w * 3 / 4, h * 3 / 4, true, false);
+    }
+protected:
+    void parameterChanged(uint32_t i, float v) override { if (i < (uint32_t)nParams_) { fValues[i] = v; repaint(); } }
+
+    void onNanoDisplay() override {
+        fontFace(NANOVG_DEJAVU_SANS_TTF);
+        drawFace();
+        wear();
+        for (int i = 0; i < nctl; ++i) {
+            if (ctl[i].kind == 0) metalKnob(ctl[i]);
+            else                  batToggle(ctl[i]);
+        }
+    }
+
+    bool onMouse(const MouseEvent& ev) override {
+        if (ev.button != 1) return false;
+        if (ev.press) {
+            const int k = knobAt(ev.pos.getX(), ev.pos.getY());
+            if (k >= 0) {
+                if (ctl[k].kind == 0) {
+                    fDrag = k; fLastY = ev.pos.getY(); fDragVal = fValues[ctl[k].id];
+                    editParameter(ctl[k].id, true); return true;
+                } else {
+                    const int id = ctl[k].id; float v = fValues[id];
+                    if (ctl[k].kind == 2) v = (v < 0.25f) ? 0.5f : (v < 0.75f ? 1.0f : 0.0f);
+                    else                  v = (v > 0.5f) ? 0.0f : 1.0f;
+                    fValues[id] = v; setParameterValue(id, v); repaint(); return true;
+                }
+            }
+        } else if (fDrag >= 0) { editParameter(ctl[fDrag].id, false); fDrag = -1; return true; }
+        return false;
+    }
+    bool onMotion(const MotionEvent& ev) override {
+        if (fDrag >= 0) {
+            const double dy = fLastY - ev.pos.getY(); fLastY = ev.pos.getY();
+            fDragVal += (float)dy / (170.f * sc());
+            if (fDragVal < 0.f) fDragVal = 0.f; if (fDragVal > 1.f) fDragVal = 1.f;
+            fValues[ctl[fDrag].id] = fDragVal; setParameterValue(ctl[fDrag].id, fDragVal); repaint();
+            return true;
+        }
+        return false;
+    }
+};
+
+END_NAMESPACE_DISTRHO
+#endif // PEDALKIT_HPP
