@@ -36,72 +36,6 @@
    }
   ]
  },
- "Amp_EN30": [
-  {
-   "name": "EN30",
-   "manufacturer": "RigBuilder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/EN30.vst3",
-   "notes": "Bundled Vox AC30 Top Boost / EL84 style amp based on the local EN30 schematics, using Rocksmith's Gain, Bass, Mid, Treble, Pres, and Bright knobs."
-  }
- ],
- "Amp_TW22": [
-  {
-   "name": "TW22",
-   "manufacturer": "RigBuilder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/TW22.vst3",
-   "notes": "Bundled Fender Super-Sonic 22 / 6V6 style amp based on the local TW22 schematic, using Rocksmith's Gain, Bass, Mid, and Treble knobs."
-  }
- ],
- "Amp_TW26": [
-  {
-   "name": "TW26",
-   "manufacturer": "RigBuilder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/TW26.vst3",
-   "notes": "Bundled Fender 57 Deluxe / 5E3 tweed style amp based on the local TW26 schematic, using Rocksmith's Gain, Bass, Mid, Treble, and Pres knobs."
-  }
- ],
- "Amp_TW40": [
-  {
-   "name": "TW40",
-   "manufacturer": "RigBuilder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/TW40.vst3",
-   "notes": "Bundled Fender Bassman 5F6-A / 5881 style amp based on the local TW40 schematic, using Rocksmith's Gain, Bass, Mid, Treble, and Pres knobs."
-  }
- ],
- "Amp_MarshallDSL100H": [
-  {
-   "name": "DSL100",
-   "manufacturer": "RigBuilder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/DSL100.vst3",
-   "notes": "Bundled Marshall DSL100H / JCM2000 style amp based on the local DSL100 schematics, using Rocksmith's Gain, Bass, Mid, Treble, Pres, and Res knobs."
-  }
- ],
- "Amp_CA100": [
-  {
-   "name": "DualRect",
-   "manufacturer": "RigBuilder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/DualRect.vst3",
-   "notes": "Bundled Mesa-Boogie Dual Rectifier Red-channel style amp based on the local Cali_100 schematic, using Rocksmith's Gain, Bass, Mid, Treble, and Pres knobs."
-  }
- ],
  "Pedal_AcousticEmulator": [
   {
    "name": "AcousticSimulator",
@@ -535,6 +469,15 @@
  ],
  "Pedal_TremOle": [
   {
+   "name": "TremOle",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/TremOle.vst3",
+   "notes": "Bundled envelope-aware stereo tremolo using Rocksmith's Sens, Attack, Release, and Mix knobs."
+  },
+  {
    "name": "MTremolo",
    "manufacturer": "MeldaProduction",
    "format": "VST3",
@@ -583,12 +526,32 @@
  ],
  "Pedal_AutoVibe": [
   {
+   "name": "AutoVibe",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/AutoVibe.vst3",
+   "notes": "Bundled envelope-controlled vibrato/vibe using Rocksmith's Sens, Attack, Release, and Mix knobs."
+  },
+  {
    "name": "MVibrato",
    "manufacturer": "MeldaProduction",
    "format": "VST3",
    "url": "https://www.meldaproduction.com/MFreeFXBundle",
    "free": true,
    "notes": "Auto-vibrato — set fixed rate/depth (no envelope)"
+  }
+ ],
+ "Pedal_BassEmulator": [
+  {
+   "name": "BassEmulator",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/BassEmulator.vst3",
+   "notes": "Bundled guitar-to-bass octave emulator using Rocksmith's Body and Tone knobs."
   }
  ],
  "Pedal_MarshallSupervibe": [
@@ -690,6 +653,15 @@
  ],
  "Pedal_OilCanEcho": [
   {
+   "name": "OilCanEcho",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/OilCanEcho.vst3",
+   "notes": "Bundled Tel-Ray / OK Pacemaker oil-can echo based on the local schematics, using Rocksmith's Time, Feedback, and Mix knobs."
+  },
+  {
    "name": "kHs Delay",
    "manufacturer": "Kilohearts",
    "format": "VST3",
@@ -699,6 +671,15 @@
   }
  ],
  "Pedal_CosmicEcho": [
+  {
+   "name": "CosmicEcho",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/CosmicEcho.vst3",
+   "notes": "Bundled Synthrotek ECHO / PT2399-style cosmic delay based on the local schematic, using Rocksmith's Time, Feedback, and Mix knobs."
+  },
   {
    "name": "kHs Delay",
    "manufacturer": "Kilohearts",
@@ -802,6 +783,15 @@
   }
  ],
  "Pedal_PlateVerb": [
+  {
+   "name": "PlateVerb",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/PlateVerb.vst3",
+   "notes": "Bundled EMT 140-style plate reverb based on the local schematic, using Rocksmith's Time, Depth, Mix, and Voice knobs."
+  },
   {
    "name": "kHs Reverb",
    "manufacturer": "Kilohearts",
@@ -1155,6 +1145,15 @@
  ],
  "Pedal_USWah": [
   {
+   "name": "USWah",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/USWah.vst3",
+   "notes": "Bundled Dunlop Cry Baby GCB-95 style wah based on the local US Wah schematic, using Rocksmith's Auto, Pedal, Sens, and Speed knobs."
+  },
+  {
    "name": "kHs Filter",
    "manufacturer": "Kilohearts",
    "format": "VST3",
@@ -1164,6 +1163,15 @@
   }
  ],
  "Pedal_UKWah": [
+  {
+   "name": "UKWah",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/UKWah.vst3",
+   "notes": "Bundled Vox V847 / Clyde McCoy style wah based on the local UK Wah schematic, using Rocksmith's Auto, Pedal, Sens, and Speed knobs."
+  },
   {
    "name": "kHs Filter",
    "manufacturer": "Kilohearts",
@@ -1192,6 +1200,15 @@
   }
  ],
  "Pedal_ModernWah": [
+  {
+   "name": "ModernWah",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/ModernWah.vst3",
+   "notes": "Bundled Morley Bad Horsie / optical contour wah based on the local Modern Wah schematic, using Rocksmith's Auto, Pedal, Sens, and Speed knobs."
+  },
   {
    "name": "kHs Filter",
    "manufacturer": "Kilohearts",
@@ -1607,6 +1624,15 @@
  ],
  "Pedal_BitCruncher": [
   {
+   "name": "BitCruncher",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/BitCruncher.vst3",
+   "notes": "Bundled Beverly BitCrusher/ADC0804-style lo-fi converter using Rocksmith's Attack, FilterType, Mix, Release, and Sens knobs."
+  },
+  {
    "name": "kHs Bitcrush",
    "manufacturer": "Kilohearts",
    "format": "VST3",
@@ -1644,6 +1670,15 @@
  ],
  "Pedal_Swole": [
   {
+   "name": "Swole",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/Swole.vst3",
+   "notes": "Bundled heavy saturated compressor based on Rocksmith's description, using Rocksmith's Smash and Rate knobs."
+  },
+  {
    "name": "kHs Filter",
    "manufacturer": "Kilohearts",
    "format": "VST3",
@@ -1663,6 +1698,15 @@
   }
  ],
  "Pedal_Enbiggenator": [
+  {
+   "name": "Enbiggenator",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/Enbiggenator.vst3",
+   "notes": "Bundled Rocksmith-style modulated thickener/widener using Rocksmith's Rate, Depth, and Mix knobs."
+  },
   {
    "name": "kHs Distortion",
    "manufacturer": "Kilohearts",
