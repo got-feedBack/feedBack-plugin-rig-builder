@@ -14,7 +14,7 @@
 (function () {
   'use strict';
   const API = '/api/plugins/rig_builder';
-  const FONTS = { bebas: 'PKBebas', barlow: 'PKBarlow', anton: 'PKAnton', crete: 'PKCrete', graffiti: 'PKGraffiti' };
+  const FONTS = { bebas: 'PKBebas', barlow: 'PKBarlow', anton: 'PKAnton', crete: 'PKCrete', graffiti: 'PKGraffiti', ink: 'PKInk' };
   let _fontsP = null;
   function ready() {
     if (_fontsP) return _fontsP;
@@ -407,16 +407,16 @@
       textC(d,.22*W,.255*H+R,F.barlow,11,w,'COMPRESS');
       textC(d,.50*W,.255*H+R,F.barlow,11,w,'FILTER');
       textC(d,.78*W,.255*H+R,F.barlow,11,w,'RATE');
-      // stylised 'MultiComp': big C … P flanking a stacked MULTI/OM (reads C-OM-P)
-      textC(d,.50*W,.495*H,F.barlow,19,w,'MULTI');
-      textC(d,.31*W,.530*H,F.anton,78,w,'C');
-      textC(d,.50*W,.580*H,F.anton,48,w,'OM');
-      textC(d,.69*W,.530*H,F.anton,78,w,'P');
+      // stylised 'MultiComp': wide — big C … P with MULTI/OM centred between them
+      textC(d,.50*W,.505*H,F.barlow,19,w,'MULTI');
+      textC(d,.24*W,.530*H,F.anton,78,w,'C');
+      textC(d,.50*W,.555*H,F.anton,48,w,'OM');
+      textC(d,.76*W,.530*H,F.anton,78,w,'P');
       // blue accent lines at the bottom — thick + short (behind EBX + footswitch)
       c.strokeStyle='rgba(46,124,228,0.92)'; c.lineWidth=8;
-      for(let i=0;i<6;i++){ const y=(.66+i*0.05)*H; c.beginPath(); c.moveTo(W*0.18,y); c.lineTo(W*0.82,y); c.stroke(); }
-      textC(d,.50*W,.685*H,F.anton,26,w,'EBX');
-      footRound(d,W*0.5,H*0.84,22); } };
+      for(let i=0;i<7;i++){ const y=(.63+i*0.05)*H; c.beginPath(); c.moveTo(W*0.18,y); c.lineTo(W*0.82,y); c.stroke(); }
+      textC(d,.50*W,.75*H,F.ink,30,w,'EBX');     // ink/marker-style brand logo
+      footRound(d,W*0.5,H*0.86,22); } };
 
   // Dyna Compress — Dyna Comp-style optical compressor. MXR-inspired look
   // (red box + cursive logo) recreated, not branded. Param order: Comp0 Attack1 Release2.

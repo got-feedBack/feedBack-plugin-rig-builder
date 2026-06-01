@@ -7781,7 +7781,7 @@ def setup(app, context):
         plugins embed (Bebas Neue / Barlow / Anton / Crete Round). They live in
         `assets/fonts/`. Only a fixed allow-list is served (no path traversal).
         """
-        allow = {"bebas", "barlow", "anton", "crete", "graffiti"}
+        allow = {"bebas", "barlow", "anton", "crete", "graffiti", "ink"}
         key = (name or "").split(".")[0].lower()
         if key not in allow:
             return JSONResponse({"error": "unknown font"}, 404)
