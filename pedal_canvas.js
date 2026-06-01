@@ -182,13 +182,14 @@
   }
 
   // chief (Boss-compact) body: coloured body, black knob plate, treadle w/ name
-  function chiefBody(d, r, g, b) { const {ctx:c,W,H,s}=d, m=7*s, cl=v=>clamp(v,0,255);
+  function chiefBody(d, r, g, b, plate) { const {ctx:c,W,H,s}=d, m=7*s, cl=v=>clamp(v,0,255);
+    const lum=0.299*r+0.587*g+0.114*b, pc=plate||[20,20,22];
     c.fillStyle=rgb(10,10,12); c.fillRect(0,0,W,H);
     const grad=c.createLinearGradient(0,m,0,H-m); grad.addColorStop(0,rgb(cl(r+18),cl(g+18),cl(b+18))); grad.addColorStop(1,rgb(cl(r-14),cl(g-14),cl(b-14)));
     rr(c,m,m,W-2*m,H-2*m,12*s); c.fillStyle=grad; c.fill();
     rr(c,m,m,W-2*m,H-2*m,12*s); c.strokeStyle='rgba(0,0,0,0.47)'; c.lineWidth=2*s; c.stroke();
     // black knob plate
-    rr(c,m+11*s,H*0.10,W-2*m-22*s,H*0.235,6*s); c.fillStyle=rgb(20,20,22); c.fill();
+    rr(c,m+11*s,H*0.10,W-2*m-22*s,H*0.235,6*s); c.fillStyle=rgb(pc[0],pc[1],pc[2]); c.fill();
     rr(c,m+11*s,H*0.10,W-2*m-22*s,H*0.235,6*s); c.strokeStyle='rgba(0,0,0,0.47)'; c.lineWidth=1.2*s; c.stroke();
     ledDot(d, W*0.5, H*0.072, true, 224,70,58);
     // treadle (body colour) + black step pad (lower half)
@@ -201,12 +202,14 @@
     // brand badge on the black step pad (parody of Boss's logo): same near-black
     // as the pad, with a blacker outline so it reads as engraved. Up near the
     // top of the pad, big, all caps.
-    chiefBadge(d, padT, padBot);
+    chiefBadge(d, padT, padBot, lum);
   }
   // Wide engraved 'CHIEF' badge across the black step pad (parody Boss logo):
   // pad-colour fill + black outline; much wider than tall via big letter spacing.
-  function chiefBadge(d, padT, padBot) { const W = d.W;
-    outlineText(d, W*0.5, padT+(padBot-padT)*0.30, FONTS.bebas, 40, rgb(20,20,22), rgb(0,0,0), 'CHIEF', 13);
+  function chiefBadge(d, padT, padBot, lum) { const W = d.W;
+    const dark = (lum != null && lum < 90);   // dark body → light CHIEF (like BOSS on black)
+    outlineText(d, W*0.5, padT+(padBot-padT)*0.30, FONTS.bebas, 40,
+      dark ? rgb(222,224,228) : rgb(20,20,22), dark ? rgb(8,8,10) : rgb(0,0,0), 'CHIEF', 13);
   }
 
   // ── Ibanez Tonelok-style body (parallels chiefBody): silver enclosure, jack
@@ -303,7 +306,7 @@
   // n1/n2 = two-word model name (n1 left, n2 right); code = parody model number
   // (e.g. 'CB-3'), a bit smaller, bottom-RIGHT corner. dy shifts everything down
   // (the EQ treadle sits lower, so it passes a positive dy).
-  function chiefName(d, n1, n2, code, dy, codeDy) { const {W,H}=d; dy = dy || 0; codeDy = codeDy || 0; const dk = rgb(16,16,20);
+  function chiefName(d, n1, n2, code, dy, codeDy, ink) { const {W,H}=d; dy = dy || 0; codeDy = codeDy || 0; const dk = ink || rgb(16,16,20);
     if (n2){ const s2 = n2.length > 7 ? 32 : 44, sc = s2 - 12;
              textC(d, 0.29*W, (0.50+dy)*H, FONTS.crete, 48, dk, n1);
              textC(d, 0.62*W, (0.58+dy)*H, FONTS.crete, s2, dk, n2);
@@ -552,10 +555,12 @@
       ledDot(d,W*.50,H*.800,true,224,56,45);
       footRound(d,W*.50,H*.885,18*s); } };
 
-  function chiefSpec(w,h,col,knobIds,n1,n2,code){ return { w,h, knobs: knobIds.map(k=>({id:k.id,cx:k.cx,cy:.235,r:.072,style:'boss'})),
-    ptr:rgb(238,240,242), draw(d){ chiefBody(d,col[0],col[1],col[2]); const wc=rgb(238,240,242);
+  function chiefSpec(w,h,col,knobIds,n1,n2,code,plate){
+    const lum=0.299*col[0]+0.587*col[1]+0.114*col[2], ink=lum>120?rgb(16,16,20):rgb(232,234,238);
+    return { w,h, knobs: knobIds.map(k=>({id:k.id,cx:k.cx,cy:.235,r:.072,style:'boss'})),
+    ptr:rgb(238,240,242), draw(d){ chiefBody(d,col[0],col[1],col[2],plate); const wc=rgb(238,240,242);
       knobIds.forEach(k=> textSpaced(d,k.cx*d.W,.135*d.H,F.barlow,k.lblPx||8.5,wc,k.lbl,0.2));
-      chiefName(d,n1,n2,code); } }; }
+      chiefName(d,n1,n2,code,0,0,ink); } }; }
 
   P.basschorus = chiefSpec(300,480,[40,158,150],
     [{id:0,cx:.205,lbl:'RATE'},{id:1,cx:.40,lbl:'DEPTH'},{id:2,cx:.595,lbl:'LO FILTER',lblPx:8},{id:3,cx:.79,lbl:'MIX'}],
@@ -605,38 +610,11 @@
       textC(d,W*.5,H*.635,F.anton,30,ink,'NYR');
       footRound(d,W*.50,H*.80,16*s);
       textC(d,W*.50,H*.91,F.crete,24,ink,'phase 99'); } };  // name below the footswitch
-  // Bass Filter Echo — Boss RE-2 Space Echo: a normal Boss-compact pedal with a
-  // GREEN knob plate (CHECK LED + 4 knobs in a row) over a black treadle with
-  // 'Space Echo' / RE-3 / CHIEF. RS params (4 knobs): Time0 Feedback1 Mix2 Filter3.
-  P.bassfilterecho = { w:300,h:480,
-    knobs:[
-      {id:0,cx:.19,cy:.205,r:.061,style:'boss'},  // TIME
-      {id:1,cx:.39,cy:.205,r:.061,style:'boss'},  // FEEDBACK
-      {id:2,cx:.59,cy:.205,r:.061,style:'boss'},  // MIX
-      {id:3,cx:.79,cy:.205,r:.061,style:'boss'}], // FILTER
-    ptr:rgb(238,240,242),
-    draw(d){ const {ctx:c,W,H,s}=d, m=7*s;
-      c.fillStyle=rgb(8,8,10); c.fillRect(0,0,W,H);
-      const grad=c.createLinearGradient(0,m,0,H-m); grad.addColorStop(0,rgb(36,36,40)); grad.addColorStop(1,rgb(16,16,18));
-      rr(c,m,m,W-2*m,H-2*m,12*s); c.fillStyle=grad; c.fill();
-      rr(c,m,m,W-2*m,H-2*m,12*s); c.strokeStyle='rgba(0,0,0,0.5)'; c.lineWidth=2*s; c.stroke();
-      // green knob plate (RE-2 upper section)
-      const px=m+8*s, py=H*.055, pw=W-2*m-16*s, ph=H*.275;
-      const gp=c.createLinearGradient(0,py,0,py+ph); gp.addColorStop(0,rgb(80,134,72)); gp.addColorStop(1,rgb(54,104,52));
-      rr(c,px,py,pw,ph,6*s); c.fillStyle=gp; c.fill();
-      rr(c,px,py,pw,ph,6*s); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=1.2*s; c.stroke();
-      const lg=rgb(232,238,226);
-      textC(d,W*.5,py+11*s,F.barlow,8,lg,'CHECK'); ledDot(d,W*.5,py+24*s,true,224,52,46);
-      // knob labels above the knobs (RS names)
-      textC(d,.19*W,.135*H,F.barlow,8.5,lg,'TIME');
-      textC(d,.39*W,.135*H,F.barlow,7.5,lg,'FEEDBACK');
-      textC(d,.59*W,.135*H,F.barlow,8.5,lg,'MIX');
-      textC(d,.79*W,.135*H,F.barlow,8.5,lg,'FILTER');
-      // treadle: Space Echo + RE-3 + CHIEF (BOSS spot)
-      textC(d,W*.45,H*.50,F.crete,38,rgb(238,240,244),'Space Echo');
-      textC(d,W*.80,H*.515,F.barlow,16,rgb(224,226,230),'RE-3');
-      outlineText(d,W*.5,H*.80,F.bebas,26,rgb(20,20,22),rgb(0,0,0),'CHIEF',12);
-      footRound(d,W*.5,H*.885,18*s); } };
+  // Bass Filter Echo — Boss RE-2 Space Echo: the chief (Boss) template recoloured
+  // (black body + GREEN knob plate), 'Space'/'Echo' + RE-3. RS: Time/Feedback/Mix/Filter.
+  P.bassfilterecho = chiefSpec(300,480,[26,26,30],
+    [{id:0,cx:.205,lbl:'TIME'},{id:1,cx:.40,lbl:'FEEDBACK',lblPx:7.5},{id:2,cx:.595,lbl:'MIX'},{id:3,cx:.79,lbl:'FILTER',lblPx:8}],
+    'Space','Echo','RE-3',[70,126,68]);
   P.bassenbig = boxSpec(320,470,[58,64,72],
     [{id:0,cx:.20,lbl:'RATE'},{id:1,cx:.40,lbl:'DEPTH'},{id:2,cx:.60,lbl:'MIX'},{id:3,cx:.80,lbl:'FILTER'}],
     'ENBIGGEN','MOD  FILTER',[110,210,224]);
