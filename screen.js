@@ -2965,6 +2965,15 @@ function rbHasCanvasUI(piece) {
     return !!(window.RBPedalCanvas && window.RBPedalCanvas.has(rbCanvasStem(piece)));
 }
 
+// Display width for the inline canvas. Portrait stomps read fine at 240px;
+// LANDSCAPE pedals (e.g. Eden WTDI 560×360) get squashed too short at 240, so
+// their lettering becomes unreadable — give them more width. max-width:100% in
+// the markup keeps it from overflowing a narrow panel.
+function rbCanvasDisplayWidth(stem) {
+    const sp = window.RBPedalCanvas && window.RBPedalCanvas.specs && window.RBPedalCanvas.specs[stem];
+    return (sp && sp.w > sp.h * 1.15) ? 400 : 240;
+}
+
 // Build the {key: value} map the canvas reads, keyed BOTH by numeric paramId
 // AND by param name. Source of truth is the live getParameters snapshot
 // (`_vst_param_meta`); in-progress edits in `_vst_params` are overlaid on top.
@@ -3009,7 +3018,7 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
                 </div>
             </div>
             <div class="flex justify-center">
-                <canvas id="rb-tone-vst-canvas-${toneIdx}-${pIdx}" style="width:240px;cursor:ns-resize;touch-action:none"></canvas>
+                <canvas id="rb-tone-vst-canvas-${toneIdx}-${pIdx}" style="width:${rbCanvasDisplayWidth(stem)}px;max-width:100%;cursor:ns-resize;touch-action:none"></canvas>
             </div>
             <div class="text-[10px] text-gray-500 text-center mt-1">Drag a knob up/down to adjust</div>`;
         const canvas = document.getElementById(`rb-tone-vst-canvas-${toneIdx}-${pIdx}`);
@@ -3742,7 +3751,7 @@ function rbMasterRenderInlineVstParams(role, idx) {
                 </div>
             </div>
             <div class="flex justify-center">
-                <canvas id="rb-master-${role}-canvas-${idx}" style="width:240px;cursor:ns-resize;touch-action:none"></canvas>
+                <canvas id="rb-master-${role}-canvas-${idx}" style="width:${rbCanvasDisplayWidth(stem)}px;max-width:100%;cursor:ns-resize;touch-action:none"></canvas>
             </div>
             <div class="text-[10px] text-gray-500 text-center mt-1">Drag a knob up/down to adjust</div>`;
         const canvas = document.getElementById(`rb-master-${role}-canvas-${idx}`);
@@ -7447,7 +7456,7 @@ async function rbCatalogEditInline(safeId, vstPath, vstFormat, rsGear, stem) {
                         title="Close inline editor" class="text-[10px] text-gray-400 hover:text-gray-200 px-1">✕</button>
             </div>
             <div class="flex justify-center">
-                <canvas id="rb-cat-canvas-${safeId}" style="width:240px;cursor:ns-resize;touch-action:none"></canvas>
+                <canvas id="rb-cat-canvas-${safeId}" style="width:${rbCanvasDisplayWidth(stem)}px;max-width:100%;cursor:ns-resize;touch-action:none"></canvas>
             </div>
             <div class="text-[10px] text-gray-500 text-center mt-1">Drag a knob up/down · then 📚 Library → Assign to save</div>`;
         const canvas = document.getElementById(`rb-cat-canvas-${safeId}`);

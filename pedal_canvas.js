@@ -163,7 +163,7 @@
   }
   function chiefName(d, n1, n2) { const {W,H}=d;
     if (n2){ textC(d, 0.31*W, 0.575*H, FONTS.crete, 42, rgb(16,16,20), n1);
-             textC(d, 0.62*W, 0.685*H, FONTS.crete, 34, rgb(16,16,20), n2); }
+             textC(d, 0.62*W, 0.648*H, FONTS.crete, 34, rgb(16,16,20), n2); }
     else   { textC(d, 0.5*W, 0.63*H, FONTS.crete, 40, rgb(16,16,20), n1); } }
 
   // ── pedal specs ───────────────────────────────────────────────────────────
