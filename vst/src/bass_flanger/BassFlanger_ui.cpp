@@ -17,12 +17,12 @@ protected:
     void drawFace() override {
         bossPedal(96, 80, 134);                  // muted purple body
         const Color w(236,232,242);
-        textSpaced(0.205f,0.135f,8.5f,w,"RATE",fBarlow,1.0f);
-        textSpaced(0.400f,0.135f,8.5f,w,"DEPTH",fBarlow,1.0f);
-        textSpaced(0.595f,0.135f,8.5f,w,"FILTER",fBarlow,0.7f);
-        textSpaced(0.790f,0.135f,8.5f,w,"MIX",fBarlow,1.0f);
-        embossText(0.30f, 0.52f, 15, "BASS", fBarlow);
-        embossText(0.60f, 0.77f, 27, "FLANGER", fBarlow);
+        textSpaced(0.205f,0.135f,8.5f,w,"RATE",fBarlow, 0.2f);
+        textSpaced(0.400f,0.135f,8.5f,w,"DEPTH",fBarlow, 0.2f);
+        textSpaced(0.595f,0.135f,8.5f,w,"FILTER",fBarlow, 0.2f);
+        textSpaced(0.790f,0.135f,8.5f,w,"MIX",fBarlow, 0.2f);
+        embossText(0.30f, 0.495f, 24, "BASS", fBarlow);
+        embossText(0.585f, 0.60f, 24, "FLANGER", fBarlow);
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassFlangerUI)
 };

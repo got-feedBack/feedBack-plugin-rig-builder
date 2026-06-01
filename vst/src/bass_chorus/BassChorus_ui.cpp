@@ -18,12 +18,12 @@ protected:
     void drawFace() override {
         bossPedal(40, 158, 150);                 // teal body
         const Color w(238,240,242);
-        textSpaced(0.205f,0.135f,8.5f,w,"RATE",fBarlow,1.0f);
-        textSpaced(0.400f,0.135f,8.5f,w,"DEPTH",fBarlow,1.0f);
-        textSpaced(0.595f,0.135f,8.0f,w,"LO FILTER",fBarlow,0.6f);
-        textSpaced(0.790f,0.135f,8.5f,w,"MIX",fBarlow,1.0f);
-        embossText(0.30f, 0.52f, 16, "BASS", fBarlow);
-        embossText(0.62f, 0.77f, 30, "CHORUS", fBarlow);
+        textSpaced(0.205f,0.135f,8.5f,w,"RATE",fBarlow, 0.2f);
+        textSpaced(0.400f,0.135f,8.5f,w,"DEPTH",fBarlow, 0.2f);
+        textSpaced(0.595f,0.135f,8.0f,w,"LO FILTER",fBarlow, 0.2f);
+        textSpaced(0.790f,0.135f,8.5f,w,"MIX",fBarlow, 0.2f);
+        embossText(0.30f, 0.495f, 27, "BASS", fBarlow);
+        embossText(0.62f, 0.60f, 27, "CHORUS", fBarlow);
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassChorusUI)
 };
