@@ -116,9 +116,6 @@ protected:
                                     Color(cl(r + 22), cl(g + 22), cl(b + 22)),
                                     Color(cl(r - 18), cl(g - 18), cl(b - 18)));
         beginPath(); roundedRect(m, m, w - 2 * m, h - 2 * m, 14 * f); fillPaint(body); fill();
-        // top bevel highlight
-        beginPath(); roundedRect(m, m, w - 2 * m, (h - 2 * m) * 0.5f, 14 * f);
-        fillColor(Color(255, 255, 255, 16)); fill();
         // edge
         beginPath(); roundedRect(m, m, w - 2 * m, h - 2 * m, 14 * f);
         strokeColor(Color(0, 0, 0, 120)); strokeWidth(2 * f); stroke();
