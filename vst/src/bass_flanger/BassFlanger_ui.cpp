@@ -21,8 +21,8 @@ protected:
         textSpaced(0.400f,0.135f,8.5f,w,"DEPTH",fBarlow, 0.2f);
         textSpaced(0.595f,0.135f,8.5f,w,"FILTER",fBarlow, 0.2f);
         textSpaced(0.790f,0.135f,8.5f,w,"MIX",fBarlow, 0.2f);
-        emchiefText(0.52f, 0.495f, 28, "Bass", fSerif);
-        emchiefText(0.52f, 0.605f, 28, "Flanger", fSerif);
+        embossText(0.31f, 0.49f, 33, "Bass", fSerif);
+        embossText(0.63f, 0.61f, 33, "Flanger", fSerif);
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassFlangerUI)
 };

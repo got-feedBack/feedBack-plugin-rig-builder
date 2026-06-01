@@ -295,7 +295,7 @@ protected:
     }
     float treadleTop_ = 0.42f, treadleBot_ = 0.93f;
     // engraved text (dark, with a faint highlight) — for names on the dark treadle
-    void emchiefText(float cx, float cy, float size, const char* s, int fid) {
+    void embossText(float cx, float cy, float size, const char* s, int fid) {
         const float f = sc();
         face(fid); fontSize(size*f); textAlign(ALIGN_CENTER | ALIGN_MIDDLE);
         fillColor(Color(255,255,255,30)); text(cx*W() + 1.3f*f, cy*H() + 1.3f*f, s, NULL); // highlight

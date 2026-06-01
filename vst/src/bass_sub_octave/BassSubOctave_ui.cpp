@@ -17,8 +17,8 @@ protected:
         const Color w(236,232,224);
         textSpaced(0.34f,0.12f,9,w,"MIX",fBarlow, 0.2f);
         textSpaced(0.66f,0.12f,9,w,"TONE",fBarlow, 0.2f);
-        emchiefText(0.50f, 0.495f, 30, "Sub", fSerif);
-        emchiefText(0.50f, 0.605f, 30, "Octave", fSerif);
+        embossText(0.31f, 0.49f, 35, "Sub", fSerif);
+        embossText(0.64f, 0.61f, 35, "Octave", fSerif);
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassSubOctaveUI)
 };
