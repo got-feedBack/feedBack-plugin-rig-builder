@@ -198,8 +198,8 @@
       ledDot(d,d.W*.5,d.H*.885,true,196,72,60); footRound(d,d.W*.5,d.H*.95,17*d.s); } };
 
   P.bassfuzz = { w:320,h:400, knobs:[
-      {id:0,cx:.26,cy:.205,r:.085,style:'davies'},{id:1,cx:.50,cy:.205,r:.085,style:'davies'},
-      {id:2,cx:.74,cy:.205,r:.085,style:'davies'}],
+      {id:0,cx:.26,cy:.225,r:.085,style:'davies'},{id:1,cx:.50,cy:.225,r:.085,style:'davies'},
+      {id:2,cx:.74,cy:.225,r:.085,style:'davies'}],
     ptr:rgb(236,238,238),
     draw(d){ const {ctx:c,W,H,s}=d; box(d,190,192,196);
       const fg=c.createLinearGradient(0,H*.085,0,H*.915); fg.addColorStop(0,rgb(106,188,64)); fg.addColorStop(1,rgb(74,152,34));
@@ -213,9 +213,9 @@
       c.textAlign='left'; c.fillText('BASS BOOST',tx+12*s,ty-5*s); c.fillText('DRY',tx+12*s,ty+5*s);
       // knob labels (Gain / Tone / Filter) — dark green, like the C++ UI
       const gl=rgb(22,32,16);
-      textC(d,.26*W,.335*H,F.barlow,11,gl,'GAIN');
-      textC(d,.50*W,.335*H,F.barlow,11,gl,'TONE');
-      textC(d,.74*W,.335*H,F.barlow,11,gl,'FILTER');
+      textC(d,.26*W,.355*H,F.barlow,11,gl,'GAIN');
+      textC(d,.50*W,.355*H,F.barlow,11,gl,'TONE');
+      textC(d,.74*W,.355*H,F.barlow,11,gl,'FILTER');
       outlineText(d,.5*W,.64*H,F.anton,62,rgb(242,242,244),rgb(12,14,16),'FUZZ',7);
       textC(d,.34*W,.485*H,F.crete,29,rgb(16,20,14),'bass');
       // LED at top-centre (above the knobs), clear of the FUZZ wordmark
