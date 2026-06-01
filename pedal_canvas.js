@@ -1201,38 +1201,45 @@
   P.studiocomp      = rackSpec({title:'STUDIO COMP',       accent:[226,150,28],  names:['Threshold','Ratio','Attack','Release','Output']});
   P.studiodelay     = rackSpec({title:'STUDIO DELAY',      accent:[105,135,205], names:['Time L','Time R','Feedback','Filter','Mix']});
   // Parametric EQ — GML 8200 look: black wide rack, COLOUR-coded knobs per band
-  // (4 bands here), centre GNL logo, "MODEL 8300 PARAMETRIC EQUALIZER" bottom.
+  // (centred), centre LNG logo, "MODEL 8300 PARAMETRIC EQUALIZER" bottom.
   // RS params: Bass0 BassFreq1 LoMid2 LoMidFreq3 LoMidQ4 HiMid5 HiMidFreq6 HiMidQ7 Treble8 TrebleFreq9.
-  P.studioeq = { w:760, h:190,
+  P.studioeq = { w:820, h:220,
     knobs:[
-      {id:0,cx:.105,cy:.36,r:.036,style:'pointer',cap:[196,44,44]},   // Bass gain (red)
-      {id:1,cx:.105,cy:.70,r:.032,style:'pointer',cap:[196,44,44]},   // BassFreq
-      {id:2,cx:.255,cy:.26,r:.030,style:'pointer',cap:[214,178,46]},  // LoMid gain (yellow)
-      {id:3,cx:.255,cy:.52,r:.028,style:'pointer',cap:[214,178,46]},  // LoMidFreq
-      {id:4,cx:.255,cy:.78,r:.026,style:'pointer',cap:[214,178,46]},  // LoMidQ
-      {id:5,cx:.620,cy:.26,r:.030,style:'pointer',cap:[60,150,70]},   // HiMid gain (green)
-      {id:6,cx:.620,cy:.52,r:.028,style:'pointer',cap:[60,150,70]},   // HiMidFreq
-      {id:7,cx:.620,cy:.78,r:.026,style:'pointer',cap:[60,150,70]},   // HiMidQ
-      {id:8,cx:.770,cy:.36,r:.036,style:'pointer',cap:[64,112,200]},  // Treble gain (blue)
-      {id:9,cx:.770,cy:.70,r:.032,style:'pointer',cap:[64,112,200]}], // TrebleFreq
+      {id:0,cx:.15,cy:.20,r:.032,style:'pointer',cap:[196,44,44]},   // Bass gain (red)
+      {id:1,cx:.15,cy:.58,r:.030,style:'pointer',cap:[196,44,44]},   // BassFreq
+      {id:2,cx:.31,cy:.20,r:.027,style:'pointer',cap:[214,178,46]},  // LoMid gain (yellow)
+      {id:3,cx:.31,cy:.49,r:.027,style:'pointer',cap:[214,178,46]},  // LoMidFreq
+      {id:4,cx:.31,cy:.78,r:.027,style:'pointer',cap:[214,178,46]},  // LoMidQ
+      {id:5,cx:.69,cy:.20,r:.027,style:'pointer',cap:[60,150,70]},   // HiMid gain (green)
+      {id:6,cx:.69,cy:.49,r:.027,style:'pointer',cap:[60,150,70]},   // HiMidFreq
+      {id:7,cx:.69,cy:.78,r:.027,style:'pointer',cap:[60,150,70]},   // HiMidQ
+      {id:8,cx:.85,cy:.20,r:.032,style:'pointer',cap:[64,112,200]},  // Treble gain (blue)
+      {id:9,cx:.85,cy:.58,r:.030,style:'pointer',cap:[64,112,200]}], // TrebleFreq
     tick:rgb(110,112,118), ptr:rgb(238,240,244),
     draw(d){ const {ctx:c,W,H}=d, m=7;
       c.fillStyle=rgb(8,8,10); c.fillRect(0,0,W,H);
       const g=c.createLinearGradient(0,0,0,H); g.addColorStop(0,rgb(30,30,34)); g.addColorStop(1,rgb(15,15,18));
       rr(c,m,m,W-2*m,H-2*m,8); c.fillStyle=g; c.fill();
       rr(c,m,m,W-2*m,H-2*m,8); c.strokeStyle=rgb(10,10,12); c.lineWidth=2; c.stroke();
-      [W*.035,W*.965].forEach(ex=>{ screw(d,ex,H*.18); screw(d,ex,H*.82); });
-      const w=rgb(226,228,232), dim=rgb(150,152,158);
-      textC(d,.105*W,.135*H,F.barlow,9.5,w,'LOW EQ');
-      textC(d,.255*W,.085*H,F.barlow,9.5,w,'LOW MID');
-      textC(d,.620*W,.085*H,F.barlow,9.5,w,'HIGH MID');
-      textC(d,.770*W,.135*H,F.barlow,9.5,w,'HIGH EQ');
-      // centre: GNL logo + green LED + EQ-IN button
-      ledDot(d,.435*W,.16*H,true,90,220,90);
-      textC(d,.435*W,.42*H,F.bebas,28,w,'GNL');
-      rr(c,.41*W,.60*H,.05*W,.13*H,3); c.fillStyle=rgb(196,44,44); c.fill();
-      textC(d,.435*W,.78*H,F.barlow,7.5,dim,'EQ IN');
-      textC(d,W-m-10,H*0.93,F.barlow,8,dim,'MODEL 8300   PARAMETRIC EQUALIZER   SERIES II','right'); } };
+      [W*.03,W*.97].forEach(ex=>{ screw(d,ex,H*.16); screw(d,ex,H*.84); });
+      const w=rgb(226,228,232), dim=rgb(152,154,160);
+      // band headers
+      textC(d,.15*W,.075*H,F.barlow,9,w,'LOW EQ');
+      textC(d,.31*W,.075*H,F.barlow,9,w,'LOW MID');
+      textC(d,.69*W,.075*H,F.barlow,9,w,'HIGH MID');
+      textC(d,.85*W,.075*H,F.barlow,9,w,'HIGH EQ');
+      // per-knob function labels (below each knob)
+      const sub=(cx,cy,r,t)=> textC(d, cx*W, cy*H + r*W + 9, F.barlow, 7, dim, t);
+      sub(.15,.20,.032,'GAIN'); sub(.15,.58,.030,'FREQ');
+      sub(.31,.20,.027,'GAIN'); sub(.31,.49,.027,'FREQ'); sub(.31,.78,.027,'Q');
+      sub(.69,.20,.027,'GAIN'); sub(.69,.49,.027,'FREQ'); sub(.69,.78,.027,'Q');
+      sub(.85,.20,.032,'GAIN'); sub(.85,.58,.030,'FREQ');
+      // centre: LNG logo + green LED + EQ-IN button
+      ledDot(d,.50*W,.14*H,true,90,220,90);
+      textC(d,.50*W,.40*H,F.bebas,30,w,'LNG');
+      rr(c,.475*W,.58*H,.05*W,.12*H,3); c.fillStyle=rgb(196,44,44); c.fill();
+      textC(d,.50*W,.77*H,F.barlow,7.5,dim,'EQ IN');
+      textC(d,W-m-12,H*0.93,F.barlow,8,dim,'MODEL 8300   PARAMETRIC EQUALIZER   SERIES II','right'); } };
   P.studiographiceq = rackSpec({title:'GRAPHIC EQ',        accent:[40,110,160],  names:['Bass','BassFreq','LoMid','LoMidFreq','Mid','MidFreq','HiMid','HiMidFreq','Treble','TrebleFreq']});
   P.studiopitch     = rackSpec({title:'STUDIO PITCH',      accent:[160,185,150], names:['Pitch','Tone','Mix','Pan']});
   P.studioplate     = rackSpec({title:'STUDIO PLATE',      accent:[200,180,168], names:['Time','Tone','Depth','Mix']});
