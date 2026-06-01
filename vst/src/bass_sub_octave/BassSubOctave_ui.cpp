@@ -1,18 +1,25 @@
-/* BassSubOctave stompbox UI — shared pedal_ui template. Shape/colour from the
- * real Boss OC-2 (chocolate-brown Boss compact); knob layout from the Rocksmith
- * "Bass Sub Octave" art: two knobs in a top row (Mix left, Tone right). */
+/* BassSubOctave UI — copyright-free recreation of the classic brown analog
+ * octaver compact it models: Boss-style enclosure, 2 knobs (the RS count). No name. */
 #include "BassSubOctaveParams.h"
-#define PEDAL_TITLE  "SUB OCTAVE"
-#define PEDAL_NAMES  kBassSubOctaveNames
-#define PEDAL_DEFS   kBassSubOctaveDef
-#define PEDAL_ACR 105
-#define PEDAL_ACG 67
-#define PEDAL_ACB 67
-#define PEDAL_ARCR 235
-#define PEDAL_ARCG 225
-#define PEDAL_ARCB 210
-#define PEDAL_W 360
-#define PEDAL_H 440
-// index order: Mix, Tone -> left / right (matches the RS art)
-#define PEDAL_KNOBS { {0.30f,0.18f,0.10f}, {0.70f,0.18f,0.10f} }
-#include "../_shared/pedal_ui.hpp"
+#include "../_shared/pedalkit.hpp"
+START_NAMESPACE_DISTRHO
+class BassSubOctaveUI : public PedalKitUI {
+public:
+    BassSubOctaveUI() : PedalKitUI(300, 480, kParamCount, kBassSubOctaveDef) {
+        names_ = kBassSubOctaveNames; knobLabels_ = false;
+        labelClr = Color(236,232,224); pointerClr = Color(236,232,224); tickClr = Color(222,216,206);
+        addKnob(kMix,  0.34f, 0.235f, 0.088f, 24,22,22, 1);
+        addKnob(kTone, 0.66f, 0.235f, 0.088f, 24,22,22, 1);
+    }
+protected:
+    void drawFace() override {
+        bossPedal(112, 70, 66);                  // chocolate brown body
+        const Color w(236,232,224);
+        textSpaced(0.34f,0.12f,9,w,"MIX",fBarlow,1.0f);
+        textSpaced(0.66f,0.12f,9,w,"TONE",fBarlow,1.0f);
+        textSpaced(0.5f,0.385f,12,w,"SUB OCTAVE",fBarlow,1.6f);
+    }
+    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassSubOctaveUI)
+};
+UI* createUI() { return new BassSubOctaveUI(); }
+END_NAMESPACE_DISTRHO

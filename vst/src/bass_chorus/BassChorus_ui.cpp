@@ -1,16 +1,30 @@
-/* BassChorus stompbox UI — shared pedal_ui template. Shape/colour/knob layout
- * from the real Boss CEB-3: light-blue body, 4 knobs in a top row
- * (E.Level/Low Filter/Rate/Depth -> Mix/LoFilter/Rate/Depth). */
+/* BassChorus UI — copyright-free recreation of the classic teal bass-chorus
+ * compact pedal it models: Boss-style enclosure (coloured body, name strip,
+ * big treadle footswitch), 4 knobs (the RS count) in a row. No brand/model name. */
 #include "BassChorusParams.h"
-#define PEDAL_TITLE  "BASS CHORUS"
-#define PEDAL_NAMES  kBassChorusNames
-#define PEDAL_DEFS   kBassChorusDef
-#define PEDAL_ACR 106
-#define PEDAL_ACG 159
-#define PEDAL_ACB 203
-#define PEDAL_W 360
-#define PEDAL_H 440
-// index order: Rate, Depth, LoFilter, Mix -> CEB-3 row positions (E.Level,
-// Low Filter, Rate, Depth left→right) => Mix@0.17, LoFilter@0.39, Rate@0.61, Depth@0.83
-#define PEDAL_KNOBS { {0.61f,0.17f,0.085f}, {0.83f,0.17f,0.085f}, {0.39f,0.17f,0.085f}, {0.17f,0.17f,0.085f} }
-#include "../_shared/pedal_ui.hpp"
+#include "../_shared/pedalkit.hpp"
+START_NAMESPACE_DISTRHO
+class BassChorusUI : public PedalKitUI {
+public:
+    BassChorusUI() : PedalKitUI(300, 480, kParamCount, kBassChorusDef) {
+        names_ = kBassChorusNames; knobLabels_ = false;
+        labelClr = Color(238,240,242); pointerClr = Color(238,240,242); tickClr = Color(225,228,230);
+        addKnob(kRate,     0.205f, 0.235f, 0.072f, 24,24,26, 1);
+        addKnob(kDepth,    0.400f, 0.235f, 0.072f, 24,24,26, 1);
+        addKnob(kLoFilter, 0.595f, 0.235f, 0.072f, 24,24,26, 1);
+        addKnob(kMix,      0.790f, 0.235f, 0.072f, 24,24,26, 1);
+    }
+protected:
+    void drawFace() override {
+        bossPedal(40, 158, 150);                 // teal body
+        const Color w(238,240,242);
+        textSpaced(0.205f,0.135f,8.5f,w,"RATE",fBarlow,1.0f);
+        textSpaced(0.400f,0.135f,8.5f,w,"DEPTH",fBarlow,1.0f);
+        textSpaced(0.595f,0.135f,8.0f,w,"LO FILTER",fBarlow,0.6f);
+        textSpaced(0.790f,0.135f,8.5f,w,"MIX",fBarlow,1.0f);
+        textSpaced(0.5f,0.385f,12,w,"BASS CHORUS",fBarlow,1.6f);
+    }
+    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassChorusUI)
+};
+UI* createUI() { return new BassChorusUI(); }
+END_NAMESPACE_DISTRHO

@@ -1,16 +1,29 @@
-/* BassFlanger stompbox UI — shared pedal_ui template. Shape/colour/knob layout
- * from the real Boss BF-3: purple body, 4 knobs in a top row
- * (Res-Manual/Depth/Rate/Mode -> Filter/Depth/Rate/Mix). */
+/* BassFlanger UI — copyright-free recreation of the bass-flanger compact it
+ * models: Boss-style enclosure, 4 knobs (RS count). No name. */
 #include "BassFlangerParams.h"
-#define PEDAL_TITLE  "FLANGER"
-#define PEDAL_NAMES  kBassFlangerNames
-#define PEDAL_DEFS   kBassFlangerDef
-#define PEDAL_ACR 175
-#define PEDAL_ACG 90
-#define PEDAL_ACB 160
-#define PEDAL_W 360
-#define PEDAL_H 440
-// index order: Rate, Depth, Filter, Mix -> BF-3 row positions (Res/Manual,
-// Depth, Rate, Mode left→right) => Filter@0.17, Depth@0.39, Rate@0.61, Mix@0.83
-#define PEDAL_KNOBS { {0.61f,0.17f,0.085f}, {0.39f,0.17f,0.085f}, {0.17f,0.17f,0.085f}, {0.83f,0.17f,0.085f} }
-#include "../_shared/pedal_ui.hpp"
+#include "../_shared/pedalkit.hpp"
+START_NAMESPACE_DISTRHO
+class BassFlangerUI : public PedalKitUI {
+public:
+    BassFlangerUI() : PedalKitUI(300, 480, kParamCount, kBassFlangerDef) {
+        names_ = kBassFlangerNames; knobLabels_ = false;
+        labelClr = Color(236,232,242); pointerClr = Color(236,232,242); tickClr = Color(222,216,232);
+        addKnob(kRate,   0.205f, 0.235f, 0.072f, 26,24,30, 1);
+        addKnob(kDepth,  0.400f, 0.235f, 0.072f, 26,24,30, 1);
+        addKnob(kFilter, 0.595f, 0.235f, 0.072f, 26,24,30, 1);
+        addKnob(kMix,    0.790f, 0.235f, 0.072f, 26,24,30, 1);
+    }
+protected:
+    void drawFace() override {
+        bossPedal(96, 80, 134);                  // muted purple body
+        const Color w(236,232,242);
+        textSpaced(0.205f,0.135f,8.5f,w,"RATE",fBarlow,1.0f);
+        textSpaced(0.400f,0.135f,8.5f,w,"DEPTH",fBarlow,1.0f);
+        textSpaced(0.595f,0.135f,8.5f,w,"FILTER",fBarlow,0.7f);
+        textSpaced(0.790f,0.135f,8.5f,w,"MIX",fBarlow,1.0f);
+        textSpaced(0.5f,0.385f,12,w,"BASS FLANGER",fBarlow,1.4f);
+    }
+    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassFlangerUI)
+};
+UI* createUI() { return new BassFlangerUI(); }
+END_NAMESPACE_DISTRHO

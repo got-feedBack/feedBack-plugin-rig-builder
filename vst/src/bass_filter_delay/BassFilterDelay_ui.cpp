@@ -1,18 +1,29 @@
-/* BassFilterDelay stompbox UI — shared pedal_ui template. Colour/knob layout
- * from the Rocksmith "Bass Filter Delay" art: deep-blue body, 4 knobs in a top
- * row (Time / Feedback / Mix / Filter), "DELAY" title. */
+/* BassFilterDelay UI — copyright-free recreation of the classic analog BBD delay
+ * compact it models: Boss-style enclosure, 4 knobs (RS count). No name. */
 #include "BassFilterDelayParams.h"
-#define PEDAL_TITLE  "DELAY"
-#define PEDAL_NAMES  kBassFilterDelayNames
-#define PEDAL_DEFS   kBassFilterDelayDef
-#define PEDAL_ACR 27
-#define PEDAL_ACG 56
-#define PEDAL_ACB 140
-#define PEDAL_ARCR 150
-#define PEDAL_ARCG 185
-#define PEDAL_ARCB 240
-#define PEDAL_W 360
-#define PEDAL_H 440
-// index order: Time, Feedback, Mix, Filter -> evenly across the top row
-#define PEDAL_KNOBS { {0.17f,0.17f,0.085f}, {0.39f,0.17f,0.085f}, {0.61f,0.17f,0.085f}, {0.83f,0.17f,0.085f} }
-#include "../_shared/pedal_ui.hpp"
+#include "../_shared/pedalkit.hpp"
+START_NAMESPACE_DISTRHO
+class BassFilterDelayUI : public PedalKitUI {
+public:
+    BassFilterDelayUI() : PedalKitUI(300, 480, kParamCount, kBassFilterDelayDef) {
+        names_ = kBassFilterDelayNames; knobLabels_ = false;
+        labelClr = Color(240,236,236); pointerClr = Color(240,236,236); tickClr = Color(228,222,222);
+        addKnob(kTime,     0.205f, 0.235f, 0.072f, 24,22,23, 1);
+        addKnob(kFeedback, 0.400f, 0.235f, 0.072f, 24,22,23, 1);
+        addKnob(kMix,      0.595f, 0.235f, 0.072f, 24,22,23, 1);
+        addKnob(kFilter,   0.790f, 0.235f, 0.072f, 24,22,23, 1);
+    }
+protected:
+    void drawFace() override {
+        bossPedal(156, 64, 72);                  // dusty rose / dark salmon body
+        const Color w(240,236,236);
+        textSpaced(0.205f,0.135f,8.0f,w,"TIME",fBarlow,1.0f);
+        textSpaced(0.400f,0.135f,7.5f,w,"FEEDBACK",fBarlow,0.5f);
+        textSpaced(0.595f,0.135f,8.0f,w,"MIX",fBarlow,1.0f);
+        textSpaced(0.790f,0.135f,8.0f,w,"FILTER",fBarlow,0.7f);
+        textSpaced(0.5f,0.385f,12,w,"BASS DELAY",fBarlow,1.6f);
+    }
+    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassFilterDelayUI)
+};
+UI* createUI() { return new BassFilterDelayUI(); }
+END_NAMESPACE_DISTRHO

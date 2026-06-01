@@ -23,7 +23,7 @@ START_NAMESPACE_DISTRHO
 class PedalKitUI : public UI
 {
 protected:
-    struct Ctl { int id; float cx, cy, r; int kind; float cr, cg, cb; }; // kind 0=knob,1=toggle2,2=toggle3
+    struct Ctl { int id; float cx, cy, r; int kind; float cr, cg, cb; int style; }; // kind 0=knob,1=toggle2,2=toggle3; style 0=pointer 1=boss 2=davies 3=knurled 4=chicken
     static const int kMaxCtl = 16;
     Ctl  ctl[kMaxCtl];
     int  nctl = 0;
@@ -86,11 +86,11 @@ protected:
     static float angleFor(float n) { return (135.f + n * 270.f) * 3.14159265f / 180.f; }
     static int cl(int v) { return v < 0 ? 0 : (v > 255 ? 255 : v); }
 
-    void addKnob(int id, float cx, float cy, float r, int cr, int cg, int cb) {
-        if (nctl < kMaxCtl) ctl[nctl++] = { id, cx, cy, r, 0, (float)cr, (float)cg, (float)cb };
+    void addKnob(int id, float cx, float cy, float r, int cr, int cg, int cb, int style = 0) {
+        if (nctl < kMaxCtl) ctl[nctl++] = { id, cx, cy, r, 0, (float)cr, (float)cg, (float)cb, style };
     }
     void addToggle(int id, float cx, float cy, float r, int states) {
-        if (nctl < kMaxCtl) ctl[nctl++] = { id, cx, cy, r, states >= 3 ? 2 : 1, 0, 0, 0 };
+        if (nctl < kMaxCtl) ctl[nctl++] = { id, cx, cy, r, states >= 3 ? 2 : 1, 0, 0, 0, 0 };
     }
 
     // ── primitives ───────────────────────────────────────────────────────
@@ -139,33 +139,81 @@ protected:
         beginPath(); circle(cx - r*0.3f, cy - r*0.3f, r*0.35f); fillColor(Color(255,255,255, on?150:40)); fill();
     }
 
-    void metalKnob(const Ctl& k) {
-        const float f = sc(), cx = W() * k.cx, cy = H() * k.cy, R = W() * k.r, n = fValues[k.id];
-        // plastic skirt base
-        beginPath(); circle(cx, cy, R * 1.16f); fillColor(Color(16, 16, 18)); fill();
-        beginPath(); circle(cx, cy, R * 1.16f); strokeColor(Color(0,0,0,140)); strokeWidth(1.5f*f); stroke();
-        // tick marks
-        strokeColor(tickClr); strokeWidth(1.4f * f);
-        for (int t = 0; t <= 10; ++t) {
-            const float a = angleFor(t / 10.f), r0 = R * 1.22f, r1 = R * 1.36f;
-            beginPath(); moveTo(cx + r0*std::cos(a), cy + r0*std::sin(a));
-            lineTo(cx + r1*std::cos(a), cy + r1*std::sin(a)); stroke();
-        }
-        // metal/plastic cap with radial sheen
-        Paint cap = radialGradient(cx - R*0.4f, cy - R*0.5f, R*0.1f, R*1.3f,
-            Color(cl((int)k.cr+45), cl((int)k.cg+45), cl((int)k.cb+45)),
-            Color((int)(k.cr*0.45f), (int)(k.cg*0.45f), (int)(k.cb*0.45f)));
-        beginPath(); circle(cx, cy, R); fillPaint(cap); fill();
-        beginPath(); circle(cx, cy, R); strokeColor(Color(8, 8, 10)); strokeWidth(1.5f*f); stroke();
-        // pointer
-        const float a = angleFor(n);
-        beginPath(); moveTo(cx + R*0.18f*std::cos(a), cy + R*0.18f*std::sin(a));
-        lineTo(cx + R*0.86f*std::cos(a), cy + R*0.86f*std::sin(a));
+    // ── knob styles (matched to each real pedal) ──────────────────────────
+    void knobPointer(float cx, float cy, float R, float n, const Ctl& k) {   // round + white pointer + tick fan
+        const float f = sc();
+        beginPath(); circle(cx, cy, R*1.16f); fillColor(Color(16,16,18)); fill();
+        strokeColor(tickClr); strokeWidth(1.4f*f);
+        for (int t=0;t<=10;++t){ float a=angleFor(t/10.f),r0=R*1.22f,r1=R*1.36f;
+            beginPath(); moveTo(cx+r0*std::cos(a),cy+r0*std::sin(a)); lineTo(cx+r1*std::cos(a),cy+r1*std::sin(a)); stroke(); }
+        Paint cap=radialGradient(cx-R*0.4f,cy-R*0.5f,R*0.1f,R*1.3f,
+            Color(cl((int)k.cr+45),cl((int)k.cg+45),cl((int)k.cb+45)),Color((int)(k.cr*0.45f),(int)(k.cg*0.45f),(int)(k.cb*0.45f)));
+        beginPath(); circle(cx,cy,R); fillPaint(cap); fill();
+        beginPath(); circle(cx,cy,R); strokeColor(Color(8,8,10)); strokeWidth(1.5f*f); stroke();
+        float a=angleFor(n);
+        beginPath(); moveTo(cx+R*0.18f*std::cos(a),cy+R*0.18f*std::sin(a)); lineTo(cx+R*0.86f*std::cos(a),cy+R*0.86f*std::sin(a));
         strokeColor(pointerClr); strokeWidth(3*f); stroke();
-        // label below
+    }
+    void knobBoss(float cx, float cy, float R, float n, const Ctl&) {        // black knurled cylinder + white line
+        const float f = sc();
+        beginPath(); circle(cx,cy,R); fillColor(Color(22,22,24)); fill();
+        strokeColor(Color(58,60,64)); strokeWidth(1.0f*f);
+        for (int i=0;i<36;++i){ float a=i/36.f*6.2831853f,r0=R*0.80f,r1=R*0.99f;
+            beginPath(); moveTo(cx+r0*std::cos(a),cy+r0*std::sin(a)); lineTo(cx+r1*std::cos(a),cy+r1*std::sin(a)); stroke(); }
+        Paint cap=radialGradient(cx-R*0.3f,cy-R*0.4f,R*0.1f,R*0.85f,Color(52,53,58),Color(22,22,25));
+        beginPath(); circle(cx,cy,R*0.74f); fillPaint(cap); fill();
+        beginPath(); circle(cx,cy,R); strokeColor(Color(6,6,8)); strokeWidth(1.4f*f); stroke();
+        float a=angleFor(n);
+        beginPath(); moveTo(cx,cy); lineTo(cx+R*0.92f*std::cos(a),cy+R*0.92f*std::sin(a));
+        strokeColor(pointerClr); strokeWidth(2.6f*f); stroke();
+        beginPath(); circle(cx+R*0.84f*std::cos(a),cy+R*0.84f*std::sin(a),2.0f*f); fillColor(pointerClr); fill();
+    }
+    void knobDavies(float cx, float cy, float R, float n, const Ctl&) {      // wide skirt + domed cap (fuzz/big-box)
+        const float f = sc();
+        beginPath(); circle(cx,cy,R*1.30f); fillColor(Color(14,14,16)); fill();
+        beginPath(); circle(cx,cy,R*1.30f); strokeColor(Color(0,0,0,150)); strokeWidth(1.5f*f); stroke();
+        Paint cap=radialGradient(cx-R*0.4f,cy-R*0.5f,R*0.1f,R*1.15f,Color(50,50,54),Color(18,18,20));
+        beginPath(); circle(cx,cy,R); fillPaint(cap); fill();
+        beginPath(); circle(cx,cy,R); strokeColor(Color(6,6,8)); strokeWidth(1.5f*f); stroke();
+        float a=angleFor(n);
+        beginPath(); moveTo(cx,cy); lineTo(cx+R*1.20f*std::cos(a),cy+R*1.20f*std::sin(a));
+        strokeColor(pointerClr); strokeWidth(3.4f*f); stroke();
+    }
+    void knobKnurled(float cx, float cy, float R, float n, const Ctl&) {     // aluminium knurled (modern OD)
+        const float f = sc();
+        Paint cap=radialGradient(cx-R*0.4f,cy-R*0.5f,R*0.1f,R*1.2f,Color(98,100,106),Color(38,39,43));
+        beginPath(); circle(cx,cy,R); fillPaint(cap); fill();
+        strokeColor(Color(150,152,158,120)); strokeWidth(0.8f*f);
+        for (int i=0;i<48;++i){ float a=i/48.f*6.2831853f,r0=R*0.86f,r1=R*0.99f;
+            beginPath(); moveTo(cx+r0*std::cos(a),cy+r0*std::sin(a)); lineTo(cx+r1*std::cos(a),cy+r1*std::sin(a)); stroke(); }
+        beginPath(); circle(cx,cy,R); strokeColor(Color(10,10,12)); strokeWidth(1.4f*f); stroke();
+        float a=angleFor(n);
+        beginPath(); moveTo(cx+R*0.15f*std::cos(a),cy+R*0.15f*std::sin(a)); lineTo(cx+R*0.9f*std::cos(a),cy+R*0.9f*std::sin(a));
+        strokeColor(Color(22,22,24)); strokeWidth(2.6f*f); stroke();
+    }
+    void knobChicken(float cx, float cy, float R, float n, const Ctl&) {     // chickenhead beak
+        const float f = sc(); float a=angleFor(n);
+        Paint cap=radialGradient(cx-R*0.2f,cy-R*0.3f,R*0.1f,R*0.8f,Color(40,40,44),Color(14,14,16));
+        beginPath(); circle(cx,cy,R*0.62f); fillPaint(cap); fill();
+        float bx=cx+R*1.08f*std::cos(a), by=cy+R*1.08f*std::sin(a), pa=a+1.5708f;
+        beginPath(); moveTo(bx,by);
+        lineTo(cx+R*0.5f*std::cos(a)+R*0.32f*std::cos(pa), cy+R*0.5f*std::sin(a)+R*0.32f*std::sin(pa));
+        lineTo(cx+R*0.5f*std::cos(a)-R*0.32f*std::cos(pa), cy+R*0.5f*std::sin(a)-R*0.32f*std::sin(pa));
+        closePath(); fillColor(Color(236,232,224)); fill();
+        beginPath(); circle(cx,cy,R*0.62f); strokeColor(Color(8,8,10)); strokeWidth(1.4f*f); stroke();
+    }
+    void metalKnob(const Ctl& k) {
+        const float f = sc(), cx = W()*k.cx, cy = H()*k.cy, R = W()*k.r, n = fValues[k.id]; (void)f;
+        switch (k.style) {
+            case 1: knobBoss(cx,cy,R,n,k); break;
+            case 2: knobDavies(cx,cy,R,n,k); break;
+            case 3: knobKnurled(cx,cy,R,n,k); break;
+            case 4: knobChicken(cx,cy,R,n,k); break;
+            default: knobPointer(cx,cy,R,n,k); break;
+        }
         if (names_ && knobLabels_) {
-            face(labelFont_); textAlign(ALIGN_CENTER | ALIGN_TOP); fontSize(12.5f*f); fillColor(labelClr);
-            text(cx, cy + R*1.45f + 2*f, names_[k.id], NULL);
+            face(labelFont_); textAlign(ALIGN_CENTER | ALIGN_TOP); fontSize(12.5f*sc()); fillColor(labelClr);
+            text(cx, cy + R*1.45f + 2*sc(), names_[k.id], NULL);
         }
     }
 
@@ -212,6 +260,38 @@ protected:
         beginPath(); roundedRect(x0, y0, w, h, 3*f); strokeColor(line); strokeWidth(1.6f*f); stroke();
         face(fid); fontSize(size*f); fillColor(txt); textAlign(ALIGN_CENTER | ALIGN_MIDDLE);
         text(cx*W(), cy*H(), s, NULL);
+    }
+    // Boss-compact style enclosure: coloured body, a darker name strip near the
+    // top, and the big rubber treadle footswitch over the lower half. The
+    // subclass draws the strip text + knobs in the upper area (y ~0.17..0.40).
+    void bossPedal(int r, int g, int b) {
+        const float f = sc(), w = W(), h = H(), m = 7*f;
+        beginPath(); rect(0, 0, w, h); fillColor(Color(10, 10, 12)); fill();
+        Paint body = linearGradient(0, m, 0, h - m, Color(cl(r+18),cl(g+18),cl(b+18)), Color(cl(r-14),cl(g-14),cl(b-14)));
+        beginPath(); roundedRect(m, m, w-2*m, h-2*m, 12*f); fillPaint(body); fill();
+        beginPath(); roundedRect(m, m, w-2*m, h-2*m, 12*f); strokeColor(Color(0,0,0,120)); strokeWidth(2*f); stroke();
+        // black control plate behind the knobs (the recessed top section)
+        beginPath(); roundedRect(m+11*f, h*0.10f, w-2*m-22*f, h*0.235f, 6*f);
+        fillColor(Color(20,20,22)); fill();
+        beginPath(); roundedRect(m+11*f, h*0.10f, w-2*m-22*f, h*0.235f, 6*f);
+        strokeColor(Color(0,0,0,120)); strokeWidth(1.2f*f); stroke();
+        // two hex screws at the top corners + status LED top-centre
+        screw(m+15*f, m+15*f); screw(w-m-15*f, m+15*f);
+        ledDot(w*0.5f, h*0.072f, 4.5f*f, true, 224, 70, 58);
+        // name strip (darker shade) sitting between the knobs and the treadle
+        beginPath(); roundedRect(m+12*f, h*0.355f, w-2*m-24*f, h*0.058f, 4*f);
+        fillColor(Color(cl(r-34),cl(g-34),cl(b-34))); fill();
+        beginPath(); roundedRect(m+12*f, h*0.355f, w-2*m-24*f, h*0.058f, 4*f);
+        strokeColor(Color(0,0,0,70)); strokeWidth(1*f); stroke();
+        // big treadle (stops short of the bottom)
+        const float tx = m+13*f, tw = w-2*m-26*f, tyTop = h*0.45f, tBot = h*0.865f;
+        Paint tre = linearGradient(0, tyTop, 0, tBot, Color(cl(r-4),cl(g-4),cl(b-4)), Color(cl(r-30),cl(g-30),cl(b-30)));
+        beginPath(); roundedRect(tx, tyTop, tw, tBot - tyTop, 16*f); fillPaint(tre); fill();
+        beginPath(); roundedRect(tx, tyTop, tw, 12*f, 16*f); fillColor(Color(255,255,255,20)); fill();   // front lip
+        beginPath(); roundedRect(tx, tyTop, tw, tBot - tyTop, 16*f); strokeColor(Color(0,0,0,100)); strokeWidth(1.5f*f); stroke();
+        // black bottom plate (the label/jack base of the pedal)
+        beginPath(); roundedRect(m+11*f, h*0.885f, w-2*m-22*f, h*0.072f, 5*f);
+        fillColor(Color(20,20,22)); fill();
     }
     void title(const char* s, Color c, float cy, float size, int fid) {
         face(fid); textAlign(ALIGN_CENTER | ALIGN_MIDDLE); fontSize(size * sc()); fillColor(c);

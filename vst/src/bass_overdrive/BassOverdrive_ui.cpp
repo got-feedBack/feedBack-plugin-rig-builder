@@ -17,10 +17,10 @@ public:
         tickClr    = Color(150, 151, 154);
         pointerClr = Color(238, 239, 242);
         // 2x2 black knobs (Blend TL, Tone TR, Gain BL, Filter BR) — RS's 4 knobs
-        addKnob(kBlend,  0.30f, 0.31f, 0.10f, 32, 32, 34);
-        addKnob(kTone,   0.70f, 0.31f, 0.10f, 32, 32, 34);
-        addKnob(kGain,   0.30f, 0.62f, 0.10f, 32, 32, 34);
-        addKnob(kFilter, 0.70f, 0.62f, 0.10f, 32, 32, 34);
+        addKnob(kBlend,  0.30f, 0.31f, 0.10f, 32, 32, 34, 3);
+        addKnob(kTone,   0.70f, 0.31f, 0.10f, 32, 32, 34, 3);
+        addKnob(kGain,   0.30f, 0.62f, 0.10f, 32, 32, 34, 3);
+        addKnob(kFilter, 0.70f, 0.62f, 0.10f, 32, 32, 34, 3);
     }
 protected:
     void drawFace() override {
