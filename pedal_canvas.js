@@ -407,10 +407,11 @@
       textC(d,.22*W,.255*H+R,F.barlow,11,w,'COMPRESS');
       textC(d,.50*W,.255*H+R,F.barlow,11,w,'FILTER');
       textC(d,.78*W,.255*H+R,F.barlow,11,w,'RATE');
-      // stylised 'MultiComp': wide — big C … P with MULTI/OM centred between them
-      textC(d,.50*W,.505*H,F.barlow,19,w,'MULTI');
+      // stylised 'MultiComp': wide — big C … P; MULTI (up top) + OM both
+      // letter-spaced to fill the gap between C and P
+      textSpaced(d,.50*W,.460*H,F.barlow,19,w,'MULTI',18);
       textC(d,.24*W,.530*H,F.anton,78,w,'C');
-      textC(d,.50*W,.555*H,F.anton,48,w,'OM');
+      textSpaced(d,.50*W,.555*H,F.anton,48,w,'OM',54);
       textC(d,.76*W,.530*H,F.anton,78,w,'P');
       // blue accent lines at the bottom — thick + short (behind EBX + footswitch)
       c.strokeStyle='rgba(46,124,228,0.92)'; c.lineWidth=8;
