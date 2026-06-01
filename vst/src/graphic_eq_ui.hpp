@@ -45,7 +45,7 @@ class GraphicEqUI : public UI
     float faderW() const { return plateW() - getWidth() * 0.105f; }
     float colW()   const { return faderW() / (float)kEqBands; }
     float colX(int i) const { return faderL() + (i + 0.5f) * colW(); }
-    float trackTop()    const { return plateY() + getHeight() * 0.052f; }
+    float trackTop()    const { return plateY() + getHeight() * 0.072f; }
     float trackBottom() const { return plateY() + plateH() - getHeight() * 0.038f; }
 
     float valToY(float v) const { return trackTop() + (1.0f - v) * (trackBottom() - trackTop()); }
@@ -120,9 +120,9 @@ protected:
 
         for (int i = 0; i < kEqBands; ++i) {
             const float cx = colX(i);
-            fontFaceId(fLbl); textAlign(ALIGN_CENTER | ALIGN_BOTTOM); fontSize(8*f);
-            fillColor(mesa ? Color(60,62,68) : Color(176,178,186));
-            text(cx, plateY() - 1*f, kEqNames[i], NULL);
+            fontFaceId(fLbl); textAlign(ALIGN_CENTER | ALIGN_TOP); fontSize(8*f);
+            fillColor(mesa ? Color(74,76,82) : Color(182,184,192));
+            text(cx, plateY() + 4*f, kEqNames[i], NULL);   // freq INSIDE the plate top
             beginPath(); roundedRect(cx - 2.0f*f, tT, 4.0f*f, tB - tT, 2.0f*f); fillColor(mesa?Color(150,151,156):Color(46,48,56)); fill();
             const float hy = valToY(fValues[i]);
             // fader cap: dark on Mesa's light channel, light on Boss's dark plate
@@ -152,10 +152,10 @@ protected:
             beginPath(); roundedRect(tx, tyTop, tw, tBot - tyTop, 12*f); strokeColor(Color(0,0,0,120)); strokeWidth(1.6f*f); stroke();
             beginPath(); roundedRect(tx+12*f, H*0.865f, tw-24*f, tBot-9*f-H*0.865f, 9*f); fillColor(Color(20,20,22)); fill();
 #if defined(EQ_NAME1) && defined(EQ_NAME2)
-            engrave(0.31f, 0.595f, 34, EQ_NAME1, Color(16,16,20));
-            engrave(0.60f, 0.700f, 27, EQ_NAME2, Color(16,16,20));
+            engrave(0.30f, 0.595f, 42, EQ_NAME1, Color(16,16,20));
+            engrave(0.61f, 0.705f, 34, EQ_NAME2, Color(16,16,20));
 #else
-            engrave(0.5f, 0.655f, 30, EQ_PLUGIN_LABEL, Color(16,16,20));
+            engrave(0.5f, 0.655f, 40, EQ_PLUGIN_LABEL, Color(16,16,20));
 #endif
         }
     }
