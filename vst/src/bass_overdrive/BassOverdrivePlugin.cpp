@@ -63,8 +63,9 @@ public:
         // DC blocker (removes the clip bias)
         zOutDC += cOutDC * (d - zOutDC);
         d = d - zOutDC;
-        // blend clean + dist (×0.8 dist to keep peaks sane)
-        return clean * (1.0f - blend) + d * blend * 0.8f;
+        // blend clean + dist (×0.8 dist to keep peaks sane), then a final
+        // output trim so the pedal sits at bypass level (was ~3.7× too loud)
+        return (clean * (1.0f - blend) + d * blend * 0.8f) * 0.40f;
     }
 };
 

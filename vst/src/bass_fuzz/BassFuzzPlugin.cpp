@@ -28,7 +28,7 @@ class BigMuff {
     // coefficients
     float cInHP, cBass, cS1, cS2, cToneLP, cToneHP, cOutDC;
     // params (derived)
-    float drive = 40.f, tone = 0.55f, dryBlend = 0.45f, makeup = 0.55f;
+    float drive = 40.f, tone = 0.55f, dryBlend = 0.45f, makeup = 0.24f;   // makeup lowered 0.55→0.24: clip kept, output level-matched to bypass
 
     // HARD clip (not tanh) — the square edges + their high harmonics are the
     // gritty, "8-bit" Big Muff character. Drive is kept moderate so the

@@ -26,11 +26,13 @@ class Rat {
     float cHP, cPre, cPost;
     float drive = 100.f;
 
-    // hard silicon-diode clip (a touch of rounding near the knee)
+    // hard silicon-diode clip — the RAT's diodes clip HARD, which is what gives
+    // the gritty buzz. Pure hard clip (the post-clip Filter low-pass tames the
+    // worst fizz). The old cubic was too soft → sounded like a clean boost.
     static inline float clip(float x) {
         if (x >  1.0f) return  1.0f;
         if (x < -1.0f) return -1.0f;
-        return x * (1.5f - 0.5f * x * x);   // cubic — harder than tanh, RAT-ish
+        return x;
     }
 public:
     void setSampleRate(float s) { fs = (s > 0.f) ? s : 48000.f; recalcFixed(); }
@@ -40,7 +42,7 @@ public:
         // bass DI (the earlier 2..32 was too clean on quiet inputs — "barely
         // distorts"), but well below the old 500× that made loud hiss.
         // ~5 .. 85; gain 0.8 → ~69.
-        drive = 5.0f + gain * 80.0f;
+        drive = 12.0f + gain * 90.0f;
         cPre  = onePoleCoef(800.0f  * std::pow(10.0f, toneP),  fs);  // 800 .. 8000 Hz pre-clip
         cPost = onePoleCoef(700.0f  * std::pow(2.0f, filterP * 3.1f), fs); // 700 .. ~6000 Hz Filter
     }
@@ -50,7 +52,7 @@ public:
         zPre += cPre * (s - zPre); s = zPre;   // pre-clip brightness (Tone)
         s = clip(s);                           // hard silicon clipping
         zPost += cPost * (s - zPost); s = zPost; // RAT Filter low-pass
-        return s * 0.85f;                      // output make-up (louder/more present)
+        return s * 0.26f;                      // output level — clip preserved, level-matched to bypass (was 0.85, far too loud)
     }
 };
 
