@@ -173,13 +173,13 @@
   // n1/n2 = two-word model name (n1 left, n2 right); code = parody model number
   // (e.g. 'CB-3'), a bit smaller, bottom-RIGHT corner. dy shifts everything down
   // (the EQ treadle sits lower, so it passes a positive dy).
-  function chiefName(d, n1, n2, code, dy) { const {W,H}=d; dy = dy || 0; const dk = rgb(16,16,20);
+  function chiefName(d, n1, n2, code, dy, codeDy) { const {W,H}=d; dy = dy || 0; codeDy = codeDy || 0; const dk = rgb(16,16,20);
     if (n2){ const s2 = n2.length > 7 ? 32 : 44, sc = s2 - 12;
              textC(d, 0.29*W, (0.50+dy)*H, FONTS.crete, 48, dk, n1);
              textC(d, 0.62*W, (0.58+dy)*H, FONTS.crete, s2, dk, n2);
-             if (code) textC(d, 0.76*W, (0.665+dy)*H, FONTS.barlow, sc, dk, code); }
+             if (code) textC(d, 0.76*W, (0.665+dy+codeDy)*H, FONTS.barlow, sc, dk, code); }
     else   { textC(d, 0.46*W, (0.56+dy)*H, FONTS.crete, 44, dk, n1);
-             if (code) textC(d, 0.78*W, (0.66+dy)*H, FONTS.barlow, 30, dk, code); } }
+             if (code) textC(d, 0.78*W, (0.66+dy+codeDy)*H, FONTS.barlow, 30, dk, code); } }
 
   // ── pedal specs ───────────────────────────────────────────────────────────
   // each: {w,h, knobs:[{id,cx,cy,r,style,cap:[r,g,b]}], draw(d,vals)}
@@ -449,7 +449,7 @@
       rr(c, tx, tyTop, tw, 10, 12); c.fillStyle = 'rgba(255,255,255,0.08)'; c.fill();
       rr(c, tx, tyTop, tw, tBot - tyTop, 12); c.strokeStyle = 'rgba(0,0,0,0.47)'; c.lineWidth = 1.6; c.stroke();
       const padT = tyTop + (tBot - tyTop) * 0.50, padBot = tBot - 9; rr(c, tx + 12, padT, tw - 24, padBot - padT, 9); c.fillStyle = rgb(20, 20, 22); c.fill();
-      chiefName(d, spec.name1 || spec.label, spec.name2, spec.code, 0.055);  // dy: EQ treadle sits lower
+      chiefName(d, spec.name1 || spec.label, spec.name2, spec.code, 0.075, -0.04);  // dy down (names), codeDy up (code)
       chiefBadge(d, padT, padBot);                                            // CHIEF badge on the pad
     }
   }
