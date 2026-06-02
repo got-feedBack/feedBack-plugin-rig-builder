@@ -168,6 +168,24 @@
       c.beginPath(); c.moveTo(cx+R*0.10*Math.cos(a),cy+R*0.10*Math.sin(a)); c.lineTo(cx+R*0.70*Math.cos(a),cy+R*0.70*Math.sin(a));
       c.strokeStyle=rgb(46,48,52); c.lineWidth=2.8*s; c.stroke(); return;
     }
+    if (style==='api') {
+      // API 550 stepped knob: 4-point grey star skirt + blue ring + cream centre,
+      // top point elongated = indicator (rotates with value).
+      for(let i=0;i<4;i++){ const pa=a+i*Math.PI/2, len=(i===0?1.46:1.30)*R;
+        c.beginPath();
+        c.moveTo(cx+Math.cos(pa)*len, cy+Math.sin(pa)*len);
+        c.lineTo(cx+Math.cos(pa+0.30)*R*0.92, cy+Math.sin(pa+0.30)*R*0.92);
+        c.lineTo(cx+Math.cos(pa-0.30)*R*0.92, cy+Math.sin(pa-0.30)*R*0.92);
+        c.closePath(); c.fillStyle=rgb(170,176,186); c.fill(); }
+      c.beginPath(); c.arc(cx,cy,R*0.96,0,7); c.fillStyle=rgb(132,140,156); c.fill();
+      c.strokeStyle=rgb(58,62,70); c.lineWidth=1*s; c.stroke();
+      c.beginPath(); c.arc(cx,cy,R*0.74,0,7); c.fillStyle=rgb(86,116,186); c.fill();
+      const ag=c.createRadialGradient(cx-R*0.22,cy-R*0.24,R*0.1,cx,cy,R*0.60);
+      ag.addColorStop(0,rgb(240,242,238)); ag.addColorStop(1,rgb(198,202,198));
+      c.beginPath(); c.arc(cx,cy,R*0.56,0,7); c.fillStyle=ag; c.fill();
+      c.beginPath(); c.arc(cx+Math.cos(a)*R*0.40, cy+Math.sin(a)*R*0.40, R*0.09,0,7); c.fillStyle=rgb(70,74,82); c.fill();
+      return;
+    }
     // pointer + tick fan (default)
     c.beginPath(); c.arc(cx,cy,R*1.16,0,7); c.fillStyle=rgb(16,16,18); c.fill();
     c.strokeStyle=tickCol; c.lineWidth=1.4*s;
@@ -1962,7 +1980,47 @@
       rr(c,.475*W,.57*H,.05*W,.12*H,3); c.fillStyle=rgb(196,44,44); c.fill();
       textC(d,.50*W,.75*H,F.barlow,11,dim,'EQ IN');
       textC(d,W-m-16,H*0.93,F.barlow,11,dim,'MODEL 8300   PARAMETRIC EQUALIZER   SERIES II','right'); } };
-  P.studiographiceq = rackSpec({title:'GRAPHIC EQ',        accent:[40,110,160],  names:['Bass','BassFreq','LoMid','LoMidFreq','Mid','MidFreq','HiMid','HiMidFreq','Treble','TrebleFreq']});
+  // Graphic EQ — API 550b look: tall black 500-series module, column of API star
+  // knobs (gain) each with a small freq knob, blue freq scales, HF/LF toggles, IN.
+  // Parody: API arrow + "G-550". RS params (10): Bass0 BassFreq1 LoMid2 LoMidFreq3
+  // Mid4 MidFreq5 HiMid6 HiMidFreq7 Treble8 TrebleFreq9 (HIGH at top → LOW bottom).
+  P.studiographiceq = { w:300, h:740,
+    knobs:[
+      {id:8,cx:.40,cy:.165,r:.090,style:'api'}, {id:9,cx:.78,cy:.165,r:.052,style:'api'},  // HIGH (Treble) + freq
+      {id:6,cx:.40,cy:.310,r:.090,style:'api'}, {id:7,cx:.78,cy:.310,r:.052,style:'api'},  // HI-MID
+      {id:4,cx:.40,cy:.455,r:.090,style:'api'}, {id:5,cx:.78,cy:.455,r:.052,style:'api'},  // MID
+      {id:2,cx:.40,cy:.600,r:.090,style:'api'}, {id:3,cx:.78,cy:.600,r:.052,style:'api'},  // LO-MID
+      {id:0,cx:.40,cy:.745,r:.090,style:'api'}, {id:1,cx:.78,cy:.745,r:.052,style:'api'}], // LOW (Bass)
+    tick:rgb(150,154,160), ptr:rgb(40,44,52),
+    draw(d){ const {ctx:c,W,H}=d, m=6;
+      c.fillStyle=rgb(8,9,11); c.fillRect(0,0,W,H);
+      const bg=c.createLinearGradient(0,0,0,H); bg.addColorStop(0,rgb(30,31,34)); bg.addColorStop(1,rgb(18,19,22));
+      rr(c,m,m,W-2*m,H-2*m,8); c.fillStyle=bg; c.fill();
+      rr(c,m,m,W-2*m,H-2*m,8); c.strokeStyle=rgb(6,7,9); c.lineWidth=2; c.stroke();
+      screw(d,.5*W,.032*H); screw(d,.5*W,.968*H);
+      const blu=rgb(86,150,214), wt=rgb(228,230,234), dim=rgb(150,154,160);
+      // API-style arrow logo + model
+      c.beginPath(); c.moveTo(.16*W,.062*H); c.lineTo(.25*W,.044*H); c.lineTo(.25*W,.080*H); c.closePath();
+      c.fillStyle=blu; c.fill(); c.fillRect(.25*W,.056*H,.05*W,.012*H);
+      textC(d,.64*W,.062*H,F.bebas,30,blu,'G-550');
+      // bands
+      const bands=[['HIGH',.165],['HI-MID',.310],['MID',.455],['LO-MID',.600],['LOW',.745]];
+      const fl=['20k','10k','1k','400','100'];
+      bands.forEach((b,i)=>{ textC(d,.075*W,b[1]*H,F.barlow,11.5,wt,b[0],'left');
+        textC(d,.40*W,(b[1]-.078)*H,F.barlow,9,dim,'0');
+        textC(d,.255*W,b[1]*H,F.barlow,10,dim,'−'); textC(d,.545*W,b[1]*H,F.barlow,10,dim,'+');
+        textC(d,.78*W,(b[1]+.064)*H,F.barlow,9,blu,fl[i]+' Hz'); });
+      // HF / LF peak-shelf toggles
+      const tog=(cy,lbl)=>{ rr(c,.895*W,(cy-.022)*H,.06*W,.05*H,2); c.fillStyle=rgb(28,29,32); c.fill();
+        rr(c,.895*W,(cy-.022)*H,.06*W,.05*H,2); c.strokeStyle=rgb(70,72,76); c.lineWidth=1; c.stroke();
+        c.beginPath(); c.arc(.925*W,(cy-.008)*H,.016*W,0,7); c.fillStyle=rgb(160,162,166); c.fill();
+        textC(d,.925*W,(cy+.04)*H,F.barlow,9,dim,lbl); };
+      tog(.235,'HF'); tog(.675,'LF');
+      // IN bypass + LED (bottom)
+      ledDot(d,.305*W,.905*H,false,210,52,42);
+      rr(c,.42*W,.882*H,.07*W,.05*H,3); c.fillStyle=rgb(232,234,232); c.fill();
+      rr(c,.42*W,.882*H,.07*W,.05*H,3); c.strokeStyle=rgb(120,122,124); c.lineWidth=1; c.stroke();
+      textC(d,.50*W,.952*H,F.bebas,17,wt,'IN'); } };
   P.studiopitch     = rackSpec({title:'STUDIO PITCH',      accent:[160,185,150], names:['Pitch','Tone','Mix','Pan']});
   P.studioplate     = rackSpec({title:'STUDIO PLATE',      accent:[200,180,168], names:['Time','Tone','Depth','Mix']});
   P.studioverb      = rackSpec({title:'STUDIO VERB',       accent:[120,195,175], names:['Time','Tone','Depth','Mix']});
