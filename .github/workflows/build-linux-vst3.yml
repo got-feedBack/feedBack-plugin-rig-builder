@@ -35,12 +35,15 @@ jobs:
 
       - name: Install build deps
         # DPF's default UI is its OpenGL backend (DGL), so the effects with a
-        # FILES_UI need the X11 + GL dev headers, not just a compiler.
+        # FILES_UI need the X11 + GL dev headers, not just a compiler. libdbus
+        # is required too: DGL's pugl file-browser links libdbus-1 on Linux, and
+        # without the -dev package the final link fails with undefined
+        # dbus_* references.
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential pkg-config \
-            libgl1-mesa-dev \
+            libgl1-mesa-dev libdbus-1-dev \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxinerama-dev
 
       - name: Clone DPF
@@ -50,9 +53,19 @@ jobs:
         run: |
           set +e
           DPF="$GITHUB_WORKSPACE/dpf"
+          # Seven effect Makefiles hardcode `include ../../DPF/...` (ignoring
+          # DPF_PATH), so expose DPF at the relative path they expect: vst/DPF.
+          ln -sfn "$DPF" "$GITHUB_WORKSPACE/vst/DPF"
           cd "$GITHUB_WORKSPACE/vst/src"
           fail=""
-          build() { ( cd "$1" && make -j2 DPF_PATH="$DPF" vst3 ) || fail="$fail $1"; }
+          # Set DPF_BUILD_DIR/DPF_TARGET_DIR explicitly: with an absolute
+          # DPF_PATH, DPF's BASE_PATH heuristic mis-resolves the default output
+          # dir, so pin both to a writable per-effect location (bin/<Name>.vst3).
+          build() {
+            ( cd "$1" && rm -rf build bin \
+                && make -j2 DPF_PATH="$DPF" DPF_BUILD_DIR="$PWD/build" DPF_TARGET_DIR="$PWD/bin" vst3 ) \
+              || fail="$fail $1"
+          }
           # root Makefile builds AutoSweep (the QTron envelope filter)
           [ -f Makefile ] && build .
           for mk in */Makefile; do
@@ -61,25 +74,38 @@ jobs:
             echo "==== building $d ===="
             build "$d"
           done
+          rm -f "$GITHUB_WORKSPACE/vst/DPF"
           echo "FAILED DIRS:$fail"
 
       - name: Inject x86_64-linux binaries into the committed bundles
         run: |
           cd "$GITHUB_WORKSPACE"
+          # A few committed bundle folders use hyphens/spaces while the DPF
+          # NAME (and built bundle) does not — map built name -> committed dir.
+          alias_of() {
+            case "$1" in
+              SuperBuzz.vst3) echo "Super-Buzz.vst3";;
+              BigBuzz.vst3)   echo "Big Buzz.vst3";;
+              BuzzTone.vst3)  echo "Buzz-Tone.vst3";;
+              BZ1.vst3)       echo "BZ-1.vst3";;
+              *)              echo "$1";;
+            esac
+          }
           count=0
           # DPF writes the built bundle under each plugin dir (bin/<Name>.vst3).
-          find vst/src -type d -path '*/Contents/x86_64-linux' | while read -r lin; do
-            bundle=$(basename "$(dirname "$(dirname "$lin")")")   # <Name>.vst3
+          while IFS= read -r lin; do
+            built=$(basename "$(dirname "$(dirname "$lin")")")   # <Name>.vst3
+            bundle=$(alias_of "$built")
             if [ -d "vst/$bundle" ]; then
               dest="vst/$bundle/Contents/x86_64-linux"
               rm -rf "$dest"; mkdir -p "$dest"
               cp -R "$lin/." "$dest/"
-              echo "injected: $bundle"
+              echo "injected: $built -> $bundle"
               count=$((count+1))
             else
-              echo "WARNING: built $bundle but no committed bundle vst/$bundle"
+              echo "WARNING: built $built but no committed bundle vst/$bundle"
             fi
-          done
+          done < <(find vst/src -type d -path '*/Contents/x86_64-linux')
           echo "injected $count bundles"
 
       - name: Commit the Linux binaries
