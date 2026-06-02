@@ -1,30 +1,37 @@
-# Rig Builder 2.1.0 — Rocksmith cab volume fix + per-cab loudness match (2026-06-02)
+# Rig Builder 2.1.0 — Every pedal & rack now has its own UI + volume fixes across the board (2026-06-02)
 
-**The Rocksmith-cab "volume drop" is fixed.** Many extracted cab IRs had
-sample peaks up to **2.0**, but the native convolver assumes the standard
-**±1.0** range — so those over-unity samples saturated and tripped the
-engine's post-IR limiter, dropping output **10–20 dB** and squashing the
-low end (the "cabs sound quiet / thin / no punch" report). The extractor's
-IR peak cap is now **0.95** (−0.45 dBFS) instead of 2.0, so IRs stay
-clip-safe. Existing installs can re-flatten their IRs in place from
-Settings → *Normalize existing Rocksmith IRs* (idempotent, keeps a
-`.unnormalized.bak`); the fix only changes **level**, never the cab's tone.
+**Every pedal and rack now has its own faithful in-app UI — 100% coverage.**
+All 100 bundled effects and every Studio / Stereo / Rota rack now render a
+recreated control face on the in-app canvas (Space Echo, API 550 graphic EQ,
+dbx 160 comp, GML 8200 parametric EQ, RCE-10 chorus, Uni-Vibe, tape echo,
+wah treadles, the full pedal set, …) — no more generic placeholders. Edit any
+gear and you get its real knobs/sliders/switches.
 
-**Cabs are now loudness-matched to each other.** A cab IR's broadband gain
-is its L2 norm (output RMS = input RMS × ‖IR‖₂), and after the clip-safe
-cap the peakiest IRs sit lower than the rest — so swapping cab or mic used
-to change the volume. Rig Builder now measures each Rocksmith cab IR's L2
-and applies a per-cab makeup in the chain gain so **every cab/mic imparts
-the same output RMS** — the same loudness-match the amp/pedal NAMs already
-get. Measured cab-to-cab spread dropped from **8 dB to 0 dB**. (A cab that
-still sounds thin is using a genuinely bright mic position — Edge/Off-axis;
-switch its mic to *Cone (close)* for full low end. That's faithful to
-Rocksmith, not a bug.)
+**Every pedal sits at the same volume now.** An auto makeup-gain keeps all
+pedals level-matched, so switching pedals — or tweaking one — no longer jumps
+the loudness up or down (wahs, sub-octave, drives, modulation, etc.).
 
-**Pedals.** The 100 bundled effects now use legally-distinct **parody
-names** with ES/EN type search, and per-tone pedal edits now happen **in
-the live chain** instead of as an isolated solo VST, with instant
-re-leveling (auto makeup) on knob changes.
+**Distortion / drive pedals no longer change volume with the knobs.** Turning
+Gain or Tone now changes the *character* (more/less clipping), not the output
+level — so dialing in a dirt pedal stops yanking the whole rig's volume around.
+
+**No more noise when a song loads.** While a song's VSTs and NAMs are loading,
+the wet path stays muted and you hear clean dry guitar; the full tone snaps in
+once everything is ready — no bursts, clicks, or garbage during load.
+
+**Editing a VST in a song plays it in the full chain.** Opening a pedal/rack
+editor on a song now auditions it *in context* (the whole signal chain), not
+the isolated solo plugin — so what you hear while tweaking is what you'll get.
+
+**Rocksmith cabinet volume fixes.** The cab "volume drop" is fixed: extracted
+cab IRs whose peaks ran over the convolver's ±1.0 range were saturating and
+tripping the post-IR limiter (−10..−20 dB + squashed low end). The IR peak cap
+is now clip-safe (0.95), and each cab is loudness-matched to the others
+(measured cab-to-cab spread **8 dB → 0 dB**), so swapping cab or mic no longer
+changes the volume. Existing installs: Settings → *Normalize existing Rocksmith
+IRs* (idempotent, keeps a `.unnormalized.bak`). Level only — never the tone.
+A cab that still sounds thin is on a bright mic (Edge/Off-axis); switch it to
+*Cone (close)* for full low end (faithful to Rocksmith, not a bug).
 
 ---
 
