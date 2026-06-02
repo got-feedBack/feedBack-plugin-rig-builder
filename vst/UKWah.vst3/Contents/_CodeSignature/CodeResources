@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/UKWah.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			oGl1vxKu6RUmrbVVTrdX7xxS1ajtqC4i1AsX9cyoDpM=
+			</data>
+		</dict>
+		<key>x86_64-win/UKWah.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			1tdH+V7g4gQEuyXQenuIzmCs8wyPoTpWECDJmv7juU8=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

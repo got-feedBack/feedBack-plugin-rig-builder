@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/BassSubOctave.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			V0wMaCuAxSOXSqUFN4s4KkbKqQiuUrsFh4EjGs3KY7I=
+			</data>
+		</dict>
+		<key>x86_64-win/BassSubOctave.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Go7O0xvHESWszy4LH+zrQQWclZnvuHySvnJpDWQOwo0=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

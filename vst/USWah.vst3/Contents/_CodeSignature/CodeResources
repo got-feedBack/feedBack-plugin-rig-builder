@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/USWah.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			9YAhaQhIcav678YCYXpBVgYWeaeSZoTdh0HNBXECOQg=
+			</data>
+		</dict>
+		<key>x86_64-win/USWah.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Uv+ElT70gOs73GHQN1eKe9zsIAlCBovOgJ//yHt+vjY=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

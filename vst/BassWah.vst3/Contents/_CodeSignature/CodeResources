@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/BassWah.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			E9rtNQJv61vrQ+kUd0KgSyRADnCF4UXizMCOHom2sJU=
+			</data>
+		</dict>
+		<key>x86_64-win/BassWah.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Z1goJumiddxr8WoB9mfOVZy8/MHpAeB4EPm+bDPqsek=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>
