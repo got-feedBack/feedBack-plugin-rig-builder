@@ -1927,16 +1927,18 @@
       rr(c,m,m,W-2*m,H-2*m,10); c.fillStyle=bg; c.fill();
       rr(c,m,m,W-2*m,H-2*m,10); c.strokeStyle=rgb(8,9,8); c.lineWidth=2; c.stroke();
       const wt=rgb(232,234,230), dim=rgb(176,180,176), grn=[74,98,62];
-      // brushed-silver trim strips (top & bottom of the front panel)
-      const trim=(y)=>{ const tg=c.createLinearGradient(0,y,0,y+H*0.05);
-        tg.addColorStop(0,rgb(216,218,222)); tg.addColorStop(.5,rgb(150,152,158)); tg.addColorStop(1,rgb(198,200,206));
-        c.fillStyle=tg; c.fillRect(m+2,y,W-2*m-4,H*0.05);
-        c.strokeStyle=rgb(80,82,86); c.lineWidth=1; c.strokeRect(m+2.5,y+.5,W-2*m-5,H*0.05-1); };
-      trim(m+3); trim(H-m-3-H*0.05);
-      // title + brand
-      textC(d,.155*W,.135*H,F.bebas,24,wt,'GALAXY ECHO','left');
-      textC(d,.155*W,.205*H,F.barlow,12,dim,'TE-102','left');
-      textC(d,.905*W,.135*H,F.bebas,22,rgb(206,64,42),'TOPLAND','right');
+      // brushed-silver trim strips (top & bottom) — thick, like the real unit
+      const trim=(y,h)=>{ const tg=c.createLinearGradient(0,y,0,y+h);
+        tg.addColorStop(0,rgb(222,224,228)); tg.addColorStop(.42,rgb(178,180,186));
+        tg.addColorStop(.58,rgb(150,152,158)); tg.addColorStop(1,rgb(202,204,210));
+        c.fillStyle=tg; c.fillRect(m+2,y,W-2*m-4,h);
+        c.strokeStyle=rgb(84,86,90); c.lineWidth=1; c.strokeRect(m+2.5,y+.5,W-2*m-5,h-1); };
+      trim(m+2, H*0.15); trim(H-m-2-H*0.06, H*0.06);
+      // equipment + model + brand — BLACK, printed on the top silver strip
+      const blk=rgb(24,24,26), tcy=.105*H;
+      textC(d,.045*W,tcy,F.bebas,24,blk,'GALAXY ECHO','left');
+      textC(d,.205*W,tcy+1,F.barlow,13,blk,'TE-102','left');
+      textC(d,.955*W,tcy,F.bebas,22,blk,'TOPLAND','right');
       // VU meter (top-left) — big analog meter filling the left space
       const vux=.05*W, vuy=.31*H, vuw=.155*W, vuh=.34*H;
       ledDot(d,.062*W,.275*H,false,210,50,40); textC(d,.128*W,.278*H,F.barlow,8.5,dim,'PEAK LEVEL','left');
