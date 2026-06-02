@@ -529,6 +529,24 @@
     [{id:0,cx:.25,lbl:'TIME'},{id:1,cx:.50,lbl:'FEEDBACK',lblPx:7},{id:2,cx:.75,lbl:'MIX'}],
     'Delay',null,'DM-2');
 
+  // Digital Verb — Boss RV-2-style: Chief body in the RV-2 gunmetal grey.
+  // RS knob names. 4 RS knobs: Time0 Mix1 Depth2 Tone3.
+  P.digitalverb = chiefSpec(300,480,[92,96,102],
+    [{id:0,cx:.205,lbl:'TIME'},{id:1,cx:.40,lbl:'MIX'},{id:2,cx:.595,lbl:'DEPTH'},{id:3,cx:.79,lbl:'TONE'}],
+    'Digital','Reverb','RV-2');
+
+  // Noise Gate — Boss NF-1-style: Chief body in the NF-1 pale silver-grey.
+  // RS knob names. 2 RS knobs: Thresh0 Rate1.
+  P.noisegate = chiefSpec(300,480,[198,200,202],
+    [{id:0,cx:.33,lbl:'THRESH'},{id:1,cx:.67,lbl:'RATE'}],
+    'Noise','Gate','NF-1');
+
+  // Limiter — Boss LM-2-style: Chief body in the LM-2 sky cyan.
+  // RS knob names. 2 RS knobs: Limit0 Rate1.
+  P.limiter = chiefSpec(300,480,[64,184,228],
+    [{id:0,cx:.33,lbl:'LIMIT'},{id:1,cx:.67,lbl:'RATE'}],
+    'Limiter',null,'LM-2');
+
   // Vintage Chorus — MXR Stereo Chorus-style: yellow landscape box, three black
   // knobs in outlined cells, the parody 'NYR' logo box + 'stereo chorus' tag,
   // round footswitch, side jack legends. RS knob names. Rate0 Depth1 Mix2.
@@ -1318,7 +1336,90 @@
       word(.450,'HOLY',54); word(.560,'SPRING',54);
       // 'reverb' wordmark + footswitch
       textSpaced(d,.5*W,.650*H,F.bebas,26,blue,'REVERB',2);
-      footRound(d,W*.5,H*.760,24*s); } };
+      footRound(d,W*.5,H*.760,24*s);
+      // brand (parody, like the rest) + MADE IN USA tag
+      textC(d,.50*W,.905*H,F.crete,15,dk,'quimical-harmony');
+      textSpaced(d,.50*W,.950*H,F.barlow,7,dk,'MADE IN USA',0.4); } };
+
+  // Plate Verb — Catalinbread Talisman-style: cool-white box, red occult/talisman
+  // graphic (all-seeing eye + symmetric wings + stars), four black knobs, script
+  // brand + tagline. Parody (Benson / Voodoo Plate Reverb). RS knob names.
+  // Time0 Depth1 Mix2 Voice3.
+  P.plateverb = { w:280,h:480, knobs:[
+      {id:0,cx:.27,cy:.150,r:.070,style:'davies'},
+      {id:1,cx:.73,cy:.150,r:.070,style:'davies'},
+      {id:2,cx:.27,cy:.310,r:.070,style:'davies'},
+      {id:3,cx:.73,cy:.310,r:.070,style:'davies'}],
+    ptr:rgb(180,182,188),
+    draw(d){ const {ctx:c,W,H,s}=d; const m=8*s, red=rgb(210,38,44);
+      c.fillStyle=rgb(8,8,10); c.fillRect(0,0,W,H);
+      const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(232,233,236)); bg.addColorStop(1,rgb(208,210,214));
+      rr(c,m,m,W-2*m,H-2*m,14*s); c.fillStyle=bg; c.fill();
+      rr(c,m,m,W-2*m,H-2*m,14*s); c.strokeStyle='rgba(0,0,0,0.3)'; c.lineWidth=2*s; c.stroke();
+      // knob labels (RS names, red)
+      textSpaced(d,.27*W,.072*H,F.barlow,8.5,red,'TIME',0.3);
+      textSpaced(d,.73*W,.072*H,F.barlow,8.5,red,'DEPTH',0.3);
+      textSpaced(d,.27*W,.232*H,F.barlow,8.5,red,'MIX',0.3);
+      textSpaced(d,.73*W,.232*H,F.barlow,8.5,red,'VOICE',0.3);
+      // all-seeing-eye triangle (top centre)
+      const ex=.50*W, ey=.135*H, tr=W*.05;
+      c.beginPath(); c.moveTo(ex,ey-tr); c.lineTo(ex-tr*0.92,ey+tr*0.72); c.lineTo(ex+tr*0.92,ey+tr*0.72); c.closePath();
+      c.strokeStyle=red; c.lineWidth=1.8*s; c.stroke();
+      c.beginPath(); c.arc(ex,ey+tr*0.12,tr*0.2,0,7); c.fillStyle=red; c.fill();
+      // red occult talisman graphic: centre axis + symmetric wings + stars
+      c.strokeStyle=red; c.lineWidth=1.8*s; c.lineCap='round';
+      c.beginPath(); c.moveTo(ex,.40*H); c.lineTo(ex,.86*H); c.stroke();
+      const wing=(sx)=>{ c.beginPath(); c.moveTo(ex,.42*H); c.lineTo(ex+sx*W*.30,.60*H);
+        c.moveTo(ex,.50*H); c.lineTo(ex+sx*W*.24,.70*H); c.stroke(); };
+      wing(1); wing(-1);
+      const star=(sx,sy,r0)=>{ c.beginPath(); for(let i=0;i<10;i++){ const rr2=(i%2?r0*0.42:r0), a=-Math.PI/2+i*Math.PI/5;
+        const x=sx+rr2*Math.cos(a), y=sy+rr2*Math.sin(a); i?c.lineTo(x,y):c.moveTo(x,y);} c.closePath(); c.fillStyle=red; c.fill(); };
+      [[.30,.45],[.70,.45],[.24,.665],[.76,.665]].forEach(p=> star(p[0]*W,p[1]*H,W*.022));
+      // VOODOO wordmark + footswitch + PLATE REVERB tag
+      textSpaced(d,.50*W,.485*H,F.anton,34,red,'VOODOO',1.0);
+      footRound(d,W*.50,H*.665,20*s);
+      textSpaced(d,.50*W,.770*H,F.barlow,9,red,'PLATE REVERB',1.0);
+      // power symbol + script brand + tagline
+      textSpaced(d,.18*W,.575*H,F.barlow,6,red,'9V-18V DC',0.2);
+      textC(d,.50*W,.880*H,F.ink,24,red,'Benson');
+      textSpaced(d,.50*W,.930*H,F.barlow,6.5,red,'MECHANISMS OF MUSIC',0.4); } };
+
+  // Tube Spring — Source Audio True Spring-style: brushed gunmetal box, two cream
+  // knobs, a SHORT/LONG/TANK toggle, script wordmark with a spring squiggle, chrome
+  // stomp + brand. Parody (Index Audio / Real Spring Reverb). RS knob names.
+  // Mix0 Depth1.
+  P.tubespring = { w:280,h:420, knobs:[
+      {id:0,cx:.27,cy:.25,r:.10,style:'pointer',cap:[230,224,208]},
+      {id:1,cx:.73,cy:.25,r:.10,style:'pointer',cap:[230,224,208]}],
+    tick:rgb(120,122,128), ptr:rgb(46,46,50),
+    draw(d){ const {ctx:c,W,H,s}=d; const m=8*s, wt=rgb(238,240,244);
+      c.fillStyle=rgb(8,8,10); c.fillRect(0,0,W,H);
+      const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(92,94,100)); bg.addColorStop(1,rgb(60,62,68));
+      rr(c,m,m,W-2*m,H-2*m,14*s); c.fillStyle=bg; c.fill();
+      c.save(); rr(c,m,m,W-2*m,H-2*m,14*s); c.clip(); c.strokeStyle='rgba(255,255,255,0.05)'; c.lineWidth=1;
+      for(let x=m;x<W-m;x+=3*s){ c.beginPath(); c.moveTo(x,m); c.lineTo(x,H-m); c.stroke(); } c.restore();
+      rr(c,m,m,W-2*m,H-2*m,14*s); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=2*s; c.stroke();
+      // status LED + knob labels (RS names)
+      ledDot(d,W*.50,H*.085,true,224,60,50);
+      textSpaced(d,.27*W,.085*H,F.barlow,9.5,wt,'MIX',0.4);
+      textSpaced(d,.73*W,.085*H,F.barlow,9.5,wt,'DEPTH',0.4);
+      // SHORT/LONG/TANK 3-way toggle (decorative)
+      const tx=.50*W, ty=.43*H;
+      rr(c,tx-5*s,ty-9*s,10*s,18*s,3*s); c.fillStyle=rgb(30,30,32); c.fill();
+      rr(c,tx-5*s,ty-9*s,10*s,18*s,3*s); c.strokeStyle=rgb(8,8,10); c.lineWidth=s; c.stroke();
+      const lg=c.createLinearGradient(tx-4*s,ty-6*s,tx+4*s,ty); lg.addColorStop(0,rgb(228,230,236)); lg.addColorStop(1,rgb(140,143,150));
+      rr(c,tx-3.5*s,ty-7*s,7*s,8*s,2*s); c.fillStyle=lg; c.fill();
+      textSpaced(d,.355*W,.415*H,F.barlow,6.5,wt,'SHORT',0.2);
+      textSpaced(d,.50*W,.375*H,F.barlow,6.5,wt,'LONG',0.2);
+      textSpaced(d,.645*W,.415*H,F.barlow,6.5,wt,'TANK',0.2);
+      // 'Real Spring' script + spring squiggle + 'REVERB'
+      textC(d,.50*W,.575*H,F.ink,38,wt,'Real Spring');
+      c.strokeStyle=wt; c.lineWidth=1.8*s; c.beginPath();
+      for(let i=0;i<=24;i++){ const x=.40*W+i*(.22*W/24), y=.620*H+Math.sin(i*0.9)*4*s; i?c.lineTo(x,y):c.moveTo(x,y); } c.stroke();
+      textSpaced(d,.50*W,.665*H,F.barlow,10,wt,'REVERB',1.4);
+      // footswitch + brand
+      footRound(d,W*.50,H*.78,20*s);
+      textSpaced(d,.50*W,.905*H,F.barlow,9,wt,'INDEX AUDIO',1.2); } };
 
   // Deja Chorus — Fulltone Deja'Vibe-style: matte-black landscape box, white
   // pinstripe border + script logo, two top knobs + two mode toggles, a big
