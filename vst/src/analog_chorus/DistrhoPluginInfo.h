@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "AnalogChorus"
+#define DISTRHO_PLUGIN_NAME    "134 Stereo Chorus"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:analogchorus"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.analogchorus"
 

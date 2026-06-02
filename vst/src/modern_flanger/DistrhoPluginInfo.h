@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "ModernFlanger"
+#define DISTRHO_PLUGIN_NAME    "FM107"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:modernflanger"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.modernflanger"
 

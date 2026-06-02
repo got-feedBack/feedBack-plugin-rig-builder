@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "BassEmulator"
+#define DISTRHO_PLUGIN_NAME    "Bass Emulator"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:bassemulator"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.bassemulator"
 

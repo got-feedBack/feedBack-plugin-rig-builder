@@ -6253,8 +6253,11 @@ const RB_TYPE_SYNONYMS = [
     [/acoustic|simulator/, 'acoustic acustico simulator'],
 ];
 function rbGearTypeTags(g) {
+    // Curated, authoritative type tags from the backend (pedal_type_tags.json)
+    // take priority; the codename synonym guess stays as a fallback for gears
+    // not yet curated.
+    let tags = ' ' + rbNorm((g && g.type_tags) || '');
     const key = rbNorm((g && g.rs_gear || '') + ' ' + (g && g.category || ''));
-    let tags = '';
     for (const [re, syn] of RB_TYPE_SYNONYMS) if (re.test(key)) tags += ' ' + syn;
     return tags;
 }

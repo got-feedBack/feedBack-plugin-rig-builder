@@ -1,7 +1,7 @@
 #ifndef DISTRHO_PLUGIN_INFO_H_INCLUDED
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "Studio Comp"
+#define DISTRHO_PLUGIN_NAME    "HZX"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:studiocomp"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.studiocomp"
 #define DISTRHO_PLUGIN_BRAND_ID  Rgbd

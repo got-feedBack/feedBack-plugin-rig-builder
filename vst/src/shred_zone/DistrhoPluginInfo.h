@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "ShredZone"
+#define DISTRHO_PLUGIN_NAME    "MT-2"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:shredzone"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.shredzone"
 

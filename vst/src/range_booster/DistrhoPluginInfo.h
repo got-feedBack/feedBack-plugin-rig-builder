@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "RangeBooster"
+#define DISTRHO_PLUGIN_NAME    "Range Booster"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:rangebooster"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.rangebooster"
 

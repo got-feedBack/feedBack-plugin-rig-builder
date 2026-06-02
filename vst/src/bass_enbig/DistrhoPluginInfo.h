@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "BassEnbig"
+#define DISTRHO_PLUGIN_NAME    "ENBIGGEN"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:bassenbig"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.bassenbig"
 

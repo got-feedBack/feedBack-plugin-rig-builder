@@ -348,7 +348,7 @@
   const P = {};
   function defKnobs(arr){ return arr; }
 
-  P.bassdistortion = { w:320,h:500, knobs:[
+  P.mouse = { w:320,h:500, knobs:[
       {id:0,cx:.215,cy:.305,r:.105,style:'pointer',cap:[26,26,28]},
       {id:1,cx:.500,cy:.305,r:.105,style:'pointer',cap:[26,26,28]},
       {id:2,cx:.785,cy:.305,r:.105,style:'pointer',cap:[26,26,28]}],
@@ -363,7 +363,7 @@
   // Bass Overdrive — Darkglass Microtubes B3K look, RS params (4 knobs):
   // Blend0 Drive1 Grunt2 Attack3. (Real B3K has Grunt/Attack as switches, but RS
   // exposes them as continuous knobs, so we keep knobs.)
-  P.bassoverdrive = { w:300,h:490,
+  P.blackbrass = { w:300,h:490,
     knobs:[
       {id:0,cx:.30,cy:.285,r:.10,style:'boss'},   // BLEND
       {id:1,cx:.70,cy:.285,r:.10,style:'boss'},   // DRIVE
@@ -380,7 +380,7 @@
       textSpaced(d,.5*d.W,.80*d.H,F.barlow,8,dim,'CMOS BASS OVERDRIVE',1.4);
       ledDot(d,d.W*.5,d.H*.86,true,196,72,60); footRound(d,d.W*.5,d.H*.93,18*d.s); } };
 
-  P.bassfuzz = { w:320,h:400, knobs:[
+  P.bassbigbuzz = { w:320,h:400, knobs:[
       {id:0,cx:.26,cy:.225,r:.085,style:'davies'},{id:1,cx:.50,cy:.225,r:.085,style:'davies'},
       {id:2,cx:.74,cy:.225,r:.085,style:'davies'}],
     ptr:rgb(236,238,238),
@@ -481,14 +481,14 @@
 
   // Chorus — Boss CE-2-style: Chief (Boss-compact) body, CE-2 cyan blue.
   // RS knob names. 3 RS knobs: Rate0 Depth1 Mix2.
-  P.chorus = chiefSpec(300,480,[66,178,210],
+  P.ch2 = chiefSpec(300,480,[66,178,210],
     [{id:0,cx:.25,lbl:'RATE'},{id:1,cx:.50,lbl:'DEPTH'},{id:2,cx:.75,lbl:'MIX'}],
     'Chorus',null,'CH-2');
 
   // Digital Chorus — Boss CE-5-style: Chief body in the CE-5 pale powder-blue,
   // 5 small knobs (RS exposes more than the CE-5's 4). RS knob names.
   // Rate0 Depth1 LoFilter2 HiFilter3 Mix4.
-  P.digitalchorus = { w:300,h:480, knobs:[
+  P.ch5 = { w:300,h:480, knobs:[
       {id:0,cx:.130,cy:.235,r:.052,style:'boss'},
       {id:1,cx:.315,cy:.235,r:.052,style:'boss'},
       {id:2,cx:.500,cy:.235,r:.052,style:'boss'},
@@ -505,63 +505,63 @@
 
   // Classic Flanger — Boss BF-2-style: Chief body in the BF-2 purple.
   // RS knob names. 3 RS knobs: Rate0 Depth1 Mix2.
-  P.classicflanger = chiefSpec(300,480,[116,50,126],
+  P.fl2 = chiefSpec(300,480,[116,50,126],
     [{id:0,cx:.25,lbl:'RATE'},{id:1,cx:.50,lbl:'DEPTH'},{id:2,cx:.75,lbl:'MIX'}],
     'Flanger',null,'FL-2');
 
   // Shaver Phaser — Boss PH-1-style: Chief body in the PH-1 grass green.
   // RS knob names. 2 RS knobs: Rate0 Depth1.
-  P.shaverphaser = chiefSpec(300,480,[66,176,70],
+  P.ph1 = chiefSpec(300,480,[66,176,70],
     [{id:0,cx:.33,lbl:'RATE'},{id:1,cx:.67,lbl:'DEPTH'}],
     'Phaser',null,'PH-1');
 
   // Multi-Trem — Boss TR-2-style: Chief body in the TR-2 teal/turquoise.
   // RS knob names. 3 RS knobs: Speed0 Mix1 Waveform2.
-  P.multitrem = chiefSpec(300,480,[34,150,146],
+  P.tr2 = chiefSpec(300,480,[34,150,146],
     [{id:0,cx:.25,lbl:'SPEED'},{id:1,cx:.50,lbl:'MIX'},{id:2,cx:.75,lbl:'WAVEFORM',lblPx:7}],
     'Tremolo',null,'TR-2');
 
   // Multi-Vibe — Boss VB-2-style: Chief body in the VB-2 bright blue.
   // RS knob names. 3 RS knobs: Speed0 Mix1 Waveform2.
-  P.multivibe = chiefSpec(300,480,[50,140,212],
+  P.vb2 = chiefSpec(300,480,[50,140,212],
     [{id:0,cx:.25,lbl:'SPEED'},{id:1,cx:.50,lbl:'MIX'},{id:2,cx:.75,lbl:'WAVEFORM',lblPx:7}],
     'Vibrato',null,'VB-2');
 
   // Baked Rotatoe — Boss RT-2/RT-20-style rotary: Chief body in the RT silver/
   // champagne (the black knob plate matches the real panel). RS knob names.
   // 4 RS knobs: Rate0 Depth1 Mix2 Balance3.
-  P.bakedrotatoe = chiefSpec(300,480,[198,194,182],
+  P.rt2 = chiefSpec(300,480,[198,194,182],
     [{id:0,cx:.205,lbl:'RATE'},{id:1,cx:.40,lbl:'DEPTH'},{id:2,cx:.595,lbl:'MIX'},{id:3,cx:.79,lbl:'BALANCE',lblPx:7}],
     'Rotary','Ensemble','RT-2');
 
   // NPN Delay — Boss DM-2-style: Chief body in the DM-2 hot pink/red.
   // RS knob names. 3 RS knobs: Time0 Feedback1 Mix2.
-  P.npndelay = chiefSpec(300,480,[216,82,114],
+  P.dm2 = chiefSpec(300,480,[216,82,114],
     [{id:0,cx:.25,lbl:'TIME'},{id:1,cx:.50,lbl:'FEEDBACK',lblPx:7},{id:2,cx:.75,lbl:'MIX'}],
     'Delay',null,'DM-2');
 
   // Digital Verb — Boss RV-2-style: Chief body in the RV-2 gunmetal grey.
   // RS knob names. 4 RS knobs: Time0 Mix1 Depth2 Tone3.
-  P.digitalverb = chiefSpec(300,480,[92,96,102],
+  P.rv2 = chiefSpec(300,480,[92,96,102],
     [{id:0,cx:.205,lbl:'TIME'},{id:1,cx:.40,lbl:'MIX'},{id:2,cx:.595,lbl:'DEPTH'},{id:3,cx:.79,lbl:'TONE'}],
     'Digital','Reverb','RV-2');
 
   // Noise Gate — Boss NF-1-style: Chief body in the NF-1 pale silver-grey.
   // RS knob names. 2 RS knobs: Thresh0 Rate1.
-  P.noisegate = chiefSpec(300,480,[198,200,202],
+  P.nf1 = chiefSpec(300,480,[198,200,202],
     [{id:0,cx:.33,lbl:'THRESH'},{id:1,cx:.67,lbl:'RATE'}],
     'Noise','Gate','NF-1');
 
   // Limiter — Boss LM-2-style: Chief body in the LM-2 sky cyan.
   // RS knob names. 2 RS knobs: Limit0 Rate1.
-  P.limiter = chiefSpec(300,480,[64,184,228],
+  P.lm2 = chiefSpec(300,480,[64,184,228],
     [{id:0,cx:.33,lbl:'LIMIT'},{id:1,cx:.67,lbl:'RATE'}],
     'Limiter',null,'LM-2');
 
   // Line Drive — Boss OS-2-style: custom Chief body in OS-2 yellow (the long
   // 'OverDrive/Distortion' name needs its own wordmark sizing). RS knob names.
   // 2 RS knobs: Gain0 Tone1.
-  P.linedrive = { w:300,h:480, knobs:[
+  P.os2 = { w:300,h:480, knobs:[
       {id:0,cx:.33,cy:.235,r:.072,style:'boss'},
       {id:1,cx:.67,cy:.235,r:.072,style:'boss'}],
     ptr:rgb(238,240,242),
@@ -574,20 +574,20 @@
 
   // Super Drive — Boss SD-1-style: Chief body in the SD-1 amber/golden yellow.
   // RS knob names. 2 RS knobs: Gain0 Tone1.
-  P.superdrive = chiefSpec(300,480,[242,180,44],
+  P.sd1 = chiefSpec(300,480,[242,180,44],
     [{id:0,cx:.33,lbl:'GAIN'},{id:1,cx:.67,lbl:'TONE'}],
     'Super','OverDrive','SD-1');
 
   // Standard Distortion — Boss DS-1-style: Chief body in the DS-1 vivid orange.
   // RS knob names. 2 RS knobs: Gain0 Tone1.
-  P.standarddistortion = chiefSpec(300,480,[240,120,34],
+  P.ds1 = chiefSpec(300,480,[240,120,34],
     [{id:0,cx:.33,lbl:'GAIN'},{id:1,cx:.67,lbl:'TONE'}],
     'Distortion',null,'DS-1');
 
   // Metal Distortion — Boss HM-2 Heavy Metal-style: custom Chief in dark charcoal
   // with ORANGE knobs + orange name/labels (the HM-2 signature). RS knob names.
   // 2 RS knobs: Gain0 Tone1.
-  P.alloydistortion = { w:300,h:480, knobs:[
+  P.hm2 = { w:300,h:480, knobs:[
       {id:0,cx:.33,cy:.235,r:.072,style:'pointer',cap:[236,142,42]},
       {id:1,cx:.67,cy:.235,r:.072,style:'pointer',cap:[236,142,42]}],
     tick:rgb(120,100,60), ptr:rgb(38,28,12),
@@ -598,14 +598,14 @@
 
   // Octavius — Boss OC-5 Octave-style: Chief body in the OC-5 dark chocolate brown.
   // RS knob names. 2 RS knobs: Tone0 Mix1.
-  P.octavius = chiefSpec(300,480,[82,52,40],
+  P.oc5 = chiefSpec(300,480,[82,52,40],
     [{id:0,cx:.33,lbl:'TONE'},{id:1,cx:.67,lbl:'MIX'}],
     'Octave',null,'OC-5');
 
   // Shred Zone — Boss MT-2 Metal Zone-style: custom Chief in MT-2 gunmetal with
   // ORANGE name + labels (black knobs, like the real MT-2). RS knob names.
   // 4 RS knobs: Gain0 Bass1 Mid2 Treble3.
-  P.shredzone = { w:300,h:480, knobs:[
+  P.mt2 = { w:300,h:480, knobs:[
       {id:0,cx:.205,cy:.235,r:.072,style:'boss'},
       {id:1,cx:.40,cy:.235,r:.072,style:'boss'},
       {id:2,cx:.595,cy:.235,r:.072,style:'boss'},
@@ -622,7 +622,7 @@
   // the knob plate + treadle recoloured to the oxblood/café (not black), black
   // knobs, cream script. 6 RS knobs (2 rows). Parody ('59 Bassmate / FBM-1).
   // Bass0 Mid1 Treble2 BassFreq3 MidShift4 TrebleFreq5.
-  P.ampeq = { w:300,h:480, knobs:[
+  P.fbm1 = { w:300,h:480, knobs:[
       {id:0,cx:.22,cy:.165,r:.060,style:'boss'},
       {id:1,cx:.50,cy:.165,r:.060,style:'boss'},
       {id:2,cx:.78,cy:.165,r:.060,style:'boss'},
@@ -704,7 +704,7 @@
   // knobs in outlined cells, the parody 'NYR' logo box + 'stereo chorus' tag,
   // round footswitch, side jack legends. RS knob names. Rate0 Depth1 Mix2.
   // (Pedal_VintageChorus → AnalogChorus.vst3.)
-  P.analogchorus = { w:460,h:330, knobs:[
+  P['134stereochorus'] = { w:460,h:330, knobs:[
       {id:0,cx:.205,cy:.275,r:.080,style:'davies'},
       {id:1,cx:.500,cy:.275,r:.080,style:'davies'},
       {id:2,cx:.795,cy:.275,r:.080,style:'davies'}],
@@ -771,7 +771,7 @@
   // Octave Up — Foxrox Octron3-style: cream box, black knobs + flanking toggles
   // inside a printed outline, bold wordmark + brand, red LED + chrome stomp.
   // Parody (Falcon / Octup). RS knob names. Tone0 Mix1.
-  P.octaveup = { w:280,h:470, knobs:[
+  P.octup = { w:280,h:470, knobs:[
       {id:0,cx:.35,cy:.135,r:.062,style:'boss'},
       {id:1,cx:.65,cy:.135,r:.062,style:'boss'}],
     ptr:rgb(238,240,242),
@@ -836,7 +836,7 @@
   // panel with three knobs, bubble graphics, outline wordmark + green tag, script
   // brand. Parody (quimical-harmony / Attack of the Clones). RS knob names.
   // Clones0 Depth1 Mix2.
-  P.sendintheclones = { w:300,h:420, knobs:[
+  P.attackoftheclones = { w:300,h:420, knobs:[
       {id:0,cx:.20,cy:.155,r:.060,style:'boss'},
       {id:1,cx:.50,cy:.155,r:.060,style:'boss'},
       {id:2,cx:.80,cy:.155,r:.060,style:'boss'}],
@@ -958,7 +958,7 @@
   // Swole — Aphex Punch Factory-style optical compressor: orange box, black top
   // banner, dB gain-reduction meter, two scaled knobs, distressed wordmark + LED
   // + stomp. Parody (Beta Fist Factory). RS knob names. Smash0 Rate1.
-  P.swole = { w:460,h:330, knobs:[
+  P.betafist = { w:460,h:330, knobs:[
       {id:0,cx:.16,cy:.55,r:.070,style:'pointer',cap:[26,26,28]},
       {id:1,cx:.80,cy:.32,r:.070,style:'pointer',cap:[26,26,28]}],
     tick:rgb(40,30,20), ptr:rgb(238,240,244),
@@ -992,7 +992,7 @@
   // Enbiggenator — TC Electronic Mimiq Doubler-style: cream box, three black
   // knobs, a DUBS 1/2/3 toggle, big grey block wordmark, true-bypass stomp,
   // side jacks. Parody (LC Quimical / Mime). RS knob names. Rate0 Depth1 Mix2.
-  P.enbiggenator = { w:280,h:470, knobs:[
+  P.mime = { w:280,h:470, knobs:[
       {id:0,cx:.55,cy:.155,r:.066,style:'davies'},
       {id:1,cx:.34,cy:.335,r:.066,style:'davies'},
       {id:2,cx:.68,cy:.335,r:.066,style:'davies'}],
@@ -1029,7 +1029,7 @@
   // US Wah — Dunlop Cry Baby-style wah treadle: black ribbed rocker tread + a
   // top control strip (AUTO toggle + 3 knobs) + a logo badge. Parody (cry man).
   // RS knob names. Auto0 Pedal1 Sens2 Speed3.
-  P.uswah = { w:280,h:480,
+  P.cryman = { w:280,h:480,
     knobs:[
       {id:1,cx:.38,cy:.160,r:.052,style:'boss'},
       {id:2,cx:.60,cy:.160,r:.052,style:'boss'},
@@ -1058,17 +1058,17 @@
       for(let y=ty0+7*s;y<ty1;y+=7*s){ c.beginPath(); c.moveTo(tx0,y-1*s); c.lineTo(tx1,y-1*s); c.strokeStyle='rgba(255,255,255,0.06)'; c.lineWidth=2.4*s; c.stroke();
         c.beginPath(); c.moveTo(tx0,y+2*s); c.lineTo(tx1,y+2*s); c.strokeStyle='rgba(0,0,0,0.45)'; c.lineWidth=1.4*s; c.stroke(); }
       c.restore();
-      // 'cry man' badge
+      // 'Cry Man' badge
       const bx=W*.23, by=H*.555, bw=W*.54, bh=H*.105;
       rr(c,bx,by,bw,bh,4*s); c.fillStyle=rgb(10,10,12); c.fill();
       rr(c,bx,by,bw,bh,4*s); c.strokeStyle=rgb(70,70,74); c.lineWidth=1*s; c.stroke();
-      textC(d,.50*W,by+bh*0.42,F.crete,26,wt,'cry man');
+      textC(d,.50*W,by+bh*0.42,F.crete,26,wt,'Cry Man');
       textSpaced(d,.50*W,by+bh*0.80,F.barlow,7.5,wt,'WAH 535',1.5); } };
 
   // UK Wah — Vox V847-style wah: black treadle with a chrome frame + big chrome
   // 'BOX' letters down the ribbed tread. Parody (BOX). RS knob names.
   // Auto0 Pedal1 Sens2 Speed3.
-  P.ukwah = { w:280,h:480,
+  P.boxb847 = { w:280,h:480,
     knobs:[
       {id:1,cx:.38,cy:.160,r:.052,style:'boss'},
       {id:2,cx:.60,cy:.160,r:.052,style:'boss'},
@@ -1098,13 +1098,14 @@
         c.beginPath(); c.moveTo(tx0,y+2*s); c.lineTo(tx1,y+2*s); c.strokeStyle='rgba(0,0,0,0.45)'; c.lineWidth=1.4*s; c.stroke(); }
       c.restore();
       ['B','O','X'].forEach((ch,i)=> outlineText(d,.50*W,(.475+i*.145)*H,F.anton,52,chrome,rgb(18,18,20),ch,0));
+      textSpaced(d,.50*W,.895*H,F.barlow,11,chrome,'B847',0.6);   // model number (parody)
       c.save(); c.translate(.175*W,.64*H); c.rotate(-Math.PI/2); textSpaced(d,0,0,F.barlow,6,wt,'MUTE',0.3); c.restore();
       c.save(); c.translate(.825*W,.64*H); c.rotate(-Math.PI/2); textSpaced(d,0,0,F.barlow,6,wt,'WAH',0.3); c.restore(); } };
 
   // Modern Wah — Morley Bad Horsie-style wah: all-black treadle, big white-outline
   // 'JOCKEY' down the ribbed tread + red 'Bad' script, red labels. Parody (Jockey).
   // RS knob names. Auto0 Pedal1 Sens2 Speed3.
-  P.modernwah = { w:280,h:480,
+  P.jockeybad = { w:280,h:480,
     knobs:[
       {id:1,cx:.38,cy:.160,r:.052,style:'boss'},
       {id:2,cx:.60,cy:.160,r:.052,style:'boss'},
@@ -1142,17 +1143,17 @@
       knobIds.forEach(k=> textSpaced(d,k.cx*d.W,.135*d.H,F.barlow,k.lblPx||8.5,wc,k.lbl,0.2));
       chiefName(d,n1,n2,code,0,0,ink); } }; }
 
-  P.basschorus = chiefSpec(300,480,[40,158,150],
+  P.cb3 = chiefSpec(300,480,[40,158,150],
     [{id:0,cx:.205,lbl:'RATE'},{id:1,cx:.40,lbl:'DEPTH'},{id:2,cx:.595,lbl:'LO FILTER',lblPx:8},{id:3,cx:.79,lbl:'MIX'}],
     'Bass','Chorus','CB-3');
-  P.basssuboctave = { w:300,h:480, knobs:[{id:0,cx:.34,cy:.235,r:.088,style:'boss'},{id:1,cx:.66,cy:.235,r:.088,style:'boss'}],
+  P.so2 = { w:300,h:480, knobs:[{id:0,cx:.34,cy:.235,r:.088,style:'boss'},{id:1,cx:.66,cy:.235,r:.088,style:'boss'}],
     ptr:rgb(236,232,224), draw(d){ chiefBody(d,112,70,66); const w=rgb(236,232,224);
       textSpaced(d,.34*d.W,.12*d.H,F.barlow,9,w,'MIX',0.2); textSpaced(d,.66*d.W,.12*d.H,F.barlow,9,w,'TONE',0.2);
       chiefName(d,'Bass','Suboctave','SO-2'); } };
-  P.bassfilterdelay = chiefSpec(300,480,[156,64,72],
+  P.dl3 = chiefSpec(300,480,[156,64,72],
     [{id:0,cx:.205,lbl:'TIME'},{id:1,cx:.40,lbl:'FEEDBACK',lblPx:7.5},{id:2,cx:.595,lbl:'MIX'},{id:3,cx:.79,lbl:'FILTER',lblPx:8}],
     'Bass','Delay','DL-3');
-  P.bassflanger = chiefSpec(300,480,[96,80,134],
+  P.fl3 = chiefSpec(300,480,[96,80,134],
     [{id:0,cx:.205,lbl:'RATE'},{id:1,cx:.40,lbl:'DEPTH'},{id:2,cx:.595,lbl:'FILTER',lblPx:8},{id:3,cx:.79,lbl:'MIX'}],
     'Bass','Flanger','FL-3');
 
@@ -1168,7 +1169,7 @@
   // Bass Phase — MXR-style orange box (NYR parody, matches the Dyna Comp).
   // 2x2 knobs; NYR logo centred with the LED above it; name below the footswitch.
   // RS params: Rate0 Depth1 Mix2 Filter3.
-  P.bassphase = { w:300,h:460,
+  P.phase99 = { w:300,h:460,
     knobs:[
       {id:0,cx:.30,cy:.175,r:.088,style:'davies'},  // RATE
       {id:1,cx:.70,cy:.175,r:.088,style:'davies'},  // DEPTH
@@ -1193,7 +1194,7 @@
 
   // Phaser — MXR Phase 90-style: orange box, single SPEED knob, NYR logo box,
   // vertical jacks, red LED, footswitch, 'phase 90' tag. RS knob name. Rate0.
-  P.phaser363 = { w:300,h:460, knobs:[
+  P.phase90 = { w:300,h:460, knobs:[
       {id:0,cx:.50,cy:.20,r:.11,style:'davies'}],
     tick:rgb(46,24,4), ptr:rgb(244,244,240),
     draw(d){ const {ctx:c,W,H,s}=d; const ink=rgb(42,22,6), m=7*s;
@@ -1214,7 +1215,7 @@
   // Plane Phase — Roland Jet Phaser AP-7-style: brown wedge body, black control
   // panel with an orange logo + AP.7, 3 knobs, two footswitches. Parody
   // (Ronald / Rocket Phase). RS knob names. Rate0 Depth1 Mix2.
-  P.planephase = { w:480,h:300, knobs:[
+  P.rocketphase = { w:480,h:300, knobs:[
       {id:0,cx:.27,cy:.295,r:.058,style:'boss'},
       {id:1,cx:.50,cy:.295,r:.058,style:'boss'},
       {id:2,cx:.73,cy:.295,r:.058,style:'boss'}],
@@ -1282,7 +1283,7 @@
   // black DAVIES knobs, white brush-script logo, red+blue LEDs, three foot-
   // switches (Half Speed / Bypass / Hard-Soft) + a small Volume trim. Parody
   // (ExtraTone / Mega-Trem). RS knob names. Speed0 Depth1.
-  P.amptrem = { w:560,h:340, knobs:[
+  P.megatrem = { w:560,h:340, knobs:[
       {id:0,cx:.30,cy:.275,r:.070,style:'davies'},
       {id:1,cx:.60,cy:.305,r:.070,style:'davies'}],
     tick:rgb(60,60,64), ptr:rgb(236,238,242),
@@ -1316,7 +1317,7 @@
   // fluted knobs + a 3-way mode toggle, over a tan tweed grille-cloth bottom
   // with a gold 'DYNA-TREM' plaque + script brand + chrome stomp. Parody
   // (Peeley). RS knob names. Sens0 Attack1 Release2 Mix3.
-  P.tremole = { w:280,h:460, knobs:[
+  P.dynatrem = { w:280,h:460, knobs:[
       {id:0,cx:.255,cy:.175,r:.078,style:'boss'},
       {id:1,cx:.745,cy:.175,r:.078,style:'boss'},
       {id:2,cx:.255,cy:.375,r:.078,style:'boss'},
@@ -1376,7 +1377,7 @@
   // with two glossy black knobs, a Vibe LED + mini toggle, the brand box logo,
   // a script wordmark, side jack legends, status LED + chrome stomp. Parody
   // (NYR / Multi-Vibe). RS knob names. Speed0 Mix1.
-  P.ampvibe = { w:280,h:470, knobs:[
+  P.multivibe = { w:280,h:470, knobs:[
       {id:0,cx:.29,cy:.29,r:.085,style:'davies'},
       {id:1,cx:.71,cy:.29,r:.085,style:'davies'}],
     ptr:rgb(244,244,246),
@@ -1417,7 +1418,7 @@
   // stripe (arrows + 9V symbol), white Roman-aqueduct arcade silhouette, four
   // black/chrome knobs, script wordmark + brand. Parody (Eruption / Oceanduct).
   // RS knob names. Sens0 Attack1 Release2 Mix3.
-  P.autovibe = { w:280,h:480, knobs:[
+  P.oceanduct = { w:280,h:480, knobs:[
       {id:0,cx:.28,cy:.265,r:.082,style:'moog'},
       {id:3,cx:.72,cy:.265,r:.082,style:'moog'},
       {id:1,cx:.28,cy:.470,r:.082,style:'moog'},
@@ -1468,7 +1469,7 @@
   // knob row over a blue label stripe, bubble-script logo, big round chrome
   // stomp + script brand. Parody (Regis / UltraVibe). RS knob names.
   // Rate0 Depth1 Mix2 Wave3.
-  P.marshallsupervibe = { w:300,h:360, knobs:[
+  P.uv1 = { w:300,h:360, knobs:[
       {id:0,cx:.155,cy:.165,r:.060,style:'knurled'},
       {id:1,cx:.385,cy:.165,r:.060,style:'knurled'},
       {id:2,cx:.615,cy:.165,r:.060,style:'knurled'},
@@ -1502,7 +1503,7 @@
   // flanking a red/white Chorus-Vibrato rocker, FUSE cap, red power jewel, and a
   // bottom row of jacks / DIN foot-control / power toggle. Parody (UniMod).
   // RS knob names. Rate0 Depth1 Mix2.
-  P.omnimod = { w:560,h:340, knobs:[
+  P.unimod = { w:560,h:340, knobs:[
       {id:0,cx:.135,cy:.42,r:.050,style:'pointer',cap:[26,26,28]},
       {id:1,cx:.465,cy:.42,r:.050,style:'pointer',cap:[26,26,28]},
       {id:2,cx:.605,cy:.42,r:.050,style:'pointer',cap:[26,26,28]}],
@@ -1668,7 +1669,7 @@
   // Cosmic Echo — Tom's Line/Mooer 'Cosmic'-style mini echo: black body, blue
   // atom/galaxy graphic, three blue knobs, outline wordmark + side jack legends.
   // Parody (RocketSynth / Space Echo). RS knob names. Time0 Feedback1 Mix2.
-  P.cosmicecho = { w:260,h:420, knobs:[
+  P.galaxyecho = { w:260,h:420, knobs:[
       {id:0,cx:.22,cy:.46,r:.072,style:'pointer',cap:[54,150,212]},
       {id:1,cx:.50,cy:.46,r:.072,style:'pointer',cap:[54,150,212]},
       {id:2,cx:.78,cy:.46,r:.072,style:'pointer',cap:[54,150,212]}],
@@ -1694,16 +1695,16 @@
       // white design band
       c.fillStyle=rgb(232,234,238); c.fillRect(W*.05,H*.635,W*.90,H*.016);
       // wordmark + brand + tagline
-      textC(d,.50*W,.715*H,F.barlow,11,blu,'Space');
+      textC(d,.50*W,.715*H,F.barlow,11,blu,'Galaxy');
       outlineText(d,.50*W,.790*H,F.anton,46,wt,blu,'ECHO',2);
       textSpaced(d,.50*W,.865*H,F.barlow,8,wt,'ROCKETSYNTH',0.6);
-      textSpaced(d,.50*W,.910*H,F.barlow,6.5,rgb(150,182,206),'LO-FI SPACE REPEATER',0.3); } };
+      textSpaced(d,.50*W,.910*H,F.barlow,6.5,rgb(150,182,206),'LO-FI GALAXY REPEATER',0.3); } };
 
   // Mod Delay — Ibanez DL10 (10-series)-style: blue body, light-blue top panel
   // with mode LEDs + five small black knobs, 'DELAY DL9 digital' branding, big
   // black ribbed treadle with embossed Ibañez wordmark. Parody. RS knob names.
   // Time0 Feedback1 Mix2 Rate3 Depth4.
-  P.moddelay = { w:280,h:460, knobs:[
+  P.dl9 = { w:280,h:460, knobs:[
       {id:0,cx:.14,cy:.205,r:.055,style:'boss'},
       {id:1,cx:.32,cy:.205,r:.055,style:'boss'},
       {id:2,cx:.50,cy:.205,r:.055,style:'boss'},
@@ -1739,17 +1740,17 @@
 
   // Bass Filter Echo — Boss RE-2 Space Echo: the chief (Boss) template recoloured
   // (black body + GREEN knob plate), 'Space'/'Echo' + RE-3. RS: Time/Feedback/Mix/Filter.
-  P.bassfilterecho = chiefSpec(300,480,[26,26,30],
+  P.se3 = chiefSpec(300,480,[26,26,30],
     [{id:0,cx:.205,lbl:'TIME'},{id:1,cx:.40,lbl:'FEEDBACK',lblPx:7.5},{id:2,cx:.595,lbl:'MIX'},{id:3,cx:.79,lbl:'FILTER',lblPx:8}],
-    'Space','Echo','SE-3',[70,126,68]);
-  P.bassenbig = boxSpec(320,470,[58,64,72],
+    'Galaxy','Echo','SE-3',[70,126,68]);
+  P.enbiggen = boxSpec(320,470,[58,64,72],
     [{id:0,cx:.20,lbl:'RATE'},{id:1,cx:.40,lbl:'DEPTH'},{id:2,cx:.60,lbl:'MIX'},{id:3,cx:.80,lbl:'FILTER'}],
     'ENBIGGEN','MOD  FILTER',[110,210,224]);
   // Bass MultiComp — EBS MultiComp (Blue Label): BLACK body with blue accent
   // lines across the bottom; stylised 'MultiComp' logo (big C…P flanking a
   // stacked MULTI/OM) under the knobs, EBX above the footswitch, blue lines
   // running behind EBX + footswitch. RS params (3 knobs): Compress0 Filter1 Rate2.
-  P.bassmulticomp = { w:300,h:470,
+  P.multicomp = { w:300,h:470,
     knobs:[
       {id:0,cx:.22,cy:.255,r:.088,style:'boss'},  // COMPRESS
       {id:1,cx:.50,cy:.255,r:.088,style:'boss'},  // FILTER
@@ -1782,7 +1783,7 @@
   // Dyna Comp — MXR Dyna Comp-style: vivid-red box, black knobs, the parody
   // 'NYR' logo box, vertical jack legends, red LED, footswitch, 'dyna comp'
   // tag. RS knob names (RS exposes 3, the real pedal has 2). Comp0 Attack1 Release2.
-  P.dynamicscompression = { w:300, h:460, knobs:[
+  P.dynacomp = { w:300, h:460, knobs:[
       {id:0,cx:.22,cy:.165,r:.078,style:'davies'},
       {id:1,cx:.50,cy:.165,r:.078,style:'davies'},
       {id:2,cx:.78,cy:.165,r:.078,style:'davies'}],
@@ -1811,7 +1812,7 @@
 
   // Holy Spring — Holy Grail-style spring reverb. Bright chrome box + ornate
   // serif logo (EHX-inspired, recreated brand-free). Params: Time0 Mix1 Depth2.
-  P.springreverb = { w:300, h:470, knobs:[
+  P.holyspring = { w:300, h:470, knobs:[
       {id:0,cx:.215,cy:.155,r:.078,style:'pointer',cap:[26,26,28]},
       {id:1,cx:.500,cy:.155,r:.078,style:'pointer',cap:[26,26,28]},
       {id:2,cx:.785,cy:.155,r:.078,style:'pointer',cap:[26,26,28]}],
@@ -1857,9 +1858,9 @@
 
   // Plate Verb — Catalinbread Talisman-style: cool-white box, red occult/talisman
   // graphic (all-seeing eye + symmetric wings + stars), four black knobs, script
-  // brand + tagline. Parody (Benson / Voodoo Plate Reverb). RS knob names.
+  // brand + tagline. Parody (Venson / Voodoo Plate Reverb). RS knob names.
   // Time0 Depth1 Mix2 Voice3.
-  P.plateverb = { w:280,h:480, knobs:[
+  P.voodoo = { w:280,h:480, knobs:[
       {id:0,cx:.27,cy:.150,r:.070,style:'davies'},
       {id:1,cx:.73,cy:.150,r:.070,style:'davies'},
       {id:2,cx:.27,cy:.310,r:.070,style:'davies'},
@@ -1895,14 +1896,14 @@
       textSpaced(d,.50*W,.770*H,F.barlow,9,red,'PLATE REVERB',1.0);
       // power symbol + script brand + tagline
       textSpaced(d,.18*W,.575*H,F.barlow,6,red,'9V-18V DC',0.2);
-      textC(d,.50*W,.880*H,F.ink,24,red,'Benson');
+      textC(d,.50*W,.880*H,F.ink,24,red,'Venson');
       textSpaced(d,.50*W,.930*H,F.barlow,6.5,red,'MECHANISMS OF MUSIC',0.4); } };
 
   // Tube Spring — Source Audio True Spring-style: brushed gunmetal box, two cream
   // knobs, a SHORT/LONG/TANK toggle, script wordmark with a spring squiggle, chrome
   // stomp + brand. Parody (Index Audio / Real Spring Reverb). RS knob names.
   // Mix0 Depth1.
-  P.tubespring = { w:280,h:420, knobs:[
+  P.realspring = { w:280,h:420, knobs:[
       {id:0,cx:.27,cy:.25,r:.10,style:'pointer',cap:[230,224,208]},
       {id:1,cx:.73,cy:.25,r:.10,style:'pointer',cap:[230,224,208]}],
     tick:rgb(120,122,128), ptr:rgb(46,46,50),
@@ -1938,7 +1939,7 @@
   // Deja Chorus — Fulltone Deja'Vibe-style: matte-black landscape box, white
   // pinstripe border + script logo, two top knobs + two mode toggles, a big
   // offset knob + BYPASS stomp + blue LED. Recreated brand-free. Rate0 Depth1 Mix2.
-  P.chorus20 = { w:480, h:300, knobs:[
+  P.dejachorus = { w:480, h:300, knobs:[
       {id:0,cx:.155,cy:.205,r:.066,style:'boss'},
       {id:1,cx:.430,cy:.205,r:.066,style:'boss'},
       {id:2,cx:.825,cy:.560,r:.110,style:'boss'}],
@@ -1973,7 +1974,7 @@
   // Acoustic Guitar Pedal — Rockman-style acoustic simulator: black box, 4 top
   // knobs with tick scales, the iconic glowing blue window + bold white wordmark.
   // Recreated brand-free. Params: Tone0 MidShift1 Body2 Mid3.
-  P.acousticsimulator = { w:300, h:360, knobs:[
+  P.acousticemulator = { w:300, h:360, knobs:[
       {id:0,cx:.145,cy:.160,r:.078,style:'pointer',cap:[32,32,34]},
       {id:1,cx:.385,cy:.160,r:.078,style:'pointer',cap:[32,32,34]},
       {id:2,cx:.625,cy:.160,r:.078,style:'pointer',cap:[32,32,34]},
@@ -2061,14 +2062,14 @@
   // Foog FM107 — Moog MF107 (moogerfooger)-style: dark granite face + wood side
   // panels, big metallic knobs, foogerfooger/foog parody. RS knob names
   // (Modern Flanger has 4). Rate0 Depth1 Regen2 Mix3.
-  P.modernflanger = foogSpec(300,420,
+  P.fm107 = foogSpec(300,420,
     [{id:0,cx:.33,cy:.30,lbl:'RATE'},{id:1,cx:.67,cy:.30,lbl:'DEPTH'},
      {id:2,cx:.33,cy:.62,lbl:'REGEN'},{id:3,cx:.67,cy:.62,lbl:'MIX'}],
     'FM107');
 
   // Analog Delay — Moog MF-104M-style: the foog (moogerfooger) template.
   // RS knob names. 3 RS knobs: Time0 Feedback1 Mix2.
-  P.analogdelay = foogSpec(300,420,
+  P.fm104 = foogSpec(300,420,
     [{id:0,cx:.32,cy:.33,lbl:'TIME'},{id:1,cx:.68,cy:.33,lbl:'FEEDBACK',lblPx:7.5},
      {id:2,cx:.50,cy:.63,lbl:'MIX'}],
     'FM104');
@@ -2077,7 +2078,7 @@
   // foogSpec box) — two knob rows, decorative LFO/FREQ slide switches, the
   // signature 8-band FILTERS slider bank, an LED row + foog logo + stomp.
   // Parody (foogermooger / FM105). RS knob names. Sens0 Attack1 Release2 Mix3 Filter4.
-  P.bobfilter = { w:320,h:480, knobs:[
+  P.fm105 = { w:320,h:480, knobs:[
       {id:0,cx:.22,cy:.165,r:.072,style:'moog'},
       {id:3,cx:.50,cy:.165,r:.072,style:'moog'},
       {id:1,cx:.30,cy:.345,r:.072,style:'moog'},
@@ -2125,7 +2126,7 @@
   // black scaled knobs, rainbow maker logo + a red POWER lever, wordmark + brand
   // + chrome stomp. Parody (Bu-Tron III / auditronics). RS knob names.
   // FilterType0 Res1 Sens2 Attack3 Release4.
-  P.autofilter = { w:300,h:470, knobs:[
+  P.butroniii = { w:300,h:470, knobs:[
       {id:1,cx:.22,cy:.290,r:.058,style:'pointer',cap:[26,26,28]},
       {id:2,cx:.22,cy:.440,r:.058,style:'pointer',cap:[26,26,28]},
       {id:3,cx:.55,cy:.180,r:.058,style:'pointer',cap:[26,26,28]},
@@ -2168,7 +2169,7 @@
   // Custom Drive — Fulltone OCD-style: cream box, two black knobs, an HP/LP voice
   // toggle + blue LED, fat black wordmark + script brand. Parody (ExtraTone / CDO).
   // RS knob names; Voice is the binary HP/LP selector. Gain0 Tone1 Voice2.
-  P.customdrive = { w:280,h:480, knobs:[
+  P.cdo = { w:280,h:480, knobs:[
       {id:0,cx:.26,cy:.215,r:.082,style:'davies'},
       {id:1,cx:.74,cy:.215,r:.082,style:'davies'}],
     switches:[{id:2,cx:.50,cy:.150,hs:.030}],
@@ -2195,7 +2196,7 @@
   // Marshall GV-2 Guv'nor Plus-style: cream Marshall-compact body, five gold
   // knobs, black oval gold-edged badge, gold stomp, script brand. Parody
   // (Regis / GM-2 Guvnor Minus). RS knob names. Gain0 Bass1 Mid2 Treble3 Deep4.
-  P.marshallguvnorplus = { w:300,h:470, knobs:[
+  P.gm2 = { w:300,h:470, knobs:[
       {id:0,cx:.12,cy:.150,r:.052,style:'pointer',cap:[200,164,84]},
       {id:1,cx:.31,cy:.150,r:.052,style:'pointer',cap:[200,164,84]},
       {id:2,cx:.50,cy:.150,r:.052,style:'pointer',cap:[200,164,84]},
@@ -2246,7 +2247,7 @@
       rr(c,W*.035,H*.135,W*.93,H*.80,6*s); c.fillStyle=rgb(210,210,208); c.fill();
       rr(c,W*.035,H*.135,W*.93,H*.80,6*s); c.strokeStyle='rgba(0,0,0,0.18)'; c.lineWidth=1.2*s; c.stroke();
       // wordmark
-      textSpaced(d,.275*W,.265*H,F.bebas,36,ink,'RANGEMASTER',1.0);
+      textSpaced(d,.275*W,.265*H,F.bebas,34,ink,'RANGE BOOSTER',1.0);
       textSpaced(d,.225*W,.405*H,F.bebas,20,ink,'TREBLE BOOSTER',1.0);
       // ascending music staff + notes
       c.strokeStyle=ink; c.lineWidth=1.3*s;
@@ -2303,7 +2304,7 @@
   // 80s Flanger — MXR M117R-style: hammered-grey landscape box, black knobs,
   // POWER label, 'NYR' logo box + 'flanger' tag, side jacks. RS knob names
   // (EightiesFlanger exposes 3). Rate0 Depth1 Mix2.
-  P.eightiesflanger = { w:460,h:320, knobs:[
+  P.n117rflanger = { w:460,h:320, knobs:[
       {id:0,cx:.25,cy:.255,r:.075,style:'davies'},
       {id:1,cx:.50,cy:.255,r:.075,style:'davies'},
       {id:2,cx:.75,cy:.255,r:.075,style:'davies'}],
@@ -2341,7 +2342,7 @@
   // box, black diagonal wedge with the retro logo, 3 black knobs in a right
   // column. Parody (quimical-harmony / DELUXE SERVANT). RS knob names.
   // Rate0 Depth1 Mix2.  (Pedal_VintageFlanger → VintageFlanger.vst3.)
-  P.vintageflanger = { w:480,h:360, knobs:[
+  P.deluxeservant = { w:480,h:360, knobs:[
       {id:0,cx:.815,cy:.335,r:.058,style:'davies'},
       {id:1,cx:.815,cy:.575,r:.058,style:'davies'},
       {id:2,cx:.815,cy:.815,r:.058,style:'davies'}],
@@ -2378,7 +2379,7 @@
 
   // Eden WTDI — landscape gold-panel bass preamp (mirrors eden_wtdi/EdenWtdi_ui.cpp).
   // Param order: Gain0 Enhance1 Comp2 Master3 Bass4 Mid5 Treble6 BassBoost7 MidShift8.
-  P.edenwtdi = { w:560, h:360,
+  P.wtdx = { w:560, h:360,
     knobs:[
       {id:4,cx:.190,cy:.300,r:.058,style:'boss'}, {id:5,cx:.500,cy:.300,r:.058,style:'boss'}, {id:6,cx:.810,cy:.300,r:.058,style:'boss'},
       {id:0,cx:.160,cy:.660,r:.058,style:'boss'}, {id:1,cx:.385,cy:.660,r:.058,style:'boss'},
@@ -2442,7 +2443,7 @@
   // landscape box, a row of 6 knobs, big two-colour graffiti 'Q-TRIX' logo (parody;
   // Q orange + -TRIX purple). RS params (6 knobs): FilterType0 Res4 Sens6 Attack1
   // Release2 Mix5.
-  P.autosweep = { w:560, h:340,
+  P.qtrix = { w:560, h:340,
     knobs:[
       {id:0,cx:.105,cy:.26,r:.052,style:'boss',select:3},  // MODE (FilterType: LP/BP/HP selector)
       {id:4,cx:.262,cy:.26,r:.052,style:'boss'},  // PEAK  (Res)
@@ -2569,9 +2570,9 @@
     spec.draw = (d, values) => eqDraw(d, spec, values);
     return spec;
   }
-  P.eq8     = eqSpec({ w: 320, h: 500, style: 0, db: 15, col: [188, 190, 186], label: 'Equalizer', code: 'GE-8',
+  P.ge8     = eqSpec({ w: 320, h: 500, style: 0, db: 15, col: [188, 190, 186], label: 'Equalizer', code: 'GE-8',
                        bands: ['50', '100', '200', '400', '800', '1600', '3200', '6400'] });
-  P.basseq8 = eqSpec({ w: 320, h: 500, style: 0, db: 15, col: [210, 206, 194], name1: 'Bass', name2: 'Equalizer', code: 'GEB-8',
+  P.geb8 = eqSpec({ w: 320, h: 500, style: 0, db: 15, col: [210, 206, 194], name1: 'Bass', name2: 'Equalizer', code: 'GEB-8',
                        bands: ['30', '75', '185', '460', '1100', '2700', '6800', '16000'] });
   P.eq5     = eqSpec({ w: 440, h: 300, style: 1, db: 15, col: [30, 30, 33], label: '5-BAND GRAPHIC',
                        bands: ['63', '250', '750', '2200', '5700'] });
@@ -2783,7 +2784,7 @@
   // Studio Comp — dbx 160 look: walnut sides, brushed-silver rails, black face,
   // silver knurled knobs, big amber VU meter, "HZX 165 COMPRESSOR/LIMITER" logo.
   // RS params (5 knobs): Threshold0 Ratio1 Attack2 Release3 Output4.
-  P.studiocomp = { w:980, h:300,
+  P.hzx = { w:980, h:300,
     knobs:[
       {id:0,cx:.105,cy:.51,r:.039,style:'knurled'},  // Threshold
       {id:1,cx:.210,cy:.51,r:.039,style:'knurled'},  // Ratio (= COMPRESSION)
@@ -2853,7 +2854,7 @@
   // Parametric EQ — GML 8200 look: black wide rack, COLOUR-coded knobs per band
   // (centred), centre LNG logo, "MODEL 8300 PARAMETRIC EQUALIZER" bottom.
   // RS params: Bass0 BassFreq1 LoMid2 LoMidFreq3 LoMidQ4 HiMid5 HiMidFreq6 HiMidQ7 Treble8 TrebleFreq9.
-  P.studioeq = { w:960, h:300,
+  P.lng = { w:960, h:300,
     knobs:[
       {id:0,cx:.15,cy:.26,r:.028,style:'pointer',cap:[196,44,44]},   // Bass gain (red)
       {id:1,cx:.15,cy:.62,r:.026,style:'pointer',cap:[196,44,44]},   // BassFreq
@@ -2894,7 +2895,7 @@
   // knobs (gain) each with a small freq knob, blue freq scales, HF/LF toggles, IN.
   // Parody: API arrow + "G-550". RS params (10): Bass0 BassFreq1 LoMid2 LoMidFreq3
   // Mid4 MidFreq5 HiMid6 HiMidFreq7 Treble8 TrebleFreq9 (HIGH at top → LOW bottom).
-  P.studiographiceq = { w:300, h:740,
+  P.g550 = { w:300, h:740,
     knobs:[
       {id:8,cx:.40,cy:.165,r:.090,style:'api'}, {id:9,cx:.78,cy:.165,r:.052,style:'api'},  // HIGH (Treble) + freq
       {id:6,cx:.40,cy:.310,r:.090,style:'api'}, {id:7,cx:.78,cy:.310,r:.052,style:'api'},  // HI-MID
@@ -2909,10 +2910,11 @@
       rr(c,m,m,W-2*m,H-2*m,8); c.strokeStyle=rgb(6,7,9); c.lineWidth=2; c.stroke();
       screw(d,.5*W,.032*H); screw(d,.5*W,.968*H);
       const blu=rgb(86,150,214), wt=rgb(228,230,234), dim=rgb(150,154,160);
-      // API-style arrow logo + model
+      // APX arrow logo + model (parody)
       c.beginPath(); c.moveTo(.16*W,.062*H); c.lineTo(.25*W,.044*H); c.lineTo(.25*W,.080*H); c.closePath();
       c.fillStyle=blu; c.fill(); c.fillRect(.25*W,.056*H,.05*W,.012*H);
-      textC(d,.64*W,.062*H,F.bebas,30,blu,'G-550');
+      textC(d,.44*W,.062*H,F.bebas,26,blu,'APX');
+      textC(d,.70*W,.062*H,F.bebas,30,blu,'G-550');
       // bands
       const bands=[['HIGH',.165],['HI-MID',.310],['MID',.455],['LO-MID',.600],['LOW',.745]];
       const frng=['2.5k–20k','800–12.5k','300–5k','75–1k','30–400'];

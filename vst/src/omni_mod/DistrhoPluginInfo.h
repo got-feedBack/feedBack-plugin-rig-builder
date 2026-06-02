@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "OmniMod"
+#define DISTRHO_PLUGIN_NAME    "UniMod"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:omnimod"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.omnimod"
 

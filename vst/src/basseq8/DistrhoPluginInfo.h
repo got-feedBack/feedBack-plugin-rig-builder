@@ -1,7 +1,7 @@
 #ifndef DISTRHO_PLUGIN_INFO_H_INCLUDED
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "Bass EQ8"
+#define DISTRHO_PLUGIN_NAME    "GEB-8"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:basseq8"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.basseq8"
 #define DISTRHO_PLUGIN_BRAND_ID  Rgbd

@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "MultiPitch"
+#define DISTRHO_PLUGIN_NAME    "Multi Pitch"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:multipitch"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.multipitch"
 

@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "UKWah"
+#define DISTRHO_PLUGIN_NAME    "BOX B847"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:ukwah"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.ukwah"
 

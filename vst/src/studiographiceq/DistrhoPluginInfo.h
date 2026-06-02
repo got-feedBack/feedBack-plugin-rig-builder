@@ -1,7 +1,7 @@
 #ifndef DISTRHO_PLUGIN_INFO_H_INCLUDED
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "Studio Graphic EQ"
+#define DISTRHO_PLUGIN_NAME    "G-550"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:studiographiceq"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.studiographiceq"
 #define DISTRHO_PLUGIN_BRAND_ID  Rgbd

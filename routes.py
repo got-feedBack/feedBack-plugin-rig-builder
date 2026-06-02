@@ -289,6 +289,108 @@ _PLATFORM_FOR_CATEGORY = {
 # ── Helpers ──────────────────────────────────────────────────────────
 
 
+# Bundled VSTs whose .vst3 file was renamed to its copyright-free parody name.
+# Maps OLD bundle filename -> NEW. Single source of truth for: (a) the DB
+# migration in _get_conn that rewrites stored preset_pieces.vst_path so existing
+# per-song assignments survive, and (b) the CI build workflows' alias_of (built
+# binary keeps the old NAME; injected into the renamed committed dir). Grows as
+# more pedals are renamed, category by category.
+_RENAMED_VST_BUNDLES = {
+    # distortion
+    "StandardDistortion.vst3": "DS-1.vst3",
+    "AlloyDistortion.vst3":    "HM-2.vst3",
+    "ShredZone.vst3":          "MT-2.vst3",
+    "VintageDistortion.vst3":  "Vintage Distortion.vst3",
+    "BassDistortion.vst3":     "Mouse.vst3",
+    # fuzz
+    "BassFuzz.vst3":           "Bass Big Buzz.vst3",
+    # drive / overdrive / boost
+    "CustomDrive.vst3":        "CDO.vst3",
+    "GermaniumDrive.vst3":     "Germanium Drive.vst3",
+    "RangeBooster.vst3":       "Range Booster.vst3",
+    "LineDrive.vst3":          "OS-2.vst3",
+    "SuperDrive.vst3":         "SD-1.vst3",
+    "MarshallGuvnorPlus.vst3": "GM-2.vst3",
+    "BassOverdrive.vst3":      "BLACKBRASS.vst3",
+    # modulation
+    "Chorus.vst3":               "CH-2.vst3",
+    "DigitalChorus.vst3":        "CH-5.vst3",
+    "Chorus20.vst3":             "Deja Chorus.vst3",
+    "AnalogChorus.vst3":         "134 Stereo Chorus.vst3",
+    "Analog Chorus.vst3":        "134 Stereo Chorus.vst3",
+    "BassChorus.vst3":           "CB-3.vst3",
+    "SendInTheClones.vst3":      "Attack of the Clones.vst3",
+    "ClassicFlanger.vst3":       "FL-2.vst3",
+    "BassFlanger.vst3":          "FL-3.vst3",
+    "ModernFlanger.vst3":        "FM107.vst3",
+    "VintageFlanger.vst3":       "Deluxe Servant.vst3",
+    "EightiesFlanger.vst3":      "N117R Flanger.vst3",
+    "ShaverPhaser.vst3":         "PH-1.vst3",
+    "Phaser363.vst3":            "phase 90.vst3",
+    "BassPhase.vst3":            "phase 99.vst3",
+    "PlanePhase.vst3":           "Rocket Phase.vst3",
+    "MultiTrem.vst3":            "TR-2.vst3",
+    "AmpTrem.vst3":              "Mega-Trem.vst3",
+    "TremOle.vst3":              "Dyna-Trem.vst3",
+    "MultiVibe.vst3":            "VB-2.vst3",
+    "MarshallSupervibe.vst3":    "UV-1.vst3",
+    "OmniMod.vst3":              "UniMod.vst3",
+    "AmpVibe.vst3":              "Multi-Vibe.vst3",
+    "AutoVibe.vst3":             "Oceanduct.vst3",
+    "BakedRotatoe.vst3":         "RT-2.vst3",
+    # delay / echo
+    "BassFilterDelay.vst3":      "DL-3.vst3",
+    "BassFilterEcho.vst3":       "SE-3.vst3",
+    "AnalogDelay.vst3":          "FM104.vst3",
+    "CosmicEcho.vst3":           "Galaxy Echo.vst3",
+    "ModDelay.vst3":             "DL9.vst3",
+    "NpnDelay.vst3":             "DM-2.vst3",
+    "NoFiEcho.vst3":             "No Fi Echo.vst3",
+    "OilCanEcho.vst3":           "Oil Can Echo.vst3",
+    "ValveEcho.vst3":            "Valve Echo.vst3",
+    # reverb
+    "DigitalVerb.vst3":          "RV-2.vst3",
+    "PlateVerb.vst3":            "VOODOO.vst3",
+    "SpringReverb.vst3":         "Holy Spring.vst3",
+    "TubeSpring.vst3":           "Real Spring.vst3",
+    # dynamics
+    "Limiter.vst3":              "LM-2.vst3",
+    "NoiseGate.vst3":            "NF-1.vst3",
+    "DynamicsCompression.vst3":  "dyna comp.vst3",
+    "BassMultiComp.vst3":        "Multi Comp.vst3",
+    "StudioComp.vst3":           "HZX.vst3",
+    "Swole.vst3":                "Beta Fist.vst3",
+    # wah
+    "USWah.vst3":                "Cry Man.vst3",
+    "cry man.vst3":              "Cry Man.vst3",
+    "UKWah.vst3":                "BOX B847.vst3",
+    "ModernWah.vst3":            "Jockey Bad.vst3",
+    "BassWah.vst3":              "Bass Wah.vst3",
+    # filter / envelope
+    "AutoSweep.vst3":            "Qtrix.vst3",
+    "AutoFilter.vst3":           "BU-TRON III.vst3",
+    "BobFilter.vst3":            "FM105.vst3",
+    "LoFiFilter.vst3":           "Lo Fi Filter.vst3",
+    # eq
+    "BassEQ8.vst3":              "GEB-8.vst3",
+    "AmpEQ.vst3":                "FBM-1.vst3",
+    "EQ8.vst3":                  "GE-8.vst3",
+    "StudioEQ.vst3":             "LNG.vst3",
+    "StudioGraphicEQ.vst3":      "G-550.vst3",
+    # pitch / octave
+    "OctaveUp.vst3":             "OCTUP.vst3",
+    "Octavius.vst3":             "OC-5.vst3",
+    "MultiPitch.vst3":           "Multi Pitch.vst3",
+    "BassSubOctave.vst3":        "SO-2.vst3",
+    # emulator / enhancer / preamp
+    "AcousticSimulator.vst3":    "Acoustic Emulator.vst3",
+    "BassEmulator.vst3":         "Bass Emulator.vst3",
+    "Enbiggenator.vst3":         "MIME.vst3",
+    "BassEnbig.vst3":            "ENBIGGEN.vst3",
+    "EdenWTDI.vst3":             "WT-DX.vst3",
+}
+
+
 def _require_db_path() -> str:
     if _db_path is None:
         raise RuntimeError("rig_builder plugin not initialized")
@@ -353,6 +455,16 @@ def _get_conn() -> sqlite3.Connection:
             "CREATE INDEX IF NOT EXISTS idx_preset_pieces_rs_gear "
             "ON preset_pieces(rs_gear_type)"
         )
+        # Renamed bundled VSTs: rewrite stored vst_path basenames old->new so
+        # per-song assignments survive the rename. Idempotent — REPLACE matches
+        # the full trailing "/<old>.vst3" segment, so it's a no-op once migrated.
+        try:
+            for old, new in _RENAMED_VST_BUNDLES.items():
+                _conn.execute(
+                    "UPDATE preset_pieces SET vst_path = REPLACE(vst_path, ?, ?) "
+                    "WHERE vst_path LIKE ?", (f"/{old}", f"/{new}", f"%/{old}"))
+        except Exception:
+            log.exception("renamed-VST path migration failed")
         _conn.commit()
         # v1.2 storage migration. Idempotent — guarded by sentinel file
         # so re-running on subsequent restarts is a no-op. Done here
@@ -1137,12 +1249,51 @@ def _load_vst_display_names() -> dict:
     return _load_cached_json("vst_display_names.json")
 
 
+def _load_pedal_type_tags() -> dict:
+    """Load (and cache) pedal_type_tags.json: maps an rs_gear key to a space-
+    separated string of searchable TYPE keywords (English + Spanish, accent-
+    free) so typing a pedal type in the catalog / add-piece picker surfaces
+    every gear of that type even when its display name is a bare model code
+    (e.g. 'MT-2'). Authoritative — overrides the codename heuristic. Missing
+    file or key = '' (search falls back to the codename synonym guess)."""
+    return _load_cached_json("pedal_type_tags.json")
+
+
 def _vst_display_stem(vst_path: str) -> str:
     """Match the UI's gStem: basename minus .vst3/.component, lowercased,
     non-alphanumerics stripped. Keep in sync with screen.js / pedal_canvas."""
     name = Path(vst_path or "").name
     name = re.sub(r"\.(vst3|component)$", "", name, flags=re.IGNORECASE)
     return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
+_GEAR_DISPLAY_NAME_CACHE: dict | None = None
+
+
+def _gear_display_name(rs_gear: str, fallback: str = "") -> str:
+    """Parody display name for a gear — the copyright-free product name shown
+    EVERYWHERE the plugin's name appears (chain piece, add-piece picker, …),
+    not just the Gear catalog. Resolves rs_gear → its bundled-VST stem (via
+    rs_gear_to_vst.json) → vst_display_names.json. Falls back to `fallback`
+    (the real name) when the gear has no bundled VST or no curated name.
+    Cached for the process (no hot reload, so the map is stable)."""
+    global _GEAR_DISPLAY_NAME_CACHE
+    if _GEAR_DISPLAY_NAME_CACHE is None:
+        seed = _load_vst_seed_catalog() or {}
+        disp = _load_vst_display_names() or {}
+        m: dict[str, str] = {}
+        for g, arr in seed.items():
+            if not isinstance(arr, list):
+                continue
+            bundled = next((e.get("bundled") for e in arr
+                            if isinstance(e, dict) and e.get("bundled")), None)
+            if not bundled:
+                continue
+            dn = disp.get(_vst_display_stem(bundled))
+            if dn:
+                m[g] = dn
+        _GEAR_DISPLAY_NAME_CACHE = m
+    return _GEAR_DISPLAY_NAME_CACHE.get(rs_gear) or fallback
 
 
 def _bundled_vst_plugins() -> list[dict]:
@@ -1793,6 +1944,13 @@ def _parse_tone(tone_data: dict) -> dict:
     return {"name": name, "key": key, "chain": chain}
 
 
+# Curated rs_gear -> daw_category overrides for gears the substring heuristic
+# misbuckets (codename lacks the type word). Grows category by category.
+_DAW_CATEGORY_OVERRIDE = {
+    "Pedal_ShredZone": "distortion",   # Metal Zone (MT-2) — 'shredzone' has no 'dist'
+}
+
+
 def _daw_category_for(rs_gear: str, rs_category: str) -> str:
     """Bucket a Rocksmith gear into a DAW-style subcategory the user
     recognises ('compression', 'modulation', 'delay', etc.) so the chain
@@ -1809,6 +1967,11 @@ def _daw_category_for(rs_gear: str, rs_category: str) -> str:
         return "amps"
     if rs_category == "cab":
         return "cabs"
+    # Curated overrides for gears whose codename doesn't contain the type word
+    # (e.g. 'ShredZone' is a distortion but has no 'dist'/'metalzone' substring).
+    ov = _DAW_CATEGORY_OVERRIDE.get(rs_gear)
+    if ov:
+        return ov
     name = (rs_gear or "").lower()
     # Order matters: more-specific patterns first so e.g. "Pedal_LoFiFilter"
     # doesn't get swallowed by the generic "filter" bucket before the
@@ -2185,7 +2348,7 @@ def _enrich_chain_piece(piece: dict, img_idx: dict | None = None) -> dict:
 
     return {
         **piece,
-        "real_name": info.get("name", rs_type),
+        "real_name": _gear_display_name(rs_type, info.get("name", rs_type)),
         "make": info.get("make", ""),
         "model": info.get("model", ""),
         "rs_category": category,
@@ -5602,6 +5765,7 @@ def setup(app, context):
         eq/wah/pitch/filter/utility/other) for finer-grained filtering in
         the picker. Sorted by daw_category → name."""
         rs_map = _load_rs_to_real()
+        type_tags = _load_pedal_type_tags()
         out: list[dict] = []
         for rs_gear, info in rs_map.items():
             if rs_gear.startswith("_") or not isinstance(info, dict):
@@ -5609,11 +5773,12 @@ def setup(app, context):
             category = info.get("category") or _gear_category(rs_gear) or "other"
             out.append({
                 "rs_gear": rs_gear,
-                "name": info.get("name") or rs_gear,
+                "name": _gear_display_name(rs_gear, info.get("name") or rs_gear),
                 "make": info.get("make", ""),
                 "model": info.get("model", ""),
                 "category": category,
                 "daw_category": _daw_category_for(rs_gear, category),
+                "type_tags": type_tags.get(rs_gear, ""),
             })
         out.sort(key=lambda g: (g["daw_category"], (g["name"] or "").lower()))
         return {"gears": out, "count": len(out)}
@@ -7286,6 +7451,7 @@ def setup(app, context):
             }
 
         display_names = _load_vst_display_names()
+        type_tags = _load_pedal_type_tags()
         cats: dict[str, list] = {}
         for gear, b in best.items():
             info = rs_map.get(gear) or {}
@@ -7304,6 +7470,7 @@ def setup(app, context):
             cats.setdefault(category, []).append({
                 "rs_gear": gear,
                 "real_name": real_name,
+                "type_tags": type_tags.get(gear, ""),
                 "make": info.get("make", ""),
                 "model": info.get("model", ""),
                 "category": category,
@@ -7400,7 +7567,7 @@ def setup(app, context):
             real_names = []
             for g in rs_gears:
                 info = rs_map.get(g) or {}
-                real_names.append(info.get("name") or g)
+                real_names.append(_gear_display_name(g, info.get("name") or g))
             try:
                 size = abs_path.stat().st_size
             except OSError:
@@ -7745,7 +7912,7 @@ def setup(app, context):
                 variant_levels = list(variants.keys())
             out.append({
                 "rs_gear": display_key,
-                "name": info.get("name") or display_key,
+                "name": _gear_display_name(display_key, info.get("name") or display_key),
                 "make": info.get("make", ""),
                 "model": info.get("model", ""),
                 "variant_count": variant_count,
@@ -8219,7 +8386,7 @@ def setup(app, context):
                 "rs_gear": rs,
                 "total_chain_slots": r[1],
                 "pending_chain_slots": r[2],
-                "name": info.get("name", rs),
+                "name": _gear_display_name(rs, info.get("name", rs)),
                 "category": info.get("category", "other"),
                 "tone3000_query": info.get("tone3000_query", rs),
             })

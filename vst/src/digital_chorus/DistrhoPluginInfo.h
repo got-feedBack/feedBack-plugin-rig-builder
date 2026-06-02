@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "DigitalChorus"
+#define DISTRHO_PLUGIN_NAME    "CH-5"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:digitalchorus"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.digitalchorus"
 

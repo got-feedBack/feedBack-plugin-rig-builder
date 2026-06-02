@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "LineDrive"
+#define DISTRHO_PLUGIN_NAME    "OS-2"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:linedrive"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.linedrive"
 

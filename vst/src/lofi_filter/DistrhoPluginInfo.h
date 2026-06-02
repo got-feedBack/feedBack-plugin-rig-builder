@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "LoFiFilter"
+#define DISTRHO_PLUGIN_NAME    "Lo Fi Filter"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:lofifilter"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.lofifilter"
 

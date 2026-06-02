@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "NoFiEcho"
+#define DISTRHO_PLUGIN_NAME    "No Fi Echo"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:nofiecho"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.nofiecho"
 

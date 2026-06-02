@@ -1,3880 +1,3880 @@
 {
- "_meta": {
-  "description": "Translation table: Rocksmith gear knob → VST parameter. Curated around Kilohearts Essentials (free) — consistent param names across the entire bundle.",
-  "version": 4,
-  "updated": "2026-05-28",
-  "schema": {
-   "<rs_gear_type>": {
-    "<vst_name_stem_lowercased>": {
-     "<rs_knob_name>": {
-      "param": "<exact VST param name as shown in the in-app editor>",
-      "scale": "<float, multiply RS value by this. 0.01 for 0-100 → 0-1; 0.0005 for ms 0-2000; 1.0 for direct dB / semitones>",
-      "offset": "<optional float, added after scale>",
-      "invert": "<optional bool, replaces v with (1-v) after scale>"
-     }
+  "_meta": {
+    "description": "Translation table: Rocksmith gear knob → VST parameter. Curated around Kilohearts Essentials (free) — consistent param names across the entire bundle.",
+    "version": 4,
+    "updated": "2026-05-28",
+    "schema": {
+      "<rs_gear_type>": {
+        "<vst_name_stem_lowercased>": {
+          "<rs_knob_name>": {
+            "param": "<exact VST param name as shown in the in-app editor>",
+            "scale": "<float, multiply RS value by this. 0.01 for 0-100 → 0-1; 0.0005 for ms 0-2000; 1.0 for direct dB / semitones>",
+            "offset": "<optional float, added after scale>",
+            "invert": "<optional bool, replaces v with (1-v) after scale>"
+          }
+        }
+      }
+    },
+    "kilohearts_param_naming_convention": {
+      "_note": "KHS modules use consistent param names across the entire Essentials bundle. Common params you'll see in every module:",
+      "rate": "Rate (Hz, 0-1 internal)",
+      "depth": "Depth (0-1)",
+      "feedback": "Feedback (0-1)",
+      "mix": "Dry/Wet (0-1) — some older docs show 'Mix'; the in-app editor will show the real name",
+      "cutoff": "Cutoff (0-1, log freq)",
+      "drive": "Drive (0-1)",
+      "threshold": "Threshold (dB)",
+      "ratio": "Ratio (1:N)",
+      "time": "Time (s or 0-1 normalised)",
+      "pitch": "Pitch (semitones)"
+    },
+    "notes": [
+      "If a param name doesn't match, open the in-app VST editor for that gear, copy the exact label from a slider, and paste here. The lookup is case-insensitive but otherwise exact.",
+      "VST name stems below are lowercased to match the case-insensitive lookup. Plugin files on disk are 'kHs Chorus.vst3' etc. — the matcher strips '.vst3' and lowercases automatically.",
+      "EQ pedals (EQ5/EQ8/BassEQ8): knobs are absolute frequencies (e.g. '5700': 5 = +5 dB at 5700 Hz). Verified band layouts (from inspect_rs_knobs.py against a real library): EQ5 = 63/250/750/2200/5700 Hz; EQ8 = 50/100/200/400/800/1600/3200/6400 Hz; BassEQ8 = 30/75/185/460/1100/2700/6800/16000 Hz. kHs 3-Band EQ absorbs three of those — the entries below pick the most musical bands per pedal. The other RS frequencies are silently dropped (lossy). For lossless mapping, switch the gear to Voxengo Marvel GEQ (16-band) and add a per-pedal entry under 'voxengo marvel geq'.",
+      "Rack_StudioEQ (4-band parametric: Bass/LoMid/HiMid/Treble with Q + Freq knobs) is the highest-coverage EQ in the library. Currently lossy-mapped to kHs 3-Band (gain bands only — Q/Freq dropped). For full fidelity switch the gear to TDR Nova (4-band parametric, free) and add a 'tdr nova' entry mapping <Band>+<BandFreq>+<BandQ> per band.",
+      "Melda free (MFreeFXBundle): MTremolo, MVibrato, MFlanger, MPhaser, MRingModulator, MEqualizer, MCompressor are now PRIMARY for those categories alongside the existing KHS entries. Melda paramId convention is consistent across the family — verifying one editor (e.g. MTremolo) validates all 7 Melda mappings.",
+      "_static block: a VST entry may include `\"_static\": {\"<vst_param_name>\": <normalized_value>, ...}` to apply UNCONDITIONAL params regardless of RS knobs. Used to pin curated character knobs (e.g. kHs Distortion Type + Dynamics) so every fuzz pedal sounds like a fuzz, every overdrive sounds like an overdrive. Values are normalized [0,1]. For stepped/enum params, verify the dropdown order via `await window.rbSweepParam(slotId, paramName)` from DevTools — names + numeric ranges differ across plugins.",
+      "kHs Distortion subtype convention (user-curated, verified via rbSweepParam): the `Type` param has 6 discrete modes — Overdrive (0.0), Saturate (0.2), Foldback (0.4), Sine (0.6), Hard Clip (0.8), Quantize (1.0). Fuzz pedals → Type=0.2 (Saturate); overdrive pedals → Type=0.0 (Overdrive); distortion pedals → Type=0.8 (Hard Clip). All three pin Dynamics=1.0 so the pedal's response tracks the player's pick attack."
+    ]
+  },
+  "Pedal_AcousticEmulator": {
+    "acousticsimulator": {
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01
+      },
+      "MidShift": {
+        "param": "MidShift",
+        "scale": 0.0003669724770642202,
+        "offset": -0.10091743119266056,
+        "_hint": "RS MidShift is 275-3000 Hz. AcousticSimulator stores it normalized: (Hz - 275) / 2725."
+      },
+      "Body": {
+        "param": "Body",
+        "scale": 0.01
+      },
+      "Mid": {
+        "param": "Mid",
+        "scale": 0.01
+      }
     }
-   }
   },
-  "kilohearts_param_naming_convention": {
-   "_note": "KHS modules use consistent param names across the entire Essentials bundle. Common params you'll see in every module:",
-   "rate": "Rate (Hz, 0-1 internal)",
-   "depth": "Depth (0-1)",
-   "feedback": "Feedback (0-1)",
-   "mix": "Dry/Wet (0-1) — some older docs show 'Mix'; the in-app editor will show the real name",
-   "cutoff": "Cutoff (0-1, log freq)",
-   "drive": "Drive (0-1)",
-   "threshold": "Threshold (dB)",
-   "ratio": "Ratio (1:N)",
-   "time": "Time (s or 0-1 normalised)",
-   "pitch": "Pitch (semitones)"
-  },
-  "notes": [
-   "If a param name doesn't match, open the in-app VST editor for that gear, copy the exact label from a slider, and paste here. The lookup is case-insensitive but otherwise exact.",
-   "VST name stems below are lowercased to match the case-insensitive lookup. Plugin files on disk are 'kHs Chorus.vst3' etc. — the matcher strips '.vst3' and lowercases automatically.",
-   "EQ pedals (EQ5/EQ8/BassEQ8): knobs are absolute frequencies (e.g. '5700': 5 = +5 dB at 5700 Hz). Verified band layouts (from inspect_rs_knobs.py against a real library): EQ5 = 63/250/750/2200/5700 Hz; EQ8 = 50/100/200/400/800/1600/3200/6400 Hz; BassEQ8 = 30/75/185/460/1100/2700/6800/16000 Hz. kHs 3-Band EQ absorbs three of those — the entries below pick the most musical bands per pedal. The other RS frequencies are silently dropped (lossy). For lossless mapping, switch the gear to Voxengo Marvel GEQ (16-band) and add a per-pedal entry under 'voxengo marvel geq'.",
-   "Rack_StudioEQ (4-band parametric: Bass/LoMid/HiMid/Treble with Q + Freq knobs) is the highest-coverage EQ in the library. Currently lossy-mapped to kHs 3-Band (gain bands only — Q/Freq dropped). For full fidelity switch the gear to TDR Nova (4-band parametric, free) and add a 'tdr nova' entry mapping <Band>+<BandFreq>+<BandQ> per band.",
-   "Melda free (MFreeFXBundle): MTremolo, MVibrato, MFlanger, MPhaser, MRingModulator, MEqualizer, MCompressor are now PRIMARY for those categories alongside the existing KHS entries. Melda paramId convention is consistent across the family — verifying one editor (e.g. MTremolo) validates all 7 Melda mappings.",
-   "_static block: a VST entry may include `\"_static\": {\"<vst_param_name>\": <normalized_value>, ...}` to apply UNCONDITIONAL params regardless of RS knobs. Used to pin curated character knobs (e.g. kHs Distortion Type + Dynamics) so every fuzz pedal sounds like a fuzz, every overdrive sounds like an overdrive. Values are normalized [0,1]. For stepped/enum params, verify the dropdown order via `await window.rbSweepParam(slotId, paramName)` from DevTools — names + numeric ranges differ across plugins.",
-   "kHs Distortion subtype convention (user-curated, verified via rbSweepParam): the `Type` param has 6 discrete modes — Overdrive (0.0), Saturate (0.2), Foldback (0.4), Sine (0.6), Hard Clip (0.8), Quantize (1.0). Fuzz pedals → Type=0.2 (Saturate); overdrive pedals → Type=0.0 (Overdrive); distortion pedals → Type=0.8 (Hard Clip). All three pin Dynamics=1.0 so the pedal's response tracks the player's pick attack."
-  ]
- },
- "Pedal_AcousticEmulator": {
-  "acousticsimulator": {
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01
-   },
-   "MidShift": {
-    "param": "MidShift",
-    "scale": 0.0003669724770642202,
-    "offset": -0.10091743119266056,
-    "_hint": "RS MidShift is 275-3000 Hz. AcousticSimulator stores it normalized: (Hz - 275) / 2725."
-   },
-   "Body": {
-    "param": "Body",
-    "scale": 0.01
-   },
-   "Mid": {
-    "param": "Mid",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_Chorus": {
-  "chorus": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.1666666667,
-    "_hint": "Rocksmith base Chorus Rate is stored around 0..6; normalize that to the CE-2 style LFO range."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "khs chorus": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_Chorus20": {
-  "chorus20": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.1,
-    "_hint": "Rocksmith Chorus 2 Rate is stored as 0..10, so the bundled plugin receives Rate/10 and applies its BBD speed curve internally."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "khs chorus": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_DigitalChorus": {
-  "digitalchorus": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.1,
-    "_hint": "Rocksmith Digital Chorus Rate is stored as a small 0..10-ish value, so the bundled plugin receives Rate/10 and applies its digital LFO curve internally."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "LoFilter": {
-    "param": "LoFilter",
-    "scale": 0.01,
-    "_hint": "Higher RS LoFilter moves the digital chorus high-pass cutoff up, matching the schematic's low-filter cut control."
-   },
-   "HiFilter": {
-    "param": "HiFilter",
-    "scale": 0.01,
-    "_hint": "Higher RS HiFilter lowers the wet-path low-pass cutoff, matching the schematic's high-filter cut control."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "khs chorus": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_VintageChorus": {
-  "analogchorus": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.1,
-    "_hint": "Rocksmith Vintage/Analog Chorus Rate is stored around 1..2, so the bundled plugin receives Rate/10 and keeps the LFO in a slow analog range."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "khs chorus": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Bass_Pedal_BassChorus": {
-  "basschorus": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "RS Rate → LFO speed 0..1 (0.1..8 Hz)."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "RS Depth → LFO mod depth 0..1."
-   },
-   "LoFilter": {
-    "param": "LoFilter",
-    "scale": 0.01,
-    "_hint": "RS LoFilter → wet high-pass 0..1 (keeps lows dry)."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Mix → dry/wet 0..1."
-   }
-  },
-  "khs chorus": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_SendInTheClones": {
-  "sendintheclones": {
-   "Clones": {
-    "param": "Clones",
-    "scale": 0.01,
-    "offset": 0.1,
-    "_hint": "Rocksmith uses low Clones values like 1/11/35. Treat 1 as 'one audible clone' rather than 1%; the plugin's internal curve then turns larger values into more/spread-out voices."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_Flanger": {
-  "khs flanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   }
-  },
-  "mflanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Dry/Wet",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_80sFlanger": {
-  "eightiesflanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "khs flanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "mflanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Dry/Wet",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_ClassicFlanger": {
-  "classicflanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "khs flanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "mflanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Dry/Wet",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_ModernFlanger": {
-  "modernflanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Regen": {
-    "param": "Regen",
-    "scale": 0.01,
-    "_hint": "Rocksmith calls the feedback control Regen; the bundled MF-108M style flanger uses it as BBD feedback/regeneration."
-   },
-   "Feedback": {
-    "param": "Regen",
-    "scale": 0.01,
-    "_hint": "Alias for any extracted rows that use Feedback instead of Regen."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "khs flanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Regen": {
-    "param": "Feedback",
-    "scale": 0.01
-   }
-  },
-  "mflanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Regen": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Dry/Wet",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_VintageFlanger": {
-  "vintageflanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "khs flanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "mflanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Dry/Wet",
-    "scale": 0.01
-   }
-  }
- },
- "Bass_Pedal_BassFlanger": {
-  "bassflanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "RS Rate→LFO speed 0..1 (0.05..5 Hz)."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "RS Depth→sweep width 0..1."
-   },
-   "Filter": {
-    "param": "Filter",
-    "scale": 0.01,
-    "_hint": "RS Filter→Resonance/feedback 0..1 (the jet)."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Mix→dry/wet 0..1."
-   }
-  },
-  "khs flanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "mflanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Dry/Wet",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_Phaser": {
-  "phaser363": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "0": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "Alias for extracted rows that carried the single Phaser 363 knob as index 0."
-   }
-  },
-  "khs phaser": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "mphaser": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Dry/Wet",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_ShaverPhaser": {
-  "shaverphaser": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   }
-  },
-  "khs phaser": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "mphaser": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Dry/Wet",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_PlanePhase": {
-  "planephase": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "khs phaser": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "mphaser": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Dry/Wet",
-    "scale": 0.01
-   }
-  }
- },
- "Bass_Pedal_BassPhase": {
-  "bassphase": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "RS Rate 0-100 → LFO speed 0..1."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "RS Depth 0-100 → sweep depth + regeneration 0..1."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Mix 0-100 → dry/wet notch blend 0..1."
-   },
-   "Filter": {
-    "param": "Filter",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → sweep centre frequency 0..1."
-   }
-  }
- },
- "Pedal_Tremolo": {
-  "tremolo": {
-   "Speed": {
-    "param": "Speed",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "Rocksmith Tremolo Mix is the depth/intensity control for the bundled Colorsound-style tremolo."
-   }
-  },
-  "bertom_freetremolo": {
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "RS 'Mix' on a tremolo is effectively depth"
-   }
-  },
-  "mtremolo": {
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.09,
-    "offset": 1.0,
-    "_hint": "RS Speed 0-100 → 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
-   }
-  }
- },
- "Pedal_AmpTrem": {
-  "amptrem": {
-   "Speed": {
-    "param": "Speed",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "Rocksmith Amp Trem Depth maps directly to the optical gain-reduction depth."
-   }
-  },
-  "bertom_freetremolo": {
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   }
-  },
-  "mtremolo": {
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.09,
-    "offset": 1.0,
-    "_hint": "RS Speed 0-100 → 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
-   }
-  }
- },
- "Pedal_MultiTrem": {
-  "multitrem": {
-   "Speed": {
-    "param": "Speed",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "Rocksmith Multi Trem Mix is tremolo depth."
-   },
-   "Waveform": {
-    "param": "Waveform",
-    "scale": 0.5,
-    "_hint": "RS Waveform 0/1/2 maps to triangle/rounded/square."
-   }
-  },
-  "bertom_freetremolo": {
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   }
-  },
-  "mtremolo": {
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.09,
-    "offset": 1.0,
-    "_hint": "RS Speed 0-100 → 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
-   }
-  }
- },
- "Pedal_SpringReverb": {
-  "springreverb": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.01,
-    "_hint": "RS Time controls the spring tank decay."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "RS Depth controls dwell, transient drip, and resonant spring intensity."
-   }
-  },
-  "khs reverb": {
-   "Time": {
-    "param": "Decay",
-    "scale": 0.0065,
-    "_hint": "RS Time → Decay (0.5-30s log). Time 0≈0.5s, 78≈4s, 100≈7s."
-   },
-   "Depth": {
-    "param": "Size",
-    "scale": 0.01,
-    "_hint": "RS Depth → Size (50-200%). 0→50%, 100→200%."
-   },
-   "Tone": {
-    "param": "Dampen",
-    "scale": 0.01,
-    "invert": true,
-    "_hint": "RS Tone (brightness) → less Dampen. Inverted."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_DigitalVerb": {
-  "digitalverb": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.01,
-    "_hint": "Rocksmith Time controls the digital reverb decay."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "Rocksmith Depth controls digital room depth, pre-delay and tail density."
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "Rocksmith Tone controls brightness/damping."
-   }
-  },
-  "khs reverb": {
-   "Time": {
-    "param": "Decay",
-    "scale": 0.0065,
-    "_hint": "RS Time → Decay (0.5-30s log). Time 0≈0.5s, 78≈4s, 100≈7s."
-   },
-   "Depth": {
-    "param": "Size",
-    "scale": 0.01,
-    "_hint": "RS Depth → Size (50-200%). 0→50%, 100→200%."
-   },
-   "Tone": {
-    "param": "Dampen",
-    "scale": 0.01,
-    "invert": true,
-    "_hint": "RS Tone (brightness) → less Dampen. Inverted."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_PlateVerb": {
-  "plateverb": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.01,
-    "_hint": "Rocksmith Time controls plate decay."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "Rocksmith Depth controls plate size, diffusion, and wet modulation."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Voice": {
-    "param": "Voice",
-    "scale": 1.0,
-    "_hint": "Rocksmith Voice is a 0/1 normal/bright plate voicing switch."
-   }
-  },
-  "khs reverb": {
-   "Time": {
-    "param": "Decay",
-    "scale": 0.0065,
-    "_hint": "RS Time → Decay (0.5-30s log). Time 0≈0.5s, 78≈4s, 100≈7s."
-   },
-   "Depth": {
-    "param": "Size",
-    "scale": 0.01,
-    "_hint": "RS Depth → Size (50-200%). 0→50%, 100→200%."
-   },
-   "Tone": {
-    "param": "Dampen",
-    "scale": 0.01,
-    "invert": true,
-    "_hint": "RS Tone (brightness) → less Dampen. Inverted."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_TubeSpring": {
-  "tubespring": {
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "Rocksmith Tube Spring Depth controls dwell, tank decay, and spring drip intensity."
-   }
-  },
-  "khs reverb": {
-   "Time": {
-    "param": "Size",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_OmniMod": {
-  "omnimod": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "khs chorus": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_AnalogueDelay": {
-  "analogdelay": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.0005,
-    "_hint": "RS Time is milliseconds. AnalogDelay stores it as ms / 2000 and reconstructs the actual delay time internally."
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_ValveEcho": {
-  "valveecho": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.0005,
-    "_hint": "RS Time is milliseconds. ValveEcho stores it as ms / 2000 and reconstructs a Binson-style multi-head delay internally."
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_NPNDelay": {
-  "npndelay": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.0005,
-    "_hint": "RS Time is milliseconds. NpnDelay stores it as ms / 2000 and clamps internally to a DM-2 style 20-420 ms range so Rocksmith presets around 396 ms survive."
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_NoFiEcho": {
-  "nofiecho": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.0005,
-    "_hint": "RS Time is milliseconds. NoFiEcho stores it as ms / 2000 and reconstructs the actual echo time internally."
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_OilCanEcho": {
-  "oilcanecho": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.0005
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "khs delay": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.0005
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_CosmicEcho": {
-  "cosmicecho": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.0005
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  },
-  "khs delay": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.0005
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_ModDelay": {
-  "moddelay": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.0011363636363636363,
-    "offset": -0.022727272727272728,
-    "_hint": "RS Time is observed 20-900 ms. ModDelay stores it normalized: (ms - 20) / 880."
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.2857142857142857,
-    "_hint": "RS Rate is observed 0-3.5 Hz. ModDelay stores it normalized: Hz / 3.5."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   }
-  },
-  "khs delay": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.0005
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Bass_Pedal_BassFilterDelay": {
-  "bassfilterdelay": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.01,
-    "_hint": "RS Time 0-100 → 30..700 ms."
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01,
-    "_hint": "RS Feedback 0-100 → regeneration 0..1."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Mix 0-100 → wet/dry 0..1."
-   },
-   "Filter": {
-    "param": "Filter",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → repeat tone 0..1 (dark↔bright)."
-   }
-  }
- },
- "Pedal_GermaniumDrive": {
-  "germaniumdrive": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01
-   }
-  },
-  "khs distortion": {
-   "Gain": {
-    "param": "Drive",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Bias",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
-   },
-   "_static": {
-    "Dynamics": 1.0,
-    "Type": 0.0
-   },
-   "Filter": {
-    "param": "Dynamics",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
-   },
-   "Blend": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
-   }
-  }
- },
- "Pedal_CustomDrive": {
-  "customdrive": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01
-   },
-   "Voice": {
-    "param": "Voice",
-    "scale": 1.0,
-    "_hint": "Rocksmith Voice is a binary 0/1 switch. CustomDrive treats <0.5 as the smoother voice and >=0.5 as the tighter/brighter voice."
-   }
-  },
-  "khs distortion": {
-   "Gain": {
-    "param": "Drive",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Bias",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
-   },
-   "_static": {
-    "Dynamics": 1.0,
-    "Type": 0.0
-   },
-   "Filter": {
-    "param": "Dynamics",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
-   },
-   "Blend": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
-   }
-  }
- },
- "Pedal_LineDrive": {
-  "linedrive": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 -> LineDrive Tone 0-1. Lower values are darker and thicker; higher values open the OS-2 style post-clipping tone network."
-   }
-  }
- },
- "Pedal_MarshallGuvnorPlus": {
-  "marshallguvnorplus": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01
-   },
-   "Bass": {
-    "param": "Bass",
-    "scale": 0.01
-   },
-   "Mid": {
-    "param": "Mid",
-    "scale": 0.01
-   },
-   "Middle": {
-    "param": "Mid",
-    "scale": 0.01,
-    "_hint": "Alias for Rocksmith exports that spell the GV-2 middle control as Middle."
-   },
-   "Treble": {
-    "param": "Treble",
-    "scale": 0.01
-   },
-   "Deep": {
-    "param": "Deep",
-    "scale": 0.01
-   }
-  }
- },
- "Bass_Pedal_BassOverdrive": {
-  "bassoverdrive": {
-   "Blend": {
-    "param": "Blend",
-    "scale": 0.01,
-    "_hint": "RS Blend 0-100 → clean/dist mix 0..1."
-   },
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain 0-100 → B3K Drive 0..1."
-   },
-   "Filter": {
-    "param": "Filter",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → B3K Grunt 0..1 (low end into the clipper)."
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → B3K Attack 0..1 (treble of the distortion)."
-   }
-  },
-  "khs distortion": {
-   "Gain": {
-    "param": "Drive",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Bias",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
-   },
-   "_static": {
-    "Dynamics": 1.0,
-    "Type": 0.0
-   },
-   "Filter": {
-    "param": "Dynamics",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
-   },
-   "Blend": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
-   }
-  }
- },
- "Pedal_RangeBooster": {
-  "rangebooster": {
-   "Boost": {
-    "param": "Boost",
-    "scale": 0.01
-   }
-  },
-  "khs distortion": {
-   "Gain": {
-    "param": "Drive",
-    "scale": 0.005,
-    "_hint": "Halve scale — booster shouldn't fully saturate"
-   },
-   "Tone": {
-    "param": "Bias",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
-   },
-   "_static": {
-    "Dynamics": 1.0,
-    "Type": 0.0
-   },
-   "Filter": {
-    "param": "Dynamics",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
-   },
-   "Blend": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
-   }
-  }
- },
- "Pedal_SuperDrive": {
-  "superdrive": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 -> SuperDrive Tone 0-1. Lower values keep the SD-1 darker and mid-forward; higher values open the top end after clipping."
-   }
-  }
- },
- "Pedal_Distortion": {
-  "standarddistortion": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 -> StandardDistortion Tone 0-1. Lower values are darker/thicker; higher values open the DS-1 style cutting top end."
-   }
-  }
- },
- "Pedal_VintageDistortion": {
-  "vintagedistortion": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 -> VintageDistortion Tone 0-1. Lower values are darker and thicker; higher values open the DOD 250 style top end."
-   }
-  }
- },
- "Pedal_MetalDistortion": {
-  "alloydistortion": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 -> AlloyDistortion Tone 0-1. Lower values emphasize the HM-2 low color; higher values add chainsaw high color."
-   }
-  }
- },
- "Rack_StereoPhaser": {
-  "stereophaser": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.16949,
-    "offset": -0.01695
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Rack_StudioWahFilter": {
-  "studiowahfilter": {
-   "Sens": {
-    "param": "Sens",
-    "scale": 0.01
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.01
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.01
-   },
-   "Pedal": {
-    "param": "Pedal",
-    "scale": 0.01
-   },
-   "Auto": {
-    "param": "Auto",
-    "scale": 1.0
-   }
-  }
- },
- "Rack_SynthFilter": {
-  "synthfilter": {
-   "Sens": {
-    "param": "Sens",
-    "scale": 0.01
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.01
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.01
-   },
-   "FilterType": {
-    "param": "Type",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Rack_RotaVibe": {
-  "rotavibe": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Balance": {
-    "param": "Balance",
-    "scale": 0.01
-   }
-  }
- },
- "Rack_StereoTubeTrem": {
-  "stereotubetrem": {
-   "Speed": {
-    "param": "Speed",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Waveform": {
-    "param": "Waveform",
-    "scale": 0.01
-   }
-  }
- },
- "Rack_StudioPitch": {
-  "studiopitch": {
-   "Pitch": {
-    "param": "Pitch",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Pan": {
-    "param": "Pan",
-    "scale": 0.01
-   }
-  }
- },
- "Bass_Pedal_BassEnbig": {
-  "bassenbig": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "RS Rate 0-100 → LFO wobble speed 0..1."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "RS Depth 0-100 → sweep range 0..1."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Mix 0-100 → wet/dry 0..1."
-   },
-   "Filter": {
-    "param": "Filter",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → base centre frequency 0..1."
-   }
-  }
- },
- "Bass_Pedal_BassFilterEcho": {
-  "bassfilterecho": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.01,
-    "_hint": "RS Time 0-100 → 40..700 ms."
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01,
-    "_hint": "RS Feedback 0-100 → regeneration 0..1."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Mix 0-100 → wet/dry 0..1."
-   },
-   "Filter": {
-    "param": "Filter",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → repeat tone 0..1 (dark↔bright)."
-   }
-  }
- },
- "Bass_Pedal_BassWah": {
-  "khs filter": {
-   "Pedal": {
-    "param": "Cutoff",
-    "scale": 0.005
-   },
-   "Sens": {
-    "param": "Resonance",
-    "scale": 0.01
-   }
-  }
- },
- "Bass_Pedal_BassSubOctave": {
-  "khs pitch shifter": {
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "Set Pitch manually to -12 in the VST editor for sub-octave"
-   }
-  }
- },
- "Bass_Pedal_EdenWTDI": {
-  "edenwtdi": {
-   "Bass": {
-    "param": "Bass",
-    "scale": 0.033333,
-    "offset": 0.5,
-    "_hint": "RS Bass ±15 dB → low-shelf gain 0..1 (0.5 = flat)."
-   },
-   "Mid": {
-    "param": "Mid",
-    "scale": 0.033333,
-    "offset": 0.5,
-    "_hint": "RS Mid ±15 dB → mid-peak gain 0..1 (0.5 = flat)."
-   },
-   "Treble": {
-    "param": "Treble",
-    "scale": 0.033333,
-    "offset": 0.5,
-    "_hint": "RS Treble ±15 dB → high-shelf gain 0..1 (0.5 = flat)."
-   },
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.033,
-    "_hint": "RS Gain (e.g. 18) → preamp drive 0..1 (clamped)."
-   },
-   "Enhance": {
-    "param": "Enhance",
-    "scale": 0.1,
-    "_hint": "RS Enhance 0-10 → contour amount 0..1."
-   },
-   "Compression": {
-    "param": "Comp",
-    "scale": 0.1,
-    "_hint": "RS Compression 0-10 → compressor amount 0..1."
-   },
-   "LoShift": {
-    "param": "Bass Boost",
-    "scale": 1.0,
-    "_hint": "RS LoShift switch 0/1 → Bass Boost toggle (drops low corner + adds bottom)."
-   },
-   "MidShift": {
-    "param": "Mid Shift",
-    "scale": 1.0,
-    "_hint": "RS MidShift switch 0/1 → Mid Shift toggle (600 Hz → 1.2 kHz)."
-   }
-  }
- },
- "Bass_Pedal_BassDistortion": {
-  "bassdistortion": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain 0-100 → RAT Distortion (drive) 0..1."
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → pre-clip brightness 0..1 (grit character)."
-   },
-   "Filter": {
-    "param": "Filter",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → RAT Filter low-pass 0..1 (dark↔bright)."
-   }
-  },
-  "khs distortion": {
-   "Gain": {
-    "param": "Drive",
-    "scale": 0.01
-   },
-   "_static": {
-    "Dynamics": 1.0,
-    "Type": 0.8
-   },
-   "Tone": {
-    "param": "Bias",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
-   },
-   "Filter": {
-    "param": "Dynamics",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
-   },
-   "Blend": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
-   }
-  }
- },
- "Pedal_FuzzWasHe": {
-  "bz-1": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01
-   }
-  },
-  "khs distortion": {
-   "Gain": {
-    "param": "Drive",
-    "scale": 0.01
-   },
-   "_static": {
-    "Dynamics": 1.0,
-    "Type": 0.2
-   },
-   "Tone": {
-    "param": "Bias",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
-   },
-   "Filter": {
-    "param": "Dynamics",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
-   },
-   "Blend": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
-   }
-  }
- },
- "Pedal_CaptFuzzle": {
-  "buzz-tone": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01
-   }
-  },
-  "khs distortion": {
-   "Gain": {
-    "param": "Drive",
-    "scale": 0.01
-   },
-   "_static": {
-    "Dynamics": 1.0,
-    "Type": 0.2
-   },
-   "Tone": {
-    "param": "Bias",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
-   },
-   "Filter": {
-    "param": "Dynamics",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
-   },
-   "Blend": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
-   }
-  }
- },
- "Pedal_BuzzOne": {
-  "super-buzz": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "Continuous octave-fuzz tone-switch balance: lower is thicker/nasal, higher is brighter and more scooped."
-   }
-  },
-  "khs distortion": {
-   "Gain": {
-    "param": "Drive",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Bias",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
-   },
-   "Filter": {
-    "param": "Dynamics",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
-   },
-   "Blend": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
-   }
-  }
- },
- "Pedal_BuzzToo": {
-  "big buzz": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "Continuous two-branch fuzz tone stack balance: lower is darker/thicker, higher is brighter and more scooped."
-   }
-  },
-  "khs distortion": {
-   "Gain": {
-    "param": "Drive",
-    "scale": 0.01
-   },
-   "_static": {
-    "Dynamics": 1.0,
-    "Type": 0.2
-   },
-   "Tone": {
-    "param": "Bias",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
-   },
-   "Filter": {
-    "param": "Dynamics",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
-   },
-   "Blend": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
-   }
-  }
- },
- "Bass_Pedal_BassFuzz": {
-  "bassfuzz": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain (sustain) 0-100 → Big Muff drive 0..1."
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → Big Muff tone stack 0..1 (LP↔HP, mid scoop at 0.5)."
-   },
-   "Filter": {
-    "param": "Filter",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → clean low-end blend 0..1 (the bass-specific dry/bass mix)."
-   }
-  },
-  "khs distortion": {
-   "Gain": {
-    "param": "Drive",
-    "scale": 0.01
-   },
-   "_static": {
-    "Dynamics": 1.0,
-    "Type": 0.2
-   },
-   "Tone": {
-    "param": "Bias",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
-   },
-   "Filter": {
-    "param": "Dynamics",
-    "scale": 0.01,
-    "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
-   },
-   "Blend": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
-   }
-  }
- },
- "Pedal_Compression": {
-  "dynamicscompression": {
-   "Comp": {
-    "param": "Comp",
-    "scale": 0.01
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.01
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.0016666666666666668,
-    "_hint": "RS Release reaches ~540 ms in the DB. Normalize by 600 so DynamicsCompression can preserve long releases instead of clamping above 100."
-   }
-  },
-  "khs compressor": {
-   "Comp": {
-    "param": "Threshold",
-    "scale": -0.46,
-    "offset": 6.0,
-    "_hint": "RS Compress amount 0-100 → Threshold full range: 0→+6dB (no comp), 100→-40dB (max)."
-   }
-  },
-  "mcompressor": {
-   "Comp": {
-    "param": "Threshold",
-    "scale": -1.0,
-    "offset": 0,
-    "_hint": "RS 'Comp' 0-100 → MCompressor Threshold roughly -100 to 0 dB. Higher RS Comp = lower threshold = more compression"
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.01
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_Compressor": {
-  "khs compressor": {
-   "Comp": {
-    "param": "Threshold",
-    "scale": -1.0,
-    "offset": 0
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.01
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.01
-   }
-  },
-  "mcompressor": {
-   "Comp": {
-    "param": "Threshold",
-    "scale": -1.0,
-    "offset": 0,
-    "_hint": "RS 'Comp' 0-100 → MCompressor Threshold roughly -100 to 0 dB. Higher RS Comp = lower threshold = more compression"
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.01
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.01
-   }
-  }
- },
- "Bass_Pedal_MBComp": {
-  "bassmulticomp": {
-   "Compress": {
-    "param": "Compress",
-    "scale": 0.01
-   },
-   "Filter": {
-    "param": "Filter",
-    "scale": 0.0011235955056179776,
-    "offset": -0.12359550561797752,
-    "_hint": "RS Filter is the multiband crossover in Hz, observed 110-1000. BassMultiComp stores it normalized: (Hz - 110) / 890."
-   },
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "Higher RS Rate recovers faster."
-   }
-  },
-  "khs compressor": {
-   "Compress": {
-    "param": "Threshold",
-    "scale": -0.46,
-    "offset": 6.0,
-    "_hint": "RS Compress amount 0-100 → Threshold full range: 0→+6dB (no comp), 100→-40dB (max)."
-   }
-  },
-  "mcompressor": {
-   "Compress": {
-    "param": "Threshold",
-    "scale": -1.0,
-    "offset": 0,
-    "_hint": "Single-band fallback — RS MBComp's multiband info is lost (Melda free has no MDynamicsMB)"
-   }
-  }
- },
- "Pedal_USWah": {
-  "uswah": {
-   "Auto": {
-    "param": "Auto",
-    "scale": 1.0
-   },
-   "Pedal": {
-    "param": "Pedal",
-    "scale": 0.01
-   },
-   "Sens": {
-    "param": "Sens",
-    "scale": 0.01
-   },
-   "Speed": {
-    "param": "Speed",
-    "scale": 0.01
-   }
-  },
-  "khs filter": {
-   "Pedal": {
-    "param": "Cutoff",
-    "scale": 0.01
-   },
-   "Sens": {
-    "param": "Resonance",
-    "scale": 0.01,
-    "_hint": "Wah sensitivity → resonance peak"
-   }
-  }
- },
- "Pedal_UKWah": {
-  "ukwah": {
-   "Auto": {
-    "param": "Auto",
-    "scale": 1.0
-   },
-   "Pedal": {
-    "param": "Pedal",
-    "scale": 0.01
-   },
-   "Sens": {
-    "param": "Sens",
-    "scale": 0.01
-   },
-   "Speed": {
-    "param": "Speed",
-    "scale": 0.01
-   }
-  },
-  "khs filter": {
-   "Pedal": {
-    "param": "Cutoff",
-    "scale": 0.01
-   },
-   "Sens": {
-    "param": "Resonance",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_ModernWah": {
-  "modernwah": {
-   "Auto": {
-    "param": "Auto",
-    "scale": 1.0
-   },
-   "Pedal": {
-    "param": "Pedal",
-    "scale": 0.01
-   },
-   "Sens": {
-    "param": "Sens",
-    "scale": 0.01
-   },
-   "Speed": {
-    "param": "Speed",
-    "scale": 0.01
-   }
-  },
-  "khs filter": {
-   "Pedal": {
-    "param": "Cutoff",
-    "scale": 0.01
-   },
-   "Sens": {
-    "param": "Resonance",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_LoFiFilter": {
-  "lofifilter": {
-   "FilterType": {
-    "param": "FilterType",
-    "scale": 0.01,
-    "_hint": "RS FilterType moves the Lofinator-style Lo/Hi filter window."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Mix controls drive, resonance, lo-fi texture, and wet intensity."
-   }
-  },
-  "khs filter": {
-   "FilterType": {
-    "param": "Cutoff",
-    "scale": 0.01,
-    "_hint": "RS FilterType sweeps the low-pass cutoff (low=darker/lo-fi)"
-   },
-   "Mix": {
-    "param": "Q",
-    "scale": 0.01,
-    "_hint": "RS Mix → resonance/Q for lo-fi colour (kHs Filter has no dry/wet)"
-   }
-  }
- },
- "Pedal_BobFilter": {
-  "bobfilter": {
-   "Sens": {
-    "param": "Sens",
-    "scale": 0.01
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.004016064257028112,
-    "offset": -0.004016064257028112,
-    "_hint": "RS Attack is observed 1-250 ms. BobFilter stores it normalized: (ms - 1) / 249."
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.00101010101010101,
-    "offset": -0.0101010101010101,
-    "_hint": "RS Release is observed 10-1000 ms. BobFilter stores it normalized: (ms - 10) / 990."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Filter": {
-    "param": "Filter",
-    "scale": 1.0,
-    "_hint": "Rocksmith Filter is a binary 0/1 voicing switch."
-   }
-  },
-  "khs filter": {
-   "Cutoff": {
-    "param": "Cutoff",
-    "scale": 0.01
-   },
-   "Resonance": {
-    "param": "Resonance",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_AutoFilter": {
-  "autofilter": {
-   "FilterType": {
-    "param": "FilterType",
-    "scale": 0.5,
-    "_hint": "0/1/2 maps to Mu-Tron style low-pass / band-pass / high-pass."
-   },
-   "Res": {
-    "param": "Res",
-    "scale": 0.01,
-    "_hint": "Peak/resonance amount."
-   },
-   "Sens": {
-    "param": "Sens",
-    "scale": 0.01,
-    "_hint": "Input detector sensitivity and sweep range. The plugin keeps an internal floor so low RS values still sweep."
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.001,
-    "_hint": "RS Attack is stored as a large raw time value; /1000 keeps it in normalized envelope range."
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.001,
-    "_hint": "RS Release is stored as a large raw time value; /1000 keeps it in normalized envelope range."
-   },
-   "_static": {
-    "FilterType": 0.5,
-    "Res": 0.55,
-    "Sens": 0.45,
-    "Attack": 0.06,
-    "Release": 0.14
-   }
-  },
-  "autosweep": {
-   "FilterType": {
-    "param": "FilterType",
-    "scale": 0.5,
-    "_hint": "0/1/2 → LP/BP/HP"
-   },
-   "Res": {
-    "param": "Res",
-    "scale": 0.01
-   },
-   "Sens": {
-    "param": "Sens",
-    "scale": 0.006,
-    "offset": 0.3,
-    "_hint": "floored so low Sens isn't inaudible"
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.001,
-    "_hint": "RS Attack /1000 (RS 128 → 0.128 ≈ 2ms)"
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.001
-   },
-   "_static": {
-    "Range": 0.9,
-    "Mix": 0.5,
-    "Boost": 0.2
-   }
-  },
-  "khs filter": {
-   "FilterType": {
-    "param": "Cutoff",
-    "scale": 0.01
-   },
-   "Res": {
-    "param": "Q",
-    "scale": 0.01
-   }
-  }
- },
- "Bass_Pedal_BassAutoFilter": {
-  "autosweep": {
-   "FilterType": {
-    "param": "FilterType",
-    "scale": 0.5,
-    "_hint": "0/1/2 maps to AutoSweep low-pass / band-pass / high-pass convention."
-   },
-   "Res": {
-    "param": "Res",
-    "scale": 0.01
-   },
-   "Sens": {
-    "param": "Sens",
-    "scale": 0.006,
-    "offset": 0.3,
-    "_hint": "Same AutoSweep sensitivity floor as guitar Auto Tone so low bass values still sweep."
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.001,
-    "_hint": "RS Attack /1000 (RS 128 → 0.128 ≈ 2ms)"
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.001
-   },
-   "_static": {
-    "Range": 0.0,
-    "Mix": 0.55,
-    "Boost": 0.15
-   },
-   "Speed": {
-    "param": "Release",
-    "scale": 0.001,
-    "_hint": "RS Bass-AutoFilter Speed (if present) → envelope release."
-   }
-  },
-  "khs filter": {
-   "Speed": {
-    "param": "Cutoff",
-    "scale": 0.01
-   },
-   "Sens": {
-    "param": "Resonance",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_EQ5": {
-  "eq5": {
-   "63": {
-    "param": "63",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "250": {
-    "param": "250",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "750": {
-    "param": "750",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "2200": {
-    "param": "2200",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "5700": {
-    "param": "5700",
-    "scale": 0.033333,
-    "offset": 0.5
-   }
-  },
-  "khs 3-band eq": {
-   "63": {
-    "param": "Low Gain",
-    "scale": 1.0,
-    "_hint": "RS EQ5 63Hz → KHS Low band. Value is dB direct. Verify paramId in inline editor — may be 'Low Gain', 'Low', or similar. Lossy: bands 250, 2200 are dropped."
-   },
-   "750": {
-    "param": "Mid Gain",
-    "scale": 1.0,
-    "_hint": "RS EQ5 750Hz → KHS Mid band."
-   },
-   "5700": {
-    "param": "High Gain",
-    "scale": 1.0,
-    "_hint": "RS EQ5 5700Hz → KHS High band."
-   }
-  },
-  "mequalizer": {
-   "_graphic_eq": [
-    {
-     "freq": 63,
-     "rs": [
-      "63"
-     ]
+  "Pedal_Chorus": {
+    "chorus": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.1666666667,
+        "_hint": "Rocksmith base Chorus Rate is stored around 0..6; normalize that to the CE-2 style LFO range."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
     },
-    {
-     "freq": 250,
-     "rs": [
-      "250"
-     ]
-    },
-    {
-     "freq": 750,
-     "rs": [
-      "750"
-     ]
-    },
-    {
-     "freq": 2200,
-     "rs": [
-      "2200"
-     ]
-    },
-    {
-     "freq": 5700,
-     "rs": [
-      "5700"
-     ]
+    "khs chorus": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
     }
-   ]
-  }
- },
- "Pedal_EQ8": {
-  "eq8": {
-   "50": {
-    "param": "50",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "100": {
-    "param": "100",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "200": {
-    "param": "200",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "400": {
-    "param": "400",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "800": {
-    "param": "800",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "1600": {
-    "param": "1600",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "3200": {
-    "param": "3200",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "6400": {
-    "param": "6400",
-    "scale": 0.033333,
-    "offset": 0.5
-   }
   },
-  "khs 3-band eq": {
-   "100": {
-    "param": "Low Gain",
-    "scale": 1.0,
-    "_hint": "RS EQ8 100Hz → KHS Low band. dB direct. Lossy: bands 50, 200, 400, 1600, 6400 are dropped — install Voxengo Marvel GEQ for full 8-band fidelity."
-   },
-   "800": {
-    "param": "Mid Gain",
-    "scale": 1.0,
-    "_hint": "RS EQ8 800Hz → KHS Mid band."
-   },
-   "3200": {
-    "param": "High Gain",
-    "scale": 1.0,
-    "_hint": "RS EQ8 3200Hz → KHS High band."
-   }
-  },
-  "mequalizer": {
-   "_graphic_eq": [
-    {
-     "freq": 71,
-     "rs": [
-      "50",
-      "100"
-     ]
+  "Pedal_Chorus20": {
+    "chorus20": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.1,
+        "_hint": "Rocksmith Chorus 2 Rate is stored as 0..10, so the bundled plugin receives Rate/10 and applies its BBD speed curve internally."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
     },
-    {
-     "freq": 283,
-     "rs": [
-      "200",
-      "400"
-     ]
-    },
-    {
-     "freq": 800,
-     "rs": [
-      "800"
-     ]
-    },
-    {
-     "freq": 1600,
-     "rs": [
-      "1600"
-     ]
-    },
-    {
-     "freq": 3200,
-     "rs": [
-      "3200"
-     ]
-    },
-    {
-     "freq": 6400,
-     "rs": [
-      "6400"
-     ]
+    "khs chorus": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
     }
-   ]
-  }
- },
- "Bass_Pedal_BassEQ8": {
-  "basseq8": {
-   "30": {
-    "param": "30",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "75": {
-    "param": "75",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "185": {
-    "param": "185",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "460": {
-    "param": "460",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "1100": {
-    "param": "1100",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "2700": {
-    "param": "2700",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "6800": {
-    "param": "6800",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "16000": {
-    "param": "16000",
-    "scale": 0.033333,
-    "offset": 0.5
-   }
   },
-  "khs 3-band eq": {
-   "75": {
-    "param": "Low Gain",
-    "scale": 1.0,
-    "_hint": "Bass EQ8 75Hz → KHS Low band. dB direct. Lossy: bands 30, 185, 1100, 6800, 16000 dropped."
-   },
-   "460": {
-    "param": "Mid Gain",
-    "scale": 1.0,
-    "_hint": "Bass EQ8 460Hz → KHS Mid band."
-   },
-   "2700": {
-    "param": "High Gain",
-    "scale": 1.0,
-    "_hint": "Bass EQ8 2700Hz → KHS High band."
-   }
-  },
-  "mequalizer": {
-   "_graphic_eq": [
-    {
-     "freq": 30,
-     "rs": [
-      "30"
-     ]
+  "Pedal_DigitalChorus": {
+    "digitalchorus": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.1,
+        "_hint": "Rocksmith Digital Chorus Rate is stored as a small 0..10-ish value, so the bundled plugin receives Rate/10 and applies its digital LFO curve internally."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "LoFilter": {
+        "param": "LoFilter",
+        "scale": 0.01,
+        "_hint": "Higher RS LoFilter moves the digital chorus high-pass cutoff up, matching the schematic's low-filter cut control."
+      },
+      "HiFilter": {
+        "param": "HiFilter",
+        "scale": 0.01,
+        "_hint": "Higher RS HiFilter lowers the wet-path low-pass cutoff, matching the schematic's high-filter cut control."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
     },
-    {
-     "freq": 75,
-     "rs": [
-      "75"
-     ]
-    },
-    {
-     "freq": 185,
-     "rs": [
-      "185"
-     ]
-    },
-    {
-     "freq": 460,
-     "rs": [
-      "460"
-     ]
-    },
-    {
-     "freq": 1723,
-     "rs": [
-      "1100",
-      "2700"
-     ]
-    },
-    {
-     "freq": 10431,
-     "rs": [
-      "6800",
-      "16000"
-     ]
+    "khs chorus": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
     }
-   ]
-  }
- },
- "Rack_StudioEQ": {
-  "studioeq": {
-   "Bass": {
-    "param": "Bass",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "BassFreq": {
-    "param": "BassFreq",
-    "scale": 1.0,
-    "_hint": "Hz, log[30,300]"
-   },
-   "LoMid": {
-    "param": "LoMid",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "LoMidFreq": {
-    "param": "LoMidFreq",
-    "scale": 1.0,
-    "_hint": "Hz, log[120,2000]"
-   },
-   "LoMidQ": {
-    "param": "LoMidQ",
-    "scale": 1.0,
-    "_hint": "Q, log[0.3,4]"
-   },
-   "HiMid": {
-    "param": "HiMid",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "HiMidFreq": {
-    "param": "HiMidFreq",
-    "scale": 1000.0,
-    "_hint": "RS kHz→Hz, log[400,8000]"
-   },
-   "HiMidQ": {
-    "param": "HiMidQ",
-    "scale": 1.0
-   },
-   "Treble": {
-    "param": "Treble",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "TrebleFreq": {
-    "param": "TrebleFreq",
-    "scale": 1000.0,
-    "_hint": "RS kHz→Hz, log[1500,16000]"
-   }
   },
-  "khs 3-band eq": {
-   "Bass": {
-    "param": "Low Gain",
-    "scale": 1.0,
-    "_hint": "4-band parametric — value is dB direct. Q + Freq knobs (BassFreq, LoMidFreq, HiMidFreq, TrebleFreq, LoMidQ, HiMidQ) are ignored. Lossy 4→3 (HiMid combined out). For lossless, switch the gear to TDR Nova (free 4-band parametric)."
-   },
-   "LoMid": {
-    "param": "Mid Gain",
-    "scale": 1.0,
-    "_hint": "Mapped as the single mid; HiMid silently dropped."
-   },
-   "Treble": {
-    "param": "High Gain",
-    "scale": 1.0
-   }
+  "Pedal_VintageChorus": {
+    "analogchorus": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.1,
+        "_hint": "Rocksmith Vintage/Analog Chorus Rate is stored around 1..2, so the bundled plugin receives Rate/10 and keeps the LFO in a slow analog range."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs chorus": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   },
-  "mequalizer": {
-   "Bass": {
-    "param": "Gain 1 (EQ 1)",
-    "scale": 1.0,
-    "_hint": "Set Band 1 On = true. dB direct."
-   },
-   "BassFreq": {
-    "param": "Frequency 1 (EQ 1)",
-    "scale": 1.0,
-    "_hint": "RS BassFreq is Hz direct (e.g. 65-485)"
-   },
-   "LoMid": {
-    "param": "Gain 2 (EQ 2)",
-    "scale": 1.0
-   },
-   "LoMidFreq": {
-    "param": "Frequency 2 (EQ 2)",
-    "scale": 1.0,
-    "_hint": "RS LoMidFreq is Hz direct (120-2000)"
-   },
-   "LoMidQ": {
-    "param": "Q 2 (EQ 2)",
-    "scale": 1.0,
-    "_hint": "RS LoMidQ ~0-4 — verify Melda Q range matches"
-   },
-   "HiMid": {
-    "param": "Gain 3 (EQ 3)",
-    "scale": 1.0
-   },
-   "HiMidFreq": {
-    "param": "Frequency 3 (EQ 3)",
-    "scale": 1000.0,
-    "_hint": "RS HiMidFreq is in kHz (0.3-8) — multiply by 1000 to land in Hz"
-   },
-   "HiMidQ": {
-    "param": "Q 3 (EQ 3)",
-    "scale": 1.0,
-    "_hint": "RS HiMidQ ~0-1"
-   },
-   "Treble": {
-    "param": "Gain 4 (EQ 4)",
-    "scale": 1.0
-   },
-   "TrebleFreq": {
-    "param": "Frequency 4 (EQ 4)",
-    "scale": 1000.0,
-    "_hint": "RS TrebleFreq is in kHz (2-13) — multiply by 1000"
-   },
-   "_static": {
-    "Enable 1 (EQ 1)": 1.0,
-    "Enable 2 (EQ 2)": 1.0,
-    "Enable 3 (EQ 3)": 1.0,
-    "Enable 4 (EQ 4)": 1.0
-   }
-  }
- },
- "Pedal_NoiseGate": {
-  "noisegate": {
-   "Thresh": {
-    "param": "Thresh",
-    "scale": 0.02,
-    "offset": 2.0,
-    "_hint": "RS Thresh is stored in dB. Map roughly -100..-50 dB into the bundled gate's normalized threshold."
-   },
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "Higher RS Rate tightens the gate decay and increases attenuation range."
-   }
+  "Bass_Pedal_BassChorus": {
+    "basschorus": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "RS Rate → LFO speed 0..1 (0.1..8 Hz)."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "RS Depth → LFO mod depth 0..1."
+      },
+      "LoFilter": {
+        "param": "LoFilter",
+        "scale": 0.01,
+        "_hint": "RS LoFilter → wet high-pass 0..1 (keeps lows dry)."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Mix → dry/wet 0..1."
+      }
+    },
+    "khs chorus": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   },
-  "khs gate": {
-   "Thresh": {
-    "param": "Threshold",
-    "scale": 1.0,
-    "_hint": "RS Thresh in dB (-66 typical) maps direct to KHS Threshold"
-   },
-   "Rate": {
-    "param": "Range",
-    "scale": 0.01,
-    "_hint": "Higher RS Rate = more aggressive gating = larger range"
-   }
-  }
- },
- "Pedal_OctaveUp": {
-  "octaveup": {
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
+  "Pedal_SendInTheClones": {
+    "sendintheclones": {
+      "Clones": {
+        "param": "Clones",
+        "scale": 0.01,
+        "offset": 0.1,
+        "_hint": "Rocksmith uses low Clones values like 1/11/35. Treat 1 as 'one audible clone' rather than 1%; the plugin's internal curve then turns larger values into more/spread-out voices."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   },
-  "khs pitch shifter": {
-   "Tone": {
-    "param": "Pitch",
-    "scale": 0.12,
-    "_hint": "Scale 0.12 lands roughly at +12 semitones (one octave up) for full Tone=100"
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_Octavius": {
-  "octavius": {
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
+  "Pedal_Flanger": {
+    "khs flanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      }
+    },
+    "mflanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Dry/Wet",
+        "scale": 0.01
+      }
+    }
   },
-  "khs pitch shifter": {
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_MultiPitch": {
-  "multipitch": {
-   "Pitch1": {
-    "param": "Pitch1",
-    "scale": 0.020833333333333332,
-    "offset": 0.5,
-    "_hint": "RS semitone Pitch1 normalized from -24..+24; -12 maps to 0.25 for a low MF-102 carrier."
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
+  "Pedal_80sFlanger": {
+    "eightiesflanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs flanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "mflanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Dry/Wet",
+        "scale": 0.01
+      }
+    }
   },
-  "khs pitch shifter": {
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_BitCruncher": {
-  "bitcruncher": {
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.01,
-    "_hint": "Rocksmith Attack controls the envelope rise time for dynamic crushing."
-   },
-   "FilterType": {
-    "param": "FilterType",
-    "scale": 0.125,
-    "_hint": "Rocksmith stores FilterType as selector values 3/4/8; /8 preserves the mode positions."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.01,
-    "_hint": "Rocksmith Release controls the envelope fall time for dynamic crushing."
-   },
-   "Sens": {
-    "param": "Sens",
-    "scale": 0.01,
-    "_hint": "Rocksmith Sens controls how hard the input drives the bit depth and sample-rate reduction."
-   }
+  "Pedal_ClassicFlanger": {
+    "classicflanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs flanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "mflanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Dry/Wet",
+        "scale": 0.01
+      }
+    }
   },
-  "khs bitcrush": {
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_RingMod": {
-  "ringmod": {
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "RS Depth controls ring-mod wet amount and carrier injection."
-   },
-   "Waveform": {
-    "param": "Waveform",
-    "scale": 1.0,
-    "_hint": "RS Waveform values are selector-like. 0 is rounded sine/triangle, 1 is sharper square."
-   },
-   "Sensitivity": {
-    "param": "Sensitivity",
-    "scale": 0.01,
-    "_hint": "RS Sensitivity controls squelch/envelope sensitivity and carrier range."
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.01,
-    "_hint": "RS Attack controls envelope and carrier slew time."
-   }
+  "Pedal_ModernFlanger": {
+    "modernflanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Regen": {
+        "param": "Regen",
+        "scale": 0.01,
+        "_hint": "Rocksmith calls the feedback control Regen; the bundled MF-108M style flanger uses it as BBD feedback/regeneration."
+      },
+      "Feedback": {
+        "param": "Regen",
+        "scale": 0.01,
+        "_hint": "Alias for any extracted rows that use Feedback instead of Regen."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs flanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      },
+      "Regen": {
+        "param": "Feedback",
+        "scale": 0.01
+      }
+    },
+    "mflanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Regen": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Dry/Wet",
+        "scale": 0.01
+      }
+    }
   },
-  "khs ring mod": {
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
+  "Pedal_VintageFlanger": {
+    "vintageflanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs flanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "mflanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Dry/Wet",
+        "scale": 0.01
+      }
+    }
   },
-  "mringmodulator": {
-   "Freq": {
-    "param": "Frequency",
-    "scale": 0.01,
-    "_hint": "RS RingMod Freq → Melda Frequency. Both likely 0-1 normalized; verify range"
-   },
-   "Mix": {
-    "param": "Dry/Wet",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_Swole": {
-  "swole": {
-   "Smash": {
-    "param": "Smash",
-    "scale": 0.01,
-    "_hint": "Rocksmith Smash controls heavy compression ratio, makeup and saturation."
-   },
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "Rocksmith Rate controls compressor recovery speed; higher is faster."
-   }
+  "Bass_Pedal_BassFlanger": {
+    "bassflanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "RS Rate→LFO speed 0..1 (0.05..5 Hz)."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "RS Depth→sweep width 0..1."
+      },
+      "Filter": {
+        "param": "Filter",
+        "scale": 0.01,
+        "_hint": "RS Filter→Resonance/feedback 0..1 (the jet)."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Mix→dry/wet 0..1."
+      }
+    },
+    "khs flanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "mflanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Dry/Wet",
+        "scale": 0.01
+      }
+    }
   },
-  "khs filter": {
-   "Rate": {
-    "param": "Cutoff",
-    "scale": 0.01
-   },
-   "Smash": {
-    "param": "Q",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_Enbiggenator": {
-  "enbiggenator": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
+  "Pedal_Phaser": {
+    "phaser363": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "0": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "Alias for extracted rows that carried the single Phaser 363 knob as index 0."
+      }
+    },
+    "khs phaser": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "mphaser": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Dry/Wet",
+        "scale": 0.01
+      }
+    }
   },
-  "khs distortion": {
-   "Depth": {
-    "param": "Drive",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_Limiter": {
-  "limiter": {
-   "Limit": {
-    "param": "Limit",
-    "scale": 0.01,
-    "_hint": "Rocksmith sends 0-100-ish limiter amount. The plugin uses an internal threshold curve so low library values still limit audibly."
-   },
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "Recovery speed; higher Rocksmith Rate recovers faster."
-   }
-  }
- },
- "Pedal_TremOle": {
-  "tremole": {
-   "Sens": {
-    "param": "Sens",
-    "scale": 0.01,
-    "_hint": "Rocksmith Sens controls detector drive for the envelope tremolo."
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.01
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "Rocksmith Mix controls tremolo depth."
-   }
+  "Pedal_ShaverPhaser": {
+    "shaverphaser": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      }
+    },
+    "khs phaser": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "mphaser": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Dry/Wet",
+        "scale": 0.01
+      }
+    }
   },
-  "mtremolo": {
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.09,
-    "offset": 1.0,
-    "_hint": "RS Speed 0-100 → 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
-   }
-  }
- },
- "Pedal_AmpVibe": {
-  "ampvibe": {
-   "Speed": {
-    "param": "Speed",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Mix controls the chorus/vibe dry-phase blend and modulation depth."
-   }
+  "Pedal_PlanePhase": {
+    "planephase": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs phaser": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "mphaser": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Dry/Wet",
+        "scale": 0.01
+      }
+    }
   },
-  "mvibrato": {
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Dry/Wet",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_MultiVibe": {
-  "multivibe": {
-   "Speed": {
-    "param": "Speed",
-    "scale": 0.01
-   },
-   "Rate": {
-    "param": "Speed",
-    "scale": 0.01,
-    "_hint": "Alias for any extracted rows that use Rate instead of Speed."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "Rocksmith Multi Vib Mix controls wet/depth intensity."
-   },
-   "Waveform": {
-    "param": "Waveform",
-    "scale": 1.0,
-    "_hint": "Rocksmith Waveform is selector-like here; value 1 selects the stronger VB-2 LFO/rise character."
-   },
-   "Wave": {
-    "param": "Waveform",
-    "scale": 1.0,
-    "_hint": "Alias for any extracted rows that use Wave instead of Waveform."
-   }
+  "Bass_Pedal_BassPhase": {
+    "bassphase": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "RS Rate 0-100 → LFO speed 0..1."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "RS Depth 0-100 → sweep depth + regeneration 0..1."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Mix 0-100 → dry/wet notch blend 0..1."
+      },
+      "Filter": {
+        "param": "Filter",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → sweep centre frequency 0..1."
+      }
+    }
   },
-  "mvibrato": {
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Dry/Wet",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_MarshallSupervibe": {
-  "marshallsupervibe": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "Alias for any extracted rows that use Speed instead of Rate."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Wave": {
-    "param": "Wave",
-    "scale": 0.01,
-    "_hint": "Rocksmith Wave shapes the Supervibe LFO and sharper rotary/vibe character."
-   }
+  "Pedal_Tremolo": {
+    "tremolo": {
+      "Speed": {
+        "param": "Speed",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "Rocksmith Tremolo Mix is the depth/intensity control for the bundled Colorsound-style tremolo."
+      }
+    },
+    "bertom_freetremolo": {
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "RS 'Mix' on a tremolo is effectively depth"
+      }
+    },
+    "mtremolo": {
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.09,
+        "offset": 1.0,
+        "_hint": "RS Speed 0-100 → 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
+      }
+    }
   },
-  "mvibrato": {
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Dry/Wet",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_AutoVibe": {
-  "autovibe": {
-   "Sens": {
-    "param": "Sens",
-    "scale": 0.01,
-    "_hint": "Rocksmith Sens controls envelope sensitivity."
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.01
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "Rocksmith Mix controls wet vibrato amount."
-   }
+  "Pedal_AmpTrem": {
+    "amptrem": {
+      "Speed": {
+        "param": "Speed",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "Rocksmith Amp Trem Depth maps directly to the optical gain-reduction depth."
+      }
+    },
+    "bertom_freetremolo": {
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      }
+    },
+    "mtremolo": {
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.09,
+        "offset": 1.0,
+        "_hint": "RS Speed 0-100 → 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
+      }
+    }
   },
-  "mvibrato": {
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Dry/Wet",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_BassEmulator": {
-  "bassemulator": {
-   "Body": {
-    "param": "Body",
-    "scale": 0.01,
-    "_hint": "Rocksmith Body controls the octave-down body and low-end weight."
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "Rocksmith Tone controls the bass-emulator brightness."
-   }
-  }
- },
- "Pedal_BakedRotatoe": {
-  "bakedrotatoe": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "Target rotary speed. The plugin applies Leslie/LERA-style acceleration and braking internally."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "Doppler, tremolo and cabinet motion intensity."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Balance": {
-    "param": "Balance",
-    "scale": 0.01,
-    "_hint": "Drum/horn balance: lower favors the low drum, higher favors the horn."
-   }
+  "Pedal_MultiTrem": {
+    "multitrem": {
+      "Speed": {
+        "param": "Speed",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "Rocksmith Multi Trem Mix is tremolo depth."
+      },
+      "Waveform": {
+        "param": "Waveform",
+        "scale": 0.5,
+        "_hint": "RS Waveform 0/1/2 maps to triangle/rounded/square."
+      }
+    },
+    "bertom_freetremolo": {
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      }
+    },
+    "mtremolo": {
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.09,
+        "offset": 1.0,
+        "_hint": "RS Speed 0-100 → 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
+      }
+    }
   },
-  "khs chorus": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Dry/Wet",
-    "scale": 0.01
-   }
-  }
- },
- "Pedal_AmpEQ": {
-  "ampeq": {
-   "Bass": {
-    "param": "Bass",
-    "scale": 0.01,
-    "_hint": "RS Bass pot 0-100 → tone-stack bass pot 0..1 (l). 50 = noon."
-   },
-   "Mid": {
-    "param": "Mid",
-    "scale": 0.01,
-    "_hint": "RS Mid pot 0-100 → tone-stack mid pot 0..1 (m). 50 = noon."
-   },
-   "Treble": {
-    "param": "Treble",
-    "scale": 0.01,
-    "_hint": "RS Treble pot 0-100 → tone-stack treble pot 0..1 (t). 50 = noon."
-   },
-   "BassFreq": {
-    "param": "BassFreq",
-    "scale": 0.5,
-    "_hint": "RS BassFreq (nominal 1.0) → VST 0.5 = stock bass cap. Scales C2 ±1 octave."
-   },
-   "MidShift": {
-    "param": "MidShift",
-    "scale": 0.5,
-    "_hint": "RS MidShift (nominal 1.0) → VST 0.5 = stock mid cap. Scales C3 to move the scoop ±1 octave."
-   },
-   "TrebleFreq": {
-    "param": "TrebleFreq",
-    "scale": 0.5,
-    "_hint": "RS TrebleFreq (nominal 1.0) → VST 0.5 = stock treble cap. Scales C1 ±1 octave."
-   }
+  "Pedal_SpringReverb": {
+    "springreverb": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.01,
+        "_hint": "RS Time controls the spring tank decay."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "RS Depth controls dwell, transient drip, and resonant spring intensity."
+      }
+    },
+    "khs reverb": {
+      "Time": {
+        "param": "Decay",
+        "scale": 0.0065,
+        "_hint": "RS Time → Decay (0.5-30s log). Time 0≈0.5s, 78≈4s, 100≈7s."
+      },
+      "Depth": {
+        "param": "Size",
+        "scale": 0.01,
+        "_hint": "RS Depth → Size (50-200%). 0→50%, 100→200%."
+      },
+      "Tone": {
+        "param": "Dampen",
+        "scale": 0.01,
+        "invert": true,
+        "_hint": "RS Tone (brightness) → less Dampen. Inverted."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   },
-  "mequalizer": {
-   "Bass": {
-    "param": "Gain 1 (EQ 1)",
-    "scale": 1.0,
-    "_hint": "RS Bass knob → MEqualizer Band 1. Curator: set Band 1 Frequency ≈ 80 Hz, On = true. dB direct."
-   },
-   "Mid": {
-    "param": "Gain 2 (EQ 2)",
-    "scale": 1.0,
-    "_hint": "RS Mid → Band 2. Frequency ≈ 800 Hz."
-   },
-   "Treble": {
-    "param": "Gain 3 (EQ 3)",
-    "scale": 1.0,
-    "_hint": "RS Treble → Band 3. Frequency ≈ 6 kHz."
-   },
-   "_static": {
-    "Enable 1 (EQ 1)": 1.0,
-    "Enable 2 (EQ 2)": 1.0,
-    "Enable 3 (EQ 3)": 1.0
-   }
-  }
- },
- "Rack_StudioGraphicEQ": {
-  "studiographiceq": {
-   "Bass": {
-    "param": "Bass",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "BassFreq": {
-    "param": "BassFreq",
-    "scale": 1.0
-   },
-   "LoMid": {
-    "param": "LoMid",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "LoMidFreq": {
-    "param": "LoMidFreq",
-    "scale": 1.0
-   },
-   "Mid": {
-    "param": "Mid",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "MidFreq": {
-    "param": "MidFreq",
-    "scale": 1000.0,
-    "_hint": "RS kHz→Hz"
-   },
-   "HiMid": {
-    "param": "HiMid",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "HiMidFreq": {
-    "param": "HiMidFreq",
-    "scale": 1000.0,
-    "_hint": "RS kHz→Hz"
-   },
-   "Treble": {
-    "param": "Treble",
-    "scale": 0.033333,
-    "offset": 0.5
-   },
-   "TrebleFreq": {
-    "param": "TrebleFreq",
-    "scale": 1000.0,
-    "_hint": "RS kHz→Hz"
-   }
+  "Pedal_DigitalVerb": {
+    "digitalverb": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.01,
+        "_hint": "Rocksmith Time controls the digital reverb decay."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "Rocksmith Depth controls digital room depth, pre-delay and tail density."
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "Rocksmith Tone controls brightness/damping."
+      }
+    },
+    "khs reverb": {
+      "Time": {
+        "param": "Decay",
+        "scale": 0.0065,
+        "_hint": "RS Time → Decay (0.5-30s log). Time 0≈0.5s, 78≈4s, 100≈7s."
+      },
+      "Depth": {
+        "param": "Size",
+        "scale": 0.01,
+        "_hint": "RS Depth → Size (50-200%). 0→50%, 100→200%."
+      },
+      "Tone": {
+        "param": "Dampen",
+        "scale": 0.01,
+        "invert": true,
+        "_hint": "RS Tone (brightness) → less Dampen. Inverted."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   },
-  "mequalizer": {
-   "Bass": {
-    "param": "Gain 1 (EQ 1)",
-    "scale": 1.0
-   },
-   "BassFreq": {
-    "param": "Frequency 1 (EQ 1)",
-    "scale": 1.0
-   },
-   "LoMid": {
-    "param": "Gain 2 (EQ 2)",
-    "scale": 1.0
-   },
-   "LoMidFreq": {
-    "param": "Frequency 2 (EQ 2)",
-    "scale": 1.0
-   },
-   "Mid": {
-    "param": "Gain 3 (EQ 3)",
-    "scale": 1.0
-   },
-   "MidFreq": {
-    "param": "Frequency 3 (EQ 3)",
-    "scale": 1000.0,
-    "_hint": "RS MidFreq is kHz"
-   },
-   "HiMid": {
-    "param": "Gain 4 (EQ 4)",
-    "scale": 1.0
-   },
-   "HiMidFreq": {
-    "param": "Frequency 4 (EQ 4)",
-    "scale": 1000.0,
-    "_hint": "kHz"
-   },
-   "Treble": {
-    "param": "Gain 5 (EQ 5)",
-    "scale": 1.0
-   },
-   "TrebleFreq": {
-    "param": "Frequency 5 (EQ 5)",
-    "scale": 1000.0,
-    "_hint": "kHz"
-   },
-   "_static": {
-    "Enable 1 (EQ 1)": 1.0,
-    "Enable 2 (EQ 2)": 1.0,
-    "Enable 3 (EQ 3)": 1.0,
-    "Enable 4 (EQ 4)": 1.0,
-    "Enable 5 (EQ 5)": 1.0
-   }
-  }
- },
- "Rack_StudioCompressor": {
-  "studiocomp": {
-   "Threshold": {
-    "param": "Threshold",
-    "scale": 1.0,
-    "_hint": "RS Threshold dB (-27.5..-0.5) → normalized via studiocomp range [-40,0]."
-   },
-   "Ratio": {
-    "param": "Ratio",
-    "scale": 1.0,
-    "_hint": "RS Ratio 1..4 literal → normalized via range [1,12]."
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 1.0,
-    "_hint": "RS Attack 0..92 ms → normalized via range [0,150]."
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 1.0,
-    "_hint": "RS Release 50..260 ms → normalized via range [20,500]."
-   }
+  "Pedal_PlateVerb": {
+    "plateverb": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.01,
+        "_hint": "Rocksmith Time controls plate decay."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "Rocksmith Depth controls plate size, diffusion, and wet modulation."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      },
+      "Voice": {
+        "param": "Voice",
+        "scale": 1.0,
+        "_hint": "Rocksmith Voice is a 0/1 normal/bright plate voicing switch."
+      }
+    },
+    "khs reverb": {
+      "Time": {
+        "param": "Decay",
+        "scale": 0.0065,
+        "_hint": "RS Time → Decay (0.5-30s log). Time 0≈0.5s, 78≈4s, 100≈7s."
+      },
+      "Depth": {
+        "param": "Size",
+        "scale": 0.01,
+        "_hint": "RS Depth → Size (50-200%). 0→50%, 100→200%."
+      },
+      "Tone": {
+        "param": "Dampen",
+        "scale": 0.01,
+        "invert": true,
+        "_hint": "RS Tone (brightness) → less Dampen. Inverted."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   },
-  "mcompressor": {
-   "Threshold": {
-    "param": "Threshold",
-    "scale": 1.0,
-    "_hint": "RS Threshold is dB direct (-27.5..-0.5). Maps 1:1."
-   },
-   "Ratio": {
-    "param": "Ratio",
-    "scale": 1.0,
-    "_hint": "RS Ratio 1..4 = literal ratio. MCompressor Ratio is the same."
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 1.0,
-    "_hint": "RS Attack 0..92 ≈ ms direct (Melda Attack is ms). Verify range — may need 0.01 scale if Melda normalizes."
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 1.0,
-    "_hint": "RS Release 50..260 ms direct. MCompressor Release is ms."
-   }
+  "Pedal_TubeSpring": {
+    "tubespring": {
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "Rocksmith Tube Spring Depth controls dwell, tank decay, and spring drip intensity."
+      }
+    },
+    "khs reverb": {
+      "Time": {
+        "param": "Size",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   },
-  "khs compressor": {
-   "Threshold": {
-    "param": "Threshold",
-    "scale": 1.0
-   },
-   "Ratio": {
-    "param": "Ratio",
-    "scale": 1.0
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 1.0,
-    "_hint": "Literal ms; kHs Attack range is log [1,500] ms (see _VST_PARAM_RANGES)."
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 1.0
-   }
-  }
- },
- "Pedal_ShredZone": {
-  "shredzone": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01
-   },
-   "Bass": {
-    "param": "Bass",
-    "scale": 0.0714285714,
-    "offset": 0.5,
-    "_hint": "RS Bass uses roughly -7..+7. Map 0 to the plugin's neutral 0.5."
-   },
-   "Mid": {
-    "param": "Mid",
-    "scale": 0.0714285714,
-    "offset": 0.5,
-    "_hint": "RS Mid uses roughly -7..+7. Map 0 to the plugin's neutral 0.5."
-   },
-   "Treble": {
-    "param": "Treble",
-    "scale": 0.0714285714,
-    "offset": 0.5,
-    "_hint": "RS Treble uses roughly -7..+7. Map 0 to the plugin's neutral 0.5."
-   }
-  }
- },
- "Rack_StereoAnalogVibe": {
-  "stereoanalogvibe": {
-   "Speed": {
-    "param": "Speed",
-    "scale": 0.01
-   },
-   "Waveform": {
-    "param": "Waveform",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
+  "Pedal_OmniMod": {
+    "omnimod": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs chorus": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   },
-  "khs chorus": {
-   "Speed": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Rack_StudioChamber": {
-  "studiochamber": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.01,
-    "_hint": "RS Time 0-100 → decay 0..1."
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → damping (dark↔bright)."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "RS Depth 0-100 → wet tail modulation 0..1."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Mix 0-100 → wet/dry 0..1."
-   }
+  "Pedal_AnalogueDelay": {
+    "analogdelay": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.0005,
+        "_hint": "RS Time is milliseconds. AnalogDelay stores it as ms / 2000 and reconstructs the actual delay time internally."
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   },
-  "khs reverb": {
-   "Time": {
-    "param": "Decay",
-    "scale": 0.0065,
-    "_hint": "RS Time → Decay (0.5-30s log). Time 0≈0.5s, 78≈4s, 100≈7s."
-   },
-   "Depth": {
-    "param": "Size",
-    "scale": 0.01,
-    "_hint": "RS Depth → Size (50-200%). 0→50%, 100→200%."
-   },
-   "Tone": {
-    "param": "Dampen",
-    "scale": 0.01,
-    "invert": true,
-    "_hint": "RS Tone (brightness) → less Dampen. Inverted."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Rack_StudioChorus": {
-  "studiochorus": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.16949,
-    "offset": -0.01695,
-    "_hint": "RS Rate in Hz (0.2..2.5) → normalized (plugin 0.1..6 Hz)."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "RS Depth 0-100 → mod depth 0..1."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Mix 0-100 → wet/dry 0..1."
-   },
-   "LoFilter": {
-    "param": "Lo Filter",
-    "scale": 0.01,
-    "_hint": "RS LoFilter 0-100 → wet high-pass 0..1."
-   },
-   "HiFilter": {
-    "param": "Hi Filter",
-    "scale": 0.01,
-    "_hint": "RS HiFilter 0-100 → wet low-pass 0..1."
-   },
-   "Stereo": {
-    "param": "Stereo",
-    "scale": 0.01,
-    "_hint": "RS Stereo 0-100 → L/R spread 0..1."
-   },
-   "Delay": {
-    "param": "Delay",
-    "scale": 0.01,
-    "_hint": "RS Delay 0-100 → base delay 0..1."
-   }
+  "Pedal_ValveEcho": {
+    "valveecho": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.0005,
+        "_hint": "RS Time is milliseconds. ValveEcho stores it as ms / 2000 and reconstructs a Binson-style multi-head delay internally."
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   },
-  "khs chorus": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01,
-    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Delay": {
-    "param": "Delay",
-    "scale": 0.01,
-    "_hint": "Both kHs Chorus and RS use 'Delay' for the base offset"
-   },
-   "Stereo": {
-    "param": "Stereo",
-    "scale": 0.01
-   }
-  }
- },
- "Rack_StudioDelay": {
-  "studiodelay": {
-   "TimeL": {
-    "param": "Time L",
-    "scale": 0.0014286,
-    "_hint": "RS TimeL in ms (40..360) → 0..700 ms normalized."
-   },
-   "TimeR": {
-    "param": "Time R",
-    "scale": 0.0014286,
-    "_hint": "RS TimeR in ms → 0..700 ms normalized."
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Filter": {
-    "param": "Filter",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
+  "Pedal_NPNDelay": {
+    "npndelay": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.0005,
+        "_hint": "RS Time is milliseconds. NpnDelay stores it as ms / 2000 and clamps internally to a DM-2 style 20-420 ms range so Rocksmith presets around 396 ms survive."
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   },
-  "khs delay": {
-   "TimeL": {
-    "param": "Time",
-    "scale": 0.005,
-    "_hint": "RS TimeL+TimeR are in ms (0-1000); use TimeL alone, scaled 0-500ms→0-1"
-   },
-   "Filter": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "RS Filter on a delay is a feedback tone control"
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Rack_StudioFlanger": {
-  "studioflanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.16949,
-    "offset": -0.01695,
-    "_hint": "RS Rate in Hz (0.3..0.6) → normalized (plugin 0.1..6 Hz)."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Regen": {
-    "param": "Regen",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
+  "Pedal_NoFiEcho": {
+    "nofiecho": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.0005,
+        "_hint": "RS Time is milliseconds. NoFiEcho stores it as ms / 2000 and reconstructs the actual echo time internally."
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   },
-  "khs flanger": {
-   "Rate": {
-    "param": "Rate",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01
-   },
-   "Regen": {
-    "param": "Feedback",
-    "scale": 0.01,
-    "_hint": "RS Regen IS feedback in kHs vocabulary"
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Rack_StudioPlate": {
-  "studioplate": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.01,
-    "_hint": "RS Time 0-100 → decay 0..1."
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → damping (dark↔bright)."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "RS Depth 0-100 → wet tail modulation 0..1."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Mix 0-100 → wet/dry 0..1."
-   }
+  "Pedal_OilCanEcho": {
+    "oilcanecho": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.0005
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs delay": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.0005
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   },
-  "khs reverb": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.01
-   },
-   "Tone": {
-    "param": "Damping",
-    "scale": 0.01
-   },
-   "Depth": {
-    "param": "Predelay",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Rack_StudioVerb": {
-  "studioverb": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.01,
-    "_hint": "RS Time 0-100 → decay 0..1."
-   },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 → damping (dark↔bright)."
-   },
-   "Depth": {
-    "param": "Depth",
-    "scale": 0.01,
-    "_hint": "RS Depth 0-100 → wet tail modulation 0..1."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01,
-    "_hint": "RS Mix 0-100 → wet/dry 0..1."
-   }
+  "Pedal_CosmicEcho": {
+    "cosmicecho": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.0005
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs delay": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.0005
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   },
-  "khs reverb": {
-   "Time": {
-    "param": "Decay",
-    "scale": 0.0065,
-    "_hint": "RS Time → Decay (0.5-30s log). Time 0≈0.5s, 78≈4s, 100≈7s."
-   },
-   "Depth": {
-    "param": "Size",
-    "scale": 0.01,
-    "_hint": "RS Depth → Size (50-200%). 0→50%, 100→200%."
-   },
-   "Tone": {
-    "param": "Dampen",
-    "scale": 0.01,
-    "invert": true,
-    "_hint": "RS Tone (brightness) → less Dampen. Inverted."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
-  }
- },
- "Rack_TapeEcho": {
-  "tapeecho": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.0014286,
-    "_hint": "RS Time in ms (~110..120) → 0..700 ms normalized."
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Filter": {
-    "param": "Filter",
-    "scale": 0.01
-   },
-   "Stereo": {
-    "param": "Stereo",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
+  "Pedal_ModDelay": {
+    "moddelay": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.0011363636363636363,
+        "offset": -0.022727272727272728,
+        "_hint": "RS Time is observed 20-900 ms. ModDelay stores it normalized: (ms - 20) / 880."
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      },
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.2857142857142857,
+        "_hint": "RS Rate is observed 0-3.5 Hz. ModDelay stores it normalized: Hz / 3.5."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      }
+    },
+    "khs delay": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.0005
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   },
-  "khs delay": {
-   "Time": {
-    "param": "Time",
-    "scale": 0.005,
-    "_hint": "RS Time in ms"
-   },
-   "Feedback": {
-    "param": "Feedback",
-    "scale": 0.01
-   },
-   "Filter": {
-    "param": "Tone",
-    "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   }
+  "Bass_Pedal_BassFilterDelay": {
+    "bassfilterdelay": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.01,
+        "_hint": "RS Time 0-100 → 30..700 ms."
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01,
+        "_hint": "RS Feedback 0-100 → regeneration 0..1."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Mix 0-100 → wet/dry 0..1."
+      },
+      "Filter": {
+        "param": "Filter",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → repeat tone 0..1 (dark↔bright)."
+      }
+    }
+  },
+  "Pedal_GermaniumDrive": {
+    "germaniumdrive": {
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01
+      }
+    },
+    "khs distortion": {
+      "Gain": {
+        "param": "Drive",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Bias",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+      },
+      "_static": {
+        "Dynamics": 1.0,
+        "Type": 0.0
+      },
+      "Filter": {
+        "param": "Dynamics",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+      },
+      "Blend": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+      }
+    }
+  },
+  "Pedal_CustomDrive": {
+    "customdrive": {
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01
+      },
+      "Voice": {
+        "param": "Voice",
+        "scale": 1.0,
+        "_hint": "Rocksmith Voice is a binary 0/1 switch. CustomDrive treats <0.5 as the smoother voice and >=0.5 as the tighter/brighter voice."
+      }
+    },
+    "khs distortion": {
+      "Gain": {
+        "param": "Drive",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Bias",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+      },
+      "_static": {
+        "Dynamics": 1.0,
+        "Type": 0.0
+      },
+      "Filter": {
+        "param": "Dynamics",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+      },
+      "Blend": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+      }
+    }
+  },
+  "Pedal_LineDrive": {
+    "linedrive": {
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 -> LineDrive Tone 0-1. Lower values are darker and thicker; higher values open the OS-2 style post-clipping tone network."
+      }
+    }
+  },
+  "Pedal_MarshallGuvnorPlus": {
+    "marshallguvnorplus": {
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01
+      },
+      "Bass": {
+        "param": "Bass",
+        "scale": 0.01
+      },
+      "Mid": {
+        "param": "Mid",
+        "scale": 0.01
+      },
+      "Middle": {
+        "param": "Mid",
+        "scale": 0.01,
+        "_hint": "Alias for Rocksmith exports that spell the GV-2 middle control as Middle."
+      },
+      "Treble": {
+        "param": "Treble",
+        "scale": 0.01
+      },
+      "Deep": {
+        "param": "Deep",
+        "scale": 0.01
+      }
+    }
+  },
+  "Bass_Pedal_BassOverdrive": {
+    "bassoverdrive": {
+      "Blend": {
+        "param": "Blend",
+        "scale": 0.01,
+        "_hint": "RS Blend 0-100 → clean/dist mix 0..1."
+      },
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01,
+        "_hint": "RS Gain 0-100 → B3K Drive 0..1."
+      },
+      "Filter": {
+        "param": "Filter",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → B3K Grunt 0..1 (low end into the clipper)."
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → B3K Attack 0..1 (treble of the distortion)."
+      }
+    },
+    "khs distortion": {
+      "Gain": {
+        "param": "Drive",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Bias",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+      },
+      "_static": {
+        "Dynamics": 1.0,
+        "Type": 0.0
+      },
+      "Filter": {
+        "param": "Dynamics",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+      },
+      "Blend": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+      }
+    }
+  },
+  "Pedal_RangeBooster": {
+    "rangebooster": {
+      "Boost": {
+        "param": "Boost",
+        "scale": 0.01
+      }
+    },
+    "khs distortion": {
+      "Gain": {
+        "param": "Drive",
+        "scale": 0.005,
+        "_hint": "Halve scale — booster shouldn't fully saturate"
+      },
+      "Tone": {
+        "param": "Bias",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+      },
+      "_static": {
+        "Dynamics": 1.0,
+        "Type": 0.0
+      },
+      "Filter": {
+        "param": "Dynamics",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+      },
+      "Blend": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+      }
+    }
+  },
+  "Pedal_SuperDrive": {
+    "superdrive": {
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 -> SuperDrive Tone 0-1. Lower values keep the SD-1 darker and mid-forward; higher values open the top end after clipping."
+      }
+    }
+  },
+  "Pedal_Distortion": {
+    "standarddistortion": {
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 -> StandardDistortion Tone 0-1. Lower values are darker/thicker; higher values open the DS-1 style cutting top end."
+      }
+    }
+  },
+  "Pedal_VintageDistortion": {
+    "vintagedistortion": {
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 -> VintageDistortion Tone 0-1. Lower values are darker and thicker; higher values open the DOD 250 style top end."
+      }
+    }
+  },
+  "Pedal_MetalDistortion": {
+    "alloydistortion": {
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 -> AlloyDistortion Tone 0-1. Lower values emphasize the HM-2 low color; higher values add chainsaw high color."
+      }
+    }
+  },
+  "Rack_StereoPhaser": {
+    "stereophaser": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.16949,
+        "offset": -0.01695
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
+  },
+  "Rack_StudioWahFilter": {
+    "studiowahfilter": {
+      "Sens": {
+        "param": "Sens",
+        "scale": 0.01
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 0.01
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 0.01
+      },
+      "Pedal": {
+        "param": "Pedal",
+        "scale": 0.01
+      },
+      "Auto": {
+        "param": "Auto",
+        "scale": 1.0
+      }
+    }
+  },
+  "Rack_SynthFilter": {
+    "synthfilter": {
+      "Sens": {
+        "param": "Sens",
+        "scale": 0.01
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 0.01
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 0.01
+      },
+      "FilterType": {
+        "param": "Type",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
+  },
+  "Rack_RotaVibe": {
+    "rotavibe": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      },
+      "Balance": {
+        "param": "Balance",
+        "scale": 0.01
+      }
+    }
+  },
+  "Rack_StereoTubeTrem": {
+    "stereotubetrem": {
+      "Speed": {
+        "param": "Speed",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      },
+      "Waveform": {
+        "param": "Waveform",
+        "scale": 0.01
+      }
+    }
+  },
+  "Rack_StudioPitch": {
+    "studiopitch": {
+      "Pitch": {
+        "param": "Pitch",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      },
+      "Pan": {
+        "param": "Pan",
+        "scale": 0.01
+      }
+    }
+  },
+  "Bass_Pedal_BassEnbig": {
+    "bassenbig": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "RS Rate 0-100 → LFO wobble speed 0..1."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "RS Depth 0-100 → sweep range 0..1."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Mix 0-100 → wet/dry 0..1."
+      },
+      "Filter": {
+        "param": "Filter",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → base centre frequency 0..1."
+      }
+    }
+  },
+  "Bass_Pedal_BassFilterEcho": {
+    "bassfilterecho": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.01,
+        "_hint": "RS Time 0-100 → 40..700 ms."
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01,
+        "_hint": "RS Feedback 0-100 → regeneration 0..1."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Mix 0-100 → wet/dry 0..1."
+      },
+      "Filter": {
+        "param": "Filter",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → repeat tone 0..1 (dark↔bright)."
+      }
+    }
+  },
+  "Bass_Pedal_BassWah": {
+    "khs filter": {
+      "Pedal": {
+        "param": "Cutoff",
+        "scale": 0.005
+      },
+      "Sens": {
+        "param": "Resonance",
+        "scale": 0.01
+      }
+    }
+  },
+  "Bass_Pedal_BassSubOctave": {
+    "khs pitch shifter": {
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "Set Pitch manually to -12 in the VST editor for sub-octave"
+      }
+    }
+  },
+  "Bass_Pedal_EdenWTDI": {
+    "edenwtdi": {
+      "Bass": {
+        "param": "Bass",
+        "scale": 0.033333,
+        "offset": 0.5,
+        "_hint": "RS Bass ±15 dB → low-shelf gain 0..1 (0.5 = flat)."
+      },
+      "Mid": {
+        "param": "Mid",
+        "scale": 0.033333,
+        "offset": 0.5,
+        "_hint": "RS Mid ±15 dB → mid-peak gain 0..1 (0.5 = flat)."
+      },
+      "Treble": {
+        "param": "Treble",
+        "scale": 0.033333,
+        "offset": 0.5,
+        "_hint": "RS Treble ±15 dB → high-shelf gain 0..1 (0.5 = flat)."
+      },
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.033,
+        "_hint": "RS Gain (e.g. 18) → preamp drive 0..1 (clamped)."
+      },
+      "Enhance": {
+        "param": "Enhance",
+        "scale": 0.1,
+        "_hint": "RS Enhance 0-10 → contour amount 0..1."
+      },
+      "Compression": {
+        "param": "Comp",
+        "scale": 0.1,
+        "_hint": "RS Compression 0-10 → compressor amount 0..1."
+      },
+      "LoShift": {
+        "param": "Bass Boost",
+        "scale": 1.0,
+        "_hint": "RS LoShift switch 0/1 → Bass Boost toggle (drops low corner + adds bottom)."
+      },
+      "MidShift": {
+        "param": "Mid Shift",
+        "scale": 1.0,
+        "_hint": "RS MidShift switch 0/1 → Mid Shift toggle (600 Hz → 1.2 kHz)."
+      }
+    }
+  },
+  "Bass_Pedal_BassDistortion": {
+    "bassdistortion": {
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01,
+        "_hint": "RS Gain 0-100 → RAT Distortion (drive) 0..1."
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → pre-clip brightness 0..1 (grit character)."
+      },
+      "Filter": {
+        "param": "Filter",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → RAT Filter low-pass 0..1 (dark↔bright)."
+      }
+    },
+    "khs distortion": {
+      "Gain": {
+        "param": "Drive",
+        "scale": 0.01
+      },
+      "_static": {
+        "Dynamics": 1.0,
+        "Type": 0.8
+      },
+      "Tone": {
+        "param": "Bias",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+      },
+      "Filter": {
+        "param": "Dynamics",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+      },
+      "Blend": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+      }
+    }
+  },
+  "Pedal_FuzzWasHe": {
+    "bz-1": {
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01
+      }
+    },
+    "khs distortion": {
+      "Gain": {
+        "param": "Drive",
+        "scale": 0.01
+      },
+      "_static": {
+        "Dynamics": 1.0,
+        "Type": 0.2
+      },
+      "Tone": {
+        "param": "Bias",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+      },
+      "Filter": {
+        "param": "Dynamics",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+      },
+      "Blend": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+      }
+    }
+  },
+  "Pedal_CaptFuzzle": {
+    "buzz-tone": {
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01
+      }
+    },
+    "khs distortion": {
+      "Gain": {
+        "param": "Drive",
+        "scale": 0.01
+      },
+      "_static": {
+        "Dynamics": 1.0,
+        "Type": 0.2
+      },
+      "Tone": {
+        "param": "Bias",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+      },
+      "Filter": {
+        "param": "Dynamics",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+      },
+      "Blend": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+      }
+    }
+  },
+  "Pedal_BuzzOne": {
+    "super-buzz": {
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "Continuous octave-fuzz tone-switch balance: lower is thicker/nasal, higher is brighter and more scooped."
+      }
+    },
+    "khs distortion": {
+      "Gain": {
+        "param": "Drive",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Bias",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+      },
+      "Filter": {
+        "param": "Dynamics",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+      },
+      "Blend": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+      }
+    }
+  },
+  "Pedal_BuzzToo": {
+    "big buzz": {
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "Continuous two-branch fuzz tone stack balance: lower is darker/thicker, higher is brighter and more scooped."
+      }
+    },
+    "khs distortion": {
+      "Gain": {
+        "param": "Drive",
+        "scale": 0.01
+      },
+      "_static": {
+        "Dynamics": 1.0,
+        "Type": 0.2
+      },
+      "Tone": {
+        "param": "Bias",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+      },
+      "Filter": {
+        "param": "Dynamics",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+      },
+      "Blend": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+      }
+    }
+  },
+  "Bass_Pedal_BassFuzz": {
+    "bassfuzz": {
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01,
+        "_hint": "RS Gain (sustain) 0-100 → Big Muff drive 0..1."
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → Big Muff tone stack 0..1 (LP↔HP, mid scoop at 0.5)."
+      },
+      "Filter": {
+        "param": "Filter",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → clean low-end blend 0..1 (the bass-specific dry/bass mix)."
+      }
+    },
+    "khs distortion": {
+      "Gain": {
+        "param": "Drive",
+        "scale": 0.01
+      },
+      "_static": {
+        "Dynamics": 1.0,
+        "Type": 0.2
+      },
+      "Tone": {
+        "param": "Bias",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+      },
+      "Filter": {
+        "param": "Dynamics",
+        "scale": 0.01,
+        "_hint": "RS Filter 0-100 → kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+      },
+      "Blend": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Blend 0-100 → kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+      }
+    }
+  },
+  "Pedal_Compression": {
+    "dynamicscompression": {
+      "Comp": {
+        "param": "Comp",
+        "scale": 0.01
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 0.01
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 0.0016666666666666668,
+        "_hint": "RS Release reaches ~540 ms in the DB. Normalize by 600 so DynamicsCompression can preserve long releases instead of clamping above 100."
+      }
+    },
+    "khs compressor": {
+      "Comp": {
+        "param": "Threshold",
+        "scale": -0.46,
+        "offset": 6.0,
+        "_hint": "RS Compress amount 0-100 → Threshold full range: 0→+6dB (no comp), 100→-40dB (max)."
+      }
+    },
+    "mcompressor": {
+      "Comp": {
+        "param": "Threshold",
+        "scale": -1.0,
+        "offset": 0,
+        "_hint": "RS 'Comp' 0-100 → MCompressor Threshold roughly -100 to 0 dB. Higher RS Comp = lower threshold = more compression"
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 0.01
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_Compressor": {
+    "khs compressor": {
+      "Comp": {
+        "param": "Threshold",
+        "scale": -1.0,
+        "offset": 0
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 0.01
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 0.01
+      }
+    },
+    "mcompressor": {
+      "Comp": {
+        "param": "Threshold",
+        "scale": -1.0,
+        "offset": 0,
+        "_hint": "RS 'Comp' 0-100 → MCompressor Threshold roughly -100 to 0 dB. Higher RS Comp = lower threshold = more compression"
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 0.01
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 0.01
+      }
+    }
+  },
+  "Bass_Pedal_MBComp": {
+    "bassmulticomp": {
+      "Compress": {
+        "param": "Compress",
+        "scale": 0.01
+      },
+      "Filter": {
+        "param": "Filter",
+        "scale": 0.0011235955056179776,
+        "offset": -0.12359550561797752,
+        "_hint": "RS Filter is the multiband crossover in Hz, observed 110-1000. BassMultiComp stores it normalized: (Hz - 110) / 890."
+      },
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "Higher RS Rate recovers faster."
+      }
+    },
+    "khs compressor": {
+      "Compress": {
+        "param": "Threshold",
+        "scale": -0.46,
+        "offset": 6.0,
+        "_hint": "RS Compress amount 0-100 → Threshold full range: 0→+6dB (no comp), 100→-40dB (max)."
+      }
+    },
+    "mcompressor": {
+      "Compress": {
+        "param": "Threshold",
+        "scale": -1.0,
+        "offset": 0,
+        "_hint": "Single-band fallback — RS MBComp's multiband info is lost (Melda free has no MDynamicsMB)"
+      }
+    }
+  },
+  "Pedal_USWah": {
+    "uswah": {
+      "Auto": {
+        "param": "Auto",
+        "scale": 1.0
+      },
+      "Pedal": {
+        "param": "Pedal",
+        "scale": 0.01
+      },
+      "Sens": {
+        "param": "Sens",
+        "scale": 0.01
+      },
+      "Speed": {
+        "param": "Speed",
+        "scale": 0.01
+      }
+    },
+    "khs filter": {
+      "Pedal": {
+        "param": "Cutoff",
+        "scale": 0.01
+      },
+      "Sens": {
+        "param": "Resonance",
+        "scale": 0.01,
+        "_hint": "Wah sensitivity → resonance peak"
+      }
+    }
+  },
+  "Pedal_UKWah": {
+    "ukwah": {
+      "Auto": {
+        "param": "Auto",
+        "scale": 1.0
+      },
+      "Pedal": {
+        "param": "Pedal",
+        "scale": 0.01
+      },
+      "Sens": {
+        "param": "Sens",
+        "scale": 0.01
+      },
+      "Speed": {
+        "param": "Speed",
+        "scale": 0.01
+      }
+    },
+    "khs filter": {
+      "Pedal": {
+        "param": "Cutoff",
+        "scale": 0.01
+      },
+      "Sens": {
+        "param": "Resonance",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_ModernWah": {
+    "modernwah": {
+      "Auto": {
+        "param": "Auto",
+        "scale": 1.0
+      },
+      "Pedal": {
+        "param": "Pedal",
+        "scale": 0.01
+      },
+      "Sens": {
+        "param": "Sens",
+        "scale": 0.01
+      },
+      "Speed": {
+        "param": "Speed",
+        "scale": 0.01
+      }
+    },
+    "khs filter": {
+      "Pedal": {
+        "param": "Cutoff",
+        "scale": 0.01
+      },
+      "Sens": {
+        "param": "Resonance",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_LoFiFilter": {
+    "lofifilter": {
+      "FilterType": {
+        "param": "FilterType",
+        "scale": 0.01,
+        "_hint": "RS FilterType moves the Lofinator-style Lo/Hi filter window."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Mix controls drive, resonance, lo-fi texture, and wet intensity."
+      }
+    },
+    "khs filter": {
+      "FilterType": {
+        "param": "Cutoff",
+        "scale": 0.01,
+        "_hint": "RS FilterType sweeps the low-pass cutoff (low=darker/lo-fi)"
+      },
+      "Mix": {
+        "param": "Q",
+        "scale": 0.01,
+        "_hint": "RS Mix → resonance/Q for lo-fi colour (kHs Filter has no dry/wet)"
+      }
+    }
+  },
+  "Pedal_BobFilter": {
+    "bobfilter": {
+      "Sens": {
+        "param": "Sens",
+        "scale": 0.01
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 0.004016064257028112,
+        "offset": -0.004016064257028112,
+        "_hint": "RS Attack is observed 1-250 ms. BobFilter stores it normalized: (ms - 1) / 249."
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 0.00101010101010101,
+        "offset": -0.0101010101010101,
+        "_hint": "RS Release is observed 10-1000 ms. BobFilter stores it normalized: (ms - 10) / 990."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      },
+      "Filter": {
+        "param": "Filter",
+        "scale": 1.0,
+        "_hint": "Rocksmith Filter is a binary 0/1 voicing switch."
+      }
+    },
+    "khs filter": {
+      "Cutoff": {
+        "param": "Cutoff",
+        "scale": 0.01
+      },
+      "Resonance": {
+        "param": "Resonance",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_AutoFilter": {
+    "autofilter": {
+      "FilterType": {
+        "param": "FilterType",
+        "scale": 0.5,
+        "_hint": "0/1/2 maps to Mu-Tron style low-pass / band-pass / high-pass."
+      },
+      "Res": {
+        "param": "Res",
+        "scale": 0.01,
+        "_hint": "Peak/resonance amount."
+      },
+      "Sens": {
+        "param": "Sens",
+        "scale": 0.01,
+        "_hint": "Input detector sensitivity and sweep range. The plugin keeps an internal floor so low RS values still sweep."
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 0.001,
+        "_hint": "RS Attack is stored as a large raw time value; /1000 keeps it in normalized envelope range."
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 0.001,
+        "_hint": "RS Release is stored as a large raw time value; /1000 keeps it in normalized envelope range."
+      },
+      "_static": {
+        "FilterType": 0.5,
+        "Res": 0.55,
+        "Sens": 0.45,
+        "Attack": 0.06,
+        "Release": 0.14
+      }
+    },
+    "autosweep": {
+      "FilterType": {
+        "param": "FilterType",
+        "scale": 0.5,
+        "_hint": "0/1/2 → LP/BP/HP"
+      },
+      "Res": {
+        "param": "Res",
+        "scale": 0.01
+      },
+      "Sens": {
+        "param": "Sens",
+        "scale": 0.006,
+        "offset": 0.3,
+        "_hint": "floored so low Sens isn't inaudible"
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 0.001,
+        "_hint": "RS Attack /1000 (RS 128 → 0.128 ≈ 2ms)"
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 0.001
+      },
+      "_static": {
+        "Range": 0.9,
+        "Mix": 0.5,
+        "Boost": 0.2
+      }
+    },
+    "khs filter": {
+      "FilterType": {
+        "param": "Cutoff",
+        "scale": 0.01
+      },
+      "Res": {
+        "param": "Q",
+        "scale": 0.01
+      }
+    }
+  },
+  "Bass_Pedal_BassAutoFilter": {
+    "autosweep": {
+      "FilterType": {
+        "param": "FilterType",
+        "scale": 0.5,
+        "_hint": "0/1/2 maps to AutoSweep low-pass / band-pass / high-pass convention."
+      },
+      "Res": {
+        "param": "Res",
+        "scale": 0.01
+      },
+      "Sens": {
+        "param": "Sens",
+        "scale": 0.006,
+        "offset": 0.3,
+        "_hint": "Same AutoSweep sensitivity floor as guitar Auto Tone so low bass values still sweep."
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 0.001,
+        "_hint": "RS Attack /1000 (RS 128 → 0.128 ≈ 2ms)"
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 0.001
+      },
+      "_static": {
+        "Range": 0.0,
+        "Mix": 0.55,
+        "Boost": 0.15
+      },
+      "Speed": {
+        "param": "Release",
+        "scale": 0.001,
+        "_hint": "RS Bass-AutoFilter Speed (if present) → envelope release."
+      }
+    },
+    "khs filter": {
+      "Speed": {
+        "param": "Cutoff",
+        "scale": 0.01
+      },
+      "Sens": {
+        "param": "Resonance",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_EQ5": {
+    "eq5": {
+      "63": {
+        "param": "63",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "250": {
+        "param": "250",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "750": {
+        "param": "750",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "2200": {
+        "param": "2200",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "5700": {
+        "param": "5700",
+        "scale": 0.033333,
+        "offset": 0.5
+      }
+    },
+    "khs 3-band eq": {
+      "63": {
+        "param": "Low Gain",
+        "scale": 1.0,
+        "_hint": "RS EQ5 63Hz → KHS Low band. Value is dB direct. Verify paramId in inline editor — may be 'Low Gain', 'Low', or similar. Lossy: bands 250, 2200 are dropped."
+      },
+      "750": {
+        "param": "Mid Gain",
+        "scale": 1.0,
+        "_hint": "RS EQ5 750Hz → KHS Mid band."
+      },
+      "5700": {
+        "param": "High Gain",
+        "scale": 1.0,
+        "_hint": "RS EQ5 5700Hz → KHS High band."
+      }
+    },
+    "mequalizer": {
+      "_graphic_eq": [
+        {
+          "freq": 63,
+          "rs": [
+            "63"
+          ]
+        },
+        {
+          "freq": 250,
+          "rs": [
+            "250"
+          ]
+        },
+        {
+          "freq": 750,
+          "rs": [
+            "750"
+          ]
+        },
+        {
+          "freq": 2200,
+          "rs": [
+            "2200"
+          ]
+        },
+        {
+          "freq": 5700,
+          "rs": [
+            "5700"
+          ]
+        }
+      ]
+    }
+  },
+  "Pedal_EQ8": {
+    "eq8": {
+      "50": {
+        "param": "50",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "100": {
+        "param": "100",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "200": {
+        "param": "200",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "400": {
+        "param": "400",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "800": {
+        "param": "800",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "1600": {
+        "param": "1600",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "3200": {
+        "param": "3200",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "6400": {
+        "param": "6400",
+        "scale": 0.033333,
+        "offset": 0.5
+      }
+    },
+    "khs 3-band eq": {
+      "100": {
+        "param": "Low Gain",
+        "scale": 1.0,
+        "_hint": "RS EQ8 100Hz → KHS Low band. dB direct. Lossy: bands 50, 200, 400, 1600, 6400 are dropped — install Voxengo Marvel GEQ for full 8-band fidelity."
+      },
+      "800": {
+        "param": "Mid Gain",
+        "scale": 1.0,
+        "_hint": "RS EQ8 800Hz → KHS Mid band."
+      },
+      "3200": {
+        "param": "High Gain",
+        "scale": 1.0,
+        "_hint": "RS EQ8 3200Hz → KHS High band."
+      }
+    },
+    "mequalizer": {
+      "_graphic_eq": [
+        {
+          "freq": 71,
+          "rs": [
+            "50",
+            "100"
+          ]
+        },
+        {
+          "freq": 283,
+          "rs": [
+            "200",
+            "400"
+          ]
+        },
+        {
+          "freq": 800,
+          "rs": [
+            "800"
+          ]
+        },
+        {
+          "freq": 1600,
+          "rs": [
+            "1600"
+          ]
+        },
+        {
+          "freq": 3200,
+          "rs": [
+            "3200"
+          ]
+        },
+        {
+          "freq": 6400,
+          "rs": [
+            "6400"
+          ]
+        }
+      ]
+    }
+  },
+  "Bass_Pedal_BassEQ8": {
+    "basseq8": {
+      "30": {
+        "param": "30",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "75": {
+        "param": "75",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "185": {
+        "param": "185",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "460": {
+        "param": "460",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "1100": {
+        "param": "1100",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "2700": {
+        "param": "2700",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "6800": {
+        "param": "6800",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "16000": {
+        "param": "16000",
+        "scale": 0.033333,
+        "offset": 0.5
+      }
+    },
+    "khs 3-band eq": {
+      "75": {
+        "param": "Low Gain",
+        "scale": 1.0,
+        "_hint": "Bass EQ8 75Hz → KHS Low band. dB direct. Lossy: bands 30, 185, 1100, 6800, 16000 dropped."
+      },
+      "460": {
+        "param": "Mid Gain",
+        "scale": 1.0,
+        "_hint": "Bass EQ8 460Hz → KHS Mid band."
+      },
+      "2700": {
+        "param": "High Gain",
+        "scale": 1.0,
+        "_hint": "Bass EQ8 2700Hz → KHS High band."
+      }
+    },
+    "mequalizer": {
+      "_graphic_eq": [
+        {
+          "freq": 30,
+          "rs": [
+            "30"
+          ]
+        },
+        {
+          "freq": 75,
+          "rs": [
+            "75"
+          ]
+        },
+        {
+          "freq": 185,
+          "rs": [
+            "185"
+          ]
+        },
+        {
+          "freq": 460,
+          "rs": [
+            "460"
+          ]
+        },
+        {
+          "freq": 1723,
+          "rs": [
+            "1100",
+            "2700"
+          ]
+        },
+        {
+          "freq": 10431,
+          "rs": [
+            "6800",
+            "16000"
+          ]
+        }
+      ]
+    }
+  },
+  "Rack_StudioEQ": {
+    "studioeq": {
+      "Bass": {
+        "param": "Bass",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "BassFreq": {
+        "param": "BassFreq",
+        "scale": 1.0,
+        "_hint": "Hz, log[30,300]"
+      },
+      "LoMid": {
+        "param": "LoMid",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "LoMidFreq": {
+        "param": "LoMidFreq",
+        "scale": 1.0,
+        "_hint": "Hz, log[120,2000]"
+      },
+      "LoMidQ": {
+        "param": "LoMidQ",
+        "scale": 1.0,
+        "_hint": "Q, log[0.3,4]"
+      },
+      "HiMid": {
+        "param": "HiMid",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "HiMidFreq": {
+        "param": "HiMidFreq",
+        "scale": 1000.0,
+        "_hint": "RS kHz→Hz, log[400,8000]"
+      },
+      "HiMidQ": {
+        "param": "HiMidQ",
+        "scale": 1.0
+      },
+      "Treble": {
+        "param": "Treble",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "TrebleFreq": {
+        "param": "TrebleFreq",
+        "scale": 1000.0,
+        "_hint": "RS kHz→Hz, log[1500,16000]"
+      }
+    },
+    "khs 3-band eq": {
+      "Bass": {
+        "param": "Low Gain",
+        "scale": 1.0,
+        "_hint": "4-band parametric — value is dB direct. Q + Freq knobs (BassFreq, LoMidFreq, HiMidFreq, TrebleFreq, LoMidQ, HiMidQ) are ignored. Lossy 4→3 (HiMid combined out). For lossless, switch the gear to TDR Nova (free 4-band parametric)."
+      },
+      "LoMid": {
+        "param": "Mid Gain",
+        "scale": 1.0,
+        "_hint": "Mapped as the single mid; HiMid silently dropped."
+      },
+      "Treble": {
+        "param": "High Gain",
+        "scale": 1.0
+      }
+    },
+    "mequalizer": {
+      "Bass": {
+        "param": "Gain 1 (EQ 1)",
+        "scale": 1.0,
+        "_hint": "Set Band 1 On = true. dB direct."
+      },
+      "BassFreq": {
+        "param": "Frequency 1 (EQ 1)",
+        "scale": 1.0,
+        "_hint": "RS BassFreq is Hz direct (e.g. 65-485)"
+      },
+      "LoMid": {
+        "param": "Gain 2 (EQ 2)",
+        "scale": 1.0
+      },
+      "LoMidFreq": {
+        "param": "Frequency 2 (EQ 2)",
+        "scale": 1.0,
+        "_hint": "RS LoMidFreq is Hz direct (120-2000)"
+      },
+      "LoMidQ": {
+        "param": "Q 2 (EQ 2)",
+        "scale": 1.0,
+        "_hint": "RS LoMidQ ~0-4 — verify Melda Q range matches"
+      },
+      "HiMid": {
+        "param": "Gain 3 (EQ 3)",
+        "scale": 1.0
+      },
+      "HiMidFreq": {
+        "param": "Frequency 3 (EQ 3)",
+        "scale": 1000.0,
+        "_hint": "RS HiMidFreq is in kHz (0.3-8) — multiply by 1000 to land in Hz"
+      },
+      "HiMidQ": {
+        "param": "Q 3 (EQ 3)",
+        "scale": 1.0,
+        "_hint": "RS HiMidQ ~0-1"
+      },
+      "Treble": {
+        "param": "Gain 4 (EQ 4)",
+        "scale": 1.0
+      },
+      "TrebleFreq": {
+        "param": "Frequency 4 (EQ 4)",
+        "scale": 1000.0,
+        "_hint": "RS TrebleFreq is in kHz (2-13) — multiply by 1000"
+      },
+      "_static": {
+        "Enable 1 (EQ 1)": 1.0,
+        "Enable 2 (EQ 2)": 1.0,
+        "Enable 3 (EQ 3)": 1.0,
+        "Enable 4 (EQ 4)": 1.0
+      }
+    }
+  },
+  "Pedal_NoiseGate": {
+    "noisegate": {
+      "Thresh": {
+        "param": "Thresh",
+        "scale": 0.02,
+        "offset": 2.0,
+        "_hint": "RS Thresh is stored in dB. Map roughly -100..-50 dB into the bundled gate's normalized threshold."
+      },
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "Higher RS Rate tightens the gate decay and increases attenuation range."
+      }
+    },
+    "khs gate": {
+      "Thresh": {
+        "param": "Threshold",
+        "scale": 1.0,
+        "_hint": "RS Thresh in dB (-66 typical) maps direct to KHS Threshold"
+      },
+      "Rate": {
+        "param": "Range",
+        "scale": 0.01,
+        "_hint": "Higher RS Rate = more aggressive gating = larger range"
+      }
+    }
+  },
+  "Pedal_OctaveUp": {
+    "octaveup": {
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs pitch shifter": {
+      "Tone": {
+        "param": "Pitch",
+        "scale": 0.12,
+        "_hint": "Scale 0.12 lands roughly at +12 semitones (one octave up) for full Tone=100"
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_Octavius": {
+    "octavius": {
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs pitch shifter": {
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_MultiPitch": {
+    "multipitch": {
+      "Pitch1": {
+        "param": "Pitch1",
+        "scale": 0.020833333333333332,
+        "offset": 0.5,
+        "_hint": "RS semitone Pitch1 normalized from -24..+24; -12 maps to 0.25 for a low MF-102 carrier."
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs pitch shifter": {
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_BitCruncher": {
+    "bitcruncher": {
+      "Attack": {
+        "param": "Attack",
+        "scale": 0.01,
+        "_hint": "Rocksmith Attack controls the envelope rise time for dynamic crushing."
+      },
+      "FilterType": {
+        "param": "FilterType",
+        "scale": 0.125,
+        "_hint": "Rocksmith stores FilterType as selector values 3/4/8; /8 preserves the mode positions."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 0.01,
+        "_hint": "Rocksmith Release controls the envelope fall time for dynamic crushing."
+      },
+      "Sens": {
+        "param": "Sens",
+        "scale": 0.01,
+        "_hint": "Rocksmith Sens controls how hard the input drives the bit depth and sample-rate reduction."
+      }
+    },
+    "khs bitcrush": {
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_RingMod": {
+    "ringmod": {
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "RS Depth controls ring-mod wet amount and carrier injection."
+      },
+      "Waveform": {
+        "param": "Waveform",
+        "scale": 1.0,
+        "_hint": "RS Waveform values are selector-like. 0 is rounded sine/triangle, 1 is sharper square."
+      },
+      "Sensitivity": {
+        "param": "Sensitivity",
+        "scale": 0.01,
+        "_hint": "RS Sensitivity controls squelch/envelope sensitivity and carrier range."
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 0.01,
+        "_hint": "RS Attack controls envelope and carrier slew time."
+      }
+    },
+    "khs ring mod": {
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "mringmodulator": {
+      "Freq": {
+        "param": "Frequency",
+        "scale": 0.01,
+        "_hint": "RS RingMod Freq → Melda Frequency. Both likely 0-1 normalized; verify range"
+      },
+      "Mix": {
+        "param": "Dry/Wet",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_Swole": {
+    "swole": {
+      "Smash": {
+        "param": "Smash",
+        "scale": 0.01,
+        "_hint": "Rocksmith Smash controls heavy compression ratio, makeup and saturation."
+      },
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "Rocksmith Rate controls compressor recovery speed; higher is faster."
+      }
+    },
+    "khs filter": {
+      "Rate": {
+        "param": "Cutoff",
+        "scale": 0.01
+      },
+      "Smash": {
+        "param": "Q",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_Enbiggenator": {
+    "enbiggenator": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs distortion": {
+      "Depth": {
+        "param": "Drive",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_Limiter": {
+    "limiter": {
+      "Limit": {
+        "param": "Limit",
+        "scale": 0.01,
+        "_hint": "Rocksmith sends 0-100-ish limiter amount. The plugin uses an internal threshold curve so low library values still limit audibly."
+      },
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "Recovery speed; higher Rocksmith Rate recovers faster."
+      }
+    }
+  },
+  "Pedal_TremOle": {
+    "tremole": {
+      "Sens": {
+        "param": "Sens",
+        "scale": 0.01,
+        "_hint": "Rocksmith Sens controls detector drive for the envelope tremolo."
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 0.01
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "Rocksmith Mix controls tremolo depth."
+      }
+    },
+    "mtremolo": {
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.09,
+        "offset": 1.0,
+        "_hint": "RS Speed 0-100 → 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
+      }
+    }
+  },
+  "Pedal_AmpVibe": {
+    "ampvibe": {
+      "Speed": {
+        "param": "Speed",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Mix controls the chorus/vibe dry-phase blend and modulation depth."
+      }
+    },
+    "mvibrato": {
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Dry/Wet",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_MultiVibe": {
+    "multivibe": {
+      "Speed": {
+        "param": "Speed",
+        "scale": 0.01
+      },
+      "Rate": {
+        "param": "Speed",
+        "scale": 0.01,
+        "_hint": "Alias for any extracted rows that use Rate instead of Speed."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "Rocksmith Multi Vib Mix controls wet/depth intensity."
+      },
+      "Waveform": {
+        "param": "Waveform",
+        "scale": 1.0,
+        "_hint": "Rocksmith Waveform is selector-like here; value 1 selects the stronger VB-2 LFO/rise character."
+      },
+      "Wave": {
+        "param": "Waveform",
+        "scale": 1.0,
+        "_hint": "Alias for any extracted rows that use Wave instead of Waveform."
+      }
+    },
+    "mvibrato": {
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Dry/Wet",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_MarshallSupervibe": {
+    "marshallsupervibe": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "Alias for any extracted rows that use Speed instead of Rate."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      },
+      "Wave": {
+        "param": "Wave",
+        "scale": 0.01,
+        "_hint": "Rocksmith Wave shapes the Supervibe LFO and sharper rotary/vibe character."
+      }
+    },
+    "mvibrato": {
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Dry/Wet",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_AutoVibe": {
+    "autovibe": {
+      "Sens": {
+        "param": "Sens",
+        "scale": 0.01,
+        "_hint": "Rocksmith Sens controls envelope sensitivity."
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 0.01
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "Rocksmith Mix controls wet vibrato amount."
+      }
+    },
+    "mvibrato": {
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Dry/Wet",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_BassEmulator": {
+    "bassemulator": {
+      "Body": {
+        "param": "Body",
+        "scale": 0.01,
+        "_hint": "Rocksmith Body controls the octave-down body and low-end weight."
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "Rocksmith Tone controls the bass-emulator brightness."
+      }
+    }
+  },
+  "Pedal_BakedRotatoe": {
+    "bakedrotatoe": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "Target rotary speed. The plugin applies Leslie/LERA-style acceleration and braking internally."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "Doppler, tremolo and cabinet motion intensity."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      },
+      "Balance": {
+        "param": "Balance",
+        "scale": 0.01,
+        "_hint": "Drum/horn balance: lower favors the low drum, higher favors the horn."
+      }
+    },
+    "khs chorus": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Dry/Wet",
+        "scale": 0.01
+      }
+    }
+  },
+  "Pedal_AmpEQ": {
+    "ampeq": {
+      "Bass": {
+        "param": "Bass",
+        "scale": 0.01,
+        "_hint": "RS Bass pot 0-100 → tone-stack bass pot 0..1 (l). 50 = noon."
+      },
+      "Mid": {
+        "param": "Mid",
+        "scale": 0.01,
+        "_hint": "RS Mid pot 0-100 → tone-stack mid pot 0..1 (m). 50 = noon."
+      },
+      "Treble": {
+        "param": "Treble",
+        "scale": 0.01,
+        "_hint": "RS Treble pot 0-100 → tone-stack treble pot 0..1 (t). 50 = noon."
+      },
+      "BassFreq": {
+        "param": "BassFreq",
+        "scale": 0.5,
+        "_hint": "RS BassFreq (nominal 1.0) → VST 0.5 = stock bass cap. Scales C2 ±1 octave."
+      },
+      "MidShift": {
+        "param": "MidShift",
+        "scale": 0.5,
+        "_hint": "RS MidShift (nominal 1.0) → VST 0.5 = stock mid cap. Scales C3 to move the scoop ±1 octave."
+      },
+      "TrebleFreq": {
+        "param": "TrebleFreq",
+        "scale": 0.5,
+        "_hint": "RS TrebleFreq (nominal 1.0) → VST 0.5 = stock treble cap. Scales C1 ±1 octave."
+      }
+    },
+    "mequalizer": {
+      "Bass": {
+        "param": "Gain 1 (EQ 1)",
+        "scale": 1.0,
+        "_hint": "RS Bass knob → MEqualizer Band 1. Curator: set Band 1 Frequency ≈ 80 Hz, On = true. dB direct."
+      },
+      "Mid": {
+        "param": "Gain 2 (EQ 2)",
+        "scale": 1.0,
+        "_hint": "RS Mid → Band 2. Frequency ≈ 800 Hz."
+      },
+      "Treble": {
+        "param": "Gain 3 (EQ 3)",
+        "scale": 1.0,
+        "_hint": "RS Treble → Band 3. Frequency ≈ 6 kHz."
+      },
+      "_static": {
+        "Enable 1 (EQ 1)": 1.0,
+        "Enable 2 (EQ 2)": 1.0,
+        "Enable 3 (EQ 3)": 1.0
+      }
+    }
+  },
+  "Rack_StudioGraphicEQ": {
+    "studiographiceq": {
+      "Bass": {
+        "param": "Bass",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "BassFreq": {
+        "param": "BassFreq",
+        "scale": 1.0
+      },
+      "LoMid": {
+        "param": "LoMid",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "LoMidFreq": {
+        "param": "LoMidFreq",
+        "scale": 1.0
+      },
+      "Mid": {
+        "param": "Mid",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "MidFreq": {
+        "param": "MidFreq",
+        "scale": 1000.0,
+        "_hint": "RS kHz→Hz"
+      },
+      "HiMid": {
+        "param": "HiMid",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "HiMidFreq": {
+        "param": "HiMidFreq",
+        "scale": 1000.0,
+        "_hint": "RS kHz→Hz"
+      },
+      "Treble": {
+        "param": "Treble",
+        "scale": 0.033333,
+        "offset": 0.5
+      },
+      "TrebleFreq": {
+        "param": "TrebleFreq",
+        "scale": 1000.0,
+        "_hint": "RS kHz→Hz"
+      }
+    },
+    "mequalizer": {
+      "Bass": {
+        "param": "Gain 1 (EQ 1)",
+        "scale": 1.0
+      },
+      "BassFreq": {
+        "param": "Frequency 1 (EQ 1)",
+        "scale": 1.0
+      },
+      "LoMid": {
+        "param": "Gain 2 (EQ 2)",
+        "scale": 1.0
+      },
+      "LoMidFreq": {
+        "param": "Frequency 2 (EQ 2)",
+        "scale": 1.0
+      },
+      "Mid": {
+        "param": "Gain 3 (EQ 3)",
+        "scale": 1.0
+      },
+      "MidFreq": {
+        "param": "Frequency 3 (EQ 3)",
+        "scale": 1000.0,
+        "_hint": "RS MidFreq is kHz"
+      },
+      "HiMid": {
+        "param": "Gain 4 (EQ 4)",
+        "scale": 1.0
+      },
+      "HiMidFreq": {
+        "param": "Frequency 4 (EQ 4)",
+        "scale": 1000.0,
+        "_hint": "kHz"
+      },
+      "Treble": {
+        "param": "Gain 5 (EQ 5)",
+        "scale": 1.0
+      },
+      "TrebleFreq": {
+        "param": "Frequency 5 (EQ 5)",
+        "scale": 1000.0,
+        "_hint": "kHz"
+      },
+      "_static": {
+        "Enable 1 (EQ 1)": 1.0,
+        "Enable 2 (EQ 2)": 1.0,
+        "Enable 3 (EQ 3)": 1.0,
+        "Enable 4 (EQ 4)": 1.0,
+        "Enable 5 (EQ 5)": 1.0
+      }
+    }
+  },
+  "Rack_StudioCompressor": {
+    "studiocomp": {
+      "Threshold": {
+        "param": "Threshold",
+        "scale": 1.0,
+        "_hint": "RS Threshold dB (-27.5..-0.5) → normalized via studiocomp range [-40,0]."
+      },
+      "Ratio": {
+        "param": "Ratio",
+        "scale": 1.0,
+        "_hint": "RS Ratio 1..4 literal → normalized via range [1,12]."
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 1.0,
+        "_hint": "RS Attack 0..92 ms → normalized via range [0,150]."
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 1.0,
+        "_hint": "RS Release 50..260 ms → normalized via range [20,500]."
+      }
+    },
+    "mcompressor": {
+      "Threshold": {
+        "param": "Threshold",
+        "scale": 1.0,
+        "_hint": "RS Threshold is dB direct (-27.5..-0.5). Maps 1:1."
+      },
+      "Ratio": {
+        "param": "Ratio",
+        "scale": 1.0,
+        "_hint": "RS Ratio 1..4 = literal ratio. MCompressor Ratio is the same."
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 1.0,
+        "_hint": "RS Attack 0..92 ≈ ms direct (Melda Attack is ms). Verify range — may need 0.01 scale if Melda normalizes."
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 1.0,
+        "_hint": "RS Release 50..260 ms direct. MCompressor Release is ms."
+      }
+    },
+    "khs compressor": {
+      "Threshold": {
+        "param": "Threshold",
+        "scale": 1.0
+      },
+      "Ratio": {
+        "param": "Ratio",
+        "scale": 1.0
+      },
+      "Attack": {
+        "param": "Attack",
+        "scale": 1.0,
+        "_hint": "Literal ms; kHs Attack range is log [1,500] ms (see _VST_PARAM_RANGES)."
+      },
+      "Release": {
+        "param": "Release",
+        "scale": 1.0
+      }
+    }
+  },
+  "Pedal_ShredZone": {
+    "shredzone": {
+      "Gain": {
+        "param": "Gain",
+        "scale": 0.01
+      },
+      "Bass": {
+        "param": "Bass",
+        "scale": 0.0714285714,
+        "offset": 0.5,
+        "_hint": "RS Bass uses roughly -7..+7. Map 0 to the plugin's neutral 0.5."
+      },
+      "Mid": {
+        "param": "Mid",
+        "scale": 0.0714285714,
+        "offset": 0.5,
+        "_hint": "RS Mid uses roughly -7..+7. Map 0 to the plugin's neutral 0.5."
+      },
+      "Treble": {
+        "param": "Treble",
+        "scale": 0.0714285714,
+        "offset": 0.5,
+        "_hint": "RS Treble uses roughly -7..+7. Map 0 to the plugin's neutral 0.5."
+      }
+    }
+  },
+  "Rack_StereoAnalogVibe": {
+    "stereoanalogvibe": {
+      "Speed": {
+        "param": "Speed",
+        "scale": 0.01
+      },
+      "Waveform": {
+        "param": "Waveform",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs chorus": {
+      "Speed": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
+  },
+  "Rack_StudioChamber": {
+    "studiochamber": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.01,
+        "_hint": "RS Time 0-100 → decay 0..1."
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → damping (dark↔bright)."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "RS Depth 0-100 → wet tail modulation 0..1."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Mix 0-100 → wet/dry 0..1."
+      }
+    },
+    "khs reverb": {
+      "Time": {
+        "param": "Decay",
+        "scale": 0.0065,
+        "_hint": "RS Time → Decay (0.5-30s log). Time 0≈0.5s, 78≈4s, 100≈7s."
+      },
+      "Depth": {
+        "param": "Size",
+        "scale": 0.01,
+        "_hint": "RS Depth → Size (50-200%). 0→50%, 100→200%."
+      },
+      "Tone": {
+        "param": "Dampen",
+        "scale": 0.01,
+        "invert": true,
+        "_hint": "RS Tone (brightness) → less Dampen. Inverted."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
+  },
+  "Rack_StudioChorus": {
+    "studiochorus": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.16949,
+        "offset": -0.01695,
+        "_hint": "RS Rate in Hz (0.2..2.5) → normalized (plugin 0.1..6 Hz)."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "RS Depth 0-100 → mod depth 0..1."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Mix 0-100 → wet/dry 0..1."
+      },
+      "LoFilter": {
+        "param": "Lo Filter",
+        "scale": 0.01,
+        "_hint": "RS LoFilter 0-100 → wet high-pass 0..1."
+      },
+      "HiFilter": {
+        "param": "Hi Filter",
+        "scale": 0.01,
+        "_hint": "RS HiFilter 0-100 → wet low-pass 0..1."
+      },
+      "Stereo": {
+        "param": "Stereo",
+        "scale": 0.01,
+        "_hint": "RS Stereo 0-100 → L/R spread 0..1."
+      },
+      "Delay": {
+        "param": "Delay",
+        "scale": 0.01,
+        "_hint": "RS Delay 0-100 → base delay 0..1."
+      }
+    },
+    "khs chorus": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01,
+        "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 → slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      },
+      "Delay": {
+        "param": "Delay",
+        "scale": 0.01,
+        "_hint": "Both kHs Chorus and RS use 'Delay' for the base offset"
+      },
+      "Stereo": {
+        "param": "Stereo",
+        "scale": 0.01
+      }
+    }
+  },
+  "Rack_StudioDelay": {
+    "studiodelay": {
+      "TimeL": {
+        "param": "Time L",
+        "scale": 0.0014286,
+        "_hint": "RS TimeL in ms (40..360) → 0..700 ms normalized."
+      },
+      "TimeR": {
+        "param": "Time R",
+        "scale": 0.0014286,
+        "_hint": "RS TimeR in ms → 0..700 ms normalized."
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Filter": {
+        "param": "Filter",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs delay": {
+      "TimeL": {
+        "param": "Time",
+        "scale": 0.005,
+        "_hint": "RS TimeL+TimeR are in ms (0-1000); use TimeL alone, scaled 0-500ms→0-1"
+      },
+      "Filter": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "RS Filter on a delay is a feedback tone control"
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
+  },
+  "Rack_StudioFlanger": {
+    "studioflanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.16949,
+        "offset": -0.01695,
+        "_hint": "RS Rate in Hz (0.3..0.6) → normalized (plugin 0.1..6 Hz)."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Regen": {
+        "param": "Regen",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs flanger": {
+      "Rate": {
+        "param": "Rate",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01
+      },
+      "Regen": {
+        "param": "Feedback",
+        "scale": 0.01,
+        "_hint": "RS Regen IS feedback in kHs vocabulary"
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
+  },
+  "Rack_StudioPlate": {
+    "studioplate": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.01,
+        "_hint": "RS Time 0-100 → decay 0..1."
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → damping (dark↔bright)."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "RS Depth 0-100 → wet tail modulation 0..1."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Mix 0-100 → wet/dry 0..1."
+      }
+    },
+    "khs reverb": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.01
+      },
+      "Tone": {
+        "param": "Damping",
+        "scale": 0.01
+      },
+      "Depth": {
+        "param": "Predelay",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
+  },
+  "Rack_StudioVerb": {
+    "studioverb": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.01,
+        "_hint": "RS Time 0-100 → decay 0..1."
+      },
+      "Tone": {
+        "param": "Tone",
+        "scale": 0.01,
+        "_hint": "RS Tone 0-100 → damping (dark↔bright)."
+      },
+      "Depth": {
+        "param": "Depth",
+        "scale": 0.01,
+        "_hint": "RS Depth 0-100 → wet tail modulation 0..1."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01,
+        "_hint": "RS Mix 0-100 → wet/dry 0..1."
+      }
+    },
+    "khs reverb": {
+      "Time": {
+        "param": "Decay",
+        "scale": 0.0065,
+        "_hint": "RS Time → Decay (0.5-30s log). Time 0≈0.5s, 78≈4s, 100≈7s."
+      },
+      "Depth": {
+        "param": "Size",
+        "scale": 0.01,
+        "_hint": "RS Depth → Size (50-200%). 0→50%, 100→200%."
+      },
+      "Tone": {
+        "param": "Dampen",
+        "scale": 0.01,
+        "invert": true,
+        "_hint": "RS Tone (brightness) → less Dampen. Inverted."
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
+  },
+  "Rack_TapeEcho": {
+    "tapeecho": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.0014286,
+        "_hint": "RS Time in ms (~110..120) → 0..700 ms normalized."
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Filter": {
+        "param": "Filter",
+        "scale": 0.01
+      },
+      "Stereo": {
+        "param": "Stereo",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    },
+    "khs delay": {
+      "Time": {
+        "param": "Time",
+        "scale": 0.005,
+        "_hint": "RS Time in ms"
+      },
+      "Feedback": {
+        "param": "Feedback",
+        "scale": 0.01
+      },
+      "Filter": {
+        "param": "Tone",
+        "scale": 0.01
+      },
+      "Mix": {
+        "param": "Mix",
+        "scale": 0.01
+      }
+    }
   }
- }
 }
