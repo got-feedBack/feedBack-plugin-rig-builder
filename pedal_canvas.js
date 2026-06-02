@@ -618,6 +618,88 @@
       textSpaced(d,.79*d.W,.135*d.H,F.barlow,8,or,'TREBLE',0.2);
       chiefName(d,'Metal','Zone','MT-2',0,0,or); } };
 
+  // Amp EQ — Boss FBM-1 Fender '59 Bassman-style: custom Chief in tweed gold with
+  // the knob plate + treadle recoloured to the oxblood/café (not black), black
+  // knobs, cream script. 6 RS knobs (2 rows). Parody ('59 Bassmate / FBM-1).
+  // Bass0 Mid1 Treble2 BassFreq3 MidShift4 TrebleFreq5.
+  P.ampeq = { w:300,h:480, knobs:[
+      {id:0,cx:.22,cy:.165,r:.060,style:'boss'},
+      {id:1,cx:.50,cy:.165,r:.060,style:'boss'},
+      {id:2,cx:.78,cy:.165,r:.060,style:'boss'},
+      {id:3,cx:.22,cy:.345,r:.060,style:'boss'},
+      {id:4,cx:.50,cy:.345,r:.060,style:'boss'},
+      {id:5,cx:.78,cy:.345,r:.060,style:'boss'}],
+    ptr:rgb(236,232,220),
+    draw(d){ const {ctx:c,W,H,s}=d; const m=7*s, cafe=rgb(96,50,46), cream=rgb(230,224,208);
+      c.fillStyle=rgb(10,8,6); c.fillRect(0,0,W,H);
+      // gold tweed body + cross-hatch
+      const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(206,166,84)); bg.addColorStop(1,rgb(180,140,62));
+      rr(c,m,m,W-2*m,H-2*m,12*s); c.fillStyle=bg; c.fill();
+      c.save(); rr(c,m,m,W-2*m,H-2*m,12*s); c.clip(); c.lineWidth=1;
+      c.strokeStyle='rgba(120,80,30,0.18)'; for(let x=-H;x<W;x+=5*s){ c.beginPath(); c.moveTo(x,0); c.lineTo(x+H,H); c.stroke(); }
+      c.strokeStyle='rgba(255,240,200,0.10)'; for(let x=0;x<W+H;x+=5*s){ c.beginPath(); c.moveTo(x,0); c.lineTo(x-H,H); c.stroke(); }
+      c.restore();
+      rr(c,m,m,W-2*m,H-2*m,12*s); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=2*s; c.stroke();
+      // café knob plate (the 'black' part, recoloured) — taller for 2 rows
+      rr(c,W*.07,H*.07,W*.86,H*.39,7*s); c.fillStyle=cafe; c.fill();
+      rr(c,W*.07,H*.07,W*.86,H*.39,7*s); c.strokeStyle='rgba(0,0,0,0.45)'; c.lineWidth=1.4*s; c.stroke();
+      ledDot(d,W*.85,H*.105,true,224,60,52);
+      // knob labels (RS names), cream
+      [['BASS',.22,.165,8],['MID',.50,.165,8],['TREBLE',.78,.165,8],['BASS FREQ',.22,.345,6],['MID SHIFT',.50,.345,6],['TREBLE FREQ',.78,.345,6]]
+        .forEach(k=> textSpaced(d,k[1]*W,(k[2]+.082)*H,F.barlow,k[3],cream,k[0],0.15));
+      // café treadle + cream script name + engraved CHIEF
+      const tx=m+4*s, tyTop=H*.50, tw=W-2*m-8*s, tBot=H-m-6*s;
+      const tg=c.createLinearGradient(0,tyTop,0,tBot); tg.addColorStop(0,rgb(108,60,54)); tg.addColorStop(1,rgb(82,40,36));
+      rr(c,tx,tyTop,tw,tBot-tyTop,12*s); c.fillStyle=tg; c.fill();
+      rr(c,tx,tyTop,tw,12*s,12*s); c.fillStyle='rgba(255,255,255,0.08)'; c.fill();
+      rr(c,tx,tyTop,tw,tBot-tyTop,12*s); c.strokeStyle='rgba(0,0,0,0.45)'; c.lineWidth=1.6*s; c.stroke();
+      textC(d,.46*W,.585*H,F.ink,34,cream,"'59 Bassmate");
+      textC(d,.74*W,.648*H,F.barlow,16,cream,'FBM-1');
+      outlineText(d,W*.5,H*.805,F.bebas,40,cafe,rgb(56,28,26),'CHIEF',13); } };
+
+  // Bass Emulator — original brand-free design (no real-world counterpart): a
+  // synthwave 'BASSQUAKE' — deep indigo box, retro gradient sun, neon perspective
+  // grid, glowing wordmark, chrome knobs with neon rings. RS knob names. Body0 Tone1.
+  P.bassemulator = { w:280,h:470, knobs:[
+      {id:0,cx:.27,cy:.160,r:.066,style:'knurled'},
+      {id:1,cx:.73,cy:.160,r:.066,style:'knurled'}],
+    tick:rgb(120,200,255), ptr:rgb(40,30,50),
+    draw(d){ const {ctx:c,W,H,s}=d; const m=8*s, cyan=rgb(90,220,255), mag=rgb(255,70,160);
+      c.fillStyle=rgb(6,6,12); c.fillRect(0,0,W,H);
+      // deep indigo->black body
+      const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(38,26,72)); bg.addColorStop(.55,rgb(22,16,44)); bg.addColorStop(1,rgb(12,10,22));
+      rr(c,m,m,W-2*m,H-2*m,14*s); c.fillStyle=bg; c.fill();
+      rr(c,m,m,W-2*m,H-2*m,14*s); c.strokeStyle=rgb(90,220,255,0.35); c.lineWidth=2*s; c.stroke();
+      // neon rings behind the knobs
+      [.27,.73].forEach(x=>{ c.beginPath(); c.arc(x*W,.160*H,.066*W*1.42,0,7); c.strokeStyle=rgb(90,220,255,0.5); c.lineWidth=2*s; c.stroke(); });
+      // knob labels (RS names)
+      textSpaced(d,.27*W,.275*H,F.barlow,9.5,cyan,'BODY',0.5);
+      textSpaced(d,.73*W,.275*H,F.barlow,9.5,cyan,'TONE',0.5);
+      // retro gradient sun
+      const sx=.50*W, sy=.45*H, sr=.20*W;
+      c.save(); c.beginPath(); c.arc(sx,sy,sr,0,7); c.clip();
+      const sg=c.createLinearGradient(0,sy-sr,0,sy+sr); sg.addColorStop(0,rgb(255,212,92)); sg.addColorStop(.5,rgb(255,92,140)); sg.addColorStop(1,rgb(150,60,200));
+      c.fillStyle=sg; c.fillRect(sx-sr,sy-sr,sr*2,sr*2);
+      c.fillStyle=rgb(16,10,26);
+      for(let i=0;i<6;i++){ const yy=sy+sr*0.12+i*(sr*0.88/6); c.fillRect(sx-sr,yy,sr*2,Math.max(1.5*s,(i+1)*0.95*s)); }
+      c.restore();
+      c.beginPath(); c.arc(sx,sy,sr,0,7); c.strokeStyle=rgb(255,120,170,0.55); c.lineWidth=2*s; c.stroke();
+      // glowing wordmark over the sun
+      c.save(); setFont(d,F.anton,30); c.textAlign='center'; c.textBaseline='middle';
+      c.shadowColor=rgb(255,40,160); c.shadowBlur=14*s; c.fillStyle=rgb(245,248,255);
+      c.fillText('BASSQUAKE',sx,.455*H); c.shadowBlur=0; c.restore();
+      textSpaced(d,.50*W,.565*H,F.barlow,8,cyan,'BASS  EMULATOR',2.0);
+      // neon perspective grid (synthwave floor)
+      const gy0=.66*H, gy1=H-m-4*s, vp=.50*W;
+      c.save(); rr(c,m,gy0,W-2*m,gy1-gy0,10*s); c.clip();
+      c.strokeStyle=rgb(150,80,220,0.55); c.lineWidth=1.2*s;
+      for(let i=0;i<=7;i++){ const t=i/7, y=gy0+(gy1-gy0)*t*t; c.beginPath(); c.moveTo(m,y); c.lineTo(W-m,y); c.stroke(); }
+      for(let i=-6;i<=6;i++){ c.beginPath(); c.moveTo(vp+i*(W*.025),gy0); c.lineTo(vp+i*(W*.16),gy1); c.stroke(); }
+      c.restore();
+      // status LED + footswitch
+      ledDot(d,W*.50,H*.705,true,90,220,255);
+      footRound(d,W*.50,H*.84,20*s); } };
+
   // Vintage Chorus — MXR Stereo Chorus-style: yellow landscape box, three black
   // knobs in outlined cells, the parody 'NYR' logo box + 'stereo chorus' tag,
   // round footswitch, side jack legends. RS knob names. Rate0 Depth1 Mix2.
