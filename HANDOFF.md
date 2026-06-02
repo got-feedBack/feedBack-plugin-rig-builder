@@ -1,5 +1,20 @@
 # Rig Builder — handoff doc
 
+> **In-chain VST editing (2026-06-02, `feat/pedals-vst`).** Pressing **Edit** on
+> a pedal in a song tone's chain now edits it **inside the live full-chain
+> preview** instead of loading an isolated single copy. `rbToneEditVst`
+> (`screen.js`) starts (or reuses) the tone's `rbListenTone` preview, maps the
+> piece → its engine slot in the loaded chain via `rbChainSlotIdForPiece`
+> (matches `native_preset.chain` stage `path`/`rs_gear`, then `getChainState()`
+> index → slot id), and routes the canvas/sliders' `setParameter` at that slot —
+> so you hear the WHOLE chain (amp+cab+pedals) and the knob adjusts the chain's
+> sound, not a louder solo pedal. No 2nd copy is stacked (the old "Edit doubles
+> the sound" guard was an unconditional `clearChain` in `rbTeardownVstEditor`;
+> it's now gated by `rbState._vstEditorInChain` so closing the pedal face leaves
+> the preview playing). Falls back to the legacy isolated `loadVST` editor when
+> no live chain is available / the piece isn't found. Master-chain editing
+> (`rbMasterEditVst`) still uses the isolated path — separate follow-up.
+
 > **Released: v2.0.0 (2026-06-01)** — 100 copyright-free bundled VST3 effects
 > (pedals + racks) under `vst/`, plus in-app HTML-canvas pedal UIs
 > (`pedal_canvas.js` / `window.RBPedalCanvas`). Pressing **Edit** renders the

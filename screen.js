@@ -2770,18 +2770,68 @@ function rbBuildCanvasModel(rawParams, overrideById) {
 // starts clean.
 async function rbTeardownVstEditor(api) {
     const slot = rbState._vstEditorSlot;
+    const inChain = rbState._vstEditorInChain;
     rbState._vstEditorSlot = null;
+    rbState._vstEditorInChain = false;
     if (!api) return;
     // Close the prior editor's native window only if there was one…
     if (slot != null) {
         try { if (api.closePluginEditor) await api.closePluginEditor(slot); } catch (_) {}
     }
-    // …but ALWAYS clear the chain. The earlier `slot == null` early-return
-    // skipped this when opening the editor with no prior editor slot — so a
-    // live "Listen" chain (loaded via loadPreset, which sets no editor slot)
-    // stayed loaded, and the subsequent loadVST stacked a SECOND copy of the
-    // pedal on top → the effect was applied twice ("Edit VST doubles the sound").
-    try { if (api.clearChain) await api.clearChain(); } catch (_) {}
+    // …and clear the chain ONLY for an ISOLATED single-VST editor. The earlier
+    // unconditional clear fixed "Edit VST doubles the sound" back when opening
+    // the editor stacked a 2nd copy on top of the live chain via loadVST. The
+    // editor now edits the pedal IN PLACE inside the live preview chain (no 2nd
+    // copy), so for an in-chain edit the preview owns the chain (torn down via
+    // rbStopPreview) — clearing here would kill the sound the instant you close
+    // the pedal face.
+    if (!inChain) {
+        try { if (api.clearChain) await api.clearChain(); } catch (_) {}
+    }
+}
+
+// Map a song-tone piece to the engine slot id of its stage WITHIN the currently
+// loaded preview chain, so editing tweaks the pedal in place (the whole chain
+// keeps playing) instead of loading an isolated, louder single copy. Returns
+// null when there's no live chain or the piece isn't found in it — callers then
+// fall back to the isolated single-VST editor.
+//
+// How the mapping works: the backend builds `native_preset.chain` in signal
+// order; each type-0 (VST) stage carries the gear `path` + `rs_gear` (= the UI
+// piece's `type`). `getChainState()` returns the loaded stages index-aligned
+// with that chain spec, so chain index → engine slot id. Duplicate identical
+// pedals are disambiguated by skipping earlier same-(type,path) pieces.
+async function rbChainSlotIdForPiece(api, payload, toneIdx, pIdx) {
+    try {
+        if (!api || typeof api.getChainState !== 'function') return null;
+        const chain = payload && payload.native_preset && payload.native_preset.chain;
+        if (!Array.isArray(chain)) return null;
+        const tone = rbState.songTones && rbState.songTones.tones[toneIdx];
+        const piece = tone && tone.chain[pIdx];
+        if (!piece) return null;
+        const effPath = rbEffVstPath(piece);
+        let dupSkip = 0;
+        for (let k = 0; k < pIdx; k++) {
+            const q = tone.chain[k];
+            if (q && q.type === piece.type && rbEffVstPath(q) === effPath) dupSkip++;
+        }
+        let seen = 0, idx = -1;
+        for (let i = 0; i < chain.length; i++) {
+            const st = chain[i];
+            if (!st || Number(st.type) !== 0) continue;
+            if (typeof st.slot === 'string' && st.slot.startsWith('master_')) continue;
+            if (piece.type != null && st.rs_gear !== piece.type) continue;
+            if (effPath && st.path && st.path !== effPath) continue;
+            if (seen++ < dupSkip) continue;
+            idx = i; break;
+        }
+        if (idx < 0) return null;
+        const loaded = await api.getChainState();
+        if (!Array.isArray(loaded) || idx >= loaded.length) return null;
+        const slot = loaded[idx];
+        if (!slot) return null;
+        return slot.id != null ? slot.id : (slot.slotId != null ? slot.slotId : idx);
+    } catch (_) { return null; }
 }
 
 // Close any inline VST editor's NATIVE window + clear the tracked slot, but
@@ -2794,6 +2844,7 @@ async function rbCloseActiveVstEditor() {
     const slot = rbState._vstEditorSlot;
     if (slot == null) return;
     rbState._vstEditorSlot = null;
+    rbState._vstEditorInChain = false;
     const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
     if (api && api.closePluginEditor) {
         try { await api.closePluginEditor(slot); } catch (_) {}
@@ -2897,38 +2948,78 @@ async function rbToneEditVst(toneIdx, pIdx) {
     editor.classList.remove('hidden');
     editor.innerHTML = `<div class="text-xs text-gray-500">loading ${rbEsc(vstPath.split('/').pop())}…</div>`;
     try {
-        // Close + clear any previously-open editor (this or another piece)
-        // before loading — closing its native window first avoids the crash.
-        await rbTeardownVstEditor(api);
-        await api.startAudio().catch(() => {});
-        const slotId = await api.loadVST(vstPath);
-        if (slotId == null || slotId < 0) {
-            editor.innerHTML = `<div class="text-xs text-red-400">${rbEsc(rbVstRefusedMsg())}</div>`;
-            return;
+        // Did the tone have a saved / in-session param state BEFORE we touch
+        // anything? Decides whether we auto-apply the RS knob mapping below
+        // (and we must read it now, before the snapshot reseed wipes it).
+        const persistedParams = (piece._vst_params && Object.keys(piece._vst_params).length)
+            ? piece._vst_params
+            : ((piece.assigned && piece.assigned.vst_state)
+                ? rbParseVstStateParams(piece.assigned.vst_state) : null);
+        const hadSaved = !!(persistedParams && Object.keys(persistedParams).length);
+
+        // Close any previously-open editor's native window cleanly first
+        // (doesn't clear the chain — a live preview keeps playing).
+        await rbCloseActiveVstEditor();
+
+        // Play the WHOLE tone chain so the pedal is heard IN CONTEXT and editing
+        // adjusts the chain's sound — not an isolated, louder single VST. Start
+        // the full-chain preview for this tone unless it's already the live one.
+        const alreadyPreviewing = (rbState.listeningTone === toneIdx
+            && rbState._previewMode === 'native');
+        // Start the preview only when this tone isn't already the active one —
+        // rbListenTone TOGGLES, so calling it for the already-listening tone
+        // would stop playback instead of starting it.
+        if (rbState.listeningTone !== toneIdx && rbState.currentSongFile) {
+            await rbListenTone(toneIdx, rbState.currentSongFile);
         }
-        rbState._vstEditorSlot = slotId;
+        // rbListenTone / rbCloseActiveVstEditor collapse inline panels — re-open ours.
+        editor.classList.remove('hidden');
+        editor.innerHTML = `<div class="text-xs text-gray-500">loading ${rbEsc(vstPath.split('/').pop())}…</div>`;
+
+        // Locate this piece's stage inside the loaded chain. setParameter on that
+        // slot tweaks the pedal in place; the chain keeps playing and no 2nd copy
+        // is stacked (loading a separate VST on top doubled the sound).
+        let slotId = await rbChainSlotIdForPiece(api, rbState._previewPayload, toneIdx, pIdx);
+        const haveChainSlot = slotId != null;
+        if (haveChainSlot) {
+            rbState._vstEditorSlot = slotId;
+            rbState._vstEditorInChain = true;
+            // The chain load already re-applied saved params; just read them back
+            // so the canvas/sliders open reflecting the live values.
+            try { piece._vst_param_meta = await api.getParameters(slotId); }
+            catch (_) { piece._vst_param_meta = piece._vst_param_meta || []; }
+        } else {
+            // Fallback (no live chain / piece not found): isolated single-VST
+            // edit so the editor still works. This DOES own + clear the chain.
+            try { if (api.clearChain) await api.clearChain(); } catch (_) {}
+            await api.startAudio().catch(() => {});
+            slotId = await api.loadVST(vstPath);
+            if (slotId == null || slotId < 0) {
+                editor.innerHTML = `<div class="text-xs text-red-400">${rbEsc(rbVstRefusedMsg())}</div>`;
+                return;
+            }
+            rbState._vstEditorSlot = slotId;
+            rbState._vstEditorInChain = false;
+            // Re-apply previously captured params if any. Helper resolves NAME
+            // keys (from apply_vst_state.py bulk-populated states) → numeric ids
+            // and clamps values to [0,1].
+            const saved = piece._vst_params
+                || (piece.assigned && piece.assigned.vst_state
+                    ? rbParseVstStateParams(piece.assigned.vst_state) : null);
+            piece._vst_param_meta = await rbRestoreSavedParamsToSlot(api, slotId, saved);
+        }
         piece._vst_slot_id = slotId;
         // Keep any previously-saved opaque blob so re-saving without a fresh
         // capture (e.g. just closing) doesn't drop it.
         piece._vst_opaque = piece._vst_opaque
             || rbParseVstStateOpaque(piece._vst_state)
             || rbParseVstStateOpaque(piece.assigned && piece.assigned.vst_state);
-        // Re-apply previously captured params if any. Helper resolves NAME
-        // keys (from apply_vst_state.py bulk-populated states) → numeric
-        // ids and clamps values to [0,1]. Without this, name-keyed states
-        // silently no-op (parseInt("Threshold")=NaN) → editor opens at
-        // plugin defaults.
-        const saved = piece._vst_params
-            || (piece.assigned && piece.assigned.vst_state
-                ? rbParseVstStateParams(piece.assigned.vst_state) : null);
-        const params = await rbRestoreSavedParamsToSlot(api, slotId, saved);
-        piece._vst_param_meta = params;
-        // Seed _vst_params with the FULL current snapshot so subsequent
-        // slider drags modify a complete dict (not just the touched ids).
-        // Persisting partial dicts was a data-loss bug: untouched params
-        // would silently revert to plugin defaults on chain rebuild.
+        // Seed _vst_params with the FULL current snapshot so subsequent slider
+        // drags modify a complete dict (not just the touched ids). Persisting
+        // partial dicts was a data-loss bug: untouched params would silently
+        // revert to plugin defaults on chain rebuild.
         piece._vst_params = {};
-        for (const param of params) {
+        for (const param of (piece._vst_param_meta || [])) {
             const id = param.id ?? param.paramId ?? param.index;
             const v  = param.value ?? param.current;
             if (id != null && typeof v === 'number') piece._vst_params[id] = v;
@@ -2938,11 +3029,10 @@ async function rbToneEditVst(toneIdx, pIdx) {
         // settings instead of plugin defaults. (The manual "Apply RS settings"
         // button still lets you re-apply or override.) Skipped when a curated
         // state already exists so we don't clobber the user's own tweaks.
-        const hadSaved = saved && Object.keys(saved).length > 0;
         if (!hadSaved && piece.knobs && Object.keys(piece.knobs).length) {
             try {
                 const vstStem2 = vstPath.split('/').pop().replace(/\.(vst3|component)$/i, '');
-                const mapped = await rbComputeRsMappedParams(piece.type, piece.knobs, vstStem2, params);
+                const mapped = await rbComputeRsMappedParams(piece.type, piece.knobs, vstStem2, piece._vst_param_meta);
                 if (mapped && Object.keys(mapped).length) {
                     for (const [id, v] of Object.entries(mapped)) {
                         const nid = Number(id);
@@ -2953,13 +3043,13 @@ async function rbToneEditVst(toneIdx, pIdx) {
                 }
             } catch (_) { /* mapping is best-effort; defaults remain on failure */ }
         }
-        // Render the inline slider panel FIRST so a headless plugin (no GUI —
-        // e.g. the bundled QTron envelope filter) still gets an editable
-        // panel even if openPluginEditor misbehaves for a UI-less plugin
-        // (returns non-promise / throws). Native-window plugins are unaffected.
+        // Render the inline slider panel / canvas FIRST so a headless plugin (no
+        // GUI — e.g. the bundled QTron envelope filter) still gets an editable
+        // panel even if openPluginEditor misbehaves for a UI-less plugin.
         const usedCanvas = rbToneRenderInlineVstParams(toneIdx, pIdx);
-        // Only fall back to the native plugin window when we DON'T have an
-        // in-app canvas recreation — the canvas is the inline editor now.
+        // Only fall back to the native plugin window when we DON'T have an in-app
+        // canvas recreation — the canvas is the inline editor now. (Tracked via
+        // _vstEditorSlot so it's closed on navigation, even for an in-chain slot.)
         if (!usedCanvas && api.openPluginEditor) {
             try {
                 const _ed = api.openPluginEditor(slotId);
