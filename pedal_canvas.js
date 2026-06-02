@@ -1819,24 +1819,24 @@
       rail(H*0.035,H*0.05); rail(H*0.915,H*0.05);
       const w=rgb(226,228,232), dim=rgb(150,152,158);
       // section labels
-      textC(d,.105*W,.235*H,F.barlow,13.5,w,'THRESHOLD');
-      textC(d,.210*W,.235*H,F.barlow,13.5,w,'COMPRESSION');
-      textC(d,.315*W,.235*H,F.barlow,13.5,w,'ATTACK');
-      textC(d,.420*W,.235*H,F.barlow,13.5,w,'RELEASE');
-      textC(d,.525*W,.235*H,F.barlow,13.5,w,'OUTPUT');
+      textC(d,.105*W,.230*H,F.barlow,16,w,'THRESHOLD');
+      textC(d,.210*W,.230*H,F.barlow,16,w,'COMPRESSION');
+      textC(d,.315*W,.230*H,F.barlow,16,w,'ATTACK');
+      textC(d,.420*W,.230*H,F.barlow,16,w,'RELEASE');
+      textC(d,.525*W,.230*H,F.barlow,16,w,'OUTPUT');
       // BELOW / ABOVE indicator LEDs over THRESHOLD
-      ledDot(d,.065*W,.345*H,true,224,196,40);  textC(d,.065*W,.395*H,F.barlow,8,dim,'BELOW');
-      ledDot(d,.145*W,.345*H,false,200,40,40);  textC(d,.147*W,.395*H,F.barlow,8,dim,'ABOVE');
+      ledDot(d,.065*W,.345*H,true,224,196,40);  textC(d,.065*W,.398*H,F.barlow,9.5,dim,'BELOW');
+      ledDot(d,.145*W,.345*H,false,200,40,40);  textC(d,.147*W,.398*H,F.barlow,9.5,dim,'ABOVE');
       // POWER button
       rr(c,.067*W,.690*H,.070*W,.085*H,3); c.fillStyle=rgb(40,40,44); c.fill();
       rr(c,.077*W,.705*H,.050*W,.055*H,2); c.fillStyle=rgb(170,172,176); c.fill();
-      textC(d,.102*W,.820*H,F.barlow,8.5,dim,'POWER');
+      textC(d,.102*W,.822*H,F.barlow,10,dim,'POWER');
       // METER selector buttons + bracket
       ['INPUT','OUTPUT','GAIN'].forEach((t,i)=>{ const bx=(.280+i*.070)*W;
         rr(c,bx,.695*H,.056*W,.075*H,3); c.fillStyle=rgb(40,40,44); c.fill();
         rr(c,bx+.008*W,.708*H,.040*W,.048*H,2); c.fillStyle=rgb(150,152,158); c.fill();
-        textC(d,bx+.028*W,.670*H,F.barlow,7,dim,i===2?'CHANGE':t); });
-      textC(d,.350*W,.840*H,F.barlow,8.5,dim,'METER');
+        textC(d,bx+.028*W,.668*H,F.barlow,8.5,dim,i===2?'CHANGE':t); });
+      textC(d,.350*W,.842*H,F.barlow,10,dim,'METER');
       // ── amber VU meter ──
       const vx=.630*W, vy=.205*H, vw=.270*W, vh=.42*H;
       rr(c,vx-7,vy-7,vw+14,vh+14,6); c.fillStyle=rgb(16,16,18); c.fill();
@@ -1849,17 +1849,17 @@
       nums.forEach((n,i)=>{ const t=a0+(a1-a0)*(i/(nums.length-1));
         c.strokeStyle=i>=4?rgb(170,40,40):rgb(38,66,142); c.lineWidth=1.4; c.beginPath();
         c.moveTo(mcx+Math.cos(t)*(mR-5),mcy+Math.sin(t)*(mR-5)); c.lineTo(mcx+Math.cos(t)*mR,mcy+Math.sin(t)*mR); c.stroke();
-        textC(d,mcx+Math.cos(t)*(mR+11),mcy+Math.sin(t)*(mR+11)+3,F.barlow,7,i>=4?rgb(150,30,30):rgb(30,55,128),n); });
-      textC(d,mcx,vy+vh*0.55,F.barlow,8.5,rgb(38,66,142),'DECIBELS');
-      textC(d,mcx,vy+vh*0.78,F.bebas,14,rgb(38,66,142),'HZX');
+        textC(d,mcx+Math.cos(t)*(mR+11),mcy+Math.sin(t)*(mR+11)+3,F.barlow,8,i>=4?rgb(150,30,30):rgb(30,55,128),n); });
+      textC(d,mcx,vy+vh*0.55,F.barlow,10,rgb(38,66,142),'DECIBELS');
+      textC(d,mcx,vy+vh*0.78,F.bebas,16,rgb(38,66,142),'HZX');
       const nt=a0+(a1-a0)*0.42; c.strokeStyle=rgb(22,22,26); c.lineWidth=2;
       c.beginPath(); c.moveTo(mcx,mcy); c.lineTo(mcx+Math.cos(nt)*mR*0.98,mcy+Math.sin(nt)*mR*0.98); c.stroke();
       c.beginPath(); c.arc(mcx,mcy,3,0,7); c.fillStyle=rgb(22,22,26); c.fill();
       // ── brand logo ──
-      textC(d,.695*W,.815*H,F.bebas,32,w,'HZX');
-      c.beginPath(); c.arc(.765*W,.793*H,3.5,0,7); c.fillStyle=dim; c.fill();
-      textC(d,.820*W,.815*H,F.bebas,32,w,'165');
-      textC(d,.768*W,.880*H,F.barlow,9.5,dim,'COMPRESSOR / LIMITER'); } };
+      textC(d,.690*W,.815*H,F.bebas,37,w,'HZX');
+      c.beginPath(); c.arc(.767*W,.790*H,4,0,7); c.fillStyle=dim; c.fill();
+      textC(d,.825*W,.815*H,F.bebas,37,w,'165');
+      textC(d,.768*W,.882*H,F.barlow,11,dim,'COMPRESSOR / LIMITER'); } };
   P.studiodelay     = rackSpec({title:'STUDIO DELAY',      accent:[105,135,205], names:['Time L','Time R','Feedback','Filter','Mix']});
   // Parametric EQ — GML 8200 look: black wide rack, COLOUR-coded knobs per band
   // (centred), centre LNG logo, "MODEL 8300 PARAMETRIC EQUALIZER" bottom.
