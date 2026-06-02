@@ -585,6 +585,12 @@
       textSpaced(d,.67*d.W,.135*d.H,F.barlow,9,or,'TONE',0.2);
       chiefName(d,'Heavy','Metal','HM-2',0,0,or); } };
 
+  // Octavius — Boss OC-5 Octave-style: Chief body in the OC-5 dark chocolate brown.
+  // RS knob names. 2 RS knobs: Tone0 Mix1.
+  P.octavius = chiefSpec(300,480,[82,52,40],
+    [{id:0,cx:.33,lbl:'TONE'},{id:1,cx:.67,lbl:'MIX'}],
+    'Octave',null,'OC-5');
+
   // Vintage Chorus — MXR Stereo Chorus-style: yellow landscape box, three black
   // knobs in outlined cells, the parody 'NYR' logo box + 'stereo chorus' tag,
   // round footswitch, side jack legends. RS knob names. Rate0 Depth1 Mix2.
@@ -652,6 +658,112 @@
       textC(d,.50*W,.805*H,F.crete,16,cream,'Hudson');
       textSpaced(d,.50*W,.850*H,F.barlow,7,cream,'KALAMAZOO  MICHIGAN',0.3);
       textSpaced(d,.50*W,.890*H,F.barlow,7.5,cream,'MODEL BZ-1A',0.4); } };
+
+  // Octave Up — Foxrox Octron3-style: cream box, black knobs + flanking toggles
+  // inside a printed outline, bold wordmark + brand, red LED + chrome stomp.
+  // Parody (Falcon / Octup). RS knob names. Tone0 Mix1.
+  P.octaveup = { w:280,h:470, knobs:[
+      {id:0,cx:.35,cy:.135,r:.062,style:'boss'},
+      {id:1,cx:.65,cy:.135,r:.062,style:'boss'}],
+    ptr:rgb(238,240,242),
+    draw(d){ const {ctx:c,W,H,s}=d; const m=8*s, ink=rgb(34,32,28);
+      c.fillStyle=rgb(8,8,7); c.fillRect(0,0,W,H);
+      const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(228,224,210)); bg.addColorStop(1,rgb(208,204,190));
+      rr(c,m,m,W-2*m,H-2*m,12*s); c.fillStyle=bg; c.fill();
+      rr(c,m,m,W-2*m,H-2*m,12*s); c.strokeStyle='rgba(0,0,0,0.3)'; c.lineWidth=2*s; c.stroke();
+      // printed black outline panel (Octron signature)
+      rr(c,W*.08,H*.05,W*.84,H*.27,10*s); c.strokeStyle=ink; c.lineWidth=1.6*s; c.stroke();
+      // knob labels (RS names)
+      textSpaced(d,.35*W,.225*H,F.barlow,9,ink,'TONE',0.3);
+      textSpaced(d,.65*W,.225*H,F.barlow,9,ink,'MIX',0.3);
+      // decorative toggles (Bright/Pure, Mids/Low)
+      const tog=(tx,up)=>{ const tw=8*s,th=18*s,ty=H*.155; rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.fillStyle=rgb(24,24,26); c.fill();
+        rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.strokeStyle=rgb(8,8,10); c.lineWidth=0.8*s; c.stroke();
+        const ly=ty+(up?-1:1)*th*0.2; const lg=c.createLinearGradient(tx-3*s,ly-4*s,tx+3*s,ly+4*s); lg.addColorStop(0,rgb(228,230,234)); lg.addColorStop(1,rgb(150,153,160));
+        rr(c,tx-3.2*s,ly-5*s,6.4*s,10*s,2*s); c.fillStyle=lg; c.fill(); };
+      tog(.165*W,true); tog(.835*W,false);
+      textSpaced(d,.165*W,.235*H,F.barlow,5.5,ink,'BRIGHT',0.1); textSpaced(d,.165*W,.265*H,F.barlow,5.5,ink,'PURE',0.1);
+      textSpaced(d,.835*W,.235*H,F.barlow,5.5,ink,'MIDS',0.1); textSpaced(d,.835*W,.265*H,F.barlow,5.5,ink,'LOW',0.1);
+      // wordmark + brand
+      textC(d,.46*W,.420*H,F.anton,48,ink,'OCTUP');
+      textSpaced(d,.50*W,.500*H,F.barlow,11,ink,'FALCON',1.5);
+      // LED + chrome footswitch
+      ledDot(d,W*.50,H*.610,true,224,56,46);
+      footRound(d,W*.50,H*.770,20*s); } };
+
+  // Multi Pitch — Moog MF-102 Ring Modulator-style: custom foog (moogerfooger)
+  // layout — two white control-group boxes flanking a centre knob + LED column,
+  // blue slide switches, foog logo. Parody (FM102). RS knob names.
+  // Pitch1-0 Tone1 Mix2.
+  P.multipitch = { w:320,h:480, knobs:[
+      {id:0,cx:.245,cy:.275,r:.072,style:'moog'},
+      {id:1,cx:.500,cy:.205,r:.055,style:'moog'},
+      {id:2,cx:.755,cy:.275,r:.072,style:'moog'}],
+    tick:rgb(150,152,158), ptr:rgb(238,240,244),
+    draw(d){ const {ctx:c,W,H,s}=d; foogBody(d); const wt=rgb(226,228,232);
+      textC(d,.31*W,.050*H,F.crete,16,wt,'foogermooger');
+      textC(d,.79*W,.042*H,F.crete,13,wt,'MULTI');
+      textC(d,.79*W,.076*H,F.crete,13,wt,'PITCH');
+      // two white control-group boxes (LFO | MODULATOR positions)
+      rr(c,W*.085,H*.115,W*.32,H*.40,8*s); c.strokeStyle=wt; c.lineWidth=1.6*s; c.stroke();
+      rr(c,W*.595,H*.115,W*.32,H*.40,8*s); c.strokeStyle=wt; c.lineWidth=1.6*s; c.stroke();
+      // knob labels (RS names)
+      textSpaced(d,.245*W,.165*H,F.barlow,8.5,wt,'PITCH1',0.2);
+      textSpaced(d,.500*W,.120*H,F.barlow,8,wt,'TONE',0.3);
+      textSpaced(d,.755*W,.165*H,F.barlow,8.5,wt,'MIX',0.3);
+      // blue slide switches (MF-102 signature)
+      const blueSlide=(sx)=>{ const sw=22*s, sh=11*s, sy=H*.43; rr(c,sx-sw/2,sy-sh/2,sw,sh,3*s); c.fillStyle=rgb(28,30,36); c.fill();
+        rr(c,sx-sw/2,sy-sh/2,sw,sh,3*s); c.strokeStyle=rgb(10,10,12); c.lineWidth=0.8*s; c.stroke();
+        rr(c,sx-sw*0.40,sy-sh*0.30,sw*0.5,sh*0.6,2*s); c.fillStyle=rgb(74,142,212); c.fill(); };
+      blueSlide(.245*W); blueSlide(.755*W);
+      // centre LED column (LEVEL / LFO / BYPASS)
+      [['LEVEL',.34],['LFO',.43],['BYPASS',.52]].forEach(p=>{ textSpaced(d,.50*W,(p[1]-0.035)*H,F.barlow,5.5,wt,p[0],0.2); ledDot(d,.50*W,p[1]*H,true,150,196,255); });
+      // foog logo + model + footswitch
+      textC(d,.72*W,.625*H,F.crete,22,wt,'foog');
+      textSpaced(d,.30*W,.625*H,F.barlow,9,wt,'FM102',0.3);
+      footRound(d,W*.50,H*.800,20*s); } };
+
+  // Send in the Clones — EHX Clone Theory-style: brushed-silver box, black control
+  // panel with three knobs, bubble graphics, outline wordmark + green tag, script
+  // brand. Parody (quimical-harmony / Attack of the Clones). RS knob names.
+  // Clones0 Depth1 Mix2.
+  P.sendintheclones = { w:300,h:420, knobs:[
+      {id:0,cx:.20,cy:.155,r:.060,style:'boss'},
+      {id:1,cx:.50,cy:.155,r:.060,style:'boss'},
+      {id:2,cx:.80,cy:.155,r:.060,style:'boss'}],
+    ptr:rgb(238,240,242),
+    draw(d){ const {ctx:c,W,H,s}=d; const m=8*s, wt=rgb(236,238,242), grn=rgb(122,212,184);
+      c.fillStyle=rgb(8,8,9); c.fillRect(0,0,W,H);
+      const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(202,204,208)); bg.addColorStop(1,rgb(168,170,176));
+      rr(c,m,m,W-2*m,H-2*m,12*s); c.fillStyle=bg; c.fill();
+      c.save(); rr(c,m,m,W-2*m,H-2*m,12*s); c.clip(); c.strokeStyle='rgba(255,255,255,0.10)'; c.lineWidth=1;
+      for(let y=m;y<H-m;y+=3*s){ c.beginPath(); c.moveTo(m,y); c.lineTo(W-m,y); c.stroke(); } c.restore();
+      rr(c,m,m,W-2*m,H-2*m,12*s); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=2*s; c.stroke();
+      // black control panel
+      rr(c,W*.06,H*.04,W*.88,H*.66,8*s); c.fillStyle=rgb(20,20,22); c.fill();
+      rr(c,W*.06,H*.04,W*.88,H*.66,8*s); c.strokeStyle=rgb(6,6,8); c.lineWidth=1.4*s; c.stroke();
+      // 9V symbol
+      c.strokeStyle=wt; c.lineWidth=1.2*s; c.beginPath(); c.arc(W*.475,H*.072,4*s,0,7); c.stroke();
+      textSpaced(d,.545*W,.072*H,F.barlow,7,wt,'9V',0.2);
+      // knob labels (RS names)
+      textSpaced(d,.20*W,.245*H,F.barlow,8.5,wt,'CLONES',0.2);
+      textSpaced(d,.50*W,.245*H,F.barlow,8.5,wt,'DEPTH',0.2);
+      textSpaced(d,.80*W,.245*H,F.barlow,8.5,wt,'MIX',0.3);
+      ledDot(d,W*.50,H*.305,true,224,56,46);
+      // bubble accents (Clone Theory signature)
+      [[.66,.40,5],[.72,.445,3],[.30,.52,4],[.355,.47,3],[.70,.55,4],[.28,.585,3]].forEach(b=>{ c.beginPath(); c.arc(b[0]*W,b[1]*H,b[2]*s,0,7); c.strokeStyle=grn; c.lineWidth=1.2*s; c.stroke(); });
+      // wordmark + tag
+      textSpaced(d,.46*W,.395*H,F.barlow,11,wt,'ATTACK OF THE',0.5);
+      outlineText(d,.46*W,.485*H,F.anton,42,wt,rgb(12,12,14),'CLONES',2);
+      textSpaced(d,.50*W,.560*H,F.barlow,8,grn,'STEREO  CHORUS  VIBRATO',0.5);
+      // footswitch
+      footRound(d,W*.50,H*.638,20*s);
+      // brand on the silver below the panel
+      textC(d,.50*W,.825*H,F.crete,16,rgb(28,28,30),'quimical-harmony');
+      textSpaced(d,.50*W,.875*H,F.barlow,7.5,rgb(40,40,44),'MADE IN NYC, USA',0.4);
+      // side jack legends (rotated)
+      c.save(); c.translate(W*.105,H*.42); c.rotate(-Math.PI/2); textSpaced(d,0,0,F.barlow,6,wt,'STEREO OUT',0.2); c.restore();
+      c.save(); c.translate(W*.895,H*.42); c.rotate(-Math.PI/2); textSpaced(d,0,0,F.barlow,6.5,wt,'INPUT',0.2); c.restore(); } };
 
   function chiefSpec(w,h,col,knobIds,n1,n2,code,plate){
     const lum=0.299*col[0]+0.587*col[1]+0.114*col[2], ink=lum>120?rgb(16,16,20):rgb(232,234,238);
