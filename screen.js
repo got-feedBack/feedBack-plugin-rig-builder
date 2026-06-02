@@ -4454,13 +4454,12 @@ function rbAddPickerSetVstFilter(toneIdx, filename, value) {
 // without needing closures over the caller.
 
 function rbBuildRocksmithPickerBody({ dawCat, filter, onCategoryCall, onFilterCall, onAddCall, searchId }) {
-    const f = (filter || '').toLowerCase().trim();
+    const f = rbNorm(filter || '').trim();
     const matches = (_rbGearsCatalog || []).filter(g => {
         if ((g.daw_category || 'other') !== dawCat) return false;
         if (!f) return true;
-        return (g.name || '').toLowerCase().includes(f)
-            || (g.rs_gear || '').toLowerCase().includes(f)
-            || (g.make || '').toLowerCase().includes(f);
+        const hay = rbNorm((g.name || '') + ' ' + (g.rs_gear || '') + ' ' + (g.make || '')) + rbGearTypeTags(g);
+        return hay.includes(f);
     });
     const catButtons = RB_DAW_CATEGORIES.map(c => `
         <button onclick="${onCategoryCall(c.key)}"
@@ -6113,11 +6112,48 @@ function rbDebouncedGearFilter() {
     _rbGearSearchTimer = setTimeout(() => rbApplyGearFilters(), 150);
 }
 
+// Lowercase + strip accents so "distorsión" == "distorsion".
+function rbNorm(s) {
+    return (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+// Maps a gear's RS codename / category to extra searchable TYPE keywords
+// (Spanish + English) so typing a pedal type — "distorsion", "coro", "eco" —
+// surfaces every gear of that type even when the display name (a model number
+// like CB-3) doesn't contain the word. Matched against the English rs_gear
+// codename, so the synonyms expand to both languages.
+const RB_TYPE_SYNONYMS = [
+    [/distortion/, 'distortion distorsion'],
+    [/overdrive/, 'overdrive drive sobresaturacion saturacion'],
+    [/fuzz|buzz|muff/, 'fuzz'],
+    [/chorus/, 'chorus coro'],
+    [/flanger|flange/, 'flanger flange'],
+    [/phaser|phase|vibe/, 'phaser fase faser vibe'],
+    [/delay|echo|clone/, 'delay echo eco retardo'],
+    [/reverb|verb|chamber|plate|spring|room|hall/, 'reverb reverberacion verb'],
+    [/tremolo|trem/, 'tremolo tremol'],
+    [/vibrato/, 'vibrato'],
+    [/wah/, 'wah wahwah'],
+    [/comp/, 'compressor compresor comp'],
+    [/\beq\b|equal|graphic/, 'eq equalizer ecualizador'],
+    [/octave|octav|pitch|sub/, 'octave octava pitch octaver'],
+    [/boost/, 'boost booster realce'],
+    [/filter|filt|wah/, 'filter filtro'],
+    [/gate/, 'gate noise compuerta ruido'],
+    [/ring|mod/, 'ringmod modulador'],
+    [/acoustic|simulator/, 'acoustic acustico simulator'],
+];
+function rbGearTypeTags(g) {
+    const key = rbNorm((g && g.rs_gear || '') + ' ' + (g && g.category || ''));
+    let tags = '';
+    for (const [re, syn] of RB_TYPE_SYNONYMS) if (re.test(key)) tags += ' ' + syn;
+    return tags;
+}
+
 function rbApplyGearFilters() {
     const el = document.getElementById('rb-catalog');
     if (!el || !rbState.gearCatalog) return;
-    const search = ((document.getElementById('rb-gear-search') || {}).value || '')
-        .toLowerCase().trim();
+    const search = rbNorm(((document.getElementById('rb-gear-search') || {}).value || '')).trim();
     const onlyUnassigned = !!((document.getElementById('rb-gear-only-unassigned') || {}).checked);
     const compact = !!((document.getElementById('rb-gear-compact') || {}).checked);
 
@@ -6129,13 +6165,13 @@ function rbApplyGearFilters() {
         const items = rbState.gearCatalog[cat].filter(g => {
             if (onlyUnassigned && g.assigned) return false;
             if (!search) return true;
-            const hay = (
+            const hay = rbNorm(
                 (g.real_name || '') + ' ' +
                 (g.make || '') + ' ' +
                 (g.model || '') + ' ' +
                 (g.rs_gear || '') + ' ' +
                 (g.tone3000_title || '')
-            ).toLowerCase();
+            ) + rbGearTypeTags(g);
             return hay.includes(search);
         });
         if (items.length) {

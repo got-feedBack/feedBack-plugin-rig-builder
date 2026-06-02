@@ -1128,6 +1128,23 @@ def _load_vst_seed_catalog() -> dict:
     return _load_cached_json("rs_gear_to_vst.json")
 
 
+def _load_vst_display_names() -> dict:
+    """Load (and cache) vst_display_names.json: maps a bundled VST's stem
+    (lowercased, alphanumeric-only — e.g. 'basschorus', 'bz1') to a copyright-
+    free display name shown in the Gear catalog instead of the real make/model.
+    Chief-family pedals map to just their model code (e.g. 'CB-3'); the rest to
+    a clean product name. Missing file = empty dict (falls back to real_name)."""
+    return _load_cached_json("vst_display_names.json")
+
+
+def _vst_display_stem(vst_path: str) -> str:
+    """Match the UI's gStem: basename minus .vst3/.component, lowercased,
+    non-alphanumerics stripped. Keep in sync with screen.js / pedal_canvas."""
+    name = Path(vst_path or "").name
+    name = re.sub(r"\.(vst3|component)$", "", name, flags=re.IGNORECASE)
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
 def _bundled_vst_plugins() -> list[dict]:
     """Return VST/AU plugins shipped inside this plugin's own ``vst/`` dir.
 
@@ -7268,17 +7285,25 @@ def setup(app, context):
                 "vst_state": None,
             }
 
+        display_names = _load_vst_display_names()
         cats: dict[str, list] = {}
         for gear, b in best.items():
             info = rs_map.get(gear) or {}
             category = info.get("category") or _category_from_codename(gear)
+            # Bundled-VST gears show a copyright-free model name (Chief pedals =
+            # just their model code, e.g. 'CB-3') instead of the real make/model.
+            real_name = info.get("name") or gear
+            if b["kind"] == "vst" and b["vst_path"]:
+                dn = display_names.get(_vst_display_stem(b["vst_path"]))
+                if dn:
+                    real_name = dn
             t3kid = b["tone3000_id"]
             meta = img_idx.get(t3kid) if t3kid else None
             variants = _variants_for(gear, info) if category == "amp" else []
             mic_variants = _mic_variants_for(gear) if category == "cab" else []
             cats.setdefault(category, []).append({
                 "rs_gear": gear,
-                "real_name": info.get("name") or gear,
+                "real_name": real_name,
                 "make": info.get("make", ""),
                 "model": info.get("model", ""),
                 "category": category,
