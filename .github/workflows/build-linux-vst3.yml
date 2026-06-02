@@ -1,0 +1,104 @@
+name: Build Linux VST3 binaries
+
+# Why: the bundled effects in vst/*.vst3 ship with macOS (Contents/MacOS/<Name>)
+# and Windows (Contents/x86_64-win/<Name>.vst3) binaries, but no Linux build.
+# On Linux the host (Slopsmith Desktop's JUCE VST3 sandbox) resolves the binary
+# at Contents/<machine>-linux/<Name>.so, where <machine> comes from `uname -m`
+# (so x86_64-linux on a normal box). With no such folder the bundles can't load
+# and the plugin has no Linux support.
+#
+# This workflow cross-builds every DPF plugin for Linux and injects the
+# x86_64-linux binary into each committed bundle, mirroring build-windows-vst3.yml
+# so the bundles become fully cross-platform (macOS + Windows + Linux).
+#
+# Run it manually from the Actions tab (workflow_dispatch). It commits the new
+# Linux binaries back to the branch it ran on.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dpf_ref:
+        description: "DISTRHO/DPF git ref to build against"
+        default: "main"
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    # ubuntu-22.04 matches the slopsmith-desktop build/sandbox runners, so the
+    # glibc the .so links against is no newer than what the shipped AppImage/deb
+    # target.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        # DPF's default UI is its OpenGL backend (DGL), so the effects with a
+        # FILES_UI need the X11 + GL dev headers, not just a compiler.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            libgl1-mesa-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxinerama-dev
+
+      - name: Clone DPF
+        run: git clone --depth 1 --branch "${{ github.event.inputs.dpf_ref }}" https://github.com/DISTRHO/DPF.git "$GITHUB_WORKSPACE/dpf"
+
+      - name: Build every VST3 for Linux
+        run: |
+          set +e
+          DPF="$GITHUB_WORKSPACE/dpf"
+          cd "$GITHUB_WORKSPACE/vst/src"
+          fail=""
+          build() { ( cd "$1" && make -j2 DPF_PATH="$DPF" vst3 ) || fail="$fail $1"; }
+          # root Makefile builds AutoSweep (the QTron envelope filter)
+          [ -f Makefile ] && build .
+          for mk in */Makefile; do
+            d=$(dirname "$mk")
+            case "$d" in DPF|_shared) continue;; esac
+            echo "==== building $d ===="
+            build "$d"
+          done
+          echo "FAILED DIRS:$fail"
+
+      - name: Inject x86_64-linux binaries into the committed bundles
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          count=0
+          # DPF writes the built bundle under each plugin dir (bin/<Name>.vst3).
+          find vst/src -type d -path '*/Contents/x86_64-linux' | while read -r lin; do
+            bundle=$(basename "$(dirname "$(dirname "$lin")")")   # <Name>.vst3
+            if [ -d "vst/$bundle" ]; then
+              dest="vst/$bundle/Contents/x86_64-linux"
+              rm -rf "$dest"; mkdir -p "$dest"
+              cp -R "$lin/." "$dest/"
+              echo "injected: $bundle"
+              count=$((count+1))
+            else
+              echo "WARNING: built $bundle but no committed bundle vst/$bundle"
+            fi
+          done
+          echo "injected $count bundles"
+
+      - name: Commit the Linux binaries
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          git config user.name  "linux-vst-bot"
+          git config user.email "linux-vst-bot@users.noreply.github.com"
+          git add vst/*/Contents/x86_64-linux || true
+          if git diff --cached --quiet; then
+            echo "No Linux binaries to commit (check the build log for failures)."
+          else
+            git commit -m "Add Linux (x86_64-linux) VST3 binaries to bundled effects"
+            git push
+          fi
+
+      - name: Upload as artifact too
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-vst3
+          path: vst/src/**/Contents/x86_64-linux/**
+          if-no-files-found: warn
