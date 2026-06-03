@@ -56,9 +56,12 @@ participants at runtime when `rbInit()` runs:
   source selection, and `song.sync`. It should appear in the inspector under
   `library`, but it is not a provider because it does not register a browsable
   library source.
-- `audio-effects`: `rig_builder.effects` reports the current NAM/VST/IR
-  chain route (`desktop-main`) using only safe summaries: stage counts,
-  type buckets, bypass counts, master pre/post counts, dependency status.
+- `audio-effects`: `rig_builder.effects` registers as the high-priority
+  full-chain provider on `desktop-main`. It resolves existing
+  `native_preset_full` / `mega_chain` backend responses into
+  `slopsmith.audio_effects.chain_plan.v1` plus a trusted desktop-only asset
+  map, and reports only safe summaries: stage counts, type buckets, bypass
+  counts, master pre/post counts, dependency status.
 - `playback`: `rig_builder.playback-observer` observes playback v1
   `ready`/`stopped`/`ended` lifecycle events. `ready` records the safe
   playback `settingsKey` when present and uses the local filename only as the
@@ -82,12 +85,34 @@ fields, or settings objects into capability hosts.
 
 Migration gates still expected:
 
-- The fetch patch for `nam_tone/native-preset/{id}` records the
-  `audio-effects.legacy-nam-routing` bridge until Slopsmith's 015
-  `audio-effects` host has an executable provider chain-resolution path and
-  `nam_tone` playback uses it. The 015 `select-chain` command is currently a
-  safe control-plane/diagnostics record; it does not call providers or return
-  private NAM/VST/IR chain payloads.
+- The fetch patch for `nam_tone/native-preset/{id}` remains as the normal
+  playback compatibility bridge and records
+  `audio-effects.legacy-nam-routing` only when that bridge/fallback path is
+  used. Rig Builder-owned provider-addressable native paths (Listen, preview
+  reload, mega-chain preload) now ask the core `audio-effects` host to load
+  the selected provider plan; the host owns the trusted desktop executor
+  handoff. Ad hoc single-file auditions still fall back to legacy
+  `loadPreset` unless they are represented as provider targets.
+
+### Audio-effects provider checkpoint (2026-06-03)
+
+- Branch: `feature/audio-effects-provider`.
+- Manifest now advertises executable audio-effects operations:
+  `chain.resolve`, `chain.inspect`, `segment.activate`, `stage.set-bypass`,
+  `stage.set-parameter`, and `fallback`, while retaining legacy commands
+  during migration.
+- Runtime registration calls `window.slopsmith.audioEffects.registerProvider`
+  with provider id `rig_builder.effects`, priority `40`, route `desktop-main`,
+  and operation handlers. The older candidate-domain participant remains for
+  capability-inspector compatibility.
+- `screen.js` converts backend native chains into safe chain plans and keeps
+  raw paths/state only in the provider-private response consumed by the core
+  host. Stage state is passed as `stateBase64` on the trusted asset entry so
+  NAM/IR/VST state survives the executor path.
+- Validation passed before the provider/executor boundary cleanup: `uv run
+  --with pytest pytest tests/test_manifest.py`, Node `new Function(screen.js)`
+  syntax check, `uv run --with fastapi python -c "import routes"`, `git diff
+  --check`, and editor diagnostics. Re-run these after any further edits.
 - Long-running routes are attributed through `jobs` but not moved into a
   first-class job queue yet; removing `jobs.legacy-*` bridge hits requires the
   backend routes to accept job IDs / cancellation directly.

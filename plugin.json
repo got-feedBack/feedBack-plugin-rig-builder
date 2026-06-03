@@ -61,7 +61,8 @@
     "audio-effects": {
       "roles": ["provider", "requester", "observer"],
       "commands": ["select-chain", "bypass", "restore", "fallback", "inspect-route"],
-      "events": ["audio-effects:changed", "audio-effects:bridge-hit"],
+      "operations": ["chain.resolve", "chain.inspect", "segment.activate", "stage.set-bypass", "stage.set-parameter", "fallback"],
+      "events": ["audio-effects:provider-registered", "audio-effects:route-selected", "audio-effects:plan-resolved", "audio-effects:changed", "audio-effects:fallback", "audio-effects:bridge-hit"],
       "mode": "active",
       "compatibility": "shim-allowed",
       "ownership": "multi-provider",

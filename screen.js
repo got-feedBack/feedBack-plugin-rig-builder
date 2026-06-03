@@ -637,12 +637,14 @@ const RB_API = '/api/plugins/rig_builder';
 const RB_PLUGIN_ID = 'rig_builder';
 const RB_EFFECTS_PARTICIPANT_ID = 'rig_builder.effects';
 const RB_EFFECTS_ROUTE_KEY = 'desktop-main';
+const RB_EFFECTS_PLAN_SCHEMA = 'slopsmith.audio_effects.chain_plan.v1';
 const RB_JOBS_PROVIDER_ID = 'rig_builder.jobs';
 const RB_PLAYBACK_OBSERVER_ID = 'rig_builder.playback-observer';
 
 function rbSlopsmith() { return window.slopsmith || null; }
 function rbCapabilitiesApi() { const s = rbSlopsmith(); return s && s.capabilities; }
 function rbCandidateDomainsApi() { const s = rbSlopsmith(); return s && s.candidateDomains; }
+function rbAudioEffectsApi() { const s = rbSlopsmith(); return s && s.audioEffects; }
 function rbJobsApi() { const s = rbSlopsmith(); return s && s.jobs; }
 function rbPlaybackApi() {
     const s = rbSlopsmith();
@@ -708,6 +710,198 @@ function rbChainCapabilitySummary(chain, extra) {
     };
 }
 
+function rbNativeStageKind(stage) {
+    const type = Number(stage && stage.type);
+    if (type === 0) return 'vst';
+    if (type === 1) return 'nam';
+    if (type === 2) return 'ir';
+    return 'utility';
+}
+
+function rbStageRole(stage, kind) {
+    const slot = String((stage && stage.slot) || '').toLowerCase();
+    if (slot.indexOf('master_pre') === 0) return 'master-pre';
+    if (slot.indexOf('master_post') === 0) return 'master-post';
+    if (slot === 'pre_pedal') return 'pre-pedal';
+    if (slot === 'post_pedal') return 'post-pedal';
+    if (slot === 'amp') return 'amp';
+    if (slot === 'rack') return 'rack';
+    if (slot === 'cabinet' || kind === 'ir') return 'cab';
+    if (kind === 'vst') return 'utility';
+    return 'unknown';
+}
+
+function rbAudioEffectsPlanId(prefix, ref) {
+    return rbSafeCapabilityId(`rig-builder-${prefix}-${ref || Date.now()}`, 'rig-builder-plan');
+}
+
+function rbBuildAudioEffectsRequestFromPayload(payload, options) {
+    const opts = options || {};
+    const nativePreset = payload && payload.native_preset || {};
+    const chain = Array.isArray(nativePreset.chain) ? nativePreset.chain : [];
+    const planId = rbAudioEffectsPlanId(opts.mode || 'chain', opts.ref || (payload && payload.id));
+    const stages = [];
+    const assets = {};
+
+    chain.forEach((stage, index) => {
+        const kind = rbNativeStageKind(stage);
+        const role = rbStageRole(stage, kind);
+        const stageId = rbSafeCapabilityId(`${planId}-stage-${index}`, `stage-${index}`);
+        const assetRef = rbSafeCapabilityId(`${planId}-asset-${index}`, `asset-${index}`);
+        const stateRef = stage && stage.state ? rbSafeCapabilityId(`${planId}-state-${index}`, `state-${index}`) : '';
+        const planStage = {
+            stageId,
+            kind,
+            role,
+            assetRef,
+            bypassed: !!(stage && stage.bypassed),
+            summary: { role, kind },
+        };
+        if (stateRef) planStage.stateRef = stateRef;
+        stages.push(planStage);
+        const asset = {
+            kind,
+            path: stage && stage.path,
+            safeName: `${role}-${kind}`,
+        };
+        if (stage && stage.state) asset.stateBase64 = stage.state;
+        assets[assetRef] = asset;
+    });
+
+    const stageIds = stages.map(stage => stage.stageId);
+    let segments = [{ segmentId: 'base', stageIds }];
+    if (payload && Array.isArray(payload.tones) && payload.tones.length) {
+        const indexToStageId = new Map(stages.map((stage, index) => [index, stage.stageId]));
+        const masterIdx = [];
+        for (const entry of payload.master_pre_slots || []) if (typeof entry.idx === 'number') masterIdx.push(entry.idx);
+        for (const entry of payload.master_post_slots || []) if (typeof entry.idx === 'number') masterIdx.push(entry.idx);
+        segments = payload.tones.slice(0, 80).map((tone, toneIndex) => {
+            const idxs = new Set(masterIdx);
+            for (const entry of tone && tone.slots || []) {
+                if (typeof entry.idx === 'number') idxs.add(entry.idx);
+            }
+            return {
+                segmentId: rbSafeCapabilityId(`tone-${toneIndex}`, `tone-${toneIndex}`),
+                stageIds: Array.from(idxs).sort((a, b) => a - b).map(idx => indexToStageId.get(idx)).filter(Boolean),
+            };
+        });
+    }
+
+    const plan = {
+        schema: RB_EFFECTS_PLAN_SCHEMA,
+        planId,
+        routeKey: RB_EFFECTS_ROUTE_KEY,
+        providerId: RB_EFFECTS_PARTICIPANT_ID,
+        stages,
+        segments,
+        summary: rbChainCapabilitySummary(chain, {
+            mode: rbSafeCapabilityId(opts.mode || 'native', 'native'),
+            segmentCount: segments.length,
+            missingCount: Array.isArray(payload && payload.missing) ? payload.missing.length : 0,
+        }),
+    };
+    return { plan, assets, chain };
+}
+
+async function rbFetchAudioEffectsPayloadForRequest(request) {
+    const target = request && request.target && typeof request.target === 'object' ? request.target : {};
+    const planRequest = request && request.planRequest && typeof request.planRequest === 'object' ? request.planRequest : {};
+    const presetId = target.presetId || request && request.presetId || planRequest.presetId;
+    if (presetId != null && presetId !== '') {
+        const resp = await fetch(`${RB_API}/native_preset_full/${encodeURIComponent(presetId)}`);
+        if (!resp.ok) return { outcome: 'no-target', status: 'preset-unavailable', reason: `Rig Builder preset plan unavailable: HTTP ${resp.status}` };
+        return { outcome: 'handled', payload: await resp.json(), mode: 'full-chain', ref: presetId };
+    }
+    const filename = target.filename || request && request.filename || planRequest.filename || rbState.currentSongFile;
+    if (filename) {
+        const resp = await fetch(`${RB_API}/mega_chain/${encodeURIComponent(filename)}`);
+        if (!resp.ok) return { outcome: 'no-target', status: 'song-unavailable', reason: `Rig Builder song chain unavailable: HTTP ${resp.status}` };
+        return { outcome: 'handled', payload: await resp.json(), mode: 'mega-chain', ref: 'song' };
+    }
+    return { outcome: 'no-target', status: 'no-target', reason: 'No preset or song target is available for Rig Builder audio-effects resolution' };
+}
+
+function rbHandledAudioEffectsResult(result, fallbackReason) {
+    if (!result || result.outcome !== 'handled') {
+        const reason = result && result.reason ? result.reason : fallbackReason;
+        throw new Error(reason || 'audio-effects chain load failed');
+    }
+    const payload = result.payload || {};
+    return { success: true, slotsLoaded: payload.slotsLoaded, audioEffects: result };
+}
+
+async function rbLoadChainPlanWithHost(payload, options) {
+    const audioEffects = rbAudioEffectsApi();
+    if (!audioEffects || typeof audioEffects.loadPlan !== 'function') return null;
+    const opts = options || {};
+    const targetPresetId = opts.presetId || (payload && payload.id);
+    const targetFilename = opts.filename || (opts.mode === 'mega-chain' ? rbState.currentSongFile : '');
+    if (!targetPresetId && !targetFilename) return null;
+    const result = await audioEffects.loadPlan({
+        authorization: opts.authorization || 'user-action',
+        routeKey: RB_EFFECTS_ROUTE_KEY,
+        providerId: RB_EFFECTS_PARTICIPANT_ID,
+        target: {
+            presetId: targetPresetId,
+            filename: targetFilename,
+            source: 'rig-builder-ui',
+        },
+        planRequest: {
+            mode: opts.mode || 'native',
+            ref: opts.ref || payload && payload.id || '',
+        },
+    }, RB_PLUGIN_ID);
+    return rbHandledAudioEffectsResult(result, 'Rig Builder audio-effects host load failed');
+}
+
+async function rbLoadNativePresetPayload(api, payload, options) {
+    let audioEffectsError = null;
+    try {
+        const result = await rbLoadChainPlanWithHost(payload, options);
+        if (result) return { result, viaAudioEffects: true };
+    } catch (e) {
+        audioEffectsError = e;
+        console.warn('[rig_builder] audio-effects executor load failed; using legacy loadPreset:', e);
+    }
+    if (api.clearChain) await api.clearChain().catch(() => {});
+    const result = await api.loadPreset(JSON.stringify(payload.native_preset));
+    if (!result || result.success === false) {
+        throw new Error((result && result.error) || (audioEffectsError && audioEffectsError.message) || 'loadPreset failed');
+    }
+    return { result, viaAudioEffects: false };
+}
+
+function rbAudioEffectsOperationHandlers() {
+    return {
+        'chain.resolve': async (request = {}) => {
+            const fetched = await rbFetchAudioEffectsPayloadForRequest(request);
+            if (!fetched || fetched.outcome !== 'handled') return fetched;
+            const resolved = rbBuildAudioEffectsRequestFromPayload(fetched.payload, { mode: fetched.mode, ref: fetched.ref });
+            return {
+                outcome: 'handled',
+                status: 'resolved',
+                plan: resolved.plan,
+                assets: resolved.assets,
+                summary: resolved.plan.summary,
+            };
+        },
+        'chain.inspect': () => ({
+            outcome: 'handled',
+            status: 'available',
+            payload: {
+                providerId: RB_EFFECTS_PARTICIPANT_ID,
+                routeKey: RB_EFFECTS_ROUTE_KEY,
+                currentSong: rbState.currentSongFile ? 'available' : 'none',
+                preview: rbState.listeningTone !== null ? 'active' : 'idle',
+            },
+        }),
+        'segment.activate': () => ({ outcome: 'handled', status: 'host-executed' }),
+        'stage.set-bypass': () => ({ outcome: 'handled', status: 'host-executed' }),
+        'stage.set-parameter': () => ({ outcome: 'handled', status: 'host-executed' }),
+        fallback: () => ({ outcome: 'handled', status: 'fallback-ready', payload: { providerId: RB_EFFECTS_PARTICIPANT_ID } }),
+    };
+}
+
 function rbCapabilityCommand(capability, command, payload) {
     const api = rbCapabilitiesApi();
     if (!api || typeof api.command !== 'function') return Promise.resolve(null);
@@ -753,6 +947,29 @@ function rbRegisterUiCapabilities() {
 }
 
 function rbRegisterAudioEffectsCapability() {
+    const audioEffects = rbAudioEffectsApi();
+    if (audioEffects && typeof audioEffects.registerProvider === 'function') {
+        audioEffects.registerProvider({
+            providerId: RB_EFFECTS_PARTICIPANT_ID,
+            ownerPluginId: RB_PLUGIN_ID,
+            label: 'Rig Builder full chains',
+            priority: 40,
+            routeKey: RB_EFFECTS_ROUTE_KEY,
+            routeKeys: [RB_EFFECTS_ROUTE_KEY],
+            kind: 'full-chain',
+            status: 'available',
+            availability: 'available',
+            sourceMode: 'native',
+            operations: ['chain.resolve', 'chain.inspect', 'segment.activate', 'stage.set-bypass', 'stage.set-parameter', 'fallback'],
+            operationHandlers: rbAudioEffectsOperationHandlers(),
+            dependencies: {
+                audioEngine: rbNativeAudio() ? 'available' : 'degraded',
+                namTone: 'available',
+            },
+            summary: { routeKey: RB_EFFECTS_ROUTE_KEY, provider: 'rig-builder', stageKinds: ['nam', 'vst', 'ir'] },
+            version: 1,
+        });
+    }
     const candidates = rbCandidateDomainsApi();
     if (!candidates || typeof candidates.registerParticipant !== 'function') return;
     candidates.registerParticipant({
@@ -767,7 +984,7 @@ function rbRegisterAudioEffectsCapability() {
         logicalKey: 'rig-builder-effects',
         routeKey: RB_EFFECTS_ROUTE_KEY,
         priority: 40,
-        capabilities: ['select-chain', 'bypass', 'restore', 'fallback', 'inspect-route'],
+        capabilities: ['select-chain', 'bypass', 'restore', 'fallback', 'inspect-route', 'chain.resolve', 'chain.inspect', 'segment.activate', 'stage.set-bypass', 'stage.set-parameter'],
         dependencies: {
             audioEngine: rbNativeAudio() ? 'available' : 'degraded',
             namTone: 'available',
@@ -871,7 +1088,7 @@ function rbRegisterCapabilities() {
         const caps = rbCapabilitiesApi();
         if (caps && typeof caps.registerParticipant === 'function') {
             caps.registerParticipant(RB_PLUGIN_ID, {
-                'audio-effects': { roles: ['provider', 'requester', 'observer'], commands: ['select-chain', 'bypass', 'restore', 'fallback', 'inspect-route'], safety: 'sensitive', compatibility: 'shim-allowed', ownership: 'multi-provider', version: 1, runtime: true },
+                'audio-effects': { roles: ['provider', 'requester', 'observer'], commands: ['select-chain', 'bypass', 'restore', 'fallback', 'inspect-route'], operations: ['chain.resolve', 'chain.inspect', 'segment.activate', 'stage.set-bypass', 'stage.set-parameter', 'fallback'], safety: 'sensitive', compatibility: 'shim-allowed', ownership: 'multi-provider', version: 1, runtime: true },
                 playback: { roles: ['observer'], kind: 'lifecycle', observes: ['ready', 'stopped', 'ended'], safety: 'safe', compatibility: 'shim-allowed', ownership: 'observer-only', version: 1, runtime: true },
                 jobs: { roles: ['provider', 'observer'], operations: ['job.enqueue', 'job.status', 'job.cancel'], safety: 'privileged', compatibility: 'shim-allowed', ownership: 'multi-provider', version: 1, runtime: true },
                 'privileged-capabilities': { roles: ['provider', 'requester', 'observer'], requests: ['inspect', 'record-outcome', 'record-bridge-hit', 'link-job'], safety: 'privileged', compatibility: 'shim-allowed', ownership: 'privileged', version: 1, runtime: true },
@@ -1463,12 +1680,14 @@ const RbMegaChain = (function () {
             rbChainGainTargetFor(mega.native_preset.chain)
         ).catch(() => {});
         try {
-            if (api.clearChain) await api.clearChain().catch(() => {});
-            const res = await api.loadPreset(JSON.stringify(mega.native_preset));
-            if (!res || res.success === false) {
-                throw new Error((res && res.error) || 'loadPreset failed');
-            }
-            void rbSyncAudioEffectsCapability('mega-chain-loaded', { chain: mega.native_preset.chain, mode: 'mega-chain', bridge: true });
+            const loaded = await rbLoadNativePresetPayload(api, mega, {
+                mode: 'mega-chain',
+                ref: 'song',
+                filename,
+                authorization: 'playback-session',
+            });
+            const res = loaded.result;
+            void rbSyncAudioEffectsCapability('mega-chain-loaded', { chain: mega.native_preset.chain, mode: 'mega-chain', bridge: !loaded.viaAudioEffects });
             // Compute dedupe savings: total active_slot entries across
             // all tones vs unique stages in the chain. A 4-tone song that
             // shares one amp + one cab across all four tones reports
@@ -1484,7 +1703,7 @@ const RbMegaChain = (function () {
             console.log(`[rig_builder mega-chain] loaded ${totalStages} unique stages`
                 + ` for "${filename}" — ${mega.tones.length} tones`
                 + ` (master ${mega.master_pre_count}+${mega.master_post_count}, ${savings}% deduped)`,
-                res);
+                res, loaded.viaAudioEffects ? '(audio-effects executor)' : '(legacy loadPreset)');
             // Capture the engine's actual slot IDs so _applyActiveTone can
             // bypass the right ones. setBypass uses ENGINE slot IDs, not
             // chain-array indices — and the engine assigns its own IDs
@@ -6696,8 +6915,11 @@ async function rbReloadPreview(refetchPresetId) {
         // Target gain is computed from the chain itself (amp+cab → ×2.0,
         // amp only → ×0.5) so the output is normalised across configs.
         await rbPreLoadMute(chainLen, rbChainGainTargetFor(chainArr)).catch(() => {});
-        if (api.clearChain) await api.clearChain().catch(() => {});
-        await api.loadPreset(JSON.stringify(payload.native_preset));
+        await rbLoadNativePresetPayload(api, payload, {
+            mode: 'preview',
+            ref: refetchPresetId || (payload && payload.id) || 'current',
+            authorization: 'user-action',
+        });
         await rbSyncAudioEffectsCapability('preview-reloaded', { chain: chainArr, mode: 'preview' });
         // Engine sometimes leaves a slot bypassed across reloads — force each
         // slot's bypass to match the spec so toggling un-bypass actually un-bypasses.
@@ -6792,9 +7014,11 @@ async function rbAuditionFile(file, kind, btnId, gain, rsGear) {
         const payload = await (await fetch(url)).json();
         const chain = payload.native_preset && payload.native_preset.chain;
         if (!Array.isArray(chain) || !chain.length) throw new Error('file not found');
-        if (api.clearChain) await api.clearChain().catch(() => {});
-        const res = await api.loadPreset(JSON.stringify(payload.native_preset));
-        if (!res || res.success === false) throw new Error((res && res.error) || 'loadPreset failed');
+        await rbLoadNativePresetPayload(api, payload, {
+            mode: 'audition',
+            ref: kind || 'single',
+            authorization: 'user-action',
+        });
         await rbSyncAudioEffectsCapability('audition-file', { chain, mode: 'audition', userAction: true });
         if (api.setGain) {
             // Chain-level drive matched to the audition target. Bass
@@ -8472,11 +8696,14 @@ async function rbListenTone(toneIdx, filename) {
             // (amp+cab → ×2.0, amp only → ×0.5) so Listen mode normalises
             // levels the same way the song-playback path does.
             await rbPreLoadMute(chain.length, rbChainGainTargetFor(chain)).catch(() => {});
-            if (api.clearChain) await api.clearChain().catch(() => {});
-            const res = await api.loadPreset(JSON.stringify(payload.native_preset));
+            const loaded = await rbLoadNativePresetPayload(api, payload, {
+                mode: 'preview',
+                ref: presetId,
+                authorization: 'user-action',
+            });
+            const res = loaded.result;
             const got = res && res.slotsLoaded;
-            console.log(`[rig_builder] chain sent=${chain.length} (NAM=${payload.nam_stage_count}) · slotsLoaded=${got}`, res);
-            if (!res || res.success === false) throw new Error((res && res.error) || 'loadPreset failed');
+            console.log(`[rig_builder] chain sent=${chain.length} (NAM=${payload.nam_stage_count}) · slotsLoaded=${got}`, res, loaded.viaAudioEffects ? '(audio-effects executor)' : '(legacy loadPreset)');
             await rbSyncAudioEffectsCapability('listen-tone', { chain, mode: 'preview', userAction: true });
             // Force bypass to match the spec: engine sometimes keeps a slot
             // bypassed across reloads (the "bypass stuck" Discord report).
