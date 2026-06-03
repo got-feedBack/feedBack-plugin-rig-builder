@@ -474,12 +474,12 @@
   //   6 -15dB 7 Ultra Lo 8 Ultra Hi
   P.samplegsbtcl = { w:900, h:256,
     knobs:[
-      {id:0,cx:.205,cy:.38,r:.020,style:'ampeg'},
-      {id:1,cx:.375,cy:.38,r:.020,style:'ampeg'},
-      {id:2,cx:.445,cy:.38,r:.020,style:'ampeg'},
-      {id:3,cx:.515,cy:.38,r:.020,style:'ampeg',select:5},
-      {id:4,cx:.585,cy:.38,r:.020,style:'ampeg'},
-      {id:5,cx:.655,cy:.38,r:.020,style:'ampeg'}],
+      {id:0,cx:.205,cy:.38,r:.022,style:'ampeg'},
+      {id:1,cx:.375,cy:.38,r:.022,style:'ampeg'},
+      {id:2,cx:.445,cy:.38,r:.022,style:'ampeg'},
+      {id:3,cx:.515,cy:.38,r:.022,style:'ampeg',select:5},
+      {id:4,cx:.585,cy:.38,r:.022,style:'ampeg'},
+      {id:5,cx:.655,cy:.38,r:.022,style:'ampeg'}],
     switches:[
       {id:6,cx:.137,cy:.38,hs:.0095,dark:true},
       {id:7,cx:.270,cy:.38,hs:.0100,dark:true},
@@ -504,31 +504,31 @@
       rr(c,ibx,iby,ibw,ibh,4); c.fillStyle=rgb(150,152,158); c.fill();
       rr(c,ibx,iby,ibw,ibh,4); c.strokeStyle=rgb(106,108,114); c.lineWidth=1.2; c.stroke();
       const diamond=(x,y,r,letter,lsz)=>{ c.save(); c.translate(x,y); c.rotate(Math.PI/4); rr(c,-r,-r,2*r,2*r,2); c.fillStyle=rgb(40,52,96); c.fill(); c.strokeStyle=rgb(208,212,220); c.lineWidth=1.3; c.stroke(); c.restore(); textC(d,x,y,F.bebas,lsz,rgb(222,226,234),letter); };
-      diamond(ibx+ibw*0.30, iby+ibh*0.28, 8, 'S', 9);
-      const jack=(x,y)=>{ c.beginPath(); c.arc(x,y,6.5,0,7); c.fillStyle=rgb(14,14,16); c.fill(); c.strokeStyle=rgb(88,90,96); c.lineWidth=1.3; c.stroke(); c.beginPath(); c.arc(x,y,2.8,0,7); c.fillStyle=rgb(34,34,38); c.fill(); };
+      diamond(ibx+ibw*0.30, iby+ibh*0.28, 9, 'S', 11);
+      const jack=(x,y)=>{ c.beginPath(); c.arc(x,y,7,0,7); c.fillStyle=rgb(14,14,16); c.fill(); c.strokeStyle=rgb(88,90,96); c.lineWidth=1.3; c.stroke(); c.beginPath(); c.arc(x,y,3,0,7); c.fillStyle=rgb(34,34,38); c.fill(); };
       jack(ibx+ibw*0.30, iby+ibh*0.70); jack(ibx+ibw*0.62, iby+ibh*0.70);
-      textC(d,ibx+ibw*0.30,iby+ibh-7,F.barlow,5.4,ink,'0'); textC(d,ibx+ibw*0.62,iby+ibh-7,F.barlow,5.4,ink,'-15');
-      lab(.137,.61,5.8,'-15dB');
+      textC(d,ibx+ibw*0.30,iby+ibh-6,F.barlow,7,ink,'0'); textC(d,ibx+ibw*0.62,iby+ibh-6,F.barlow,7,ink,'-15');
+      lab(.137,.62,7.5,'-15dB');
       // ── engraved frames around the knob bank and the right plate ──
-      engrave(.185*W, PT+8, .49*W, PH-16);
-      engrave(.695*W, PT+8, PL+PW-8 - .695*W, PH-16);
+      engrave(.170*W, PT+8, .520*W, PH-16);
+      engrave(.700*W, PT+8, PL+PW-8 - .700*W, PH-16);
       // ── knob labels (engraved) + the 1–5 frequency selector marks ──
-      [[.205,'GAIN'],[.375,'BASS'],[.445,'MIDRANGE'],[.515,'FREQUENCY'],[.585,'TREBLE'],[.655,'MASTER']].forEach(k=>lab(k[0],.55,7.2,k[1]));
-      for(let i=0;i<5;i++) textC(d,(.515+(i-2)*0.013)*W,.205*H,F.barlow,5.4,dim,String(i+1));
+      [[.205,'GAIN'],[.375,'BASS'],[.445,'MIDRANGE'],[.515,'FREQUENCY'],[.585,'TREBLE'],[.655,'MASTER']].forEach(k=>lab(k[0],.555,9,k[1]));
+      for(let i=0;i<5;i++) textC(d,(.515+(i-2)*0.014)*W,.195*H,F.barlow,7,dim,String(i+1));
       // ── ultra push switches ──
-      textC(d,.270*W,.51*H,F.barlow,5.6,ink,'ULTRA'); textC(d,.270*W,.565*H,F.barlow,5.6,ink,'LO');
-      textC(d,.302*W,.51*H,F.barlow,5.6,ink,'ULTRA'); textC(d,.302*W,.565*H,F.barlow,5.6,ink,'HI');
+      textC(d,.270*W,.50*H,F.barlow,7,ink,'ULTRA'); textC(d,.270*W,.565*H,F.barlow,7,ink,'LO');
+      textC(d,.302*W,.50*H,F.barlow,7,ink,'ULTRA'); textC(d,.302*W,.565*H,F.barlow,7,ink,'HI');
       // ── right engraved SAMPLEG · SBT-CL + standby/power rockers ──
-      textC(d,.770*W,.30*H,F.bebas,15,ink,'SAMPLEG'); textC(d,.770*W,.43*H,F.barlow,8.5,dim,'SBT-CL');
-      const rock=(cx,red,lbl)=>{ const x=cx*W,y=.38*H; rr(c,x-9,y-18,18,36,3); c.fillStyle=rgb(20,20,22); c.fill();
-        rr(c,x-9,y-18,18,36,3); c.strokeStyle=rgb(70,72,76); c.lineWidth=1.2; c.stroke();
-        rr(c,x-6,y-16,12,16,2); c.fillStyle=red?rgb(176,32,30):rgb(54,56,60); c.fill(); textC(d,x,.61*H,F.barlow,5.6,ink,lbl); };
-      rock(.905,false,'STANDBY'); rock(.945,true,'POWER');
+      textC(d,.772*W,.29*H,F.bebas,19,ink,'SAMPLEG'); textC(d,.772*W,.43*H,F.barlow,11,dim,'SBT-CL');
+      const rock=(cx,red,lbl)=>{ const x=cx*W,y=.38*H; rr(c,x-10,y-19,20,38,3); c.fillStyle=rgb(20,20,22); c.fill();
+        rr(c,x-10,y-19,20,38,3); c.strokeStyle=rgb(70,72,76); c.lineWidth=1.2; c.stroke();
+        rr(c,x-7,y-17,14,17,2); c.fillStyle=red?rgb(176,32,30):rgb(54,56,60); c.fill(); textC(d,x,.62*H,F.barlow,7,ink,lbl); };
+      rock(.905,false,'STANDBY'); rock(.948,true,'POWER');
       // ── black grille below: Sampleg diamond + wordmark, Heritage script ──
-      const gy=.82*H;
-      diamond(.050*W, gy, 9, 'S', 11);
-      textC(d,.090*W,gy,F.bebas,22,rgb(232,234,238),'Sampleg','left');
-      textC(d,.955*W,gy,F.crete,12,rgb(150,152,158),'Heritage','right'); } };
+      const gy=.83*H;
+      diamond(.052*W, gy, 11, 'S', 13);
+      textC(d,.095*W,gy,F.bebas,26,rgb(232,234,238),'Sampleg','left');
+      textC(d,.955*W,gy,F.crete,15,rgb(150,152,158),'Heritage','right'); } };
 
   P.mouse = { w:320,h:500, knobs:[
       {id:0,cx:.215,cy:.305,r:.105,style:'pointer',cap:[26,26,28]},
