@@ -36,7 +36,20 @@ for _stream in (sys.stdout, sys.stderr):
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 
 # Generated data maps (rs_to_real.json, rs_cab_to_ir.json, …) live here.
-DATA_DIR = PLUGIN_ROOT / "data"
+# In a packaged build PLUGIN_ROOT is read-only (e.g. an AppImage squashfs
+# mount), so writing the bundled data/ raises OSError(Errno 30). The host
+# plugin (routes.py) seeds the bundled defaults into a writable per-user dir
+# and exports RIG_BUILDER_DATA_DIR; honour it so extractor writes land there.
+#
+# DATA_DIR is resolved once at import. That is correct for this module's only
+# consumers — the tools/*.py extractor scripts, which routes.py runs as
+# SUBPROCESSES *after* exporting RIG_BUILDER_DATA_DIR, so each fresh interpreter
+# imports `common` with the override already in the environment. In-process code
+# (routes.py / rb_core) does NOT read common.DATA_DIR; it uses routes._data_path,
+# which re-reads the env per call. So both halves resolve to the same writable
+# dir. If you ever import common.DATA_DIR in-process, set the env var first.
+_DATA_DIR_OVERRIDE = os.environ.get("RIG_BUILDER_DATA_DIR")
+DATA_DIR = Path(_DATA_DIR_OVERRIDE) if _DATA_DIR_OVERRIDE else (PLUGIN_ROOT / "data")
 
 # Make the plugin root importable so tools can `import rb_core.tone3000_client`
 # and read the sibling JSON maps no matter where they're launched from.
