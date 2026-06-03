@@ -475,11 +475,11 @@
   P.samplegsbtcl = { w:900, h:256,
     knobs:[
       {id:0,cx:.205,cy:.38,r:.022,style:'ampeg'},
-      {id:1,cx:.375,cy:.38,r:.022,style:'ampeg'},
-      {id:2,cx:.445,cy:.38,r:.022,style:'ampeg'},
-      {id:3,cx:.515,cy:.38,r:.022,style:'ampeg',select:5},
-      {id:4,cx:.585,cy:.38,r:.022,style:'ampeg'},
-      {id:5,cx:.655,cy:.38,r:.022,style:'ampeg'}],
+      {id:1,cx:.365,cy:.38,r:.022,style:'ampeg'},
+      {id:2,cx:.439,cy:.38,r:.022,style:'ampeg'},
+      {id:3,cx:.513,cy:.38,r:.022,style:'ampeg',select:5},
+      {id:4,cx:.587,cy:.38,r:.022,style:'ampeg'},
+      {id:5,cx:.661,cy:.38,r:.022,style:'ampeg'}],
     switches:[
       {id:6,cx:.137,cy:.38,hs:.0095,dark:true},
       {id:7,cx:.270,cy:.38,hs:.0100,dark:true},
@@ -507,28 +507,28 @@
       diamond(ibx+ibw*0.30, iby+ibh*0.28, 9, 'S', 11);
       const jack=(x,y)=>{ c.beginPath(); c.arc(x,y,7,0,7); c.fillStyle=rgb(14,14,16); c.fill(); c.strokeStyle=rgb(88,90,96); c.lineWidth=1.3; c.stroke(); c.beginPath(); c.arc(x,y,3,0,7); c.fillStyle=rgb(34,34,38); c.fill(); };
       jack(ibx+ibw*0.30, iby+ibh*0.70); jack(ibx+ibw*0.62, iby+ibh*0.70);
-      textC(d,ibx+ibw*0.30,iby+ibh-6,F.barlow,7,ink,'0'); textC(d,ibx+ibw*0.62,iby+ibh-6,F.barlow,7,ink,'-15');
-      lab(.137,.62,7.5,'-15dB');
+      textC(d,ibx+ibw*0.30,iby+ibh-6,F.barlow,8,ink,'0'); textC(d,ibx+ibw*0.62,iby+ibh-6,F.barlow,8,ink,'-15');
+      lab(.137,.63,8.5,'-15dB');
       // ── engraved frames around the knob bank and the right plate ──
-      engrave(.170*W, PT+8, .520*W, PH-16);
-      engrave(.700*W, PT+8, PL+PW-8 - .700*W, PH-16);
+      engrave(.168*W, PT+8, .527*W, PH-16);
+      engrave(.705*W, PT+8, PL+PW-8 - .705*W, PH-16);
       // ── knob labels (engraved) + the 1–5 frequency selector marks ──
-      [[.205,'GAIN'],[.375,'BASS'],[.445,'MIDRANGE'],[.515,'FREQUENCY'],[.585,'TREBLE'],[.655,'MASTER']].forEach(k=>lab(k[0],.555,9,k[1]));
-      for(let i=0;i<5;i++) textC(d,(.515+(i-2)*0.014)*W,.195*H,F.barlow,7,dim,String(i+1));
-      // ── ultra push switches ──
-      textC(d,.270*W,.50*H,F.barlow,7,ink,'ULTRA'); textC(d,.270*W,.565*H,F.barlow,7,ink,'LO');
-      textC(d,.302*W,.50*H,F.barlow,7,ink,'ULTRA'); textC(d,.302*W,.565*H,F.barlow,7,ink,'HI');
+      [[.205,'GAIN'],[.365,'BASS'],[.439,'MIDRANGE'],[.513,'FREQUENCY'],[.587,'TREBLE'],[.661,'MASTER']].forEach(k=>lab(k[0],.555,10.5,k[1]));
+      for(let i=0;i<5;i++) textC(d,(.513+(i-2)*0.014)*W,.19*H,F.barlow,8,dim,String(i+1));
+      // ── ultra push switches (single ULTRA over both, LO / HI under each) ──
+      textC(d,.286*W,.495*H,F.barlow,8,ink,'ULTRA');
+      textC(d,.270*W,.565*H,F.barlow,8,ink,'LO'); textC(d,.302*W,.565*H,F.barlow,8,ink,'HI');
       // ── right engraved SAMPLEG · SBT-CL + standby/power rockers ──
-      textC(d,.772*W,.29*H,F.bebas,19,ink,'SAMPLEG'); textC(d,.772*W,.43*H,F.barlow,11,dim,'SBT-CL');
+      textC(d,.772*W,.29*H,F.bebas,22,ink,'SAMPLEG'); textC(d,.772*W,.44*H,F.barlow,12.5,dim,'SBT-CL');
       const rock=(cx,red,lbl)=>{ const x=cx*W,y=.38*H; rr(c,x-10,y-19,20,38,3); c.fillStyle=rgb(20,20,22); c.fill();
         rr(c,x-10,y-19,20,38,3); c.strokeStyle=rgb(70,72,76); c.lineWidth=1.2; c.stroke();
-        rr(c,x-7,y-17,14,17,2); c.fillStyle=red?rgb(176,32,30):rgb(54,56,60); c.fill(); textC(d,x,.62*H,F.barlow,7,ink,lbl); };
-      rock(.905,false,'STANDBY'); rock(.948,true,'POWER');
+        rr(c,x-7,y-17,14,17,2); c.fillStyle=red?rgb(176,32,30):rgb(54,56,60); c.fill(); textC(d,x,.525*H,F.barlow,8,ink,lbl); };
+      rock(.872,false,'STANDBY'); rock(.915,true,'POWER');
       // ── black grille below: Sampleg diamond + wordmark, Heritage script ──
       const gy=.83*H;
-      diamond(.052*W, gy, 11, 'S', 13);
-      textC(d,.095*W,gy,F.bebas,26,rgb(232,234,238),'Sampleg','left');
-      textC(d,.955*W,gy,F.crete,15,rgb(150,152,158),'Heritage','right'); } };
+      diamond(.052*W, gy, 12, 'S', 14);
+      textC(d,.097*W,gy,F.bebas,28,rgb(232,234,238),'Sampleg','left');
+      textC(d,.955*W,gy,F.crete,17,rgb(150,152,158),'Heritage','right'); } };
 
   P.mouse = { w:320,h:500, knobs:[
       {id:0,cx:.215,cy:.305,r:.105,style:'pointer',cap:[26,26,28]},
