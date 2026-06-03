@@ -582,29 +582,29 @@
       rr(c,ibx,iby,ibw,ibh,4); c.fillStyle=rgb(150,152,158); c.fill(); rr(c,ibx,iby,ibw,ibh,4); c.strokeStyle=rgb(106,108,114); c.lineWidth=1.2; c.stroke();
       const jack=(x,y)=>{ c.beginPath(); c.arc(x,y,7,0,7); c.fillStyle=rgb(14,14,16); c.fill(); c.strokeStyle=rgb(88,90,96); c.lineWidth=1.3; c.stroke(); c.beginPath(); c.arc(x,y,3,0,7); c.fillStyle=rgb(34,34,38); c.fill(); };
       jack(ibx+ibw*0.30, iby+ibh*0.24); jack(ibx+ibw*0.30, iby+ibh*0.58);
-      textC(d,ibx+ibw*0.58,iby+ibh*0.24,F.barlow,6.5,ink,'PASS','left'); textC(d,ibx+ibw*0.58,iby+ibh*0.58,F.barlow,6.5,ink,'ACT','left');
-      lab(.103,.61,7.5,'ACTIVE');
-      // engraved frames
-      engrave(.148*W, PT+8, .247*W, PH-16);
-      engrave(.422*W, PT+8, .325*W, PH-16);
-      engrave(.753*W, PT+8, PL+PW-8 - .753*W, PH-16);
+      textC(d,ibx+ibw*0.58,iby+ibh*0.24,F.barlow,7.5,ink,'PASS','left'); textC(d,ibx+ibw*0.58,iby+ibh*0.58,F.barlow,7.5,ink,'ACT','left');
+      lab(.103,.61,9,'ACTIVE');
+      // engraved frames — each fully encloses its controls (knobs/faders/switch)
+      engrave(.133*W, PT+8, .227*W, PH-16);                  // Tube / Solid / Comp
+      engrave(.388*W, PT+8, .360*W, PH-16);                  // EQ-In switch + 10 faders
+      engrave(.738*W, PT+8, .205*W, PH-16);                  // Low Pass / High Pass / Volume
       // left knob labels
-      [[.170,'TUBE'],[.245,'SOLID ST'],[.320,'COMP']].forEach(k=>lab(k[0],.59,8.5,k[1]));
+      [[.170,'TUBE'],[.245,'SOLID ST'],[.320,'COMP']].forEach(k=>lab(k[0],.59,10,k[1]));
       // EQ band freq labels above the faders + section legend below
       const ef=['30','64','125','250','500','1k','2k','4k','8k','16k'];
       const fx=[.440,.4725,.505,.5375,.570,.6025,.635,.6675,.700,.7325];
-      for(let i=0;i<10;i++) textC(d,fx[i]*W,.225*H,F.barlow,7,dim,ef[i]);
-      lab(.586,.62,8,'GRAPHIC EQUALIZER');
+      for(let i=0;i<10;i++) textC(d,fx[i]*W,.225*H,F.barlow,8.5,dim,ef[i]);
+      lab(.586,.62,9.5,'GRAPHIC EQUALIZER');
       // right knob labels
-      [[.775,'LOW PASS'],[.840,'HIGH PASS'],[.905,'VOLUME']].forEach(k=>lab(k[0],.59,8,k[1]));
-      // power rocker
-      const px=.958*W,py=.40*H; rr(c,px-10,py-19,20,38,3); c.fillStyle=rgb(20,20,22); c.fill();
+      [[.775,'LOW PASS'],[.840,'HIGH PASS'],[.905,'VOLUME']].forEach(k=>lab(k[0],.59,10,k[1]));
+      // power rocker (on the bare panel, right of the right-hand frame)
+      const px=.957*W,py=.40*H; rr(c,px-10,py-19,20,38,3); c.fillStyle=rgb(20,20,22); c.fill();
       rr(c,px-10,py-19,20,38,3); c.strokeStyle=rgb(70,72,76); c.lineWidth=1.2; c.stroke(); rr(c,px-7,py-17,14,17,2); c.fillStyle=rgb(176,32,30); c.fill();
-      textC(d,px,.61*H,F.barlow,7,ink,'POWER');
+      textC(d,px,.61*H,F.barlow,8.5,ink,'POWER');
       // wordmark + model below the panel
       const gy=.85*H;
-      textC(d,.04*W,gy,F.bebas,27,rgb(232,234,238),'Sharke','left');
-      textC(d,.955*W,gy,F.barlow,9.5,rgb(150,152,158),'MODEL HB3500  ·  350 WATTS','right'); } };
+      textC(d,.04*W,gy,F.bebas,30,rgb(232,234,238),'Sharke','left');
+      textC(d,.955*W,gy,F.barlow,11,rgb(150,152,158),'MODEL HB3500  ·  350 WATTS','right'); } };
 
   P.mouse = { w:320,h:500, knobs:[
       {id:0,cx:.215,cy:.305,r:.105,style:'pointer',cap:[26,26,28]},
