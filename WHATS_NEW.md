@@ -1,3 +1,69 @@
+# Rig Builder 2.1.0 — Every pedal & rack now has its own UI + volume fixes across the board (2026-06-02)
+
+**Every pedal and rack now has its own faithful in-app UI — 100% coverage.**
+All 100 bundled effects and every Studio / Stereo / Rota rack now render a
+recreated control face on the in-app canvas (Space Echo, API 550 graphic EQ,
+dbx 160 comp, GML 8200 parametric EQ, RCE-10 chorus, Uni-Vibe, tape echo,
+wah treadles, the full pedal set, …) — no more generic placeholders. Edit any
+gear and you get its real knobs/sliders/switches.
+
+**Every pedal sits at the same volume now.** An auto makeup-gain keeps all
+pedals level-matched, so switching pedals — or tweaking one — no longer jumps
+the loudness up or down (wahs, sub-octave, drives, modulation, etc.).
+
+**Distortion / drive pedals no longer change volume with the knobs.** Turning
+Gain or Tone now changes the *character* (more/less clipping), not the output
+level — so dialing in a dirt pedal stops yanking the whole rig's volume around.
+
+**No more noise when a song loads.** While a song's VSTs and NAMs are loading,
+the wet path stays muted and you hear clean dry guitar; the full tone snaps in
+once everything is ready — no bursts, clicks, or garbage during load.
+
+**Editing a VST in a song plays it in the full chain.** Opening a pedal/rack
+editor on a song now auditions it *in context* (the whole signal chain), not
+the isolated solo plugin — so what you hear while tweaking is what you'll get.
+
+**Rocksmith cabinet volume fixes.** The cab "volume drop" is fixed: extracted
+cab IRs whose peaks ran over the convolver's ±1.0 range were saturating and
+tripping the post-IR limiter (−10..−20 dB + squashed low end). The IR peak cap
+is now clip-safe (0.95), and each cab is loudness-matched to the others
+(measured cab-to-cab spread **8 dB → 0 dB**), so swapping cab or mic no longer
+changes the volume. Existing installs: Settings → *Normalize existing Rocksmith
+IRs* (idempotent, keeps a `.unnormalized.bak`). Level only — never the tone.
+A cab that still sounds thin is on a bright mic (Edge/Off-axis); switch it to
+*Cone (close)* for full low end (faithful to Rocksmith, not a bug).
+
+---
+
+# Rig Builder 2.0.1 — Windows binaries for the bundled effects + parody pedal UIs (2026-06-01)
+
+**Windows support for the bundled effects.** The 100 bundled VST3 effects now
+ship a **Windows (x86_64-win) binary** inside every `.vst3` bundle, alongside
+the macOS one. Windows users were hitting *"engine refused to load this plugin"*
+on Edit/playback because the bundles only had a macOS binary — that's fixed:
+download the plugin and the effects load and play on Windows too. (Linux builds
+are still to come; the editor now shows a clear message instead of the cryptic
+error on platforms without a build.)
+
+**Parody pedal artwork (in-app canvas UIs).** The recreated pedal faces now use
+tasteful, legally-distinct parody branding instead of generic labels:
+- Distortion (RAT) → **MOUSE**
+- Fuzz (Big Muff) → **bass · BIG BUZZ**
+- Overdrive (Darkglass B3K) → **BLACKBRASS · MINITUBES B3X** (faithful B3K layout)
+- Bass Auto Filter (Q-Tron+) → **Q-TRIX** with a two-colour graffiti logo and a
+  click-through **LP/BP/HP** mode selector
+- Boss-style pedals → engraved **CHIEF** badge + parody model codes
+  (Bass Chorus **CB-3**, Delay **DL-3**, Flanger **FL-3**, Sub Octave **SO-2**)
+- Boss graphic EQs → **GE-8 / GEB-8** codes + CHIEF badge
+- Plus faithful **Eden WTDI** and **Bass Wah** faces.
+
+**Other fixes.** The guitar **Auto Tone** gear now maps to the Mu-Tron-style
+AutoFilter plugin (bass keeps the Q-Tron-style one); the Bass Overdrive knobs are
+correctly labelled (Blend/Drive/Grunt/Attack); landscape pedals render wider so
+their lettering stays legible.
+
+---
+
 # Rig Builder 2.0.0 — 100 bundled effect VSTs + in-app pedal UIs (2026-06-01)
 
 The big one. Rig Builder now ships **100 copyright-free VST3 effects** (pedals

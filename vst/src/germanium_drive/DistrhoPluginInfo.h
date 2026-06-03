@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "GermaniumDrive"
+#define DISTRHO_PLUGIN_NAME    "Germanium Drive"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:germaniumdrive"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.germaniumdrive"
 

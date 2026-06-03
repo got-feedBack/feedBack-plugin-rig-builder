@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "SendInTheClones"
+#define DISTRHO_PLUGIN_NAME    "Attack of the Clones"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:sendintheclones"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.sendintheclones"
 

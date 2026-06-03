@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "BassPhase"
+#define DISTRHO_PLUGIN_NAME    "phase 99"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:bassphase"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.bassphase"
 

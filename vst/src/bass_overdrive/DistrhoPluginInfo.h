@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "BassOverdrive"
+#define DISTRHO_PLUGIN_NAME    "BLACKBRASS"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:bassoverdrive"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.bassoverdrive"
 

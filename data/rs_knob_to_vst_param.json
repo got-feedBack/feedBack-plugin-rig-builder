@@ -38,227 +38,6 @@
    "kHs Distortion subtype convention (user-curated, verified via rbSweepParam): the `Type` param has 6 discrete modes — Overdrive (0.0), Saturate (0.2), Foldback (0.4), Sine (0.6), Hard Clip (0.8), Quantize (1.0). Fuzz pedals → Type=0.2 (Saturate); overdrive pedals → Type=0.0 (Overdrive); distortion pedals → Type=0.8 (Hard Clip). All three pin Dynamics=1.0 so the pedal's response tracks the player's pick attack."
   ]
  },
- "Amp_EN30": {
-  "en30": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01
-   },
-   "Bass": {
-    "param": "Bass",
-    "scale": 0.01
-   },
-   "Mid": {
-    "param": "Mid",
-    "scale": 0.01,
-    "_hint": "The AC30 Top Boost reference has no Mid pot; this fills or cuts the post-tone-stack body while preserving Rocksmith's Mid knob."
-   },
-   "Treble": {
-    "param": "Treble",
-    "scale": 0.01
-   },
-   "Pres": {
-    "param": "Pres",
-    "scale": 0.01,
-    "_hint": "Pres maps to the inverse of the AC30 cut/presence behavior: higher Rocksmith Pres means less cut and more EL84/speaker bite."
-   },
-   "Bright": {
-    "param": "Bright",
-    "scale": 1.0,
-    "_hint": "Rocksmith stores Bright as 0/1; EN30 treats values >= 0.5 as the brilliant/top-boost voicing."
-   }
-  }
- },
- "Amp_TW22": {
-  "tw22": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01,
-    "_hint": "Rocksmith's single Gain blends the Super-Sonic 22 from Vintage/Fat clean behavior into the Burn channel's cascaded gain stages."
-   },
-   "Bass": {
-    "param": "Bass",
-    "scale": 0.01
-   },
-   "Mid": {
-    "param": "Mid",
-    "scale": 0.01
-   },
-   "Treble": {
-    "param": "Treble",
-    "scale": 0.01
-   }
-  }
- },
- "Amp_TW26": {
-  "tw26": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01,
-    "_hint": "5E3 volume behavior: Rocksmith Gain drives the 12AY7 preamp and cathode-biased 6V6 output section."
-   },
-   "Bass": {
-    "param": "Bass",
-    "scale": 0.01,
-    "_hint": "The real 57 Deluxe has no Bass pot; this controls low-end coupling and tweed thump while tightening high-gain flub."
-   },
-   "Mid": {
-    "param": "Mid",
-    "scale": 0.01,
-    "_hint": "The real 5E3 has no Mid pot; this controls the tweed mid body instead of a blackface-style scoop."
-   },
-   "Treble": {
-    "param": "Treble",
-    "scale": 0.01,
-    "_hint": "Maps to the single 5E3 Tone circuit."
-   },
-   "Pres": {
-    "param": "Pres",
-    "scale": 0.01,
-    "_hint": "The schematic has no presence pot; this adds/removes power-amp and speaker bite."
-   }
-  }
- },
- "Amp_TW40": {
-  "tw40": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01,
-    "_hint": "Rocksmith Gain drives the 5F6-A preamp and 5881-style output section."
-   },
-   "Bass": {
-    "param": "Bass",
-    "scale": 0.01,
-    "_hint": "Maps to the Bassman FMV tone stack bass control."
-   },
-   "Mid": {
-    "param": "Mid",
-    "scale": 0.01,
-    "_hint": "Maps to the Bassman FMV tone stack middle control."
-   },
-   "Treble": {
-    "param": "Treble",
-    "scale": 0.01,
-    "_hint": "Maps to the Bassman FMV tone stack treble control and bright-channel blend."
-   },
-   "Pres": {
-    "param": "Pres",
-    "scale": 0.01,
-    "_hint": "Maps to the Bassman presence circuit and upper speaker bite."
-   }
-  }
- },
- "Amp_MarshallDSL100H": {
-  "dsl100": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01,
-    "_hint": "Rocksmith Gain morphs the DSL100 from Classic Clean into Classic Crunch and Ultra OD1."
-   },
-   "Bass": {
-    "param": "Bass",
-    "scale": 0.01,
-    "_hint": "Maps to the DSL tone stack bass control plus low-end tightening at high gain."
-   },
-   "Mid": {
-    "param": "Mid",
-    "scale": 0.01,
-    "_hint": "Maps to the DSL tone stack middle control; low Mid at high Gain increases the Tone Shift-style scoop."
-   },
-   "Treble": {
-    "param": "Treble",
-    "scale": 0.01,
-    "_hint": "Maps to the DSL tone stack treble control and high-gain bite."
-   },
-   "Pres": {
-    "param": "Pres",
-    "scale": 0.01,
-    "_hint": "Maps to the upper feedback-loop presence and speaker bite."
-   },
-   "Res": {
-    "param": "Res",
-    "scale": 0.01,
-    "_hint": "Maps to the DSL deep/resonance low-feedback behavior."
-   }
-  }
- },
- "Amp_CA100": {
-  "dualrect": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01,
-    "_hint": "Rocksmith Gain morphs the Dual Rectifier Red channel through the local Red G2/G5/G8 curation."
-   },
-   "Bass": {
-    "param": "Bass",
-    "scale": 0.01,
-    "_hint": "Maps to the Dual Rectifier Red tone stack bass control with high-gain low-end tightening."
-   },
-   "Mid": {
-    "param": "Mid",
-    "scale": 0.01,
-    "_hint": "Maps to the Red tone stack mid control; high Gain adds the Rectifier modern scoop around it."
-   },
-   "Treble": {
-    "param": "Treble",
-    "scale": 0.01,
-    "_hint": "Maps to the Red tone stack treble control and cascaded-stage bite."
-   },
-   "Pres": {
-    "param": "Pres",
-    "scale": 0.01,
-    "_hint": "Maps to the presence and feedback network in the power amp."
-   }
-  }
- },
- "Amp_CA38": {
-  "markiv": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01,
-    "_hint": "Rocksmith Gain morphs the Mark IV from clean to fat gain to tight lead."
-   },
-   "Bass": {
-    "param": "Bass",
-    "scale": 0.01,
-    "_hint": "Maps to the Mark pre-gain bass shaping with tighter low end as Gain rises."
-   },
-   "Mid": {
-    "param": "Mid",
-    "scale": 0.01,
-    "_hint": "Maps to the Mark mid control and moderates the internal post-preamp graphic-EQ scoop."
-   },
-   "Treble": {
-    "param": "Treble",
-    "scale": 0.01,
-    "_hint": "Maps to the pre-gain treble control, lead bite, and derived presence behavior."
-   }
-  }
- },
- "Amp_CA85": {
-  "markiii": {
-   "Gain": {
-    "param": "Gain",
-    "scale": 0.01,
-    "_hint": "Rocksmith Gain controls the Mark III crunch-mode drive and lead-stage push."
-   },
-   "Bass": {
-    "param": "Bass",
-    "scale": 0.01,
-    "_hint": "Maps to the Mark III pre-gain bass shaping with bass-shift style low-end control."
-   },
-   "Mid": {
-    "param": "Mid",
-    "scale": 0.01,
-    "_hint": "Maps to the Mark III mid control and moderates the internal graphic-EQ scoop."
-   },
-   "Treble": {
-    "param": "Treble",
-    "scale": 0.01,
-    "_hint": "Maps to the pre-gain treble, pull-bright character, crunch bite, and derived presence."
-   }
-  }
- },
  "Pedal_AcousticEmulator": {
   "acousticsimulator": {
    "Tone": {
@@ -2017,7 +1796,7 @@
   }
  },
  "Pedal_FuzzWasHe": {
-  "fuzzwashe": {
+  "bz-1": {
    "Gain": {
     "param": "Gain",
     "scale": 0.01
@@ -2054,7 +1833,7 @@
   }
  },
  "Pedal_CaptFuzzle": {
-  "captainfuzzle": {
+  "buzz-tone": {
    "Gain": {
     "param": "Gain",
     "scale": 0.01
@@ -2091,7 +1870,7 @@
   }
  },
  "Pedal_BuzzOne": {
-  "buzzone": {
+  "super-buzz": {
    "Gain": {
     "param": "Gain",
     "scale": 0.01
@@ -2099,7 +1878,7 @@
    "Tone": {
     "param": "Tone",
     "scale": 0.01,
-    "_hint": "Continuous Super-Fuzz tone-switch balance: lower is thicker/nasal, higher is brighter and more scooped."
+    "_hint": "Continuous octave-fuzz tone-switch balance: lower is thicker/nasal, higher is brighter and more scooped."
    }
   },
   "khs distortion": {
@@ -2125,7 +1904,7 @@
   }
  },
  "Pedal_BuzzToo": {
-  "buzztoo": {
+  "big buzz": {
    "Gain": {
     "param": "Gain",
     "scale": 0.01
@@ -2133,7 +1912,7 @@
    "Tone": {
     "param": "Tone",
     "scale": 0.01,
-    "_hint": "Continuous Big Muff V1 tone stack balance: lower is darker/thicker, higher is brighter and more scooped."
+    "_hint": "Continuous two-branch fuzz tone stack balance: lower is darker/thicker, higher is brighter and more scooped."
    }
   },
   "khs distortion": {
@@ -4095,6 +3874,227 @@
    "Mix": {
     "param": "Mix",
     "scale": 0.01
+   }
+  }
+ },
+ "Amp_CA100": {
+  "dualrect": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "Rocksmith Gain morphs the Dual Rectifier Red channel through the local Red G2/G5/G8 curation."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "Maps to the Dual Rectifier Red tone stack bass control with high-gain low-end tightening."
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.01,
+    "_hint": "Maps to the Red tone stack mid control; high Gain adds the Rectifier modern scoop around it."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "Maps to the Red tone stack treble control and cascaded-stage bite."
+   },
+   "Pres": {
+    "param": "Pres",
+    "scale": 0.01,
+    "_hint": "Maps to the presence and feedback network in the power amp."
+   }
+  }
+ },
+ "Amp_CA38": {
+  "markiv": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "Rocksmith Gain morphs the Mark IV from clean to fat gain to tight lead."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "Maps to the Mark pre-gain bass shaping with tighter low end as Gain rises."
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.01,
+    "_hint": "Maps to the Mark mid control and moderates the internal post-preamp graphic-EQ scoop."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "Maps to the pre-gain treble control, lead bite, and derived presence behavior."
+   }
+  }
+ },
+ "Amp_CA85": {
+  "markiii": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "Rocksmith Gain controls the Mark III crunch-mode drive and lead-stage push."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "Maps to the Mark III pre-gain bass shaping with bass-shift style low-end control."
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.01,
+    "_hint": "Maps to the Mark III mid control and moderates the internal graphic-EQ scoop."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "Maps to the pre-gain treble, pull-bright character, crunch bite, and derived presence."
+   }
+  }
+ },
+ "Amp_EN30": {
+  "en30": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.01,
+    "_hint": "The AC30 Top Boost reference has no Mid pot; this fills or cuts the post-tone-stack body while preserving Rocksmith's Mid knob."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01
+   },
+   "Pres": {
+    "param": "Pres",
+    "scale": 0.01,
+    "_hint": "Pres maps to the inverse of the AC30 cut/presence behavior: higher Rocksmith Pres means less cut and more EL84/speaker bite."
+   },
+   "Bright": {
+    "param": "Bright",
+    "scale": 1.0,
+    "_hint": "Rocksmith stores Bright as 0/1; EN30 treats values >= 0.5 as the brilliant/top-boost voicing."
+   }
+  }
+ },
+ "Amp_MarshallDSL100H": {
+  "dsl100": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "Rocksmith Gain morphs the DSL100 from Classic Clean into Classic Crunch and Ultra OD1."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "Maps to the DSL tone stack bass control plus low-end tightening at high gain."
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.01,
+    "_hint": "Maps to the DSL tone stack middle control; low Mid at high Gain increases the Tone Shift-style scoop."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "Maps to the DSL tone stack treble control and high-gain bite."
+   },
+   "Pres": {
+    "param": "Pres",
+    "scale": 0.01,
+    "_hint": "Maps to the upper feedback-loop presence and speaker bite."
+   },
+   "Res": {
+    "param": "Res",
+    "scale": 0.01,
+    "_hint": "Maps to the DSL deep/resonance low-feedback behavior."
+   }
+  }
+ },
+ "Amp_TW22": {
+  "tw22": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "Rocksmith's single Gain blends the Super-Sonic 22 from Vintage/Fat clean behavior into the Burn channel's cascaded gain stages."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.01
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01
+   }
+  }
+ },
+ "Amp_TW26": {
+  "tw26": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "5E3 volume behavior: Rocksmith Gain drives the 12AY7 preamp and cathode-biased 6V6 output section."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "The real 57 Deluxe has no Bass pot; this controls low-end coupling and tweed thump while tightening high-gain flub."
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.01,
+    "_hint": "The real 5E3 has no Mid pot; this controls the tweed mid body instead of a blackface-style scoop."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "Maps to the single 5E3 Tone circuit."
+   },
+   "Pres": {
+    "param": "Pres",
+    "scale": 0.01,
+    "_hint": "The schematic has no presence pot; this adds/removes power-amp and speaker bite."
+   }
+  }
+ },
+ "Amp_TW40": {
+  "tw40": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "Rocksmith Gain drives the 5F6-A preamp and 5881-style output section."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "Maps to the Bassman FMV tone stack bass control."
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.01,
+    "_hint": "Maps to the Bassman FMV tone stack middle control."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "Maps to the Bassman FMV tone stack treble control and bright-channel blend."
+   },
+   "Pres": {
+    "param": "Pres",
+    "scale": 0.01,
+    "_hint": "Maps to the Bassman presence circuit and upper speaker bite."
    }
   }
  }

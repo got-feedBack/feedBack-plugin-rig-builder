@@ -9,7 +9,7 @@ FILES_UI = \
 	USWah_ui.cpp
 
 FILES_UI = \
-	EN30_ui.cpp
+	USWah_ui.cpp
 
 DPF_PATH ?= ../DPF
 

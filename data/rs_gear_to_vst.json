@@ -36,94 +36,6 @@
    }
   ]
  },
- "Amp_EN30": [
-  {
-   "name": "EN30",
-   "manufacturer": "RigBuilder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/EN30.vst3",
-   "notes": "Bundled Vox AC30 Top Boost / EL84 style amp based on the local EN30 schematics, using Rocksmith's Gain, Bass, Mid, Treble, Pres, and Bright knobs."
-  }
- ],
- "Amp_TW22": [
-  {
-   "name": "TW22",
-   "manufacturer": "RigBuilder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/TW22.vst3",
-   "notes": "Bundled Fender Super-Sonic 22 / 6V6 style amp based on the local TW22 schematic, using Rocksmith's Gain, Bass, Mid, and Treble knobs."
-  }
- ],
- "Amp_TW26": [
-  {
-   "name": "TW26",
-   "manufacturer": "RigBuilder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/TW26.vst3",
-   "notes": "Bundled Fender 57 Deluxe / 5E3 tweed style amp based on the local TW26 schematic, using Rocksmith's Gain, Bass, Mid, Treble, and Pres knobs."
-  }
- ],
- "Amp_TW40": [
-  {
-   "name": "TW40",
-   "manufacturer": "RigBuilder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/TW40.vst3",
-   "notes": "Bundled Fender Bassman 5F6-A / 5881 style amp based on the local TW40 schematic, using Rocksmith's Gain, Bass, Mid, Treble, and Pres knobs."
-  }
- ],
- "Amp_MarshallDSL100H": [
-  {
-   "name": "DSL100",
-   "manufacturer": "RigBuilder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/DSL100.vst3",
-   "notes": "Bundled Marshall DSL100H / JCM2000 style amp based on the local DSL100 schematics, using Rocksmith's Gain, Bass, Mid, Treble, Pres, and Res knobs."
-  }
- ],
- "Amp_CA100": [
-  {
-   "name": "DualRect",
-   "manufacturer": "RigBuilder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/DualRect.vst3",
-   "notes": "Bundled Mesa-Boogie Dual Rectifier Red-channel style amp based on the local Cali_100 schematic, using Rocksmith's Gain, Bass, Mid, Treble, and Pres knobs."
-  }
- ],
- "Amp_CA38": [
-  {
-   "name": "MarkIV",
-   "manufacturer": "RigBuilder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/MarkIV.vst3",
-   "notes": "Bundled Mesa-Boogie Mark IV lead-channel style amp based on the local Mark IV schematic, using Rocksmith's Gain, Bass, Mid, and Treble knobs."
-  }
- ],
- "Amp_CA85": [
-  {
-   "name": "MarkIII",
-   "manufacturer": "RigBuilder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/MarkIII.vst3",
-   "notes": "Bundled Mesa-Boogie Mark III R2 / crunch-mode style amp based on the local Mark III schematic, using Rocksmith's Gain, Bass, Mid, and Treble knobs."
-  }
- ],
  "Pedal_AcousticEmulator": [
   {
    "name": "AcousticSimulator",
@@ -131,7 +43,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/AcousticSimulator.vst3",
+   "bundled": "vst/Acoustic Emulator.vst3",
    "notes": "Bundled acoustic simulator based on the local blue-button acoustic pedal schematic, using Rocksmith's Tone, MidShift, Body, and Mid knobs."
   }
  ],
@@ -142,7 +54,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/Chorus.vst3",
+   "bundled": "vst/CH-2.vst3",
    "notes": "Bundled Boss CE-2 style BBD chorus based on the local schematic, using Rocksmith's Rate, Depth, and Mix knobs."
   },
   {
@@ -161,7 +73,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/Chorus20.vst3",
+   "bundled": "vst/Deja Chorus.vst3",
    "notes": "Bundled stereo BBD chorus/flanger based on the local Chorus 2.0 schematic, using Rocksmith's Rate, Depth, and Mix knobs."
   },
   {
@@ -190,7 +102,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/DigitalChorus.vst3",
+   "bundled": "vst/CH-5.vst3",
    "notes": "Bundled clean digital chorus based on the local digital chorus schematic, using Rocksmith's Rate, Depth, LoFilter, HiFilter, and Mix knobs."
   },
   {
@@ -209,7 +121,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/AnalogChorus.vst3",
+   "bundled": "vst/134 Stereo Chorus.vst3",
    "notes": "Bundled warm analog stereo BBD chorus based on the local analog chorus schematic, using Rocksmith's Rate, Depth, and Mix knobs."
   },
   {
@@ -226,7 +138,7 @@
    "name": "BassChorus",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/BassChorus.vst3",
+   "bundled": "vst/CB-3.vst3",
    "free": true,
    "notes": "Bundled Boss CEB-3 model — BBD chorus with the bass Low Filter (keeps lows dry). Rate/Depth/LoFilter/Mix map 1:1 to RS."
   },
@@ -264,7 +176,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/EightiesFlanger.vst3",
+   "bundled": "vst/N117R Flanger.vst3",
    "notes": "Bundled MXR Flanger Original/SAD1024 style BBD flanger based on the local 80s flanger schematic, using Rocksmith's Rate, Depth, and Mix knobs."
   },
   {
@@ -291,7 +203,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/ClassicFlanger.vst3",
+   "bundled": "vst/FL-2.vst3",
    "notes": "Bundled Boss BF-2/MN3207 style BBD flanger based on the local classic flanger schematic, using Rocksmith's Rate, Depth, and Mix knobs."
   },
   {
@@ -318,7 +230,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/ModernFlanger.vst3",
+   "bundled": "vst/FM107.vst3",
    "notes": "Bundled MF-108M/Cluster Flux style BBD flanger based on the local modern flange schematic, using Rocksmith's Rate, Depth, Regen, and Mix knobs."
   },
   {
@@ -345,7 +257,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/VintageFlanger.vst3",
+   "bundled": "vst/Deluxe Servant.vst3",
    "notes": "Bundled Deluxe Electric Mistress style BBD flanger based on the local vintage flanger schematic, using Rocksmith's Rate, Depth, and Mix knobs."
   },
   {
@@ -370,7 +282,7 @@
    "name": "BassFlanger",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/BassFlanger.vst3",
+   "bundled": "vst/FL-3.vst3",
    "free": true,
    "notes": "Bundled Boss BF-2/BF-3 model adapted for bass — modulated delay + feedback (Filter=resonance), lows kept clean. Rate/Depth/Filter/Mix map 1:1."
   },
@@ -398,7 +310,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/Phaser363.vst3",
+   "bundled": "vst/phase 90.vst3",
    "notes": "Bundled MXR Phase 90 style four-stage phaser based on the local Phaser 363 schematic, using Rocksmith's single Rate knob."
   },
   {
@@ -425,7 +337,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/ShaverPhaser.vst3",
+   "bundled": "vst/PH-1.vst3",
    "notes": "Bundled ET-25B style phaser based on the local shaver phaser schematic, using Rocksmith's Rate and Depth knobs with fixed internal mix."
   },
   {
@@ -452,7 +364,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/PlanePhase.vst3",
+   "bundled": "vst/Rocket Phase.vst3",
    "notes": "Bundled AP-7 style eight-stage phaser based on the local Plane Phase schematic, using Rocksmith's Rate, Depth, and Mix knobs."
   },
   {
@@ -477,7 +389,7 @@
    "name": "BassPhase",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/BassPhase.vst3",
+   "bundled": "vst/phase 99.vst3",
    "free": true,
    "notes": "Bundled analog bass phaser — 4 swept all-pass stages with regeneration, dry/wet notch blend, and a wet-path high-pass so bass lows stay solid. Maps RS Rate/Depth/Mix/Filter."
   },
@@ -524,7 +436,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/AmpTrem.vst3",
+   "bundled": "vst/Mega-Trem.vst3",
    "notes": "Bundled Demeter Tremulator-style optical amp tremolo based on the local schematic, using Rocksmith's Speed and Depth knobs."
   },
   {
@@ -543,7 +455,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/MultiTrem.vst3",
+   "bundled": "vst/TR-2.vst3",
    "notes": "Bundled Boss TR-2 style multi-wave tremolo based on the local schematic, using Rocksmith's Speed, Mix, and Waveform knobs."
   },
   {
@@ -562,7 +474,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/TremOle.vst3",
+   "bundled": "vst/Dyna-Trem.vst3",
    "notes": "Bundled envelope-aware stereo tremolo using Rocksmith's Sens, Attack, Release, and Mix knobs."
   },
   {
@@ -581,7 +493,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/AmpVibe.vst3",
+   "bundled": "vst/Multi-Vibe.vst3",
    "notes": "Bundled Uni-Vibe style four-stage phase modulation based on the local schematic, using Rocksmith's Speed and Mix knobs."
   },
   {
@@ -600,7 +512,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/MultiVibe.vst3",
+   "bundled": "vst/VB-2.vst3",
    "notes": "Bundled Boss VB-2 style BBD vibrato based on the local schematic, using Rocksmith's Speed, Mix and Waveform knobs."
   },
   {
@@ -619,7 +531,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/AutoVibe.vst3",
+   "bundled": "vst/Oceanduct.vst3",
    "notes": "Bundled envelope-controlled vibrato/vibe using Rocksmith's Sens, Attack, Release, and Mix knobs."
   },
   {
@@ -638,7 +550,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/BassEmulator.vst3",
+   "bundled": "vst/Bass Emulator.vst3",
    "notes": "Bundled guitar-to-bass octave emulator using Rocksmith's Body and Tone knobs."
   }
  ],
@@ -649,7 +561,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/MarshallSupervibe.vst3",
+   "bundled": "vst/UV-1.vst3",
    "notes": "Bundled Marshall SV-1/Supervibe style MN3007 BBD vibe based on the local schematic, using Rocksmith's Rate, Depth, Mix and Wave knobs."
   },
   {
@@ -668,7 +580,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/BakedRotatoe.vst3",
+   "bundled": "vst/RT-2.vst3",
    "notes": "Bundled Leslie/RT-20 style rotary speaker based on the local LERA Leslie rotor adapter reference, using Rocksmith's Rate, Depth, Mix and Balance knobs."
   },
   {
@@ -687,7 +599,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/OmniMod.vst3",
+   "bundled": "vst/UniMod.vst3",
    "notes": "Bundled Uni-Vibe/Shin-ei style photocell phase modulation based on the local Omni Mod schematics, using Rocksmith's Rate, Depth, and Mix knobs."
   },
   {
@@ -704,7 +616,7 @@
    "name": "AnalogDelay",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/AnalogDelay.vst3",
+   "bundled": "vst/FM104.vst3",
    "free": true,
    "notes": "Bundled MF-104 style BBD delay using Rocksmith Time, Feedback and Mix controls"
   }
@@ -714,7 +626,7 @@
    "name": "ValveEcho",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/ValveEcho.vst3",
+   "bundled": "vst/Valve Echo.vst3",
    "free": true,
    "notes": "Bundled Binson Echorec style valve drum echo using Rocksmith Time, Feedback and Mix controls"
   }
@@ -724,7 +636,7 @@
    "name": "NpnDelay",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/NpnDelay.vst3",
+   "bundled": "vst/DM-2.vst3",
    "free": true,
    "notes": "Bundled DM-2 style BBD/NPN delay using Rocksmith Time, Feedback and Mix controls"
   }
@@ -734,7 +646,7 @@
    "name": "NoFiEcho",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/NoFiEcho.vst3",
+   "bundled": "vst/No Fi Echo.vst3",
    "free": true,
    "notes": "Bundled DE7-style stereo no-fi echo using Rocksmith Time, Feedback and Mix controls"
   }
@@ -746,7 +658,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/OilCanEcho.vst3",
+   "bundled": "vst/Oil Can Echo.vst3",
    "notes": "Bundled Tel-Ray / OK Pacemaker oil-can echo based on the local schematics, using Rocksmith's Time, Feedback, and Mix knobs."
   },
   {
@@ -765,7 +677,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/CosmicEcho.vst3",
+   "bundled": "vst/Galaxy Echo.vst3",
    "notes": "Bundled Synthrotek ECHO / PT2399-style cosmic delay based on the local schematic, using Rocksmith's Time, Feedback, and Mix knobs."
   },
   {
@@ -784,7 +696,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/ModDelay.vst3",
+   "bundled": "vst/DL9.vst3",
    "notes": "Bundled DLL10/DML10-style modulated delay using Rocksmith's Time, Feedback, Mix, Rate, and Depth knobs."
   },
   {
@@ -801,7 +713,7 @@
    "name": "BassFilterDelay",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/BassFilterDelay.vst3",
+   "bundled": "vst/DL-3.vst3",
    "free": true,
    "notes": "Bundled Boss DM-2 analog (BBD) delay — warm repeats that darken cumulatively via a feedback-loop low-pass + gentle saturation. Maps RS Time/Feedback/Mix/Filter."
   },
@@ -819,7 +731,7 @@
    "name": "BassFilterEcho",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/BassFilterEcho.vst3",
+   "bundled": "vst/SE-3.vst3",
    "free": true,
    "notes": "Bundled vintage tape echo — same engine as the Filter Delay but voiced like tape: darker, more saturated repeats with wow & flutter. Maps RS Time/Feedback/Mix/Filter."
   },
@@ -839,7 +751,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/SpringReverb.vst3",
+   "bundled": "vst/Holy Spring.vst3",
    "notes": "Bundled Holy Grail-style spring tank reverb using Rocksmith's Time, Mix, and Depth knobs."
   },
   {
@@ -858,7 +770,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/DigitalVerb.vst3",
+   "bundled": "vst/RV-2.vst3",
    "notes": "Bundled Boss RV-2 style early digital reverb based on the local schematic, using Rocksmith's Time, Mix, Depth, and Tone knobs."
   },
   {
@@ -877,7 +789,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/PlateVerb.vst3",
+   "bundled": "vst/VOODOO.vst3",
    "notes": "Bundled EMT 140-style plate reverb based on the local schematic, using Rocksmith's Time, Depth, Mix, and Voice knobs."
   },
   {
@@ -896,7 +808,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/TubeSpring.vst3",
+   "bundled": "vst/Real Spring.vst3",
    "notes": "Bundled tube/spring tank reverb based on the local spring driver schematic, using Rocksmith's Mix and Depth knobs."
   },
   {
@@ -915,7 +827,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/DynamicsCompression.vst3",
+   "bundled": "vst/dyna comp.vst3",
    "notes": "Bundled Dyna Comp-style pedal compressor using Rocksmith's Comp, Attack, and Release knobs."
   },
   {
@@ -960,7 +872,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/BassMultiComp.vst3",
+   "bundled": "vst/Multi Comp.vst3",
    "notes": "Bundled EBS MultiComp-style multiband bass compressor based on the local schematic, using Rocksmith's Compress, Filter, and Rate knobs."
   },
   {
@@ -1019,7 +931,7 @@
    "name": "EQ8",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/EQ8.vst3",
+   "bundled": "vst/GE-8.vst3",
    "free": true,
    "notes": "Bundled 8-band graphic EQ clone of Rocksmith EQ8"
   },
@@ -1053,7 +965,7 @@
    "name": "Amp EQ",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/AmpEQ.vst3",
+   "bundled": "vst/FBM-1.vst3",
    "free": true,
    "notes": "Bundled Fender '59 Bassman 5F6-A passive FMV tone stack (Yeh & Smith DAFx-06 model). Bass/Mid/Treble interact with the real mid scoop; BassFreq/MidShift/TrebleFreq scale the tone-stack caps."
   },
@@ -1079,7 +991,7 @@
    "name": "Bass EQ8",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/BassEQ8.vst3",
+   "bundled": "vst/GEB-8.vst3",
    "free": true,
    "notes": "Bundled 8-band bass graphic EQ, Boss GE-7B gyrator model, RS bands"
   },
@@ -1113,7 +1025,7 @@
    "name": "Studio Comp",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/StudioComp.vst3",
+   "bundled": "vst/HZX.vst3",
    "free": true,
    "notes": "Bundled dbx 160 model — true-RMS feed-forward VCA compressor (dbx 202 RMS detector + log VCA, OverEasy soft knee). Threshold/Ratio/Attack/Release map 1:1 to RS."
   },
@@ -1139,7 +1051,7 @@
    "name": "Studio EQ",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/StudioEQ.vst3",
+   "bundled": "vst/LNG.vst3",
    "free": true,
    "notes": "Bundled 4-band parametric EQ, GML-style clean"
   },
@@ -1173,7 +1085,7 @@
    "name": "Studio Graphic EQ",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/StudioGraphicEQ.vst3",
+   "bundled": "vst/G-550.vst3",
    "free": true,
    "notes": "Bundled 5-band sweepable EQ, API-550 proportional-Q style"
   },
@@ -1209,7 +1121,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/NoiseGate.vst3",
+   "bundled": "vst/NF-1.vst3",
    "notes": "Bundled ET-45C/default-gate style gate using Rocksmith's Thresh and Rate knobs"
   },
   {
@@ -1226,7 +1138,7 @@
    "name": "Limiter",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/Limiter.vst3",
+   "bundled": "vst/LM-2.vst3",
    "free": true,
    "notes": "Bundled two-knob stereo peak limiter using Rocksmith's Limit and Rate controls"
   }
@@ -1238,7 +1150,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/USWah.vst3",
+   "bundled": "vst/Cry Man.vst3",
    "notes": "Bundled Dunlop Cry Baby GCB-95 style wah based on the local US Wah schematic, using Rocksmith's Auto, Pedal, Sens, and Speed knobs."
   },
   {
@@ -1257,7 +1169,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/UKWah.vst3",
+   "bundled": "vst/BOX B847.vst3",
    "notes": "Bundled Vox V847 / Clyde McCoy style wah based on the local UK Wah schematic, using Rocksmith's Auto, Pedal, Sens, and Speed knobs."
   },
   {
@@ -1274,7 +1186,7 @@
    "name": "BassWah",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/BassWah.vst3",
+   "bundled": "vst/Bass Wah.vst3",
    "free": true,
    "notes": "Bundled Cry Baby Bass Wah (105Q) model — resonant band-pass swept across 100 Hz-1.6 kHz by Pedal position, the input envelope (Sens) and an LFO (Speed) when Auto is on, with a little dry blend to keep bass body. Maps RS Auto/Pedal/Sens/Speed."
   },
@@ -1294,7 +1206,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/ModernWah.vst3",
+   "bundled": "vst/Jockey Bad.vst3",
    "notes": "Bundled Morley Bad Horsie / optical contour wah based on the local Modern Wah schematic, using Rocksmith's Auto, Pedal, Sens, and Speed knobs."
   },
   {
@@ -1313,7 +1225,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/LoFiFilter.vst3",
+   "bundled": "vst/Lo Fi Filter.vst3",
    "notes": "Bundled Lofinator-style lo-fi filter based on the local schematic, using Rocksmith's FilterType and Mix knobs."
   },
   {
@@ -1332,7 +1244,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/BobFilter.vst3",
+   "bundled": "vst/FM105.vst3",
    "notes": "Bundled Moog/MuRF-style analog filter based on the local MF-105 schematic, using Rocksmith's Sens, Attack, Release, Mix, and Filter knobs."
   },
   {
@@ -1349,7 +1261,7 @@
    "name": "AutoFilter",
    "manufacturer": "Rig Builder",
    "format": "VST3",
-   "bundled": "vst/AutoFilter.vst3",
+   "bundled": "vst/BU-TRON III.vst3",
    "free": true,
    "notes": "Bundled Mu-Tron III style envelope filter based on the local Auto Filter schematic, using Rocksmith's FilterType, Res, Sens, Attack and Release knobs."
   },
@@ -1357,9 +1269,9 @@
    "name": "AutoSweep",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/AutoSweep.vst3",
+   "bundled": "vst/Qtrix.vst3",
    "free": true,
-   "notes": "Bundled envelope filter / auto-wah (ships in vst/AutoSweep.vst3). Real envelope follower -> biquad sweep, no separate install."
+   "notes": "Bundled envelope filter / auto-wah (ships in vst/Qtrix.vst3). Real envelope follower -> biquad sweep, no separate install."
   },
   {
    "name": "kHs Filter",
@@ -1375,7 +1287,7 @@
    "name": "AutoSweep",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/AutoSweep.vst3",
+   "bundled": "vst/Qtrix.vst3",
    "free": true,
    "notes": "Bundled Q-Tron-style envelope filter kept for Rocksmith Bass Auto Filter/Bass Auto Tone, with bass-range sweep calibration; guitar Auto Tone uses the Mu-Tron III clone."
   },
@@ -1395,7 +1307,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/GermaniumDrive.vst3",
+   "bundled": "vst/Germanium Drive.vst3",
    "notes": "Bundled two-knob smooth germanium overdrive for Rocksmith's Gain/Tone pedal."
   },
   {
@@ -1414,7 +1326,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/CustomDrive.vst3",
+   "bundled": "vst/CDO.vst3",
    "notes": "Bundled MOSFET/diode custom overdrive based on the local Custom Drive schematic, using Rocksmith's Gain, Tone, and Voice knobs."
   },
   {
@@ -1431,7 +1343,7 @@
    "name": "LineDrive",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/LineDrive.vst3",
+   "bundled": "vst/OS-2.vst3",
    "free": true,
    "notes": "Bundled Boss OS-2 style drive/distortion blend using Rocksmith Gain and Tone controls"
   }
@@ -1441,7 +1353,7 @@
    "name": "MarshallGuvnorPlus",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/MarshallGuvnorPlus.vst3",
+   "bundled": "vst/GM-2.vst3",
    "free": true,
    "notes": "Bundled Marshall GV-2 Guv'nor Plus style drive using Rocksmith Gain, Bass, Mid, Treble and Deep controls"
   }
@@ -1451,7 +1363,7 @@
    "name": "SuperDrive",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/SuperDrive.vst3",
+   "bundled": "vst/SD-1.vst3",
    "free": true,
    "notes": "Bundled Boss SD-1 style asymmetric feedback overdrive using Rocksmith Gain and Tone controls"
   }
@@ -1463,7 +1375,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/RangeBooster.vst3",
+   "bundled": "vst/Range Booster.vst3",
    "notes": "Bundled Rangemaster-style treble booster based on the local OC44 Range Booster schematic, using Rocksmith's Boost knob."
   },
   {
@@ -1480,7 +1392,7 @@
    "name": "StandardDistortion",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/StandardDistortion.vst3",
+   "bundled": "vst/DS-1.vst3",
    "free": true,
    "notes": "Bundled Boss DS-1 style standard distortion using Rocksmith Gain and Tone controls"
   }
@@ -1490,7 +1402,7 @@
    "name": "VintageDistortion",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/VintageDistortion.vst3",
+   "bundled": "vst/Vintage Distortion.vst3",
    "free": true,
    "notes": "Bundled DOD 250 style op-amp/asymmetric diode distortion using Rocksmith Gain and Tone controls"
   }
@@ -1500,7 +1412,7 @@
    "name": "AlloyDistortion",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/AlloyDistortion.vst3",
+   "bundled": "vst/HM-2.vst3",
    "free": true,
    "notes": "Bundled Boss HM-2 style alloy/heavy metal distortion using Rocksmith Gain and Tone controls"
   }
@@ -1510,7 +1422,7 @@
    "name": "BassDistortion",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/BassDistortion.vst3",
+   "bundled": "vst/Mouse.vst3",
    "free": true,
    "notes": "Bundled Pro Co RAT model — LM308 high-gain + hard silicon clip + the RAT passive Filter low-pass. Gain(Distortion)/Tone(pre-clip)/Filter(RAT Filter) map 1:1 to RS."
   },
@@ -1528,7 +1440,7 @@
    "name": "BassOverdrive",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/BassOverdrive.vst3",
+   "bundled": "vst/BLACKBRASS.vst3",
    "free": true,
    "notes": "Bundled Darkglass Microtubes B3K model — clean+CMOS-clip parallel paths. Blend/Gain(Drive)/Filter(Grunt)/Tone(Attack) map 1:1 to RS."
   },
@@ -1543,13 +1455,13 @@
  ],
  "Pedal_FuzzWasHe": [
   {
-   "name": "FuzzWasHe",
+   "name": "BZ-1",
    "manufacturer": "Rig Builder",
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/FuzzWasHe.vst3",
-   "notes": "Bundled two-knob silicon FZ-3 style fuzz based on the local Fuzz Was He schematic."
+   "bundled": "vst/BZ-1.vst3",
+   "notes": "Bundled two-knob Chief-style silicon fuzz based on the local schematic."
   },
   {
    "name": "kHs Distortion",
@@ -1557,18 +1469,18 @@
    "format": "VST3",
    "url": "https://kilohearts.com/products/essentials",
    "free": true,
-   "notes": "Fallback: generic fuzz character when bundled FuzzWasHe is unavailable."
+   "notes": "Fallback: generic fuzz character when bundled BZ-1 is unavailable."
   }
  ],
  "Pedal_CaptFuzzle": [
   {
-   "name": "CaptainFuzzle",
+   "name": "Buzz-Tone",
    "manufacturer": "Rig Builder",
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/CaptainFuzzle.vst3",
-   "notes": "Bundled two-knob low-headroom germanium fuzz based on the local Captain Fuzzle schematic."
+   "bundled": "vst/Buzz-Tone.vst3",
+   "notes": "Bundled two-knob low-headroom germanium fuzz inspired by a vintage fuzz-tone circuit."
   },
   {
    "name": "kHs Distortion",
@@ -1576,18 +1488,18 @@
    "format": "VST3",
    "url": "https://kilohearts.com/products/essentials",
    "free": true,
-   "notes": "Fallback: generic fuzz character when bundled CaptainFuzzle is unavailable."
+   "notes": "Fallback: generic fuzz character when bundled Buzz-Tone is unavailable."
   }
  ],
  "Pedal_BuzzOne": [
   {
-   "name": "BuzzOne",
+   "name": "Super-Buzz",
    "manufacturer": "Rig Builder",
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/BuzzOne.vst3",
-   "notes": "Bundled Univox Super-Fuzz style octave fuzz based on the local Buzz 1 schematic, using Rocksmith's Gain and Tone knobs."
+   "bundled": "vst/Super-Buzz.vst3",
+   "notes": "Bundled octave fuzz based on the local schematic, using Rocksmith's Gain and Tone knobs."
   },
   {
    "name": "kHs Distortion",
@@ -1600,13 +1512,13 @@
  ],
  "Pedal_BuzzToo": [
   {
-   "name": "BuzzToo",
+   "name": "Big Buzz",
    "manufacturer": "Rig Builder",
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/BuzzToo.vst3",
-   "notes": "Bundled Big Muff V1 style fuzz based on the local Buzz 2 schematic, using Rocksmith's Gain and Tone knobs."
+   "bundled": "vst/Big Buzz.vst3",
+   "notes": "Bundled triangle-era four-transistor fuzz based on the local schematic, using Rocksmith's Gain and Tone knobs."
   },
   {
    "name": "kHs Distortion",
@@ -1614,7 +1526,7 @@
    "format": "VST3",
    "url": "https://kilohearts.com/products/essentials",
    "free": true,
-   "notes": "Variant of BuzzOne"
+   "notes": "Variant of Super-Buzz"
   }
  ],
  "Bass_Pedal_BassFuzz": [
@@ -1622,7 +1534,7 @@
    "name": "BassFuzz",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/BassFuzz.vst3",
+   "bundled": "vst/Bass Big Buzz.vst3",
    "free": true,
    "notes": "Bundled EHX Bass Big Muff Pi model — 2-stage diode-clip fuzz + Big Muff tone stack + clean low-end blend. Gain/Tone/Filter map 1:1 to RS."
   },
@@ -1642,7 +1554,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/OctaveUp.vst3",
+   "bundled": "vst/OCTUP.vst3",
    "notes": "Bundled clean +12 octave-up inspired by Foxrox Octron and EQD Tentacle two-path octave references, using Rocksmith's Tone and Mix knobs."
   },
   {
@@ -1661,7 +1573,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/Octavius.vst3",
+   "bundled": "vst/OC-5.vst3",
    "notes": "Bundled Boss OC-2 style octave-down pedal based on the local Octavius schematic, using Rocksmith's Tone and Mix knobs."
   },
   {
@@ -1680,7 +1592,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/MultiPitch.vst3",
+   "bundled": "vst/Multi Pitch.vst3",
    "notes": "Bundled MF-102 style ring mod pitch-sideband pedal based on the local multipitch schematic, using Rocksmith's Pitch1, Tone and Mix knobs."
   },
   {
@@ -1697,7 +1609,7 @@
    "name": "BassSubOctave",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/BassSubOctave.vst3",
+   "bundled": "vst/SO-2.vst3",
    "free": true,
    "notes": "Bundled Boss OC-2 model — monophonic analog octaver: comparator + flip-flop frequency divider (one octave down), envelope-tracked, with a Tone low-pass and dry/sub Mix. Maps RS Mix/Tone."
   },
@@ -1763,7 +1675,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/Swole.vst3",
+   "bundled": "vst/Beta Fist.vst3",
    "notes": "Bundled heavy saturated compressor based on Rocksmith's description, using Rocksmith's Smash and Rate knobs."
   },
   {
@@ -1780,7 +1692,7 @@
    "name": "ShredZone",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/ShredZone.vst3",
+   "bundled": "vst/MT-2.vst3",
    "free": true,
    "notes": "Bundled Boss MT-2 style high-gain distortion using Rocksmith Gain, Bass, Mid and Treble controls"
   }
@@ -1792,7 +1704,7 @@
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/Enbiggenator.vst3",
+   "bundled": "vst/MIME.vst3",
    "notes": "Bundled Rocksmith-style modulated thickener/widener using Rocksmith's Rate, Depth, and Mix knobs."
   },
   {
@@ -1869,7 +1781,7 @@
    "name": "BassEnbig",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/BassEnbig.vst3",
+   "bundled": "vst/ENBIGGEN.vst3",
    "free": true,
    "notes": "Bundled 'Enbiggenator' — a fictional RS pedal modeled as an LFO-modulated resonant band-pass (sci-fi vibe/wobble). Maps RS Rate/Depth/Mix/Filter."
   },
@@ -1887,7 +1799,7 @@
    "name": "SendInTheClones",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/SendInTheClones.vst3",
+   "bundled": "vst/Attack of the Clones.vst3",
    "free": true,
    "notes": "Bundled Clone Theory style BBD chorus/doubler. Clones increases voice count/spread; Depth and Mix mirror Rocksmith."
   }
@@ -1897,7 +1809,7 @@
    "name": "EdenWTDI",
    "manufacturer": "RigBuilder",
    "format": "VST3",
-   "bundled": "vst/EdenWTDI.vst3",
+   "bundled": "vst/WT-DX.vst3",
    "free": true,
    "notes": "Bundled Eden WTDI model — preamp Gain drive + optical Compressor + 3-band active EQ (Bass/Mid/Treble ±15 dB) + Eden Enhance contour. The two red switches are LoShift (Bass Boost) and MidShift, modeled as toggles. Maps all 8 RS knobs."
   },
@@ -2052,6 +1964,94 @@
    "url": "https://kilohearts.com/products/kilohearts_essentials",
    "free": true,
    "notes": "Tape echo → kHs Delay (no dedicated tape-saturation in free; the comp pre-stage covers some)"
+  }
+ ],
+ "Amp_CA100": [
+  {
+   "name": "DualRect",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/DualRect.vst3",
+   "notes": "Bundled Mesa-Boogie Dual Rectifier Red-channel style amp based on the local Cali_100 schematic, using Rocksmith's Gain, Bass, Mid, Treble, and Pres knobs."
+  }
+ ],
+ "Amp_CA38": [
+  {
+   "name": "MarkIV",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/MarkIV.vst3",
+   "notes": "Bundled Mesa-Boogie Mark IV lead-channel style amp based on the local Mark IV schematic, using Rocksmith's Gain, Bass, Mid, and Treble knobs."
+  }
+ ],
+ "Amp_CA85": [
+  {
+   "name": "MarkIII",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/MarkIII.vst3",
+   "notes": "Bundled Mesa-Boogie Mark III R2 / crunch-mode style amp based on the local Mark III schematic, using Rocksmith's Gain, Bass, Mid, and Treble knobs."
+  }
+ ],
+ "Amp_EN30": [
+  {
+   "name": "EN30",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/EN30.vst3",
+   "notes": "Bundled Vox AC30 Top Boost / EL84 style amp based on the local EN30 schematics, using Rocksmith's Gain, Bass, Mid, Treble, Pres, and Bright knobs."
+  }
+ ],
+ "Amp_MarshallDSL100H": [
+  {
+   "name": "DSL100",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/DSL100.vst3",
+   "notes": "Bundled Marshall DSL100H / JCM2000 style amp based on the local DSL100 schematics, using Rocksmith's Gain, Bass, Mid, Treble, Pres, and Res knobs."
+  }
+ ],
+ "Amp_TW22": [
+  {
+   "name": "TW22",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/TW22.vst3",
+   "notes": "Bundled Fender Super-Sonic 22 / 6V6 style amp based on the local TW22 schematic, using Rocksmith's Gain, Bass, Mid, and Treble knobs."
+  }
+ ],
+ "Amp_TW26": [
+  {
+   "name": "TW26",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/TW26.vst3",
+   "notes": "Bundled Fender 57 Deluxe / 5E3 tweed style amp based on the local TW26 schematic, using Rocksmith's Gain, Bass, Mid, Treble, and Pres knobs."
+  }
+ ],
+ "Amp_TW40": [
+  {
+   "name": "TW40",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/TW40.vst3",
+   "notes": "Bundled Fender Bassman 5F6-A / 5881 style amp based on the local TW40 schematic, using Rocksmith's Gain, Bass, Mid, Treble, and Pres knobs."
   }
  ]
 }

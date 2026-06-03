@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "EightiesFlanger"
+#define DISTRHO_PLUGIN_NAME    "N117R Flanger"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:eightiesflanger"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.eightiesflanger"
 

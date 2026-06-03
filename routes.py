@@ -289,6 +289,108 @@ _PLATFORM_FOR_CATEGORY = {
 # ── Helpers ──────────────────────────────────────────────────────────
 
 
+# Bundled VSTs whose .vst3 file was renamed to its copyright-free parody name.
+# Maps OLD bundle filename -> NEW. Single source of truth for: (a) the DB
+# migration in _get_conn that rewrites stored preset_pieces.vst_path so existing
+# per-song assignments survive, and (b) the CI build workflows' alias_of (built
+# binary keeps the old NAME; injected into the renamed committed dir). Grows as
+# more pedals are renamed, category by category.
+_RENAMED_VST_BUNDLES = {
+    # distortion
+    "StandardDistortion.vst3": "DS-1.vst3",
+    "AlloyDistortion.vst3":    "HM-2.vst3",
+    "ShredZone.vst3":          "MT-2.vst3",
+    "VintageDistortion.vst3":  "Vintage Distortion.vst3",
+    "BassDistortion.vst3":     "Mouse.vst3",
+    # fuzz
+    "BassFuzz.vst3":           "Bass Big Buzz.vst3",
+    # drive / overdrive / boost
+    "CustomDrive.vst3":        "CDO.vst3",
+    "GermaniumDrive.vst3":     "Germanium Drive.vst3",
+    "RangeBooster.vst3":       "Range Booster.vst3",
+    "LineDrive.vst3":          "OS-2.vst3",
+    "SuperDrive.vst3":         "SD-1.vst3",
+    "MarshallGuvnorPlus.vst3": "GM-2.vst3",
+    "BassOverdrive.vst3":      "BLACKBRASS.vst3",
+    # modulation
+    "Chorus.vst3":               "CH-2.vst3",
+    "DigitalChorus.vst3":        "CH-5.vst3",
+    "Chorus20.vst3":             "Deja Chorus.vst3",
+    "AnalogChorus.vst3":         "134 Stereo Chorus.vst3",
+    "Analog Chorus.vst3":        "134 Stereo Chorus.vst3",
+    "BassChorus.vst3":           "CB-3.vst3",
+    "SendInTheClones.vst3":      "Attack of the Clones.vst3",
+    "ClassicFlanger.vst3":       "FL-2.vst3",
+    "BassFlanger.vst3":          "FL-3.vst3",
+    "ModernFlanger.vst3":        "FM107.vst3",
+    "VintageFlanger.vst3":       "Deluxe Servant.vst3",
+    "EightiesFlanger.vst3":      "N117R Flanger.vst3",
+    "ShaverPhaser.vst3":         "PH-1.vst3",
+    "Phaser363.vst3":            "phase 90.vst3",
+    "BassPhase.vst3":            "phase 99.vst3",
+    "PlanePhase.vst3":           "Rocket Phase.vst3",
+    "MultiTrem.vst3":            "TR-2.vst3",
+    "AmpTrem.vst3":              "Mega-Trem.vst3",
+    "TremOle.vst3":              "Dyna-Trem.vst3",
+    "MultiVibe.vst3":            "VB-2.vst3",
+    "MarshallSupervibe.vst3":    "UV-1.vst3",
+    "OmniMod.vst3":              "UniMod.vst3",
+    "AmpVibe.vst3":              "Multi-Vibe.vst3",
+    "AutoVibe.vst3":             "Oceanduct.vst3",
+    "BakedRotatoe.vst3":         "RT-2.vst3",
+    # delay / echo
+    "BassFilterDelay.vst3":      "DL-3.vst3",
+    "BassFilterEcho.vst3":       "SE-3.vst3",
+    "AnalogDelay.vst3":          "FM104.vst3",
+    "CosmicEcho.vst3":           "Galaxy Echo.vst3",
+    "ModDelay.vst3":             "DL9.vst3",
+    "NpnDelay.vst3":             "DM-2.vst3",
+    "NoFiEcho.vst3":             "No Fi Echo.vst3",
+    "OilCanEcho.vst3":           "Oil Can Echo.vst3",
+    "ValveEcho.vst3":            "Valve Echo.vst3",
+    # reverb
+    "DigitalVerb.vst3":          "RV-2.vst3",
+    "PlateVerb.vst3":            "VOODOO.vst3",
+    "SpringReverb.vst3":         "Holy Spring.vst3",
+    "TubeSpring.vst3":           "Real Spring.vst3",
+    # dynamics
+    "Limiter.vst3":              "LM-2.vst3",
+    "NoiseGate.vst3":            "NF-1.vst3",
+    "DynamicsCompression.vst3":  "dyna comp.vst3",
+    "BassMultiComp.vst3":        "Multi Comp.vst3",
+    "StudioComp.vst3":           "HZX.vst3",
+    "Swole.vst3":                "Beta Fist.vst3",
+    # wah
+    "USWah.vst3":                "Cry Man.vst3",
+    "cry man.vst3":              "Cry Man.vst3",
+    "UKWah.vst3":                "BOX B847.vst3",
+    "ModernWah.vst3":            "Jockey Bad.vst3",
+    "BassWah.vst3":              "Bass Wah.vst3",
+    # filter / envelope
+    "AutoSweep.vst3":            "Qtrix.vst3",
+    "AutoFilter.vst3":           "BU-TRON III.vst3",
+    "BobFilter.vst3":            "FM105.vst3",
+    "LoFiFilter.vst3":           "Lo Fi Filter.vst3",
+    # eq
+    "BassEQ8.vst3":              "GEB-8.vst3",
+    "AmpEQ.vst3":                "FBM-1.vst3",
+    "EQ8.vst3":                  "GE-8.vst3",
+    "StudioEQ.vst3":             "LNG.vst3",
+    "StudioGraphicEQ.vst3":      "G-550.vst3",
+    # pitch / octave
+    "OctaveUp.vst3":             "OCTUP.vst3",
+    "Octavius.vst3":             "OC-5.vst3",
+    "MultiPitch.vst3":           "Multi Pitch.vst3",
+    "BassSubOctave.vst3":        "SO-2.vst3",
+    # emulator / enhancer / preamp
+    "AcousticSimulator.vst3":    "Acoustic Emulator.vst3",
+    "BassEmulator.vst3":         "Bass Emulator.vst3",
+    "Enbiggenator.vst3":         "MIME.vst3",
+    "BassEnbig.vst3":            "ENBIGGEN.vst3",
+    "EdenWTDI.vst3":             "WT-DX.vst3",
+}
+
+
 def _require_db_path() -> str:
     if _db_path is None:
         raise RuntimeError("rig_builder plugin not initialized")
@@ -353,6 +455,16 @@ def _get_conn() -> sqlite3.Connection:
             "CREATE INDEX IF NOT EXISTS idx_preset_pieces_rs_gear "
             "ON preset_pieces(rs_gear_type)"
         )
+        # Renamed bundled VSTs: rewrite stored vst_path basenames old->new so
+        # per-song assignments survive the rename. Idempotent — REPLACE matches
+        # the full trailing "/<old>.vst3" segment, so it's a no-op once migrated.
+        try:
+            for old, new in _RENAMED_VST_BUNDLES.items():
+                _conn.execute(
+                    "UPDATE preset_pieces SET vst_path = REPLACE(vst_path, ?, ?) "
+                    "WHERE vst_path LIKE ?", (f"/{old}", f"/{new}", f"%/{old}"))
+        except Exception:
+            log.exception("renamed-VST path migration failed")
         _conn.commit()
         # v1.2 storage migration. Idempotent — guarded by sentinel file
         # so re-running on subsequent restarts is a no-op. Done here
@@ -377,6 +489,14 @@ def _get_conn() -> sqlite3.Connection:
             _migrate_output_gain_to_unity()
         except Exception:
             log.exception("output_gain unity migration failed")
+        # v2.0.1: point pedal/rack pieces at their BUNDLED VST primary. DBs
+        # mapped before the bundled effects existed (or before a pedal rename)
+        # still reference external plugins (kHs/Melda) or a removed bundle name,
+        # so the bundled DSP never loads. One-shot, sentinel-guarded.
+        try:
+            _migrate_assign_bundled_primary_once()
+        except Exception:
+            log.exception("bundled-primary migration failed")
         # NOTE: the auto gear-global consolidation was DISABLED — its
         # "most-recent VST wins, applied to every instance" rule flattened
         # per-song picks and mis-mapped gears (e.g. a comp pedal globbed onto
@@ -458,6 +578,76 @@ def _migrate_consolidate_gear_assignments_once() -> None:
     log.info("gear global consolidation: %d pieces across %d songs unified to "
              "a single assignment", report.get("rows_changed", 0),
              report.get("presets_affected", 0))
+
+
+def _migrate_assign_bundled_primary_once() -> None:
+    """One-shot: point pedal/rack pieces at their BUNDLED VST primary.
+
+    The 100 bundled effects are the default in rs_gear_to_vst.json, but DBs
+    mapped before they existed (or before a pedal rename) still point at
+    external plugins (kHs/Melda) or a now-removed bundle name — so the bundled
+    DSP never loads ("still getting kHs Chorus", "FuzzWasHe won't open"). This
+    reassigns every AUTO-assigned pedal/rack piece — plus any piece whose
+    current VST file no longer exists (e.g. a renamed bundle) — to the bundled
+    primary and recomputes its vst_state from the RS knobs. Amps and cabs are
+    left untouched (they keep their NAM/IR). A still-valid MANUAL pick is
+    preserved. Sentinel-guarded so it runs exactly once (later manual choices
+    stick). Backs the DB up first."""
+    conn = _conn
+    if conn is None:
+        return
+    marker_row = conn.execute(
+        "SELECT settings_json FROM presets WHERE name = ?",
+        ("__rig_builder_master_pre__",),
+    ).fetchone()
+    marker = json.loads(marker_row[0] or "{}") if marker_row else {}
+    if marker.get("bundled_primary_assigned_v1"):
+        return
+    if _db_path:
+        try:
+            shutil.copy2(_db_path, f"{_db_path}.pre-bundled-primary.bak")
+        except OSError:
+            log.exception("pre-bundled-primary backup failed; skipping")
+            return
+    known = _build_known_vst_lookup()
+    rows = conn.execute(
+        "SELECT id, rs_gear_type, params_json, vst_path, assigned_mode "
+        "FROM preset_pieces"
+    ).fetchall()
+    changed = 0
+    for pid, gear, pj, cur, mode in rows:
+        if not gear or _gear_category(gear) in ("amp", "cab"):
+            continue
+        pick = _pick_installed_primary_vst(gear, known)
+        if not pick:
+            continue
+        bundled = pick["vst_path"]
+        if cur == bundled:
+            continue
+        cur_broken = bool(cur) and not Path(cur).exists()
+        # Respect a deliberate manual pick that still resolves; reassign
+        # everything auto, and any broken VST path (e.g. a renamed bundle).
+        if mode == "manual" and not cur_broken:
+            continue
+        try:
+            knobs = json.loads(pj) if pj else {}
+        except (ValueError, TypeError):
+            knobs = {}
+        state = _compute_vst_state_for_piece(
+            gear, bundled, knobs if isinstance(knobs, dict) else {})
+        conn.execute(
+            "UPDATE preset_pieces SET kind='vst', file=NULL, "
+            "vst_path=?, vst_format=?, vst_state=? WHERE id=?",
+            (bundled, pick["vst_format"], state, pid),
+        )
+        changed += 1
+    mpid = _get_master_preset_id("pre")
+    if mpid is not None:
+        marker["bundled_primary_assigned_v1"] = True
+        conn.execute("UPDATE presets SET settings_json = ? WHERE id = ?",
+                     (json.dumps(marker), mpid))
+    conn.commit()
+    log.info("bundled-primary migration: reassigned %d pedal/rack pieces", changed)
 
 
 def _load_settings() -> dict:
@@ -1048,6 +1238,62 @@ def _load_vst_seed_catalog() -> dict:
     Used by /vst/suggest. Missing file = empty dict (degrades to "no
     suggestions, user picks manually from the full known list")."""
     return _load_cached_json("rs_gear_to_vst.json")
+
+
+def _load_vst_display_names() -> dict:
+    """Load (and cache) vst_display_names.json: maps a bundled VST's stem
+    (lowercased, alphanumeric-only — e.g. 'basschorus', 'bz1') to a copyright-
+    free display name shown in the Gear catalog instead of the real make/model.
+    Chief-family pedals map to just their model code (e.g. 'CB-3'); the rest to
+    a clean product name. Missing file = empty dict (falls back to real_name)."""
+    return _load_cached_json("vst_display_names.json")
+
+
+def _load_pedal_type_tags() -> dict:
+    """Load (and cache) pedal_type_tags.json: maps an rs_gear key to a space-
+    separated string of searchable TYPE keywords (English + Spanish, accent-
+    free) so typing a pedal type in the catalog / add-piece picker surfaces
+    every gear of that type even when its display name is a bare model code
+    (e.g. 'MT-2'). Authoritative — overrides the codename heuristic. Missing
+    file or key = '' (search falls back to the codename synonym guess)."""
+    return _load_cached_json("pedal_type_tags.json")
+
+
+def _vst_display_stem(vst_path: str) -> str:
+    """Match the UI's gStem: basename minus .vst3/.component, lowercased,
+    non-alphanumerics stripped. Keep in sync with screen.js / pedal_canvas."""
+    name = Path(vst_path or "").name
+    name = re.sub(r"\.(vst3|component)$", "", name, flags=re.IGNORECASE)
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
+_GEAR_DISPLAY_NAME_CACHE: dict | None = None
+
+
+def _gear_display_name(rs_gear: str, fallback: str = "") -> str:
+    """Parody display name for a gear — the copyright-free product name shown
+    EVERYWHERE the plugin's name appears (chain piece, add-piece picker, …),
+    not just the Gear catalog. Resolves rs_gear → its bundled-VST stem (via
+    rs_gear_to_vst.json) → vst_display_names.json. Falls back to `fallback`
+    (the real name) when the gear has no bundled VST or no curated name.
+    Cached for the process (no hot reload, so the map is stable)."""
+    global _GEAR_DISPLAY_NAME_CACHE
+    if _GEAR_DISPLAY_NAME_CACHE is None:
+        seed = _load_vst_seed_catalog() or {}
+        disp = _load_vst_display_names() or {}
+        m: dict[str, str] = {}
+        for g, arr in seed.items():
+            if not isinstance(arr, list):
+                continue
+            bundled = next((e.get("bundled") for e in arr
+                            if isinstance(e, dict) and e.get("bundled")), None)
+            if not bundled:
+                continue
+            dn = disp.get(_vst_display_stem(bundled))
+            if dn:
+                m[g] = dn
+        _GEAR_DISPLAY_NAME_CACHE = m
+    return _GEAR_DISPLAY_NAME_CACHE.get(rs_gear) or fallback
 
 
 def _bundled_vst_plugins() -> list[dict]:
@@ -1698,6 +1944,13 @@ def _parse_tone(tone_data: dict) -> dict:
     return {"name": name, "key": key, "chain": chain}
 
 
+# Curated rs_gear -> daw_category overrides for gears the substring heuristic
+# misbuckets (codename lacks the type word). Grows category by category.
+_DAW_CATEGORY_OVERRIDE = {
+    "Pedal_ShredZone": "distortion",   # Metal Zone (MT-2) — 'shredzone' has no 'dist'
+}
+
+
 def _daw_category_for(rs_gear: str, rs_category: str) -> str:
     """Bucket a Rocksmith gear into a DAW-style subcategory the user
     recognises ('compression', 'modulation', 'delay', etc.) so the chain
@@ -1714,6 +1967,11 @@ def _daw_category_for(rs_gear: str, rs_category: str) -> str:
         return "amps"
     if rs_category == "cab":
         return "cabs"
+    # Curated overrides for gears whose codename doesn't contain the type word
+    # (e.g. 'ShredZone' is a distortion but has no 'dist'/'metalzone' substring).
+    ov = _DAW_CATEGORY_OVERRIDE.get(rs_gear)
+    if ov:
+        return ov
     name = (rs_gear or "").lower()
     # Order matters: more-specific patterns first so e.g. "Pedal_LoFiFilter"
     # doesn't get swallowed by the generic "filter" bucket before the
@@ -2090,7 +2348,7 @@ def _enrich_chain_piece(piece: dict, img_idx: dict | None = None) -> dict:
 
     return {
         **piece,
-        "real_name": info.get("name", rs_type),
+        "real_name": _gear_display_name(rs_type, info.get("name", rs_type)),
         "make": info.get("make", ""),
         "model": info.get("model", ""),
         "rs_category": category,
@@ -2730,6 +2988,80 @@ def _nam_stage(path, *, bypassed, input_level=1.0, output_drive=None,
 _RS_IR_MAKEUP = 1.0
 
 
+# Per-cab RMS matching. A cab IR's broadband convolution gain — i.e. how much
+# output RMS it imparts (output_RMS = input_RMS × ‖IR‖₂ for broadband input) —
+# is exactly its L2 norm. After the ±1.0 clip-safe peak cap, IRs no longer all
+# share an L2 (the peakiest get pulled down ~8 dB), so different cabs/mics play
+# at different loudness. We compute each RS cab IR's L2 and surface a makeup
+# factor (target_L2 / L2) on the stage dict; the engine ignores per-IR gain, so
+# screen.js (rbChainGainTargetFor) folds it into the chain gain. Result: every
+# cab imparts the same output RMS — the same loudness-match the NAM loudness
+# normalizer (`_nam_normalized_output_level`) gives amps/pedals.
+_IR_REF_L2 = 2.4          # common broadband gain (matches tone3000 cab IRs)
+_IR_MAKEUP_MAX = 2.818    # +9 dB cap — covers the ~8 dB L2 spread with headroom
+_ir_l2_cache: dict[tuple, float | None] = {}
+_ir_l2_lock = threading.Lock()
+
+
+def _read_ir_l2(path: Path) -> float | None:
+    """L2 norm (sqrt of total energy) of a mono float32 cab IR. Returns None
+    when the file is unreadable or not the mono-float32 shape we ship."""
+    try:
+        blob = path.read_bytes()
+    except OSError:
+        return None
+    if blob[:4] != b"RIFF" or blob[8:12] != b"WAVE":
+        return None
+    pos = 12
+    fmt_tag = ch = bps = None
+    data_off = data_size = None
+    while pos < len(blob) - 8:
+        cid = blob[pos:pos + 4]
+        csize = struct.unpack("<I", blob[pos + 4:pos + 8])[0]
+        if cid == b"fmt ":
+            fmt_tag, ch, _sr, _, _, bps = struct.unpack(
+                "<HHIIHH", blob[pos + 8:pos + 8 + 16])
+        elif cid == b"data":
+            data_off, data_size = pos + 8, csize
+        pos += 8 + csize + (csize & 1)
+    if (fmt_tag, bps) != (3, 32) or data_off is None or ch != 1:
+        return None
+    n = data_size // 4
+    if n == 0:
+        return None
+    total = sum(v * v for v in struct.unpack(
+        "<%df" % n, blob[data_off:data_off + data_size]))
+    return total ** 0.5
+
+
+def _ir_l2_for_path(path: Path) -> float | None:
+    """Cached `_read_ir_l2`. Keyed by (path, mtime, size) so the value is
+    recomputed if the IR is rewritten (e.g. the normalize endpoint)."""
+    try:
+        st = path.stat()
+        key = (str(path), st.st_mtime_ns, st.st_size)
+    except OSError:
+        return None
+    with _ir_l2_lock:
+        if key in _ir_l2_cache:
+            return _ir_l2_cache[key]
+    val = _read_ir_l2(path)
+    with _ir_l2_lock:
+        _ir_l2_cache[key] = val
+    return val
+
+
+def _ir_rms_makeup(path: Path) -> float:
+    """Linear makeup that brings this cab IR's broadband gain to `_IR_REF_L2`
+    so every cab imparts the same output RMS. Clamped to [1.0, _IR_MAKEUP_MAX]
+    — we only ever lift quiet IRs toward the common target, never cut (the
+    target equals the loudest IRs' L2). Falls back to 1.0 when L2 is unknown."""
+    l2 = _ir_l2_for_path(path)
+    if not l2 or l2 <= 0.0:
+        return 1.0
+    return max(1.0, min(_IR_MAKEUP_MAX, _IR_REF_L2 / l2))
+
+
 def _ir_stage(ir_path, *, bypassed, gain=1.0,
               slot=None, rs_gear=None, tone_key=None) -> dict:
     """Build a type-2 (cab IR) chain stage. `gain` is unity by default — the
@@ -2744,6 +3076,12 @@ def _ir_stage(ir_path, *, bypassed, gain=1.0,
         stage["rs_gear"] = rs_gear
     if tone_key is not None:
         stage["tone_key"] = tone_key
+    # Per-cab RMS-match factor for screen.js (engine ignores it, like slot/
+    # rs_gear). Only RS cab IRs vary in L2 after the clip-safe peak cap; other
+    # IRs (tone3000) are already loudness-normalized, so we leave them alone.
+    p = Path(ir_path)
+    if "rocksmith" in p.as_posix().lower():
+        stage["cab_rms_makeup"] = round(_ir_rms_makeup(p), 4)
     stage["state"] = _state_b64({"irPath": str(ir_path), "gain": gain})
     return stage
 
@@ -5507,6 +5845,7 @@ def setup(app, context):
         eq/wah/pitch/filter/utility/other) for finer-grained filtering in
         the picker. Sorted by daw_category → name."""
         rs_map = _load_rs_to_real()
+        type_tags = _load_pedal_type_tags()
         out: list[dict] = []
         for rs_gear, info in rs_map.items():
             if rs_gear.startswith("_") or not isinstance(info, dict):
@@ -5514,11 +5853,12 @@ def setup(app, context):
             category = info.get("category") or _gear_category(rs_gear) or "other"
             out.append({
                 "rs_gear": rs_gear,
-                "name": info.get("name") or rs_gear,
+                "name": _gear_display_name(rs_gear, info.get("name") or rs_gear),
                 "make": info.get("make", ""),
                 "model": info.get("model", ""),
                 "category": category,
                 "daw_category": _daw_category_for(rs_gear, category),
+                "type_tags": type_tags.get(rs_gear, ""),
             })
         out.sort(key=lambda g: (g["daw_category"], (g["name"] or "").lower()))
         return {"gears": out, "count": len(out)}
@@ -7190,17 +7530,27 @@ def setup(app, context):
                 "vst_state": None,
             }
 
+        display_names = _load_vst_display_names()
+        type_tags = _load_pedal_type_tags()
         cats: dict[str, list] = {}
         for gear, b in best.items():
             info = rs_map.get(gear) or {}
             category = info.get("category") or _category_from_codename(gear)
+            # Bundled-VST gears show a copyright-free model name (Chief pedals =
+            # just their model code, e.g. 'CB-3') instead of the real make/model.
+            real_name = info.get("name") or gear
+            if b["kind"] == "vst" and b["vst_path"]:
+                dn = display_names.get(_vst_display_stem(b["vst_path"]))
+                if dn:
+                    real_name = dn
             t3kid = b["tone3000_id"]
             meta = img_idx.get(t3kid) if t3kid else None
             variants = _variants_for(gear, info) if category == "amp" else []
             mic_variants = _mic_variants_for(gear) if category == "cab" else []
             cats.setdefault(category, []).append({
                 "rs_gear": gear,
-                "real_name": info.get("name") or gear,
+                "real_name": real_name,
+                "type_tags": type_tags.get(gear, ""),
                 "make": info.get("make", ""),
                 "model": info.get("model", ""),
                 "category": category,
@@ -7297,7 +7647,7 @@ def setup(app, context):
             real_names = []
             for g in rs_gears:
                 info = rs_map.get(g) or {}
-                real_names.append(info.get("name") or g)
+                real_names.append(_gear_display_name(g, info.get("name") or g))
             try:
                 size = abs_path.stat().st_size
             except OSError:
@@ -7642,7 +7992,7 @@ def setup(app, context):
                 variant_levels = list(variants.keys())
             out.append({
                 "rs_gear": display_key,
-                "name": info.get("name") or display_key,
+                "name": _gear_display_name(display_key, info.get("name") or display_key),
                 "make": info.get("make", ""),
                 "model": info.get("model", ""),
                 "variant_count": variant_count,
@@ -7703,7 +8053,7 @@ def setup(app, context):
         plugins embed (Bebas Neue / Barlow / Anton / Crete Round). They live in
         `assets/fonts/`. Only a fixed allow-list is served (no path traversal).
         """
-        allow = {"bebas", "barlow", "anton", "crete"}
+        allow = {"bebas", "barlow", "anton", "crete", "graffiti", "ink"}
         key = (name or "").split(".")[0].lower()
         if key not in allow:
             return JSONResponse({"error": "unknown font"}, 404)
@@ -8116,7 +8466,7 @@ def setup(app, context):
                 "rs_gear": rs,
                 "total_chain_slots": r[1],
                 "pending_chain_slots": r[2],
-                "name": info.get("name", rs),
+                "name": _gear_display_name(rs, info.get("name", rs)),
                 "category": info.get("category", "other"),
                 "tone3000_query": info.get("tone3000_query", rs),
             })

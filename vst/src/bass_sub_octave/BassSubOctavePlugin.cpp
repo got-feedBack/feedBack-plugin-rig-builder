@@ -16,6 +16,7 @@
 #include "DistrhoPlugin.hpp"
 #include "BassSubOctaveParams.h"
 #include <cmath>
+#include "../_shared/automakeup.hpp"
 
 START_NAMESPACE_DISTRHO
 
@@ -79,6 +80,7 @@ public:
 
 class BassSubOctavePlugin : public Plugin {
     Octaver L, R;
+    RBAutoMakeup makeupL, makeupR;
     float fParams[kParamCount];
     void recalc() {
         L.setParams(fParams[kMix], fParams[kTone]);
@@ -88,7 +90,7 @@ public:
     BassSubOctavePlugin() : Plugin(kParamCount, 0, 0) {
         for (int i = 0; i < kParamCount; ++i) fParams[i] = kBassSubOctaveDef[i];
         const float sr = (float)getSampleRate();
-        L.setSampleRate(sr); R.setSampleRate(sr); L.reset(); R.reset(); recalc();
+        L.setSampleRate(sr); R.setSampleRate(sr); makeupL.setSampleRate(sr); makeupR.setSampleRate(sr); L.reset(); R.reset(); recalc();
     }
 protected:
     const char* getLabel()       const override { return "BassSubOctave"; }
@@ -105,13 +107,13 @@ protected:
         p.ranges.min = kBassSubOctaveMin[i]; p.ranges.max = kBassSubOctaveMax[i]; p.ranges.def = kBassSubOctaveDef[i];
     }
     float getParameterValue(uint32_t i) const override { return (i < (uint32_t)kParamCount) ? fParams[i] : 0.f; }
-    void  setParameterValue(uint32_t i, float v) override { if (i < (uint32_t)kParamCount) { fParams[i] = v; recalc(); } }
-    void  sampleRateChanged(double r) override { L.setSampleRate((float)r); R.setSampleRate((float)r); L.reset(); R.reset(); recalc(); }
+    void  setParameterValue(uint32_t i, float v) override { if (i < (uint32_t)kParamCount) { fParams[i] = v; recalc(); makeupL.snap(); makeupR.snap(); } }
+    void  sampleRateChanged(double r) override { L.setSampleRate((float)r); R.setSampleRate((float)r); makeupL.setSampleRate((float)r); makeupR.setSampleRate((float)r); L.reset(); R.reset(); recalc(); }
 
     void run(const float** in, float** out, uint32_t frames) override {
         const float* iL = in[0]; const float* iR = in[1];
         float* oL = out[0]; float* oR = out[1];
-        for (uint32_t i = 0; i < frames; ++i) { oL[i] = L.process(iL[i]); oR[i] = R.process(iR[i]); }
+        for (uint32_t i = 0; i < frames; ++i) { oL[i] = makeupL.process(iL[i], L.process(iL[i])); oR[i] = makeupR.process(iR[i], R.process(iR[i])); }
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassSubOctavePlugin)
 };

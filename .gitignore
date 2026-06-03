@@ -26,3 +26,6 @@ gear_photos/
 
 # JSON backups created by migration helpers.
 *.json.bak
+
+# External build framework (fetched locally, not part of the plugin)
+vst/src/DPF/

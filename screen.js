@@ -296,6 +296,7 @@ function rbChainGainTargetFor(chainSpec) {
     let base = 1.0;
     if (Array.isArray(chainSpec)) {
         let hasActiveAmp = false, hasRsCab = false, hasOtherCab = false, activeNamCount = 0;
+        let rsCabMakeup = 1.0;
         for (const stage of chainSpec) {
             if (!stage || stage.bypassed) continue;
             if (stage.type === 1) {
@@ -306,8 +307,16 @@ function rbChainGainTargetFor(chainSpec) {
             // is RAW (quiet → needs +6 dB). A tone3000 IR is already normalized
             // (boosting it is what saturated non-RS-cab tones), so 0 dB.
             if (stage.type === 2) {
-                if (String(stage.path || '').toLowerCase().includes('rocksmith')) hasRsCab = true;
-                else hasOtherCab = true;
+                if (String(stage.path || '').toLowerCase().includes('rocksmith')) {
+                    hasRsCab = true;
+                    // Per-cab RMS-match factor from the backend (target_L2 / ‖IR‖₂).
+                    // Equalizes broadband output RMS across cabs/mics so the
+                    // peakiest IRs (pulled ~8 dB down by the clip-safe peak cap)
+                    // don't play quieter than the rest. Last active RS cab wins.
+                    if (typeof stage.cab_rms_makeup === 'number' && stage.cab_rms_makeup > 0) {
+                        rsCabMakeup = stage.cab_rms_makeup;
+                    }
+                } else hasOtherCab = true;
             }
         }
         // Auto makeup (dB): +6 for a Rocksmith cab, 0 for a non-RS (tone3000)
@@ -318,6 +327,10 @@ function rbChainGainTargetFor(chainSpec) {
             let dB = cabDb + 2 * Math.max(0, activeNamCount - 1);
             dB = Math.max(-12, Math.min(18, dB));
             base = Math.pow(10, dB / 20);
+            // Apply the per-cab RMS match OUTSIDE the dB clamp above (which caps
+            // the multi-NAM stack, a different axis) so the level equalization is
+            // never clipped. rbClampChainGainTarget still bounds the final target.
+            if (hasRsCab) base *= rsCabMakeup;
             base *= rbPostAmpMakeupForChain(chainSpec);
         }
     }
@@ -403,21 +416,40 @@ async function rbPreLoadMute(chainLen, targetGain) {
     const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
     if (!audio) { _rbMuteInFlight = false; return; }
     const target = pendingTarget;   // was 4 — chains can need ~20×
+    // Hold the chain muted until the WHOLE chain has loaded AND the post-load
+    // VST-param / input-drive re-apply has settled — otherwise the un-mute
+    // races the stage-by-stage NAM/VST init and the user hears the load peaks
+    // ("se escucha cómo carga cada NAM y VST"). The old `100 + 50·stages` un-
+    // muted at ~350 ms while the re-apply walk (`reapplyDelay`, computed in the
+    // fetch interceptor) fires at ~400 ms, so its setParameter transients leaked
+    // through. This generous estimate stays AHEAD of that re-apply + a settle
+    // margin and scales with stage count (NAM loads dominate). Override:
+    // `window.__rbMutePreLoadHold`.
     const hold = (typeof window.__rbMutePreLoadHold === 'number')
         ? Math.max(20, window.__rbMutePreLoadHold | 0)
-        : 100 + 50 * Math.max(1, chainLen | 0);
+        : 250 + 120 * Math.max(1, chainLen | 0);
+    // During load we want the player to hear ONLY the clean dry guitar/bass,
+    // not the chain forming. chain gain 0 kills the wet path (and its load
+    // peaks); leaving the input monitor UN-muted lets the dry signal through so
+    // it's "clean guitar while it loads", then the effects fade in once loaded.
+    // Kill-switch for the dry behaviour: `window.__rbDryDuringLoad = false`
+    // (falls back to the old full-silence mute).
+    const dryDuringLoad = window.__rbDryDuringLoad !== false;
     let wasMuted = false;
     try { if (typeof audio.isMonitorMuted === 'function') wasMuted = !!(await audio.isMonitorMuted()); } catch (_) {}
     try {
         // `chain` = post-NAM, pre-output. Setting to 0 silences the guitar
-        // signal path without touching the song's backing track.
+        // signal path (and the loading stages' peaks) without touching the
+        // song's backing track.
         if (typeof audio.setGain === 'function') await audio.setGain('chain', 0);
-        if (typeof audio.setMonitorMute === 'function') await audio.setMonitorMute(true);
+        if (typeof audio.setMonitorMute === 'function')
+            await audio.setMonitorMute(dryDuringLoad ? false : true);
     } catch (_) {}
     setTimeout(async () => {
         try {
-            // Un-mute the monitor immediately (it's a hard mute, no transient).
-            if (!wasMuted && typeof audio.setMonitorMute === 'function') await audio.setMonitorMute(false);
+            // Restore the monitor to whatever it was before the load (dry mode
+            // forced it on; put it back so normal play isn't doubled).
+            if (typeof audio.setMonitorMute === 'function') await audio.setMonitorMute(wasMuted);
             // Fade chain gain 0 → target over ~24 ms in 4 steps so the
             // restore doesn't click. Final value is the smart target,
             // not a fixed 1.0 — that's how we normalise across "amp +
@@ -2751,18 +2783,68 @@ function rbBuildCanvasModel(rawParams, overrideById) {
 // starts clean.
 async function rbTeardownVstEditor(api) {
     const slot = rbState._vstEditorSlot;
+    const inChain = rbState._vstEditorInChain;
     rbState._vstEditorSlot = null;
+    rbState._vstEditorInChain = false;
     if (!api) return;
     // Close the prior editor's native window only if there was one…
     if (slot != null) {
         try { if (api.closePluginEditor) await api.closePluginEditor(slot); } catch (_) {}
     }
-    // …but ALWAYS clear the chain. The earlier `slot == null` early-return
-    // skipped this when opening the editor with no prior editor slot — so a
-    // live "Listen" chain (loaded via loadPreset, which sets no editor slot)
-    // stayed loaded, and the subsequent loadVST stacked a SECOND copy of the
-    // pedal on top → the effect was applied twice ("Edit VST doubles the sound").
-    try { if (api.clearChain) await api.clearChain(); } catch (_) {}
+    // …and clear the chain ONLY for an ISOLATED single-VST editor. The earlier
+    // unconditional clear fixed "Edit VST doubles the sound" back when opening
+    // the editor stacked a 2nd copy on top of the live chain via loadVST. The
+    // editor now edits the pedal IN PLACE inside the live preview chain (no 2nd
+    // copy), so for an in-chain edit the preview owns the chain (torn down via
+    // rbStopPreview) — clearing here would kill the sound the instant you close
+    // the pedal face.
+    if (!inChain) {
+        try { if (api.clearChain) await api.clearChain(); } catch (_) {}
+    }
+}
+
+// Map a song-tone piece to the engine slot id of its stage WITHIN the currently
+// loaded preview chain, so editing tweaks the pedal in place (the whole chain
+// keeps playing) instead of loading an isolated, louder single copy. Returns
+// null when there's no live chain or the piece isn't found in it — callers then
+// fall back to the isolated single-VST editor.
+//
+// How the mapping works: the backend builds `native_preset.chain` in signal
+// order; each type-0 (VST) stage carries the gear `path` + `rs_gear` (= the UI
+// piece's `type`). `getChainState()` returns the loaded stages index-aligned
+// with that chain spec, so chain index → engine slot id. Duplicate identical
+// pedals are disambiguated by skipping earlier same-(type,path) pieces.
+async function rbChainSlotIdForPiece(api, payload, toneIdx, pIdx) {
+    try {
+        if (!api || typeof api.getChainState !== 'function') return null;
+        const chain = payload && payload.native_preset && payload.native_preset.chain;
+        if (!Array.isArray(chain)) return null;
+        const tone = rbState.songTones && rbState.songTones.tones[toneIdx];
+        const piece = tone && tone.chain[pIdx];
+        if (!piece) return null;
+        const effPath = rbEffVstPath(piece);
+        let dupSkip = 0;
+        for (let k = 0; k < pIdx; k++) {
+            const q = tone.chain[k];
+            if (q && q.type === piece.type && rbEffVstPath(q) === effPath) dupSkip++;
+        }
+        let seen = 0, idx = -1;
+        for (let i = 0; i < chain.length; i++) {
+            const st = chain[i];
+            if (!st || Number(st.type) !== 0) continue;
+            if (typeof st.slot === 'string' && st.slot.startsWith('master_')) continue;
+            if (piece.type != null && st.rs_gear !== piece.type) continue;
+            if (effPath && st.path && st.path !== effPath) continue;
+            if (seen++ < dupSkip) continue;
+            idx = i; break;
+        }
+        if (idx < 0) return null;
+        const loaded = await api.getChainState();
+        if (!Array.isArray(loaded) || idx >= loaded.length) return null;
+        const slot = loaded[idx];
+        if (!slot) return null;
+        return slot.id != null ? slot.id : (slot.slotId != null ? slot.slotId : idx);
+    } catch (_) { return null; }
 }
 
 // Close any inline VST editor's NATIVE window + clear the tracked slot, but
@@ -2775,6 +2857,7 @@ async function rbCloseActiveVstEditor() {
     const slot = rbState._vstEditorSlot;
     if (slot == null) return;
     rbState._vstEditorSlot = null;
+    rbState._vstEditorInChain = false;
     const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
     if (api && api.closePluginEditor) {
         try { await api.closePluginEditor(slot); } catch (_) {}
@@ -2878,38 +2961,78 @@ async function rbToneEditVst(toneIdx, pIdx) {
     editor.classList.remove('hidden');
     editor.innerHTML = `<div class="text-xs text-gray-500">loading ${rbEsc(vstPath.split('/').pop())}…</div>`;
     try {
-        // Close + clear any previously-open editor (this or another piece)
-        // before loading — closing its native window first avoids the crash.
-        await rbTeardownVstEditor(api);
-        await api.startAudio().catch(() => {});
-        const slotId = await api.loadVST(vstPath);
-        if (slotId == null || slotId < 0) {
-            editor.innerHTML = `<div class="text-xs text-red-400">engine refused to load this plugin</div>`;
-            return;
+        // Did the tone have a saved / in-session param state BEFORE we touch
+        // anything? Decides whether we auto-apply the RS knob mapping below
+        // (and we must read it now, before the snapshot reseed wipes it).
+        const persistedParams = (piece._vst_params && Object.keys(piece._vst_params).length)
+            ? piece._vst_params
+            : ((piece.assigned && piece.assigned.vst_state)
+                ? rbParseVstStateParams(piece.assigned.vst_state) : null);
+        const hadSaved = !!(persistedParams && Object.keys(persistedParams).length);
+
+        // Close any previously-open editor's native window cleanly first
+        // (doesn't clear the chain — a live preview keeps playing).
+        await rbCloseActiveVstEditor();
+
+        // Play the WHOLE tone chain so the pedal is heard IN CONTEXT and editing
+        // adjusts the chain's sound — not an isolated, louder single VST. Start
+        // the full-chain preview for this tone unless it's already the live one.
+        const alreadyPreviewing = (rbState.listeningTone === toneIdx
+            && rbState._previewMode === 'native');
+        // Start the preview only when this tone isn't already the active one —
+        // rbListenTone TOGGLES, so calling it for the already-listening tone
+        // would stop playback instead of starting it.
+        if (rbState.listeningTone !== toneIdx && rbState.currentSongFile) {
+            await rbListenTone(toneIdx, rbState.currentSongFile);
         }
-        rbState._vstEditorSlot = slotId;
+        // rbListenTone / rbCloseActiveVstEditor collapse inline panels — re-open ours.
+        editor.classList.remove('hidden');
+        editor.innerHTML = `<div class="text-xs text-gray-500">loading ${rbEsc(vstPath.split('/').pop())}…</div>`;
+
+        // Locate this piece's stage inside the loaded chain. setParameter on that
+        // slot tweaks the pedal in place; the chain keeps playing and no 2nd copy
+        // is stacked (loading a separate VST on top doubled the sound).
+        let slotId = await rbChainSlotIdForPiece(api, rbState._previewPayload, toneIdx, pIdx);
+        const haveChainSlot = slotId != null;
+        if (haveChainSlot) {
+            rbState._vstEditorSlot = slotId;
+            rbState._vstEditorInChain = true;
+            // The chain load already re-applied saved params; just read them back
+            // so the canvas/sliders open reflecting the live values.
+            try { piece._vst_param_meta = await api.getParameters(slotId); }
+            catch (_) { piece._vst_param_meta = piece._vst_param_meta || []; }
+        } else {
+            // Fallback (no live chain / piece not found): isolated single-VST
+            // edit so the editor still works. This DOES own + clear the chain.
+            try { if (api.clearChain) await api.clearChain(); } catch (_) {}
+            await api.startAudio().catch(() => {});
+            slotId = await api.loadVST(vstPath);
+            if (slotId == null || slotId < 0) {
+                editor.innerHTML = `<div class="text-xs text-red-400">${rbEsc(rbVstRefusedMsg())}</div>`;
+                return;
+            }
+            rbState._vstEditorSlot = slotId;
+            rbState._vstEditorInChain = false;
+            // Re-apply previously captured params if any. Helper resolves NAME
+            // keys (from apply_vst_state.py bulk-populated states) → numeric ids
+            // and clamps values to [0,1].
+            const saved = piece._vst_params
+                || (piece.assigned && piece.assigned.vst_state
+                    ? rbParseVstStateParams(piece.assigned.vst_state) : null);
+            piece._vst_param_meta = await rbRestoreSavedParamsToSlot(api, slotId, saved);
+        }
         piece._vst_slot_id = slotId;
         // Keep any previously-saved opaque blob so re-saving without a fresh
         // capture (e.g. just closing) doesn't drop it.
         piece._vst_opaque = piece._vst_opaque
             || rbParseVstStateOpaque(piece._vst_state)
             || rbParseVstStateOpaque(piece.assigned && piece.assigned.vst_state);
-        // Re-apply previously captured params if any. Helper resolves NAME
-        // keys (from apply_vst_state.py bulk-populated states) → numeric
-        // ids and clamps values to [0,1]. Without this, name-keyed states
-        // silently no-op (parseInt("Threshold")=NaN) → editor opens at
-        // plugin defaults.
-        const saved = piece._vst_params
-            || (piece.assigned && piece.assigned.vst_state
-                ? rbParseVstStateParams(piece.assigned.vst_state) : null);
-        const params = await rbRestoreSavedParamsToSlot(api, slotId, saved);
-        piece._vst_param_meta = params;
-        // Seed _vst_params with the FULL current snapshot so subsequent
-        // slider drags modify a complete dict (not just the touched ids).
-        // Persisting partial dicts was a data-loss bug: untouched params
-        // would silently revert to plugin defaults on chain rebuild.
+        // Seed _vst_params with the FULL current snapshot so subsequent slider
+        // drags modify a complete dict (not just the touched ids). Persisting
+        // partial dicts was a data-loss bug: untouched params would silently
+        // revert to plugin defaults on chain rebuild.
         piece._vst_params = {};
-        for (const param of params) {
+        for (const param of (piece._vst_param_meta || [])) {
             const id = param.id ?? param.paramId ?? param.index;
             const v  = param.value ?? param.current;
             if (id != null && typeof v === 'number') piece._vst_params[id] = v;
@@ -2919,11 +3042,10 @@ async function rbToneEditVst(toneIdx, pIdx) {
         // settings instead of plugin defaults. (The manual "Apply RS settings"
         // button still lets you re-apply or override.) Skipped when a curated
         // state already exists so we don't clobber the user's own tweaks.
-        const hadSaved = saved && Object.keys(saved).length > 0;
         if (!hadSaved && piece.knobs && Object.keys(piece.knobs).length) {
             try {
                 const vstStem2 = vstPath.split('/').pop().replace(/\.(vst3|component)$/i, '');
-                const mapped = await rbComputeRsMappedParams(piece.type, piece.knobs, vstStem2, params);
+                const mapped = await rbComputeRsMappedParams(piece.type, piece.knobs, vstStem2, piece._vst_param_meta);
                 if (mapped && Object.keys(mapped).length) {
                     for (const [id, v] of Object.entries(mapped)) {
                         const nid = Number(id);
@@ -2934,13 +3056,13 @@ async function rbToneEditVst(toneIdx, pIdx) {
                 }
             } catch (_) { /* mapping is best-effort; defaults remain on failure */ }
         }
-        // Render the inline slider panel FIRST so a headless plugin (no GUI —
-        // e.g. the bundled QTron envelope filter) still gets an editable
-        // panel even if openPluginEditor misbehaves for a UI-less plugin
-        // (returns non-promise / throws). Native-window plugins are unaffected.
+        // Render the inline slider panel / canvas FIRST so a headless plugin (no
+        // GUI — e.g. the bundled QTron envelope filter) still gets an editable
+        // panel even if openPluginEditor misbehaves for a UI-less plugin.
         const usedCanvas = rbToneRenderInlineVstParams(toneIdx, pIdx);
-        // Only fall back to the native plugin window when we DON'T have an
-        // in-app canvas recreation — the canvas is the inline editor now.
+        // Only fall back to the native plugin window when we DON'T have an in-app
+        // canvas recreation — the canvas is the inline editor now. (Tracked via
+        // _vstEditorSlot so it's closed on navigation, even for an in-chain slot.)
         if (!usedCanvas && api.openPluginEditor) {
             try {
                 const _ed = api.openPluginEditor(slotId);
@@ -2954,6 +3076,17 @@ async function rbToneEditVst(toneIdx, pIdx) {
     }
 }
 
+function rbIsWindows() { return /win/i.test((navigator.platform || navigator.userAgent || '')); }
+// Message for a failed VST load. The bundled effects currently ship macOS-only
+// VST3 binaries, so on Windows the engine can't load them — say so clearly
+// instead of the cryptic "engine refused to load this plugin".
+function rbVstRefusedMsg() {
+    return 'engine refused to load this plugin'
+        + (rbIsWindows()
+            ? ' — heads up: the bundled effects only ship a macOS build right now, so they can\'t load on Windows yet (a Windows build is on the way).'
+            : '');
+}
+
 // Normalize a VST path → canvas spec key (lowercased basename, no separators).
 function rbCanvasStem(piece) {
     const p = rbEffVstPath(piece);
@@ -2963,6 +3096,21 @@ function rbCanvasStem(piece) {
 // True if we have an in-app canvas recreation of this piece's plugin UI.
 function rbHasCanvasUI(piece) {
     return !!(window.RBPedalCanvas && window.RBPedalCanvas.has(rbCanvasStem(piece)));
+}
+
+// Display width for the inline canvas. Portrait stomps read fine at 240px;
+// LANDSCAPE pedals (e.g. Eden WTDI 560×360) get squashed too short at 240, so
+// their lettering becomes unreadable — give them more width. max-width:100% in
+// the markup keeps it from overflowing a narrow panel.
+function rbCanvasDisplayWidth(stem) {
+    const sp = window.RBPedalCanvas && window.RBPedalCanvas.specs && window.RBPedalCanvas.specs[stem];
+    if (!sp || sp.w <= sp.h * 1.15) return 240;          // portrait
+    const aspect = sp.w / sp.h;
+    // Very wide (1U racks ≈ 4.4:1) need more width so the small labels stay
+    // legible; moderate landscape (Eden/Q-Tron) scales with the aspect.
+    // max-width:100% in the markup keeps it from overflowing a narrow panel.
+    if (aspect > 3) return 820;
+    return Math.max(360, Math.min(440, Math.round(aspect * 256)));
 }
 
 // Build the {key: value} map the canvas reads, keyed BOTH by numeric paramId
@@ -3009,7 +3157,7 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
                 </div>
             </div>
             <div class="flex justify-center">
-                <canvas id="rb-tone-vst-canvas-${toneIdx}-${pIdx}" style="width:240px;cursor:ns-resize;touch-action:none"></canvas>
+                <canvas id="rb-tone-vst-canvas-${toneIdx}-${pIdx}" style="width:${rbCanvasDisplayWidth(stem)}px;max-width:100%;cursor:ns-resize;touch-action:none"></canvas>
             </div>
             <div class="text-[10px] text-gray-500 text-center mt-1">Drag a knob up/down to adjust</div>`;
         const canvas = document.getElementById(`rb-tone-vst-canvas-${toneIdx}-${pIdx}`);
@@ -3675,7 +3823,7 @@ async function rbMasterEditVst(role, idx) {
         await api.startAudio().catch(() => {});
         const slotId = await api.loadVST(vstPath);
         if (slotId == null || slotId < 0) {
-            editor.innerHTML = `<div class="text-xs text-red-400">engine refused to load this plugin</div>`;
+            editor.innerHTML = `<div class="text-xs text-red-400">${rbEsc(rbVstRefusedMsg())}</div>`;
             return;
         }
         rbState._vstEditorSlot = slotId;
@@ -3742,7 +3890,7 @@ function rbMasterRenderInlineVstParams(role, idx) {
                 </div>
             </div>
             <div class="flex justify-center">
-                <canvas id="rb-master-${role}-canvas-${idx}" style="width:240px;cursor:ns-resize;touch-action:none"></canvas>
+                <canvas id="rb-master-${role}-canvas-${idx}" style="width:${rbCanvasDisplayWidth(stem)}px;max-width:100%;cursor:ns-resize;touch-action:none"></canvas>
             </div>
             <div class="text-[10px] text-gray-500 text-center mt-1">Drag a knob up/down to adjust</div>`;
         const canvas = document.getElementById(`rb-master-${role}-canvas-${idx}`);
@@ -4428,13 +4576,12 @@ function rbAddPickerSetVstFilter(toneIdx, filename, value) {
 // without needing closures over the caller.
 
 function rbBuildRocksmithPickerBody({ dawCat, filter, onCategoryCall, onFilterCall, onAddCall, searchId }) {
-    const f = (filter || '').toLowerCase().trim();
+    const f = rbNorm(filter || '').trim();
     const matches = (_rbGearsCatalog || []).filter(g => {
         if ((g.daw_category || 'other') !== dawCat) return false;
         if (!f) return true;
-        return (g.name || '').toLowerCase().includes(f)
-            || (g.rs_gear || '').toLowerCase().includes(f)
-            || (g.make || '').toLowerCase().includes(f);
+        const hay = rbNorm((g.name || '') + ' ' + (g.rs_gear || '') + ' ' + (g.make || '')) + rbGearTypeTags(g);
+        return hay.includes(f);
     });
     const catButtons = RB_DAW_CATEGORIES.map(c => `
         <button onclick="${onCategoryCall(c.key)}"
@@ -5277,7 +5424,7 @@ async function rbLoadAndEditVst(toneIdx, pIdx) {
         await rbTeardownVstEditor(api);
         await api.startAudio().catch(() => {});
         const slotId = await api.loadVST(path);
-        if (slotId == null || slotId < 0) throw new Error('engine refused to load this plugin');
+        if (slotId == null || slotId < 0) throw new Error(rbVstRefusedMsg());
         rbState._vstEditorSlot = slotId;
         // Render the inline params editor (HTML sliders driving setParameter
         // in real time). This is THE workaround for the blurry-native-editor
@@ -6087,11 +6234,51 @@ function rbDebouncedGearFilter() {
     _rbGearSearchTimer = setTimeout(() => rbApplyGearFilters(), 150);
 }
 
+// Lowercase + strip accents so "distorsión" == "distorsion".
+function rbNorm(s) {
+    return (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+// Maps a gear's RS codename / category to extra searchable TYPE keywords
+// (Spanish + English) so typing a pedal type — "distorsion", "coro", "eco" —
+// surfaces every gear of that type even when the display name (a model number
+// like CB-3) doesn't contain the word. Matched against the English rs_gear
+// codename, so the synonyms expand to both languages.
+const RB_TYPE_SYNONYMS = [
+    [/distortion/, 'distortion distorsion'],
+    [/overdrive/, 'overdrive drive sobresaturacion saturacion'],
+    [/fuzz|buzz|muff/, 'fuzz'],
+    [/chorus/, 'chorus coro'],
+    [/flanger|flange/, 'flanger flange'],
+    [/phaser|phase|vibe/, 'phaser fase faser vibe'],
+    [/delay|echo|clone/, 'delay echo eco retardo'],
+    [/reverb|verb|chamber|plate|spring|room|hall/, 'reverb reverberacion verb'],
+    [/tremolo|trem/, 'tremolo tremol'],
+    [/vibrato/, 'vibrato'],
+    [/wah/, 'wah wahwah'],
+    [/comp/, 'compressor compresor comp'],
+    [/\beq\b|equal|graphic/, 'eq equalizer ecualizador'],
+    [/octave|octav|pitch|sub/, 'octave octava pitch octaver'],
+    [/boost/, 'boost booster realce'],
+    [/filter|filt|wah/, 'filter filtro'],
+    [/gate/, 'gate noise compuerta ruido'],
+    [/ring|mod/, 'ringmod modulador'],
+    [/acoustic|simulator/, 'acoustic acustico simulator'],
+];
+function rbGearTypeTags(g) {
+    // Curated, authoritative type tags from the backend (pedal_type_tags.json)
+    // take priority; the codename synonym guess stays as a fallback for gears
+    // not yet curated.
+    let tags = ' ' + rbNorm((g && g.type_tags) || '');
+    const key = rbNorm((g && g.rs_gear || '') + ' ' + (g && g.category || ''));
+    for (const [re, syn] of RB_TYPE_SYNONYMS) if (re.test(key)) tags += ' ' + syn;
+    return tags;
+}
+
 function rbApplyGearFilters() {
     const el = document.getElementById('rb-catalog');
     if (!el || !rbState.gearCatalog) return;
-    const search = ((document.getElementById('rb-gear-search') || {}).value || '')
-        .toLowerCase().trim();
+    const search = rbNorm(((document.getElementById('rb-gear-search') || {}).value || '')).trim();
     const onlyUnassigned = !!((document.getElementById('rb-gear-only-unassigned') || {}).checked);
     const compact = !!((document.getElementById('rb-gear-compact') || {}).checked);
 
@@ -6103,13 +6290,13 @@ function rbApplyGearFilters() {
         const items = rbState.gearCatalog[cat].filter(g => {
             if (onlyUnassigned && g.assigned) return false;
             if (!search) return true;
-            const hay = (
+            const hay = rbNorm(
                 (g.real_name || '') + ' ' +
                 (g.make || '') + ' ' +
                 (g.model || '') + ' ' +
                 (g.rs_gear || '') + ' ' +
                 (g.tone3000_title || '')
-            ).toLowerCase();
+            ) + rbGearTypeTags(g);
             return hay.includes(search);
         });
         if (items.length) {
@@ -6240,9 +6427,7 @@ function rbRenderCatalogCardCompact(g) {
         ${photo}
         ${status}
         <div class="min-w-0 flex-1">
-            <div class="text-gray-200 truncate text-xs"><strong>${rbEsc(g.real_name)}</strong>
-                <span class="text-gray-500 text-[10px]">${rbEsc(g.rs_gear)}</span>
-            </div>
+            <div class="text-gray-200 truncate text-xs"><strong>${rbEsc(g.real_name)}</strong></div>
             ${file}
         </div>
         ${g.file ? `<button id="${btnId}" onclick="rbAuditionFile(${JSON.stringify(g.file)},${JSON.stringify(g.kind || 'nam')},'${btnId}',undefined,${JSON.stringify(g.rs_gear || '')})"
@@ -6473,7 +6658,6 @@ function rbRenderCatalogCard(g) {
                 ${photoBlock}
                 <div class="min-w-0 flex-1">
                     <div class="text-gray-100 font-medium leading-tight break-words" title="${rbEsc(g.real_name)}">${rbEsc(g.real_name)}</div>
-                    <div class="text-[11px] text-gray-500 font-mono break-all">${rbEsc(g.rs_gear)}</div>
                 </div>
                 <div class="flex items-center gap-1 flex-shrink-0 mt-0.5">
                     ${t3kHeaderLink}
@@ -7250,7 +7434,7 @@ async function rbCatalogLoadAndEdit(panelId) {
         await rbTeardownVstEditor(api);
         await api.startAudio().catch(() => {});
         const slotId = await api.loadVST(path);
-        if (slotId == null || slotId < 0) throw new Error('engine refused to load this plugin');
+        if (slotId == null || slotId < 0) throw new Error(rbVstRefusedMsg());
         rbState._vstEditorSlot = slotId;
         if (api.openPluginEditor) {
             await api.openPluginEditor(slotId).catch((e) => console.warn('openPluginEditor:', e));
@@ -7417,7 +7601,7 @@ async function rbCatalogEditInline(safeId, vstPath, vstFormat, rsGear, stem) {
         if (api.clearChain) await api.clearChain().catch(() => {});
         await api.startAudio().catch(() => {});
         const slotId = await api.loadVST(vstPath);
-        if (slotId == null || slotId < 0) throw new Error('engine refused to load this plugin');
+        if (slotId == null || slotId < 0) throw new Error(rbVstRefusedMsg());
         rbState._vstEditorSlot = slotId;
         // Apply the (gear, vst) `_static` defaults (subtype pins) if any.
         if (rsGear) {
@@ -7447,7 +7631,7 @@ async function rbCatalogEditInline(safeId, vstPath, vstFormat, rsGear, stem) {
                         title="Close inline editor" class="text-[10px] text-gray-400 hover:text-gray-200 px-1">✕</button>
             </div>
             <div class="flex justify-center">
-                <canvas id="rb-cat-canvas-${safeId}" style="width:240px;cursor:ns-resize;touch-action:none"></canvas>
+                <canvas id="rb-cat-canvas-${safeId}" style="width:${rbCanvasDisplayWidth(stem)}px;max-width:100%;cursor:ns-resize;touch-action:none"></canvas>
             </div>
             <div class="text-[10px] text-gray-500 text-center mt-1">Drag a knob up/down · then 📚 Library → Assign to save</div>`;
         const canvas = document.getElementById(`rb-cat-canvas-${safeId}`);

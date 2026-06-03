@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "USWah"
+#define DISTRHO_PLUGIN_NAME    "Cry Man"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:uswah"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.uswah"
 

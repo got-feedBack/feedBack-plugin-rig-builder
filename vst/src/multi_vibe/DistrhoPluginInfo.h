@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "MultiVibe"
+#define DISTRHO_PLUGIN_NAME    "VB-2"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:multivibe"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.multivibe"
 

@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "MarshallSupervibe"
+#define DISTRHO_PLUGIN_NAME    "UV-1"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:marshallsupervibe"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.marshallsupervibe"
 

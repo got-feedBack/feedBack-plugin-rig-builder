@@ -8452,11 +8452,11 @@
   "make": "Buzz",
   "manifest": "gear_pedal_buzzone",
   "model": "1",
-  "name": "Buzz 1",
+  "name": "Super-Buzz",
   "query_source": "art_asset",
   "sound_bank": "pedal_buzzone",
   "tone3000_gears": "pedal",
-  "tone3000_query": "Buzz 1"
+  "tone3000_query": "Super-Buzz"
  },
  "Pedal_BuzzToo": {
   "art_asset": "buzz-2",
@@ -8464,23 +8464,23 @@
   "make": "Buzz",
   "manifest": "gear_pedal_buzztoo",
   "model": "2",
-  "name": "Buzz 2",
+  "name": "Big Buzz",
   "query_source": "art_asset",
   "sound_bank": "pedal_buzztoo",
   "tone3000_gears": "pedal",
-  "tone3000_query": "Buzz 2"
+  "tone3000_query": "Big Buzz"
  },
  "Pedal_CaptFuzzle": {
   "art_asset": "captain-fuzzle",
   "category": "pedal",
-  "make": "Captain",
+  "make": "Buzz",
   "manifest": "gear_pedal_captfuzzle",
-  "model": "Fuzzle",
-  "name": "Captain Fuzzle",
+  "model": "Tone",
+  "name": "Buzz-Tone",
   "query_source": "art_asset",
   "sound_bank": "pedal_captfuzzle",
   "tone3000_gears": "pedal",
-  "tone3000_query": "Captain Fuzzle"
+  "tone3000_query": "Buzz-Tone"
  },
  "Pedal_Chorus": {
   "art_asset": "chorus",
@@ -8632,11 +8632,11 @@
   "make": "Fuzzy",
   "manifest": "gear_pedal_fuzzwashe",
   "model": "Was He",
-  "name": "Fuzzy Was He",
+  "name": "BZ-1",
   "query_source": "art_asset",
   "sound_bank": "pedal_fuzzwashe",
   "tone3000_gears": "pedal",
-  "tone3000_query": "Fuzzy Was He"
+  "tone3000_query": "BZ-1"
  },
  "Pedal_GermaniumDrive": {
   "art_asset": "germanium-drive",

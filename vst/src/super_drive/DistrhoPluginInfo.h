@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "SuperDrive"
+#define DISTRHO_PLUGIN_NAME    "SD-1"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:superdrive"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.superdrive"
 

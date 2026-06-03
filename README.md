@@ -40,6 +40,7 @@ IRs, then chains them so the song plays through a realistic
 2. Drop this folder into the plugins directory so it lives at:
    - **macOS:** `~/Library/Application Support/slopsmith-desktop/plugins/rig_builder/`
    - **Windows:** `%APPDATA%\slopsmith-desktop\plugins\rig_builder\`
+   - **Linux:** `~/.config/slopsmith-desktop/plugins/rig_builder/`
 3. Restart Slopsmith. **Rig Builder** appears in the nav.
 
 Optional: open **Settings** and paste a tone3000 API key (`t3k_…`) to unlock

@@ -88,7 +88,15 @@ def _parse_didx(didx: bytes) -> list[tuple[int, int, int]]:
 
 
 _IR_TARGET_L2 = 2.4    # match tone3000 cab IRs' broadband convolution gain
-_IR_PEAK_CAP = 2.0     # clip safety — never let an IR's peak exceed this
+# Clip safety. The native convolver assumes the standard ±1.0 float range —
+# any sample over unity saturates and trips the engine's post-IR limiter
+# (10-20 dB drop + a squashed, bass-light low end). So the cap MUST stay
+# ≤ 1.0; 0.95 (= -0.45 dBFS) leaves a hair of headroom and matches the
+# runtime /normalize_rocksmith_irs pass exactly. Trade-off: IRs whose L2
+# target would push the peak past 0.95 get peak-capped here, so they don't
+# fully reach _IR_TARGET_L2 — clip-safety wins over loudness-match. (Was 2.0,
+# which was the actual cause of the Rocksmith-cab volume-drop / thin low end.)
+_IR_PEAK_CAP = 0.95
 
 
 def _peak_normalize_float32(samples: bytes) -> bytes:

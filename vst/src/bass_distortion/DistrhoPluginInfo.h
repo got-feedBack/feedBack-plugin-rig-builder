@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "BassDistortion"
+#define DISTRHO_PLUGIN_NAME    "Mouse"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:bassdistortion"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.bassdistortion"
 

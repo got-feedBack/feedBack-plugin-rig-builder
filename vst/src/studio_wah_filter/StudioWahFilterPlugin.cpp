@@ -6,6 +6,7 @@
 #include "DistrhoPlugin.hpp"
 #include "StudioWahFilterParams.h"
 #include <cmath>
+#include "../_shared/automakeup.hpp"
 START_NAMESPACE_DISTRHO
 class WahCh {
     float fs=48000.f; float ic1=0.f,ic2=0.f,env=0.f,atk=0.f,rel=0.f;
@@ -33,12 +34,12 @@ public:
     }
 };
 class StudioWahFilterPlugin : public Plugin {
-    WahCh L,R; float fParams[kParamCount];
+    WahCh L,R; RBAutoMakeup makeupL, makeupR; float fParams[kParamCount];
     void recalc(){ L.setParams(fParams[kSens],fParams[kAttack],fParams[kRelease],fParams[kPedal],fParams[kAuto]);
         R.setParams(fParams[kSens],fParams[kAttack],fParams[kRelease],fParams[kPedal],fParams[kAuto]); }
 public:
     StudioWahFilterPlugin():Plugin(kParamCount,0,0){ for(int i=0;i<kParamCount;++i)fParams[i]=kStudioWahFilterDef[i];
-        L.setSampleRate((float)getSampleRate());R.setSampleRate((float)getSampleRate());L.reset();R.reset();recalc(); }
+        L.setSampleRate((float)getSampleRate());R.setSampleRate((float)getSampleRate());makeupL.setSampleRate((float)getSampleRate());makeupR.setSampleRate((float)getSampleRate());L.reset();R.reset();recalc(); }
 protected:
     const char* getLabel() const override { return "StudioWahFilter"; }
     const char* getDescription() const override { return "Auto wah filter"; }
@@ -51,11 +52,11 @@ protected:
         p.name=kStudioWahFilterNames[i]; p.symbol=kStudioWahFilterSymbols[i];
         p.ranges.min=kStudioWahFilterMin[i]; p.ranges.max=kStudioWahFilterMax[i]; p.ranges.def=kStudioWahFilterDef[i]; }
     float getParameterValue(uint32_t i) const override { return (i<(uint32_t)kParamCount)?fParams[i]:0.f; }
-    void setParameterValue(uint32_t i, float v) override { if(i<(uint32_t)kParamCount){fParams[i]=v;recalc();} }
-    void sampleRateChanged(double) override { L.setSampleRate((float)getSampleRate());R.setSampleRate((float)getSampleRate());recalc(); }
+    void setParameterValue(uint32_t i, float v) override { if(i<(uint32_t)kParamCount){fParams[i]=v;recalc();makeupL.snap();makeupR.snap();} }
+    void sampleRateChanged(double) override { L.setSampleRate((float)getSampleRate());R.setSampleRate((float)getSampleRate());makeupL.setSampleRate((float)getSampleRate());makeupR.setSampleRate((float)getSampleRate());recalc(); }
     void run(const float** in, float** out, uint32_t frames) override {
         const float* iL=in[0];const float* iR=in[1];float* oL=out[0];float* oR=out[1];
-        for(uint32_t i=0;i<frames;++i){ oL[i]=L.process(iL[i]); oR[i]=R.process(iR[i]); } }
+        for(uint32_t i=0;i<frames;++i){ oL[i]=makeupL.process(iL[i], L.process(iL[i])); oR[i]=makeupR.process(iR[i], R.process(iR[i])); } }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StudioWahFilterPlugin)
 };
 Plugin* createPlugin(){ return new StudioWahFilterPlugin(); }

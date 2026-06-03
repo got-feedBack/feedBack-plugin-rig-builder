@@ -26,7 +26,12 @@ import sys
 from common import PLUGIN_ROOT
 
 TARGET_L2 = 2.4    # match tone3000 cab IRs' broadband convolution gain
-PEAK_CAP = 2.0     # never let an IR's peak exceed this (clip safety)
+# Clip safety — see extract_irs.py for the full rationale. The native
+# convolver assumes ±1.0; samples over unity saturate and trip the post-IR
+# limiter (volume drop + bass-light low end), so the cap MUST stay ≤ 1.0.
+# 0.95 (= -0.45 dBFS) matches the runtime /normalize_rocksmith_irs pass.
+# (Was 2.0 — the cause of the Rocksmith-cab volume-drop / thin low end.)
+PEAK_CAP = 0.95
 
 
 def _read_wav(path):

@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "AutoSweep"
+#define DISTRHO_PLUGIN_NAME    "Qtrix"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:autosweep"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.autosweep"
 

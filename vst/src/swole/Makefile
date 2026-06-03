@@ -9,7 +9,7 @@ FILES_UI = \
 	Swole_ui.cpp
 
 FILES_UI = \
-	DualRect_ui.cpp
+	Swole_ui.cpp
 
 DPF_PATH ?= ../DPF
 

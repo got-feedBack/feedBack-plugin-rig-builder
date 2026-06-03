@@ -9,7 +9,7 @@ FILES_UI = \
 	TremOle_ui.cpp
 
 FILES_UI = \
-	TW22_ui.cpp
+	TremOle_ui.cpp
 
 DPF_PATH ?= ../DPF
 

@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "OilCanEcho"
+#define DISTRHO_PLUGIN_NAME    "Oil Can Echo"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:oilcanecho"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.oilcanecho"
 

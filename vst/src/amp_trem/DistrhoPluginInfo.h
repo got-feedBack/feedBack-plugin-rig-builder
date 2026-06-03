@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "AmpTrem"
+#define DISTRHO_PLUGIN_NAME    "Mega-Trem"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:amptrem"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.amptrem"
 

@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "Limiter"
+#define DISTRHO_PLUGIN_NAME    "LM-2"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:limiter"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.limiter"
 

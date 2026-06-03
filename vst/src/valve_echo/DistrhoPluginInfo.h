@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "ValveEcho"
+#define DISTRHO_PLUGIN_NAME    "Valve Echo"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:valveecho"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.valveecho"
 

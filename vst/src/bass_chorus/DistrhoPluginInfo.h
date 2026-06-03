@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "BassChorus"
+#define DISTRHO_PLUGIN_NAME    "CB-3"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:basschorus"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.basschorus"
 

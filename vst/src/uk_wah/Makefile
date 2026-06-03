@@ -9,7 +9,7 @@ FILES_UI = \
 	UKWah_ui.cpp
 
 FILES_UI = \
-	DSL100_ui.cpp
+	UKWah_ui.cpp
 
 DPF_PATH ?= ../DPF
 

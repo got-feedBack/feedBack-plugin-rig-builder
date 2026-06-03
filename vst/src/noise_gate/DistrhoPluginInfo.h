@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "NoiseGate"
+#define DISTRHO_PLUGIN_NAME    "NF-1"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:noisegate"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.noisegate"
 

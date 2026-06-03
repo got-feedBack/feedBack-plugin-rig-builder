@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "AcousticSimulator"
+#define DISTRHO_PLUGIN_NAME    "Acoustic Emulator"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:acousticsimulator"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.acousticsimulator"
 

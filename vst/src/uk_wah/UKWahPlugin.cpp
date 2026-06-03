@@ -8,6 +8,7 @@
 #include "DistrhoPlugin.hpp"
 #include "UKWahParams.h"
 #include <cmath>
+#include "../_shared/automakeup.hpp"
 
 START_NAMESPACE_DISTRHO
 
@@ -138,6 +139,8 @@ class UKWahPlugin : public Plugin
 {
     VoxWah left;
     VoxWah right;
+    RBAutoMakeup makeupL;
+    RBAutoMakeup makeupR;
     float params[kParamCount];
 
     void recalc()
@@ -155,6 +158,8 @@ public:
         const float sr = (float)getSampleRate();
         left.setSampleRate(sr);
         right.setSampleRate(sr);
+        makeupL.setSampleRate(sr);
+        makeupR.setSampleRate(sr);
         left.reset();
         right.reset();
         recalc();
@@ -193,6 +198,8 @@ protected:
         {
             params[index] = value;
             recalc();
+            makeupL.snap();
+            makeupR.snap();
         }
     }
 
@@ -200,6 +207,8 @@ protected:
     {
         left.setSampleRate((float)sampleRate);
         right.setSampleRate((float)sampleRate);
+        makeupL.setSampleRate((float)sampleRate);
+        makeupR.setSampleRate((float)sampleRate);
         left.reset();
         right.reset();
         recalc();
@@ -214,8 +223,9 @@ protected:
 
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = left.process(inL[i]);
-            outR[i] = right.process(inR[i]);
+            // Auto makeup-gain: match output loudness to the dry input (level, not character).
+            outL[i] = makeupL.process(inL[i], left.process(inL[i]));
+            outR[i] = makeupR.process(inR[i], right.process(inR[i]));
         }
     }
 

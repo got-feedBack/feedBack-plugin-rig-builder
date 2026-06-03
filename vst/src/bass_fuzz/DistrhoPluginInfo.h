@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "BassFuzz"
+#define DISTRHO_PLUGIN_NAME    "Bass Big Buzz"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:bassfuzz"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.bassfuzz"
 

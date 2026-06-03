@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "AutoFilter"
+#define DISTRHO_PLUGIN_NAME    "BU-TRON III"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:autofilter"
 #define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.autofilter"
 
