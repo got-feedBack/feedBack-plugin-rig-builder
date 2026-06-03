@@ -2053,5 +2053,16 @@
    "bundled": "vst/TW40.vst3",
    "notes": "Bundled Fender Bassman 5F6-A / 5881 style amp based on the local TW40 schematic, using Rocksmith's Gain, Bass, Mid, Treble, and Pres knobs."
   }
+ ],
+ "Bass_Amp_BT880B": [
+  {
+   "name": "FreddyKrueger800BR",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/FreddyKrueger800BR.vst3",
+   "notes": "Bundled Gallien-Krueger 800RB style bass head (Rocksmith 'BT880B' = GK RB800) modeled from the 800RB service manual, using Rocksmith's Gain, Bass, Mid, and Treble knobs."
+  }
  ]
 }

@@ -4097,5 +4097,32 @@
     "_hint": "Maps to the Bassman presence circuit and upper speaker bite."
    }
   }
+ },
+ "Bass_Amp_BT880B": {
+  "freddykrueger800br": {
+   "Gain": {
+    "param": "Volume",
+    "scale": 0.033,
+    "_hint": "RS Gain -> preamp Volume/drive 0..1 (the GK input/growl stage)."
+   },
+   "Bass": {
+    "param": "Bass",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Bass +/-15 dB -> 60 Hz low-shelf 0..1 (0.5 = flat)."
+   },
+   "Mid": {
+    "param": "Hi-Mid",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS single Mid -> the 1 kHz Hi-Mid band (the GK growl/punch); Lo-Mid 250 Hz stays flat."
+   },
+   "Treble": {
+    "param": "Treble",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Treble +/-15 dB -> 4 kHz high-shelf 0..1 (0.5 = flat)."
+   }
+  }
  }
 }
