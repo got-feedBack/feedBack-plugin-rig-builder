@@ -558,12 +558,12 @@
       {id:5,cx:.905,cy:.40,r:.023,style:'pointer',cap:[26,26,28]}],
     switches:[
       {id:16,cx:.103,cy:.40,hs:.011,dark:true},
-      {id:17,cx:.405,cy:.40,hs:.011,dark:true}],
+      {id:17,cx:.388,cy:.40,hs:.011,dark:true}],
     faders:[
-      {id:6,cx:.440,y0:.27,y1:.56},{id:7,cx:.4725,y0:.27,y1:.56},{id:8,cx:.505,y0:.27,y1:.56},
-      {id:9,cx:.5375,y0:.27,y1:.56},{id:10,cx:.570,y0:.27,y1:.56},{id:11,cx:.6025,y0:.27,y1:.56},
-      {id:12,cx:.635,y0:.27,y1:.56},{id:13,cx:.6675,y0:.27,y1:.56},{id:14,cx:.700,y0:.27,y1:.56},
-      {id:15,cx:.7325,y0:.27,y1:.56}],
+      {id:6,cx:.420,y0:.27,y1:.56},{id:7,cx:.4512,y0:.27,y1:.56},{id:8,cx:.4824,y0:.27,y1:.56},
+      {id:9,cx:.5136,y0:.27,y1:.56},{id:10,cx:.5448,y0:.27,y1:.56},{id:11,cx:.576,y0:.27,y1:.56},
+      {id:12,cx:.6072,y0:.27,y1:.56},{id:13,cx:.6384,y0:.27,y1:.56},{id:14,cx:.6696,y0:.27,y1:.56},
+      {id:15,cx:.7008,y0:.27,y1:.56}],
     tick:rgb(74,76,82), ptr:rgb(245,246,249),
     draw(d,vals){ vals=vals||{}; const {ctx:c,W,H}=d;
       const ink=rgb(30,31,35), dim=rgb(92,94,100);
@@ -586,15 +586,15 @@
       lab(.103,.61,9,'ACTIVE');
       // engraved frames — each fully encloses its controls (knobs/faders/switch)
       engrave(.133*W, PT+8, .227*W, PH-16);                  // Tube / Solid / Comp
-      engrave(.388*W, PT+8, .360*W, PH-16);                  // EQ-In switch + 10 faders
+      engrave(.368*W, PT+8, .352*W, PH-16);                  // EQ-In switch + 10 faders
       engrave(.738*W, PT+8, .205*W, PH-16);                  // Low Pass / High Pass / Volume
       // left knob labels
       [[.170,'TUBE'],[.245,'SOLID ST'],[.320,'COMP']].forEach(k=>lab(k[0],.59,10,k[1]));
       // EQ band freq labels above the faders + section legend below
       const ef=['30','64','125','250','500','1k','2k','4k','8k','16k'];
-      const fx=[.440,.4725,.505,.5375,.570,.6025,.635,.6675,.700,.7325];
+      const fx=[.420,.4512,.4824,.5136,.5448,.576,.6072,.6384,.6696,.7008];
       for(let i=0;i<10;i++) textC(d,fx[i]*W,.225*H,F.barlow,8.5,dim,ef[i]);
-      lab(.586,.62,9.5,'GRAPHIC EQUALIZER');
+      lab(.560,.62,9.5,'GRAPHIC EQUALIZER');
       // right knob labels
       [[.775,'LOW PASS'],[.840,'HIGH PASS'],[.905,'VOLUME']].forEach(k=>lab(k[0],.59,10,k[1]));
       // power rocker (on the bare panel, right of the right-hand frame)
