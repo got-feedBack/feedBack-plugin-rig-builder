@@ -667,15 +667,15 @@
       jack(.068*W,.41*H); jack(.130*W,.41*H);
       lab(.068,.585,8.5,'0 dB'); lab(.130,.585,8.5,'-15 dB');
       // ── centre: EQUALIZATION frame + 5 knobs ──
-      frame(.298*W, PT+.10*PH, .452*W, PH-.20*PH);
-      lab(.524,.255,8,'EQUALIZATION',dim);
+      frame(.285*W, PT+.05*PH, .463*W, PH-.10*PH);
+      lab(.5165,.235,8,'EQUALIZATION',dim);
       [[.345,'GAIN'],[.435,'BASS'],[.525,'MIDRANGE'],[.615,'TREBLE'],[.705,'MASTER']].forEach(k=>lab(k[0],.56,9.5,k[1]));
       // ── right: MODEL V-4B box + STANDBY / POWER toggles ──
-      const mbx=.775*W, mby=PT+.10*PH, mbw=.198*W, mbh=PH-.20*PH;
+      const mbx=.760*W, mby=PT+.10*PH, mbw=.196*W, mbh=PH-.20*PH;
       frame(mbx,mby,mbw,mbh);
       textC(d,mbx+mbw*0.24,.31*H,F.barlow,7.5,dim,'MODEL'); textC(d,mbx+mbw*0.24,.43*H,F.bebas,16,ink,'V-4B');
       const tog=(cx,lbl)=>{ const x=cx*W,y=.39*H; rr(c,x-5,y-14,10,28,2); c.fillStyle=rgb(152,154,160); c.fill(); rr(c,x-5,y-14,10,28,2); c.strokeStyle=rgb(96,98,104); c.lineWidth=1; c.stroke(); rr(c,x-4,y-13,8,11,1); c.fillStyle=rgb(58,60,64); c.fill(); textC(d,x,.56*H,F.barlow,7,ink,lbl); };
-      tog(.892,'STANDBY'); tog(.940,'POWER');
+      tog(.877,'STANDBY'); tog(.925,'POWER');
       // ── black grille below: Sampleg diamond + script wordmark ──
       const gy=.82*H;
       diamond(.055*W, gy, 12, 'S', 14);
