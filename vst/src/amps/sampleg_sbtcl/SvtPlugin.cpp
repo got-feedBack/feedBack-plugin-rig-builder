@@ -30,6 +30,13 @@
 
 START_NAMESPACE_DISTRHO
 
+// RB loudness/headroom output stage (shared across all amps): kLvl matches the
+// amp to the common multitone loudness (~0.30 RMS at real settings); the soft
+// knee is transparent below +/-0.80 and saturates to a +/-0.98 ceiling so EQ
+// boosts never hard-clip. See AMP_LOUDNESS.md.
+static inline float rbAmpLvl(float x){ const float t=0.80f,c=0.98f,a=(x<0.f?-x:x);
+    if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
+
 // Loudness standardization (shared amp convention): a per-amp output `makeup`
 // tuned so the multitone (110 Hz–1.8 kHz) RMS matches the Box DC30 reference
 // (~0.40 RMS), then softClip()*0.98f as the final ceiling (same as EN30Core.h).
@@ -295,7 +302,7 @@ protected:
     void run(const float** in, float** out, uint32_t frames) override {
         const float* iL = in[0]; const float* iR = in[1];
         float* oL = out[0]; float* oR = out[1];
-        for (uint32_t i = 0; i < frames; ++i) { oL[i] = softClip(L.process(iL[i])) * 0.98f; oR[i] = softClip(R.process(iR[i])) * 0.98f; }  // loudness std (~0.40 RMS multitone) + ceiling
+        for (uint32_t i = 0; i < frames; ++i) { oL[i] = rbAmpLvl(0.579f * softClip(L.process(iL[i])) * 0.98f); oR[i] = rbAmpLvl(0.579f * softClip(R.process(iR[i])) * 0.98f); }  // loudness std (~0.40 RMS multitone) + ceiling
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SvtPlugin)
 };

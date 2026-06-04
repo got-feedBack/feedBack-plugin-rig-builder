@@ -4,6 +4,13 @@
 
 START_NAMESPACE_DISTRHO
 
+// RB loudness/headroom output stage (shared across all amps): kLvl matches the
+// amp to the common multitone loudness (~0.30 RMS at real settings); the soft
+// knee is transparent below +/-0.80 and saturates to a +/-0.98 ceiling so EQ
+// boosts never hard-clip. See AMP_LOUDNESS.md.
+static inline float rbAmpLvl(float x){ const float t=0.80f,c=0.98f,a=(x<0.f?-x:x);
+    if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
+
 class MarkIVPlugin : public Plugin
 {
     RbMarkAmpCore left{true};
@@ -72,8 +79,8 @@ protected:
     {
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outputs[0][i] = left.process(inputs[0][i]);
-            outputs[1][i] = right.process(inputs[1][i]);
+            outputs[0][i] = rbAmpLvl(0.680f * left.process(inputs[0][i]));
+            outputs[1][i] = rbAmpLvl(0.680f * right.process(inputs[1][i]));
         }
     }
 
