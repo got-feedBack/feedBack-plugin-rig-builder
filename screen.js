@@ -250,8 +250,6 @@ function rbDriveForChainInput(opts) {
 }
 
 function rbApplyChainInputDrive(opts) {
-    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
-    if (!audio || typeof audio.setGain !== 'function') return;
     const drive = rbDriveForChainInput(opts);
     // Re-poll guard: the song-playback callers fire this ~600 ms after
     // the bundle's chain load — but `highway.getStringCount()` may not
@@ -270,8 +268,13 @@ function rbApplyChainInputDrive(opts) {
         setTimeout(() => rbApplyChainInputDrive({ _isRepoll: true }), 1500);
         setTimeout(() => rbApplyChainInputDrive({ _isRepoll: true }), 3500);
     }
-    return audio.setGain('input', drive).catch((e) => {
-        console.warn('[rig_builder] setGain(input,', drive, ') failed:', e);
+    return rbSetRouteGainsWithHost({ input: drive }, 'chain-input-drive').then((handled) => {
+        if (handled) return;
+        const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        if (!audio || typeof audio.setGain !== 'function') return;
+        return audio.setGain('input', drive).catch((e) => {
+            console.warn('[rig_builder] setGain(input,', drive, ') failed:', e);
+        });
     });
 }
 
@@ -345,13 +348,56 @@ function rbClampChainGainTarget(targetGain) {
         : 1.0;
 }
 
+function rbAudioEffectsLoadOptionsForChain(chain, opts) {
+    const targetGain = rbClampChainGainTarget(rbChainGainTargetFor(chain));
+    const chainLen = Array.isArray(chain) ? chain.length : 0;
+    const hold = (typeof window.__rbMutePreLoadHold === 'number')
+        ? Math.max(20, window.__rbMutePreLoadHold | 0)
+        : 250 + 120 * Math.max(1, chainLen | 0);
+    return {
+        preloadMute: {
+            enabled: window.__rbMutePreLoad !== false,
+            dryDuringLoad: window.__rbDryDuringLoad !== false,
+            targetGain,
+            holdMs: hold,
+        },
+        gains: {
+            input: rbDriveForChainInput({ chain }),
+            chain: targetGain,
+        },
+        startAudio: !!(opts && opts.startAudio),
+    };
+}
+
+async function rbSetRouteGainsWithHost(gains, reason) {
+    rbRegisterAudioEffectsCapability();
+    const audioEffects = rbAudioEffectsApi();
+    if (!audioEffects || typeof audioEffects.setRouteGain !== 'function') return false;
+    try {
+        const result = await audioEffects.setRouteGain({
+            routeKey: RB_EFFECTS_ROUTE_KEY,
+            authorization: 'playback-session',
+            gains,
+            summary: { reason: reason || 'rig-builder-gain' },
+        });
+        if (result && result.outcome === 'handled') return true;
+        if (result && result.outcome !== 'no-target' && result.outcome !== 'no-handler') {
+            console.warn('[rig_builder] audio-effects route gain was not handled:', result);
+        }
+    } catch (e) {
+        console.warn('[rig_builder] audio-effects route gain failed:', e);
+    }
+    return false;
+}
+
 async function rbApplyChainOutputGain(opts) {
     const chain = opts && Array.isArray(opts.chain) ? opts.chain : null;
     if (!chain) return;
-    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
-    if (!audio || typeof audio.setGain !== 'function') return;
     const target = rbClampChainGainTarget(rbChainGainTargetFor(chain));
     window.__rbPendingChainGainTarget = target;
+    if (await rbSetRouteGainsWithHost({ chain: target }, 'chain-output-gain')) return;
+    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    if (!audio || typeof audio.setGain !== 'function') return;
     return audio.setGain('chain', target).catch((e) => {
         console.warn('[rig_builder] setGain(chain,', target, ') failed:', e);
     });
@@ -364,10 +410,10 @@ async function rbSetChainMakeup(v) {
     window.__rbChainMakeup = val;
     const cmVal = document.getElementById('rb-chain-makeup-val');
     if (cmVal) cmVal.textContent = val.toFixed(2) + '×';
-    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
-    if (audio && typeof audio.setGain === 'function') {
-        const base = (typeof window.__rbChainBaseTarget === 'number') ? window.__rbChainBaseTarget : 1.0;
-        audio.setGain('chain', base * val).catch(() => {});
+    const base = (typeof window.__rbChainBaseTarget === 'number') ? window.__rbChainBaseTarget : 1.0;
+    if (!(await rbSetRouteGainsWithHost({ chain: base * val }, 'chain-makeup'))) {
+        const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        if (audio && typeof audio.setGain === 'function') audio.setGain('chain', base * val).catch(() => {});
     }
     fetch(`${RB_API}/settings`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -920,8 +966,29 @@ async function rbLoadChainPlanWithHost(payload, options) {
             mode: opts.mode || 'native',
             ref: opts.ref || payload && payload.id || '',
         },
+        options: opts.executorOptions || {},
     }, RB_PLUGIN_ID);
     return rbHandledAudioEffectsResult(result, 'Rig Builder audio-effects host load failed');
+}
+
+async function rbReleaseAudioEffectsRouteWithHost(reason) {
+    rbRegisterAudioEffectsCapability();
+    const audioEffects = rbAudioEffectsApi();
+    if (!audioEffects || typeof audioEffects.releaseRoute !== 'function') return false;
+    try {
+        const result = await audioEffects.releaseRoute({
+            routeKey: RB_EFFECTS_ROUTE_KEY,
+            authorization: 'playback-session',
+            summary: { reason: reason || 'rig-builder-teardown' },
+        });
+        if (result && result.outcome === 'handled') return true;
+        if (result && result.outcome !== 'no-target' && result.outcome !== 'no-handler') {
+            console.warn('[rig_builder] audio-effects route release was not handled:', result);
+        }
+    } catch (e) {
+        console.warn('[rig_builder] audio-effects route release failed:', e);
+    }
+    return false;
 }
 
 async function rbActivateSegmentWithHost(segmentId, toneKey) {
@@ -951,6 +1018,8 @@ async function rbLoadNativePresetPayload(api, payload, options) {
         audioEffectsError = e;
         console.warn('[rig_builder] audio-effects executor load failed; using legacy loadPreset:', e);
     }
+    const chain = payload && payload.native_preset && Array.isArray(payload.native_preset.chain) ? payload.native_preset.chain : [];
+    await rbPreLoadMute(chain.length, rbChainGainTargetFor(chain)).catch(() => {});
     if (api.clearChain) await api.clearChain().catch(() => {});
     const result = await api.loadPreset(JSON.stringify(payload.native_preset));
     if (!result || result.success === false) {
@@ -1913,23 +1982,21 @@ const RbMegaChain = (function () {
         //    play through alongside our chain.
         _duckGuitarStem();
 
-        // 3. Load the mega-chain into the engine — single loadPreset call.
-        //    AWAIT the pre-load mute so the chain output is actually at 0
-        //    before clearChain+loadPreset run. Earlier this was a fire-and-
-        //    forget call, which raced the loadPreset and let the attack
-        //    transient leak through ("still gives feedback sometimes on
-        //    initial song load" — Discord report).
-        await rbPreLoadMute(
-            mega.native_preset.chain.length,
-            rbChainGainTargetFor(mega.native_preset.chain)
-        ).catch(() => {});
+        // 3. Load the mega-chain into the engine. On current Desktop this
+        //    goes through audio-effects load options so the executor owns
+        //    load mute/fade, initial route gain, and startAudio. The legacy
+        //    fallback still performs rbPreLoadMute immediately before its
+        //    direct clearChain + loadPreset call.
+        let loadedViaAudioEffects = false;
         try {
             const loaded = await rbLoadNativePresetPayload(api, mega, {
                 mode: 'mega-chain',
                 ref: 'song',
                 filename,
                 authorization: 'playback-session',
+                executorOptions: rbAudioEffectsLoadOptionsForChain(mega.native_preset.chain, { startAudio: true }),
             });
+            loadedViaAudioEffects = !!loaded.viaAudioEffects;
             const res = loaded.result;
             void rbSyncAudioEffectsCapability('mega-chain-loaded', { chain: mega.native_preset.chain, mode: 'mega-chain', bridge: !loaded.viaAudioEffects });
             // Compute dedupe savings: total active_slot entries across
@@ -2026,7 +2093,7 @@ const RbMegaChain = (function () {
         // NAMs leak through.
         try {
             const wasRunning = api.isAudioRunning ? await api.isAudioRunning().catch(() => true) : true;
-            if (!wasRunning && api.startAudio) await api.startAudio();
+            if (!loadedViaAudioEffects && !wasRunning && api.startAudio) await api.startAudio();
             // _applyActiveTone already set the input drive from the active
             // tone's amp metadata; don't overwrite it with a generic value.
         } catch (e) { console.warn('[rig_builder mega-chain] startAudio failed:', e); }
@@ -2284,7 +2351,8 @@ const RbMegaChain = (function () {
         if (!silent) _restoreGuitarStem();
         if (_active) {
             const api = _api();
-            if (api && api.clearChain) {
+            const releasedByHost = await rbReleaseAudioEffectsRouteWithHost('mega-chain-teardown');
+            if (!releasedByHost && api && api.clearChain) {
                 try { await api.clearChain(); } catch (_) {}
             }
         }

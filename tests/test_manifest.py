@@ -61,6 +61,12 @@ def test_screen_registers_executable_audio_effects_provider():
     assert "rbLoadChainPlanWithHost" in src
     assert "rbActivateSegmentWithHost" in src
     assert "audioEffects.activateSegment" in src
+    assert "rbReleaseAudioEffectsRouteWithHost" in src
+    assert "audioEffects.releaseRoute" in src
+    assert "rbSetRouteGainsWithHost" in src
+    assert "audioEffects.setRouteGain" in src
+    assert "rbAudioEffectsLoadOptionsForChain" in src
+    assert "options: opts.executorOptions || {}" in src
     assert "rbRegisterAudioEffectsCapability();\n    const audioEffects = rbAudioEffectsApi();" in src
     assert "loadPlan" in src
     assert "rbLoadNativePresetPayload" in src
@@ -113,6 +119,9 @@ def test_screen_blocks_amp_button_while_mega_chain_active():
     assert "rbSelectAudioEffectsRoute('mega-chain-pending')" in src
     assert "const activatedByHost = await rbActivateSegmentWithHost" in src
     assert "if (!activatedByHost)" in src
+    assert "executorOptions: rbAudioEffectsLoadOptionsForChain" in src
+    assert "const releasedByHost = await rbReleaseAudioEffectsRouteWithHost" in src
+    assert "if (!releasedByHost && api && api.clearChain)" in src
     assert "waiting for /settings before build" in src
     assert "settings-ready catch-up" in src
     assert "function rbInjectPlayerToneButton()" in src
