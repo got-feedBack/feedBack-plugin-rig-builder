@@ -11,12 +11,15 @@ START_NAMESPACE_DISTRHO
 
 struct Spot { int id; float cx, cy, r; const char* name; };
 static const Spot kKnobs[] = {
-    { kGain,   0.110f, 0.40f, 0.028f, "GAIN" },
-    { kBass,   0.180f, 0.40f, 0.028f, "BASS" },
-    { kMiddle, 0.250f, 0.40f, 0.028f, "MIDDLE" },
-    { kTreble, 0.320f, 0.40f, 0.028f, "TREBLE" },
-    { kComp,   0.860f, 0.40f, 0.028f, "COMP" },
-    { kVolume, 0.935f, 0.40f, 0.028f, "VOLUME" },
+    { kGain,         0.060f, 0.40f, 0.026f, "GAIN" },
+    { kBlend,        0.130f, 0.40f, 0.026f, "BLEND" },
+    { kBass,         0.220f, 0.40f, 0.026f, "BASS" },
+    { kMiddle,       0.285f, 0.40f, 0.026f, "MIDDLE" },
+    { kTreble,       0.350f, 0.40f, 0.026f, "TREBLE" },
+    { kThreshold,    0.430f, 0.40f, 0.026f, "THRESH" },
+    { kDepth,        0.495f, 0.40f, 0.026f, "DEPTH" },
+    { kGraphicLevel, 0.840f, 0.40f, 0.026f, "EQ LVL" },
+    { kVolume,       0.930f, 0.40f, 0.030f, "VOLUME" },
 };
 static const int kNumKnobs = (int)(sizeof(kKnobs)/sizeof(kKnobs[0]));
 static const char* const kEqLbl[kNumEq] = {"30","90","275","750","2.2k","6.5k","12k"};
@@ -65,7 +68,7 @@ class DbsUI : public UI {
     int knobAt(double px,double py) const { for(int i=0;i<kNumKnobs;++i){ float dx=px-W()*kKnobs[i].cx,dy=py-H()*kKnobs[i].cy,R=W()*kKnobs[i].r+6; if(dx*dx+dy*dy<=R*R) return i; } return -1; }
     int faderAt(double px,double py) const { for(int i=0;i<kNumEq;++i){ if(std::fabs(px-eqX(i))<=12 && py>=eqY0()-12 && py<=eqY1()+12) return i; } return -1; }
     struct S{int id;float cx,cy;};
-    void switches(S* s) const { s[0]={kBright,0.055f,0.66f}; s[1]={kDeep,0.055f,0.82f}; s[2]={kLoInput,0.110f,0.74f}; }
+    void switches(S* s) const { s[0]={kBright,0.055f,0.66f}; s[1]={kDeep,0.055f,0.82f}; s[2]={kGraphicOn,0.560f,0.74f}; s[3]={kLoInput,0.110f,0.74f}; }
 public:
     DbsUI() : UI(DISTRHO_UI_DEFAULT_WIDTH,DISTRHO_UI_DEFAULT_HEIGHT), fDrag(-1), fFader(-1), fLastY(0), fDragVal(0.5f) {
         loadSharedResources();
@@ -92,8 +95,8 @@ protected:
         for(int i=0;i<kNumEq;++i) drawFader(i);
         textAlign(ALIGN_CENTER|ALIGN_BOTTOM); fontSize(8*f); fillColor(Color(40,40,44));
         text(W()*0.50f, eqY0()-13*f, "GRAPHIC EQUALIZER", NULL);
-        S sw[3]; switches(sw); const char* lbl[3]={"BRIGHT","DEEP","LO IN"};
-        for(int i=0;i<3;++i) drawSwitch(sw[i].id, sw[i].cx, sw[i].cy, lbl[i]);
+        S sw[4]; switches(sw); const char* lbl[4]={"BRIGHT","DEEP","GRAPHIC","LO IN"};
+        for(int i=0;i<4;++i) drawSwitch(sw[i].id, sw[i].cx, sw[i].cy, lbl[i]);
         // power rocker
         const float px=w*0.965f,py=h*0.74f;
         beginPath(); roundedRect(px-10*f,py-14*f,20*f,28*f,3*f); fillColor(Color(18,18,20)); fill();
@@ -107,8 +110,8 @@ protected:
     bool onMouse(const MouseEvent& ev) override {
         if(ev.button!=1) return false;
         if(ev.press){
-            S sw[3]; switches(sw);
-            for(int i=0;i<3;++i){ float hs=W()*0.014f+5; if(std::fabs(ev.pos.getX()-W()*sw[i].cx)<=hs && std::fabs(ev.pos.getY()-H()*sw[i].cy)<=hs){ float nv=fValues[sw[i].id]>0.5f?0.f:1.f; fValues[sw[i].id]=nv; setParameterValue(sw[i].id,nv); repaint(); return true; } }
+            S sw[4]; switches(sw);
+            for(int i=0;i<4;++i){ float hs=W()*0.014f+5; if(std::fabs(ev.pos.getX()-W()*sw[i].cx)<=hs && std::fabs(ev.pos.getY()-H()*sw[i].cy)<=hs){ float nv=fValues[sw[i].id]>0.5f?0.f:1.f; fValues[sw[i].id]=nv; setParameterValue(sw[i].id,nv); repaint(); return true; } }
             int fd=faderAt(ev.pos.getX(),ev.pos.getY());
             if(fd>=0){ fFader=fd; editParameter(kFirstEq+fd,true); float n=1.f-(float)((ev.pos.getY()-eqY0())/(eqY1()-eqY0())); if(n<0)n=0; if(n>1)n=1; fValues[kFirstEq+fd]=n; setParameterValue(kFirstEq+fd,n); repaint(); return true; }
             int k=knobAt(ev.pos.getX(),ev.pos.getY());

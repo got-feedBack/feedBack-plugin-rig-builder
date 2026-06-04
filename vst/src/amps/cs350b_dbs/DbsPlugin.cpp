@@ -134,11 +134,11 @@ struct MFB {
 class DbsChannel {
     float fs = 48000.f;
     SsPre ss;                            // clean op-amp gain (no tube)
-    float gainDrive=1, master=1;
+    float gainDrive=1, master=1, blend=0.6f, graphicLvl=1.f;
     Biquad brite, deep;                  // Bright / Deep voicing shelves
     Biquad bqBass, bqMid, bqTreble;      // Primary EQ
     // compressor: envelope detector -> JFET voltage-controlled-resistor gain cell
-    bool compOn=false; float env=0, atk=0, rel=0, compThr=1, compAmt=0, compMk=1;
+    bool compOn=false, graphicOn=true; float env=0, atk=0, rel=0, compThr=1, compAmt=0, compMk=1;
     static inline float msC(float ms, float fs){ return std::exp(-1.f/(0.001f*ms*fs)); }
     MFB eq[kNumEq];  float eqG[kNumEq];                  // 7-band gyrator graphic EQ
 public:
@@ -155,6 +155,8 @@ public:
         // that would make low-Gain songs play quiet. kLvl is calibrated at the
         // real median (Gain 5) so typical songs land at the house loudness.
         gainDrive = (0.8f + p[kGain] * 3.0f) * pad;
+        // Pre-amp Blend: VALVE (warm, soft) <-> SOLID-STATE (clean). 0 = valve, 1 = SS.
+        blend = p[kBlend];
 
         // Bright (HF lift ~+6 dB @ 3 kHz) / Deep (LF lift ~+6 dB @ 50 Hz) switches.
         if (p[kBright] > 0.5f) brite.setHighShelf(3000.f, 6.0f, fs); else brite.setBypass();
@@ -166,21 +168,28 @@ public:
         bqMid.setPeak(600.f, (p[kMiddle] - 0.5f) * 28.f, 0.8f, fs);
         bqTreble.setHighShelf(4000.f, (p[kTreble] - 0.5f) * 30.f, fs);
 
-        compOn  = p[kComp] > 0.001f;
-        compThr = 0.35f - p[kComp]*0.28f;
-        compAmt = p[kComp];
-        compMk  = 1.0f + p[kComp]*0.35f;
+        // Compression: Threshold (ON..MIN..MAX -> when it bites) + Depth (amount).
+        compOn  = p[kDepth] > 0.001f;
+        compThr = 0.50f - p[kThreshold]*0.40f;       // higher Threshold knob -> lower threshold -> bites sooner
+        compAmt = p[kDepth];
+        compMk  = 1.0f + p[kDepth]*0.35f;
 
-        // 7-band graphic EQ, +/-15 dB (0.5 = flat).
+        // 7-band graphic EQ, +/-15 dB (0.5 = flat) + Graphic Level (+/-6 dB) + in/out.
+        graphicOn = p[kGraphicOn] > 0.5f;
         for (int i=0;i<kNumEq;++i)
             eqG[i] = std::pow(10.f, (p[kFirstEq+i]-0.5f)*30.f/20.f);
+        graphicLvl = std::pow(10.f, (p[kGraphicLevel]-0.5f)*12.f/20.f);
 
         master = p[kVolume] / 0.7f;
     }
 
     inline float process(float x) {
-        // 1. clean op-amp gain (solid-state)
-        double s = ss.process((double)(gainDrive * x));
+        // 1. preamp: blend the SOLID-STATE op-amp path (clean) with a VALVE path
+        //    (warm soft-saturation). Pre-amp Blend sweeps between them.
+        const double d = (double)(gainDrive * x);
+        const double sClean = ss.process(d);
+        const double sValve = std::tanh(d * 1.4) * 0.71;       // ~unity small-signal, warm when pushed
+        double s = blend * sClean + (1.0 - blend) * sValve;
         // 2. Bright / Deep voicing
         s = brite.process((float)s); s = deep.process((float)s);
         // 3. Primary EQ
@@ -197,9 +206,10 @@ public:
                 if (rds < Ron) rds = Ron; gain = rds/(Rs+rds); }
             s = s * gain * compMk;
         }
-        // 5. GRAPHIC EQ — parallel nodal MFB bands summed onto the dry signal
-        { const double dry=s; double sum=dry;
-          for (int i=0;i<kNumEq;++i) sum -= (eqG[i]-1.0) * eq[i].proc(dry); s = sum; }
+        // 5. GRAPHIC EQ (in/out) — parallel nodal MFB bands summed onto the dry,
+        //    then the Graphic Level make-up.
+        if (graphicOn) { const double dry=s; double sum=dry;
+          for (int i=0;i<kNumEq;++i) sum -= (eqG[i]-1.0) * eq[i].proc(dry); s = sum * graphicLvl; }
         // 6. Volume → clean SS power
         return (float)(s * master);
     }

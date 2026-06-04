@@ -683,27 +683,29 @@
       textC(d,.955*W,gy,F.crete,15,rgb(150,152,158),'Heritage','right'); } };
 
   // ── Marsten DBS 7400 — faithful Marshall DBS 7400 (Dynamic Bass System) look
-  //   (parody branding): GOLD/champagne chassis with a BLACK control panel, black
-  //   knobs, the GRAPHIC EQUALIZER faders, a big VOLUME knob, and the gold lower
-  //   strip with the Marsten cursive script + DYNAMIC BASS SYSTEM + INPUT jacks.
-  //   Logical ids: 0 Gain 1 Bass 2 Middle 3 Treble 4 Comp 5 Volume |
-  //     6..12 EQ 30/90/275/750/2.2k/6.5k/12k | 13 Bright 14 Deep 15 Lo In
+  //   (parody): gold/champagne chassis, black control panel, ALL controls REAL.
+  //   Logical ids: 0 Gain 1 Pre-amp Blend 2 Bass 3 Middle 4 Treble 5 Threshold
+  //   6 Depth 7 Volume | 8..14 graphic 30/90/275/750/2.2k/6.5k/12k 15 Graphic
+  //   Level | 16 Bright 17 Deep 18 Graphic 19 Lo Input
   P.marstendbs7400 = { w:960, h:300,
     knobs:[
-      {id:0,cx:.062,cy:.31,r:.022,style:'pointer',cap:[20,20,22]},
-      {id:1,cx:.280,cy:.31,r:.022,style:'pointer',cap:[20,20,22]},
-      {id:2,cx:.340,cy:.31,r:.022,style:'pointer',cap:[20,20,22]},
-      {id:3,cx:.400,cy:.31,r:.022,style:'pointer',cap:[20,20,22]},
-      {id:4,cx:.488,cy:.31,r:.022,style:'pointer',cap:[20,20,22]},
-      {id:5,cx:.910,cy:.31,r:.032,style:'pointer',cap:[20,20,22]}],
+      {id:0,cx:.062,cy:.31,r:.021,style:'pointer',cap:[20,20,22]},
+      {id:1,cx:.122,cy:.31,r:.021,style:'pointer',cap:[20,20,22]},
+      {id:2,cx:.285,cy:.31,r:.021,style:'pointer',cap:[20,20,22]},
+      {id:3,cx:.340,cy:.31,r:.021,style:'pointer',cap:[20,20,22]},
+      {id:4,cx:.395,cy:.31,r:.021,style:'pointer',cap:[20,20,22]},
+      {id:5,cx:.482,cy:.31,r:.021,style:'pointer',cap:[20,20,22]},
+      {id:6,cx:.537,cy:.31,r:.021,style:'pointer',cap:[20,20,22]},
+      {id:7,cx:.915,cy:.31,r:.032,style:'pointer',cap:[20,20,22]}],
     switches:[
-      {id:13,cx:.150,cy:.24,hs:.0095,dark:true},
-      {id:14,cx:.150,cy:.40,hs:.0095,dark:true},
-      {id:15,cx:.090,cy:.76,hs:.0095,dark:true}],
+      {id:16,cx:.158,cy:.22,hs:.0090,dark:true},
+      {id:17,cx:.158,cy:.40,hs:.0090,dark:true},
+      {id:18,cx:.853,cy:.31,hs:.0090,dark:true},
+      {id:19,cx:.092,cy:.76,hs:.0090,dark:true}],
     faders:[
-      {id:6,cx:.585,y0:.19,y1:.43},{id:7,cx:.620,y0:.19,y1:.43},{id:8,cx:.655,y0:.19,y1:.43},
-      {id:9,cx:.690,y0:.19,y1:.43},{id:10,cx:.725,y0:.19,y1:.43},{id:11,cx:.760,y0:.19,y1:.43},
-      {id:12,cx:.795,y0:.19,y1:.43}],
+      {id:8,cx:.585,y0:.18,y1:.42},{id:9,cx:.616,y0:.18,y1:.42},{id:10,cx:.647,y0:.18,y1:.42},
+      {id:11,cx:.678,y0:.18,y1:.42},{id:12,cx:.709,y0:.18,y1:.42},{id:13,cx:.740,y0:.18,y1:.42},
+      {id:14,cx:.771,y0:.18,y1:.42},{id:15,cx:.810,y0:.18,y1:.42}],
     tick:rgb(150,148,135), ptr:rgb(236,233,221),
     draw(d,vals){ vals=vals||{}; const {ctx:c,W,H}=d;
       const cream=rgb(220,216,200), dim=rgb(150,148,132), goldInk=rgb(52,44,28);
@@ -711,7 +713,6 @@
       box(d, 182,162,112, true);
       const cg=c.createLinearGradient(0,0,0,H); cg.addColorStop(0,'rgba(255,250,230,0.30)'); cg.addColorStop(.5,'rgba(255,250,230,0.0)'); cg.addColorStop(1,'rgba(60,46,18,0.22)');
       c.fillStyle=cg; c.fillRect(0,0,W,H);
-      // rack ear screws
       [[.020,.10],[.020,.90],[.980,.10],[.980,.90]].forEach(s=>{ c.beginPath(); c.arc(s[0]*W,s[1]*H,5,0,7); c.fillStyle=rgb(120,104,64); c.fill(); c.strokeStyle=rgb(70,58,30); c.lineWidth=1; c.stroke(); });
       // ── black control panel ──
       const PL=.045*W, PT=.06*H, PW=.910*W, PH=.52*H;
@@ -720,32 +721,31 @@
       rr(c,PL+3,PT+3,PW-6,PH-6,4); c.strokeStyle='rgba(150,148,132,0.45)'; c.lineWidth=1; c.stroke();
       const lab=(cx,y,sz,t,col)=>textC(d,cx*W,y*H,F.barlow,sz,col||cream,t);
       const frame=(x,y,w,h)=>{ rr(c,x,y,w,h,3); c.strokeStyle='rgba(176,174,156,0.6)'; c.lineWidth=1; c.stroke(); };
-      const dknob=(cx,cy,r)=>{ const x=cx*W,y=cy*H,R=W*r; c.beginPath();c.arc(x,y,R+2,0,7);c.fillStyle=rgb(150,148,135);c.fill(); c.beginPath();c.arc(x,y,R,0,7);c.fillStyle=rgb(22,22,24);c.fill(); c.beginPath();c.moveTo(x,y);c.lineTo(x,y-R*0.8);c.strokeStyle=cream;c.lineWidth=2;c.stroke(); };
-      // PEAK LED + GAIN + decorative PRE-AMP BLEND
+      // PEAK LED + GAIN + PRE-AMP BLEND (real knobs)
       c.beginPath(); c.arc(.050*W,.135*H,4,0,7); c.fillStyle=rgb(214,64,42); c.fill();
       lab(.050,.205,6.5,'PEAK',dim);
-      lab(.062,.47,8,'GAIN');
-      dknob(.120,.31,.022); lab(.120,.45,6.5,'PRE-AMP'); lab(.120,.50,6.5,'BLEND');
+      lab(.062,.47,7.5,'GAIN');
+      lab(.122,.45,6,'PRE-AMP'); lab(.122,.50,6,'BLEND');
       // BRIGHT / DEEP switch labels
-      lab(.150,.155,6.5,'BRIGHT'); lab(.150,.475,6.5,'DEEP');
+      lab(.158,.135,6.5,'BRIGHT'); lab(.158,.475,6.5,'DEEP');
       // PRIMARY EQ frame
-      frame(.245*W,.10*H,.190*W,.40*H); lab(.340,.155,7.5,'PRIMARY EQ',dim);
-      [[.280,'BASS'],[.340,'MIDDLE'],[.400,'TREBLE']].forEach(k=>lab(k[0],.47,7,k[1]));
-      // COMPRESSION frame (Threshold = real knob, Depth decorative)
-      frame(.450*W,.10*H,.120*W,.40*H); lab(.510,.155,7.5,'COMPRESSION',dim);
-      lab(.488,.47,6.5,'THRESH'); dknob(.535,.31,.020); lab(.535,.47,6.5,'DEPTH');
-      // GRAPHIC EQUALIZER frame + band labels
-      frame(.575*W,.10*H,.265*W,.40*H); lab(.7075,.155,7.5,'GRAPHIC EQUALIZER',dim);
-      ['30','90','275','750','2k2','6k5','12k'].forEach((t,i)=>lab(.585+i*0.035,.465,6,t,dim));
+      frame(.250*W,.10*H,.180*W,.40*H); lab(.340,.155,7.5,'PRIMARY EQ',dim);
+      [[.285,'BASS'],[.340,'MIDDLE'],[.395,'TREBLE']].forEach(k=>lab(k[0],.47,6.5,k[1]));
+      // COMPRESSION frame (Threshold + Depth — both real)
+      frame(.448*W,.10*H,.120*W,.40*H); lab(.508,.155,7.5,'COMPRESSION',dim);
+      lab(.482,.47,6.5,'THRESH'); lab(.537,.47,6.5,'DEPTH');
+      // GRAPHIC EQUALIZER frame + band labels + LEVEL + GRAPHIC switch
+      frame(.572*W,.10*H,.300*W,.40*H); lab(.690,.155,7.5,'GRAPHIC EQUALIZER',dim);
+      ['30','90','275','750','2k2','6k5','12k','LVL'].forEach((t,i)=>lab((i<7?.585+i*0.031:.810),.465,6,t,dim));
+      lab(.853,.45,6.5,'GRAPHIC');
       // VOLUME (big, right)
-      lab(.910,.47,8,'VOLUME');
-      // ── bottom gold strip: INPUT jacks + Marsten script + power ──
+      lab(.915,.47,7.5,'VOLUME');
+      // ── bottom gold strip: INPUT jack + Marsten script + power ──
       const gy=.78*H;
       const jack=(x)=>{ c.beginPath();c.arc(x*W,gy,7,0,7);c.fillStyle=rgb(28,26,20);c.fill();c.strokeStyle=rgb(110,96,58);c.lineWidth=1.4;c.stroke();c.beginPath();c.arc(x*W,gy,3,0,7);c.fillStyle=rgb(58,52,36);c.fill(); };
-      jack(.150); lab(.090,.74,6.5,'INPUT',goldInk);
+      jack(.150); lab(.092,.74,6,'INPUT',goldInk);
       textC(d,.215*W,gy+5,F.crete,30,rgb(248,244,234),'Marsten','left');
       textC(d,.415*W,gy+3,F.barlow,15,goldInk,'DYNAMIC BASS SYSTEM','left');
-      // power rocker
       rr(c,.945*W-9,gy-12,18,24,2); c.fillStyle=rgb(22,22,24); c.fill(); rr(c,.945*W-6,gy-10,12,9,1); c.fillStyle=rgb(202,52,40); c.fill();
       textC(d,.945*W,.945*H,F.barlow,7,goldInk,'POWER'); } };
 
