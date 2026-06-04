@@ -96,6 +96,17 @@ def test_screen_coalesces_mega_chain_lifecycle_builds():
     assert "_pendingBuildFile !== filename" in src
 
 
+def test_screen_blocks_amp_button_while_mega_chain_active():
+    src = (ROOT / "screen.js").read_text()
+
+    assert "let _ampToggleAllowed = false" in src
+    assert "window.__rbAmpClickBlockerInstalled" in src
+    assert "event.stopImmediatePropagation()" in src
+    assert "AMP button click ignored" in src
+    assert "let _ampRecoveryTimer = null" in src
+    assert "window.RbMegaChain = api" in src
+
+
 def test_screen_handles_excess_engine_slots_without_negative_mismatch():
     src = (ROOT / "screen.js").read_text()
 

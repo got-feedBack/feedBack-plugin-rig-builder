@@ -1647,12 +1647,19 @@ const RbMegaChain = (function () {
 
     // If the bundle's AMP is on, click it off so it stops doing its own
     // clearChain+loadPreset on every tone change.
+    let _ampToggleAllowed = false;
     function _forceBundleAmpOff() {
         const btn = document.getElementById('btn-nam');
         if (!btn) return;
         const isOn = /(?:^|\s)bg-green-/.test(btn.className);
         if (isOn) {
-            try { btn.click(); } catch (_) {}
+            try {
+                _ampToggleAllowed = true;
+                btn.click();
+            } catch (_) {
+            } finally {
+                _ampToggleAllowed = false;
+            }
         }
     }
 
@@ -2068,6 +2075,7 @@ const RbMegaChain = (function () {
     // clearChain + loadPreset that destroys our mega-chain. Mute monitor
     // momentarily so the click of the toggle isn't audible.
     let _ampGuardHandle = null;
+    let _ampRecoveryTimer = null;
     function _startAmpGuard() {
         _stopAmpGuard();
         _ampGuardHandle = setInterval(() => {
@@ -2077,22 +2085,36 @@ const RbMegaChain = (function () {
             const isOn = /(?:^|\s)bg-green-/.test(btn.className);
             if (isOn) {
                 console.warn('[rig_builder mega-chain] AMP turned on by bundle — turning it back off');
-                try { btn.click(); } catch (_) {}
+                _forceBundleAmpOff();
                 // After AMP-off the bundle has already done clearChain;
                 // rebuild our mega-chain so audio comes back.
                 const filename = window.slopsmith && window.slopsmith.currentSong
                     && window.slopsmith.currentSong.filename;
-                if (filename) {
-                    setTimeout(() => {
+                if (filename && !_ampRecoveryTimer) {
+                    _ampRecoveryTimer = setTimeout(() => {
+                        _ampRecoveryTimer = null;
                         buildForSong(filename).catch(e =>
                             console.warn('[rig_builder mega-chain] re-build after AMP-off failed:', e));
-                    }, 200);
+                    }, 350);
                 }
             }
         }, 500);
     }
     function _stopAmpGuard() {
         if (_ampGuardHandle) { clearInterval(_ampGuardHandle); _ampGuardHandle = null; }
+        if (_ampRecoveryTimer) { clearTimeout(_ampRecoveryTimer); _ampRecoveryTimer = null; }
+    }
+
+    if (!window.__rbAmpClickBlockerInstalled) {
+        window.__rbAmpClickBlockerInstalled = true;
+        document.addEventListener('click', (event) => {
+            const target = event.target && event.target.closest ? event.target.closest('#btn-nam') : null;
+            if (!target || _ampToggleAllowed || !_active) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            console.log('[rig_builder mega-chain] AMP button click ignored — mega-chain owns the engine');
+            _forceBundleAmpOff();
+        }, true);
     }
 
     function _startPolling() {
@@ -2141,7 +2163,9 @@ const RbMegaChain = (function () {
     function isActive() { return _active; }
     function settingOn() { return _settingOn(); }
 
-    return { buildForSong, teardown, isActive, settingOn };
+    const api = { buildForSong, teardown, isActive, settingOn };
+    window.RbMegaChain = api;
+    return api;
 })();
 
 // Hook into the slopsmith song lifecycle. `song:loaded` fires from
