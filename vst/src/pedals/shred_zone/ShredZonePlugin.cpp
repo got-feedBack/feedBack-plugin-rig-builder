@@ -265,7 +265,7 @@ public:
             + 0.018f * std::fabs((bass - 0.5f) * 28.0f)
             + 0.016f * std::fabs((mid - 0.5f) * 32.0f)
             + 0.016f * std::fabs((treble - 0.5f) * 30.0f);
-        const float level = 0.62f / ((1.0f + 0.35f * gain + 0.32f * g) * eqEnergy);
+        const float level = 0.50f / ((1.0f + 0.35f * gain + 0.32f * g) * eqEnergy);  // -1.9 dB: ran a touch hot vs the other distortions
         return softClip(y * level) * 0.98f;
     }
 };

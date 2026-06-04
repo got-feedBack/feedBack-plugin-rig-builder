@@ -236,7 +236,7 @@ protected:
 
     void run(const float** in, float** out, uint32_t frames) override {
         const float* iL=in[0]; const float* iR=in[1]; float* oL=out[0]; float* oR=out[1];
-        for (uint32_t i=0;i<frames;++i){ oL[i]=rbAmpLvl(1.683f*L.process(iL[i])); oR[i]=rbAmpLvl(1.683f*R.process(iR[i])); }  // kLvl -> -14 LUF (~0.19 RMS @ real CS350B median Gain 5); loudness ~flat across Gain. See AMP_LOUDNESS.md
+        for (uint32_t i=0;i<frames;++i){ oL[i]=rbAmpLvl(2.050f*L.process(iL[i])); oR[i]=rbAmpLvl(2.050f*R.process(iR[i])); }  // kLvl: -14 LUF at Gain 5 was 1.683; +1.7 dB so this CLEAN amp matches the saturated amps' PERCEIVED loudness (clean has lower crest density). See AMP_LOUDNESS.md
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DbsPlugin)
 };
