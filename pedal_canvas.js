@@ -682,59 +682,72 @@
       textC(d,.100*W,gy,F.bebas,26,rgb(232,234,238),'Sampleg','left');
       textC(d,.955*W,gy,F.crete,15,rgb(150,152,158),'Heritage','right'); } };
 
-  // ── Marsten DBS 7400 — Marshall DBS 7400 (Dynamic Bass System) style (parody).
-  //   Silver rack panel: Hi/Lo jacks + Bright/Deep/Lo-In switches, Gain + Primary
-  //   EQ (Bass/Middle/Treble) + Compression knobs, a 7-band graphic EQ (faders),
-  //   a big Volume knob, and the Marsten · DYNAMIC BASS SYSTEM wordmark.
+  // ── Marsten DBS 7400 — faithful Marshall DBS 7400 (Dynamic Bass System) look
+  //   (parody branding): GOLD/champagne chassis with a BLACK control panel, black
+  //   knobs, the GRAPHIC EQUALIZER faders, a big VOLUME knob, and the gold lower
+  //   strip with the Marsten cursive script + DYNAMIC BASS SYSTEM + INPUT jacks.
   //   Logical ids: 0 Gain 1 Bass 2 Middle 3 Treble 4 Comp 5 Volume |
   //     6..12 EQ 30/90/275/750/2.2k/6.5k/12k | 13 Bright 14 Deep 15 Lo In
   P.marstendbs7400 = { w:960, h:300,
     knobs:[
-      {id:0,cx:.150,cy:.40,r:.023,style:'pointer',cap:[26,26,28]},
-      {id:1,cx:.215,cy:.40,r:.023,style:'pointer',cap:[26,26,28]},
-      {id:2,cx:.280,cy:.40,r:.023,style:'pointer',cap:[26,26,28]},
-      {id:3,cx:.345,cy:.40,r:.023,style:'pointer',cap:[26,26,28]},
-      {id:4,cx:.410,cy:.40,r:.023,style:'pointer',cap:[26,26,28]},
-      {id:5,cx:.905,cy:.40,r:.030,style:'pointer',cap:[26,26,28]}],
+      {id:0,cx:.062,cy:.31,r:.022,style:'pointer',cap:[20,20,22]},
+      {id:1,cx:.280,cy:.31,r:.022,style:'pointer',cap:[20,20,22]},
+      {id:2,cx:.340,cy:.31,r:.022,style:'pointer',cap:[20,20,22]},
+      {id:3,cx:.400,cy:.31,r:.022,style:'pointer',cap:[20,20,22]},
+      {id:4,cx:.488,cy:.31,r:.022,style:'pointer',cap:[20,20,22]},
+      {id:5,cx:.910,cy:.31,r:.032,style:'pointer',cap:[20,20,22]}],
     switches:[
-      {id:13,cx:.070,cy:.66,hs:.010,dark:true},
-      {id:14,cx:.070,cy:.82,hs:.010,dark:true},
-      {id:15,cx:.120,cy:.74,hs:.010,dark:true}],
+      {id:13,cx:.150,cy:.24,hs:.0095,dark:true},
+      {id:14,cx:.150,cy:.40,hs:.0095,dark:true},
+      {id:15,cx:.090,cy:.76,hs:.0095,dark:true}],
     faders:[
-      {id:6,cx:.500,y0:.27,y1:.56},{id:7,cx:.540,y0:.27,y1:.56},{id:8,cx:.580,y0:.27,y1:.56},
-      {id:9,cx:.620,y0:.27,y1:.56},{id:10,cx:.660,y0:.27,y1:.56},{id:11,cx:.700,y0:.27,y1:.56},
-      {id:12,cx:.740,y0:.27,y1:.56}],
-    tick:rgb(74,76,82), ptr:rgb(245,246,249),
+      {id:6,cx:.585,y0:.19,y1:.43},{id:7,cx:.620,y0:.19,y1:.43},{id:8,cx:.655,y0:.19,y1:.43},
+      {id:9,cx:.690,y0:.19,y1:.43},{id:10,cx:.725,y0:.19,y1:.43},{id:11,cx:.760,y0:.19,y1:.43},
+      {id:12,cx:.795,y0:.19,y1:.43}],
+    tick:rgb(150,148,135), ptr:rgb(236,233,221),
     draw(d,vals){ vals=vals||{}; const {ctx:c,W,H}=d;
-      const ink=rgb(30,31,35), dim=rgb(92,94,100);
-      box(d, 22,23,26, true);                                  // black rack shell
-      const PL=.025*W, PT=.10*H, PW=.95*W, PH=.55*H;
-      const pg=c.createLinearGradient(0,PT,0,PT+PH); pg.addColorStop(0,rgb(206,208,212)); pg.addColorStop(.5,rgb(182,184,190)); pg.addColorStop(1,rgb(160,162,168));
-      rr(c,PL,PT,PW,PH,4); c.fillStyle=pg; c.fill();
-      c.save(); rr(c,PL,PT,PW,PH,4); c.clip();
-      for(let x=PL;x<PL+PW;x+=2){ c.strokeStyle=(((x|0)%4)?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.04)'); c.lineWidth=1; c.beginPath(); c.moveTo(x,PT); c.lineTo(x,PT+PH); c.stroke(); }
-      c.restore();
-      rr(c,PL,PT,PW,PH,4); c.strokeStyle=rgb(118,120,126); c.lineWidth=1.5; c.stroke();
-      const lab=(cx,y,sz,t,col)=>textC(d,cx*W,y*H,F.barlow,sz,col||ink,t);
-      const frame=(x,y,w,h)=>{ rr(c,x,y+1.4,w,h,4); c.strokeStyle='rgba(255,255,255,0.5)'; c.lineWidth=1; c.stroke();
-        rr(c,x,y,w,h,4); c.strokeStyle=rgb(118,120,126); c.lineWidth=1.3; c.stroke(); };
-      // ── left: Hi/Lo jacks + COMPRESSION LED ──
-      const jack=(x,y)=>{ c.beginPath(); c.arc(x,y,7,0,7); c.fillStyle=rgb(16,16,18); c.fill(); c.strokeStyle=rgb(96,98,104); c.lineWidth=1.4; c.stroke(); c.beginPath(); c.arc(x,y,3,0,7); c.fillStyle=rgb(38,38,42); c.fill(); };
-      jack(.040*W,.34*H); jack(.040*W,.50*H);
-      lab(.040,.30,7.5,'HI'); lab(.040,.555,7.5,'LO');
-      // knob labels
-      [[.150,'GAIN'],[.215,'BASS'],[.280,'MIDDLE'],[.345,'TREBLE'],[.410,'COMP'],[.905,'VOLUME']].forEach(k=>lab(k[0],.55,9,k[1]));
-      // switch labels (Bright/Deep/Lo-In drawn by framework; just label)
-      lab(.070,.58,7.5,'BRIGHT'); lab(.070,.90,7.5,'DEEP'); lab(.120,.66,7.5,'LO IN');
-      // ── centre: GRAPHIC EQUALIZER frame + band labels ──
-      frame(.470*W, PT+.04*PH, .300*W, PH-.66*PH);
-      lab(.620,.165,8,'GRAPHIC EQUALIZER',dim);
-      ['30','90','275','750','2k2','6k5','12k'].forEach((t,i)=>lab(.500+i*0.040,.60,7,t,dim));
-      // ── Marsten wordmark + DYNAMIC BASS SYSTEM ──
-      const gy=.83*H;
-      textC(d,.045*W,gy,F.bebas,26,rgb(232,234,238),'Marsten','left');
-      textC(d,.270*W,gy,F.crete,13,rgb(150,152,158),'DYNAMIC BASS SYSTEM','left');
-      textC(d,.955*W,gy,F.barlow,11,rgb(150,152,158),'DBS 7400  400 W','right'); } };
+      const cream=rgb(220,216,200), dim=rgb(150,148,132), goldInk=rgb(52,44,28);
+      // ── gold / champagne brushed chassis ──
+      box(d, 182,162,112, true);
+      const cg=c.createLinearGradient(0,0,0,H); cg.addColorStop(0,'rgba(255,250,230,0.30)'); cg.addColorStop(.5,'rgba(255,250,230,0.0)'); cg.addColorStop(1,'rgba(60,46,18,0.22)');
+      c.fillStyle=cg; c.fillRect(0,0,W,H);
+      // rack ear screws
+      [[.020,.10],[.020,.90],[.980,.10],[.980,.90]].forEach(s=>{ c.beginPath(); c.arc(s[0]*W,s[1]*H,5,0,7); c.fillStyle=rgb(120,104,64); c.fill(); c.strokeStyle=rgb(70,58,30); c.lineWidth=1; c.stroke(); });
+      // ── black control panel ──
+      const PL=.045*W, PT=.06*H, PW=.910*W, PH=.52*H;
+      rr(c,PL,PT,PW,PH,5); c.fillStyle=rgb(19,19,21); c.fill();
+      rr(c,PL,PT,PW,PH,5); c.strokeStyle=rgb(6,6,7); c.lineWidth=2; c.stroke();
+      rr(c,PL+3,PT+3,PW-6,PH-6,4); c.strokeStyle='rgba(150,148,132,0.45)'; c.lineWidth=1; c.stroke();
+      const lab=(cx,y,sz,t,col)=>textC(d,cx*W,y*H,F.barlow,sz,col||cream,t);
+      const frame=(x,y,w,h)=>{ rr(c,x,y,w,h,3); c.strokeStyle='rgba(176,174,156,0.6)'; c.lineWidth=1; c.stroke(); };
+      const dknob=(cx,cy,r)=>{ const x=cx*W,y=cy*H,R=W*r; c.beginPath();c.arc(x,y,R+2,0,7);c.fillStyle=rgb(150,148,135);c.fill(); c.beginPath();c.arc(x,y,R,0,7);c.fillStyle=rgb(22,22,24);c.fill(); c.beginPath();c.moveTo(x,y);c.lineTo(x,y-R*0.8);c.strokeStyle=cream;c.lineWidth=2;c.stroke(); };
+      // PEAK LED + GAIN + decorative PRE-AMP BLEND
+      c.beginPath(); c.arc(.050*W,.135*H,4,0,7); c.fillStyle=rgb(214,64,42); c.fill();
+      lab(.050,.205,6.5,'PEAK',dim);
+      lab(.062,.47,8,'GAIN');
+      dknob(.120,.31,.022); lab(.120,.45,6.5,'PRE-AMP'); lab(.120,.50,6.5,'BLEND');
+      // BRIGHT / DEEP switch labels
+      lab(.150,.155,6.5,'BRIGHT'); lab(.150,.475,6.5,'DEEP');
+      // PRIMARY EQ frame
+      frame(.245*W,.10*H,.190*W,.40*H); lab(.340,.155,7.5,'PRIMARY EQ',dim);
+      [[.280,'BASS'],[.340,'MIDDLE'],[.400,'TREBLE']].forEach(k=>lab(k[0],.47,7,k[1]));
+      // COMPRESSION frame (Threshold = real knob, Depth decorative)
+      frame(.450*W,.10*H,.120*W,.40*H); lab(.510,.155,7.5,'COMPRESSION',dim);
+      lab(.488,.47,6.5,'THRESH'); dknob(.535,.31,.020); lab(.535,.47,6.5,'DEPTH');
+      // GRAPHIC EQUALIZER frame + band labels
+      frame(.575*W,.10*H,.265*W,.40*H); lab(.7075,.155,7.5,'GRAPHIC EQUALIZER',dim);
+      ['30','90','275','750','2k2','6k5','12k'].forEach((t,i)=>lab(.585+i*0.035,.465,6,t,dim));
+      // VOLUME (big, right)
+      lab(.910,.47,8,'VOLUME');
+      // ── bottom gold strip: INPUT jacks + Marsten script + power ──
+      const gy=.78*H;
+      const jack=(x)=>{ c.beginPath();c.arc(x*W,gy,7,0,7);c.fillStyle=rgb(28,26,20);c.fill();c.strokeStyle=rgb(110,96,58);c.lineWidth=1.4;c.stroke();c.beginPath();c.arc(x*W,gy,3,0,7);c.fillStyle=rgb(58,52,36);c.fill(); };
+      jack(.150); lab(.090,.74,6.5,'INPUT',goldInk);
+      textC(d,.215*W,gy+5,F.crete,30,rgb(248,244,234),'Marsten','left');
+      textC(d,.415*W,gy+3,F.barlow,15,goldInk,'DYNAMIC BASS SYSTEM','left');
+      // power rocker
+      rr(c,.945*W-9,gy-12,18,24,2); c.fillStyle=rgb(22,22,24); c.fill(); rr(c,.945*W-6,gy-10,12,9,1); c.fillStyle=rgb(202,52,40); c.fill();
+      textC(d,.945*W,.945*H,F.barlow,7,goldInk,'POWER'); } };
 
   // ── Sharke HB3500 — faithful Hartke HA3500 silver panel (parody) ────────────
   // Silver control panel: Passive/Active inputs + Active pad, Tube + Solid State
