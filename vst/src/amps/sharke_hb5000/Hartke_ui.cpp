@@ -97,7 +97,7 @@ protected:
         textAlign(ALIGN_LEFT|ALIGN_BOTTOM); fontSize(22*f); fillColor(Color(28,28,32));
         text(bx+16*f,by+bh-10*f,"Sharke",NULL);
         textAlign(ALIGN_RIGHT|ALIGN_BOTTOM); fontSize(10*f); fillColor(Color(70,72,78));
-        text(bx+bw-16*f,by+bh-10*f,"MODEL HB5000  350 WATTS",NULL);
+        text(bx+bw-16*f,by+bh-10*f,"MODEL HB5000  250+250 WATTS",NULL);
     }
     bool onMouse(const MouseEvent& ev) override {
         if(ev.button!=1) return false;
