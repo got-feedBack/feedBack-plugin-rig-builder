@@ -1573,6 +1573,7 @@ const RbMegaChain = (function () {
     let _pending = false;      // a build is scheduled/running and owns the next chain transition
     let _pendingFilename = null;
     let _activeFilename = null;
+    let _lastError = null;
     let _mega = null;          // last fetched /mega_chain response
     let _activeToneKey = null; // tone_key currently un-bypassed
     let _pollHandle = null;    // setInterval handle watching highway tone changes
@@ -1606,9 +1607,11 @@ const RbMegaChain = (function () {
         return {
             active: _active,
             pending: _pending,
+            failed: !!_lastError,
+            error: _lastError && _lastError.reason || '',
             enabled: _settingOn(),
             activeToneKey: _activeToneKey || '',
-            filename: _activeFilename || _pendingFilename || _currentSongFilename(),
+            filename: _activeFilename || _pendingFilename || (_lastError && _lastError.filename) || _currentSongFilename(),
         };
     }
 
@@ -1626,7 +1629,21 @@ const RbMegaChain = (function () {
     function markPending(filename) {
         _pending = true;
         _pendingFilename = filename || _currentSongFilename() || null;
+        _lastError = null;
         rbSelectAudioEffectsRoute('mega-chain-pending');
+        _emitState();
+    }
+
+    function _markFailed(filename, reason) {
+        _pending = false;
+        _pendingFilename = null;
+        _active = false;
+        _activeFilename = null;
+        _activeToneKey = null;
+        _lastError = {
+            filename: filename || _currentSongFilename() || '',
+            reason: rbShortSafeText(reason || 'Rig Builder could not load this song\'s tone chain', 'Rig Builder could not load this song\'s tone chain'),
+        };
         _emitState();
     }
 
@@ -1815,12 +1832,12 @@ const RbMegaChain = (function () {
         const api = _api();
         if (!api) {
             console.warn('[rig_builder mega-chain] buildForSong aborted — no native audio API');
-            _clearPending(filename);
+            _markFailed(filename, 'Native audio engine is not available');
             return false;
         }
         if (!filename) {
             console.warn('[rig_builder mega-chain] buildForSong aborted — no filename');
-            _clearPending(filename);
+            _markFailed(filename, 'No song filename is available');
             return false;
         }
         // Tear down any previous session before starting a fresh one.
@@ -1832,14 +1849,14 @@ const RbMegaChain = (function () {
             resp = await fetch(`${RB_API}/mega_chain/${encodeURIComponent(filename)}`);
         } catch (e) {
             console.warn('[rig_builder mega-chain] fetch failed:', e);
-            _clearPending(filename);
+            _markFailed(filename, e && e.message ? e.message : 'Could not fetch this song\'s tone chain');
             return false;
         }
         if (!resp.ok) {
-            // No mappings for this song, or backend error → silently fall
-            // back to the cooperative path. The bundle will still work.
+            // No mappings for this song, or backend error: keep ownership
+            // visible so the player button can explain why rig tones are off.
             console.warn(`[rig_builder mega-chain] /mega_chain/${filename} → HTTP ${resp.status} (no tone mappings for this song? Run Batch all or open it in per-song tab first to seed mappings)`);
-            _clearPending(filename);
+            _markFailed(filename, resp.status === 404 ? 'No mapped Rig Builder tones were found for this song' : `Rig Builder song chain unavailable: HTTP ${resp.status}`);
             return false;
         }
         const mega = await resp.json();
@@ -1847,7 +1864,7 @@ const RbMegaChain = (function () {
             || !Array.isArray(mega.native_preset.chain)
             || mega.native_preset.chain.length === 0) {
             console.warn('[rig_builder mega-chain] empty chain returned by backend:', mega);
-            _clearPending(filename);
+            _markFailed(filename, 'Rig Builder returned an empty tone chain for this song');
             return false;
         }
         _mega = mega;
@@ -1942,7 +1959,7 @@ const RbMegaChain = (function () {
             console.warn('[rig_builder mega-chain] loadPreset failed, falling back:', e);
             _mega = null;
             _restoreGuitarStem();
-            _clearPending(filename);
+            _markFailed(filename, e && e.message ? e.message : 'Native engine could not load this tone chain');
             return false;
         }
 
@@ -2240,6 +2257,7 @@ const RbMegaChain = (function () {
         _activeToneKey = null;
         _pending = false;
         _pendingFilename = null;
+        if (!silent) _lastError = null;
         _indexToSlotId = [];
         _emitState();
     }
@@ -2272,8 +2290,8 @@ function rbInjectPlayerToneButton() {
     if (!controls) return;
     const state = window.RbMegaChain && typeof window.RbMegaChain.state === 'function'
         ? window.RbMegaChain.state()
-        : { active: false, pending: false, enabled: false };
-    const shouldShow = !!(state.active || state.pending || state.enabled || window.__rbMegaChain === false);
+        : { active: false, pending: false, failed: false, enabled: false };
+    const shouldShow = !!(state.active || state.pending || state.failed || state.enabled || window.__rbMegaChain === false);
     const existing = document.getElementById('btn-rig-tones');
     if (!shouldShow) {
         if (existing) existing.remove();
@@ -2312,11 +2330,16 @@ function rbUpdatePlayerToneButton() {
     if (!btn) return;
     const state = window.RbMegaChain && typeof window.RbMegaChain.state === 'function'
         ? window.RbMegaChain.state()
-        : { active: false, pending: false, enabled: false, activeToneKey: '' };
+        : { active: false, pending: false, failed: false, error: '', enabled: false, activeToneKey: '' };
     if (state.pending) {
         btn.textContent = 'Rig Tones Loading';
         btn.title = 'Rig Builder is loading this song\'s tone chain. Click to cancel and turn tones off for this session.';
         btn.className = 'px-3 py-1.5 bg-amber-700/40 hover:bg-amber-700/60 rounded-lg text-xs text-amber-200 transition';
+    } else if (state.failed) {
+        btn.textContent = 'Rig Tones Failed';
+        const reason = state.error ? ` ${state.error}` : '';
+        btn.title = `Rig Builder could not load this song\'s tone chain.${reason} Click to retry.`;
+        btn.className = 'px-3 py-1.5 bg-red-700/50 hover:bg-red-700/70 rounded-lg text-xs text-red-100 transition';
     } else if (state.active) {
         btn.textContent = 'Rig Tones On';
         const active = state.activeToneKey ? ` Active tone: ${state.activeToneKey}.` : '';

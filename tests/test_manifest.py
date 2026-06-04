@@ -113,6 +113,10 @@ def test_screen_blocks_amp_button_while_mega_chain_active():
     assert "btn.id = 'btn-rig-tones'" in src
     assert "Rig Tones On" in src
     assert "Rig Tones Loading" in src
+    assert "Rig Tones Failed" in src
+    assert "bg-red-700/50" in src
+    assert "function _markFailed" in src
+    assert "state.failed" in src
     assert "Rig Tones Off" in src
     assert "RbMegaChain.markPending(filename)" in src
     assert "window.__rbAmpClickBlockerInstalled" in src
