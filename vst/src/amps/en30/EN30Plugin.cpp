@@ -18,12 +18,18 @@ class EN30Plugin : public Plugin
 
     void applyAll()
     {
-        left.setGain(params[kGain]);     right.setGain(params[kGain]);
-        left.setBass(params[kBass]);     right.setBass(params[kBass]);
-        left.setMid(params[kMid]);       right.setMid(params[kMid]);
-        left.setTreble(params[kTreble]); right.setTreble(params[kTreble]);
-        left.setPres(params[kPres]);     right.setPres(params[kPres]);
-        left.setBright(params[kBright]); right.setBright(params[kBright]);
+        left.setNormalVol(params[kNormalVol]); right.setNormalVol(params[kNormalVol]);
+        left.setTBVol(params[kTBVol]);         right.setTBVol(params[kTBVol]);
+        left.setTreble(params[kTreble]);       right.setTreble(params[kTreble]);
+        left.setBass(params[kBass]);           right.setBass(params[kBass]);
+        left.setRevTone(params[kRevTone]);     right.setRevTone(params[kRevTone]);
+        left.setRevLevel(params[kRevLevel]);   right.setRevLevel(params[kRevLevel]);
+        left.setSpeed(params[kSpeed]);         right.setSpeed(params[kSpeed]);
+        left.setDepth(params[kDepth]);         right.setDepth(params[kDepth]);
+        left.setCut(params[kCut]);             right.setCut(params[kCut]);
+        left.setMaster(params[kMaster]);       right.setMaster(params[kMaster]);
+        left.setInput(params[kInput]);         right.setInput(params[kInput]);
+        left.setBright(params[kBright]);       right.setBright(params[kBright]);
     }
 
 public:

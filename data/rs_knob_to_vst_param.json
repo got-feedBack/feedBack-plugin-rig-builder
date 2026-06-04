@@ -3955,33 +3955,47 @@
   }
  },
  "Amp_EN30": {
-  "boxdc30": {
+  "box dc30": {
+   "_hint": "BOX DC30 = the FULL Vox AC30C2 panel (modelled from Vox_ac30c2.pdf). The AC30 has no Mid or Bright pot, so those RS knobs are mapped to REAL circuit behaviour: Mid -> Normal-channel Volume with the input jumpered to Both (the classic AC30 channel-jumper fills the Vox mid-scoop), and Bright -> the Top Boost brilliance bright-cap. Gain/Treble/Bass/Pres map straight onto the panel.",
    "Gain": {
-    "param": "Gain",
-    "scale": 0.01
-   },
-   "Bass": {
-    "param": "Bass",
-    "scale": 0.01
-   },
-   "Mid": {
-    "param": "Mid",
+    "param": "TB Vol",
     "scale": 0.01,
-    "_hint": "The AC30 Top Boost reference has no Mid pot; this fills or cuts the post-tone-stack body while preserving Rocksmith's Mid knob."
+    "_hint": "RS Gain drives the Top-Boost (Brilliant) channel Volume — the AC30C2's real gain control. Output loudness is held flat across the range by the model's makeup."
    },
    "Treble": {
     "param": "Treble",
-    "scale": 0.01
+    "scale": 0.01,
+    "_hint": "RS Treble maps to the Top-Boost tone-stack Treble (VR3 A1M)."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass maps to the Top-Boost tone-stack Bass (VR4 A1M)."
+   },
+   "Mid": {
+    "param": "Normal Vol",
+    "scale": 0.01,
+    "_hint": "The AC30 has no Mid pot. With the input jumpered to Both (_static Input=0.5), RS Mid turns up the Normal channel — its mid-forward voicing fills the Top Boost mid-scoop, exactly like jumpering the two channels on a real AC30. Loudness stays ~flat (model compensates)."
    },
    "Pres": {
-    "param": "Pres",
+    "param": "Tone Cut",
     "scale": 0.01,
-    "_hint": "Pres maps to the inverse of the AC30 cut/presence behavior: higher Rocksmith Pres means less cut and more EL84/speaker bite."
+    "invert": true,
+    "_hint": "Pres is the inverse of the AC30 Tone Cut (VR9 + C80 4n7): higher RS Pres -> less cut -> more EL84/speaker bite."
    },
    "Bright": {
     "param": "Bright",
     "scale": 1.0,
-    "_hint": "Rocksmith stores Bright as 0/1; EN30 treats values >= 0.5 as the brilliant/top-boost voicing."
+    "_hint": "RS Bright (0/1) sets the Top Boost brilliance bright-cap (preamp treble sparkle, distinct from the power-amp Tone Cut so it doesn't fight Pres)."
+   },
+   "_static": {
+    "Input": 0.5,
+    "Rev Tone": 0.5,
+    "Rev Level": 0.0,
+    "Speed": 0.3,
+    "Depth": 0.0,
+    "Master": 0.72,
+    "_note": "Controls Rocksmith songs don't set, pinned to the reference: Input jumpered to Both so RS Mid (-> Normal Vol) can blend the Normal channel in, reverb level off (tone centred), tremolo off (speed parked), Master at the calibrated ~0.40 RMS loudness reference."
    }
   }
  },
@@ -4020,7 +4034,7 @@
   }
  },
  "Amp_TW22": {
-  "bendersupernova22": {
+  "bender supernova 22": {
    "Gain": {
     "param": "Gain",
     "scale": 0.01,
@@ -4041,7 +4055,7 @@
   }
  },
  "Amp_TW26": {
-  "benderdeluxe": {
+  "bender deluxe": {
    "Gain": {
     "param": "Gain",
     "scale": 0.01,

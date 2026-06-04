@@ -2,22 +2,25 @@
 #define EN30_CORE_H
 
 /*
- * EN30Core - BOX DC30 / Vox AC30 Top Boost component model.
+ * EN30Core - BOX DC30 / Vox AC30C2 (Custom series) component model.
  *
  * This is not a full SPICE/MNA netlist solver. It is a white-box audio model
- * where each audible block is driven by the component values in the local AC30
- * schematics: RC coupling caps, grid leaks, cathode bypass caps, 12AX7/ECC83
- * stages, Top Boost passive network, PI cut network, EL84 cathode bias, GZ34
- * supply sag, output transformer and 2x12 speaker filtering.
+ * where each audible block is driven by the component values in the local
+ * AC30C2 schematic: RC coupling caps, grid leaks, cathode bypass caps, the
+ * three 12AX7 preamp stages (V1/V2/V3), the Top Boost treble/bass network,
+ * the VR9 4n7 Tone Cut, four EL84s with a SILICON (1N4007) supply — so only
+ * gentle sag, not a GZ34 dip — the output transformer and 2x12 speaker.
  *
  * Local references:
- *   amps/vox ac30 (en30)/ac30-60-02-iss5.pdf
+ *   amps/vox ac30 (en30)/Vox_ac30c2.pdf            (THIS model — Custom series)
  *   amps/vox ac30 (en30)/Vox_ac30cc2_ac30cc2x_2005_sm.pdf
- *   amps/vox ac30 (en30)/Vox_ac30c2.pdf
+ *   amps/vox ac30 (en30)/ac30-60-02-iss5.pdf
  *
- * Rocksmith exposes Gain, Bass, Mid, Treble, Pres, Bright. The AC30 has no Mid
- * pot, so Mid controls how much of the Top Boost scoop is filled back in.
- * Pres is inverse Cut: higher Pres means the 4n7/A220K cut network is opened.
+ * The AC30C2 panel is the only source of controls: Normal Vol, TB Vol, Treble,
+ * Bass, Reverb Tone, Reverb Level, Tremolo Speed/Depth, Tone Cut, Master. There
+ * is NO Mid and NO Bright control (the Brilliant channel is inherently bright).
+ * Rocksmith's Gain/Bass/Treble/Pres map onto TB Vol/Bass/Treble/Tone Cut(inv);
+ * RS Mid + Bright have no panel target on a real AC30, so they are dropped.
  */
 
 #include "EN30Params.h"
@@ -470,7 +473,7 @@ public:
     }
 };
 
-class Gz34CathodeBiasedSupply
+class SolidStateSupply
 {
     float sr = 48000.0f;
     float rectifierSag = 0.0f;
@@ -489,10 +492,12 @@ public:
     void setSampleRate(float sampleRate)
     {
         sr = sampleRate > 1000.0f ? sampleRate : 48000.0f;
-        // GZ34 + 22u/47u filter string: quick dip, slower recovery.
-        sagAttack = 1.0f - std::exp(-1.0f / (0.010f * sr));
-        sagRelease = 1.0f - std::exp(-1.0f / (0.180f * sr));
-        // EL84 shared cathode: R71 50R with C47 220u -> about 11 ms.
+        // AC30C2 uses a SILICON bridge (D5-D8 1N4007), not a GZ34 tube rectifier:
+        // the B+ barely sags (low diode resistance), so the dip is small + quick.
+        sagAttack = 1.0f - std::exp(-1.0f / (0.008f * sr));
+        sagRelease = 1.0f - std::exp(-1.0f / (0.140f * sr));
+        // EL84 shared cathode-bias R/C still breathes (R101/R104 3K3, C with the
+        // 100uF/220uF filter caps) -> a gentle dynamic compression, ~11 ms.
         const float tau = 50.0f * 220.0e-6f;
         cathodeCoeff = 1.0f - std::exp(-1.0f / (std::fmax(tau, 0.001f) * sr));
     }
@@ -501,11 +506,10 @@ public:
     {
         rectifierSag += (env - rectifierSag) * (env > rectifierSag ? sagAttack : sagRelease);
         cathodeRise += (env - cathodeRise) * cathodeCoeff;
-        // Gentler sag than a full GZ34 dip: the AC30 breathes/compresses but it
-        // should not collapse the steady-state level (that read as "muffled/too
-        // compressed" when cranked). Keep the dynamic breathing, ease the depth.
-        const float bPlus = 1.0f / (1.0f + rectifierSag * (0.30f + 0.52f * gain + 0.26f * hot));
-        const float cathodeBias = 1.0f / (1.0f + cathodeRise * (0.16f + 0.28f * gain));
+        // Solid-state rectified: only a slight B+ dip (tight, not a saggy GZ34);
+        // most of the "breathing" comes from the EL84 cathode bias instead.
+        const float bPlus = 1.0f / (1.0f + rectifierSag * (0.10f + 0.20f * gain + 0.10f * hot));
+        const float cathodeBias = 1.0f / (1.0f + cathodeRise * (0.14f + 0.24f * gain));
         return bPlus * cathodeBias;
     }
 };
@@ -514,7 +518,7 @@ class El84PowerAmp
 {
     RcHighPass c24c25Coupling100n;
     RcLowPass screenNode;
-    Gz34CathodeBiasedSupply supply;
+    SolidStateSupply supply;
 
 public:
     void reset()
@@ -548,25 +552,99 @@ public:
     }
 };
 
+// --- compact mono spring reverb (3 allpass diffusers + 2 damped combs,
+//     band-limited like a real spring tank) ---
+class SpringReverb
+{
+    float ap0[1024], ap1[1024], ap2[1024];
+    float cb0[3600], cb1[3600];
+    int p0 = 0, p1 = 0, p2 = 0, c0 = 0, c1 = 0;
+    int n0 = 225, n1 = 341, n2 = 441, nc0 = 1617, nc1 = 1991;
+    float damp0 = 0.0f, damp1 = 0.0f;
+    Biquad inHp, inLp;
+    static inline float apStep(float* buf, int& p, int n, float in, float g)
+    {
+        const float bo = buf[p];
+        const float v = in + bo * g;
+        buf[p] = v;
+        if (++p >= n) p = 0;
+        return bo - v * g;
+    }
+public:
+    void setSampleRate(float sr)
+    {
+        const float s = (sr > 1000.0f ? sr : 48000.0f) / 48000.0f;
+        n0 = (int)(225 * s); n1 = (int)(341 * s); n2 = (int)(441 * s);
+        nc0 = (int)(1617 * s); nc1 = (int)(1991 * s);
+        if (nc0 > 3599) nc0 = 3599; if (nc1 > 3599) nc1 = 3599;
+        inHp.setHighPass(sr, 220.0f, 0.7f);     // springs roll off the lows
+        inLp.setLowPass(sr, 3600.0f, 0.7f);     // and the highs ("boing")
+        clear();
+    }
+    void clear()
+    {
+        for (int i = 0; i < 1024; ++i) ap0[i] = ap1[i] = ap2[i] = 0.0f;
+        for (int i = 0; i < 3600; ++i) cb0[i] = cb1[i] = 0.0f;
+        p0 = p1 = p2 = c0 = c1 = 0; damp0 = damp1 = 0.0f;
+    }
+    float process(float x)
+    {
+        x = inLp.process(inHp.process(x));
+        x = apStep(ap0, p0, n0, x, 0.6f);
+        x = apStep(ap1, p1, n1, x, 0.6f);
+        x = apStep(ap2, p2, n2, x, 0.6f);
+        const float o0 = cb0[c0]; damp0 += 0.42f * (o0 - damp0); cb0[c0] = x + damp0 * 0.71f; if (++c0 >= nc0) c0 = 0;
+        const float o1 = cb1[c1]; damp1 += 0.42f * (o1 - damp1); cb1[c1] = x + damp1 * 0.69f; if (++c1 >= nc1) c1 = 0;
+        return (o0 + o1) * 0.5f;
+    }
+};
+
+// --- amplitude tremolo LFO (Speed = rate, Depth = amount) ---
+class Tremolo
+{
+    float phase = 0.0f, inc = 0.0f, sr = 48000.0f;
+public:
+    void setSampleRate(float s) { sr = s > 1000.0f ? s : 48000.0f; }
+    void setSpeed(float speed) { const float hz = 1.8f + 8.0f * clamp01(speed); inc = 2.0f * kPi * hz / sr; }
+    inline float tick(float depth)
+    {
+        phase += inc; if (phase > 2.0f * kPi) phase -= 2.0f * kPi;
+        const float lfo = 0.5f - 0.5f * std::cos(phase);   // 0..1
+        return 1.0f - clamp01(depth) * 0.92f * lfo;
+    }
+    void reset() { phase = 0.0f; }
+};
+
 class EN30Core
 {
     float sampleRate = 48000.0f;
-    float gain = kEN30Def[kGain];
-    float bass = kEN30Def[kBass];
-    float mid = kEN30Def[kMid];
-    float treble = kEN30Def[kTreble];
-    float pres = kEN30Def[kPres];
-    float bright = kEN30Def[kBright];
+    float normalVol = kEN30Def[kNormalVol];
+    float tbVol    = kEN30Def[kTBVol];
+    float treble   = kEN30Def[kTreble];
+    float bass     = kEN30Def[kBass];
+    float revTone  = kEN30Def[kRevTone];   // Reverb Tone  VR8 A100K
+    float revLevel = kEN30Def[kRevLevel];  // Reverb Level VR5 A500K
+    float speed    = kEN30Def[kSpeed];
+    float depth    = kEN30Def[kDepth];
+    float cut_     = kEN30Def[kCut];        // Tone Cut     VR9 B220K  [RS Pres inv]
+    float master   = kEN30Def[kMaster];
+    float input_   = kEN30Def[kInput];      // Normal(0)/Both(0.5)/Top Boost(1)
+    float bright   = kEN30Def[kBright];     // Top Boost bright-cap amount [RS Bright]
 
     RcLowPass inputGridStopper;
-    RcHighPass v1Bright120p;
-    RcHighPass v1Bright470p;
+    RcHighPass v1Bright120p;      // C13 120pF treble-bypass on TB Volume
     TriodeStage v8aFirstTriode;
     CathodeFollower v8bFollower;
     TopBoostToneStack topBoost;
     TriodeStage v7bRecovery;
     CutNetwork cut;
     El84PowerAmp powerAmp;
+    RcHighPass normalHp;          // Normal channel input
+    RcLowPass normalLp;
+    Biquad normalMid;             // Normal channel mid-forward voicing (fills scoop)
+    SpringReverb spring;
+    RcLowPass revToneLp;          // Reverb Tone: tilt/low-pass on the wet return
+    Tremolo trem;
 
     Biquad transformerLow;
     Biquad speakerHp;
@@ -576,21 +654,27 @@ class EN30Core
     Biquad speakerLp;
     DcBlock dcBlock;
 
+    // The AC30C2 has only the real panel pots plus the channel-jumper input and
+    // the Top Boost brilliance cap. Internal derivation:
+    //   gain (brilliant drive) <- TB Vol ;  pres (open/cut) <- 1 - Tone Cut ;
+    //   b (Top Boost brightness) <- Bright bright-cap amount.
     void updateComponentValues()
     {
+        const float gain = tbVol;
+        const float pres = 1.0f - clamp01(cut_);
+        const float mid  = 0.5f;             // Top Boost stack has no mid pot
+        const float b    = clamp01(bright);  // Top Boost brilliance (RS Bright)
         const float g = smoothstep(gain);
         const float hot = smoothstepRange(0.52f, 0.96f, gain);
-        const float b = bright >= 0.5f ? 1.0f : 0.0f;
 
         // Input jack/grid: 68k stopper into 1M grid leak, with the first-stage
         // Miller capacitance setting the ultrasonic rolloff.
         inputGridStopper.setRC(sampleRate, 68000.0f, 55.0e-12f);
 
-        // Brilliant volume treble bypass caps: C8 120pF and C9 470pF.
+        // Brilliant volume treble bypass cap C13 120pF (always present, no switch).
         v1Bright120p.setRC(sampleRate, 470000.0f, 120.0e-12f);
-        v1Bright470p.setRC(sampleRate, 470000.0f, 470.0e-12f);
 
-        // V8a ECC83: 100k plate, R9 1k5 with C7 22u bypass. The first coupling
+        // V1 12AX7: 100k plate, 1k5 cathode with 22u bypass. The first coupling
         // cap is effectively direct from input for audio, so use a sub-audio HP.
         v8aFirstTriode.set(sampleRate,
                            1.0e-6f, 1000000.0f,
@@ -629,14 +713,31 @@ class EN30Core
         // Open the top so the AC30 chime is there and Treble/Pres/Bright land
         // BELOW the rolloff (they were acting above it -> "they do nothing").
         speakerLp.setLowPass(sampleRate, 6600.0f + 3400.0f * pres + 1100.0f * b, 0.62f);
+
+        // Normal channel: darker than Top Boost (no treble network) and
+        // mid-forward — jumpering it in (Input=Both, Normal Vol up = RS Mid)
+        // fills the Top Boost mid-scoop. Band-limit + a broad ~640 Hz mid hump.
+        normalHp.setHz(sampleRate, 70.0f);
+        normalLp.setHz(sampleRate, 5200.0f);
+        normalMid.setPeaking(sampleRate, 640.0f, 0.80f, 4.5f);
+
+        // Reverb Tone (VR8 A100K): a tilt/low-pass on the spring return.
+        // Dark at 0 (~1.4 kHz) opening up past the spring's own 3.6 kHz roll-off.
+        revToneLp.setHz(sampleRate, 1400.0f + 6000.0f * clamp01(revTone));
+        trem.setSpeed(speed);
     }
 
 public:
     void reset()
     {
         inputGridStopper.reset();
+        normalHp.reset();
+        normalLp.reset();
+        normalMid.reset();
+        spring.clear();
+        revToneLp.reset();
+        trem.reset();
         v1Bright120p.reset();
-        v1Bright470p.reset();
         v8aFirstTriode.reset();
         v8bFollower.reset();
         topBoost.reset();
@@ -656,47 +757,77 @@ public:
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
+        spring.setSampleRate(sampleRate);
+        trem.setSampleRate(sampleRate);
         reset();
     }
 
-    void setGain(float v)   { gain = clamp01(v);   updateComponentValues(); }
-    void setBass(float v)   { bass = clamp01(v);   updateComponentValues(); }
-    void setMid(float v)    { mid = clamp01(v);    updateComponentValues(); }
-    void setTreble(float v) { treble = clamp01(v); updateComponentValues(); }
-    void setPres(float v)   { pres = clamp01(v);   updateComponentValues(); }
-    void setBright(float v) { bright = clamp01(v); updateComponentValues(); }
+    void setNormalVol(float v){ normalVol = clamp01(v); }
+    void setTBVol(float v)    { tbVol = clamp01(v);    updateComponentValues(); }
+    void setTreble(float v)   { treble = clamp01(v);   updateComponentValues(); }
+    void setBass(float v)     { bass = clamp01(v);     updateComponentValues(); }
+    void setRevTone(float v)  { revTone = clamp01(v);  updateComponentValues(); }
+    void setRevLevel(float v) { revLevel = clamp01(v); }
+    void setSpeed(float v)    { speed = clamp01(v);    updateComponentValues(); }
+    void setDepth(float v)    { depth = clamp01(v); }
+    void setCut(float v)      { cut_ = clamp01(v);     updateComponentValues(); }
+    void setMaster(float v)   { master = clamp01(v); }
+    void setInput(float v)    { input_ = clamp01(v); }
+    void setBright(float v)   { bright = clamp01(v);   updateComponentValues(); }
 
     float process(float in)
     {
-        const float g = smoothstep(gain);
-        const float hot = smoothstepRange(0.52f, 0.96f, gain);
-        const float b = bright >= 0.5f ? 1.0f : 0.0f;
+        const float b = clamp01(bright);
+        // Input cable selector: 0 = Normal jack, 0.5 = Both (jumpered), 1 = Top
+        // Boost jack. Gate each channel's output (both stages always run so their
+        // filter states stay live and switching is click-free).
+        const float inp = clamp01(input_);
+        const float tbG   = clamp01(inp * 2.0f);          // on at Both + Top Boost
+        const float nGate = clamp01((1.0f - inp) * 2.0f); // on at Normal + Both
+
+        // Top Boost channel drive comes ONLY from its own TB Volume (RS Gain).
+        const float gTb   = smoothstep(tbVol);
+        const float hotTb = smoothstepRange(0.52f, 0.96f, tbVol);
 
         float x = inputGridStopper.process(in);
 
-        // V8a first gain stage before the volume control.
-        float v1 = v8aFirstTriode.process(x, 0.55f + 0.45f * hot, 1.0f);
+        // --- Brilliant (Top Boost) channel — the Rocksmith path ---
+        // V1 -> TB Volume (C13 120pF bright bypass, scaled by Bright) -> cathode
+        // follower -> Top Boost treble/bass stack -> V3 recovery.
+        float v1 = v8aFirstTriode.process(x, 0.55f + 0.45f * hotTb, 1.0f);
+        const float volume = 0.16f + 1.62f * gTb + 0.88f * hotTb;   // TB Volume
+        const float brightBleed = (1.0f - 0.42f * gTb) * (0.05f + 0.20f * b) * v1Bright120p.process(v1);
+        float tbOut = v1 * volume + brightBleed;
+        tbOut = v8bFollower.process(tbOut);
+        tbOut = topBoost.process(tbOut);
+        tbOut = v7bRecovery.process(tbOut, 0.75f + 0.65f * gTb + 0.45f * hotTb, 1.0f);
 
-        // Brilliant channel volume and bright caps. The 120p/470p caps bypass
-        // the volume attenuation, so they matter most at lower Gain settings.
-        const float volume = 0.16f + 1.62f * g + 0.88f * hot;
-        const float brightBleed = b * (1.0f - 0.42f * g) *
-            (0.11f * v1Bright120p.process(v1) + 0.15f * v1Bright470p.process(v1));
-        float y = v1 * volume + brightBleed;
+        // --- Normal channel — darker, mid-forward. Jumpered in by Input=Both and
+        //     its own Normal Vol (RS Mid rides this to fill the Top Boost scoop). ---
+        float nrm = normalMid.process(normalLp.process(normalHp.process(x)));
+        nrm = softClip(nrm * (1.4f + 3.0f * normalVol));
+        nrm *= (0.62f + 1.25f * normalVol);
 
-        // Cathode follower drives the low-impedance Top Boost network.
-        y = v8bFollower.process(y);
-        y = topBoost.process(y);
+        float y = tbOut * tbG + nrm * nGate;
 
-        // Recovery triode brings back the tone-stack insertion loss.
-        y = v7bRecovery.process(y, 0.75f + 0.65f * g + 0.45f * hot, 1.0f);
+        // Effective drive into the power amp + makeup follows the ACTIVE channel,
+        // so in Normal mode the TB Volume has no effect: Normal(normalVol) ->
+        // Both/Top Boost(tbVol). (Top Boost dominates the drive once jumpered.)
+        const float effGain = inp < 0.5f
+            ? normalVol + (tbVol - normalVol) * (inp * 2.0f)
+            : tbVol;
+        const float g   = smoothstep(effGain);
+        const float hot = smoothstepRange(0.52f, 0.96f, effGain);
 
-        // Long-tail PI/cut and EL84 cathode-biased output stage.
+        // --- Tone Cut (VR9 + C80 4n7) + Master volume into the power amp ---
         y = cut.process(y);
-        y = powerAmp.process(y, gain, hot, bass, treble);
+        y *= (0.85f + 0.30f * master);
+
+        // --- 4x EL84 power amp, solid-state rectified (tight, only gentle sag) ---
+        y = powerAmp.process(y, effGain, hot, bass, treble);
         y = dcBlock.process(y);
 
-        // Output transformer and 2x12 Celestion-style cabinet.
+        // --- output transformer + 2x12 Celestion ---
         y = transformerLow.process(y);
         y = speakerHp.process(y);
         y = speakerBody.process(y);
@@ -704,18 +835,27 @@ public:
         y = speakerFizzNotch.process(y);
         y = speakerLp.process(y);
 
+        // --- spring reverb (parallel): VR5 Level, VR8 Tone (tilt on the wet) ---
+        if (revLevel > 0.001f)
+        {
+            const float wet = revToneLp.process(spring.process(y));
+            y += wet * (0.95f * revLevel);
+        }
+
+        // --- tremolo (amplitude LFO): VR7 Speed, VR6 Depth ---
+        if (depth > 0.001f)
+            y *= trem.tick(depth);
+
+        // --- output makeup: holds Rocksmith loudness ~constant vs TB Vol and vs
+        //     the jumpered Normal channel (RS Mid), so the level stays at the
+        //     reference while the tone/mids shift. ---
+        const float normalBlend = nGate * normalVol;   // how much Normal is summed in
         const float toneEnergy = 1.0f
             + 0.013f * std::fabs((bass - 0.5f) * 20.0f)
-            + 0.012f * std::fabs((mid - 0.5f) * 22.0f)
-            + 0.013f * std::fabs((treble - 0.5f) * 22.0f);
-        // Output makeup (NOT a circuit element). The EL84 saturation + GZ34 sag
-        // deliberately lower the *dynamic* level as Gain rises — that compression
-        // is part of the class-A AC30 feel and is kept. But the steady-state
-        // loudness must stay roughly constant across the Gain sweep so high-gain
-        // presets don't drop ~10 dB in the mix. This makeup rises with Gain to
-        // counter the saturation/sag RMS loss while preserving the sag dynamics.
+            + 0.013f * std::fabs((treble - 0.5f) * 22.0f)
+            + 0.12f * normalBlend;
         const float makeup = 1.0f + 0.74f * g + 0.42f * hot;
-        const float level = (0.82f * makeup) / toneEnergy;
+        const float level = (0.66f * makeup * (0.55f + 0.62f * master)) / toneEnergy;
         return softClip(y * level) * 0.98f;
     }
 };
