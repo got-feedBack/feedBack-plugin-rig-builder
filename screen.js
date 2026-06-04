@@ -1823,14 +1823,17 @@ const RbMegaChain = (function () {
                 if (typeof api.getChainState === 'function') {
                     const loaded = await api.getChainState();
                     if (Array.isArray(loaded)) {
-                        for (let i = 0; i < loaded.length; i++) {
-                            const s = loaded[i];
+                        const expected = mega.native_preset.chain.length;
+                        const relevant = loaded.length > expected ? loaded.slice(loaded.length - expected) : loaded;
+                        for (let i = 0; i < relevant.length; i++) {
+                            const s = relevant[i];
                             const id = (s && (s.id != null ? s.id : s.slotId != null ? s.slotId : i));
                             _indexToSlotId[i] = id;
                         }
-                        const expected = mega.native_preset.chain.length;
                         const got = _indexToSlotId.length;
-                        if (got !== expected) {
+                        if (loaded.length > expected) {
+                            console.warn(`[rig_builder mega-chain] engine reported ${loaded.length} total slots after loading ${expected}; using the most recent ${expected} slot IDs for this chain.`);
+                        } else if (got < expected) {
                             // The engine couldn't load every stage we sent. Likely a
                             // missing file or a malformed plugin. Mark the unreachable
                             // chain indices as null so _applyActiveTone skips them
@@ -2178,6 +2181,10 @@ const RbMegaChain = (function () {
         }
     }).catch(() => {});
 
+    let _pendingBuildTimer = null;
+    let _pendingBuildFile = null;
+    let _buildingFile = null;
+
     function triggerBuild(filename, source) {
         if (!RbMegaChain.settingOn()) {
             console.log('[rig_builder mega-chain] skip — setting off');
@@ -2187,15 +2194,40 @@ const RbMegaChain = (function () {
             console.log('[rig_builder mega-chain] skip — no filename from', source);
             return;
         }
+        if (filename === _pendingBuildFile && _pendingBuildTimer) {
+            console.log(`[rig_builder mega-chain] duplicate ${source} for ${filename} — build already scheduled`);
+            return;
+        }
+        if (filename === _buildingFile) {
+            console.log(`[rig_builder mega-chain] duplicate ${source} for ${filename} — build already running`);
+            return;
+        }
+        if (filename === _lastSeenFile && RbMegaChain.isActive()) {
+            console.log(`[rig_builder mega-chain] duplicate ${source} for ${filename} — chain already active`);
+            return;
+        }
+        if (_pendingBuildTimer) {
+            clearTimeout(_pendingBuildTimer);
+            _pendingBuildTimer = null;
+        }
+        _lastSeenFile = filename;
+        _pendingBuildFile = filename;
         console.log(`[rig_builder mega-chain] song detected via ${source}: ${filename} — scheduling buildForSong in 600 ms`);
         // Give the bundle ~600 ms to inject its #btn-nam etc. so our
         // AMP-off click hits a real button. Also lets the highway
         // stabilise so resolveActiveToneKey reads a sensible value.
-        setTimeout(() => {
+        _pendingBuildTimer = setTimeout(() => {
+            _pendingBuildTimer = null;
+            if (_pendingBuildFile !== filename) return;
+            _buildingFile = filename;
             RbMegaChain.buildForSong(filename).then(ok => {
                 if (!ok) console.warn(`[rig_builder mega-chain] buildForSong returned false for "${filename}" (no mappings? bundle interfered?)`);
             }).catch(e =>
-                console.warn('[rig_builder mega-chain] buildForSong threw:', e));
+                console.warn('[rig_builder mega-chain] buildForSong threw:', e))
+                .finally(() => {
+                    if (_buildingFile === filename) _buildingFile = null;
+                    if (!RbMegaChain.isActive() && _pendingBuildFile === filename) _pendingBuildFile = null;
+                });
         }, 600);
     }
 
@@ -2219,18 +2251,22 @@ const RbMegaChain = (function () {
                     console.log('[rig_builder mega-chain] playback:ready observed but no local filename is available; waiting for legacy/currentSong fallback');
                     return;
                 }
-                if (target.filename === _lastSeenFile) return;
-                _lastSeenFile = target.filename;
                 triggerBuild(target.filename, target.settingsKey ? 'playback:ready event (settingsKey present)' : 'playback:ready event');
             });
             window.slopsmith.on('playback:stopped', () => {
                 _lastSeenFile = null;
+                _pendingBuildFile = null;
+                _buildingFile = null;
+                if (_pendingBuildTimer) { clearTimeout(_pendingBuildTimer); _pendingBuildTimer = null; }
                 window.__rbPlaybackSettingsKey = '';
                 window.__rbPlaybackSettingsFilename = '';
                 if (RbMegaChain.isActive()) RbMegaChain.teardown(false).catch(() => {});
             });
             window.slopsmith.on('playback:ended', () => {
                 _lastSeenFile = null;
+                _pendingBuildFile = null;
+                _buildingFile = null;
+                if (_pendingBuildTimer) { clearTimeout(_pendingBuildTimer); _pendingBuildTimer = null; }
                 window.__rbPlaybackSettingsKey = '';
                 window.__rbPlaybackSettingsFilename = '';
                 if (RbMegaChain.isActive()) RbMegaChain.teardown(false).catch(() => {});
@@ -2247,18 +2283,19 @@ const RbMegaChain = (function () {
             // giving up — same info, different source.
             const filename = (info && info.filename)
                 || (window.slopsmith.currentSong && window.slopsmith.currentSong.filename);
-            _lastSeenFile = filename;
             triggerBuild(filename, info && info.filename ? 'song:loaded event' : 'song:loaded event (fallback to currentSong)');
         });
         window.slopsmith.on('song:unloaded', () => {
             _lastSeenFile = null;
+            _pendingBuildFile = null;
+            _buildingFile = null;
+            if (_pendingBuildTimer) { clearTimeout(_pendingBuildTimer); _pendingBuildTimer = null; }
             if (RbMegaChain.isActive()) RbMegaChain.teardown(false).catch(() => {});
         });
         // Catch up on a song that was already loaded when we hooked in:
         // the event has already fired and EventEmitter won't replay it.
         const cur = window.slopsmith.currentSong;
         if (cur && cur.filename && cur.filename !== _lastSeenFile) {
-            _lastSeenFile = cur.filename;
             triggerBuild(cur.filename, 'currentSong catch-up');
         }
         // Belt-and-suspenders: poll every 2 s for currentSong changes the
@@ -2270,7 +2307,6 @@ const RbMegaChain = (function () {
             const c = window.slopsmith && window.slopsmith.currentSong;
             const f = c && c.filename;
             if (!f || f === _lastSeenFile) return;
-            _lastSeenFile = f;
             triggerBuild(f, 'currentSong poll');
         }, 2000);
     }

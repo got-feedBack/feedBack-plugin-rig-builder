@@ -84,6 +84,27 @@ def test_screen_registers_executable_audio_effects_provider():
     assert "rbEnsureCapabilitiesRegistered(0)" in src
 
 
+def test_screen_coalesces_mega_chain_lifecycle_builds():
+    src = (ROOT / "screen.js").read_text()
+
+    assert "let _pendingBuildTimer = null" in src
+    assert "let _pendingBuildFile = null" in src
+    assert "let _buildingFile = null" in src
+    assert "build already scheduled" in src
+    assert "build already running" in src
+    assert "chain already active" in src
+    assert "_pendingBuildFile !== filename" in src
+
+
+def test_screen_handles_excess_engine_slots_without_negative_mismatch():
+    src = (ROOT / "screen.js").read_text()
+
+    assert "loaded.length > expected ? loaded.slice(loaded.length - expected) : loaded" in src
+    assert "engine reported ${loaded.length} total slots" in src
+    assert "} else if (got < expected)" in src
+    assert "const skipped = expected - got" in src
+
+
 def test_routes_return_mirrored_preset_ids_for_mapping_refs():
     src = (ROOT / "routes.py").read_text()
 
