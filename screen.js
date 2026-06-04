@@ -885,6 +885,7 @@ function rbHandledAudioEffectsResult(result, fallbackReason) {
 }
 
 async function rbLoadChainPlanWithHost(payload, options) {
+    rbRegisterAudioEffectsCapability();
     const audioEffects = rbAudioEffectsApi();
     if (!audioEffects || typeof audioEffects.loadPlan !== 'function') return null;
     const opts = options || {};
@@ -1166,6 +1167,16 @@ function rbRegisterCapabilities() {
         console.warn('[rig_builder] capability registration failed:', e);
     }
 }
+
+function rbEnsureCapabilitiesRegistered(attempt) {
+    const n = Number(attempt || 0);
+    rbRegisterCapabilities();
+    const audioEffects = rbAudioEffectsApi();
+    if (audioEffects && typeof audioEffects.registerProvider === 'function') return;
+    if (n < 20) setTimeout(() => rbEnsureCapabilitiesRegistered(n + 1), 250);
+}
+
+rbEnsureCapabilitiesRegistered(0);
 
 function rbRecordAudioEffectsBridge(reason) {
     const candidates = rbCandidateDomainsApi();

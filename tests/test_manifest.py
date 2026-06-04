@@ -57,6 +57,7 @@ def test_screen_registers_executable_audio_effects_provider():
     assert "assets[assetRef] = asset" in src
     assert "asset.stateBase64 = stage.state" in src
     assert "rbLoadChainPlanWithHost" in src
+    assert "rbRegisterAudioEffectsCapability();\n    const audioEffects = rbAudioEffectsApi();" in src
     assert "loadPlan" in src
     assert "rbLoadNativePresetPayload" in src
     assert "rbUpsertAudioEffectsMapping" in src
@@ -79,6 +80,8 @@ def test_screen_registers_executable_audio_effects_provider():
     assert "window.__rbPlaybackSettingsKey = ''" in src
     assert "window.__rbPlaybackSettingsFilename" in src
     assert "slopsmithDesktop.audioEffects" not in src
+    assert "function rbEnsureCapabilitiesRegistered" in src
+    assert "rbEnsureCapabilitiesRegistered(0)" in src
 
 
 def test_routes_return_mirrored_preset_ids_for_mapping_refs():
