@@ -3345,17 +3345,18 @@
       c.fillStyle=rgb(236,118,24); c.fillRect(0,0,W,H);                 // orange tolex
       rr(c,.035*W,.07*H,.930*W,.86*H,6); c.fillStyle=rgb(238,234,222); c.fill();   // cream panel
       rr(c,.035*W,.07*H,.930*W,.86*H,6); c.strokeStyle=rgb(150,146,134); c.lineWidth=1.4; c.stroke();
-      textC(d,.085*W,.235*H,F.anton,40,rgb(24,22,20),'CITRUS','left');
-      textC(d,.560*W,.235*H,F.anton,22,rgb(40,38,34),'AD200','left');
-      rr(c,.770*W,.13*H,.085*W,.24*H,3); c.fillStyle=rgb(228,224,212); c.fill();
-      rr(c,.770*W,.13*H,.085*W,.24*H,3); c.strokeStyle=rgb(150,40,40); c.lineWidth=1.2; c.stroke();
+      textC(d,.070*W,.255*H,F.graffiti,54,rgb(24,22,20),'Citrus','left');
+      textC(d,.620*W,.185*H,F.anton,26,rgb(40,38,34),'AD200','left');
+      textC(d,.620*W,.315*H,F.barlow,13,rgb(58,54,48),'BASS','left');
+      textC(d,.620*W,.415*H,F.barlow,13,rgb(58,54,48),'MK II','left');
       const lab=(cx,y,sz,t,col)=>textC(d,cx*W,y*H,F.barlow,sz,col||rgb(232,233,236),t);
-      rr(c,.06*W,.55*H,.88*W,.36*H,5); c.fillStyle=rgb(18,18,20); c.fill();           // black strip
-      rr(c,.355*W,.575*H,.245*W,.31*H,4); c.fillStyle=rgb(232,112,22); c.fill();      // orange tone section
+      rr(c,.05*W,.52*H,.90*W,.40*H,5); c.fillStyle=rgb(18,18,20); c.fill();           // black strip
+      rr(c,.350*W,.55*H,.255*W,.34*H,4); c.fillStyle=rgb(232,112,22); c.fill();       // orange tone section
       const rocker=(x)=>{ rr(c,x*W-8,.70*H-14,16,28,2); c.fillStyle=rgb(40,40,44); c.fill(); rr(c,x*W-8,.70*H-14,16,28,2); c.strokeStyle=rgb(90,92,96); c.lineWidth=1; c.stroke(); };
       rocker(.105); rocker(.160); lab(.105,.89,6.5,'POWER',rgb(206,150,40)); lab(.160,.89,6.5,'STANDBY',rgb(206,150,40));
       ledDot(d,.078*W,.70*H,true,236,140,30);
-      [[.230,'GAIN'],[.395,'BASS'],[.475,'MIDDLE'],[.555,'TREBLE'],[.690,'MASTER']].forEach(k=>lab(k[0],.83,8.5,k[1]));
+      [[.230,'GAIN'],[.690,'MASTER']].forEach(k=>lab(k[0],.86,11.5,k[1]));
+      [[.395,'BASS'],[.475,'MIDDLE'],[.555,'TREBLE']].forEach(k=>lab(k[0],.86,9,k[1]));
       const jack=(x,y)=>{ c.beginPath();c.arc(x*W,y*H,8,0,7);c.fillStyle=rgb(16,16,18);c.fill();c.strokeStyle=rgb(120,122,126);c.lineWidth=1.4;c.stroke(); };
       jack(.825,.62); jack(.825,.80);
       const act=(vals[5]||0)>0.5;
