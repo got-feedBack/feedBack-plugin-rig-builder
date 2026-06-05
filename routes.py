@@ -638,11 +638,11 @@ def _migrate_assign_bundled_primary_once() -> None:
         ("__rig_builder_master_pre__",),
     ).fetchone()
     marker = json.loads(marker_row[0] or "{}") if marker_row else {}
-    if marker.get("bundled_primary_assigned_v7"):
+    if marker.get("bundled_primary_assigned_v8"):
         return
     if _db_path:
         try:
-            shutil.copy2(_db_path, f"{_db_path}.pre-bundled-primary-v7.bak")
+            shutil.copy2(_db_path, f"{_db_path}.pre-bundled-primary-v8.bak")
         except OSError:
             log.exception("pre-bundled-primary backup failed; skipping")
             return
@@ -683,7 +683,7 @@ def _migrate_assign_bundled_primary_once() -> None:
         changed += 1
     mpid = _get_master_preset_id("pre")
     if mpid is not None:
-        marker["bundled_primary_assigned_v7"] = True
+        marker["bundled_primary_assigned_v8"] = True
         conn.execute("UPDATE presets SET settings_json = ? WHERE id = ?",
                      (json.dumps(marker), mpid))
     conn.commit()
