@@ -3435,38 +3435,44 @@
   // Dustup CDN — Ashdown ABM EVO (parody). Blue-grey face, two VU meters; Input,
   // Bass/Middle/Treble with a 6-band graphic EQ between them, Valve Drive/Sub/
   // Comp, Output, and Active/Shape/EQ/Sub/Comp switches. ids 0..18.
+  // Dustup CDN — Ashdown ABM EVO (parody). Clean zones: a single top row of 8
+  // knobs (Input/Bass/Middle/Treble/Valve Drive/Sub/Comp/Output), a centered
+  // 6-band graphic-EQ fader bank below, switches in the bottom corners. ids 0..18.
   P.dustupcdn = { w:1100, h:280,
     knobs:[
-      {id:0,cx:.065,cy:.40,r:.028,style:'pointer',cap:[18,18,20]},
-      {id:1,cx:.230,cy:.36,r:.028,style:'pointer',cap:[18,18,20]},
-      {id:2,cx:.460,cy:.36,r:.028,style:'pointer',cap:[18,18,20]},
-      {id:3,cx:.640,cy:.36,r:.028,style:'pointer',cap:[18,18,20]},
-      {id:4,cx:.300,cy:.72,r:.026,style:'pointer',cap:[18,18,20]},
-      {id:5,cx:.500,cy:.72,r:.026,style:'pointer',cap:[18,18,20]},
-      {id:6,cx:.640,cy:.72,r:.026,style:'pointer',cap:[18,18,20]},
-      {id:7,cx:.915,cy:.40,r:.028,style:'pointer',cap:[18,18,20]}],
-    faders:[{id:8,cx:.290,y0:.20,y1:.50},{id:9,cx:.330,y0:.20,y1:.50},{id:10,cx:.370,y0:.20,y1:.50},
-      {id:11,cx:.510,y0:.20,y1:.50},{id:12,cx:.550,y0:.20,y1:.50},{id:13,cx:.590,y0:.20,y1:.50}],
-    switches:[{id:14,cx:.070,cy:.72,hs:.009,dark:true},{id:15,cx:.122,cy:.72,hs:.009,dark:true},
-      {id:16,cx:.430,cy:.86,hs:.009,dark:true},{id:17,cx:.560,cy:.86,hs:.009,dark:true},{id:18,cx:.700,cy:.86,hs:.009,dark:true}],
+      {id:0,cx:.075,cy:.30,r:.027,style:'pointer',cap:[18,18,20]},
+      {id:1,cx:.199,cy:.30,r:.027,style:'pointer',cap:[18,18,20]},
+      {id:2,cx:.323,cy:.30,r:.027,style:'pointer',cap:[18,18,20]},
+      {id:3,cx:.447,cy:.30,r:.027,style:'pointer',cap:[18,18,20]},
+      {id:4,cx:.571,cy:.30,r:.027,style:'pointer',cap:[18,18,20]},
+      {id:5,cx:.695,cy:.30,r:.027,style:'pointer',cap:[18,18,20]},
+      {id:6,cx:.819,cy:.30,r:.027,style:'pointer',cap:[18,18,20]},
+      {id:7,cx:.943,cy:.30,r:.027,style:'pointer',cap:[18,18,20]}],
+    faders:[{id:8,cx:.375,y0:.58,y1:.82},{id:9,cx:.435,y0:.58,y1:.82},{id:10,cx:.495,y0:.58,y1:.82},
+      {id:11,cx:.555,y0:.58,y1:.82},{id:12,cx:.615,y0:.58,y1:.82},{id:13,cx:.675,y0:.58,y1:.82}],
+    switches:[{id:14,cx:.075,cy:.74,hs:.010,dark:true},{id:15,cx:.180,cy:.74,hs:.010,dark:true},
+      {id:16,cx:.290,cy:.66,hs:.010,dark:true},{id:17,cx:.790,cy:.74,hs:.010,dark:true},{id:18,cx:.890,cy:.74,hs:.010,dark:true}],
     names:['Input','Bass','Middle','Treble','Valve Drive','Sub Harmonics','Comp','Output','100 Hz','180 Hz','340 Hz','1.3 kHz','3.6 kHz','5 kHz','Active','Shape','EQ In','Sub','Compressor'],
     tick:rgb(90,100,110), ptr:rgb(244,245,248),
-    draw(d,vals){ const {ctx:c,W,H}=d; const ink=rgb(30,38,46), dim=rgb(50,60,70);
+    draw(d,vals){ const {ctx:c,W,H}=d; const ink=rgb(28,36,44), dim=rgb(64,76,86);
       box(d, 28,28,30, false);
       const PL=.012*W,PT=.04*H,PW=.976*W,PH=.92*H;
-      const pg=c.createLinearGradient(0,PT,0,PT+PH); pg.addColorStop(0,rgb(190,206,214)); pg.addColorStop(1,rgb(150,166,178));
+      const pg=c.createLinearGradient(0,PT,0,PT+PH); pg.addColorStop(0,rgb(192,208,216)); pg.addColorStop(1,rgb(150,166,178));
       rr(c,PL,PT,PW,PH,7); c.fillStyle=pg; c.fill(); rr(c,PL,PT,PW,PH,7); c.strokeStyle=rgb(90,100,110); c.lineWidth=1.5; c.stroke();
       const lab=(cx,y,sz,t,col)=>textC(d,cx*W,y*H,F.barlow,sz,col||ink,t);
-      // VU meters
-      const vu=(cx)=>{ const x=cx*W-29, y=.36*H-17; rr(c,x,y,58,34,3); c.fillStyle=rgb(238,206,90); c.fill(); rr(c,x,y,58,34,3); c.strokeStyle=rgb(20,20,22); c.lineWidth=1.4; c.stroke();
-        c.strokeStyle=rgb(40,40,44); c.lineWidth=1; c.beginPath(); c.moveTo(x+29,y+30); c.lineTo(x+42,y+12); c.stroke();
-        c.strokeStyle=rgb(176,32,30); c.beginPath(); c.moveTo(x+42,y+12); c.lineTo(x+51,y+10); c.stroke(); };
-      vu(.140); vu(.840);
-      textC(d,.300*W,.15*H,F.barlow,16,ink,'Dustup'); lab(.300,.29,10,'CDN  EVO',dim);
-      c.beginPath(); c.arc(.020*W,.40*H,8,0,7); c.fillStyle=rgb(16,16,18); c.fill(); c.strokeStyle=rgb(80,90,100); c.lineWidth=1.4; c.stroke();
-      [[.065,.40,'INPUT'],[.230,.36,'BASS'],[.460,.36,'MIDDLE'],[.640,.36,'TREBLE'],[.300,.72,'VALVE DRIVE'],[.500,.72,'SUB'],[.640,.72,'COMP'],[.915,.40,'OUTPUT']].forEach(k=>lab(k[0],k[1]+.085,8,k[2]));
-      [['100',.290],['180',.330],['340',.370],['1.3k',.510],['3.6k',.550],['5k',.590]].forEach(b=>lab(b[1],.535,6.5,b[0],dim));
-      lab(.070,.80,6,'ACTIVE'); lab(.122,.80,6,'SHAPE'); lab(.430,.94,6,'EQ'); lab(.560,.94,6,'SUB'); lab(.700,.94,6,'COMP'); } };
+      // wordmark (top-left) + VU meter (top-right), both clear of the knob row
+      textC(d,.075*W,.105*H,F.barlow,20,ink,'Dustup','left'); textC(d,.075*W,.165*H,F.barlow,10,dim,'CDN  EVO','left');
+      { const x=.905*W, y=.055*H, w=66, h=30; rr(c,x,y,w,h,3); c.fillStyle=rgb(238,210,96); c.fill(); rr(c,x,y,w,h,3); c.strokeStyle=rgb(20,20,22); c.lineWidth=1.3; c.stroke();
+        c.strokeStyle=rgb(40,40,44); c.lineWidth=1; c.beginPath(); c.moveTo(x+w*0.5,y+h-3); c.lineTo(x+w*0.72,y+8); c.stroke();
+        c.strokeStyle=rgb(176,32,30); c.beginPath(); c.moveTo(x+w*0.72,y+8); c.lineTo(x+w-7,y+6); c.stroke(); }
+      // knob labels (one clear line under each)
+      [[.075,'INPUT'],[.199,'BASS'],[.323,'MIDDLE'],[.447,'TREBLE'],[.571,'VALVE DRIVE'],[.695,'SUB HARM'],[.819,'COMP'],[.943,'OUTPUT']]
+        .forEach(k=>lab(k[0],.445,8.5,k[1]));
+      // graphic-EQ section: title above the bank, freq labels below
+      lab(.525,.515,8,'GRAPHIC EQ',dim);
+      [['100',.375],['180',.435],['340',.495],['1.3k',.555],['3.6k',.615],['5k',.675]].forEach(b=>lab(b[1],.875,7.5,b[0],dim));
+      // switch labels
+      lab(.075,.835,7,'ACTIVE'); lab(.180,.835,7,'SHAPE'); lab(.290,.745,7,'EQ IN'); lab(.790,.835,7,'SUB'); lab(.890,.835,7,'COMP'); } };
 
   // Electric B600F — Acoustic B600H (parody). Black face + cyan accent: Passive/
   // Active + Mute, PREAMP (Gain/Volume), NOTCH (Freq+On), 6-band EQ (40/120/350/
