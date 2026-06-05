@@ -3468,6 +3468,37 @@
       [['100',.290],['180',.330],['340',.370],['1.3k',.510],['3.6k',.550],['5k',.590]].forEach(b=>lab(b[1],.535,6.5,b[0],dim));
       lab(.070,.80,6,'ACTIVE'); lab(.122,.80,6,'SHAPE'); lab(.430,.94,6,'EQ'); lab(.560,.94,6,'SUB'); lab(.700,.94,6,'COMP'); } };
 
+  // Electric B600F — Acoustic B600H (parody). Black face + cyan accent: Passive/
+  // Active + Mute, PREAMP (Gain/Volume), NOTCH (Freq+On), 6-band EQ (40/120/350/
+  // 800/2k/5k), 'electric' / B600F wordmarks. ids 0..11.
+  P.electricb600f = { w:1100, h:200,
+    knobs:[
+      {id:0,cx:.175,cy:.50,r:.026,style:'pointer',cap:[18,18,20]},
+      {id:1,cx:.235,cy:.50,r:.026,style:'pointer',cap:[18,18,20]},
+      {id:2,cx:.305,cy:.50,r:.026,style:'pointer',cap:[18,18,20]},
+      {id:3,cx:.420,cy:.50,r:.026,style:'pointer',cap:[18,18,20]},
+      {id:4,cx:.480,cy:.50,r:.026,style:'pointer',cap:[18,18,20]},
+      {id:5,cx:.540,cy:.50,r:.026,style:'pointer',cap:[18,18,20]},
+      {id:6,cx:.600,cy:.50,r:.026,style:'pointer',cap:[18,18,20]},
+      {id:7,cx:.660,cy:.50,r:.026,style:'pointer',cap:[18,18,20]},
+      {id:8,cx:.720,cy:.50,r:.026,style:'pointer',cap:[18,18,20]}],
+    switches:[{id:9,cx:.110,cy:.46,hs:.009,dark:true},{id:10,cx:.130,cy:.72,hs:.009,dark:true},{id:11,cx:.348,cy:.50,hs:.009,dark:true}],
+    names:['Gain','Volume','Notch Freq','40 Hz','120 Hz','350 Hz','800 Hz','2 kHz','5 kHz','Active','Mute','Notch'],
+    tick:rgb(40,180,205), ptr:rgb(80,200,220),
+    draw(d,vals){ const {ctx:c,W,H}=d; const ink=rgb(210,212,216), cyan=rgb(40,180,205);
+      box(d, 22,22,24, false);
+      const PL=.012*W,PT=.05*H,PW=.976*W,PH=.90*H;
+      rr(c,PL,PT,PW,PH,6); c.fillStyle=rgb(20,20,22); c.fill(); rr(c,PL,PT,PW,PH,6); c.strokeStyle=rgb(50,52,56); c.lineWidth=1.4; c.stroke();
+      c.fillStyle=cyan; c.fillRect(PL,PT+8,PW,2); c.fillRect(PL,PT+PH-10,PW,2);
+      const lab=(cx,y,sz,t,col)=>textC(d,cx*W,y*H,F.barlow,sz,col||ink,t);
+      for(let i=0;i<2;++i){ const jx=W*(0.045+i*0.035); c.beginPath(); c.arc(jx,H*0.50,7,0,7); c.fillStyle=rgb(16,16,18); c.fill(); c.strokeStyle=rgb(80,90,100); c.lineWidth=1.4; c.stroke(); }
+      lab(.045,.30,6.5,'PASSIVE'); lab(.080,.30,6.5,'ACTIVE');
+      lab(.205,.78,7.5,'PREAMP',rgb(150,200,210)); lab(.327,.78,7.5,'NOTCH',rgb(150,200,210)); lab(.570,.78,7.5,'EQUALIZER',rgb(150,200,210));
+      [[.175,'GAIN'],[.235,'VOLUME'],[.305,'FREQ'],[.420,'40'],[.480,'120'],[.540,'350'],[.600,'800'],[.660,'2K'],[.720,'5K']].forEach(k=>lab(k[0],.30,8,k[1]));
+      textC(d,PL+16,(PT+PH)-4,F.barlow,18,rgb(228,230,234),'electric','left');
+      textC(d,(PL+PW)-60,H*0.5,F.barlow,20,rgb(228,230,234),'B600F','right');
+      c.beginPath(); c.arc(.945*W,H*0.5,4.5,0,7); c.fillStyle=rgb(40,90,220); c.fill(); } };
+
   // ── generic fallback: any VST without a hand-built spec gets a clean knob
   //    grid built from its live parameter metadata (so nothing opens in a
   //    native window). params = [{id|paramId|index, name, value}, …]. ──────────

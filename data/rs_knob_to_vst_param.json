@@ -4634,6 +4634,30 @@
    }
   }
  },
+ "Bass_Amp_LT85B": {
+  "electricb600f": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> preamp Gain 0..1."
+   },
+   "Bass": {
+    "param": "120 Hz",
+    "scale": 0.01,
+    "_hint": "RS Bass 0-100 (50=flat) -> EQ 120 Hz band 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "800 Hz",
+    "scale": 0.01,
+    "_hint": "RS Mid 0-100 (50=flat) -> EQ 800 Hz band 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "5 kHz",
+    "scale": 0.01,
+    "_hint": "RS Treble 0-100 (50=flat) -> EQ 5 kHz band 0..1 (0.5 flat)."
+   }
+  }
+ },
  "Bass_Amp_CS75B": {
   "samplegv4b": {
    "Gain": {

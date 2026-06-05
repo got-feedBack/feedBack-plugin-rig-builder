@@ -2241,6 +2241,17 @@
    "notes": "Bundled Ashdown ABM EVO (Bass Magnifier) style head (Rocksmith 'LT25B'): component-level model from the Ashdown ABM500 EVO preamp schematic. ECC83 Valve Drive, Bass/Middle/Treble, 6-band graphic EQ (100/180/340/1.3k/3.6k/5k), Sub-octave generator, opto Comp, Shape, Output. RS Gain->Input; RS Bass/Mid/Treble->Bass/Middle/Treble."
   }
  ],
+ "Bass_Amp_LT85B": [
+  {
+   "name": "ElectricB600F",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/ElectricB600F.vst3",
+   "notes": "Bundled Acoustic B600H style 600 W solid-state bass head (Rocksmith 'LT85B'): component-level model from the Acoustic B450/B600H schematic. Gain/Volume preamp, sweepable Notch (Freq+On), 6-band EQ (40/120/350/800/2k/5k), Mute, Class-D power (clean). RS Gain->Gain; RS Bass/Mid/Treble->EQ 120/800/5k bands."
+  }
+ ],
  "Bass_Amp_CS75B": [
   {
    "name": "SamplegV4B",
