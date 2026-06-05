@@ -2131,6 +2131,17 @@
    "notes": "Bundled Peavey T-Max style two-channel bass head (Rocksmith 'BT600B'): component-level model from the T-Max preamp schematic (Peavey drawing 70985). 12AX7 tube channel (Tube Pre/Post) + solid-state channel (rail-clipping CLIP), Channel Select/Combine, Shelving Low/High, 7-band graphic EQ (40/100/250/625/1.6k/4k/10k), biamp Balance/X-Over, Master. RS Gain->Tube Pre; RS Bass/Mid/Treble->graphic-EQ 100/625/4k bands."
   }
  ],
+ "Bass_Amp_CS300B": [
+  {
+   "name": "BenderFumble800",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/BenderFumble800.vst3",
+   "notes": "Bundled Fender Rumble Bass style all-tube head (Rocksmith 'CS300B'): component-level model from the 1995 Fender Rumble Bass schematic (FMIC 048406/048411) — 12AX7 preamp + Fender passive Treble/Bass/Middle tone stack + Bright + 6x 6550WA push-pull (~300 W). RS Gain->Gain; RS Bass/Mid/Treble->tone stack."
+  }
+ ],
  "Bass_Amp_CS75B": [
   {
    "name": "SamplegV4B",
