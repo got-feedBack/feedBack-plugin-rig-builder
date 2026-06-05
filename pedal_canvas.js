@@ -3479,7 +3479,7 @@
       c.beginPath(); c.arc(.045*W,.71*H,9,0,7); c.fillStyle=rgb(16,16,18); c.fill(); c.strokeStyle=rgb(80,90,100); c.lineWidth=1.5; c.stroke();
       lab(.045,.86,6.5,'INPUT'); lab(.150,.60,6,'SHAPE'); lab(.150,.74,6,'ACTIVE');
       // bottom section labels (one row, like the panel): aligned to their controls
-      lab(.345,.875,8.5,'VALVE DRIVE'); lab(.448,.80,7,'EQ'); lab(.560,.875,8.5,'COMP'); lab(.745,.875,8.5,'SUB HARMONICS'); } };
+      lab(.345,.92,8.5,'VALVE DRIVE'); lab(.448,.82,7,'EQ'); lab(.560,.92,8.5,'COMP'); lab(.745,.92,8.5,'SUB HARMONICS'); } };
 
   // Electric B600F — Acoustic B600H (parody). Black face + cyan accent: Passive/
   // Active + Mute, PREAMP (Gain/Volume), NOTCH (Freq+On), 6-band EQ (40/120/350/
