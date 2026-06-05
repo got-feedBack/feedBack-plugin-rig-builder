@@ -2109,7 +2109,7 @@
    "notes": "Bundled Hartke HA3500 style bass head (assigned to Rocksmith 'CH300B'/'CLH-300B', which exposes Gain/Bass/Mid/Treble + Mid-Freq/Enhance): tube+solid-state preamp blend, compressor, 10-band graphic EQ, low/high-pass, master. Modeled from the HA3500 circuit diagram. RS Gain->Solid State; RS Bass/Mid/Treble->graphic-EQ 125/500/4k bands. (CS300B freed for a Fender Rumble.)"
   }
  ],
- "Bass_Amp_BT600B": [
+ "Bass_Amp_CH600B": [
   {
    "name": "SharkeHB5000",
    "manufacturer": "RigBuilder",
@@ -2117,7 +2117,18 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/SharkeHB5000.vst3",
-   "notes": "Bundled Hartke HA5000 style bass head (Rocksmith 'BT600B'): 2x250W bi-amp, tube+solid-state preamp blend, compressor, 10-band graphic EQ, contour low/high-pass, master. Modeled from the HA5000 circuit diagram (board 4005182801). RS Gain->Solid State; RS Bass/Mid/Treble->graphic-EQ 125/500/5k bands."
+   "notes": "Bundled Hartke HA5000 style bass head (Rocksmith 'CH600B'): 2x250W bi-amp, tube+solid-state preamp blend, compressor, 10-band graphic EQ, contour low/high-pass, master. Modeled from the HA5000 circuit diagram (board 4005182801). RS Gain->Solid State; RS Bass/Mid/Treble->graphic-EQ 125/500/5k bands."
+  }
+ ],
+ "Bass_Amp_BT600B": [
+  {
+   "name": "PeeBeeTMinus",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/PeeBeeTMinus.vst3",
+   "notes": "Bundled Peavey T-Max style two-channel bass head (Rocksmith 'BT600B'): component-level model from the T-Max preamp schematic (Peavey drawing 70985). 12AX7 tube channel (Tube Pre/Post) + solid-state channel (rail-clipping CLIP), Channel Select/Combine, Shelving Low/High, 7-band graphic EQ (40/100/250/625/1.6k/4k/10k), biamp Balance/X-Over, Master. RS Gain->Tube Pre; RS Bass/Mid/Treble->graphic-EQ 100/625/4k bands."
   }
  ],
  "Bass_Amp_CS75B": [

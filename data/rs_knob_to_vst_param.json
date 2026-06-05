@@ -4337,7 +4337,7 @@
    }
   }
  },
- "Bass_Amp_BT600B": {
+ "Bass_Amp_CH600B": {
   "sharkehb5000": {
    "Gain": {
     "param": "Solid State",
@@ -4361,6 +4361,33 @@
     "offset": 0.5,
     "scale": 0.033333,
     "_hint": "RS Treble +/-15 dB -> graphic-EQ 3 kHz band 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_BT600B": {
+  "peebeetminus": {
+   "Gain": {
+    "param": "Tube Pre",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> 12AX7 Tube Pre drive 0..1 (the T-Max's warm grit channel)."
+   },
+   "Bass": {
+    "param": "100 Hz",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Bass +/-15 dB -> graphic-EQ 100 Hz band 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "625 Hz",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Mid +/-15 dB -> graphic-EQ 625 Hz band 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "4 kHz",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Treble +/-15 dB -> graphic-EQ 4 kHz band 0..1 (0.5 flat)."
    }
   }
  },
