@@ -2153,6 +2153,17 @@
    "notes": "Bundled Eden WT-300 'Traveler' Valve-Tech style hybrid bass preamp (Rocksmith 'EdenE300'): component-level model from the Eden WT-300 preamp schematic (2-19-93) — 12AX7 input, Eden opto Comp, Enhance contour, Bass/Treble shelves, 3-band semi-parametric EQ (30-300/200-2k/1.2-12k), Master. RS Gain->Gain; RS Bass/Mid/Treble->Bass/EQ2 mid/Treble."
   }
  ],
+ "Bass_Amp_EdenWT550": [
+  {
+   "name": "AidenGT550",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/AidenGT550.vst3",
+   "notes": "Bundled Eden WT-550 'Traveler 550' Valve-Tech style hybrid bass preamp (Rocksmith 'EdenWT550'): same Valve-Tech Twin-Triode preamp as the WT-300 in the 550 W head, modeled from the WT-550 preamp schematic (WT550PreEQ). 12AX7 input, Eden Comp, Enhance, Bass/Treble shelves, 3-band semi-parametric EQ (Low/Mid/High), Master. RS Gain->Gain; RS Bass/Mid/Treble->Bass/EQ2 mid/Treble."
+  }
+ ],
  "Bass_Amp_CS75B": [
   {
    "name": "SamplegV4B",
