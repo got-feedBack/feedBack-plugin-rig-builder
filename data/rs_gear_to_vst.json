@@ -2186,6 +2186,17 @@
    "notes": "Bundled Custom Hiwatt 100 (DR103) style all-tube head (Rocksmith 'HT100B'): component-level model from the documented DR103 circuit + factory spec — 12AX7 Normal/Bright preamp, British (FMV) Bass/Middle/Treble tone stack, Presence (NFB), 4x EL34 push-pull (~100 W, big clean Hiwatt headroom). RS Gain->Normal Vol; RS Bass/Mid/Treble->tone stack."
   }
  ],
+ "Bass_Amp_HT400B": [
+  {
+   "name": "SillaBoogie400",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/SillaBoogie400.vst3",
+   "notes": "Bundled Mesa/Boogie Bass 400+ style all-tube head (Rocksmith 'HT400B'): component-level model from the Bass 400+ panel + circuit — 12AX7 preamp (Volume 1/2, pull-Bright), passive Middle/Bass/Treble (pull-Shift) tone stack, Mesa 6-band graphic EQ (40/100/250/625/1560/3900), 12x 6L6 push-pull (~500 W, huge clean tube headroom). RS Gain->Volume 1; RS Bass/Mid/Treble->tone stack."
+  }
+ ],
  "Bass_Amp_CS75B": [
   {
    "name": "SamplegV4B",

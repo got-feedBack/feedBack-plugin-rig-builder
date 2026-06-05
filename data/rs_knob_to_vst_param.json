@@ -4511,6 +4511,30 @@
    }
   }
  },
+ "Bass_Amp_HT400B": {
+  "sillaboogie400": {
+   "Gain": {
+    "param": "Volume 1",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> Volume 1 channel / 12AX7 drive 0..1."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.1,
+    "_hint": "RS Bass 0-10 (5=flat) -> tone-stack ~90 Hz low shelf 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.1,
+    "_hint": "RS Mid 0-10 (5=flat) -> tone-stack ~500 Hz mid 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.1,
+    "_hint": "RS Treble 0-10 (5=flat) -> tone-stack ~3 kHz high shelf 0..1 (0.5 flat)."
+   }
+  }
+ },
  "Bass_Amp_CS75B": {
   "samplegv4b": {
    "Gain": {
