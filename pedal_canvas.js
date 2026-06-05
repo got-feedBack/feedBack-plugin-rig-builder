@@ -3333,11 +3333,11 @@
   // orange tone section (Bass/Middle/Treble), Master, Passive/Active. ids 0..5.
   P.citrusad200 = { w:900, h:300,
     knobs:[
-      {id:0,cx:.230,cy:.65,r:.044,style:'pointer',cap:[20,20,22]},
+      {id:0,cx:.230,cy:.67,r:.044,style:'pointer',cap:[20,20,22]},
       {id:1,cx:.395,cy:.70,r:.030,style:'pointer',cap:[20,20,22]},
       {id:2,cx:.475,cy:.70,r:.030,style:'pointer',cap:[20,20,22]},
       {id:3,cx:.555,cy:.70,r:.030,style:'pointer',cap:[20,20,22]},
-      {id:4,cx:.690,cy:.65,r:.044,style:'pointer',cap:[20,20,22]}],
+      {id:4,cx:.690,cy:.67,r:.044,style:'pointer',cap:[20,20,22]}],
     switches:[{id:5,cx:.885,cy:.70,hs:.011,dark:true}],
     names:['Gain','Bass','Middle','Treble','Master','Active'],
     tick:rgb(120,116,104), ptr:rgb(244,245,248),
@@ -3355,7 +3355,7 @@
       const rocker=(x)=>{ rr(c,x*W-8,.70*H-14,16,28,2); c.fillStyle=rgb(40,40,44); c.fill(); rr(c,x*W-8,.70*H-14,16,28,2); c.strokeStyle=rgb(90,92,96); c.lineWidth=1; c.stroke(); };
       rocker(.105); rocker(.150); lab(.105,.89,6.5,'POWER',rgb(206,150,40)); lab(.150,.89,6.5,'STANDBY',rgb(206,150,40));
       ledDot(d,.078*W,.70*H,true,236,140,30);
-      [[.230,'GAIN'],[.690,'MASTER']].forEach(k=>lab(k[0],.81,11.5,k[1]));
+      [[.230,'GAIN'],[.690,'MASTER']].forEach(k=>lab(k[0],.86,11.5,k[1]));
       [[.395,'BASS'],[.475,'MIDDLE'],[.555,'TREBLE']].forEach(k=>lab(k[0],.86,9,k[1]));
       const jack=(x,y)=>{ c.beginPath();c.arc(x*W,y*H,8,0,7);c.fillStyle=rgb(16,16,18);c.fill();c.strokeStyle=rgb(120,122,126);c.lineWidth=1.4;c.stroke(); };
       jack(.825,.62); jack(.825,.80);
