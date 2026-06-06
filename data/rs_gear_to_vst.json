@@ -2295,5 +2295,27 @@
    "bundled": "vst/amps/CitrusRumbleverb50.vst3",
    "notes": "Bundled Orange Rockerverb 50 MkII style 2-channel guitar head (Rocksmith 'OrangeRockerverb'): component-level model from the Rockerverb 50 schematic. Clean (Vol/Bass/Treble) + Dirty (Gain/Bass/Middle/Treble/Vol) channels, valve spring Reverb, Output master, 2x EL34 push-pull. RS Gain/Bass/Mid/Treble drive the Dirty channel (default channel)."
   }
+ ],
+ "Amp_EpiphoneElectarCentury": [
+  {
+   "name": "EpicallCentura",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/EpicallCentura.vst3",
+   "notes": "Bundled Epiphone Electar Century (75th reissue) style 15W guitar head (Rocksmith 'EpiphoneElectarCentury'): component-level model from the Century 75th-reissue schematic. Two 12AX7 stages, passive Tone, input Voice (Dark/Normal/Bright), pull-Boost, 2x 6V6 push-pull. RS Volume(Gain)->Volume."
+  }
+ ],
+ "Amp_EpiphoneZephyr": [
+  {
+   "name": "EpicallRuby",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/EpicallRuby.vst3",
+   "notes": "Bundled Epiphone Electar Zephyr Amp20 (~1949) style vintage guitar amp (Rocksmith 'EpiphoneZephyr'): component-level model from the 1949 Zephyr schematic. 12AX7 preamp, passive Bass/Treble, 2x 6L6G push-pull (~20W). RS Volume(Gain)/Bass/Treble."
+  }
  ]
 }

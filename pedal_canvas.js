@@ -3596,6 +3596,62 @@
       c.beginPath(); c.arc(.935*W,.66*H,9,0,7); c.fillStyle=rgb(16,16,18); c.fill(); c.strokeStyle=rgb(120,122,126); c.lineWidth=1.5; c.stroke();
       lab(.935,.82,8,'INPUT',rgb(238,235,228)); } };
 
+  // Epicall Centura — Epiphone Electar Century (parody). Amber tweed head, black
+  // control strip: Tone · Volume · Voice knobs, Boost toggle, pilot jewel +
+  // Power/Speaker/Footswitch + Bright/Normal/Dark input jacks. ids 0..3.
+  P.epicallcentura = { w:1000, h:300,
+    knobs:[
+      {id:1,cx:.430,cy:.74,r:.044,style:'pointer',cap:[18,18,20]},
+      {id:0,cx:.560,cy:.74,r:.044,style:'pointer',cap:[18,18,20]},
+      {id:2,cx:.690,cy:.74,r:.038,style:'pointer',cap:[18,18,20]}],
+    switches:[{id:3,cx:.820,cy:.74,hs:.012,dark:true}],
+    names:['Volume','Tone','Voice','Boost'],
+    tick:rgb(120,116,104), ptr:rgb(244,245,248),
+    draw(d,vals){ const {ctx:c,W,H}=d; vals=vals||{};
+      const cg=c.createLinearGradient(0,0,0,H); cg.addColorStop(0,rgb(214,150,78)); cg.addColorStop(1,rgb(184,118,52));
+      c.fillStyle=cg; c.fillRect(0,0,W,H);                                          // amber tweed cabinet
+      rr(c,.04*W,.07*H,.92*W,.34*H,6); c.fillStyle=rgb(40,30,22); c.fill();         // grille
+      c.strokeStyle=rgb(150,110,60); c.lineWidth=1.2; for(let i=1;i<22;++i){ c.beginPath(); c.moveTo(.04*W+i*.92*W/22,.07*H); c.lineTo(.04*W+i*.92*W/22,.41*H); c.stroke(); }
+      textC(d,.50*W,.245*H,F.graffiti,40,rgb(236,225,200),'Epicall');
+      // black control strip
+      rr(c,.04*W,.50*H,.92*W,.44*H,5); c.fillStyle=rgb(18,18,20); c.fill();
+      c.fillStyle=rgb(214,150,78); c.fillRect(.04*W,.535*H,.92*W,.045*H);           // amber band
+      const lab=(cx,y,sz,t,col)=>textC(d,cx*W,y*H,F.barlow,sz,col||rgb(232,233,236),t);
+      textC(d,.22*W,.558*H,F.crete,15,rgb(28,22,16),'Centura');
+      // left jacks + jewel
+      const jack=(x)=>{ c.beginPath(); c.arc(x*W,.74*H,8,0,7); c.fillStyle=rgb(14,14,16); c.fill(); c.strokeStyle=rgb(120,122,126); c.lineWidth=1.4; c.stroke(); };
+      const tog=(x)=>{ rr(c,x*W-8,.74*H-15,16,30,2); c.fillStyle=rgb(36,36,40); c.fill(); rr(c,x*W-8,.74*H-15,16,30,2); c.strokeStyle=rgb(90,92,96); c.lineWidth=1; c.stroke(); };
+      tog(.075); jack(.135); jack(.190); ledDot(d,.245*W,.74*H,true,232,60,40);
+      lab(.075,.90,7,'POWER',rgb(236,225,200)); lab(.135,.90,6.5,'SPKR',rgb(236,225,200)); lab(.190,.90,6.5,'FTSW',rgb(236,225,200));
+      // knob labels + boost + input voicing jacks
+      lab(.430,.90,10,'TONE',rgb(236,225,200)); lab(.560,.90,10,'VOLUME',rgb(236,225,200)); lab(.690,.90,9,'VOICE',rgb(236,225,200));
+      lab(.820,.90,8,'BOOST',rgb(236,225,200));
+      jack(.905); jack(.950); lab(.905,.90,6,'BRT',rgb(236,225,200)); lab(.950,.90,6,'DRK',rgb(236,225,200)); } };
+
+  // Epicall Ruby — Epiphone Electar Zephyr Amp20 (parody). Vintage walnut combo,
+  // silver top panel with the Electar-style script, Volume · Bass · Treble knobs,
+  // input jacks + pilot. ids 0..2.
+  P.epicallruby = { w:900, h:300,
+    knobs:[
+      {id:0,cx:.380,cy:.60,r:.050,style:'pointer',cap:[224,220,206]},
+      {id:1,cx:.545,cy:.60,r:.050,style:'pointer',cap:[224,220,206]},
+      {id:2,cx:.705,cy:.60,r:.050,style:'pointer',cap:[224,220,206]}],
+    switches:[],
+    names:['Volume','Bass','Treble'],
+    tick:rgb(70,60,48), ptr:rgb(40,36,30),
+    draw(d,vals){ const {ctx:c,W,H}=d; vals=vals||{};
+      const wg=c.createLinearGradient(0,0,0,H); wg.addColorStop(0,rgb(150,100,56)); wg.addColorStop(1,rgb(110,72,40));
+      c.fillStyle=wg; c.fillRect(0,0,W,H);                                          // walnut cabinet
+      rr(c,.10*W,.10*H,.80*W,.80*H,8); c.fillStyle=rgb(198,194,182); c.fill();      // silver top panel
+      rr(c,.10*W,.10*H,.80*W,.80*H,8); c.strokeStyle=rgb(120,118,110); c.lineWidth=1.6; c.stroke();
+      textC(d,.50*W,.27*H,F.crete,30,rgb(40,36,30),'Epicall  Ruby');
+      const lab=(cx,y,sz,t)=>textC(d,cx*W,y*H,F.barlow,sz,rgb(40,36,30),t);
+      lab(.380,.80,11,'VOLUME'); lab(.545,.80,11,'BASS'); lab(.705,.80,11,'TREBLE');
+      // input jacks + pilot (left of the knobs)
+      const jack=(x,y)=>{ c.beginPath(); c.arc(x*W,y*H,7,0,7); c.fillStyle=rgb(40,38,40); c.fill(); c.strokeStyle=rgb(90,88,82); c.lineWidth=1.3; c.stroke(); };
+      jack(.180,.52); jack(.180,.68); lab(.180,.80,7,'INPUTS');
+      ledDot(d,.820*W,.52*H,true,232,60,40); } };
+
   // ── generic fallback: any VST without a hand-built spec gets a clean knob
   //    grid built from its live parameter metadata (so nothing opens in a
   //    native window). params = [{id|paramId|index, name, value}, …]. ──────────
