@@ -2122,13 +2122,13 @@
  ],
  "Amp_GB38": [
   {
-   "name": "Mr. Y MAZ 18",
+   "name": "Mr. Y MAZ 38",
    "manufacturer": "RigBuilder",
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/amps/MrYMaz18.vst3",
-   "notes": "Bundled Dr. Z Maz 18 Jr Reverb style head (parody brand 'Mr. Y'), full front panel (Volume, Treble, Middle, Bass, Cut, Master, Reverb) modelled component-by-component from the local Maz 18 Jr Reverb schematic. A 2xEL84 (~18W) class-AB head with a GZ34 tube rectifier (noticeable sag, touch-sensitive); voiced Vox-meets-Fender, chimey + midrange-forward, with spring reverb. Rocksmith's Gain drives the Volume; Bass/Mid/Treble->tone stack (Cut/Master/Reverb via _static)."
+   "bundled": "vst/amps/MrYMaz38.vst3",
+   "notes": "Bundled Dr. Z Maz 38 (Senior NR) style head (parody brand 'Mr. Y'). Amp_GB38 is the Maz 38; no Maz 38 schematic was found, but the Maz line shares one preamp + tone stack (traced from the Maz 18 Jr schematic) and only the power amp differs. Panel (Volume, Treble, Middle, Bass, Cut, Master) -> Vox-meets-Fender TMB tone stack -> 4x EL84 (~38W) + solid-state rectifier: big headroom, tighter/firmer lows, breaks up later, far less sag than the 2xEL84/GZ34 Maz 18. Rocksmith's Gain drives the Volume (preamp/drive); Bass/Mid/Treble->tone stack (Cut + Master via _static)."
   }
  ],
  "Amp_GB50": [

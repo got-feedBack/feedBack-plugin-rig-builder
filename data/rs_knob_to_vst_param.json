@@ -4544,12 +4544,12 @@
   }
  },
  "Amp_GB38": {
-  "mrymaz18": {
-   "_hint": "Mr. Y MAZ 18 = the Dr. Z Maz 18 Jr Reverb (2xEL84 ~18W, GZ34 sag, Vox-meets-Fender). No gain knob: the Volume drives the preamp. RS Gain -> VOLUME, Bass/Mid/Treble -> the tone stack. _static pins Cut, Master and Reverb.",
+  "mrymaz38": {
+   "_hint": "Mr. Y MAZ 38 = Dr. Z Maz 38 (Senior NR). RS Gain -> VOLUME (the preamp/drive), Bass/Mid/Treble -> the Vox-meets-Fender TMB tone stack. _static pins Cut + Master. No reverb (Senior NR).",
    "Gain": {
     "param": "Volume",
     "scale": 0.01,
-    "_hint": "RS Gain -> VOLUME (drives the preamp into the EL84s; the GZ34 sag adds touch-feel). Loudness held ~flat by the makeup."
+    "_hint": "RS Gain -> VOLUME (the only preamp/drive control). Loudness held ~flat by the makeup."
    },
    "Bass": {
     "param": "Bass",
@@ -4559,18 +4559,17 @@
    "Mid": {
     "param": "Middle",
     "scale": 0.01,
-    "_hint": "RS Mid -> Maz tone-stack middle (10K)."
+    "_hint": "RS Mid -> Maz tone-stack middle (10k)."
    },
    "Treble": {
     "param": "Treble",
     "scale": 0.01,
-    "_hint": "RS Treble -> Maz tone-stack treble (250K, 250pF cap)."
+    "_hint": "RS Treble -> Maz tone-stack treble (250k, 250pF)."
    },
    "_static": {
     "Cut": 0.4,
     "Master": 0.7,
-    "Reverb": 0.0,
-    "_note": "Cut just below noon (higher = darker), Master past noon, Reverb off. Dial Cut / Reverb on the face by hand."
+    "_note": "Cut just below noon (higher = darker), Master up (the 38 has headroom). Dial on the face by hand."
    }
   }
  },

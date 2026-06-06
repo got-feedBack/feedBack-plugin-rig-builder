@@ -1,22 +1,21 @@
 /*
- * MR. Y MAZ 18 - Dr. Z Maz 18 Jr Reverb for Rocksmith's Amp_GB38. Parody brand
+ * MR. Y MAZ 38 - Dr. Z Maz 38 (Senior NR) for Rocksmith's Amp_GB38. Parody brand
  * "Mr. Y"; the in-app face must never read "Dr. Z" or "Maz".
  *
- * Hand-traced schematic (Dr. Z Maz 18 Jr Reverb): a 2xEL84 (~18W) class-AB head
- * with a GZ34 tube rectifier (=> noticeable SAG / spongy, touch-sensitive feel).
- * Voiced Vox-meets-Fender: chimey, midrange-forward, breaks up musically.
+ * Same Maz front-end as the Maz 18 (shared preamp + tone stack), but a BIGGER
+ * power amp: 4x EL84 (~38W) + solid-state rectifier -> much more headroom, tighter
+ * lows, breaks up later, far less sag. Senior NR = no reverb. Chimey, punchy.
  *  - Preamp: 12AX7 input (68k/1M, 680ohm cathode), 1n couplings; 2nd 12AX7 (100k
  *    plate, 820ohm+25uF cathode); tone stack: TREBLE 250k (250pF treble cap),
  *    MIDDLE 10k, BASS ~1M, with 56k/100k/47n -> VOLUME (1MA).
  *  - 12AX7 phase inverter; CUT 250kA (post treble cut, higher = darker); MASTER.
- *  - Spring REVERB (12AT7 driver + tank + 12AX7 recovery + 250k Reverb level).
- *  - Power: 2xEL84 (2.7k screens, 360v), CinTran OT; GZ34 rectifier sag (spongy).
+ *  - Power: 4xEL84 (~38W, 2 pairs), solid-state rectifier -> tight, big headroom.
  *
  * Rocksmith: RS Gain -> VOLUME (the amp's only preamp/drive control); Bass/Mid/
- * Treble -> the TMB tone stack. Cut/Master/Reverb set on the face by hand.
+ * Treble -> the TMB tone stack. Cut + Master set on the face by hand.
  */
 #include "DistrhoPlugin.hpp"
-#include "Maz18Params.h"
+#include "Maz38Params.h"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -64,7 +63,7 @@ public:
             (a+1.0f)+(a-1.0f)*c+2.0f*ra*al,-2.0f*((a-1.0f)+(a+1.0f)*c),(a+1.0f)+(a-1.0f)*c-2.0f*ra*al); }
 };
 
-// Dr.Z Maz 18 TMB tone stack (3rd-order bilinear): TREBLE 250k (250pF treble cap),
+// Dr.Z Maz 38 TMB tone stack (3rd-order bilinear): TREBLE 250k (250pF treble cap),
 // MIDDLE 10k, BASS 1M, slope R 100k, coupling/bass C 47nF. Vox-meets-Fender
 // midrange-forward voicing; placed before the volume / output drive.
 class MarkToneStack
@@ -113,40 +112,17 @@ public:
     float process(float x){ const float y=x-x1+0.995f*y1; x1=x; y1=y; return y; }
 };
 
-// Compact Schroeder spring reverb (2 combs + 2 allpass). The Maz 18 reverb is
-// off for songs (RS pins it to 0); this gives the REVERB knob something musical
-// when dialled by hand (12AT7 driver + tank + 12AX7 recovery).
-class SpringReverb
-{
-    static const int N1=1481, N2=1709, A1=229, A2=97;
-    float c1[N1], c2[N2], ap1[A1], ap2[A2];
-    int i1=0,i2=0,j1=0,j2=0; float lp1=0.0f,lp2=0.0f;
-public:
-    void reset(){ for(int i=0;i<N1;++i)c1[i]=0.f; for(int i=0;i<N2;++i)c2[i]=0.f;
-        for(int i=0;i<A1;++i)ap1[i]=0.f; for(int i=0;i<A2;++i)ap2[i]=0.f;
-        i1=i2=j1=j2=0; lp1=lp2=0.f; }
-    float process(float x){
-        float y1=c1[i1]; lp1 += 0.42f*(y1-lp1); c1[i1]= x + 0.80f*lp1; if(++i1>=N1)i1=0;
-        float y2=c2[i2]; lp2 += 0.42f*(y2-lp2); c2[i2]= x + 0.76f*lp2; if(++i2>=N2)i2=0;
-        float y=(y1+y2)*0.5f;
-        float t1=ap1[j1]; float o1=-0.6f*y+t1; ap1[j1]= y+0.6f*o1; if(++j1>=A1)j1=0; y=o1;
-        float t2=ap2[j2]; float o2=-0.6f*y+t2; ap2[j2]= y+0.6f*o2; if(++j2>=A2)j2=0; y=o2;
-        return y;
-    }
-};
-
 } // namespace
 
-class Maz18Core
+class Maz38Core
 {
     float sampleRate = 48000.0f;
-    float volume = kMaz18Def[kVolume];
-    float treble = kMaz18Def[kTreble];
-    float mid    = kMaz18Def[kMiddle];
-    float bass   = kMaz18Def[kBass];
-    float cut    = kMaz18Def[kCut];
-    float master = kMaz18Def[kMaster];
-    float reverb = kMaz18Def[kReverb];
+    float volume = kMaz38Def[kVolume];
+    float treble = kMaz38Def[kTreble];
+    float mid    = kMaz38Def[kMiddle];
+    float bass   = kMaz38Def[kBass];
+    float cut    = kMaz38Def[kCut];
+    float master = kMaz38Def[kMaster];
 
     // derived
     float drv = 0.6f, outM = 0.7f;
@@ -157,7 +133,6 @@ class Maz18Core
     Biquad phaseLp, cutShelf, presenceShelf;
     Biquad speakerHp, speakerThump, speakerLowMid, speakerBite, speakerFizz, speakerLp;
     DcBlock dcBlock;
-    SpringReverb spring;
     float sag = 0.0f;
 
     void updateFilters()
@@ -165,7 +140,7 @@ class Maz18Core
         drv  = clamp01(volume);
         outM = clamp01(master);
         const float g = smoothstep(drv);
-        const float pushed = smoothstepRange(0.40f, 0.92f, drv);
+        const float pushed = smoothstepRange(0.50f, 0.97f, drv);
 
         inputHp.setHighPass(sampleRate, 40.0f + 34.0f * g, 0.70f);
         pickupLoad.setLowPass(sampleRate, 13200.0f - 1200.0f * pushed + 800.0f * treble, 0.64f);
@@ -186,8 +161,8 @@ class Maz18Core
         presenceShelf.setHighShelf(sampleRate, 2900.0f, 0.78f, 2.6f + 1.0f * treble);
 
         // Vox-meets-Fender 1x12 (EL84) voicing: midrange-forward, chimey top.
-        speakerHp.setHighPass(sampleRate, 84.0f, 0.72f);
-        speakerThump.setPeaking(sampleRate, 120.0f, 0.84f, 0.6f + 2.0f * bass);
+        speakerHp.setHighPass(sampleRate, 94.0f, 0.72f);
+        speakerThump.setPeaking(sampleRate, 124.0f, 0.86f, 0.3f + 1.8f * bass);
         speakerLowMid.setPeaking(sampleRate, 480.0f + 120.0f * mid, 0.74f, 1.0f + 2.2f * mid - 0.5f * pushed);
         speakerBite.setPeaking(sampleRate, 2800.0f + 500.0f * treble, 0.74f, 1.6f + 2.0f * treble);
         speakerFizz.setPeaking(sampleRate, 5600.0f, 0.96f, -2.6f - 2.2f * pushed);
@@ -201,7 +176,7 @@ public:
         toneStack.reset(); stackMakeupLow.reset(); interHp.reset(); cathodeLp.reset();
         phaseLp.reset(); cutShelf.reset(); presenceShelf.reset();
         speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset(); speakerBite.reset(); speakerFizz.reset(); speakerLp.reset();
-        dcBlock.reset(); spring.reset(); sag = 0.0f;
+        dcBlock.reset(); sag = 0.0f;
         updateFilters();
     }
 
@@ -218,18 +193,17 @@ public:
             case kBass:   bass = v; break;
             case kCut:    cut = v; break;
             case kMaster: master = v; break;
-            case kReverb: reverb = v; break;
             default: break;
         }
         updateFilters();
     }
 
-    void initDefaults() { for (int i = 0; i < kParamCount; ++i) setParam(i, kMaz18Def[i]); }
+    void initDefaults() { for (int i = 0; i < kParamCount; ++i) setParam(i, kMaz38Def[i]); }
 
     float process(float in)
     {
         const float g = smoothstep(drv);
-        const float pushed = smoothstepRange(0.40f, 0.92f, drv);
+        const float pushed = smoothstepRange(0.50f, 0.97f, drv);
         const float mPush = smoothstep(outM);
 
         float x = inputHp.process(in);
@@ -247,23 +221,20 @@ public:
         y = asymTube(y, 0.95f + 1.6f * volume + 1.2f * pushed, -0.008f);
         y = cathodeLp.process(y);
 
-        // spring reverb (parallel send), off when REVERB = 0
-        if (reverb > 0.001f) { const float wet = spring.process(y); y += (0.9f * reverb) * wet; }
-
         y = phaseLp.process(y);
 
-        // 2xEL84 ~18W class-AB + GZ34 rectifier sag. The Maz 18 is a SMALL amp:
-        // it compresses earlier, and the GZ34 sag is a touch spongier than usual
-        // (slower release, deeper drop) -> the spongy, touch-sensitive feel.
+        // 4xEL84 ~38W class-AB + SOLID-STATE rectifier. The Maz 38 is a BIG EL84
+        // amp: lots of headroom, breaks up LATER, tight/firm lows, far less sag
+        // than the GZ34 Maz 38 (faster recovery, shallower drop).
         const float env = std::fabs(y);
-        const float attack = 1.0f - std::exp(-1.0f / (0.0072f * sampleRate));   // a bit slower attack
-        const float release = 1.0f - std::exp(-1.0f / (0.190f * sampleRate));   // spongier (longer) release
+        const float attack = 1.0f - std::exp(-1.0f / (0.0050f * sampleRate));   // faster, tighter
+        const float release = 1.0f - std::exp(-1.0f / (0.110f * sampleRate));   // tighter recovery
         sag += (env - sag) * (env > sag ? attack : release);
-        const float sagDrop = 1.0f / (1.0f + sag * (0.44f + 0.78f * mPush + 0.58f * pushed));  // deeper sag
-        const float powerDrive = (1.05f + 1.75f * mPush + 1.45f * pushed) * sagDrop;           // EL84 breaks up early
-        y = asymTube(y, powerDrive, 0.006f + 0.012f * (treble - bass));
-        y = 0.84f * y + 0.16f * softClip(y * (1.6f + 1.2f * pushed));   // a touch more 2nd-stage compression
-        y *= 0.96f - 0.10f * sag;                                       // spongier level droop
+        const float sagDrop = 1.0f / (1.0f + sag * (0.20f + 0.42f * mPush + 0.32f * pushed));  // shallow sag
+        const float powerDrive = (0.80f + 1.50f * mPush + 1.25f * pushed) * sagDrop;           // big headroom, late breakup
+        y = asymTube(y, powerDrive, 0.006f + 0.010f * (treble - bass));
+        y = 0.90f * y + 0.10f * softClip(y * (1.5f + 1.0f * pushed));   // less power-amp compression
+        y *= 0.98f - 0.05f * sag;                                       // tight level droop
 
         y = cutShelf.process(y);
         y = presenceShelf.process(y);
@@ -283,46 +254,46 @@ public:
             + 0.011f * std::fabs((bass - 0.5f) * 15.0f)
             + 0.012f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.012f * std::fabs((treble - 0.5f) * 17.0f);
-        const float cleanMakeup = 1.0f + 8.0f * std::exp(-drv / 0.28f);
-        const float level = 0.46f * cleanMakeup / ((1.0f + 0.42f * mPush) * toneEnergy);
+        const float cleanMakeup = 1.0f + 7.0f * std::exp(-drv / 0.26f);
+        const float level = 0.55f * cleanMakeup / ((1.0f + 0.42f * mPush) * toneEnergy);
         return softClip(y * level) * 0.97f;
     }
 };
 
-class Maz18Plugin : public Plugin
+class Maz38Plugin : public Plugin
 {
-    Maz18Core left;
-    Maz18Core right;
+    Maz38Core left;
+    Maz38Core right;
     float params[kParamCount];
 
     void applyAll() { for (int i = 0; i < kParamCount; ++i) { left.setParam(i, params[i]); right.setParam(i, params[i]); } }
 
 public:
-    Maz18Plugin() : Plugin(kParamCount, 0, 0)
+    Maz38Plugin() : Plugin(kParamCount, 0, 0)
     {
-        for (int i = 0; i < kParamCount; ++i) params[i] = kMaz18Def[i];
+        for (int i = 0; i < kParamCount; ++i) params[i] = kMaz38Def[i];
         left.setSampleRate((float)getSampleRate());
         right.setSampleRate((float)getSampleRate());
         applyAll();
     }
 
 protected:
-    const char* getLabel() const override { return "MrYMaz18"; }
-    const char* getDescription() const override { return "Dr. Z Maz 18 Jr Reverb style 2xEL84 amp"; }
+    const char* getLabel() const override { return "MrYMaz38"; }
+    const char* getDescription() const override { return "Dr. Z Maz 38 Senior NR style 4xEL84 amp"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
     uint32_t getVersion() const override { return d_version(1, 0, 0); }
-    int64_t getUniqueId() const override { return d_cconst('Y', 'm', '1', '8'); }
+    int64_t getUniqueId() const override { return d_cconst('Y', 'm', '3', '8'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
     {
         if (index >= (uint32_t)kParamCount) return;
         parameter.hints = kParameterIsAutomatable;
-        parameter.name = kMaz18Names[index];
-        parameter.symbol = kMaz18Symbols[index];
-        parameter.ranges.min = kMaz18Min[index];
-        parameter.ranges.max = kMaz18Max[index];
-        parameter.ranges.def = kMaz18Def[index];
+        parameter.name = kMaz38Names[index];
+        parameter.symbol = kMaz38Symbols[index];
+        parameter.ranges.min = kMaz38Min[index];
+        parameter.ranges.max = kMaz38Max[index];
+        parameter.ranges.def = kMaz38Def[index];
     }
 
     float getParameterValue(uint32_t index) const override { return index < (uint32_t)kParamCount ? params[index] : 0.0f; }
@@ -355,9 +326,9 @@ protected:
         }
     }
 
-    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Maz18Plugin)
+    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Maz38Plugin)
 };
 
-Plugin* createPlugin() { return new Maz18Plugin(); }
+Plugin* createPlugin() { return new Maz38Plugin(); }
 
 END_NAMESPACE_DISTRHO

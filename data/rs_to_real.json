@@ -842,15 +842,15 @@
     "tone3000_id": 2405
    }
   },
-  "make": "",
+  "make": "Dr. Z",
   "manifest": "gear_amp_gb38",
-  "model": "GB38",
-  "name": "GB38",
+  "model": "Maz 38",
+  "name": "Dr. Z Maz 38",
   "name_correction_note": "user re-curated as Marshall JCM900 (was 'GB38')",
   "query_source": "generic",
   "sound_bank": "amp_gb38",
   "tone3000_gears": "amp",
-  "tone3000_query": "guitar amp"
+  "tone3000_query": "Dr Z Maz 38"
  },
  "Amp_GB50": {
   "art_asset": "gb50",

@@ -1,11 +1,11 @@
 #ifndef DISTRHO_PLUGIN_INFO_H_INCLUDED
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
-#define DISTRHO_PLUGIN_NAME    "MrYMaz18"
-#define DISTRHO_PLUGIN_URI     "urn:rigbuilder:mrymaz18"
-#define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.mrymaz18"
+#define DISTRHO_PLUGIN_NAME    "MrYMaz38"
+#define DISTRHO_PLUGIN_URI     "urn:rigbuilder:mrymaz38"
+#define DISTRHO_PLUGIN_CLAP_ID "rigbuilder.mrymaz38"
 #define DISTRHO_PLUGIN_BRAND_ID  Rgbd
-#define DISTRHO_PLUGIN_UNIQUE_ID Ym18
+#define DISTRHO_PLUGIN_UNIQUE_ID Ym38
 #define DISTRHO_PLUGIN_HAS_UI        0
 #define DISTRHO_PLUGIN_IS_RT_SAFE    1
 #define DISTRHO_PLUGIN_NUM_INPUTS    2

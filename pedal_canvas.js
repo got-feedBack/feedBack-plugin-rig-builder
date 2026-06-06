@@ -5781,19 +5781,18 @@
       bolt(bx+11*s,by+bh2*.5,2.6*s); bolt(bx+bw-11*s,by+bh2*.5,2.6*s);
       textSpaced(d,W*.5,by+bh2*.52,F.anton,28,rgb(236,237,240),'UNPARALLEL',0.04); } };
 
-  // ── MR. Y MAZ 18 (Dr. Z Maz 18 Jr Reverb) — black tolex, silver grille with the
+  // ── MR. Y MAZ 38 (Dr. Z Maz 38 Senior NR) — black tolex, silver grille with the
   //    big "Y" logo (parody of Dr.Z's "Z") + Legacy badge, black panel, cream knobs.
-  //    7 knobs: 0 Volume 1 Treble 2 Middle 3 Bass 4 Cut 5 Master 6 Reverb.
-  //    RS: Gain->Volume, Bass/Mid/Treble->stack (Cut/Master/Reverb static).
-  P.mrymaz18 = { w:1700, h:560, ptr:rgb(238,233,214), tick:rgb(120,112,84),
+  //    6 knobs: 0 Volume 1 Treble 2 Middle 3 Bass 4 Cut 5 Master (no reverb).
+  //    4xEL84 ~38W. RS: Gain->Volume, Bass/Mid/Treble->stack (Cut/Master static).
+  P.mrymaz38 = { w:1700, h:560, ptr:rgb(238,233,214), tick:rgb(120,112,84),
     knobs:[
-      {id:5,cx:.395,cy:.770,r:.020,style:'cream'},  // MASTER
-      {id:4,cx:.460,cy:.770,r:.020,style:'cream'},  // CUT
-      {id:3,cx:.525,cy:.770,r:.020,style:'cream'},  // BASS
-      {id:2,cx:.590,cy:.770,r:.020,style:'cream'},  // MIDDLE
-      {id:1,cx:.655,cy:.770,r:.020,style:'cream'},  // TREBLE
-      {id:0,cx:.720,cy:.770,r:.020,style:'cream'},  // VOLUME
-      {id:6,cx:.230,cy:.770,r:.020,style:'cream'} ],// REVERB
+      {id:5,cx:.420,cy:.770,r:.020,style:'cream'},  // MASTER
+      {id:4,cx:.490,cy:.770,r:.020,style:'cream'},  // CUT
+      {id:3,cx:.560,cy:.770,r:.020,style:'cream'},  // BASS
+      {id:2,cx:.630,cy:.770,r:.020,style:'cream'},  // MIDDLE
+      {id:1,cx:.700,cy:.770,r:.020,style:'cream'},  // TREBLE
+      {id:0,cx:.770,cy:.770,r:.020,style:'cream'} ],// VOLUME
     draw(d,vals){ const {ctx:c,W,H,s}=d;
       const ink=rgb(232,230,224), inkF='rgba(232,230,224,0.6)', chr=rgb(198,202,208), gold=rgb(232,214,150);
       const bgr=c.createLinearGradient(0,0,0,H); bgr.addColorStop(0,rgb(26,26,28)); bgr.addColorStop(1,rgb(13,13,15));
@@ -5832,16 +5831,15 @@
       const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,rgb(28,29,31)); pg.addColorStop(1,rgb(14,15,17));
       rr(c,px,py,pw,ph,5*s); c.fillStyle=pg; c.fill(); rr(c,px,py,pw,ph,5*s); c.strokeStyle=rgb(70,72,76); c.lineWidth=1.2*s; c.stroke();
       const cy=py+ph*.45;
-      // POWER / STANDBY toggles (left) + "MAZ 18" badge
+      // POWER / STANDBY toggles (left) + "MAZ 38" badge
       batToggle(d,.075*W,cy,8*s,true); textSpaced(d,.075*W,py+ph*.16,F.barlow,6.5,ink,'POWER',0.02);
       batToggle(d,.120*W,cy,8*s,true); textSpaced(d,.120*W,py+ph*.16,F.barlow,6.5,ink,'STANDBY',0.0);
       c.save(); c.textAlign='left'; c.textBaseline='middle';
-      setFont(d,F.anton,22); c.fillStyle=gold; c.fillText('MAZ',.155*W,cy);
-      setFont(d,F.anton,30); c.fillStyle=ink; c.fillText('18',.205*W,cy); c.restore();
+      setFont(d,F.anton,22); c.fillStyle=gold; c.fillText('MAZ',.175*W,cy);
+      setFont(d,F.anton,30); c.fillStyle=ink; c.fillText('38',.225*W,cy); c.restore();
       // knob labels
       const lbl=(cx2,t,sz)=>textSpaced(d,cx2*W,ly,F.barlow,sz||7,ink,t,0.03);
-      lbl(.395,'MASTER',6.5); lbl(.460,'CUT'); lbl(.525,'BASS'); lbl(.590,'MIDDLE',6.5); lbl(.655,'TREBLE',6.5); lbl(.720,'VOLUME',6.5);
-      lbl(.230,'REVERB',6.5);
+      lbl(.420,'MASTER',6.5); lbl(.490,'CUT'); lbl(.560,'BASS'); lbl(.630,'MIDDLE',6.5); lbl(.700,'TREBLE',6.5); lbl(.770,'VOLUME',6.5);
       // INPUT Hi/Lo (far right)
       const jack=(jx,jy)=>{ c.beginPath(); c.arc(jx,jy,6.5*s,0,7); c.fillStyle=rgb(14,13,14); c.fill();
         c.strokeStyle=chr; c.lineWidth=1.6*s; c.stroke(); c.beginPath(); c.arc(jx,jy,2.2*s,0,7); c.fillStyle=rgb(52,50,54); c.fill(); };
