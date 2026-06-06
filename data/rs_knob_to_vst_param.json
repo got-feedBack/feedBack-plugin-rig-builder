@@ -4802,5 +4802,62 @@
     "_hint": "RS Treble 0-100 (50=flat) -> Treble 0..1."
    }
   }
+ },
+ "Amp_GibsonGA8": {
+  "hipzonga8": {
+   "Gain": {
+    "param": "Volume",
+    "scale": 0.01,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass 0-100 (50=flat) -> Bass 0..1."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble 0-100 (50=flat) -> Treble 0..1."
+   }
+  }
+ },
+ "Amp_GibsonGA79": {
+  "hipzonga79rvt": {
+   "Gain": {
+    "param": "Volume",
+    "scale": 0.01,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass 0-100 (50=flat) -> Bass 0..1."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble 0-100 (50=flat) -> Treble 0..1."
+   }
+  }
+ },
+ "Amp_GibsonGA88": {
+  "hipzonga88": {
+   "Gain": {
+    "param": "Volume",
+    "scale": 0.01,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass 0-100 (50=flat) -> Bass 0..1."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble 0-100 (50=flat) -> Treble 0..1."
+   }
+  }
  }
 }

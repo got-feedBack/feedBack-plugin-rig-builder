@@ -2317,5 +2317,38 @@
    "bundled": "vst/amps/EpicallRuby.vst3",
    "notes": "Bundled Epiphone Electar Zephyr Amp20 (~1949) style vintage guitar amp (Rocksmith 'EpiphoneZephyr'): component-level model from the 1949 Zephyr schematic. 12AX7 preamp, passive Bass/Treble, 2x 6L6G push-pull (~20W). RS Volume(Gain)/Bass/Treble."
   }
+ ],
+ "Amp_GibsonGA8": [
+  {
+   "name": "HipzonGA8",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/HipzonGA8.vst3",
+   "notes": "Bundled Gibson GA-8 Discoverer (GA-8T) style guitar amp (Rocksmith 'GibsonGA8'): component-level from the GA-8T schematic. 12AX7 preamp, passive Bass/Treble, 2x 6BM8 push-pull (~10W), on-board tremolo (Speed/Depth). RS Volume(Loudness)/Bass/Treble."
+  }
+ ],
+ "Amp_GibsonGA79": [
+  {
+   "name": "HipzonGA79RVT",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/HipzonGA79RVT.vst3",
+   "notes": "Bundled Gibson GA-79 RVT Multi Stereo style guitar amp (Rocksmith 'GibsonGA79'): component-level from the GA-79 RVT schematic. 12AX7 preamp, passive Bass/Treble, valve spring Reverb, 4x 6BQ5 (EL84) push-pull, tremolo (Speed/Depth); modeled mono. RS Volume/Bass/Treble."
+  }
+ ],
+ "Amp_GibsonGA88": [
+  {
+   "name": "HipzonGA88",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/HipzonGA88.vst3",
+   "notes": "Bundled Gibson GA-88S stereo style guitar amp (Rocksmith 'GibsonGA88'): component-level from the GA-88S schematic. 12AX7 preamp, passive Bass/Treble, 4x 6BQ5 (EL84) push-pull (~30W, clean PA headroom); modeled mono. RS Volume/Bass/Treble."
+  }
  ]
 }

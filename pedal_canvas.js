@@ -3652,6 +3652,75 @@
       jack(.180,.52); jack(.180,.68); lab(.180,.80,7,'INPUTS');
       ledDot(d,.820*W,.52*H,true,232,60,40); } };
 
+  // Hipzon GA-8 — Gibson GA-8 Discoverer (parody). Cream tolex, silver control
+  // plate: Volume · Bass · Treble · Speed · Depth (tremolo). ids 0..4.
+  P.hipzonga8 = { w:1000, h:300,
+    knobs:[
+      {id:0,cx:.200,cy:.62,r:.044,style:'pointer',cap:[20,20,22]},
+      {id:1,cx:.340,cy:.62,r:.044,style:'pointer',cap:[20,20,22]},
+      {id:2,cx:.480,cy:.62,r:.044,style:'pointer',cap:[20,20,22]},
+      {id:3,cx:.620,cy:.62,r:.044,style:'pointer',cap:[20,20,22]},
+      {id:4,cx:.760,cy:.62,r:.044,style:'pointer',cap:[20,20,22]}],
+    switches:[],
+    names:['Volume','Bass','Treble','Speed','Depth'],
+    tick:rgb(90,86,78), ptr:rgb(244,245,248),
+    draw(d,vals){ const {ctx:c,W,H}=d;
+      c.fillStyle=rgb(226,221,206); c.fillRect(0,0,W,H);                            // cream tolex
+      rr(c,.05*W,.30*H,.90*W,.62*H,6); c.fillStyle=rgb(196,196,190); c.fill();      // silver plate
+      rr(c,.05*W,.30*H,.90*W,.62*H,6); c.strokeStyle=rgb(120,120,116); c.lineWidth=1.4; c.stroke();
+      textC(d,.50*W,.165*H,F.crete,30,rgb(40,38,34),'Hipzon  GA-8');
+      textC(d,.50*W,.40*H,F.barlow,11,rgb(90,86,78),'DISCOVERER');
+      const lab=(cx,t)=>textC(d,cx*W,.86*H,F.barlow,10.5,rgb(40,38,34),t);
+      [[.200,'VOLUME'],[.340,'BASS'],[.480,'TREBLE'],[.620,'SPEED'],[.760,'DEPTH']].forEach(k=>lab(k[0],k[1]));
+      ledDot(d,.90*W,.40*H,true,232,60,40); } };
+
+  // Hipzon GA-79 RVT — Gibson GA-79 RVT Multi Stereo (parody). Brown tolex, silver
+  // panel: Volume · Bass · Treble · Reverb · Speed · Depth. ids 0..5.
+  P.hipzonga79rvt = { w:1100, h:300,
+    knobs:[
+      {id:0,cx:.150,cy:.62,r:.038,style:'pointer',cap:[20,20,22]},
+      {id:1,cx:.265,cy:.62,r:.038,style:'pointer',cap:[20,20,22]},
+      {id:2,cx:.380,cy:.62,r:.038,style:'pointer',cap:[20,20,22]},
+      {id:3,cx:.500,cy:.62,r:.038,style:'pointer',cap:[20,20,22]},
+      {id:4,cx:.615,cy:.62,r:.038,style:'pointer',cap:[20,20,22]},
+      {id:5,cx:.730,cy:.62,r:.038,style:'pointer',cap:[20,20,22]}],
+    switches:[],
+    names:['Volume','Bass','Treble','Reverb','Speed','Depth'],
+    tick:rgb(90,86,78), ptr:rgb(244,245,248),
+    draw(d,vals){ const {ctx:c,W,H}=d;
+      const bg=c.createLinearGradient(0,0,0,H); bg.addColorStop(0,rgb(96,78,64)); bg.addColorStop(1,rgb(74,58,46));
+      c.fillStyle=bg; c.fillRect(0,0,W,H);                                          // brown tolex
+      rr(c,.04*W,.30*H,.92*W,.62*H,6); c.fillStyle=rgb(198,196,188); c.fill();      // silver panel
+      rr(c,.04*W,.30*H,.92*W,.62*H,6); c.strokeStyle=rgb(120,118,112); c.lineWidth=1.4; c.stroke();
+      textC(d,.40*W,.165*H,F.crete,28,rgb(236,232,222),'Hipzon');
+      textC(d,.66*W,.175*H,F.barlow,16,rgb(236,232,222),'GA-79 RVT  ·  MULTI STEREO','left');
+      const lab=(cx,t)=>textC(d,cx*W,.86*H,F.barlow,10,rgb(40,38,34),t);
+      [[.150,'VOLUME'],[.265,'BASS'],[.380,'TREBLE'],[.500,'REVERB'],[.615,'SPEED'],[.730,'DEPTH']].forEach(k=>lab(k[0],k[1]));
+      const jack=(x,y)=>{ c.beginPath(); c.arc(x*W,y*H,7,0,7); c.fillStyle=rgb(40,38,40); c.fill(); c.strokeStyle=rgb(90,88,82); c.lineWidth=1.3; c.stroke(); };
+      jack(.860,.52); jack(.910,.52); textC(d,.885*W,.70*H,F.barlow,8,rgb(40,38,34),'STEREO');
+      ledDot(d,.93*W,.40*H,true,232,60,40); } };
+
+  // Hipzon GA-88 — Gibson GA-88S stereo (parody, recreated from RS art). Grey
+  // tolex, silver plate: Volume · Bass · Treble. ids 0..2.
+  P.hipzonga88 = { w:900, h:300,
+    knobs:[
+      {id:0,cx:.350,cy:.60,r:.050,style:'pointer',cap:[20,20,22]},
+      {id:1,cx:.520,cy:.60,r:.050,style:'pointer',cap:[20,20,22]},
+      {id:2,cx:.680,cy:.60,r:.050,style:'pointer',cap:[20,20,22]}],
+    switches:[],
+    names:['Volume','Bass','Treble'],
+    tick:rgb(90,86,78), ptr:rgb(244,245,248),
+    draw(d,vals){ const {ctx:c,W,H}=d;
+      c.fillStyle=rgb(96,98,102); c.fillRect(0,0,W,H);                              // grey tolex
+      rr(c,.07*W,.12*H,.86*W,.30*H,6); c.fillStyle=rgb(198,196,188); c.fill();      // silver name plate
+      textC(d,.50*W,.27*H,F.crete,30,rgb(40,38,34),'Hipzon  GA-88');
+      rr(c,.07*W,.46*H,.86*W,.46*H,6); c.fillStyle=rgb(40,40,42); c.fill();         // black control strip
+      const lab=(cx,t)=>textC(d,cx*W,.86*H,F.barlow,11,rgb(224,224,218),t);
+      [[.350,'VOLUME'],[.520,'BASS'],[.680,'TREBLE']].forEach(k=>lab(k[0],k[1]));
+      const jack=(x)=>{ c.beginPath(); c.arc(x*W,.60*H,8,0,7); c.fillStyle=rgb(16,16,18); c.fill(); c.strokeStyle=rgb(120,122,126); c.lineWidth=1.4; c.stroke(); };
+      jack(.150); jack(.840); textC(d,.150*W,.78*H,F.barlow,8,rgb(224,224,218),'IN');
+      ledDot(d,.840*W,.78*H,true,232,60,40); } };
+
   // ── generic fallback: any VST without a hand-built spec gets a clean knob
   //    grid built from its live parameter metadata (so nothing opens in a
   //    native window). params = [{id|paramId|index, name, value}, …]. ──────────
