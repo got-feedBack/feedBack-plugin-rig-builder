@@ -3148,8 +3148,8 @@ def _ir_rms_makeup(path: Path) -> float:
 # loudness equal to the cab-alone path (data/di_cab_makeup.json, cross-validated
 # to <0.5 dB). Generation is pure-python (no numpy) so it runs in the chain
 # builder; the makeup table is precomputed offline by tools/make_di_cab_irs.py.
-_DI_CAB_DI = 0.6
-_DI_CAB_CAB = 0.4
+_DI_CAB_DI = 0.8
+_DI_CAB_CAB = 0.2
 _di_cab_makeup_tbl: dict | None = None
 
 
@@ -5896,9 +5896,9 @@ def setup(app, context):
             # at every chain load — value of 8.0 = +18 dB feeds NAM amps
             # at capture-time levels so they actually saturate.
             "nam_chain_input_drive": float(s.get("nam_chain_input_drive", 1.0)),
-            # User "Chain volume" trim (setGain('chain') multiplier). Default 4×
-            # — the guitar chain runs much quieter than the backing track.
-            "chain_makeup": float(s.get("chain_makeup", 4.0)),
+            # User "Output chain" / chain-volume trim (setGain('chain')
+            # multiplier). Range 0–5, default 1× (the knob value IS the multiplier).
+            "chain_makeup": float(s.get("chain_makeup", 1.0)),
             "has_tone3000_key": bool(key),
             "tone3000_api_key_preview": (key[:6] + "…") if key else "",
             "tone3000_connected": bool(s.get("tone3000_access_token")),
@@ -5922,16 +5922,16 @@ def setup(app, context):
         if "nam_chain_input_drive" in data:
             try:
                 v = float(data["nam_chain_input_drive"])
-                # Clamp 0.1..16. 8.0 default is already aggressive;
-                # >16 is asking for digital clipping on hot pickups.
-                allowed["nam_chain_input_drive"] = max(0.1, min(16.0, v))
+                # Input-chain (amp drive) knob: range 0–5, default 1× (no boost).
+                allowed["nam_chain_input_drive"] = max(0.0, min(5.0, v))
             except (TypeError, ValueError):
                 pass
         if "chain_makeup" in data:
             try:
-                # User cab/chain volume trim — multiplies the auto chain-gain
+                # Output-chain / chain-volume trim — multiplies the auto chain-gain
                 # target (setGain('chain',X), the only level the engine respects).
-                allowed["chain_makeup"] = max(0.1, min(24.0, float(data["chain_makeup"])))
+                # Range 0–5, default 1×.
+                allowed["chain_makeup"] = max(0.0, min(5.0, float(data["chain_makeup"])))
             except (TypeError, ValueError):
                 pass
         if "bypass_all_cabs" in data:

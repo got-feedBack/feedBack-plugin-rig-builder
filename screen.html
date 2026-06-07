@@ -14,13 +14,13 @@
          · Master (global pre/post FX — unchanged)
          · Setup  (was Dashboard + Settings — batch ops + tone3000 + prefs) -->
     <div class="flex gap-2 mb-6 border-b border-gray-800">
-        <button data-rb-tab="song" onclick="rbShowTab('song')"
-                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
-            Songs
-        </button>
         <button data-rb-tab="gear" onclick="rbShowTab('gear')"
                 class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
             Gear
+        </button>
+        <button data-rb-tab="song" onclick="rbShowTab('song')"
+                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
+            Songs
         </button>
         <button data-rb-tab="master" onclick="rbShowTab('master')"
                 class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
@@ -191,6 +191,23 @@
          DOM ids used by JS — only the layout was reorganised. -->
     <div id="rb-tab-settings" class="rb-tab-panel hidden">
 
+        <!-- Levels — kept at the very top for quick access. -->
+        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+            <h3 class="text-white font-semibold mb-3">Levels</h3>
+            <div class="mt-2 flex justify-center gap-24">
+                <div class="flex flex-col items-center select-none">
+                    <div id="rb-amp-drive-knob" title="Input chain — drag up/down · double-click to reset to 1"></div>
+                    <span id="rb-amp-drive-val" class="text-xs text-purple-300 mt-1">1.0×</span>
+                    <span class="text-sm text-gray-300 mt-1">Input chain</span>
+                </div>
+                <div class="flex flex-col items-center select-none">
+                    <div id="rb-chain-makeup-knob" title="Output chain — drag up/down · double-click to reset to 1"></div>
+                    <span id="rb-chain-makeup-val" class="text-xs text-purple-300 mt-1">1.0×</span>
+                    <span class="text-sm text-gray-300 mt-1">Output chain</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Connect tone3000 first — it's the prerequisite for in-app
              candidate listing and automatic downloads, so it leads Settings. -->
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
@@ -359,59 +376,6 @@
                     Scan for plugins
                 </button>
                 <span id="rb-settings-scan-status" class="text-xs text-gray-500"></span>
-            </div>
-        </div>
-
-        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
-            <h3 class="text-white font-semibold mb-3">
-                Chain preloader <span class="text-emerald-400 text-xs ml-2">DEFAULT</span>
-            </h3>
-            <p class="text-gray-500 text-sm mb-3">
-                Pre-loads every tone of the song into one big chain at song start,
-                then switches between tones by toggling bypass instead of reloading
-                NAMs. <strong class="text-gray-300">Eliminates the tone-change spike
-                completely</strong>. Steady-state memory is higher (every NAM stays
-                loaded) but on M-series Macs the trade-off is clear-cut.
-            </p>
-            <p class="text-gray-400 text-xs mb-3 leading-snug">
-                Turn it off if you're on a weak x86 laptop and hear crackling, or if
-                a specific song is misbehaving — playback then falls back to the
-                cooperative load/unload path. Kill-switch in DevTools:
-                <code class="bg-dark-900 px-1 rounded">window.__rbMegaChain = false</code>.
-            </p>
-            <label class="flex items-center gap-2 text-sm text-gray-300">
-                <input type="checkbox" id="rb-mega-chain-mode" onchange="rbSaveSettings()" class="rounded">
-                Enable chain preloader (default)
-            </label>
-        </div>
-
-        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
-            <h3 class="text-white font-semibold mb-3">Levels</h3>
-            <div class="mt-1">
-                <label class="flex items-center justify-between text-sm text-gray-300">
-                    <span>Amp drive (input into NAM)</span>
-                    <span id="rb-amp-drive-val" class="text-xs text-purple-300">1.0×</span>
-                </label>
-                <input type="range" id="rb-amp-drive" min="1" max="5" step="0.1" value="1"
-                       oninput="rbSetAmpDrive(this.value)"
-                       class="w-full mt-1 accent-purple-500">
-                <p class="text-[11px] text-gray-500 mt-1 leading-snug">
-                    Push into the amp NAM before it (guitar amps only — bass auto-uses 1×).
-                    Default <strong>1× = no boost</strong>. Raise it for more amp saturation. Applies live.
-                </p>
-            </div>
-            <div class="mt-4">
-                <label class="flex items-center justify-between text-sm text-gray-300">
-                    <span>Chain volume (output makeup)</span>
-                    <span id="rb-chain-makeup-val" class="text-xs text-purple-300">4.00×</span>
-                </label>
-                <input type="range" id="rb-chain-makeup" min="0.25" max="8" step="0.05" value="4"
-                       oninput="rbSetChainMakeup(this.value)"
-                       class="w-full mt-1 accent-purple-500">
-                <p class="text-[11px] text-gray-500 mt-1 leading-snug">
-                    Raises / lowers the whole guitar chain — the only level the engine respects.
-                    Use it if the guitar sits too quiet under the backing track. Applies live.
-                </p>
             </div>
         </div>
 
