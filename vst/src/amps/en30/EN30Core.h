@@ -925,7 +925,20 @@ public:
             + 0.013f * std::fabs((bass - 0.5f) * 20.0f)
             + 0.013f * std::fabs((treble - 0.5f) * 22.0f)
             + 0.12f * normalBlend;
-        const float makeup = 1.0f + 0.74f * g + 0.42f * hot;
+        // Loudness compensation: the TB Volume (= RS Gain) drives the preamp over
+        // a ~22 dB range, so WITHOUT compensation cranking the gain blasts the
+        // output. We divide the makeup by (a power of) that same preamp-drive
+        // proxy so the output stays ~flat across the gain sweep, with only a gentle
+        // few-dB rise when cranked (exponent < 1 leaves a little of the natural
+        // "louder when hot" behaviour). Previously the makeup *rose* with gain.
+        // Loudness vs Gain: the raw amp is loudest around mid TB Volume and, past
+        // that, the power amp saturates so the output naturally PLATEAUS/eases off
+        // — i.e. cranking the gain does NOT make a real AC30 keep getting louder.
+        // So the makeup only lifts the clean->breakup region (g up to ~0.5) and
+        // then stays FLAT; it must not rise into the saturated zone or max gain
+        // blasts. (The previous makeup rose all the way to the top.)
+        const float liftG = (g < 0.5f) ? g : 0.5f;
+        const float makeup = 1.0f + 0.70f * liftG;
         const float level = (0.66f * makeup * (0.55f + 0.62f * master)) / toneEnergy;
         return softClip(y * level) * 0.98f;
     }
