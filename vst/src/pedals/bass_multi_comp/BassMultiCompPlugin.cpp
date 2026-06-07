@@ -177,7 +177,11 @@ public:
         // Parallel component keeps attack and makes low Compress settings feel
         // like the original pedal rather than a studio limiter.
         const float dry = 0.20f * (1.0f - compress) + 0.05f;
-        const float makeup = dbToGain(0.6f + 3.0f * compress);
+        // Auto-makeup: tracks the band gain-reduction so raising Compress keeps
+        // the OUTPUT level ~constant (loudness-transparent ±1 dB) instead of
+        // ducking the signal. Tuned offline against a multitone sweep so the
+        // pedal sits at ~unity across Compress 0→1. See AMP_LOUDNESS.md.
+        const float makeup = dbToGain(3.5f + 12.5f * compress * compress);
         float y = clean * dry + compressed * (1.0f - dry) * makeup;
 
         // Very light output safety, not an audible drive stage.
