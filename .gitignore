@@ -29,3 +29,11 @@ gear_photos/
 
 # External build framework (fetched locally, not part of the plugin)
 vst/src/DPF/
+
+AMP_BUILD_GUIDE.md
+AMP_LOUDNESS.md
+AMP_MODELING_GUIDE.md
+PEDAL_DSP_GUIDE.md
+PEDAL_UI_GUIDE.md
+pedal_inspirations.csv
+

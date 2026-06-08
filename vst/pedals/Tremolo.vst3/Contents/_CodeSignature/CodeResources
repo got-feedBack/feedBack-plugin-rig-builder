@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/Tremolo.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			gH+3W2A+m7RqJh9DvRdrJ0wIYZQKpbYQdtMDL6HV9ms=
+			</data>
+		</dict>
+		<key>x86_64-win/Tremolo.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			NB4LYdvM73PyBcZFQhogO36/k53cLZBX/ymX2sY6vhM=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

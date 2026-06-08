@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/StudioDelay.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			kFDVFyLYXEXRWeV2dLnfWuFjtv9dgOM3KQNAHowGyHE=
+			</data>
+		</dict>
+		<key>x86_64-win/StudioDelay.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			wEWNtQBT1Yc2exj8UdyEwUBFMbSTBCeK3JB8PLwJeUI=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

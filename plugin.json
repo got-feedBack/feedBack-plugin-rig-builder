@@ -1,9 +1,9 @@
 {
   "id": "rig_builder",
   "name": "Rig Builder",
-  "version": "2.1.0",
+  "version": "2.1.2",
   "private": false,
-  "nav": { "label": "Rig Builder", "screen": "rig_builder" },
+  "nav": { "label": "Rig Builder", "screen": "plugin-rig_builder" },
   "screen": "screen.html",
   "script": "screen.js",
   "routes": "routes.py"

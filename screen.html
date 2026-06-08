@@ -22,6 +22,11 @@
     #v3-main #rb-root { padding-top: 1.5rem; }
     /* v3: sidebar + Plugins page own navigation, so hide the legacy "< Back". */
     #v3-main #rb-root .rb-back{display:none!important}
+    #rb-root.rb-wide { max-width: min(1400px, calc(100vw - 3rem)); }
+    @media (max-width: 1023px) {
+        #rb-root .rb-gear-browser { grid-template-columns: 1fr !important; }
+        #rb-root.rb-wide { max-width: 100%; }
+    }
 </style>
 <div id="rb-root" class="max-w-5xl mx-auto px-6 pt-24 pb-16">
     <button onclick="showScreen('home')" class="rb-back text-gray-500 hover:text-white text-sm mb-6 flex items-center gap-1">
@@ -102,31 +107,31 @@
             </div>
         </div>
 
-        <!-- View: All gear (catalog) — with search, jump pills, status
-             filter, compact view, and collapsible category sections. -->
+        <!-- View: All gear (catalog browser). -->
         <div id="rb-gear-view-all" class="rb-gear-view">
-            <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-3 mb-4 space-y-2">
-                <div class="flex items-center gap-2 flex-wrap">
+            <div class="rb-gear-browser grid grid-cols-1 lg:grid-cols-2 gap-4" style="grid-template-columns:minmax(260px,320px) minmax(0,1fr)">
+                <aside class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-3 space-y-3">
                     <input id="rb-gear-search" type="text"
                            placeholder="Search gear by name, make, model, codename…"
                            oninput="rbDebouncedGearFilter()"
-                           class="flex-1 min-w-[220px] bg-dark-800 border border-gray-800 rounded-lg px-3 py-1.5 text-sm text-gray-200 placeholder-gray-600 focus:border-accent/50 outline-none">
+                           class="w-full bg-dark-800 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-accent/50 outline-none">
+                    <select id="rb-gear-instrument-filter"
+                            onchange="rbSelectGearInstrument(this.value)"
+                            class="w-full bg-dark-800 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent/50 outline-none">
+                        <option value="all">All instruments</option>
+                        <option value="guitar">Guitar</option>
+                        <option value="bass">Bass</option>
+                    </select>
+                    <div id="rb-gear-category-menu" class="grid grid-cols-2 gap-2"></div>
                     <label class="text-xs text-gray-400 flex items-center gap-1.5 whitespace-nowrap cursor-pointer hover:text-gray-200 transition">
                         <input type="checkbox" id="rb-gear-only-unassigned" onchange="rbApplyGearFilters()" class="rounded">
                         Only unassigned
                     </label>
-                    <label class="text-xs text-gray-400 flex items-center gap-1.5 whitespace-nowrap cursor-pointer hover:text-gray-200 transition">
-                        <input type="checkbox" id="rb-gear-compact" onchange="rbApplyGearFilters()" class="rounded">
-                        Compact
-                    </label>
-                    <button onclick="rbClearGearFilters()"
-                            class="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 transition" title="Reset search + filters">
-                        ✕ Clear
-                    </button>
-                </div>
-                <div id="rb-gear-jump-pills" class="flex gap-1 flex-wrap"></div>
+                    <div id="rb-gear-list-summary" class="text-xs text-gray-500"></div>
+                    <div id="rb-catalog" class="space-y-1 text-sm max-h-[80vh] overflow-y-auto pr-1">Loading…</div>
+                </aside>
+                <section id="rb-gear-detail" class="min-w-0">Loading…</section>
             </div>
-            <div id="rb-catalog" class="space-y-6 text-sm">Loading…</div>
         </div>
 
         <!-- View: Pending (unassigned gears) -->

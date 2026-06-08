@@ -463,6 +463,34 @@ def _get_conn() -> sqlite3.Connection:
             "CREATE INDEX IF NOT EXISTS idx_preset_pieces_rs_gear "
             "ON preset_pieces(rs_gear_type)"
         )
+        # Plugin rename: old installs stored bundled VST absolute paths under
+        # plugins/nam_rig_builder/. The active plugin dir is rig_builder, and
+        # the old directory may no longer exist, so normalize those paths before
+        # applying bundle/subdir migrations below.
+        try:
+            _conn.execute(
+                "UPDATE preset_pieces "
+                "SET vst_path = REPLACE(vst_path, ?, ?) "
+                "WHERE vst_path LIKE ?",
+                ("/plugins/nam_rig_builder/",
+                 "/plugins/rig_builder/",
+                 "%/plugins/nam_rig_builder/%"),
+            )
+        except Exception:
+            log.exception("plugin-dir VST path migration failed")
+        # IR/cab rows must not carry a stale VST path. Older assign flows could
+        # leave vst_path populated while changing the row back to kind='ir' or
+        # kind='rs_ir', which made the Gear tab try to open an unrelated VST for
+        # cabinets.
+        try:
+            _conn.execute(
+                "UPDATE preset_pieces "
+                "SET vst_path = NULL, vst_format = NULL, vst_state = NULL "
+                "WHERE kind IN ('ir', 'rs_ir') "
+                "AND vst_path IS NOT NULL AND vst_path != ''"
+            )
+        except Exception:
+            log.exception("stale cab/IR VST cleanup failed")
         # Renamed bundled VSTs: rewrite stored vst_path basenames old->new so
         # per-song assignments survive the rename. Idempotent — REPLACE matches
         # the full trailing "/<old>.vst3" segment, so it's a no-op once migrated.
@@ -1444,19 +1472,23 @@ def _pick_installed_primary_vst(rs_gear: str, known_lookup: dict) -> dict | None
     candidates = seed.get(rs_gear)
     if not isinstance(candidates, list):
         return None
+    # Prefer bundled Rig Builder plugins over external scan results, even when
+    # the curated list also contains a third-party fallback. This keeps rescan /
+    # batch output on the VSTs shipped with rig_builder instead of silently
+    # drifting back to NAM/external choices.
     for cand in candidates:
         if not isinstance(cand, dict):
             continue
-        # Bundled VST shipped INSIDE this plugin (e.g. AutoSweep) — the system
-        # scan won't list it, so resolve it by plugin-relative path. Makes it
-        # the primary for every user with zero install (works even with no
-        # scan cache). Falls through to the next candidate if the file is gone.
         bundled = cand.get("bundled")
         if bundled:
             bpath = _plugin_dir / bundled
             if bpath.exists():
                 return {"vst_path": str(bpath),
                         "vst_format": cand.get("format") or "VST3"}
+    for cand in candidates:
+        if not isinstance(cand, dict):
+            continue
+        if cand.get("bundled"):
             continue
         if not cand.get("name") or not known_lookup:
             continue
@@ -1472,6 +1504,84 @@ def _pick_installed_primary_vst(rs_gear: str, known_lookup: dict) -> dict | None
         return {"vst_path": installed[0]["path"],
                 "vst_format": installed[0].get("format") or "VST3"}
     return None
+
+
+_AMP_EQ_RS_KEYS = {
+    "bass", "mid", "middle", "treble", "pres", "presence", "res", "resonance",
+    "lo", "low", "lomid", "hi", "high", "himid",
+}
+
+
+def _vst_mapping_stem(vst_path: str) -> str:
+    name = Path(vst_path or "").name
+    for ext in (".vst3", ".component"):
+        if name.lower().endswith(ext):
+            return name[:-len(ext)].lower()
+    return name.lower()
+
+
+def _amp_default_role_for_param(param_name: str) -> str | None:
+    n = re.sub(r"[^a-z0-9]+", " ", str(param_name or "").lower()).strip()
+    if not n:
+        return None
+    if re.search(r"\bgain boost\b|\bboost\b", n):
+        return None
+    if re.search(r"\b(bass|mid|middle|treble|presence|resonance)\b", n):
+        return "eq"
+    if re.search(r"^eq\s*\d+\b|\bgeq\b|\bgain\s+\d+\s+eq\b", n):
+        return "eq"
+    if re.search(r"\b(gain|drive)\b", n):
+        return "gain"
+    if re.search(r"\b(master|volume|vol|output|level|loudness)\b", n):
+        return "volume"
+    return None
+
+
+def _apply_amp_open_defaults(
+    rs_gear: str,
+    vst_path: str,
+    params_by_name: dict | None,
+    knob_table: dict,
+) -> dict:
+    """Gear-level amp defaults: gain 30%, EQ centered, volume/master 60%.
+
+    This intentionally works on the VST state envelope, not on stored
+    Rocksmith `params_json`, so existing song knob maps remain untouched.
+    """
+    params = dict(params_by_name or {})
+    if not rs_gear or not vst_path or _gear_category(rs_gear) != "amp":
+        return params
+
+    gear_block = (knob_table or {}).get(rs_gear) or {}
+    vst_block = gear_block.get(_vst_mapping_stem(vst_path)) or {}
+    protected: set[str] = set()
+
+    for rs_knob, spec in vst_block.items():
+        if not isinstance(spec, dict):
+            continue
+        pname = spec.get("param")
+        if not isinstance(pname, str) or not pname:
+            continue
+        key = str(rs_knob).lower()
+        if key == "gain":
+            params[pname] = 0.30
+            protected.add(pname.lower())
+        elif key in _AMP_EQ_RS_KEYS:
+            params[pname] = 0.50
+            protected.add(pname.lower())
+
+    for pname in list(params.keys()):
+        if str(pname).lower() in protected:
+            continue
+        role = _amp_default_role_for_param(pname)
+        if role == "gain":
+            params[pname] = 0.30
+        elif role == "eq":
+            params[pname] = 0.50
+        elif role == "volume":
+            params[pname] = 0.60
+
+    return params
 
 
 def _compute_vst_state_for_piece(rs_gear: str, vst_path: str,
@@ -1521,9 +1631,30 @@ def _compute_vst_state_for_piece(rs_gear: str, vst_path: str,
                     rs_gear, vst_path, exc_info=True)
         return None
     if result is None:
-        return json.dumps({"params": {}})
-    params_by_name, _skipped = result
+        params_by_name = {}
+    else:
+        params_by_name, _skipped = result
     return json.dumps({"params": params_by_name})
+
+
+def _compute_gear_open_vst_state(rs_gear: str, vst_path: str) -> str | None:
+    """Default state for opening a gear-level VST editor/audition.
+
+    This is intentionally separate from _compute_vst_state_for_piece(), which
+    preserves song-specific Rocksmith knob mapping. Gear-level browsing has no
+    song tone, so amps open at neutral musical defaults instead.
+    """
+    state = _compute_vst_state_for_piece(rs_gear, vst_path, {}) or "{}"
+    try:
+        env = json.loads(state)
+        params = env.get("params") if isinstance(env, dict) else {}
+    except (ValueError, TypeError):
+        params = {}
+    if not isinstance(params, dict):
+        params = {}
+    params = _apply_amp_open_defaults(
+        rs_gear, vst_path, params, _load_knob_to_vst_table() or {})
+    return json.dumps({"params": params})
 
 
 def _effective_vst_state_for_piece(
@@ -7652,7 +7783,7 @@ def setup(app, context):
             ).fetchall()
         best: dict[str, dict] = {}
         for gear, kind, file, t3kid, _id, vst_path, vst_format, vst_state in rows:
-            has_assignment = bool(file) or (kind == "vst" and bool(vst_path))
+            has_assignment = bool(file) or bool(vst_path)
             cur = best.get(gear)
             if cur is None or (has_assignment and not cur["has_assignment"]):
                 best[gear] = {
@@ -7769,6 +7900,23 @@ def setup(app, context):
         # surfacing them all would bury the useful gear. Cabs still appear when
         # a song actually uses them (they're already in `best`).
         known_lookup = _build_known_vst_lookup()
+        for gear, b in list(best.items()):
+            if not gear or b.get("vst_path"):
+                continue
+            info = rs_map.get(gear) or {}
+            cat = info.get("category") or _category_from_codename(gear)
+            if cat == "cab":
+                continue
+            prim = _pick_installed_primary_vst(gear, known_lookup)
+            if not prim:
+                continue
+            b["kind"] = "vst"
+            b["file"] = None
+            b["has_assignment"] = True
+            b["vst_path"] = prim["vst_path"]
+            b["vst_format"] = prim["vst_format"]
+            b.setdefault("vst_state", None)
+
         for gear, info in rs_map.items():
             if gear.startswith("_") or not isinstance(info, dict) or gear in best:
                 continue
@@ -7792,10 +7940,10 @@ def setup(app, context):
         for gear, b in best.items():
             info = rs_map.get(gear) or {}
             category = info.get("category") or _category_from_codename(gear)
-            # Bundled-VST gears show a copyright-free model name (Chief pedals =
-            # just their model code, e.g. 'CB-3') instead of the real make/model.
+            # Gear with an assigned VST shows its copyright-free display name
+            # when available, even if the historical row is still kind="nam".
             real_name = info.get("name") or gear
-            if b["kind"] == "vst" and b["vst_path"]:
+            if b.get("vst_path"):
                 dn = display_names.get(_vst_display_stem(b["vst_path"]))
                 if dn:
                     real_name = dn
@@ -7803,6 +7951,9 @@ def setup(app, context):
             meta = img_idx.get(t3kid) if t3kid else None
             variants = _variants_for(gear, info) if category == "amp" else []
             mic_variants = _mic_variants_for(gear) if category == "cab" else []
+            vst_state = b["vst_state"]
+            if category == "amp" and b.get("vst_path"):
+                vst_state = _compute_gear_open_vst_state(gear, b["vst_path"])
             cats.setdefault(category, []).append({
                 "rs_gear": gear,
                 "real_name": real_name,
@@ -7815,7 +7966,7 @@ def setup(app, context):
                 "file": b["file"],
                 "vst_path": b["vst_path"],
                 "vst_format": b["vst_format"],
-                "vst_state": b["vst_state"],
+                "vst_state": vst_state,
                 "tone3000_id": t3kid,
                 "tone3000_title": (meta or {}).get("title"),
                 "image": (meta or {}).get("image"),

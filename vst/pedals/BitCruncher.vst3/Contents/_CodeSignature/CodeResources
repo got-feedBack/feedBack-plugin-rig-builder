@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/BitCruncher.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			pj3CRc+axxxbtRuzG78Jzisk0IT+cIbI733tiHWe0vg=
+			</data>
+		</dict>
+		<key>x86_64-win/BitCruncher.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			tWmaJAxlRCQPVCbXXoEkR1uiog7vUScRBSfDJPKEzjs=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

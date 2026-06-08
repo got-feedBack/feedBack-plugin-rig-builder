@@ -23,6 +23,12 @@ START_NAMESPACE_DISTRHO
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
 static inline float softClip(float x) { return std::tanh(x); }
+static inline float clamp01(float v) {
+    return v < 0.f ? 0.f : (v > 1.f ? 1.f : v);
+}
+static inline float rbFiniteAudio(float x) {
+    return std::isfinite(x) ? (x < -4.f ? -4.f : (x > 4.f ? 4.f : x)) : 0.f;
+}
 
 // ── RBJ biquad — subtractive tone stack ──────────────────────────────────────
 class Biquad {
@@ -30,10 +36,15 @@ class Biquad {
 public:
     void reset() { z1 = z2 = 0.f; }
     inline float process(float x) {
+        if (!std::isfinite(x)) { reset(); return 0.f; }
         const float y = b0 * x + z1;
         z1 = b1 * x - a1 * y + z2;
         z2 = b2 * x - a2 * y;
-        return y;
+        if (!std::isfinite(y) || !std::isfinite(z1) || !std::isfinite(z2)) {
+            reset();
+            return 0.f;
+        }
+        return rbFiniteAudio(y);
     }
     void setLowShelf(float fc, float dB, float fs) {
         const float A = std::pow(10.f, dB / 40.f);
@@ -157,6 +168,8 @@ public:
     void reset() { v1.reset(); bqBass.reset(); bqMid.reset(); bqTreble.reset(); pwrLP.reset(); }
 
     void setParams(float gain, float bass, float middle, float treble, float masterP, bool active) {
+        gain = clamp01(gain); bass = clamp01(bass); middle = clamp01(middle);
+        treble = clamp01(treble); masterP = clamp01(masterP);
         const float pad = active ? 0.45f : 1.0f;          // Active input pads hot basses
         drive = (0.4f + gain * 9.0f) * pad;
 
@@ -172,11 +185,21 @@ public:
     }
 
     inline float process(float x) {
+        if (!std::isfinite(x)) { reset(); return 0.f; }
         float s = (float)v1.process((double)(drive * x));        // 12AX7 input
+        if (!std::isfinite(s)) {
+            reset();
+            s = softClip(drive * x) * 0.35f;
+        } else if (std::fabs(s) < 1.0e-8f && std::fabs(x) > 1.0e-6f) {
+            // Some hosts can activate the plugin before the MNA stage has settled.
+            // Keep the amp audible instead of letting a silent first state persist.
+            s = softClip(drive * x) * 0.20f;
+        }
         s = bqBass.process(s); s = bqMid.process(s); s = bqTreble.process(s);  // subtractive stack
         s = pushPull(s * pwrDrive) * master;                     // 4x KT88 power
         s = pwrLP.process(s);
-        return s;
+        if (!std::isfinite(s)) { reset(); return 0.f; }
+        return rbFiniteAudio(s);
     }
 };
 
@@ -213,12 +236,23 @@ protected:
         p.ranges.min = kCitrusMin[i]; p.ranges.max = kCitrusMax[i]; p.ranges.def = kCitrusDef[i];
     }
     float getParameterValue(uint32_t i) const override { return (i < (uint32_t)kParamCount) ? fParams[i] : 0.f; }
-    void  setParameterValue(uint32_t i, float v) override { if (i < (uint32_t)kParamCount) { fParams[i] = v; recalc(); } }
+    void  setParameterValue(uint32_t i, float v) override {
+        if (i < (uint32_t)kParamCount) {
+            fParams[i] = std::isfinite(v) ? clamp01(v) : kCitrusDef[i];
+            recalc();
+        }
+    }
+    void  activate() override { L.reset(); R.reset(); recalc(); }
     void  sampleRateChanged(double r) override { L.setSampleRate((float)r); R.setSampleRate((float)r); L.reset(); R.reset(); recalc(); }
 
     void run(const float** in, float** out, uint32_t frames) override {
         const float* iL = in[0]; const float* iR = in[1]; float* oL = out[0]; float* oR = out[1];
-        for (uint32_t i = 0; i < frames; ++i) { oL[i] = rbAmpLvl(kCitrusLvl * softClip(kCitrusMakeup * L.process(iL[i])) * 0.98f); oR[i] = rbAmpLvl(kCitrusLvl * softClip(kCitrusMakeup * R.process(iR[i])) * 0.98f); }
+        for (uint32_t i = 0; i < frames; ++i) {
+            const float l = rbFiniteAudio(kCitrusLvl * softClip(kCitrusMakeup * L.process(iL[i])) * 0.98f);
+            const float r = rbFiniteAudio(kCitrusLvl * softClip(kCitrusMakeup * R.process(iR[i])) * 0.98f);
+            oL[i] = rbAmpLvl(l);
+            oR[i] = rbAmpLvl(r);
+        }
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CitrusPlugin)
 };

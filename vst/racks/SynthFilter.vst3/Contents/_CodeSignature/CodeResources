@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/SynthFilter.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			yTjhAwBV/7kCBXFiM+SpnWv/83etIJUIJAt02Y5hMpA=
+			</data>
+		</dict>
+		<key>x86_64-win/SynthFilter.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			gTBpaFZvnmzgEEvOY2Xlr38Y9P/qi1hUTJw4pIx96+s=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

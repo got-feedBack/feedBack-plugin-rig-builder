@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/TapeEcho.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			qxUaJ4R5is3pDMTaPFVCuYR/t2LxAgL8G7jHybBgs54=
+			</data>
+		</dict>
+		<key>x86_64-win/TapeEcho.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			tP5wsvOpHNxHaDv6UNN0pRiPRF5BaaYkSOWTKo/6ww0=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

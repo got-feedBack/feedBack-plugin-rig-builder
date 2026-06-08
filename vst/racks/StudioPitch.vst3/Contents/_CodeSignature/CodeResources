@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/StudioPitch.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			/cvPvYlaPEFbBmx6Vp9wUgWTqqhL/2Eig4I7/k+nIG8=
+			</data>
+		</dict>
+		<key>x86_64-win/StudioPitch.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			MdEPK5p3Jjjc11d1qSy/4I2sU/9yfFkcix6dItcyDXw=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

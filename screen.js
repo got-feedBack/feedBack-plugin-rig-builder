@@ -1,4 +1,61 @@
 // NAM Rig Builder plugin — Rocksmith tone → NAM preset mapping UI.
+window.RB_API = window.RB_API || '/api/plugins/rig_builder';
+
+window.NAM_API = window.NAM_API || '/api/plugins/nam_tone';
+
+function rbScopeCss(css) {
+    const prefixSelector = (selector) => {
+        const s = selector.trim();
+        if (!s || s.startsWith('#rb-root')) return s;
+        if (s === 'html' || s === 'body' || s === ':root') return '#rb-root';
+        return `#rb-root ${s}`;
+    };
+    let out = '';
+    let i = 0;
+    while (i < css.length) {
+        const open = css.indexOf('{', i);
+        if (open < 0) {
+            out += css.slice(i);
+            break;
+        }
+        const prelude = css.slice(i, open).trim();
+        let depth = 1;
+        let j = open + 1;
+        while (j < css.length && depth > 0) {
+            const ch = css[j++];
+            if (ch === '{') depth += 1;
+            else if (ch === '}') depth -= 1;
+        }
+        const body = css.slice(open + 1, j - 1);
+        if (/^@(media|supports|container)\b/.test(prelude)) {
+            out += `${prelude}{${rbScopeCss(body)}}`;
+        } else if (/^@(keyframes|-webkit-keyframes|font-face)\b/.test(prelude)) {
+            out += `${prelude}{${body}}`;
+        } else {
+            out += `${prelude.split(',').map(prefixSelector).join(',')}{${body}}`;
+        }
+        i = j;
+    }
+    return out;
+}
+
+function rbEnsureScopedCss() {
+    const existing = document.getElementById('rb-css');
+    if (existing && existing.tagName === 'STYLE') return;
+    if (window.__rbCssLoading) return;
+    if (existing) existing.remove();
+    window.__rbCssLoading = true;
+    fetch('/api/plugins/rig_builder/asset/rb.css')
+        .then(r => r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status}`)))
+        .then(css => {
+            const st = document.createElement('style');
+            st.id = 'rb-css';
+            st.textContent = rbScopeCss(css);
+            document.head.appendChild(st);
+        })
+        .catch(e => console.warn('[rig_builder] failed to load scoped CSS:', e))
+        .finally(() => { window.__rbCssLoading = false; });
+}
 
 (function () {
     // Idempotency: showScreen is wrapped at most once even if screen.js
@@ -15,36 +72,35 @@
         const sc = document.createElement('script');
         sc.id = 'rb-pedal-canvas-js';
         sc.src = '/api/plugins/rig_builder/asset/pedal_canvas.js';
-        sc.onload = () => { try { window.RBPedalCanvas && window.RBPedalCanvas.ready(); } catch (_) {} };
+        sc.onload = () => {
+            try {
+                window.RBPedalCanvas && window.RBPedalCanvas.ready().then(() => {
+                    try { if (rbState.currentTab === 'gear') rbApplyGearFilters(); } catch (_) {}
+                });
+            } catch (_) {}
+        };
         document.head.appendChild(sc);
     }
 
-    // Self-contained Tailwind stylesheet (assets/rb.css, built by
-    // tools/build_tailwind.sh). The host regenerates tailwind.min.css to cover
-    // a plugin's classes, but several builds skip that rebuild (no node) —
-    // leaving classes the host itself doesn't use undefined (white borders,
-    // collapsed `gap-x-4`, etc.). Loading our own build makes the UI correct
-    // everywhere, independent of the host rebuild.
-    if (!document.getElementById('rb-css')) {
-        const lk = document.createElement('link');
-        lk.id = 'rb-css';
-        lk.rel = 'stylesheet';
-        lk.href = '/api/plugins/rig_builder/asset/rb.css';
-        document.head.appendChild(lk);
-    }
-
     const origShowScreen = window.showScreen;
+
     if (typeof origShowScreen === 'function') {
-        window.showScreen = function (id) {
-            origShowScreen(id);
-            if (id === 'plugin-rig_builder') {
-                rbInit();
-            } else {
-                // Leaving NAM Rig Builder: close any open native VST editor
-                // window (so the next screen's loadPreset can't crash the host
-                // by clearing its slot) and stop any live preview/audition.
-                rbOnLeaveRigBuilder();
+        window.showScreen = function (...args) {
+            const id = args[0];
+
+            const result = origShowScreen.apply(this, args);
+
+            try {
+                if (id === 'plugin-rig_builder') {
+                    rbInit();
+                } else if (typeof rbOnLeaveRigBuilder === 'function') {
+                    rbOnLeaveRigBuilder();
+                }
+            } catch (e) {
+                console.warn('[rig_builder] showScreen hook failed:', e);
             }
+
+            return result;
         };
     }
     // The host always emits 'screen:changed' on navigation — even when it calls
@@ -279,7 +335,7 @@ function rbApplyChainInputDrive(opts) {
     // an explicit isBass — they already KNOW the answer (catalog
     // audition path).
     const calledExplicitly = opts && (opts.isBass === true || opts.isBass === false || Array.isArray(opts.chain));
-    if (!calledExplicitly && !opts?._isRepoll) {
+    if (!calledExplicitly && !(opts && opts._isRepoll)) {
         setTimeout(() => rbApplyChainInputDrive({ _isRepoll: true }), 1500);
         setTimeout(() => rbApplyChainInputDrive({ _isRepoll: true }), 3500);
     }
@@ -443,7 +499,7 @@ async function rbSetChainMakeup(v) {
         const base = (typeof window.__rbChainBaseTarget === 'number') ? window.__rbChainBaseTarget : 1.0;
         audio.setGain('chain', base * val).catch(() => {});
     }
-    fetch(`${RB_API}/settings`, {
+    fetch(`${window.RB_API}/settings`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chain_makeup: val }),
     }).catch(() => {});
@@ -460,7 +516,7 @@ async function rbSetAmpDrive(v) {
     const el = document.getElementById('rb-amp-drive-val');
     if (el) el.textContent = val.toFixed(1) + '×';
     rbApplyChainInputDrive();   // re-applies respecting bass detection
-    fetch(`${RB_API}/settings`, {
+    fetch(`${window.RB_API}/settings`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nam_chain_input_drive: val }),
     }).catch(() => {});
@@ -732,8 +788,6 @@ function rbEffVstPath(p)  { return p._vst_path || (p.assigned && p.assigned.vst_
 function rbEffVstFormat(p){ return p._vst_format || (p.assigned && p.assigned.vst_format) || 'VST3'; }
 function rbEffVstState(p) { return p._vst_state ?? (p.assigned && p.assigned.vst_state) ?? null; }
 
-const RB_API = '/api/plugins/rig_builder';
-
 // Cache-bust query for gear-photo URLs. Set once per session so:
 //   - 200 responses still ETag-validate on each refresh (no extra
 //     network traffic — the param doesn't change between renders)
@@ -743,7 +797,6 @@ const RB_API = '/api/plugins/rig_builder';
 // The current epoch is plenty unique; we only need it to differ
 // across plugin restarts.
 const _RB_GEAR_PHOTO_CB = `?cb=${Date.now()}`;
-const NAM_API = '/api/plugins/nam_tone';
 
 // ── RbMegaChain: pre-loaded whole-song chain with bypass-flip switching
 //
@@ -968,7 +1021,7 @@ const RbMegaChain = (function () {
 
         let resp;
         try {
-            resp = await fetch(`${RB_API}/mega_chain/${encodeURIComponent(filename)}`);
+            resp = await fetch(`${window.RB_API}/mega_chain/${encodeURIComponent(filename)}`);
         } catch (e) {
             console.warn('[rig_builder mega-chain] fetch failed:', e);
             return false;
@@ -1383,7 +1436,7 @@ const RbMegaChain = (function () {
     // the flag stays undefined and the hook below thinks the setting is
     // off. Fire-and-forget — the polling fallback will pick up the song
     // as soon as the flag flips.
-    fetch(`${RB_API}/settings`).then(r => r.json()).then(s => {
+    fetch(`${window.RB_API}/settings`).then(r => r.json()).then(s => {
         if (s && typeof s.mega_chain_mode !== 'undefined') {
             window.__rbMegaChainSetting = !!s.mega_chain_mode;
             console.log(`[rig_builder mega-chain] boot setting=${window.__rbMegaChainSetting} (read from /settings)`);
@@ -1474,8 +1527,9 @@ function rbEsc(s) {
 // ── Init / status ───────────────────────────────────────────────────
 
 async function rbInit() {
+    rbEnsureScopedCss();
     try {
-        const r = await fetch(`${RB_API}/status`);
+        const r = await fetch(`${window.RB_API}/status`);
         rbState.status = await r.json();
     } catch (e) {
         document.getElementById('rb-status').innerHTML = rbBanner(
@@ -1552,6 +1606,7 @@ function rbShowTab(name) {
     // orphaned native window can't crash the host on the next chain load.
     rbCloseActiveVstEditor();
     rbState.currentTab = name;
+    document.getElementById('rb-root')?.classList.toggle('rb-wide', name === 'gear');
     document.querySelectorAll('.rb-tab-panel').forEach(el => el.classList.add('hidden'));
     const panel = document.getElementById(`rb-tab-${name}`);
     if (panel) panel.classList.remove('hidden');
@@ -1629,7 +1684,7 @@ async function rbLoadManageTab() {
     // overwriting the live progress line with a "Loading inventory…"
     // flash. The poll will fill `summary` on the next tick.
     try {
-        const st = await (await fetch(`${RB_API}/preload_status`)).json();
+        const st = await (await fetch(`${window.RB_API}/preload_status`)).json();
         if (st && st.running) {
             rbPreloadStartPolling();
         }
@@ -1638,7 +1693,7 @@ async function rbLoadManageTab() {
     root.innerHTML = '';
     let data;
     try {
-        const r = await fetch(`${RB_API}/nam_inventory`);
+        const r = await fetch(`${window.RB_API}/nam_inventory`);
         data = await r.json();
         if (!r.ok) throw new Error(data.error || r.status);
     } catch (e) {
@@ -1721,7 +1776,7 @@ async function rbDeleteNamFile(path) {
         return;
     }
     try {
-        const r = await fetch(`${RB_API}/nam_file?path=${encodeURIComponent(path)}`, {
+        const r = await fetch(`${window.RB_API}/nam_file?path=${encodeURIComponent(path)}`, {
             method: 'DELETE',
         });
         const d = await r.json();
@@ -1742,7 +1797,7 @@ async function rbPreloadCuratedVariants() {
         return;
     }
     try {
-        const r = await fetch(`${RB_API}/preload_curated_variants`, {
+        const r = await fetch(`${window.RB_API}/preload_curated_variants`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
@@ -1782,7 +1837,7 @@ function rbPreloadStopPolling() {
 async function rbPreloadPollOnce() {
     let st;
     try {
-        st = await (await fetch(`${RB_API}/preload_status`)).json();
+        st = await (await fetch(`${window.RB_API}/preload_status`)).json();
     } catch (e) {
         return;
     }
@@ -1821,7 +1876,7 @@ async function rbPurgeNams(filter, label) {
         return;
     }
     try {
-        const r = await fetch(`${RB_API}/nam_purge`, {
+        const r = await fetch(`${window.RB_API}/nam_purge`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...filter, confirm: true }),
@@ -1862,7 +1917,7 @@ async function rbStartBatch(mode) {
     const btns = document.querySelectorAll('.rb-batch-btn');
     btns.forEach(b => { b.disabled = true; });
     try {
-        const r = await fetch(`${RB_API}/batch_all`, {
+        const r = await fetch(`${window.RB_API}/batch_all`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ mode }),
@@ -1884,7 +1939,7 @@ async function rbStartBatch(mode) {
 async function rbPollBatch() {
     let st;
     try {
-        const r = await fetch(`${RB_API}/batch_status`);
+        const r = await fetch(`${window.RB_API}/batch_status`);
         st = await r.json();
     } catch (e) {
         return;
@@ -1917,7 +1972,7 @@ async function rbLoadPending() {
     el.innerHTML = '<span class="text-gray-500">Loading…</span>';
     let data;
     try {
-        const r = await fetch(`${RB_API}/coverage`);
+        const r = await fetch(`${window.RB_API}/coverage`);
         data = await r.json();
     } catch (e) {
         el.innerHTML = `<span class="text-red-400">Error: ${rbEsc(e.message)}</span>`;
@@ -1966,7 +2021,7 @@ async function rbOpenSuggest(rsGear, queryOverride = '', gearsOverride = '') {
     if (gearsOverride) qs.set('gears_override', gearsOverride);
     let data;
     try {
-        const r = await fetch(`${RB_API}/search?${qs}`);
+        const r = await fetch(`${window.RB_API}/search?${qs}`);
         data = await r.json();
     } catch (e) {
         alert(`Search failed: ${e.message}`);
@@ -2063,7 +2118,7 @@ async function rbOpenSuggest(rsGear, queryOverride = '', gearsOverride = '') {
                 Open tone3000.com with these filters ↗
             </a>
         </div>`;
-    document.body.appendChild(modal);
+    (document.getElementById('rb-root') || document.body).appendChild(modal);
 }
 
 function rbSuggestRerun(rsGear) {
@@ -2077,7 +2132,7 @@ async function rbSuggestSaveOverride(rsGear) {
     const g = document.getElementById('rb-suggest-gears').value.trim();
     if (!q) { alert('Query required'); return; }
     try {
-        const r = await fetch(`${RB_API}/override_query`, {
+        const r = await fetch(`${window.RB_API}/override_query`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ rs_gear: rsGear, query: q, gears: g }),
@@ -2127,7 +2182,7 @@ function rbOnSongSearchInput() {
 
 async function rbListSongs() {
     const q = document.getElementById('rb-song-search').value.trim();
-    const r = await fetch(`${RB_API}/list_songs?q=${encodeURIComponent(q)}`);
+    const r = await fetch(`${window.RB_API}/list_songs?q=${encodeURIComponent(q)}`);
     const data = await r.json();
     const el = document.getElementById('rb-song-list');
     if (!data.songs.length) {
@@ -2252,7 +2307,7 @@ async function rbAutoDownloadSong(filename, unmappedCount, container) {
     banner.innerHTML = `<p class="text-blue-400">⬇ Auto-downloading ${unmappedCount} unassigned piece(s) from tone3000…</p>`;
     container.prepend(banner);
     try {
-        const r = await fetch(`${RB_API}/auto_download_song`, {
+        const r = await fetch(`${window.RB_API}/auto_download_song`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ filename }),
@@ -2292,7 +2347,7 @@ async function rbAutoDownloadSong(filename, unmappedCount, container) {
 
 async function rbFetchSong(filename) {
     try {
-        const r = await fetch(`${RB_API}/song/${encodeURIComponent(filename)}`);
+        const r = await fetch(`${window.RB_API}/song/${encodeURIComponent(filename)}`);
         return await r.json();
     } catch (e) {
         return null;
@@ -2515,7 +2570,7 @@ function rbRenderPieceCard(p, toneIdx, pIdx, isSelected, total) {
     // this rs_gear. The onerror swaps the broken <img> for the sibling
     // placeholder via plain DOM properties — avoids HTML-in-attribute
     // escaping bugs.
-    const imgUrl = `${RB_API}/gear_photo/${encodeURIComponent(p.type)}${_RB_GEAR_PHOTO_CB}`;
+    const imgUrl = `${window.RB_API}/gear_photo/${encodeURIComponent(p.type)}${_RB_GEAR_PHOTO_CB}`;
     const onerr = "this.style.display='none'; var n=this.nextElementSibling; if(n) n.classList.remove('hidden');";
     // For pieces backed by one of our canvas-UI VSTs, show the recreated
     // plugin face (at the piece's current param values) instead of RS art.
@@ -2702,7 +2757,7 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
     // Big photo for the editor (same source as the chain cards).
     // Same sibling-swap pattern as rbRenderPieceCard — see comment there
     // for why we avoid the `JSON.stringify` inside an attribute approach.
-    const imgUrl = `${RB_API}/gear_photo/${encodeURIComponent(p.type)}${_RB_GEAR_PHOTO_CB}`;
+    const imgUrl = `${window.RB_API}/gear_photo/${encodeURIComponent(p.type)}${_RB_GEAR_PHOTO_CB}`;
     const onerrBig = "this.style.display='none'; var n=this.nextElementSibling; if(n) n.classList.remove('hidden');";
     // Plugin-UI face for our canvas-backed VSTs (current param values).
     const pStemBig = rbCanvasStem(p);
@@ -3175,7 +3230,7 @@ async function rbToneEditVst(toneIdx, pIdx) {
             } catch (_) { /* UI-less plugin: no native editor view to open */ }
         }
     } catch (e) {
-        editor.innerHTML = `<div class="text-xs text-red-400">load failed: ${rbEsc(e.message || e)}</div>`;
+        editor.innerHTML = `<div class="text-xs text-red-400">load failed: ${rbEsc(rbFriendlyVstLoadError(e))}</div>`;
     } finally {
         rbState._vstEditorBusy = false;
     }
@@ -3189,7 +3244,16 @@ function rbVstRefusedMsg() {
     return 'engine refused to load this plugin'
         + (rbIsWindows()
             ? ' — heads up: the bundled effects only ship a macOS build right now, so they can\'t load on Windows yet (a Windows build is on the way).'
-            : '');
+            : ' — the plugin binary could not be opened. Check OS/CPU compatibility, macOS quarantine/blocking, and that the .vst3/.component bundle is complete.');
+}
+
+function rbFriendlyVstLoadError(e) {
+    const raw = String((e && e.message) || e || '').trim();
+    if (!raw) return 'VST load failed';
+    if (/engine refused/i.test(raw) || /refused (to load )?(this )?plugin/i.test(raw)) {
+        return rbVstRefusedMsg();
+    }
+    return raw;
 }
 
 // Normalize a VST path → canvas spec key (lowercased basename, no separators).
@@ -3203,19 +3267,16 @@ function rbHasCanvasUI(piece) {
     return !!(window.RBPedalCanvas && window.RBPedalCanvas.has(rbCanvasStem(piece)));
 }
 
-// Display width for the inline canvas. Portrait stomps read fine at 240px;
-// LANDSCAPE pedals (e.g. Eden WTDI 560×360) get squashed too short at 240, so
-// their lettering becomes unreadable — give them more width. max-width:100% in
-// the markup keeps it from overflowing a narrow panel.
+// Display width for the inline canvas. Keep each VST at a readable default
+// size based on its own aspect ratio; max-width:100% in the markup keeps it
+// from overflowing a narrow panel.
 function rbCanvasDisplayWidth(stem) {
     const sp = window.RBPedalCanvas && window.RBPedalCanvas.specs && window.RBPedalCanvas.specs[stem];
-    if (!sp || sp.w <= sp.h * 1.15) return 240;          // portrait
+    if (!sp) return 420;
     const aspect = sp.w / sp.h;
-    // Very wide (1U racks ≈ 4.4:1, amp heads ≈ 3.3:1) need more width so the
-    // small labels stay legible; moderate landscape (Eden/Q-Tron) scales with
-    // the aspect. max-width:100% in the markup keeps it from overflowing.
+    if (aspect <= 1.15) return Math.max(380, Math.min(460, Math.round(aspect * 620)));
     if (aspect > 3) return 1320;
-    return Math.max(360, Math.min(440, Math.round(aspect * 256)));
+    return Math.max(560, Math.min(860, Math.round(aspect * 430)));
 }
 
 // Build the {key: value} map the canvas reads, keyed BOTH by numeric paramId
@@ -3513,7 +3574,7 @@ async function rbPickVariant(toneIdx, pIdx, level) {
         }
     }
     try {
-        const r = await fetch(`${RB_API}/piece_variant_override`, {
+        const r = await fetch(`${window.RB_API}/piece_variant_override`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 preset_id: presetId,
@@ -3557,7 +3618,7 @@ async function rbToggleGearSwap(toneIdx, pIdx) {
 async function rbLoadGearsInCategory(category) {
     window.__rbGearCatCache = window.__rbGearCatCache || {};
     if (window.__rbGearCatCache[category]) return window.__rbGearCatCache[category];
-    const r = await fetch(`${RB_API}/gears_in_category/${encodeURIComponent(category)}`);
+    const r = await fetch(`${window.RB_API}/gears_in_category/${encodeURIComponent(category)}`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     window.__rbGearCatCache[category] = data.gears || [];
@@ -3650,7 +3711,7 @@ async function rbConfirmGearSwap(toneIdx, pIdx, toRsGear) {
         }
     }
     try {
-        const r = await fetch(`${RB_API}/gear/replace_with`, {
+        const r = await fetch(`${window.RB_API}/gear/replace_with`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 preset_id: presetId,
@@ -3685,7 +3746,7 @@ async function rbRefreshSongAfterEdit(toneIdx) {
     const filename = rbState.songTones && rbState.songTones.filename;
     if (!filename) return;
     try {
-        const r = await fetch(`${RB_API}/song/${encodeURIComponent(filename)}`);
+        const r = await fetch(`${window.RB_API}/song/${encodeURIComponent(filename)}`);
         if (!r.ok) return;
         const fresh = await r.json();
         // Seed bypass on the fresh data BEFORE replacing rbState so the
@@ -3713,7 +3774,7 @@ async function rbLoadMasterChain() {
     const statusEl = document.getElementById('rb-master-status');
     if (statusEl) statusEl.textContent = 'Loading master chain…';
     try {
-        const r = await fetch(`${RB_API}/master_chain`);
+        const r = await fetch(`${window.RB_API}/master_chain`);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const data = await r.json();
         rbState.master.pre  = Array.isArray(data.pre)  ? data.pre  : [];
@@ -3885,7 +3946,7 @@ async function rbPersistMasterChain(role) {
         };
     });
     try {
-        const r = await fetch(`${RB_API}/master_chain/save`, {
+        const r = await fetch(`${window.RB_API}/master_chain/save`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ role, pieces }),
@@ -3984,7 +4045,7 @@ async function rbMasterEditVst(role, idx) {
             } catch (_) { /* UI-less plugin: no native editor view to open */ }
         }
     } catch (e) {
-        editor.innerHTML = `<div class="text-xs text-red-400">load failed: ${rbEsc(e.message || e)}</div>`;
+        editor.innerHTML = `<div class="text-xs text-red-400">load failed: ${rbEsc(rbFriendlyVstLoadError(e))}</div>`;
     } finally {
         rbState._vstEditorBusy = false;
     }
@@ -4190,7 +4251,7 @@ async function rbOpenMasterAddPiecePicker(role) {
     picker.innerHTML = `<div class="text-xs text-gray-500">Loading gear catalog…</div>`;
     if (_rbGearsCatalog === null) {
         try {
-            const r = await fetch(`${RB_API}/gears_catalog`);
+            const r = await fetch(`${window.RB_API}/gears_catalog`);
             const data = await r.json();
             _rbGearsCatalog = (data && data.gears) || [];
         } catch (_) { _rbGearsCatalog = []; }
@@ -4368,7 +4429,7 @@ async function rbMasterAssignFromLibrary(role, idx, kind) {
     panel.classList.remove('hidden');
     panel.innerHTML = `<div class="text-xs text-gray-500">Loading library…</div>`;
     try {
-        const r = await fetch(`${RB_API}/local_files?kind=${kind}`);
+        const r = await fetch(`${window.RB_API}/local_files?kind=${kind}`);
         const data = await r.json();
         const files = data.files || [];
         const inputId = `rb-master-${role}-${idx}-libsearch`;
@@ -4534,7 +4595,7 @@ async function rbOpenAddPiecePicker(toneIdx, filename) {
     modal.innerHTML = `<div class="text-xs text-gray-500">Loading gear catalog…</div>`;
     if (_rbGearsCatalog === null) {
         try {
-            const r = await fetch(`${RB_API}/gears_catalog`);
+            const r = await fetch(`${window.RB_API}/gears_catalog`);
             const data = await r.json();
             _rbGearsCatalog = (data && data.gears) || [];
         } catch (_) {
@@ -5021,7 +5082,7 @@ function rbRenderVstPanelBody(toneIdx, pIdx, currentVstPath, currentFormat) {
 async function rbComputeRsMappedParams(rsGearType, rsKnobs, vstStem, paramsList) {
     let mapping;
     try {
-        const r = await fetch(`${RB_API}/vst/knob_mapping?rs_gear_type=${encodeURIComponent(rsGearType)}&vst_name=${encodeURIComponent(vstStem)}`);
+        const r = await fetch(`${window.RB_API}/vst/knob_mapping?rs_gear_type=${encodeURIComponent(rsGearType)}&vst_name=${encodeURIComponent(vstStem)}`);
         const data = await r.json();
         mapping = data && data.mapping;
     } catch (_) { return null; }
@@ -5084,7 +5145,7 @@ async function rbApplyRsSettingsToVst(toneIdx, pIdx) {
     setStatus('looking up mapping…');
     let mapping;
     try {
-        const r = await fetch(`${RB_API}/vst/knob_mapping?rs_gear_type=${encodeURIComponent(piece.type)}&vst_name=${encodeURIComponent(vstStem)}`);
+        const r = await fetch(`${window.RB_API}/vst/knob_mapping?rs_gear_type=${encodeURIComponent(piece.type)}&vst_name=${encodeURIComponent(vstStem)}`);
         const data = await r.json();
         mapping = data && data.mapping;
     } catch (e) {
@@ -5251,7 +5312,7 @@ async function rbLoadKnownVsts() {
         return Array.from(byPath.values()).sort((x, y) => String(x.name || '').localeCompare(String(y.name || '')));
     };
     const loadBackend = async () => {
-        const r = await fetch(`${RB_API}/vst/known`);
+        const r = await fetch(`${window.RB_API}/vst/known`);
         if (!r.ok) return [];
         const data = await r.json();
         return Array.isArray(data.plugins) ? data.plugins : [];
@@ -5267,7 +5328,7 @@ async function rbLoadKnownVsts() {
                 rbState.knownVsts = mergeByPath(backendPlugins, plugins);
                 // Sync to our backend cache so future loads work even if
                 // the engine cache gets wiped.
-                fetch(`${RB_API}/vst/sync_known`, {
+                fetch(`${window.RB_API}/vst/sync_known`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({plugins: rbState.knownVsts}),
@@ -5344,7 +5405,7 @@ async function rbDoVstScan(statusSetter) {
             await api.savePluginList().catch((e) =>
                 console.warn('[rig_builder] savePluginList failed:', e));
         }
-        await fetch(`${RB_API}/vst/sync_known`, {
+        await fetch(`${window.RB_API}/vst/sync_known`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({plugins: rbState.knownVsts}),
@@ -5355,7 +5416,7 @@ async function rbDoVstScan(statusSetter) {
         // to pick up the merged list instead of showing only what scan
         // got before crashing.
         try {
-            const merged = await (await fetch(`${RB_API}/vst/known`)).json();
+            const merged = await (await fetch(`${window.RB_API}/vst/known`)).json();
             if (Array.isArray(merged.plugins) &&
                 merged.plugins.length >= rbState.knownVsts.length) {
                 rbState.knownVsts = merged.plugins;
@@ -5566,7 +5627,7 @@ async function rbLoadAndEditVst(toneIdx, pIdx) {
             statusEl.textContent = `loaded slot ${slotId} · ${params.length} params · tweak below, then "Capture state"`;
         }
     } catch (e) {
-        if (statusEl) statusEl.textContent = `load failed: ${e.message || e}`;
+        if (statusEl) statusEl.textContent = `load failed: ${rbFriendlyVstLoadError(e)}`;
     }
 }
 
@@ -5912,7 +5973,7 @@ async function rbUploadFile(input, toneIdx, pIdx) {
     const file = input.files[0];
     if (!file) return;
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
-    const targetUrl = piece.rs_category === 'cab' ? `${NAM_API}/irs` : `${NAM_API}/models`;
+    const targetUrl = piece.rs_category === 'cab' ? `${window.NAM_API}/irs` : `${window.NAM_API}/models`;
 
     const fd = new FormData();
     fd.append('file', file);
@@ -5981,7 +6042,7 @@ async function rbPersistTone(toneIdx, filename) {
         pieces,
     };
     try {
-        const r = await fetch(`${RB_API}/save_preset`, {
+        const r = await fetch(`${window.RB_API}/save_preset`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -6140,7 +6201,7 @@ async function rbReloadPreview(refetchPresetId) {
     if (!api) return;
     if (refetchPresetId != null) {
         try {
-            rbState._previewPayload = await (await fetch(`${RB_API}/native_preset_full/${refetchPresetId}`)).json();
+            rbState._previewPayload = await (await fetch(`${window.RB_API}/native_preset_full/${refetchPresetId}`)).json();
         } catch (e) { console.warn('[rig_builder] refetch preview failed', e); return; }
     }
     const payload = rbState._previewPayload;
@@ -6248,7 +6309,7 @@ async function rbAuditionFile(file, kind, btnId, gain, rsGear) {
             ? `&gain=${encodeURIComponent(gain.toFixed(4))}` : '';
         const gearQs = (typeof rsGear === 'string' && rsGear)
             ? `&rs_gear=${encodeURIComponent(rsGear)}` : '';
-        const url = `${RB_API}/native_preset_one?file=${encodeURIComponent(file)}&kind=${encodeURIComponent(kind || 'nam')}${gainQs}${gearQs}`;
+        const url = `${window.RB_API}/native_preset_one?file=${encodeURIComponent(file)}&kind=${encodeURIComponent(kind || 'nam')}${gainQs}${gearQs}`;
         const payload = await (await fetch(url)).json();
         const chain = payload.native_preset && payload.native_preset.chain;
         if (!Array.isArray(chain) || !chain.length) throw new Error('file not found');
@@ -6301,7 +6362,7 @@ async function rbAuditionCandidate(btn, rsGear, toneId) {
     if (!btn.dataset.origLabel) btn.dataset.origLabel = old;
     btn.disabled = true; btn.textContent = '⏳';
     try {
-        const r = await fetch(`${RB_API}/audition_candidate`, {
+        const r = await fetch(`${window.RB_API}/audition_candidate`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ rs_gear: rsGear, tone3000_id: toneId }),
         });
@@ -6331,13 +6392,23 @@ const RB_GEAR_LABEL = {
     other: 'Other',
 };
 
+const RB_GEAR_BROWSER_CATS = [
+    { key: 'amp', label: 'Amps' },
+    { key: 'pedal', label: 'Pedals' },
+    { key: 'rack', label: 'Racks' },
+    { key: 'cab', label: 'Cabs' },
+];
+
+if (!rbState.gearBrowserCategory) rbState.gearBrowserCategory = 'amp';
+if (!rbState.gearInstrumentFilter) rbState.gearInstrumentFilter = 'all';
+
 async function rbLoadCatalog() {
     const el = document.getElementById('rb-catalog');
     if (!el) return;
     if (rbState._auditionId) await rbStopPreview();   // stop stale audition before re-render
     el.innerHTML = '<p class="text-gray-500">Loading…</p>';
     let data;
-    try { data = await (await fetch(`${RB_API}/gear_catalog`)).json(); }
+    try { data = await (await fetch(`${window.RB_API}/gear_catalog`)).json(); }
     catch (e) { el.innerHTML = `<p class="text-red-400">Error: ${rbEsc(e.message)}</p>`; return; }
     rbState.gearCatalog = (data && data.categories) || {};
     if (!Object.keys(rbState.gearCatalog).length) {
@@ -6397,90 +6468,321 @@ function rbGearTypeTags(g) {
     return tags;
 }
 
+function rbGearInstrument(g) {
+    const category = (g && g.category || '').toLowerCase();
+    if (category === 'rack') return 'all';
+    const rs = String(g && g.rs_gear || '');
+    return /^Bass_/i.test(rs) || /(^|_)Bass(_|$)/i.test(rs) ? 'bass' : 'guitar';
+}
+
+function rbGearHasVst(g) {
+    return !!(g && g.vst_path);
+}
+
+function rbGearCanvasStem(g) {
+    return rbGearHasVst(g)
+        ? g.vst_path.split('/').pop().replace(/\.(vst3|component)$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+        : '';
+}
+
+function rbGearUsesVstOnlyVisual(g) {
+    return ['amp', 'pedal', 'rack'].includes(String(g && g.category || '').toLowerCase());
+}
+
+function rbGearIsAssigned(g) {
+    return rbGearHasVst(g) || !!(g && (g.assigned || g.file));
+}
+
+function rbGearSearchHaystack(g) {
+    return rbNorm(
+        (g.real_name || '') + ' ' +
+        (g.make || '') + ' ' +
+        (g.model || '') + ' ' +
+        (g.rs_gear || '') + ' ' +
+        (g.tone3000_title || '')
+    ) + rbGearTypeTags(g);
+}
+
+function rbGearMatchesFilters(g, search, onlyUnassigned, instrument) {
+    if (onlyUnassigned && rbGearIsAssigned(g)) return false;
+    if (instrument && instrument !== 'all') {
+        const gi = rbGearInstrument(g);
+        if (gi !== 'all' && gi !== instrument) return false;
+    }
+    return !search || rbGearSearchHaystack(g).includes(search);
+}
+
+function rbFilteredGearByCategory(search, onlyUnassigned, instrument) {
+    const out = {};
+    for (const cat of RB_GEAR_BROWSER_CATS.map(c => c.key)) {
+        const rows = rbState.gearCatalog && rbState.gearCatalog[cat] || [];
+        out[cat] = rows.filter(g => rbGearMatchesFilters(g, search, onlyUnassigned, instrument));
+    }
+    return out;
+}
+
+function rbFindGear(rsGear) {
+    if (!rbState.gearCatalog) return null;
+    for (const cat of Object.keys(rbState.gearCatalog)) {
+        const found = (rbState.gearCatalog[cat] || []).find(g => g.rs_gear === rsGear);
+        if (found) return found;
+    }
+    return null;
+}
+
+function rbSelectGearCategory(cat) {
+    rbState.gearBrowserCategory = cat;
+    const list = rbFilteredGearForActiveCategory();
+    rbState.gearSelected = list[0] ? list[0].rs_gear : null;
+    rbApplyGearFilters();
+}
+
+function rbSelectGearInstrument(value) {
+    rbState.gearInstrumentFilter = value || 'all';
+    rbState.gearSelected = null;
+    rbApplyGearFilters();
+}
+
+function rbSelectGear(rsGear) {
+    rbState.gearSelected = rsGear;
+    rbApplyGearFilters();
+}
+
+function rbFilteredGearForActiveCategory() {
+    if (!rbState.gearCatalog) return [];
+    const search = rbNorm(((document.getElementById('rb-gear-search') || {}).value || '')).trim();
+    const onlyUnassigned = !!((document.getElementById('rb-gear-only-unassigned') || {}).checked);
+    const instrument = rbState.gearInstrumentFilter || 'all';
+    const cat = rbState.gearBrowserCategory || 'amp';
+    return (rbState.gearCatalog[cat] || [])
+        .filter(g => rbGearMatchesFilters(g, search, onlyUnassigned, instrument));
+}
+
+function rbRenderGearCategoryMenu(filtered) {
+    const el = document.getElementById('rb-gear-category-menu');
+    if (!el) return;
+    const active = rbState.gearBrowserCategory || 'amp';
+    el.innerHTML = RB_GEAR_BROWSER_CATS.map(cat => {
+        const on = cat.key === active;
+        const count = (filtered[cat.key] || []).length;
+        return `<button onclick="rbSelectGearCategory('${cat.key}')"
+                        class="px-3 py-2 rounded-lg text-left border transition ${on
+                            ? 'bg-accent/30 border-accent/40 text-white'
+                            : 'bg-dark-800/50 border-gray-800/50 text-gray-400 hover:text-gray-200 hover:bg-dark-700/50'}">
+                    <span class="block text-sm font-medium">${cat.label}</span>
+                    <span class="block text-[10px] text-gray-500">${count} shown</span>
+                </button>`;
+    }).join('');
+}
+
+function rbRenderGearListItem(g) {
+    const selected = rbState.gearSelected === g.rs_gear;
+    const assigned = rbGearIsAssigned(g);
+    const instrument = rbGearInstrument(g);
+    const rsArt = `${window.RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}${_RB_GEAR_PHOTO_CB}`;
+    const stem = rbGearCanvasStem(g);
+    const vstArt = (stem && window.RBPedalCanvas && window.RBPedalCanvas.has(stem))
+        ? window.RBPedalCanvas.dataURL(stem, {}) : null;
+    const thumbW = vstArt ? 84 : 56;
+    const sub = [
+        instrument === 'all' ? 'all instruments' : instrument,
+        assigned ? 'assigned' : 'unassigned',
+    ].join(' · ');
+    return `<button onclick="rbSelectGear(${rbEsc(JSON.stringify(g.rs_gear))})"
+                    class="w-full text-left border rounded-lg p-2 transition flex items-center gap-2 ${selected
+                        ? 'bg-dark-600 border-accent/40'
+                        : 'bg-dark-800/40 border-gray-800/40 hover:bg-dark-700/50 hover:border-gray-700'}">
+                <span class="h-14 flex-shrink-0 rounded bg-dark-900 border border-gray-800/50 overflow-hidden flex items-center justify-center" style="width:${thumbW}px;height:56px">
+                    ${vstArt ? `<img src="${vstArt}" alt="" loading="lazy"
+                         style="width:${thumbW}px;height:56px;object-fit:contain"
+                         onerror="this.style.display='none'; var n=this.nextElementSibling; if(n)n.style.display='';">` : ''}
+                    <img src="${rsArt}" alt="" loading="lazy"
+                         style="${vstArt ? 'display:none;' : ''}width:56px;height:56px;object-fit:contain"
+                         onerror="this.style.display='none'; var n=this.nextElementSibling; if(n)n.classList.remove('hidden');">
+                    <span class="hidden text-[9px] uppercase text-gray-700">${rbEsc(g.category || 'gear')}</span>
+                </span>
+                <span class="min-w-0 flex-1">
+                    <span class="block text-sm text-gray-100 leading-tight break-words">${rbEsc(g.real_name || g.rs_gear)}</span>
+                    <span class="block text-[10px] text-gray-500 mt-1">${rbEsc(sub)}</span>
+                </span>
+            </button>`;
+}
+
+function rbCatalogVisualForGear(g, size) {
+    const isVst = rbGearHasVst(g);
+    const gStem = isVst ? g.vst_path.split('/').pop().replace(/\.(vst3|component)$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+    const canvasArt = (gStem && window.RBPedalCanvas && window.RBPedalCanvas.has(gStem))
+        ? window.RBPedalCanvas.dataURL(gStem, {}) : null;
+    const minHeight = size === 'large' ? '360px' : '96px';
+    const height = size === 'large' ? '52vh' : '96px';
+    if (rbGearUsesVstOnlyVisual(g)) {
+        if (canvasArt) {
+            return `<div class="bg-dark-900 border border-purple-800/30 rounded-xl overflow-hidden flex items-center justify-center"
+                         style="min-height:${minHeight};height:${height}">
+                        <img src="${canvasArt}" alt="" style="max-width:100%;max-height:100%;object-fit:contain" class="max-w-full max-h-full object-contain">
+                    </div>`;
+        }
+        if (isVst) {
+            const vstName = g.vst_path.split('/').pop();
+            return `<div class="bg-purple-900/10 border border-purple-800/30 rounded-xl flex items-center justify-center text-center px-6"
+                         style="min-height:${minHeight};height:${height}">
+                        <div class="max-w-md">
+                            <div class="text-purple-300 text-sm font-semibold mb-1">VST assigned</div>
+                            <div class="text-gray-200 text-xs break-all">${rbEsc(vstName)}</div>
+                        </div>
+                    </div>`;
+        }
+        return `<div class="bg-dark-900/60 border border-gray-800/50 rounded-xl flex items-center justify-center text-center px-6"
+                     style="min-height:${minHeight};height:${height}">
+                <div>
+                    <div class="text-gray-500 text-sm">No VST assigned</div>
+                </div>
+            </div>`;
+    }
+    const rsArt = `${window.RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}${_RB_GEAR_PHOTO_CB}`;
+    const fallback = g.image
+        ? `<img src="${rbEsc(g.image)}" alt="" loading="lazy"
+                 style="display:none;max-width:100%;max-height:100%;object-fit:contain"
+                 class="max-w-full max-h-full rounded object-contain bg-dark-900"
+                 onerror="this.style.display='none'; var n=this.nextElementSibling; if(n)n.classList.remove('hidden');">`
+        : '';
+    const onerr = "this.style.display='none'; var n=this.nextElementSibling; if(n){ if(n.tagName==='IMG'){n.style.display=''} else {n.classList.remove('hidden')} }";
+    const empty = `<div class="hidden w-full h-full flex items-center justify-center text-gray-700 text-xs uppercase tracking-wide">${rbEsc(g.category || 'gear')}</div>`;
+    return `<div class="bg-dark-900 border border-gray-800/50 rounded-xl overflow-hidden flex items-center justify-center"
+                 style="min-height:${minHeight};height:${height}">
+                ${canvasArt
+                    ? `<img src="${canvasArt}" alt="" style="max-width:100%;max-height:100%;object-fit:contain" class="max-w-full max-h-full object-contain">`
+                    : `<img src="${rsArt}" alt="" loading="lazy" style="max-width:100%;max-height:100%;object-fit:contain" class="max-w-full max-h-full object-contain" onerror="${onerr}">${fallback}${empty}`}
+            </div>`;
+}
+
+function rbOpenSelectedGearVst(g) {
+    if (!rbGearHasVst(g)) return;
+    const safeId = g.rs_gear.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const panel = document.getElementById(`rb-cat-edit-${safeId}`);
+    if (panel && !panel.classList.contains('hidden')) return;
+    const stem = g.vst_path.split('/').pop()
+        .replace(/\.(vst3|component)$/i, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+    rbCatalogEditInline(safeId, g.vst_path, g.vst_format || 'VST3', g.rs_gear, stem);
+}
+
+function rbRenderGearDetail(g) {
+    const el = document.getElementById('rb-gear-detail');
+    if (!el) return;
+    if (!g) {
+        el.innerHTML = `<div class="bg-dark-700/40 border border-gray-800/50 rounded-xl p-6 text-gray-500 text-sm">
+            No gear matches the current filters.
+        </div>`;
+        return;
+    }
+    const safeId = g.rs_gear.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const isVst = rbGearHasVst(g);
+    const assignedLine = isVst
+        ? `<span class="text-purple-300 break-all">VST: ${rbEsc(g.vst_path.split('/').pop())}</span>`
+        : rbGearIsAssigned(g)
+            ? `<span class="text-emerald-300 break-all">${rbEsc(g.tone3000_title || rbLibShortName(g.file) || 'assigned')}</span>`
+            : `<span class="text-gray-500">unassigned</span>`;
+    const instrument = rbGearInstrument(g);
+    const t3kHeaderLink = g.tone3000_url
+        ? `<a href="${rbEsc(g.tone3000_url)}" target="_blank" title="View on tone3000"
+              class="text-gray-500 hover:text-accent text-sm">tone3000 ↗</a>` : '';
+    const hasInlineAudition = (
+        (Array.isArray(g.variants) && g.variants.length > 0)
+        || (Array.isArray(g.mic_variants) && g.mic_variants.length > 0)
+    );
+    const variantsBtn = g.category === 'amp' ? `
+        <button onclick="rbToggleAmpVariants('${rbEsc(g.rs_gear)}')"
+                class="bg-emerald-900/30 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-800/40 px-3 py-1.5 rounded text-xs">🎚 Variants</button>` : '';
+    const libraryBtn = `<button onclick="rbToggleCatalogLibrary('${rbEsc(g.rs_gear)}','${rbEsc(g.category || '')}','${rbEsc(g.vst_path || '')}','${rbEsc(g.vst_format || 'VST3')}')"
+                                class="bg-indigo-900/30 hover:bg-indigo-900/50 text-indigo-300 border border-indigo-800/40 px-3 py-1.5 rounded text-xs">📚 Library</button>`;
+    const searchBtn = `<button onclick="rbOpenSuggest('${rbEsc(g.rs_gear)}')"
+                                class="text-gray-400 hover:text-gray-200 text-xs px-2 py-1.5">🔍 Search tone3000</button>`;
+    const editVstBtn = isVst ? `<button onclick="rbOpenSelectedGearVst(rbFindGear(${rbEsc(JSON.stringify(g.rs_gear))}))"
+                                class="bg-purple-900/40 hover:bg-purple-900/60 text-purple-200 border border-purple-800/50 px-3 py-1.5 rounded text-xs">🎛 Edit VST</button>` : '';
+    const variantAuditions = Array.isArray(g.variants) && g.variants.length
+        ? `<div class="flex items-center gap-1 flex-wrap">${g.variants.map(v => {
+            const vId = `rb-aud-${_rbCatalogSeq++}`;
+            if (!v.available || !v.file) return `<button disabled class="text-[10px] px-2 py-0.5 rounded bg-dark-800/50 text-gray-600 cursor-not-allowed">▶ ${rbEsc(v.level)}</button>`;
+            const trim = rbAuditionGainForVariantLevel(v.level);
+            return `<button id="${vId}" onclick="rbAuditionFile('${rbEsc(v.file).replace(/'/g,"\\'")}','nam','${vId}',${trim},'${rbEsc(g.rs_gear || '')}')"
+                            class="text-[10px] px-2 py-0.5 rounded bg-emerald-900/30 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/40">▶ ${rbEsc(v.level)}</button>`;
+        }).join('')}</div>` : '';
+    const micAuditions = Array.isArray(g.mic_variants) && g.mic_variants.length
+        ? `<div class="flex items-center gap-1 flex-wrap">${g.mic_variants.map(v => {
+            const vId = `rb-aud-${_rbCatalogSeq++}`;
+            if (!v.available || !v.ir_file) return `<button disabled class="text-[10px] px-2 py-0.5 rounded bg-dark-800/50 text-gray-600 cursor-not-allowed">▶ ${rbEsc(v.label || v.suffix)}</button>`;
+            return `<button id="${vId}" onclick="rbAuditionFile('${rbEsc(v.ir_file).replace(/'/g,"\\'")}','ir','${vId}')"
+                            class="text-[10px] px-2 py-0.5 rounded bg-sky-900/30 hover:bg-sky-900/60 text-sky-300 border border-sky-800/40">▶ ${rbEsc(v.label || v.suffix)}</button>`;
+        }).join('')}</div>` : '';
+    const visualBlock = rbCatalogVisualForGear(g, 'large');
+
+    el.innerHTML = `<div class="bg-dark-700/40 border border-gray-800/50 rounded-xl p-4 space-y-4">
+        <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+                <h3 class="text-white text-xl font-semibold leading-tight break-words">${rbEsc(g.real_name || g.rs_gear)}</h3>
+                <div class="text-xs text-gray-500 mt-1">
+                    ${rbEsc(g.rs_gear)} · ${rbEsc(RB_GEAR_LABEL[g.category] || g.category || 'gear')} · ${rbEsc(instrument === 'all' ? 'all instruments' : instrument)}
+                </div>
+            </div>
+            ${t3kHeaderLink}
+        </div>
+        <div id="rb-cat-edit-${safeId}" class="hidden bg-purple-900/10 border border-purple-800/30 rounded p-2"></div>
+        ${visualBlock}
+        <div class="bg-dark-800/50 border border-gray-800/40 rounded-lg p-3 space-y-2">
+            <div class="text-xs text-gray-400">Current assignment: ${assignedLine}</div>
+            ${variantAuditions}
+            ${micAuditions}
+            <div class="flex flex-wrap items-center gap-1.5">
+                ${editVstBtn}
+                ${variantsBtn}
+                ${libraryBtn}
+                <div class="flex-1"></div>
+                ${searchBtn}
+            </div>
+            <div id="rb-cat-lib-${safeId}" class="hidden bg-indigo-900/10 border border-indigo-800/30 rounded p-2"></div>
+            <div id="rb-cat-variants-${safeId}" class="hidden bg-emerald-900/10 border border-emerald-800/30 rounded p-2"></div>
+        </div>
+    </div>`;
+}
+
 function rbApplyGearFilters() {
     const el = document.getElementById('rb-catalog');
     if (!el || !rbState.gearCatalog) return;
     const search = rbNorm(((document.getElementById('rb-gear-search') || {}).value || '')).trim();
     const onlyUnassigned = !!((document.getElementById('rb-gear-only-unassigned') || {}).checked);
-    const compact = !!((document.getElementById('rb-gear-compact') || {}).checked);
+    const instrument = rbState.gearInstrumentFilter || 'all';
+    const instEl = document.getElementById('rb-gear-instrument-filter');
+    if (instEl && instEl.value !== instrument) instEl.value = instrument;
 
-    // Filter items per category based on search + status. Empty
-    // categories drop out so we don't render an empty header.
-    const filtered = {};
-    let total = 0;
-    for (const cat in rbState.gearCatalog) {
-        const items = rbState.gearCatalog[cat].filter(g => {
-            if (onlyUnassigned && g.assigned) return false;
-            if (!search) return true;
-            const hay = rbNorm(
-                (g.real_name || '') + ' ' +
-                (g.make || '') + ' ' +
-                (g.model || '') + ' ' +
-                (g.rs_gear || '') + ' ' +
-                (g.tone3000_title || '')
-            ) + rbGearTypeTags(g);
-            return hay.includes(search);
-        });
-        if (items.length) {
-            filtered[cat] = items;
-            total += items.length;
-        }
+    const filtered = rbFilteredGearByCategory(search, onlyUnassigned, instrument);
+    rbRenderGearCategoryMenu(filtered);
+
+    const activeCat = rbState.gearBrowserCategory || 'amp';
+    const activeList = filtered[activeCat] || [];
+    const selectedStillVisible = rbState.gearSelected && activeList.some(g => g.rs_gear === rbState.gearSelected);
+    if (!selectedStillVisible) rbState.gearSelected = activeList[0] ? activeList[0].rs_gear : null;
+    const selected = rbState.gearSelected ? rbFindGear(rbState.gearSelected) : null;
+
+    const summary = document.getElementById('rb-gear-list-summary');
+    if (summary) {
+        const label = (RB_GEAR_BROWSER_CATS.find(c => c.key === activeCat) || {}).label || activeCat;
+        summary.textContent = `${activeList.length} ${label.toLowerCase()}${search ? ' matching search' : ''}`;
     }
 
-    // Jump pills — one per category, with the FILTERED count so the
-    // user knows how many matches landed in each. Active pill = the
-    // category currently scrolled-to is not tracked (it'd need a
-    // scroll observer); just style them all uniformly.
-    const pillsEl = document.getElementById('rb-gear-jump-pills');
-    if (pillsEl) {
-        if (Object.keys(filtered).length <= 1) {
-            pillsEl.innerHTML = '';   // no point in pills for one section
-        } else {
-            pillsEl.innerHTML = Object.keys(filtered).map(cat => {
-                const collapsed = rbState.gearCollapsedCats.has(cat);
-                return `<button onclick="rbScrollToCategory('${cat}')"
-                        class="text-xs px-2 py-1 rounded-full transition
-                               ${collapsed ? 'bg-dark-800 text-gray-500' : 'bg-dark-600 text-gray-200 hover:bg-dark-500'}">
-                    ${rbEsc(RB_GEAR_LABEL[cat] || cat)}
-                    <span class="text-gray-400 ml-1">${filtered[cat].length}</span>
-                </button>`;
-            }).join('');
-        }
-    }
-
-    // Render sections. Each has a clickable header that toggles collapse.
-    if (!total) {
+    if (!activeList.length) {
         el.innerHTML = `<div class="text-center text-gray-500 py-10">
             No matches.${search ? ` Try clearing the search.` : ''}</div>`;
+        rbRenderGearDetail(null);
         return;
     }
-    try {
-        el.innerHTML = Object.keys(filtered).map(cat => {
-            const items = filtered[cat];
-            const collapsed = rbState.gearCollapsedCats.has(cat);
-            const label = RB_GEAR_LABEL[cat] || cat;
-            const body = collapsed ? '' :
-                (compact
-                    ? `<div class="bg-dark-800/30 border border-gray-800/30 rounded-lg divide-y divide-gray-800/30">
-                          ${items.map(rbRenderCatalogCardCompact).join('')}
-                       </div>`
-                    : `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          ${items.map(rbRenderCatalogCard).join('')}
-                       </div>`);
-            return `<div id="rb-cat-${cat}" class="scroll-mt-4">
-                <h3 onclick="rbToggleCategoryCollapse('${cat}')"
-                    class="text-white font-semibold mb-3 cursor-pointer select-none flex items-center gap-2 hover:text-accent transition">
-                    <span class="text-gray-500 text-xs w-3 inline-block">${collapsed ? '▶' : '▼'}</span>
-                    ${rbEsc(label)}
-                    <span class="text-gray-500 text-xs font-normal">(${items.length})</span>
-                </h3>
-                ${body}
-            </div>`;
-        }).join('');
-    } catch (e) {
+    try { el.innerHTML = activeList.map(rbRenderGearListItem).join(''); }
+    catch (e) {
         console.error('[rig_builder] catalog render failed', e);
         el.innerHTML = `<p class="text-red-400">Error rendering: ${rbEsc(e.message)}</p>`;
     }
+    rbRenderGearDetail(selected);
     // Pedal-canvas thumbnails are rendered with dataURL() at build time; if the
     // embedded fonts weren't loaded yet they'd use a fallback face. Repaint the
     // catalog ONCE when fonts finish loading so the thumbnails come out right.
@@ -6515,10 +6817,13 @@ function rbToggleCategoryCollapse(cat) {
 function rbClearGearFilters() {
     const s = document.getElementById('rb-gear-search');
     const u = document.getElementById('rb-gear-only-unassigned');
-    const c = document.getElementById('rb-gear-compact');
+    const i = document.getElementById('rb-gear-instrument-filter');
     if (s) s.value = '';
     if (u) u.checked = false;
-    if (c) c.checked = false;
+    if (i) i.value = 'all';
+    rbState.gearInstrumentFilter = 'all';
+    rbState.gearBrowserCategory = 'amp';
+    rbState.gearSelected = null;
     rbState.gearCollapsedCats.clear();
     rbApplyGearFilters();
 }
@@ -6600,7 +6905,7 @@ function rbRenderCatalogCard(g) {
     // trick avoids the HTML-in-attribute escaping issue we hit in the
     // song editor — onerror just hides this img and reveals the next
     // sibling, which is the next photo source down the chain.
-    const rsArt = `${RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}${_RB_GEAR_PHOTO_CB}`;
+    const rsArt = `${window.RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}${_RB_GEAR_PHOTO_CB}`;
     const onerrChain = "this.style.display='none'; var n=this.nextElementSibling; if(n){ if(n.tagName==='IMG'){n.style.display=''} else {n.classList.remove('hidden')} }";
     // For gears we've built a VST canvas UI for, show the recreated plugin
     // face as the thumbnail (instead of the Rocksmith art). dataURL renders
@@ -6655,7 +6960,7 @@ function rbRenderCatalogCard(g) {
     let listenBtn = '';
     let editBtn = '';
     if (isVst) {
-        listenBtn = `<button id="${btnId}" onclick="event.stopPropagation(); rbAuditionVst('${rbEsc(g.vst_path).replace(/'/g,"\\'")}','${rbEsc(g.vst_format || 'VST3')}','${btnId}')"
+        listenBtn = `<button id="${btnId}" onclick="event.stopPropagation(); rbAuditionVst('${rbEsc(g.vst_path).replace(/'/g,"\\'")}','${rbEsc(g.vst_format || 'VST3')}','${btnId}','${rbEsc(g.rs_gear)}')"
                             title="Listen to this VST in isolation"
                             class="bg-purple-700/50 hover:bg-purple-600/60 text-purple-100 px-3 py-1.5 rounded text-xs">▶ Listen</button>`;
         // Direct "edit this VST" — loads the plugin and opens the native
@@ -6819,7 +7124,7 @@ async function rbToggleAmpVariants(rsGear) {
     el.classList.remove('hidden');
     el.innerHTML = `<div class="text-xs text-gray-500">Loading…</div>`;
     try {
-        const r = await fetch(`${RB_API}/amp_variants/${encodeURIComponent(rsGear)}`);
+        const r = await fetch(`${window.RB_API}/amp_variants/${encodeURIComponent(rsGear)}`);
         if (!r.ok) throw new Error((await r.json().catch(()=>({}))).error || r.status);
         const data = await r.json();
         el.innerHTML = rbRenderAmpVariantsPanel(rsGear, data);
@@ -6946,7 +7251,7 @@ async function rbAmpVariantsQuickLoad(rsGear) {
     statusEl.textContent = 'fetching captures…';
     statusEl.className = 'text-[10px] text-gray-500 mt-1.5';
     try {
-        const r = await fetch(`${RB_API}/tone3000/captures/${toneId}`);
+        const r = await fetch(`${window.RB_API}/tone3000/captures/${toneId}`);
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || r.status);
         const caps = data.captures || [];
@@ -7008,7 +7313,7 @@ async function rbInspectAmpVariant(rsGear, level) {
     statusEl.textContent = 'fetching captures…';
     statusEl.className = 'text-[10px] text-gray-500';
     try {
-        const r = await fetch(`${RB_API}/tone3000/captures/${toneId}`);
+        const r = await fetch(`${window.RB_API}/tone3000/captures/${toneId}`);
         const data = await r.json();
         if (!r.ok) throw new Error(data.error || r.status);
         const caps = data.captures || [];
@@ -7073,7 +7378,7 @@ async function rbSaveAmpVariant(rsGear, level) {
     statusEl.textContent = 'saving…';
     statusEl.className = 'text-[10px] text-gray-500';
     try {
-        const r = await fetch(`${RB_API}/amp_variants/${encodeURIComponent(rsGear)}/${encodeURIComponent(level)}`, {
+        const r = await fetch(`${window.RB_API}/amp_variants/${encodeURIComponent(rsGear)}/${encodeURIComponent(level)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -7098,7 +7403,7 @@ async function rbSaveAmpVariant(rsGear, level) {
 async function rbDeleteAmpVariant(rsGear, level) {
     if (!confirm(`Remove the "${level}" variant for ${rsGear}?`)) return;
     try {
-        const r = await fetch(`${RB_API}/amp_variants/${encodeURIComponent(rsGear)}/${encodeURIComponent(level)}`, {
+        const r = await fetch(`${window.RB_API}/amp_variants/${encodeURIComponent(rsGear)}/${encodeURIComponent(level)}`, {
             method: 'DELETE',
         });
         if (!r.ok) {
@@ -7190,7 +7495,7 @@ async function rbCatLibTab(rsGear, tab) {
             // to a pedal slot (or vice versa) for experimentation — the
             // category-restricted version blocked that. Defaults to the
             // current gear's category being expanded; others collapsed.
-            const r = await fetch(`${RB_API}/local_files?kind=${kind}`);
+            const r = await fetch(`${window.RB_API}/local_files?kind=${kind}`);
             if (!r.ok) throw new Error(`HTTP ${r.status}`);
             const data = await r.json();
             el._rbAllFiles = data.files || [];
@@ -7360,7 +7665,7 @@ function rbFilterCatalogLibrary(rsGear) {
 async function rbCatalogBulkAssignLocal(rsGear, fileName, kind) {
     if (!confirm(`Apply "${fileName}" to every preset using ${rsGear}?`)) return;
     try {
-        const r = await fetch(`${RB_API}/use_local_for_gear`, {
+        const r = await fetch(`${window.RB_API}/use_local_for_gear`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -7563,7 +7868,7 @@ async function rbCatalogLoadAndEdit(panelId) {
         }
         if (statusEl) statusEl.textContent = `loaded slot ${slotId} — tweak knobs, then "Capture state" or just "Assign".`;
     } catch (e) {
-        if (statusEl) statusEl.textContent = `load failed: ${e.message || e}`;
+        if (statusEl) statusEl.textContent = `load failed: ${rbFriendlyVstLoadError(e)}`;
     }
 }
 
@@ -7598,7 +7903,7 @@ async function rbCatalogAssignVst(panelId, rsGear) {
     const statusEl = document.getElementById(`${panelId}-status`);
     if (statusEl) statusEl.textContent = 'applying to all presets using this gear…';
     try {
-        const r = await fetch(`${RB_API}/vst/assign`, {
+        const r = await fetch(`${window.RB_API}/vst/assign`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 rs_gear_type: rsGear, vst_path: path, vst_format: fmt,
@@ -7620,7 +7925,7 @@ async function rbCatalogAssignVst(panelId, rsGear) {
 
 async function rbLoadCatalogVstSuggestions(rsGearType, panelId) {
     try {
-        const r = await fetch(`${RB_API}/vst/suggest/${encodeURIComponent(rsGearType)}`);
+        const r = await fetch(`${window.RB_API}/vst/suggest/${encodeURIComponent(rsGearType)}`);
         if (!r.ok) return;
         const data = await r.json();
         const suggestions = (data && data.suggestions) || [];
@@ -7699,17 +8004,90 @@ window.rbSweepParam = async function (slotId, paramName, steps) {
 // plugin UI, show it right in the expanded gear card (draggable knobs →
 // live setParameter) instead of popping the native window. Falls back to
 // the native-window path (rbCatalogEditVst) for plugins without a canvas.
+function rbCatalogSavedParamsForGear(rsGear) {
+    const g = rbFindGear(rsGear);
+    if (!g || g.category !== 'amp') return null;
+    return g && g.vst_state ? rbParseVstStateParams(g.vst_state) : null;
+}
+
+async function rbApplyCatalogGearVstParams(api, slotId, vstPath, rsGear) {
+    const saved = rbCatalogSavedParamsForGear(rsGear);
+    if (saved && Object.keys(saved).length) {
+        return rbRestoreSavedParamsToSlot(api, slotId, saved);
+    }
+    if (!rsGear) return null;
+    const vstStem = vstPath.split('/').pop().replace(/\.(vst3|component)$/i, '').toLowerCase();
+    try {
+        const r = await fetch(`${window.RB_API}/vst/knob_mapping?rs_gear_type=${encodeURIComponent(rsGear)}&vst_name=${encodeURIComponent(vstStem)}`);
+        const data = await r.json();
+        const staticBlock = data && data.mapping && data.mapping._static;
+        if (staticBlock && typeof staticBlock === 'object') {
+            return rbRestoreSavedParamsToSlot(api, slotId, staticBlock);
+        }
+    } catch (e) {
+        console.warn('[rig_builder catalog-edit] default param apply skipped:', e);
+    }
+    return null;
+}
+
+let _rbStandaloneVstLoadSeq = 0;
+
+function rbStandaloneVstLoadToken() {
+    _rbStandaloneVstLoadSeq += 1;
+    return _rbStandaloneVstLoadSeq;
+}
+
+function rbStandaloneVstLoadActive(token) {
+    return token === _rbStandaloneVstLoadSeq;
+}
+
+async function rbQuarantineFailedStandaloneVst(api, token) {
+    if (token != null && !rbStandaloneVstLoadActive(token)) return;
+    try {
+        if (api && api.setGain) {
+            await api.setGain('chain', 0.0);
+            await api.setGain('input', 1.0);
+        }
+        if (api && api.setMonitorMute) await api.setMonitorMute(true);
+        if (api && api.clearChain) await api.clearChain();
+        if (api && api.stopAudio) await api.stopAudio();
+    } catch (_) {}
+}
+
+async function rbMakeStandaloneVstAudible(api) {
+    if (!api) return;
+    try {
+        if (api.setGain) {
+            await api.setGain('input', 1.0);
+            await api.setGain('chain', 1.0);
+        }
+    } catch (_) {}
+    try { if (api.setMonitorMute) await api.setMonitorMute(false); } catch (_) {}
+    try { if (api.startAudio) await api.startAudio(); } catch (_) {}
+}
+
 async function rbCatalogEditInline(safeId, vstPath, vstFormat, rsGear, stem) {
-    if (!window.RBPedalCanvas) return rbCatalogEditVst(vstPath, vstFormat, rsGear);
     const el = document.getElementById(`rb-cat-edit-${safeId}`);
     if (!el) return rbCatalogEditVst(vstPath, vstFormat, rsGear);
+    let waitedForCanvas = false;
+    if (!window.RBPedalCanvas) {
+        waitedForCanvas = true;
+        el.classList.remove('hidden');
+        el.innerHTML = `<div class="text-xs text-gray-500">loading VST UI…</div>`;
+        for (let i = 0; i < 30 && !window.RBPedalCanvas; i++) {
+            await new Promise(r => setTimeout(r, 50));
+        }
+    }
+    if (!window.RBPedalCanvas) return rbCatalogEditVst(vstPath, vstFormat, rsGear);
     const api = rbNativeAudio();
     if (!api || typeof api.loadVST !== 'function') return alert('Native VST hosting not available.');
     // Toggle close.
-    if (!el.classList.contains('hidden')) {
+    if (!waitedForCanvas && !el.classList.contains('hidden')) {
         el.classList.add('hidden');
         el.innerHTML = '';
-        await rbCloseActiveVstEditor().catch(() => {});
+        rbStandaloneVstLoadToken();
+        await rbTeardownVstEditor(api).catch(() => {});
+        try { if (api.setMonitorMute) await api.setMonitorMute(true); } catch (_) {}
         return;
     }
     // Mutual exclusivity with the other sub-panels.
@@ -7717,24 +8095,17 @@ async function rbCatalogEditInline(safeId, vstPath, vstFormat, rsGear, stem) {
     document.getElementById(`rb-cat-variants-${safeId}`)?.classList.add('hidden');
     el.classList.remove('hidden');
     el.innerHTML = `<div class="text-xs text-gray-500">loading ${rbEsc(vstPath.split('/').pop())}…</div>`;
+    const loadToken = rbStandaloneVstLoadToken();
     try {
         await rbCloseActiveVstEditor().catch(() => {});
         if (rbState.listeningTone !== null || rbState._auditionId) await rbStopPreview().catch(() => {});
         if (api.clearChain) await api.clearChain().catch(() => {});
-        await api.startAudio().catch(() => {});
         const slotId = await api.loadVST(vstPath);
+        if (!rbStandaloneVstLoadActive(loadToken)) return;
         if (slotId == null || slotId < 0) throw new Error(rbVstRefusedMsg());
         rbState._vstEditorSlot = slotId;
-        // Apply the (gear, vst) `_static` defaults (subtype pins) if any.
-        if (rsGear) {
-            const vstStem = vstPath.split('/').pop().replace(/\.(vst3|component)$/i, '').toLowerCase();
-            try {
-                const r = await fetch(`${RB_API}/vst/knob_mapping?rs_gear_type=${encodeURIComponent(rsGear)}&vst_name=${encodeURIComponent(vstStem)}`);
-                const data = await r.json();
-                const staticBlock = data && data.mapping && data.mapping._static;
-                if (staticBlock && typeof staticBlock === 'object') await rbRestoreSavedParamsToSlot(api, slotId, staticBlock);
-            } catch (e) { console.warn('[rig_builder catalog-edit] _static apply skipped:', e); }
-        }
+        await rbApplyCatalogGearVstParams(api, slotId, vstPath, rsGear);
+        await rbMakeStandaloneVstAudible(api);
         // Snapshot current params → canvas model (logical values + idMap).
         let model = { values: {}, idMap: {}, logicalParams: [] };
         try {
@@ -7765,7 +8136,10 @@ async function rbCatalogEditInline(safeId, vstPath, vstFormat, rsGear, stem) {
         if (window.RBPedalCanvas.ready) window.RBPedalCanvas.ready().then(draw);
         draw();
     } catch (e) {
-        el.innerHTML = `<div class="text-xs text-red-400">load failed: ${rbEsc(e.message || e)}</div>`;
+        await rbQuarantineFailedStandaloneVst(api, loadToken);
+        if (rbStandaloneVstLoadActive(loadToken)) {
+            el.innerHTML = `<div class="text-xs text-red-400">load failed: ${rbEsc(rbFriendlyVstLoadError(e))}</div>`;
+        }
     }
 }
 
@@ -7775,40 +8149,21 @@ async function rbCatalogEditVst(vstPath, vstFormat, rsGear) {
         alert('Native VST hosting not available.');
         return;
     }
+    const loadToken = rbStandaloneVstLoadToken();
     try {
         await rbCloseActiveVstEditor();
         if (rbState.listeningTone !== null || rbState._auditionId) {
             await rbStopPreview();
         }
         if (api.clearChain) await api.clearChain().catch(() => {});
-        const wasRunning = api.isAudioRunning ? await api.isAudioRunning().catch(() => true) : true;
-        if (!wasRunning) await api.startAudio().catch(() => {});
         const slotId = await api.loadVST(vstPath);
+        if (!rbStandaloneVstLoadActive(loadToken)) return;
         if (slotId == null || slotId < 0) {
-            alert(`Engine refused to load this plugin:\n${vstPath}`);
-            return;
+            throw new Error(`${rbVstRefusedMsg()}\n${vstPath}`);
         }
         rbState._vstEditorSlot = slotId;
-        // Apply the (gear, vst) `_static` defaults if any — pinned params
-        // curated in rs_knob_to_vst_param.json (e.g. kHs Distortion's
-        // Mode + Dynamics for fuzz/od/dist subtypes). Without this, the
-        // Edit button shows the plugin's defaults regardless of subtype,
-        // and the user can't preview what a fuzz-vs-overdrive default
-        // sounds like. RS-knob translations are NOT applied here (catalog
-        // is gear-level, no per-tone knob values).
-        if (rsGear) {
-            const vstStem = vstPath.split('/').pop().replace(/\.(vst3|component)$/i, '').toLowerCase();
-            try {
-                const r = await fetch(`${RB_API}/vst/knob_mapping?rs_gear_type=${encodeURIComponent(rsGear)}&vst_name=${encodeURIComponent(vstStem)}`);
-                const data = await r.json();
-                const staticBlock = data && data.mapping && data.mapping._static;
-                if (staticBlock && typeof staticBlock === 'object') {
-                    await rbRestoreSavedParamsToSlot(api, slotId, staticBlock);
-                }
-            } catch (e) {
-                console.warn('[rig_builder catalog-edit] _static apply skipped:', e);
-            }
-        }
+        await rbApplyCatalogGearVstParams(api, slotId, vstPath, rsGear);
+        await rbMakeStandaloneVstAudible(api);
         if (api.openPluginEditor) {
             await api.openPluginEditor(slotId).catch((e) => {
                 console.warn('[rig_builder] openPluginEditor failed:', e);
@@ -7818,11 +8173,18 @@ async function rbCatalogEditVst(vstPath, vstFormat, rsGear) {
             alert('This Slopsmith build has no openPluginEditor API.');
         }
     } catch (e) {
-        alert(`Edit failed: ${e.message || e}`);
+        await rbQuarantineFailedStandaloneVst(api, loadToken);
+        if (rbStandaloneVstLoadActive(loadToken)) alert(`Edit failed: ${rbFriendlyVstLoadError(e)}`);
     }
 }
 
-async function rbAuditionVst(vstPath, vstFormat, btnId) {
+function rbRestoreAuditionButton(btn) {
+    if (!btn) return;
+    btn.disabled = false;
+    btn.textContent = btn.dataset.origLabel || '▶';
+}
+
+async function rbAuditionVst(vstPath, vstFormat, btnId, rsGear) {
     const api = rbNativeAudio();
     if (!api) return;
     const btn = document.getElementById(btnId);
@@ -7834,6 +8196,7 @@ async function rbAuditionVst(vstPath, vstFormat, btnId) {
     if (rbState.listeningTone !== null || rbState._auditionId) {
         await rbStopPreview();
     }
+    const loadToken = rbStandaloneVstLoadToken();
     // Stash the original button text so stop/swap can restore it.
     if (btn && !btn.dataset.origLabel) btn.dataset.origLabel = btn.textContent;
     try {
@@ -7853,10 +8216,14 @@ async function rbAuditionVst(vstPath, vstFormat, btnId) {
             throw new Error('engine has no loadVST API (WASM-only build?)');
         }
         const slotId = await api.loadVST(vstPath);
-        if (slotId == null || slotId < 0) throw new Error('engine refused this plugin');
-        if (api.setMonitorMute) await api.setMonitorMute(false).catch(() => {});
+        if (!rbStandaloneVstLoadActive(loadToken)) {
+            rbRestoreAuditionButton(btn);
+            return;
+        }
+        if (slotId == null || slotId < 0) throw new Error(rbVstRefusedMsg());
+        await rbApplyCatalogGearVstParams(api, slotId, vstPath, rsGear);
         const wasRunning = api.isAudioRunning ? await api.isAudioRunning().catch(() => true) : true;
-        await api.startAudio();
+        await rbMakeStandaloneVstAudible(api);
         rbState._previewStartedAudio = !wasRunning;
         rbState._previewMode = 'native';
         rbState._auditionId = btnId;
@@ -7867,11 +8234,9 @@ async function rbAuditionVst(vstPath, vstFormat, btnId) {
             btn.textContent = labelTail ? `⏸ ${labelTail}` : '⏸';
         }
     } catch (e) {
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = btn.dataset.origLabel || '▶';
-        }
-        alert(`Audition failed: ${e.message || e}`);
+        await rbQuarantineFailedStandaloneVst(api, loadToken);
+        rbRestoreAuditionButton(btn);
+        if (rbStandaloneVstLoadActive(loadToken)) alert(`Audition failed: ${rbFriendlyVstLoadError(e)}`);
     }
 }
 
@@ -7909,7 +8274,7 @@ async function rbListenTone(toneIdx, filename) {
     const api = rbNativeAudio();
     try {
         if (api) {
-            const payload = await (await fetch(`${RB_API}/native_preset_full/${presetId}`)).json();
+            const payload = await (await fetch(`${window.RB_API}/native_preset_full/${presetId}`)).json();
             const chain = (payload.native_preset && payload.native_preset.chain) || [];
             if (chain.length === 0) {
                 alert('This tone has no pieces with an assigned file yet.');
@@ -7979,7 +8344,7 @@ async function rbListenTone(toneIdx, filename) {
 async function rbLoadSettings() {
     let s;
     try {
-        const r = await fetch(`${RB_API}/settings`);
+        const r = await fetch(`${window.RB_API}/settings`);
         s = await r.json();
     } catch (e) {
         return;
@@ -8038,7 +8403,7 @@ async function rbOauthConnect() {
     const statusEl = document.getElementById('rb-oauth-status');
     try {
         const origin = window.location.origin;
-        const r = await fetch(`${RB_API}/oauth/start?origin=${encodeURIComponent(origin)}`);
+        const r = await fetch(`${window.RB_API}/oauth/start?origin=${encodeURIComponent(origin)}`);
         const d = await r.json();
         if (!d.authorize_url) throw new Error('no authorize URL');
         window.open(d.authorize_url, '_blank');  // → system browser
@@ -8058,7 +8423,7 @@ async function rbOauthPoll(n) {
         return;
     }
     try {
-        const r = await fetch(`${RB_API}/oauth/status`);
+        const r = await fetch(`${window.RB_API}/oauth/status`);
         const d = await r.json();
         if (d.connected) {
             rbLoadSettings();
@@ -8070,7 +8435,7 @@ async function rbOauthPoll(n) {
 }
 
 async function rbOauthDisconnect() {
-    await fetch(`${RB_API}/oauth/disconnect`, { method: 'POST' });
+    await fetch(`${window.RB_API}/oauth/disconnect`, { method: 'POST' });
     rbLoadSettings();
     rbInit();
 }
@@ -8078,7 +8443,7 @@ async function rbOauthDisconnect() {
 async function rbSaveSettings() {
     const megaCb = document.getElementById('rb-mega-chain-mode');
     const mega_chain_mode = megaCb ? !!megaCb.checked : false;
-    await fetch(`${RB_API}/settings`, {
+    await fetch(`${window.RB_API}/settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mega_chain_mode }),
@@ -8095,7 +8460,7 @@ async function rbSaveSettings() {
 // new value.
 async function rbSetAllowTone3000Fallback(checked) {
     try {
-        await fetch(`${RB_API}/settings`, {
+        await fetch(`${window.RB_API}/settings`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ curated_only: !checked }),
@@ -8136,7 +8501,7 @@ async function rbDownloadForGear(btn, rsGear, toneId) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 180000);
     try {
-        const r = await fetch(`${RB_API}/download_for_gear`, {
+        const r = await fetch(`${window.RB_API}/download_for_gear`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ rs_gear: rsGear, tone3000_id: toneId }),
@@ -8237,7 +8602,7 @@ async function rbExtractAll() {
     const status = document.getElementById('rb-extract-all-status');
     status.textContent = 'Step 1/3: rebuilding gear map…';
     try {
-        let r = await fetch(`${RB_API}/extract_gear_map`, {
+        let r = await fetch(`${window.RB_API}/extract_gear_map`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ gears_psarc: path }),
@@ -8254,7 +8619,7 @@ async function rbExtractAll() {
         status.innerHTML = `<span class="text-gray-400">Gear map: ${gearCount} entries. Step 2/3: extracting gear photos (~10-20s)…</span>`;
         let photosNote = '';
         try {
-            r = await fetch(`${RB_API}/extract_gear_photos`, {
+            r = await fetch(`${window.RB_API}/extract_gear_photos`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ gears_psarc: path }),
@@ -8271,7 +8636,7 @@ async function rbExtractAll() {
 
         // Step 3 — cab IRs.
         status.innerHTML = `<span class="text-gray-400">Gear map: ${gearCount}${photosNote}. Step 3/3: extracting cab IRs (30-60s)…</span>`;
-        r = await fetch(`${RB_API}/extract_irs`, {
+        r = await fetch(`${window.RB_API}/extract_irs`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ gears_psarc: path }),
@@ -8306,7 +8671,7 @@ async function rbExportDefaults() {
     const status = document.getElementById('rb-export-defaults-status');
     status.textContent = 'Exporting…';
     try {
-        const r = await fetch(`${RB_API}/export_default_captures`, { method: 'POST' });
+        const r = await fetch(`${window.RB_API}/export_default_captures`, { method: 'POST' });
         const data = await r.json();
         if (!r.ok) {
             status.innerHTML = `<span class="text-red-400">Error: ${rbEsc(data.error || r.status)}</span>`;
