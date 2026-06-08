@@ -479,7 +479,16 @@ class Tone3000Client:
 # original amp at the cost of disk and CPU. We pick by user preference
 # but fall back through the list — some tones only have one size
 # available.
-_SIZE_PREFERENCE = ("standard", "lite", "feather", "nano", "custom")
+#
+# A1 (legacy) sizes: standard, lite, feather, nano. A2 (the architecture
+# Tone3000 made the default in June 2026) leads with a "full" size. "full"
+# sits at the front of the *fallback* order: pick_best_model still honours the
+# caller's preferred_size first (default "standard"), so a tone offering both a
+# standard and a full capture keeps picking standard — but an A2-only tone,
+# which has no "standard", now falls back to its flagship "full" capture rather
+# than a smaller one. Exact match with a models[0] fallback, so a tone that
+# exposes neither is unaffected.
+_SIZE_PREFERENCE = ("full", "standard", "lite", "feather", "nano", "custom")
 
 
 def pick_best_model(models_payload: dict, preferred_size: str = "standard") -> dict | None:
