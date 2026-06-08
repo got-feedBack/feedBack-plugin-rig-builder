@@ -2812,12 +2812,6 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
                         class="bg-amber-900/25 hover:bg-amber-900/45 text-amber-300 border border-amber-800/40 px-3 py-1.5 rounded text-xs">
                     🔁 Swap…
                 </button>
-                ${hasVst ? `
-                <button onclick="rbToneEditVst(${toneIdx}, ${pIdx})"
-                        title="Load this VST in the engine and edit its parameters with inline sliders"
-                        class="bg-purple-900/30 hover:bg-purple-900/50 text-purple-300 border border-purple-800/40 px-3 py-1.5 rounded text-xs">
-                    🎛 Edit VST
-                </button>` : ''}
                 <div class="flex-1"></div>
                 <button onclick="rbRemovePiece(${toneIdx}, ${pIdx})"
                         title="Remove this piece from the chain"
@@ -6476,7 +6470,20 @@ function rbGearInstrument(g) {
 }
 
 function rbGearHasVst(g) {
-    return !!(g && g.vst_path);
+    return !!(g && (
+        g.vst_path ||
+        g.assigned?.vst_path ||
+        g.assigned_kind === 'vst' ||
+        g.kind === 'vst'
+    ));
+}
+
+function rbGearVstPath(g) {
+    return (g && (
+        g.vst_path ||
+        g.assigned?.vst_path ||
+        ''
+    )) || '';
 }
 
 function rbGearCanvasStem(g) {
@@ -6616,17 +6623,18 @@ function rbCatalogVisualForGear(g, size) {
     const minHeight = size === 'large' ? '360px' : '96px';
     const height = size === 'large' ? '52vh' : '96px';
     if (rbGearUsesVstOnlyVisual(g)) {
-        if (canvasArt) {
-            return `<div class="bg-dark-900 border border-purple-800/30 rounded-xl overflow-hidden flex items-center justify-center"
-                         style="min-height:${minHeight};height:${height}">
-                        <img src="${canvasArt}" alt="" style="max-width:100%;max-height:100%;object-fit:contain" class="max-w-full max-h-full object-contain">
-                    </div>`;
-        }
         if (isVst) {
+            if (canvasArt) {
+                return `<div class="bg-dark-900 border border-purple-800/30 rounded-xl overflow-hidden flex items-center justify-center"
+                            style="min-height:${minHeight};height:${height}">
+                            <img src="${canvasArt}" alt="" style="max-width:100%;max-height:100%;object-fit:contain">
+                        </div>`;
+            }
+
             const vstName = g.vst_path.split('/').pop();
             return `<div class="bg-purple-900/10 border border-purple-800/30 rounded-xl flex items-center justify-center text-center px-6"
-                         style="min-height:${minHeight};height:${height}">
-                        <div class="max-w-md">
+                        style="min-height:${minHeight};height:${height}">
+                        <div>
                             <div class="text-purple-300 text-sm font-semibold mb-1">VST assigned</div>
                             <div class="text-gray-200 text-xs break-all">${rbEsc(vstName)}</div>
                         </div>
@@ -6657,15 +6665,27 @@ function rbCatalogVisualForGear(g, size) {
 }
 
 function rbOpenSelectedGearVst(g) {
-    if (!rbGearHasVst(g)) return;
+    if (!g || !rbGearHasVst(g)) return;
+
     const safeId = g.rs_gear.replace(/[^a-zA-Z0-9_-]/g, '_');
     const panel = document.getElementById(`rb-cat-edit-${safeId}`);
-    if (panel && !panel.classList.contains('hidden')) return;
-    const stem = g.vst_path.split('/').pop()
+    if (!panel) return;
+
+    const path = rbGearVstPath ? rbGearVstPath(g) : g.vst_path;
+    if (!path) return;
+
+    const stem = path.split('/').pop()
         .replace(/\.(vst3|component)$/i, '')
         .toLowerCase()
         .replace(/[^a-z0-9]/g, '');
-    rbCatalogEditInline(safeId, g.vst_path, g.vst_format || 'VST3', g.rs_gear, stem);
+
+    rbCatalogEditInline(
+        safeId,
+        path,
+        g.vst_format || 'VST3',
+        g.rs_gear,
+        stem
+    );
 }
 
 function rbRenderGearDetail(g) {
@@ -6699,8 +6719,7 @@ function rbRenderGearDetail(g) {
                                 class="bg-indigo-900/30 hover:bg-indigo-900/50 text-indigo-300 border border-indigo-800/40 px-3 py-1.5 rounded text-xs">📚 Library</button>`;
     const searchBtn = `<button onclick="rbOpenSuggest('${rbEsc(g.rs_gear)}')"
                                 class="text-gray-400 hover:text-gray-200 text-xs px-2 py-1.5">🔍 Search tone3000</button>`;
-    const editVstBtn = isVst ? `<button onclick="rbOpenSelectedGearVst(rbFindGear(${rbEsc(JSON.stringify(g.rs_gear))}))"
-                                class="bg-purple-900/40 hover:bg-purple-900/60 text-purple-200 border border-purple-800/50 px-3 py-1.5 rounded text-xs">🎛 Edit VST</button>` : '';
+    const editVstBtn = ''
     const variantAuditions = Array.isArray(g.variants) && g.variants.length
         ? `<div class="flex items-center gap-1 flex-wrap">${g.variants.map(v => {
             const vId = `rb-aud-${_rbCatalogSeq++}`;
@@ -6729,7 +6748,7 @@ function rbRenderGearDetail(g) {
             ${t3kHeaderLink}
         </div>
         <div id="rb-cat-edit-${safeId}" class="hidden bg-purple-900/10 border border-purple-800/30 rounded p-2"></div>
-        ${visualBlock}
+        ${isVst ? '' : visualBlock}
         <div class="bg-dark-800/50 border border-gray-800/40 rounded-lg p-3 space-y-2">
             <div class="text-xs text-gray-400">Current assignment: ${assignedLine}</div>
             ${variantAuditions}
@@ -6745,6 +6764,12 @@ function rbRenderGearDetail(g) {
             <div id="rb-cat-variants-${safeId}" class="hidden bg-emerald-900/10 border border-emerald-800/30 rounded p-2"></div>
         </div>
     </div>`;
+
+    if (isVst) {
+    setTimeout(() => {
+        rbOpenSelectedGearVst(g);
+    }, 0);
+}
 }
 
 function rbApplyGearFilters() {
@@ -6761,8 +6786,12 @@ function rbApplyGearFilters() {
 
     const activeCat = rbState.gearBrowserCategory || 'amp';
     const activeList = filtered[activeCat] || [];
-    const selectedStillVisible = rbState.gearSelected && activeList.some(g => g.rs_gear === rbState.gearSelected);
-    if (!selectedStillVisible) rbState.gearSelected = activeList[0] ? activeList[0].rs_gear : null;
+    const selectedStillVisible = rbState.gearSelected &&
+        activeList.some(g => g.rs_gear === rbState.gearSelected);
+
+    if (!selectedStillVisible)
+        rbState.gearSelected = null;
+
     const selected = rbState.gearSelected ? rbFindGear(rbState.gearSelected) : null;
 
     const summary = document.getElementById('rb-gear-list-summary');
@@ -6969,9 +6998,7 @@ function rbRenderCatalogCard(g) {
         // bulk-assign step). Passes rs_gear so rbCatalogEditVst can apply
         // the (gear, vst) `_static` defaults (e.g. kHs Distortion Type for
         // fuzz/od/dist pedals, MEqualizer band-enable flags).
-        editBtn = `<button onclick="event.stopPropagation(); rbCatalogEditInline('${safeId}','${rbEsc(g.vst_path).replace(/'/g,"\\'")}','${rbEsc(g.vst_format || 'VST3')}','${rbEsc(g.rs_gear)}','${gStem}')"
-                           title="Edit this VST's settings (shows the plugin UI inline; applies _static defaults)"
-                           class="bg-purple-900/40 hover:bg-purple-900/60 text-purple-200 border border-purple-800/50 px-3 py-1.5 rounded text-xs">🎛 Edit</button>`;
+        editBtn = ''
     } else if (g.assigned && !hasInlineAudition) {
         listenBtn = `<button id="${btnId}" onclick="event.stopPropagation(); rbAuditionFile('${rbEsc(g.file).replace(/'/g,"\\'")}', '${rbEsc(g.kind || 'nam')}', '${btnId}', undefined, '${rbEsc(g.rs_gear || '')}')"
                             title="Listen to this gear in isolation"
@@ -8000,6 +8027,22 @@ window.rbSweepParam = async function (slotId, paramName, steps) {
     return ranges;
 };
 
+async function rbHardResetVstAudio(api) {
+    try {
+        if (api.setGain) {
+            await api.setGain('input', 0.0);
+            await api.setGain('chain', 0.0);
+        }
+        if (api.setMonitorMute) await api.setMonitorMute(true);
+        if (api.clearChain) await api.clearChain();
+        await new Promise(r => setTimeout(r, 150));
+        if (api.setGain) {
+            await api.setGain('input', 1.0);
+            await api.setGain('chain', 0.0);
+        }
+    } catch (_) {}
+}
+
 // Inline catalog editor: when we have an in-app canvas recreation of the
 // plugin UI, show it right in the expanded gear card (draggable knobs →
 // live setParameter) instead of popping the native window. Falls back to
@@ -8054,16 +8097,27 @@ async function rbQuarantineFailedStandaloneVst(api, token) {
     } catch (_) {}
 }
 
-async function rbMakeStandaloneVstAudible(api) {
+async function rbMakeStandaloneVstAudible(api, opts) {
     if (!api) return;
+
+    const noUnmute = !!(opts && opts.noUnmute);
+
     try {
         if (api.setGain) {
             await api.setGain('input', 1.0);
-            await api.setGain('chain', 1.0);
+            if (!noUnmute) await api.setGain('chain', 1.0);
         }
     } catch (_) {}
-    try { if (api.setMonitorMute) await api.setMonitorMute(false); } catch (_) {}
-    try { if (api.startAudio) await api.startAudio(); } catch (_) {}
+
+    try {
+        if (!noUnmute && api.setMonitorMute) {
+            await api.setMonitorMute(false);
+        }
+    } catch (_) {}
+
+    try {
+        if (api.startAudio) await api.startAudio();
+    } catch (_) {}
 }
 
 async function rbCatalogEditInline(safeId, vstPath, vstFormat, rsGear, stem) {
@@ -8097,15 +8151,68 @@ async function rbCatalogEditInline(safeId, vstPath, vstFormat, rsGear, stem) {
     el.innerHTML = `<div class="text-xs text-gray-500">loading ${rbEsc(vstPath.split('/').pop())}…</div>`;
     const loadToken = rbStandaloneVstLoadToken();
     try {
+        await rbHardResetVstAudio(api);
         await rbCloseActiveVstEditor().catch(() => {});
         if (rbState.listeningTone !== null || rbState._auditionId) await rbStopPreview().catch(() => {});
+
+        // MUTE ANTES DE CLEARCHAIN
+        if (api.setGain) {
+            await api.setGain('input', 0.0).catch(() => {});
+            await api.setGain('chain', 0.0).catch(() => {});
+        }
+        if (api.setMonitorMute) {
+            await api.setMonitorMute(true).catch(() => {});
+        }
+
+        // pequeña espera para que el motor procese el mute
+        await new Promise(r => setTimeout(r, 80));
+
         if (api.clearChain) await api.clearChain().catch(() => {});
+
+        // otra espera antes de cargar el VST nuevo
+        await new Promise(r => setTimeout(r, 80));
+
         const slotId = await api.loadVST(vstPath);
+
+        await new Promise(r => setTimeout(r, 180));
+
+        if (api.setGain) {
+            await api.setGain('input', 1.0).catch(() => {});
+        }
+
         if (!rbStandaloneVstLoadActive(loadToken)) return;
         if (slotId == null || slotId < 0) throw new Error(rbVstRefusedMsg());
         rbState._vstEditorSlot = slotId;
-        await rbApplyCatalogGearVstParams(api, slotId, vstPath, rsGear);
-        await rbMakeStandaloneVstAudible(api);
+        await rbMakeStandaloneVstAudible(api, { noUnmute: true });
+
+        setTimeout(async () => {
+
+            try {
+
+                if (api.setGain) {
+
+                    await api.setGain('chain', 0.15);
+
+                    await new Promise(r => setTimeout(r, 20));
+
+                    await api.setGain('chain', 0.35);
+
+                    await new Promise(r => setTimeout(r, 20));
+
+                    await api.setGain('chain', 0.65);
+
+                    await new Promise(r => setTimeout(r, 20));
+
+                    await api.setGain('chain', 1.0);
+
+                }
+
+                if (api.setMonitorMute) await api.setMonitorMute(false);
+
+            } catch (_) {}
+
+        }, 500);
+        setTimeout(() => rbSignalChainLoaded().catch(() => {}), 250);
         // Snapshot current params → canvas model (logical values + idMap).
         let model = { values: {}, idMap: {}, logicalParams: [] };
         try {
@@ -8157,9 +8264,12 @@ async function rbCatalogEditVst(vstPath, vstFormat, rsGear) {
         }
         if (api.clearChain) await api.clearChain().catch(() => {});
         const slotId = await api.loadVST(vstPath);
+
         if (!rbStandaloneVstLoadActive(loadToken)) return;
+
         if (slotId == null || slotId < 0) {
-            throw new Error(`${rbVstRefusedMsg()}\n${vstPath}`);
+            await rbQuarantineFailedStandaloneVst(api, loadToken);
+            throw new Error(rbVstRefusedMsg());
         }
         rbState._vstEditorSlot = slotId;
         await rbApplyCatalogGearVstParams(api, slotId, vstPath, rsGear);
@@ -8174,7 +8284,9 @@ async function rbCatalogEditVst(vstPath, vstFormat, rsGear) {
         }
     } catch (e) {
         await rbQuarantineFailedStandaloneVst(api, loadToken);
-        if (rbStandaloneVstLoadActive(loadToken)) alert(`Edit failed: ${rbFriendlyVstLoadError(e)}`);
+        if (rbStandaloneVstLoadActive(loadToken)) {
+            el.innerHTML = `<div class="text-xs text-red-400">load failed: ${rbEsc(rbFriendlyVstLoadError(e))}</div>`;
+        }
     }
 }
 
