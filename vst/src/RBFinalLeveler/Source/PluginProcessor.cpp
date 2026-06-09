@@ -35,6 +35,7 @@ public:
         sr = sampleRate > 0.0 ? sampleRate : 48000.0;
         currentGainDb = 0.0f;
         currentGain = 1.0f;
+        levelInitialized = false;
     }
 
     void releaseResources() override {}
@@ -92,11 +93,13 @@ public:
         const float peakDb = juce::Decibels::gainToDecibels(peak, -120.0f);
 
         float wantedGainDb = currentGainDb;
+        const bool hasSignal = rmsDb >= gateDb;
 
-        if (rmsDb < gateDb)
+        if (!hasSignal)
         {
-            // No subir ruido/silencio. Vuelve lentamente a unity.
-            wantedGainDb = 0.0f;
+            // Do not chase silence/noise. Holding the learned correction avoids
+            // the audible fade-in that happens when gain resets between notes.
+            wantedGainDb = currentGainDb;
         }
         else
         {
@@ -109,8 +112,15 @@ public:
                 wantedGainDb = maxAllowedByPeak;
         }
 
+        if (hasSignal && !levelInitialized)
+        {
+            currentGainDb = juce::jlimit(-maxCutDb, maxBoostDb, wantedGainDb);
+            currentGain = juce::Decibels::decibelsToGain(currentGainDb + trimDb);
+            levelInitialized = true;
+        }
+
         // Si hay que cortar volumen, reaccionar rápido.
-        // Si hay que subir, hacerlo más lento para evitar pumping.
+        // Si hay que subir, hacerlo estable pero sin efecto de fade-in.
         const bool cutting = wantedGainDb < currentGainDb;
         const float timeMs = cutting ? attackMs : releaseMs;
 
@@ -161,6 +171,7 @@ private:
     double sr = 48000.0;
     float currentGainDb = 0.0f;
     float currentGain = 1.0f;
+    bool levelInitialized = false;
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     {
@@ -170,7 +181,7 @@ private:
             "target_rms_db",
             "Target RMS dB",
             juce::NormalisableRange<float>(-30.0f, -6.0f, 0.1f),
-            -18.0f
+            -14.0f
         ));
 
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -197,15 +208,15 @@ private:
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             "attack_ms",
             "Attack ms",
-            juce::NormalisableRange<float>(5.0f, 1000.0f, 1.0f),
-            80.0f
+            juce::NormalisableRange<float>(1.0f, 250.0f, 1.0f),
+            12.0f
         ));
 
         params.push_back(std::make_unique<juce::AudioParameterFloat>(
             "release_ms",
             "Release ms",
-            juce::NormalisableRange<float>(100.0f, 5000.0f, 1.0f),
-            1500.0f
+            juce::NormalisableRange<float>(20.0f, 1000.0f, 1.0f),
+            120.0f
         ));
 
         params.push_back(std::make_unique<juce::AudioParameterFloat>(

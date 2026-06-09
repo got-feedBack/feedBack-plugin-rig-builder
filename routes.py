@@ -290,8 +290,8 @@ _DEFAULT_SETTINGS = {
     "final_chain_min_gain_db": -20.0,
     "final_chain_max_gain_db": 20.0,
     "final_chain_gate_db": -45.0,
-    "final_chain_attack_ms": 800,
-    "final_chain_release_ms": 2500,
+    "final_chain_attack_ms": 12,
+    "final_chain_release_ms": 120,
 }
 
 # Tone3000 platform value to request per Rocksmith category. Amps and
@@ -325,7 +325,10 @@ def _final_leveler_params_state() -> str:
       1 = Max Boost
       2 = Max Cut
       3 = Gate
-      4 = Ceiling
+      4 = Attack
+      5 = Release
+      6 = Ceiling
+      7 = Output Trim
     """
     s = _load_settings()
 
@@ -340,14 +343,24 @@ def _final_leveler_params_state() -> str:
     max_boost = float(s.get("final_chain_max_gain_db", 20.0))
     max_cut = abs(float(s.get("final_chain_min_gain_db", -20.0)))
     gate = float(s.get("final_chain_gate_db", -45.0))
+    # Older settings shipped with 800/2500 ms here, which made the final
+    # leveler behave like a slow auto-volume fade-in. Clamp the effective
+    # leveler times to musical limiter values so stale local settings do not
+    # reintroduce that bloom.
+    attack = min(float(s.get("final_chain_attack_ms", 12)), 80.0)
+    release = min(float(s.get("final_chain_release_ms", 120)), 250.0)
     ceiling = float(s.get("final_leveler_ceiling_db", -1.0))
+    trim = float(s.get("final_leveler_trim_db", 0.0))
 
     params = {
-        "0": norm(target_rms, -30.0, -10.0),
+        "0": norm(target_rms, -30.0, -6.0),
         "1": norm(max_boost, 0.0, 24.0),
         "2": norm(max_cut, 0.0, 24.0),
-        "3": norm(gate, -70.0, -30.0),
-        "4": norm(ceiling, -6.0, 0.0),
+        "3": norm(gate, -80.0, -30.0),
+        "4": norm(attack, 1.0, 250.0),
+        "5": norm(release, 20.0, 1000.0),
+        "6": norm(ceiling, -12.0, -0.1),
+        "7": norm(trim, -12.0, 12.0),
     }
 
     return json.dumps({"params": params})
@@ -6162,8 +6175,8 @@ def setup(app, context):
             "final_chain_min_gain_db": float(s.get("final_chain_min_gain_db", -20.0)),
             "final_chain_max_gain_db": float(s.get("final_chain_max_gain_db", 20.0)),
             "final_chain_gate_db": float(s.get("final_chain_gate_db", -45.0)),
-            "final_chain_attack_ms": int(s.get("final_chain_attack_ms", 800)),
-            "final_chain_release_ms": int(s.get("final_chain_release_ms", 2500)),
+            "final_chain_attack_ms": int(min(float(s.get("final_chain_attack_ms", 12)), 80.0)),
+            "final_chain_release_ms": int(min(float(s.get("final_chain_release_ms", 120)), 250.0)),
             "has_tone3000_key": bool(key),
             "tone3000_api_key_preview": (key[:6] + "…") if key else "",
             "tone3000_connected": bool(s.get("tone3000_access_token")),
@@ -6217,7 +6230,8 @@ def setup(app, context):
         for key in ("final_chain_attack_ms", "final_chain_release_ms"):
             if key in data:
                 try:
-                    allowed[key] = max(50, min(10000, int(data[key])))
+                    hi = 80 if key == "final_chain_attack_ms" else 250
+                    allowed[key] = max(1, min(hi, int(data[key])))
                 except (TypeError, ValueError):
                     pass
         if "bypass_all_cabs" in data:

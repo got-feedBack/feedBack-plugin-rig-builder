@@ -43,6 +43,7 @@ target_compile_definitions(RBFinalLeveler
     PUBLIC
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
+        JUCE_IGNORE_VST3_MISMATCHED_PARAMETER_ID_WARNING=1
 )
 
 target_link_libraries(RBFinalLeveler
