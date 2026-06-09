@@ -4989,9 +4989,10 @@ _watcher_state: dict = {
 
 
 def _watch_scan_dlc() -> dict[str, int] | None:
-    """Return {filename: size} for every PSARC/sloppak in the DLC dir,
+    """Return {relative_dlc_path: size} for every PSARC/sloppak in the DLC dir,
     or None if the dir isn't available. RECURSIVE — picks up files
-    nested in subfolders (artist-based or any other organisation)."""
+    nested in subfolders (artist-based, converter output, or any other
+    organisation)."""
     dlc = _get_dlc_dir() if _get_dlc_dir else None
     if not dlc:
         return None
@@ -5003,12 +5004,11 @@ def _watch_scan_dlc() -> dict[str, int] | None:
             if p.suffix.lower() not in (".psarc", ".sloppak"):
                 continue
             try:
-                # Basename keys to stay consistent with web_library.db
-                # and _list_library_songs. Two subfolders with the same
-                # song basename would collide — first one wins, but that
-                # mirrors the host's own behaviour.
-                current[p.name] = p.stat().st_size
+                key = p.resolve().relative_to(dlc.resolve()).as_posix()
+                current[key] = p.stat().st_size
             except OSError:
+                continue
+            except ValueError:
                 continue
     except OSError:
         return None
