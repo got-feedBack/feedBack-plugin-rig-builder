@@ -279,6 +279,19 @@ _DEFAULT_SETTINGS = {
     # 70% DI (dry) + 30% cab blend, level-matched so the cab is audible and the
     # bass-band loudness is preserved (see _ir_stage / tools/make_di_cab_irs.py).
     "bass_di_cab": True,
+
+    # Final chain normalizer.
+    # Applied after the WHOLE chain, independent of whether the stages are
+    # NAM, VST or IR. The frontend uses the native engine's output meter,
+    # then adjusts setGain('chain', X) so every complete chain lands near
+    # the same perceived level.
+    "final_chain_normalize": True,
+    "final_chain_target_rms_db": -14.0,
+    "final_chain_min_gain_db": -20.0,
+    "final_chain_max_gain_db": 20.0,
+    "final_chain_gate_db": -45.0,
+    "final_chain_attack_ms": 800,
+    "final_chain_release_ms": 2500,
 }
 
 # Tone3000 platform value to request per Rocksmith category. Amps and
@@ -293,6 +306,85 @@ _PLATFORM_FOR_CATEGORY = {
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
+def _final_leveler_vst_path() -> Path | None:
+    """Bundled final loudness normalizer VST.
+
+    This VST lives at the very end of every generated chain and levels the
+    complete result, independent of whether the previous stages are NAM, VST
+    or IR.
+    """
+    p = (_plugin_dir / _FINAL_LEVELER_REL).resolve()
+    return p if p.exists() else None
+
+
+def _final_leveler_params_state() -> str:
+    """State envelope consumed by the JS reapply path.
+
+    Parameter order expected by RB Final Leveler VST:
+      0 = Target RMS
+      1 = Max Boost
+      2 = Max Cut
+      3 = Gate
+      4 = Ceiling
+    """
+    s = _load_settings()
+
+    def norm(value, lo, hi):
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            v = lo
+        return max(0.0, min(1.0, (v - lo) / (hi - lo)))
+
+    target_rms = float(s.get("final_chain_target_rms_db", -14.0))
+    max_boost = float(s.get("final_chain_max_gain_db", 20.0))
+    max_cut = abs(float(s.get("final_chain_min_gain_db", -20.0)))
+    gate = float(s.get("final_chain_gate_db", -45.0))
+    ceiling = float(s.get("final_leveler_ceiling_db", -1.0))
+
+    params = {
+        "0": norm(target_rms, -30.0, -10.0),
+        "1": norm(max_boost, 0.0, 24.0),
+        "2": norm(max_cut, 0.0, 24.0),
+        "3": norm(gate, -70.0, -30.0),
+        "4": norm(ceiling, -6.0, 0.0),
+    }
+
+    return json.dumps({"params": params})
+
+def _final_leveler_stage(missing: list | None = None) -> dict | None:
+    """Build the final VST stage, or None if disabled/missing."""
+    s = _load_settings()
+
+    if not s.get("final_chain_normalize", True):
+        return None
+
+    if s.get("final_leveler_enabled", True) is False:
+        return None
+
+    p = _final_leveler_vst_path()
+    if not p:
+        if missing is not None:
+            missing.append(str(_FINAL_LEVELER_REL))
+        return None
+
+    return _vst_stage(
+        p,
+        "VST3",
+        bypassed=False,
+        state=_vst_stage_state(str(p), "VST3", _final_leveler_params_state()),
+        slot="master_post",
+        rs_gear=_FINAL_LEVELER_RS_GEAR,
+    )
+
+
+def _append_final_leveler(chain: list[dict], missing: list | None = None) -> None:
+    """Append RB Final Leveler as the very last stage."""
+    if any((s or {}).get("rs_gear") == _FINAL_LEVELER_RS_GEAR for s in chain):
+        return
+    stage = _final_leveler_stage(missing)
+    if stage:
+        chain.append(stage)
 
 # Bundled VSTs whose .vst3 file was renamed to its copyright-free parody name.
 # Maps OLD bundle filename -> NEW. Single source of truth for: (a) the DB
@@ -398,6 +490,9 @@ _RENAMED_VST_BUNDLES = {
     "TW26.vst3":                 "BENDER DELUXE.vst3",
 }
 
+_FINAL_LEVELER_RS_GEAR = "__rb_final_leveler__"
+_FINAL_LEVELER_NAME = "RB Final Leveler.vst3"
+_FINAL_LEVELER_REL = Path("vst") / "racks" / _FINAL_LEVELER_NAME
 
 def _require_db_path() -> str:
     if _db_path is None:
@@ -5713,7 +5808,6 @@ def _canonical_song_key(filename: str) -> str:
         low = low[:-2]
     return low
 
-
 def setup(app, context):
     global _config_dir, _get_dlc_dir, _get_sloppak_cache_dir, _db_path
 
@@ -5792,6 +5886,16 @@ def setup(app, context):
             },
         }
 
+    @app.get("/api/plugins/rig_builder/final_leveler_stage")
+    def final_leveler_stage():
+        missing = []
+        stage = _final_leveler_stage(missing)
+        return {
+            "enabled": stage is not None,
+            "stage": stage,
+            "missing": missing,
+        }
+    
     @app.post("/api/plugins/rig_builder/extract_irs")
     def extract_irs(data: dict = Body(...)):
         """Run extract_irs.py against a user-supplied gears.psarc. The
@@ -6053,6 +6157,13 @@ def setup(app, context):
             # User "Output chain" / chain-volume trim (setGain('chain')
             # multiplier). Range 0–5, default 1× (the knob value IS the multiplier).
             "chain_makeup": float(s.get("chain_makeup", 1.0)),
+            "final_chain_normalize": bool(s.get("final_chain_normalize", True)),
+            "final_chain_target_rms_db": float(s.get("final_chain_target_rms_db", -14.0)),
+            "final_chain_min_gain_db": float(s.get("final_chain_min_gain_db", -20.0)),
+            "final_chain_max_gain_db": float(s.get("final_chain_max_gain_db", 20.0)),
+            "final_chain_gate_db": float(s.get("final_chain_gate_db", -45.0)),
+            "final_chain_attack_ms": int(s.get("final_chain_attack_ms", 800)),
+            "final_chain_release_ms": int(s.get("final_chain_release_ms", 2500)),
             "has_tone3000_key": bool(key),
             "tone3000_api_key_preview": (key[:6] + "…") if key else "",
             "tone3000_connected": bool(s.get("tone3000_access_token")),
@@ -6088,6 +6199,27 @@ def setup(app, context):
                 allowed["chain_makeup"] = max(0.0, min(5.0, float(data["chain_makeup"])))
             except (TypeError, ValueError):
                 pass
+        if "final_chain_normalize" in data:
+            allowed["final_chain_normalize"] = bool(data["final_chain_normalize"])
+
+        for key in (
+            "final_chain_target_rms_db",
+            "final_chain_min_gain_db",
+            "final_chain_max_gain_db",
+            "final_chain_gate_db",
+        ):
+            if key in data:
+                try:
+                    allowed[key] = float(data[key])
+                except (TypeError, ValueError):
+                    pass
+
+        for key in ("final_chain_attack_ms", "final_chain_release_ms"):
+            if key in data:
+                try:
+                    allowed[key] = max(50, min(10000, int(data[key])))
+                except (TypeError, ValueError):
+                    pass
         if "bypass_all_cabs" in data:
             want = bool(data["bypass_all_cabs"])
             allowed["bypass_all_cabs"] = want
@@ -6768,6 +6900,7 @@ def setup(app, context):
         return {"ok": True, "preset_id": preset_id, "mirrored": mirrored}
 
     # ── Export current gear→capture assignments as shipped defaults ───
+    @app.post("/api/plugins/rig_builder/export_default_captures")
     @app.post("/api/plugins/nam_rig_builder/export_default_captures")
     def export_default_captures():
         """Snapshot the current DB's gear→capture choices into
@@ -6910,6 +7043,9 @@ def setup(app, context):
             master_pre_stages  = _build_master_stages("pre",  models_dir, irs_dir, output_gain, missing)
             master_post_stages = _build_master_stages("post", models_dir, irs_dir, output_gain, missing)
             chain = master_pre_stages + chain + master_post_stages
+
+        # Siempre último: normalizador final de cadena completa.
+        _append_final_leveler(chain, missing)
 
         return {
             "id": preset_id,
@@ -7074,6 +7210,10 @@ def setup(app, context):
         # off and everything IN the list on.
         master_pre_stages  = _build_master_stages("pre",  models_dir, irs_dir, 1.0, missing)
         master_post_stages = _build_master_stages("post", models_dir, irs_dir, 1.0, missing)
+
+        final_leveler = _final_leveler_stage(missing)
+        if final_leveler:
+            master_post_stages.append(final_leveler)
 
         # Pass 1: enumerate each tone's stages and bucket them by slot type
         # so we can flatten in signal-flow order. Track per-tone usage so we
@@ -7268,7 +7408,10 @@ def setup(app, context):
             # multiplies the normalised level so user overrides still work.
             stage = _nam_stage(p, bypassed=False, input_level=_drive,
                                output_drive=_drive, output_mult=float(gain))
-        return {"native_preset": {"version": 1, "chain": [stage]}}
+        chain = [stage]
+        missing = []
+        _append_final_leveler(chain, missing)
+        return {"native_preset": {"version": 1, "chain": chain}, "missing": missing}
 
     # ── VST plugin endpoints (Fase C: known list + assign + state) ────
     # The native engine owns the actual VST scan + load via the JS bridge

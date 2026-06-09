@@ -183,6 +183,11 @@ function rbEnsureScopedCss() {
                 // Same delay strategy as the VST param re-apply so it
                 // lands after the chain has settled in the engine.
                 setTimeout(() => { rbApplyChainInputDrive({ chain }); }, reapplyDelay);
+
+                setTimeout(() => {
+                    rbStartFinalChainNormalizer(chain);
+                }, reapplyDelay + 150);
+
             } catch (_) {
                 return origFetch(input, init);
             }
@@ -365,6 +370,11 @@ function rbChainGainTargetFor(chainSpec) {
     // the engine respects (per-stage IR gain is ignored). Multiplies the
     // auto-leveled base below.
     const makeup = (typeof window.__rbChainMakeup === 'number') ? window.__rbChainMakeup : 1.0;
+    if (rbChainHasFinalLeveler(chainSpec)) {
+    window.__rbChainBaseTarget = 1.0;
+    return makeup;
+    }
+
     let base = 1.0;
     if (Array.isArray(chainSpec)) {
         let hasActiveAmp = false, hasActiveVstAmp = false, hasRsCab = false, hasOtherCab = false, activeNamCount = 0;
@@ -438,6 +448,268 @@ async function rbApplyChainOutputGain(opts) {
     return audio.setGain('chain', target).catch((e) => {
         console.warn('[rig_builder] setGain(chain,', target, ') failed:', e);
     });
+}
+
+// ── Final chain normalizer ─────────────────────────────────────────────
+// Normalizes the COMPLETE chain output, independent of whether the stages
+// are NAM, VST or IR. This is the correct level-matching layer:
+//
+//   pre_pedal → amp → post_pedal → rack → cabinet → FINAL NORMALIZER
+//
+// It requires the native audio engine to expose an output meter such as:
+//   audio.getOutputMeter() → { rmsDb, peakDb }
+//
+// If the current engine build has no meter API, this falls back to the old
+// rbApplyChainOutputGain heuristic so playback never breaks.
+const RB_FINAL_NORM_DEFAULTS = {
+    enabled: true,
+    targetRmsDb: -18.0,
+    minGainDb: -18.0,
+    maxGainDb: 18.0,
+    gateDb: -45.0,
+    attackMs: 800,
+    releaseMs: 2500,
+};
+
+function rbIsFinalLevelerStage(stage) {
+    if (!stage || Number(stage.type) !== 0) return false;
+
+    const hay = [
+        stage.rs_gear,
+        stage.name,
+        stage.path,
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    return hay.includes('__rb_final_leveler__')
+        || hay.includes('rb final leveler')
+        || hay.includes('rbfinalleveler')
+        || hay.includes('rb_final_leveler');
+}
+
+function rbChainHasFinalLeveler(chainSpec) {
+    return Array.isArray(chainSpec)
+        && chainSpec.some(stage => stage && !stage.bypassed && rbIsFinalLevelerStage(stage));
+}
+
+let _rbFinalNormTimer = null;
+let _rbFinalNormRunId = 0;
+let _rbFinalNormCorrectionDb = 0;
+let _rbFinalNormWarnedNoMeter = false;
+
+function rbDbToGain(db) {
+    return Math.pow(10, db / 20);
+}
+
+function rbGainToDb(gain) {
+    return 20 * Math.log10(Math.max(1e-9, Number(gain) || 0));
+}
+
+function rbClampDb(db, minDb, maxDb) {
+    return Math.max(minDb, Math.min(maxDb, db));
+}
+
+async function rbLoadFinalNormSettings() {
+    try {
+        const r = await fetch(`${window.RB_API}/settings`);
+        const s = await r.json();
+        return {
+            enabled: s.final_chain_normalize !== false,
+            targetRmsDb: Number.isFinite(Number(s.final_chain_target_rms_db)) ? Number(s.final_chain_target_rms_db) : -18.0,
+            minGainDb: Number.isFinite(Number(s.final_chain_min_gain_db)) ? Number(s.final_chain_min_gain_db) : -18.0,
+            maxGainDb: Number.isFinite(Number(s.final_chain_max_gain_db)) ? Number(s.final_chain_max_gain_db) : 18.0,
+            gateDb: Number.isFinite(Number(s.final_chain_gate_db)) ? Number(s.final_chain_gate_db) : -45.0,
+            attackMs: Number.isFinite(Number(s.final_chain_attack_ms)) ? Number(s.final_chain_attack_ms) : 800,
+            releaseMs: Number.isFinite(Number(s.final_chain_release_ms)) ? Number(s.final_chain_release_ms) : 2500,
+        };
+    } catch (_) {
+        return RB_FINAL_NORM_DEFAULTS;
+    }
+}
+
+function rbNormalizeMeterShape(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+
+    const firstNumber = (...keys) => {
+        for (const k of keys) {
+            const v = raw[k];
+            if (typeof v === 'number' && Number.isFinite(v)) return v;
+        }
+        return null;
+    };
+
+    let rmsDb = firstNumber(
+        'rmsDb',
+        'rms_db',
+        'chainRmsDb',
+        'chain_rms_db',
+        'outputRmsDb',
+        'output_rms_db',
+        'postChainRmsDb',
+        'post_chain_rms_db'
+    );
+
+    let peakDb = firstNumber(
+        'peakDb',
+        'peak_db',
+        'chainPeakDb',
+        'chain_peak_db',
+        'outputPeakDb',
+        'output_peak_db',
+        'postChainPeakDb',
+        'post_chain_peak_db'
+    );
+
+    // Accept linear meters too, if the engine exposes them that way.
+    if (rmsDb === null) {
+        const rms = firstNumber('rms', 'chainRms', 'outputRms', 'postChainRms');
+        if (rms !== null) rmsDb = rbGainToDb(rms);
+    }
+
+    if (peakDb === null) {
+        const peak = firstNumber('peak', 'chainPeak', 'outputPeak', 'postChainPeak');
+        if (peak !== null) peakDb = rbGainToDb(peak);
+    }
+
+    if (rmsDb === null) return null;
+    if (peakDb === null) peakDb = -999;
+
+    return { rmsDb, peakDb };
+}
+
+async function rbReadFinalOutputMeter(audio) {
+    if (!audio) return null;
+
+    const candidates = [
+        'getOutputMeter',
+        'getChainMeter',
+        'getPostChainMeter',
+        'getMeter',
+        'getLevels',
+    ];
+
+    for (const fn of candidates) {
+        if (typeof audio[fn] !== 'function') continue;
+        try {
+            const raw = await audio[fn]();
+            const meter = rbNormalizeMeterShape(raw);
+            if (meter) return meter;
+        } catch (_) {}
+    }
+
+    return null;
+}
+
+function rbStopFinalChainNormalizer() {
+    _rbFinalNormRunId += 1;
+    if (_rbFinalNormTimer) {
+        clearInterval(_rbFinalNormTimer);
+        _rbFinalNormTimer = null;
+    }
+}
+
+async function rbStartFinalChainNormalizer(chainSpec, opts) {
+    rbStopFinalChainNormalizer();
+
+    const chain = Array.isArray(chainSpec) ? chainSpec : [];
+    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    if (!audio || typeof audio.setGain !== 'function') return;
+
+    if (rbChainHasFinalLeveler(chain)) {
+        const userTrim = (typeof window.__rbChainMakeup === 'number')
+            ? window.__rbChainMakeup
+            : 1.0;
+        window.__rbChainBaseTarget = 1.0;
+        window.__rbPendingChainGainTarget = userTrim;
+        try {
+            await audio.setGain('chain', rbClampChainGainTarget(userTrim));
+        } catch (e) {
+            console.warn('[rig_builder final-leveler] setGain(chain) failed:', e);
+        }
+        return;
+    }
+
+    const settings = await rbLoadFinalNormSettings();
+
+    // Bootstrap with the existing smart target. This preserves all the old
+    // safety logic and gives the normalizer a sane starting point.
+    const initialTarget = rbClampChainGainTarget(rbChainGainTargetFor(chain));
+    const baseTarget = (typeof window.__rbChainBaseTarget === 'number')
+        ? window.__rbChainBaseTarget
+        : Math.max(0.0001, initialTarget / Math.max(0.0001, (typeof window.__rbChainMakeup === 'number' ? window.__rbChainMakeup : 1.0)));
+
+    window.__rbPendingChainGainTarget = initialTarget;
+
+    try {
+        await audio.setGain('chain', initialTarget);
+    } catch (e) {
+        console.warn('[rig_builder final-norm] initial setGain(chain) failed:', e);
+    }
+
+    if (!settings.enabled) return;
+
+    const firstMeter = await rbReadFinalOutputMeter(audio);
+
+    // No meter API = cannot do real final loudness normalization.
+    // Keep old behaviour instead of breaking playback.
+    if (!firstMeter) {
+        if (!_rbFinalNormWarnedNoMeter) {
+            _rbFinalNormWarnedNoMeter = true;
+            console.warn('[rig_builder final-norm] no output meter API found. Falling back to rbChainGainTargetFor(). Add audio.getOutputMeter() to enable true final-chain normalization.');
+        }
+        return;
+    }
+
+    const runId = ++_rbFinalNormRunId;
+    _rbFinalNormCorrectionDb = 0;
+
+    const tickMs = 100;
+
+    _rbFinalNormTimer = setInterval(async () => {
+        if (runId !== _rbFinalNormRunId) return;
+
+        const meter = await rbReadFinalOutputMeter(audio);
+        if (!meter) return;
+
+        const rmsDb = meter.rmsDb;
+        const peakDb = meter.peakDb;
+
+        // Do not raise silence/noise. Otherwise the normalizer will crank gain
+        // when the player is not playing.
+        if (rmsDb < settings.gateDb) return;
+
+        let wantedCorrectionDb = settings.targetRmsDb - rmsDb;
+        wantedCorrectionDb = rbClampDb(
+            wantedCorrectionDb,
+            settings.minGainDb,
+            settings.maxGainDb
+        );
+
+        // Anti-clip guard: if peaks are already close to 0 dBFS, do not keep
+        // increasing gain. Cutting is still allowed.
+        if (peakDb > -3.0 && wantedCorrectionDb > _rbFinalNormCorrectionDb) {
+            wantedCorrectionDb = _rbFinalNormCorrectionDb;
+        }
+
+        const movingUp = wantedCorrectionDb > _rbFinalNormCorrectionDb;
+        const smoothMs = movingUp ? settings.attackMs : settings.releaseMs;
+        const alpha = Math.min(1, tickMs / Math.max(1, smoothMs));
+
+        _rbFinalNormCorrectionDb += (wantedCorrectionDb - _rbFinalNormCorrectionDb) * alpha;
+
+        const userTrim = (typeof window.__rbChainMakeup === 'number')
+            ? window.__rbChainMakeup
+            : 1.0;
+
+        const finalGain = rbClampChainGainTarget(
+            baseTarget * rbDbToGain(_rbFinalNormCorrectionDb) * userTrim
+        );
+
+        window.__rbPendingChainGainTarget = finalGain;
+
+        try {
+            await audio.setGain('chain', finalGain);
+        } catch (_) {}
+    }, tickMs);
 }
 
 // Rotary knob widget for the Setup "Levels" controls. Renders an SVG knob into
@@ -998,7 +1270,7 @@ const RbMegaChain = (function () {
             return copy;
         });
         await rbApplyChainInputDrive({ chain: effectiveChain });
-        await rbApplyChainOutputGain({ chain: effectiveChain });
+        await rbStartFinalChainNormalizer(effectiveChain);
         _activeToneKey = activeToneKey;
     }
 
@@ -1394,6 +1666,7 @@ const RbMegaChain = (function () {
     }
 
     async function teardown(silent) {
+        rbStopFinalChainNormalizer();
         _stopPolling();
         _stopAmpGuard();
         if (!silent) _restoreGuitarStem();
@@ -2953,6 +3226,7 @@ async function rbTeardownVstEditor(api) {
     // rbStopPreview) — clearing here would kill the sound the instant you close
     // the pedal face.
     if (!inChain) {
+        rbStopFinalChainNormalizer();
         try { if (api.clearChain) await api.clearChain(); } catch (_) {}
     }
 }
@@ -3032,6 +3306,7 @@ async function rbCloseActiveVstEditor() {
 // report. Idempotent + safe to call when nothing is open.
 let _rbLeaving = false;
 async function rbOnLeaveRigBuilder() {
+    rbStopFinalChainNormalizer();
     if (_rbLeaving) return;
     _rbLeaving = true;
     try {
@@ -3173,7 +3448,7 @@ async function rbToneEditVst(toneIdx, pIdx) {
             const saved = piece._vst_params
                 || (piece.assigned && piece.assigned.vst_state
                     ? rbParseVstStateParams(piece.assigned.vst_state) : null);
-            piece._vst_param_meta = await rbRestoreSavedParamsToSlot(api, slotId, saved);
+            piece._vst_param_meta = await rbRestoreSavedParamsToSlot(api, slotId, saved, vstPath)
         }
         piece._vst_slot_id = slotId;
         // Keep any previously-saved opaque blob so re-saving without a fresh
@@ -4016,7 +4291,7 @@ async function rbMasterEditVst(role, idx) {
         const saved = piece._vst_params
             || (piece.assigned && piece.assigned.vst_state
                 ? rbParseVstStateParams(piece.assigned.vst_state) : null);
-        const params = await rbRestoreSavedParamsToSlot(api, slotId, saved);
+        const params = await rbRestoreSavedParamsToSlot(api, slotId, saved, vstPath)
         piece._vst_param_meta = params;
         // Seed _vst_params with the FULL current snapshot. Without this,
         // subsequent slider drags would write a PARTIAL dict — untouched
@@ -5493,22 +5768,63 @@ function rbResolveStagedPath(toneIdx, pIdx) {
 // states silently no-op (parseInt("Threshold") = NaN → editor opens at
 // plugin defaults). Without clamping, an out-of-range value gets pinned
 // to the param's min or behaves erratically (see `Gain -2328 dB` bug).
-async function rbRestoreSavedParamsToSlot(api, slotId, savedParams) {
+
+async function rbGetVstParamsEventually(api, slotId, attempts = 18, delayMs = 75) {
+    if (!api || typeof api.getParameters !== 'function') return [];
+
+    let last = [];
+    for (let i = 0; i < attempts; i++) {
+        try {
+            const raw = await api.getParameters(slotId);
+            if (Array.isArray(raw)) {
+                last = raw;
+                if (raw.length > 0) return raw;
+            }
+        } catch (e) {
+            if (i === 0) console.warn('[rig_builder restore] getParameters threw:', e);
+        }
+        await new Promise(r => setTimeout(r, delayMs));
+    }
+    return last;
+}
+
+function rbAddCanvasParamNameFallback(vstPath, nameToId, idToName) {
+    if (!vstPath || !window.RBPedalCanvas || !window.RBPedalCanvas.specs) return false;
+
+    const stem = vstPath.split('/').pop()
+        .replace(/\.(vst3|component)$/i, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
+    const spec = window.RBPedalCanvas.specs[stem];
+    if (!spec || !Array.isArray(spec.names)) return false;
+
+    let added = 0;
+    spec.names.forEach((name, idx) => {
+        if (!name) return;
+        const key = String(name).trim().toLowerCase();
+        if (nameToId[key] == null) {
+            nameToId[key] = idx;
+            idToName[idx] = name;
+            added++;
+        }
+    });
+
+    if (added) {
+        console.log(`[rig_builder restore] using canvas spec fallback for ${stem}: ${added} param names`);
+    }
+
+    return added > 0;
+}
+
+async function rbRestoreSavedParamsToSlot(api, slotId, savedParams, vstPath = '') {
     // Small grace period after loadVST. Some JUCE-hosted VST3 plugins (esp.
     // larger ones like MCompressor with 150 params) finish parameter setup
     // a tick or two after loadVST resolves; calling setParameter inside that
     // window can silently no-op even though it returns without throwing.
     // Empirically 50 ms is enough on M1 with kHs / Melda free.
     await new Promise(r => setTimeout(r, 50));
-    let params = [];
-    if (typeof api.getParameters === 'function') {
-        try {
-            const raw = await api.getParameters(slotId);
-            if (Array.isArray(raw)) params = raw;
-        } catch (e) {
-            console.warn('[rig_builder restore] getParameters threw:', e);
-        }
-    }
+    let params = await rbGetVstParamsEventually(api, slotId);
     const savedKeys = savedParams ? Object.keys(savedParams) : [];
     console.log(`[rig_builder restore] slot=${slotId} · ${params.length} live params · ${savedKeys.length} saved keys: ${savedKeys.slice(0, 6).join(', ')}${savedKeys.length > 6 ? '…' : ''}`);
     if (!savedParams || typeof api.setParameter !== 'function') {
@@ -5525,6 +5841,17 @@ async function rbRestoreSavedParamsToSlot(api, slotId, savedParams) {
             idToName[pid] = p.name || p.label;
         }
     });
+    const unresolvedNameKeys = savedKeys.filter(k => {
+        const key = String(k).trim().toLowerCase();
+        if (nameToId[key] != null) return false;
+
+        const asNum = parseInt(k, 10);
+        return !(Number.isFinite(asNum) && String(asNum) === String(k).trim());
+    });
+
+    if (unresolvedNameKeys.length) {
+        rbAddCanvasParamNameFallback(vstPath, nameToId, idToName);
+    }
     const sampleParam = params[0] || {};
     console.log(`[rig_builder restore] slot=${slotId} · live param shape keys: ${Object.keys(sampleParam).join(', ')} · first 5 names: ${params.slice(0, 5).map(p => p.name || p.label || '<no-name>').join(' | ')}`);
     let applied = 0;
@@ -5569,7 +5896,7 @@ async function rbRestoreSavedParamsToSlot(api, slotId, savedParams) {
     // requested vs actual for up to 4 touched params).
     if (typeof api.getParameters === 'function') {
         try {
-            const refreshed = await api.getParameters(slotId);
+            const refreshed = await rbGetVstParamsEventually(api, slotId, 4, 50);
             if (Array.isArray(refreshed)) {
                 params = refreshed;
                 const verify = [];
@@ -5600,7 +5927,7 @@ async function rbLoadAndEditVst(toneIdx, pIdx) {
         // Clear any previous experimental load so the editor doesn't accumulate.
         await rbTeardownVstEditor(api);
         await api.startAudio().catch(() => {});
-        const slotId = await rbSafeLoadStandaloneVst(api, vstPath);
+        const slotId = await rbSafeLoadStandaloneVst(api, path);
         if (slotId == null || slotId < 0) throw new Error(rbVstRefusedMsg());
         rbState._vstEditorSlot = slotId;
         // Render the inline params editor (HTML sliders driving setParameter
@@ -5614,7 +5941,7 @@ async function rbLoadAndEditVst(toneIdx, pIdx) {
         // and clamps values to [0,1] (engine's normalized range).
         const savedParams = piece._vst_params || (piece.assigned && piece.assigned.vst_state
             ? rbParseVstStateParams(piece.assigned.vst_state) : null);
-        const params = await rbRestoreSavedParamsToSlot(api, slotId, savedParams);
+        const params = await rbRestoreSavedParamsToSlot(api, slotId, savedParams, path);
         piece._vst_param_meta = params;
         rbRenderInlineVstParams(toneIdx, pIdx);
         if (statusEl) {
@@ -6070,6 +6397,7 @@ function rbNativeAudio() {
 
 // Stop whatever preview is active (native full-chain or nam_tone fallback).
 async function rbStopPreview() {
+    rbStopFinalChainNormalizer();
     // Tear down any open VST editor window BEFORE clearChain below — clearing
     // a slot an editor window still points at crashes the host.
     await rbCloseActiveVstEditor();
@@ -6186,6 +6514,50 @@ async function rbReapplyBypassToChain(api, chainSpec) {
     }
 }
 
+let _rbFinalLevelerStageCache = null;
+
+async function rbFetchFinalLevelerStage() {
+    if (_rbFinalLevelerStageCache) return _rbFinalLevelerStageCache;
+    try {
+        const r = await fetch(`${window.RB_API}/final_leveler_stage`);
+        const d = await r.json();
+        const stage = d && d.enabled && d.stage ? d.stage : null;
+        _rbFinalLevelerStageCache = stage;
+        return stage;
+    } catch (_) {
+        return null;
+    }
+}
+
+async function rbAppendFinalLevelerToStandaloneVstChain(api, baseStage) {
+    const chainSpec = [baseStage];
+    const leveler = await rbFetchFinalLevelerStage();
+
+    if (!api || !leveler || !leveler.path || typeof api.loadVST !== 'function') {
+        return chainSpec;
+    }
+
+    try {
+        const levelerSlotId = await api.loadVST(leveler.path);
+        if (levelerSlotId == null || levelerSlotId < 0) {
+            console.warn('[rig_builder final-leveler] engine refused final leveler VST');
+            return chainSpec;
+        }
+
+        chainSpec.push(leveler);
+
+        // Aplica los params del leveler si el engine no restaura state solo.
+        await rbReapplyVstParamsToChain(api, chainSpec).catch((e) =>
+            console.warn('[rig_builder final-leveler] param reapply failed:', e)
+        );
+
+        return chainSpec;
+    } catch (e) {
+        console.warn('[rig_builder final-leveler] append failed:', e);
+        return chainSpec;
+    }
+}
+
 // Reload the current native preview chain. Pass a presetId to refetch the
 // chain (after a gear change); omit it to just re-apply bypass flags to the
 // already-fetched chain (after a bypass toggle). Audio keeps running.
@@ -6223,7 +6595,7 @@ async function rbReloadPreview(refetchPresetId) {
         await rbReapplyVstParamsToChain(api, chainArr).catch((e) =>
             console.warn('[rig_builder] reload re-apply VST params:', e));
         await rbApplyChainInputDrive({ chain: chainArr });
-        await rbApplyChainOutputGain({ chain: chainArr });
+        await rbStartFinalChainNormalizer(chainArr);
         // Don't manually un-mute here — rbPreLoadMute does it with a fade
         // on its own timer. Forcing un-mute now would defeat the fade.
     } catch (e) { console.warn('[rig_builder] reload preview failed', e); }
@@ -6317,8 +6689,9 @@ async function rbAuditionFile(file, kind, btnId, gain, rsGear) {
             // catalog always knows g.rs_gear so this is reliable.
             const isBass = typeof rsGear === 'string' && rsGear.startsWith('Bass_');
             await rbApplyChainInputDrive({ isBass, chain });
-            await api.setGain('chain', 1.0).catch(() => {});
         }
+
+        await rbStartFinalChainNormalizer(chain);
         if (api.setMonitorMute) await api.setMonitorMute(false).catch(() => {});
         const wasRunning = api.isAudioRunning ? await api.isAudioRunning().catch(() => true) : true;
         await api.startAudio();
@@ -7887,7 +8260,7 @@ async function rbCatalogLoadAndEdit(panelId) {
     try {
         await rbTeardownVstEditor(api);
         await api.startAudio().catch(() => {});
-        const slotId = await rbSafeLoadStandaloneVst(api, vstPath);
+        const slotId = await rbSafeLoadStandaloneVst(api, path);
         if (slotId == null || slotId < 0) throw new Error(rbVstRefusedMsg());
         rbState._vstEditorSlot = slotId;
         if (api.openPluginEditor) {
@@ -8129,20 +8502,27 @@ function rbCatalogSavedParamsForGear(rsGear) {
 async function rbApplyCatalogGearVstParams(api, slotId, vstPath, rsGear) {
     const saved = rbCatalogSavedParamsForGear(rsGear);
     if (saved && Object.keys(saved).length) {
-        return rbRestoreSavedParamsToSlot(api, slotId, saved);
+        return rbRestoreSavedParamsToSlot(api, slotId, saved, vstPath);
     }
+
     if (!rsGear) return null;
-    const vstStem = vstPath.split('/').pop().replace(/\.(vst3|component)$/i, '').toLowerCase();
+
+    const vstStem = vstPath.split('/').pop()
+        .replace(/\.(vst3|component)$/i, '')
+        .toLowerCase();
+
     try {
         const r = await fetch(`${window.RB_API}/vst/knob_mapping?rs_gear_type=${encodeURIComponent(rsGear)}&vst_name=${encodeURIComponent(vstStem)}`);
         const data = await r.json();
         const staticBlock = data && data.mapping && data.mapping._static;
+
         if (staticBlock && typeof staticBlock === 'object') {
-            return rbRestoreSavedParamsToSlot(api, slotId, staticBlock);
+            return rbRestoreSavedParamsToSlot(api, slotId, staticBlock, vstPath);
         }
     } catch (e) {
         console.warn('[rig_builder catalog-edit] default param apply skipped:', e);
     }
+
     return null;
 }
 
@@ -8233,23 +8613,21 @@ async function rbCatalogEditInline(safeId, vstPath, vstFormat, rsGear, stem) {
 
         if (!rbStandaloneVstLoadActive(loadToken)) return;
 
-        await rbApplyCatalogGearVstParams(api, slotId, vstPath, rsGear);
-        await rbMakeStandaloneVstAudible(api, { noUnmute: true });
+        const baseStage = {
+            type: 0,
+            slot: /^Amp_|^Bass_Amp_|^DI_Amp_/.test(String(rsGear || '')) ? 'amp' : 'pedal',
+            path: vstPath,
+            format: vstFormat || 'VST3',
+            rs_gear: rsGear || '',
+            bypassed: false,
+        };
 
-        setTimeout(async () => {
-            try {
-                if (api.setGain) {
-                    await api.setGain('chain', 0.15);
-                    await new Promise(r => setTimeout(r, 20));
-                    await api.setGain('chain', 0.35);
-                    await new Promise(r => setTimeout(r, 20));
-                    await api.setGain('chain', 0.65);
-                    await new Promise(r => setTimeout(r, 20));
-                    await api.setGain('chain', 1.0);
-                }
-                if (api.setMonitorMute) await api.setMonitorMute(false);
-            } catch (_) {}
-        }, 500);
+        await rbApplyCatalogGearVstParams(api, slotId, vstPath, rsGear);
+
+        const chainForLeveling = await rbAppendFinalLevelerToStandaloneVstChain(api, baseStage);
+
+        await rbMakeStandaloneVstAudible(api);
+        await rbStartFinalChainNormalizer(chainForLeveling);
 
     
         setTimeout(() => rbSignalChainLoaded().catch(() => {}), 250);
@@ -8312,8 +8690,21 @@ async function rbCatalogEditVst(vstPath, vstFormat, rsGear) {
             throw new Error(rbVstRefusedMsg());
         }
         rbState._vstEditorSlot = slotId;
+        const baseStage = {
+            type: 0,
+            slot: /^Amp_|^Bass_Amp_|^DI_Amp_/.test(String(rsGear || '')) ? 'amp' : 'pedal',
+            path: vstPath,
+            format: vstFormat || 'VST3',
+            rs_gear: rsGear || '',
+            bypassed: false,
+        };
+
         await rbApplyCatalogGearVstParams(api, slotId, vstPath, rsGear);
+
+        const chainForLeveling = await rbAppendFinalLevelerToStandaloneVstChain(api, baseStage);
+
         await rbMakeStandaloneVstAudible(api);
+        await rbStartFinalChainNormalizer(chainForLeveling);
         if (api.openPluginEditor) {
             await api.openPluginEditor(slotId).catch((e) => {
                 console.warn('[rig_builder] openPluginEditor failed:', e);
@@ -8373,9 +8764,25 @@ async function rbAuditionVst(vstPath, vstFormat, btnId, rsGear) {
             return;
         }
         if (slotId == null || slotId < 0) throw new Error(rbVstRefusedMsg());
+        const baseStage = {
+            type: 0,
+            slot: /^Amp_|^Bass_Amp_|^DI_Amp_/.test(String(rsGear || '')) ? 'amp' : 'pedal',
+            path: vstPath,
+            format: vstFormat || 'VST3',
+            rs_gear: rsGear || '',
+            bypassed: false,
+        };
+
         await rbApplyCatalogGearVstParams(api, slotId, vstPath, rsGear);
+
+        // Agrega RB Final Leveler después del VST que estás escuchando.
+        const chainForLeveling = await rbAppendFinalLevelerToStandaloneVstChain(api, baseStage);
+
         const wasRunning = api.isAudioRunning ? await api.isAudioRunning().catch(() => true) : true;
         await rbMakeStandaloneVstAudible(api);
+
+        await rbStartFinalChainNormalizer(chainForLeveling);
+
         rbState._previewStartedAudio = !wasRunning;
         rbState._previewMode = 'native';
         rbState._auditionId = btnId;
@@ -8460,7 +8867,7 @@ async function rbListenTone(toneIdx, filename) {
             // with a smooth ramp. Forcing them here defeats the fade.
             if (api.setGain) {
                 await rbApplyChainInputDrive({ chain });
-                await rbApplyChainOutputGain({ chain });
+                await rbStartFinalChainNormalizer(chain);
             }
             const wasRunning = api.isAudioRunning ? await api.isAudioRunning().catch(() => true) : true;
             await api.startAudio();
