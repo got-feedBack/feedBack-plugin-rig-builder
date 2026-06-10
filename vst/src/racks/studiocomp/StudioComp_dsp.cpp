@@ -21,9 +21,11 @@ class StudioCompPlugin : public Plugin {
     // detector + envelope state
     double fMs;        // mean-square (linked)
     double fGrDb;      // smoothed gain reduction (dB, >= 0)
+    double fMsCleanS;  // slow-smoothed input mean-square (closed-loop makeup)
+    double fMsWetS;    // slow-smoothed post-reduction mean-square
     // derived coefficients
     float  fThrDb, fRatio, fMakeupDb;
-    float  fRmsCoef, fAttCoef, fRelCoef;
+    float  fRmsCoef, fAttCoef, fRelCoef, fSlowCoef;
 
     static float coefFor(float timeMs, float fs) {
         const float t = timeMs * 0.001f;
@@ -33,14 +35,15 @@ class StudioCompPlugin : public Plugin {
     void recalc() {
         fThrDb  = scThresholdDb(fParams[cThreshold]);
         fRatio  = scRatio(fParams[cRatio]);
-        const float outDb = scOutputDb(fParams[cOutput]);
-        // Auto make-up: recover ~half the theoretical reduction at threshold,
-        // since RS never sends an Output value. The Output knob trims on top.
-        const float autoMk = (1.0f - 1.0f / fRatio) * (-fThrDb) * 0.5f;
-        fMakeupDb = autoMk + outDb;
+        // Closed-loop auto make-up matches output loudness to input below, so
+        // fMakeupDb is now JUST the user Output-knob trim on top (no open-loop
+        // "recover half the reduction" term that made level jump with
+        // Threshold/Ratio).
+        fMakeupDb = scOutputDb(fParams[cOutput]);
         fRmsCoef = coefFor(SC_RMS_TIME * 1000.0f, fs);
         fAttCoef = coefFor(scAttackMs(fParams[cAttack]), fs);
         fRelCoef = coefFor(scReleaseMs(fParams[cRelease]), fs);
+        fSlowCoef = coefFor(250.0f, fs);   // ~250 ms loudness window
     }
     // OverEasy soft-knee gain computer -> gain reduction in dB (>= 0).
     inline float grForLevel(float L) const {
@@ -60,7 +63,7 @@ public:
         fParams[cRelease]   = 0.2083f;  // ~120 ms
         fParams[cOutput]    = 0.3333f;  // 0 dB
         fs = (float)getSampleRate(); if (fs <= 0.f) fs = 48000.f;
-        fMs = 0.0; fGrDb = 0.0;
+        fMs = 0.0; fGrDb = 0.0; fMsCleanS = 0.0; fMsWetS = 0.0;
         recalc();
     }
 protected:
@@ -85,7 +88,9 @@ protected:
     void run(const float** in, float** out, uint32_t frames) override {
         const float* iL = in[0]; const float* iR = in[1];
         float* oL = out[0]; float* oR = out[1];
-        const float mkLin = std::pow(10.0f, fMakeupDb / 20.0f);
+        const float outLin = std::pow(10.0f, fMakeupDb / 20.0f);   // Output-knob trim
+        const float mkHi = std::pow(10.0f, 18.0f / 20.0f);
+        const float mkLo = std::pow(10.0f, -12.0f / 20.0f);
         for (uint32_t i = 0; i < frames; ++i) {
             const float l = iL[i], r = iR[i];
             // true-RMS detection (linked)
@@ -97,10 +102,20 @@ protected:
             // attack when GR increasing, release when decreasing
             const double coef = (target > fGrDb) ? fAttCoef : fRelCoef;
             fGrDb += coef * (target - fGrDb);
-            // log-domain VCA
-            const float g = mkLin * std::pow(10.0f, (float)(-fGrDb) / 20.0f);
-            oL[i] = l * g;
-            oR[i] = r * g;
+            // log-domain VCA (reduction only — makeup is closed-loop below)
+            const float g = std::pow(10.0f, (float)(-fGrDb) / 20.0f);
+            const float lw = l * g, rw = r * g;
+            // Closed-loop auto make-up: match the post-reduction signal's
+            // smoothed RMS to the input's so OUTPUT loudness stays constant as
+            // Threshold/Ratio change instead of jumping. Range-limited.
+            fMsCleanS += (double)fSlowCoef * (sq - fMsCleanS);
+            fMsWetS   += (double)fSlowCoef * (0.5 * ((double)lw * lw + (double)rw * rw) - fMsWetS);
+            float mk = 1.0f;
+            if (fMsWetS > 1e-12 && fMsCleanS > 1e-12)
+                mk = (float)std::sqrt(fMsCleanS / fMsWetS);
+            mk = std::fmin(mkHi, std::fmax(mkLo, mk));
+            oL[i] = lw * mk * outLin;
+            oR[i] = rw * mk * outLin;
         }
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StudioCompPlugin)

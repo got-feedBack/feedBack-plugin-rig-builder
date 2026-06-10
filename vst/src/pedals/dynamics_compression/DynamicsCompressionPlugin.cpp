@@ -53,6 +53,13 @@ class DynamicsCompressionCore
     float releaseA = 0.0f;
     float gainA = 0.0f;
 
+    // Closed-loop auto-makeup: match the wet mix's smoothed RMS to the clean
+    // signal's so raising Comp keeps OUTPUT loudness constant (replaces the
+    // old open-loop curve that reached +21 dB at Comp=1).
+    float msClean = 0.0f;
+    float msWet = 0.0f;
+    float msCoeff = 0.0f;
+
     void updateFilters()
     {
         const float dt = 1.0f / sampleRate;
@@ -73,6 +80,9 @@ class DynamicsCompressionCore
         releaseA = 1.0f - std::exp(-1.0f / (0.001f * releaseMs * sampleRate));
 
         gainA = 1.0f - std::exp(-1.0f / (0.006f * sampleRate));
+
+        // ~250 ms loudness window for the auto-makeup tracker.
+        msCoeff = 1.0f - std::exp(-1.0f / std::fmax(1.0f, 0.250f * sampleRate));
     }
 
     float highPass(float x)
@@ -124,6 +134,7 @@ public:
     {
         hpX1 = hpY1 = toneY = env = 0.0f;
         gainSmooth = 1.0f;
+        msClean = msWet = 0.0f;
         updateFilters();
     }
 
@@ -154,6 +165,7 @@ public:
     float process(float in)
     {
         float x = highPass(in);
+        const float ref = x;   // clean loudness reference (pre input-drive)
 
         // Input transistor and OTA input rounding. Keep it subtle: this is
         // compression color, not distortion.
@@ -167,11 +179,17 @@ public:
         const float dryKeep = 0.04f + 0.10f * attack;
         float y = wet * (1.0f - dryKeep) + x * dryKeep;
 
-        // Auto-makeup tracks the gain-reduction so raising Comp keeps the OUTPUT
-        // level ~constant (loudness-transparent, ~unity) instead of ducking the
-        // signal. Tuned offline against a multitone Comp sweep. See AMP_LOUDNESS.md.
-        const float makeupDb = 3.8f + 16.5f * comp + 1.1f * comp * comp;
-        y *= dbToAmp(makeupDb);
+        // Auto-makeup (closed loop): match the wet mix's smoothed RMS to the
+        // clean signal's so the OUTPUT loudness stays constant as Comp rises
+        // instead of ballooning. Can cut as well as boost; range-limited
+        // (-12..+18 dB) so silence/noise can't blow up. See AMP_LOUDNESS.md.
+        msClean += msCoeff * (ref * ref - msClean);
+        msWet += msCoeff * (y * y - msWet);
+        float makeup = 1.0f;
+        if (msWet > 1.0e-9f && msClean > 1.0e-9f)
+            makeup = std::sqrt(msClean / msWet);
+        makeup = std::fmin(dbToAmp(18.0f), std::fmax(dbToAmp(-12.0f), makeup));
+        y *= makeup;
 
         y = softClip(y * (0.94f + 0.08f * comp)) * 0.98f;
         y = lowPass(y);
