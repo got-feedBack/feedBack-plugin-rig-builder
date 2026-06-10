@@ -202,7 +202,7 @@ protected:
 
     void run(const float** in, float** out, uint32_t frames) override {
         const float* iL = in[0]; const float* iR = in[1]; float* oL = out[0]; float* oR = out[1];
-        for (uint32_t i = 0; i < frames; ++i) { oL[i] = rbAmpLvl(kGa88Lvl * softClip(kGa88Makeup * L.process(iL[i])) * 0.98f); oR[i] = rbAmpLvl(kGa88Lvl * softClip(kGa88Makeup * R.process(iR[i])) * 0.98f); }
+        for (uint32_t i = 0; i < frames; ++i) { oL[i] = rbAmpLvl(kGa88Lvl * softClip(kGa88Makeup * L.process(3.2f * iL[i])) * 0.98f); oR[i] = rbAmpLvl(kGa88Lvl * softClip(kGa88Makeup * R.process(3.2f * iR[i])) * 0.98f); }
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Ga88Plugin)
 };

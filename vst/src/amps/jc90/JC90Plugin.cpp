@@ -375,7 +375,7 @@ protected:
         for (uint32_t i = 0; i < frames; ++i)
         {
             float oL, oR;
-            core.process(inL[i], inR[i], oL, oR);
+            core.process(3.2f * inL[i], 3.2f * inR[i], oL, oR);
             outL[i] = rbAmpLvl(0.640f * oL);
             outR[i] = rbAmpLvl(0.640f * oR);
         }

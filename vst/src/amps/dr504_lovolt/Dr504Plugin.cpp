@@ -153,7 +153,7 @@ class Dr504Core
         // Preamp drive (the volumes); the Hiwatt preamp stays clean -> a gentle proxy.
         preDrive = clamp01(brightG * brightVol + normalG * normalVol * 0.80f);
         const float g = smoothstep(preDrive);
-        const float pushed = smoothstepRange(0.45f, 0.95f, preDrive);
+        const float pushed = smoothstepRange(0.28f, 0.88f, preDrive);
         const float bright = clamp01(0.32f * treble + 0.20f * pres + 0.45f * (1.0f - brightVol));
 
         inputHp.setHighPass(sampleRate, 40.0f + 30.0f * g, 0.70f);
@@ -216,27 +216,35 @@ public:
     float process(float in)
     {
         const float g = smoothstep(preDrive);
-        const float pushed = smoothstepRange(0.45f, 0.95f, preDrive);
+        const float pushed = smoothstepRange(0.28f, 0.88f, preDrive);
         const float mPush = smoothstep(master);
 
-        float x = inputHp.process(in);
+        // Input pre-gain (2026-06): the VST chain's pre-amp input boost does NOT
+        // reach VST amp stages (it only drives the NAM path), so this amp ran on
+        // the raw, quiet guitar and stayed clean even at RS Gain 100. Feed the
+        // preamp a guitar-level push here so the BRILLIANT VOL sweep actually
+        // breaks up — gain ~44 already gets crunch, gain 100 is full distortion.
+        float x = inputHp.process(in * 3.2f);
         x = pickupLoad.process(x);
         x = softClip(x * (1.03f + 0.06f * pushed)) * (0.97f - 0.03f * pushed);
 
-        // BRILLIANT channel (bright cap) + NORMAL channel — gentle (Hiwatt headroom).
+        // BRILLIANT channel (bright cap) + NORMAL channel — hotter than a stock
+        // Hiwatt so the in-game (quiet-input) tones reach their intended breakup.
         float bch = brightCapShelf.process(brightBody.process(x));
-        bch = asymTube(bch, 0.85f + 1.7f * brightVol + 1.4f * g, 0.010f + 0.012f * brightVol);
+        bch = asymTube(bch, 2.05f + 4.4f * brightVol + 2.3f * g, 0.010f + 0.012f * brightVol);
         float nch = normalBody.process(x);
-        nch = asymTube(nch, 0.80f + 1.5f * normalVol + 1.2f * g, 0.009f + 0.010f * normalVol);
+        nch = asymTube(nch, 1.30f + 3.4f * normalVol + 1.9f * g, 0.009f + 0.010f * normalVol);
 
-        // jumpered mix
-        float y = brightG * brightVol * bch + normalG * normalVol * 0.92f * nch;
+        // jumpered mix — soften the channel-volume attenuation so low/mid Gain
+        // still drives the recovery stage (was brightVol*bch = collapsed at 44).
+        float y = brightG * (0.34f + 0.66f * brightVol) * bch
+                + normalG * (0.30f + 0.62f * normalVol) * nch;
         const float cleanLeak = 0.40f * (1.0f - smoothstepRange(0.30f, 0.85f, preDrive));
         y = y * (1.0f - cleanLeak) + x * cleanLeak * (brightG * brightVol + normalG * normalVol * 0.5f);
 
         // recovery (ECC83) into the tone stack
         y = interstageHp.process(y);
-        y = asymTube(y, 0.85f + 1.3f * preDrive + 1.6f * pushed, -0.006f - 0.008f * preDrive);
+        y = asymTube(y, 1.30f + 2.7f * preDrive + 1.8f * pushed, -0.006f - 0.008f * preDrive);
         y = cathodeLp.process(y);
 
         y = toneStack.process(y) * 1.75f;

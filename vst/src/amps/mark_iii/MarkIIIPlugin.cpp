@@ -232,7 +232,11 @@ public:
         const float pushed = smoothstepRange(0.40f, 0.92f, drv);
         const float mPush = smoothstep(outM);
 
-        float x = inputHp.process(in);
+        // Input pre-gain (2026-06): the VST chain's pre-amp input boost does NOT
+        // reach VST amp stages, so this amp ran on the raw, quiet guitar and the
+        // LEAD channel stayed too clean even at RS Gain 90. Feed the preamp a
+        // guitar-level push so the singing Boogie lead actually saturates.
+        float x = inputHp.process(in * 3.2f);
         x = pickupLoad.process(x);
         x = brightShelf.process(x);
         // V1 first gain stage (mild) -> the scooped tone stack (pre-distortion EQ)
@@ -245,9 +249,13 @@ public:
         rh *= 0.72f + 1.20f * master;
 
         // LEAD voice: cascaded gain (V3A/V3B) -> the singing Boogie lead.
-        float ld = asymTube(t, 1.20f + 4.0f * leadDrive + 2.4f * g, 0.012f + 0.014f * leadDrive);
+        // ~1.27x hotter cascade drive (2026-06): the Mark III lead channel was
+        // too clean at high LEAD DRIVE; this pushes both gain stages further into
+        // saturation for the singing/compressed Boogie lead. Loudness held flat
+        // by cleanMakeup (verified ~-8.4 dBFS at gain 90, no level blast).
+        float ld = asymTube(t, 1.40f + 5.4f * leadDrive + 2.9f * g, 0.012f + 0.014f * leadDrive);
         ld = interHp.process(ld);
-        ld = asymTube(ld, 0.95f + 4.6f * leadDrive + 2.8f * pushed, -0.008f - 0.012f * leadDrive);
+        ld = asymTube(ld, 1.15f + 6.1f * leadDrive + 3.3f * pushed, -0.008f - 0.012f * leadDrive);
         ld = cathodeLp.process(ld);
         ld *= 0.45f + 1.0f * leadMaster;
 

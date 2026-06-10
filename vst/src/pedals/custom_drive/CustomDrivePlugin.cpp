@@ -186,7 +186,12 @@ public:
     {
         const float voiceOn = voice >= 0.5f ? 1.0f : 0.0f;
 
-        float x = inputHp.process(in);
+        // Input pre-gain (2026-06): the VST chain's pre-amp input boost does not
+        // reach VST stages, so this pedal ran on the raw, quiet guitar and stayed
+        // clean even at RS Gain 100 (e.g. Hysteria). Feed it a guitar-level push
+        // so high Gain actually hits the op-amp/MOSFET clipping. The auto-makeup
+        // in run() re-levels the output, so this changes clip amount, not volume.
+        float x = inputHp.process(in * 2.0f);
         x = preVoice.process(x);
 
         // Op-amp gain into MOSFET/diode clipping. Low Gain stays controlled;

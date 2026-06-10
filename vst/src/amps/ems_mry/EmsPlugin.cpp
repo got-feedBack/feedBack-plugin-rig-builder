@@ -274,7 +274,7 @@ protected:
     void run(const float** inputs, float** outputs, uint32_t frames) override
     {
         const float* inL=inputs[0]; const float* inR=inputs[1]; float* outL=outputs[0]; float* outR=outputs[1];
-        for (uint32_t i=0;i<frames;++i){ outL[i]=rbAmpLvl(0.560f*left.process(inL[i])); outR[i]=rbAmpLvl(0.560f*right.process(inR[i])); }
+        for (uint32_t i=0;i<frames;++i){ outL[i]=rbAmpLvl(0.560f*left.process(3.2f * inL[i])); outR[i]=rbAmpLvl(0.560f*right.process(3.2f * inR[i])); }
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EmsPlugin)
 };
