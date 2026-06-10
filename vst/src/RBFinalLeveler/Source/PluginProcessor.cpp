@@ -36,6 +36,7 @@ public:
         currentGainDb = 0.0f;
         currentGain = 1.0f;
         levelInitialized = false;
+        msEnv = 0.0;
     }
 
     void releaseResources() override {}
@@ -71,23 +72,34 @@ public:
         const float ceilingDb = *apvts.getRawParameterValue("ceiling_db");
         const float trimDb = *apvts.getRawParameterValue("trim_db");
 
-        double sumSq = 0.0;
+        // Loudness detector: a FIXED-TIME (~30 ms) running mean-square,
+        // integrated per sample so it is independent of the host block size
+        // (the old code averaged a single block, ~3-10 ms). 30 ms reacts
+        // quickly to a tone change while the gain follower below smooths any
+        // residual per-cycle ripple on low bass notes.
+        const float rmsTauMs = 30.0f;
+        const float rmsCoef = 1.0f - std::exp(-1.0f / std::max(1.0f, (rmsTauMs / 1000.0f) * float(sr)));
+
         float peak = 0.0f;
+        const float* chData[2] = { nullptr, nullptr };
+        const int chN = std::min(numChannels, 2);
+        for (int ch = 0; ch < chN; ++ch)
+            chData[ch] = buffer.getReadPointer(ch);
 
-        for (int ch = 0; ch < numChannels; ++ch)
+        for (int i = 0; i < numSamples; ++i)
         {
-            const float* data = buffer.getReadPointer(ch);
-
-            for (int i = 0; i < numSamples; ++i)
+            double sq = 0.0;
+            for (int ch = 0; ch < chN; ++ch)
             {
-                const float x = data[i];
-                sumSq += double(x) * double(x);
+                const float x = chData[ch][i];
+                sq += double(x) * double(x);
                 peak = std::max(peak, std::abs(x));
             }
+            sq /= double(std::max(1, chN));
+            msEnv += double(rmsCoef) * (sq - msEnv);
         }
 
-        const double denom = double(numChannels) * double(numSamples);
-        const float rms = std::sqrt(float(sumSq / std::max(1.0, denom)));
+        const float rms = std::sqrt(float(msEnv));
 
         const float rmsDb = juce::Decibels::gainToDecibels(rms, -120.0f);
         const float peakDb = juce::Decibels::gainToDecibels(peak, -120.0f);
@@ -119,10 +131,19 @@ public:
             levelInitialized = true;
         }
 
-        // Si hay que cortar volumen, reaccionar rápido.
-        // Si hay que subir, hacerlo estable pero sin efecto de fade-in.
+        // Cutting reacts fast, boosting is slower (avoids audible fade-in).
         const bool cutting = wantedGainDb < currentGainDb;
-        const float timeMs = cutting ? attackMs : releaseMs;
+        const float baseMs = cutting ? attackMs : releaseMs;
+
+        // Adaptive convergence: snap fast on a BIG sustained level change — a
+        // tone switch (e.g. drive -> clean), where the old fixed 120 ms boost
+        // made the new tone fade in quietly over ~half a second. Small drift
+        // keeps the slow time so musical dynamics aren't flattened (no
+        // pumping). urgency: 0 at <=3 dB gap, ramps to 1 at >=12 dB.
+        const float gapDb = std::abs(wantedGainDb - currentGainDb);
+        const float urgency = juce::jlimit(0.0f, 1.0f, (gapDb - 3.0f) / 9.0f);
+        const float fastMs = 20.0f;
+        const float timeMs = baseMs * (1.0f - urgency) + fastMs * urgency;
 
         const float blockSeconds = float(numSamples / sr);
         const float alpha = 1.0f - std::exp(-blockSeconds / std::max(0.001f, timeMs / 1000.0f));
@@ -172,6 +193,7 @@ private:
     float currentGainDb = 0.0f;
     float currentGain = 1.0f;
     bool levelInitialized = false;
+    double msEnv = 0.0;   // running mean-square (fixed ~100 ms loudness window)
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     {
