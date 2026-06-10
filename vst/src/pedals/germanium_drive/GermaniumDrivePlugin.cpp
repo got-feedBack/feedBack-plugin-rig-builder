@@ -1,27 +1,43 @@
 /*
- * GermaniumDrive - smooth germanium overdrive for Rocksmith's
- * Pedal_GermaniumDrive. This is not a full Hudson Broadcast/Skywave clone:
- * Rocksmith exposes only Gain and Tone, so the DSP keeps the circuit cues that
- * matter for that pedal slot: fixed input low cut, asymmetric germanium-style
- * saturation, a subtle transformer-like final softener, and a post tone filter.
+ * GermaniumDrive — germanium boost/overdrive for Rocksmith's
+ * Pedal_GermaniumDrive. Character reference: the Skywave (Aion) adaptation of
+ * the Hudson Electronics Broadcast (pedals/germanium drive.pdf).
+ *
+ * The Broadcast is a HYBRID silicon + germanium, class-A boost/light-overdrive
+ * with a TRANSFORMER-COUPLED output that saturates on higher drive. It is a
+ * warm boost-into-light-OD, NOT a harsh fuzz. Signal path modelled here:
+ *
+ *   IN -> C2 input coupling (fixed low cut) -> Q1 2N5088 silicon class-A gain
+ *   stage (the GAIN knob is the feedback amount fed germanium->silicon, so it
+ *   raises drive) -> Q2 2N404A germanium stage (soft, asymmetric saturation =
+ *   the warm even-harmonic core) -> TY-141P output transformer (even-harmonic
+ *   rounding that engages with level) -> LEVEL.
+ *
+ * Rocksmith exposes only Gain and Tone, so:
+ *   - Gain : silicon feedback drive into the germanium + transformer saturation.
+ *   - Tone : post brightness (the real pedal has no treble control; this is a
+ *            musical brightness tilt over the warm voicing).
+ * Low Cut / Level / Gain Mode / Voltage are pinned at musical fixed values.
+ *
+ * Loudness: a DETERMINISTIC static makeup keyed only to the Gain knob. The
+ * previous revision used an RMS-matching auto-makeup (AGC) whose ~200 ms
+ * envelope swelled on every note over the compressing clipper — that is what
+ * sounded like a "reverb / strange attack". A static makeup cannot swell, so
+ * the pedal is just a drive again.
  */
 #include "DistrhoPlugin.hpp"
 #include "GermaniumDriveParams.h"
-#include "../_shared/automakeup.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
 
 namespace {
 
+static constexpr float kPi = 3.14159265359f;
+
 static inline float clamp01(float v)
 {
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
-}
-
-static inline float softClip(float x)
-{
-    return std::tanh(x);
 }
 
 } // namespace
@@ -32,23 +48,28 @@ class GermaniumDriveCore
     float gain = kGermaniumDriveDef[kGain];
     float tone = kGermaniumDriveDef[kTone];
 
-    float hpX1 = 0.0f;
-    float hpY1 = 0.0f;
-    float toneY = 0.0f;
-
-    float hpA = 0.0f;
-    float toneA = 0.0f;
+    // input coupling + fixed low-cut (one-pole high pass)
+    float hpX1 = 0.0f, hpY1 = 0.0f, hpA = 0.0f;
+    // tone brightness (one-pole low pass)
+    float toneY = 0.0f, toneA = 0.0f;
+    // germanium asymmetry DC corrector (precomputed)
+    float germBiasDc = 0.0f;
 
     void updateFilters()
     {
-        const float hpHz = 45.0f + 95.0f * gain;
-        const float hpRc = 1.0f / (2.0f * 3.14159265359f * hpHz);
+        // C2 input coupling + Low Cut pinned tight-but-full (~85 Hz). The
+        // Broadcast's Low Cut tightens the low end; this is a musical fixed
+        // position so the pedal stays full without getting flabby.
+        const float hpHz = 85.0f;
+        const float rc = 1.0f / (2.0f * kPi * hpHz);
         const float dt = 1.0f / sampleRate;
-        hpA = hpRc / (hpRc + dt);
+        hpA = rc / (rc + dt);
 
-        const float toneHz = 850.0f * std::pow(9.0f, tone);
-        const float toneX = std::exp(-2.0f * 3.14159265359f * toneHz / sampleRate);
-        toneA = 1.0f - toneX;
+        // Tone = brightness. Sweeps the post low-pass corner ~1.1k..~6.6k.
+        const float toneHz = 1100.0f * std::pow(6.0f, tone);
+        toneA = 1.0f - std::exp(-2.0f * kPi * toneHz / sampleRate);
+
+        germBiasDc = std::tanh(0.17f);
     }
 
     float highPass(float x)
@@ -65,30 +86,6 @@ class GermaniumDriveCore
         return toneY;
     }
 
-    float germaniumStage(float x) const
-    {
-        // Keep a small always-on germanium edge, but let the bottom of the
-        // Gain control clean up instead of staying in obvious distortion.
-        const float driveKnob = 0.08f + 0.92f * gain;
-        const float drive = 2.2f + 42.0f * driveKnob * driveKnob;
-        const float bias = -0.12f + 0.08f * gain;
-
-        const float pushed = x * drive + bias;
-        const float pos = softClip(pushed * (1.60f + 2.60f * driveKnob));
-        const float neg = softClip(pushed * (0.65f + 1.20f * driveKnob));
-        float y = pushed >= 0.0f ? pos : neg;
-
-        // Leak only a little clean signal. The first revision kept too much
-        // dry level at low/mid gain and sounded like a volume boost.
-        const float cleanBlend = 0.08f * (1.0f - gain);
-        y = y * (1.0f - cleanBlend) + x * cleanBlend;
-
-        // Compensate the added internal push. Distortion should be audible,
-        // but engaging this pedal should not feel like +10 dB of clean level.
-        const float makeup = 0.38f / (1.0f + 0.75f * driveKnob);
-        return y * makeup;
-    }
-
 public:
     void reset()
     {
@@ -102,40 +99,43 @@ public:
         reset();
     }
 
-    void setGain(float v)
-    {
-        gain = clamp01(v);
-        updateFilters();
-    }
-
-    void setTone(float v)
-    {
-        tone = clamp01(v);
-        updateFilters();
-    }
+    void setGain(float v) { gain = clamp01(v); updateFilters(); }
+    void setTone(float v) { tone = clamp01(v); updateFilters(); }
 
     float process(float in)
     {
-        const float driveKnob = 0.08f + 0.92f * gain;
-        const float hp = highPass(in) * (2.0f + 5.8f * driveKnob);
+        const float g = gain;
 
-        // First stage: silicon-ish class-A preamp color, now intentionally
-        // driven enough to feed the germanium stage from normal guitar DI.
-        const float preGain = 1.8f + 12.0f * driveKnob;
-        float y = 0.82f * softClip(hp * preGain * 0.60f) + 0.18f * hp;
+        // C2 input coupling + fixed low cut.
+        float x = highPass(in);
 
-        // Second stage: softer asymmetric germanium saturation.
-        y = germaniumStage(y);
+        // Q1 — 2N5088 silicon class-A gain stage. The GAIN knob is the feedback
+        // amount fed back from the germanium stage, so it raises the drive into
+        // Q2. Kept mostly clean (it is a preamp) with a gentle soft ceiling so
+        // the saturation character comes from germanium + transformer, not from
+        // a hard silicon clip.
+        const float q1Gain = 1.7f + 7.8f * g;
+        float q1 = std::tanh(x * q1Gain * 0.45f) * 1.55f;
 
-        // Tone is mostly a brightness control. Low values get the low-pass
-        // result; high values restore more of the pre-filtered harmonics.
-        const float dark = toneLowPass(y);
-        y = dark * (1.0f - 0.55f * tone) + y * (0.55f * tone);
+        // Q2 — 2N404A germanium stage. Soft, ASYMMETRIC saturation: the warm,
+        // even-harmonic core of the Broadcast. The +0.17 bias (DC-corrected)
+        // makes the two halves clip differently = germanium warmth.
+        float q2 = std::tanh(q1 * (1.0f + 1.7f * g) + 0.17f) - germBiasDc;
 
-        // Output transformer cue: extra rounding after the two gain stages,
-        // trimmed down so the perceived result is drive, not volume boost.
-        y = 0.42f * softClip(y * (1.50f + 1.30f * driveKnob));
-        return y;
+        // TY-141P output transformer: even-harmonic rounding that engages with
+        // level/drive (the transformer "saturates on higher drive levels").
+        float tr = std::tanh(q2 * (0.85f + 0.5f * g));
+
+        // Tone — post brightness tilt over the warm voicing.
+        const float dark = toneLowPass(tr);
+        float y = dark + (tr - dark) * (0.25f + 0.75f * tone);
+
+        // Deterministic static makeup (function of Gain only — never of the
+        // signal envelope, so it cannot swell/pump). Calibrated against the raw
+        // core RMS so engaging the pedal and sweeping Gain holds a roughly
+        // unity, consistent level (~0..+1.5 dB vs dry across the whole sweep).
+        const float makeup = 0.13f + 1.10f * std::exp(-g / 0.22f);
+        return y * makeup;
     }
 };
 
@@ -143,8 +143,6 @@ class GermaniumDrivePlugin : public Plugin
 {
     GermaniumDriveCore left;
     GermaniumDriveCore right;
-    RBAutoMakeup makeupL;
-    RBAutoMakeup makeupR;
     float params[kParamCount];
 
     void applyAll()
@@ -163,8 +161,6 @@ public:
             params[i] = kGermaniumDriveDef[i];
         left.setSampleRate((float)getSampleRate());
         right.setSampleRate((float)getSampleRate());
-        makeupL.setSampleRate((float)getSampleRate());
-        makeupR.setSampleRate((float)getSampleRate());
         applyAll();
     }
 
@@ -173,7 +169,7 @@ protected:
     const char* getDescription() const override { return "Classic smooth germanium overdrive"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 2); }
+    uint32_t getVersion() const override { return d_version(1, 0, 3); }
     int64_t getUniqueId() const override { return d_cconst('G', 'd', 'r', 'v'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -199,16 +195,12 @@ protected:
             return;
         params[index] = clamp01(value);
         applyAll();
-        makeupL.snap();
-        makeupR.snap();
     }
 
     void sampleRateChanged(double newSampleRate) override
     {
         left.setSampleRate((float)newSampleRate);
         right.setSampleRate((float)newSampleRate);
-        makeupL.setSampleRate((float)newSampleRate);
-        makeupR.setSampleRate((float)newSampleRate);
         applyAll();
     }
 
@@ -220,10 +212,8 @@ protected:
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            // Auto makeup-gain: match output loudness to the dry input so the
-            // drive's controls change only the amount of clip, not the level.
-            outL[i] = makeupL.process(inL[i], left.process(inL[i]));
-            outR[i] = makeupR.process(inR[i], right.process(inR[i]));
+            outL[i] = left.process(inL[i]);
+            outR[i] = right.process(inR[i]);
         }
     }
 
