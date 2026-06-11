@@ -402,6 +402,10 @@ function rbChainGainTargetFor(chainSpec) {
         let rsCabMakeup = 1.0;
         for (const stage of chainSpec) {
             if (!stage || stage.bypassed) continue;
+            // The per-amp loudness trim is a clean unit-impulse IR stage; it's
+            // not a cab — skip it so it doesn't flip hasOtherCab and drop the
+            // amp-only -6 dB. (Only reachable when the final leveler is absent.)
+            if (stage.rs_gear === '__rb_amp_trim') continue;
             if (stage.type === 1) {
                 activeNamCount++;
                 if (stage.slot === 'amp') hasActiveAmp = true;

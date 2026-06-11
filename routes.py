@@ -319,17 +319,21 @@ def _final_leveler_vst_path() -> Path | None:
 
 
 def _final_leveler_params_state() -> str:
-    """State envelope consumed by the JS reapply path.
+    """State envelope consumed by both the native restore and the JS reapply.
 
-    Parameter order expected by RB Final Leveler VST:
-      0 = Target RMS
-      1 = Max Boost
-      2 = Max Cut
-      3 = Gate
-      4 = Attack
-      5 = Release
-      6 = Ceiling
-      7 = Output Trim
+    CRITICAL: the params dict MUST be keyed by the VST's parameter DISPLAY
+    NAMES, not by positional indices. Both apply paths resolve params BY NAME:
+    the native engine restores `pluginState` params by name, and the JS
+    `rbReapplyVstParamsToChain` builds a name->id map from getParameters().
+    Numeric string keys ("0".."7") match no name, so they fell through to the
+    JS numeric-paramId fallback — which hit the engine's prepended "Buffer
+    Size"/"Sample Rate" meta params and applied EVERY value off-by-two (e.g.
+    Max Cut got the Attack value ≈ 0.7 dB, so the leveler could no longer
+    attenuate loud amps). Keying by name fixes both paths.
+
+    Names must match RBFinalLeveler's createParameterLayout() exactly:
+      Target RMS dB / Max Boost dB / Max Cut dB / Gate dB /
+      Attack ms / Release ms / Ceiling dB / Output Trim dB
     """
     s = _load_settings()
 
@@ -359,14 +363,14 @@ def _final_leveler_params_state() -> str:
     trim = chain_vol_db + float(s.get("final_leveler_trim_db", 0.0))
 
     params = {
-        "0": norm(target_rms, -30.0, -6.0),
-        "1": norm(max_boost, 0.0, 24.0),
-        "2": norm(max_cut, 0.0, 24.0),
-        "3": norm(gate, -80.0, -30.0),
-        "4": norm(attack, 1.0, 250.0),
-        "5": norm(release, 20.0, 1000.0),
-        "6": norm(ceiling, -12.0, -0.1),
-        "7": norm(trim, -24.0, 18.0),
+        "Target RMS dB":  norm(target_rms, -30.0, -6.0),
+        "Max Boost dB":   norm(max_boost, 0.0, 24.0),
+        "Max Cut dB":     norm(max_cut, 0.0, 24.0),
+        "Gate dB":        norm(gate, -80.0, -30.0),
+        "Attack ms":      norm(attack, 1.0, 250.0),
+        "Release ms":     norm(release, 20.0, 1000.0),
+        "Ceiling dB":     norm(ceiling, -12.0, -0.1),
+        "Output Trim dB": norm(trim, -24.0, 18.0),
     }
 
     return json.dumps({"params": params})
@@ -3336,6 +3340,154 @@ def _ir_stage_gain(kind: str | None, ir_path: str | Path | None, base_gain: floa
     if (kind or "").lower() == "rs_ir" or _is_rocksmith_ir_file(ir_path):
         return g * _RS_IR_MAKEUP
     return g
+
+
+# ── Per-amp loudness normalization (computed in rig builder, NOT in the VST) ──
+#
+# Every bundled amp VST3 bakes its own output coeff (kLvl), so amps drift in
+# loudness (measured range ≈ −25…−2 LUFS) and cranking Gain raises level. The
+# fix lives here, not in the DSP: data/amp_loudness_model.json holds a measured
+# BS.1770-4 LUFS sweep per amp (tools/measure_amp_loudness.py). From the amp's
+# resolved params we compute a CLEAN trim (dB) so every amp lands at the target
+# (−14 LUFS), with Gain allowed to push output up to −12 and Volume/Master up
+# to −11. The trim rides a tiny unit-impulse IR stage right after the amp (a
+# clean gain the engine already applies to IR stages) — the amp's own Gain param
+# is never touched, so it still saturates exactly as before. See AMP_LOUDNESS.md.
+_AMP_LOUDNESS_FILE = "amp_loudness_model.json"
+_AMP_TARGET_LUFS = -14.0
+_AMP_CAP_GAIN_DB = 2.0     # Gain may raise output to −12 LUFS (target + 2)
+_AMP_CAP_VOL_DB = 3.0      # Volume/Master may raise output to −11 LUFS (target + 3)
+_AMP_TRIM_MIN_DB = -24.0   # deepest cut (very loud amps, e.g. jc90 ≈ −1.8 LUFS)
+_AMP_TRIM_MAX_DB = 9.0     # largest boost (quiet DI preamps); bounded to cap hiss
+_AMP_TRIM_RS_GEAR = "__rb_amp_trim"   # sentinel rs_gear on the trim stage
+
+
+def _load_amp_loudness_model() -> dict:
+    return _load_cached_json(_AMP_LOUDNESS_FILE, post=_strip_meta_keys)
+
+
+def _interp_curve(curve, x: float) -> float:
+    """Linear-interpolate a [[v, lufs], …] sweep (v ascending in [0, 1])."""
+    if not curve:
+        return _AMP_TARGET_LUFS
+    if x <= curve[0][0]:
+        return curve[0][1]
+    if x >= curve[-1][0]:
+        return curve[-1][1]
+    for i in range(1, len(curve)):
+        x0, y0 = curve[i - 1]
+        x1, y1 = curve[i]
+        if x <= x1:
+            t = (x - x0) / (x1 - x0) if x1 > x0 else 0.0
+            return y0 + t * (y1 - y0)
+    return curve[-1][1]
+
+
+def _amp_loudness_trim_db(entry: dict, params: dict) -> float:
+    """Clean trim (dB) that levels an amp to the target with the soft caps.
+
+    `entry` is one amp's amp_loudness_model.json record; `params` is the amp's
+    resolved {param_name: 0..1} (missing names fall back to the measured
+    defaults). Gain stays saturating — we never touch it — but its loudness
+    contribution is soft-capped at +2 dB and Volume/Master's at +3 dB, so the
+    output sits in the −14…−11 LUFS band whatever the knobs do.
+    """
+    default = entry.get("default") or {}
+
+    def _val(name):
+        try:
+            return float(params.get(name, default.get(name, 0.5)))
+        except (TypeError, ValueError):
+            return float(default.get(name, 0.5))
+
+    gain_params = entry.get("gain_params") or []
+    gain_curve = entry.get("gain_curve") or []
+    if gain_params and gain_curve:
+        g_now = sum(_val(p) for p in gain_params) / len(gain_params)
+        g_def = sum(float(default.get(p, 0.5)) for p in gain_params) / len(gain_params)
+        l_gain = _interp_curve(gain_curve, g_now)
+        l_def = _interp_curve(gain_curve, g_def)
+    else:
+        l_gain = l_def = float(entry.get("lufs_default", _AMP_TARGET_LUFS))
+
+    d_vol = 0.0
+    for name, curve in (entry.get("vol_curves") or {}).items():
+        if not curve:
+            continue
+        d_vol += _interp_curve(curve, _val(name)) - _interp_curve(curve, float(default.get(name, 0.5)))
+
+    d_gain = l_gain - l_def
+    l_meas = l_gain + d_vol
+    extra_g = _AMP_CAP_GAIN_DB * math.tanh(max(0.0, d_gain) / _AMP_CAP_GAIN_DB) if _AMP_CAP_GAIN_DB > 0 else 0.0
+    extra_v = _AMP_CAP_VOL_DB * math.tanh(max(0.0, d_vol) / _AMP_CAP_VOL_DB) if _AMP_CAP_VOL_DB > 0 else 0.0
+    desired = _AMP_TARGET_LUFS + extra_g + extra_v
+    return max(_AMP_TRIM_MIN_DB, min(_AMP_TRIM_MAX_DB, desired - l_meas))
+
+
+def _amp_params_from_state(effective_vst_state) -> dict | None:
+    """Named params from an amp's effective VST state.
+
+    Returns {} when there's no state (→ use the model's measured defaults), a
+    {name: value} dict for the normal `{"params": {...}}` envelope, or None when
+    the state is opaque/unreadable (→ skip trimming, can't read the params).
+    """
+    if not effective_vst_state:
+        return {}
+    try:
+        env = json.loads(effective_vst_state) if isinstance(effective_vst_state, str) else effective_vst_state
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(env, dict) or env.get("opaque"):
+        return None
+    p = env.get("params")
+    return p if isinstance(p, dict) else None
+
+
+def _amp_trim_mult_for_state(vst_path, effective_vst_state) -> float:
+    """Linear post-amp gain that levels this amp VST. 1.0 (no-op) for any VST
+    that isn't a modeled amp, or whose state is opaque."""
+    model = _load_amp_loudness_model()
+    if not model:
+        return 1.0
+    entry = model.get(Path(vst_path).stem.lower())
+    if not isinstance(entry, dict):
+        return 1.0
+    params = _amp_params_from_state(effective_vst_state)
+    if params is None:
+        return 1.0
+    return 10.0 ** (_amp_loudness_trim_db(entry, params) / 20.0)
+
+
+def _unit_impulse_ir_path() -> Path | None:
+    """A cached 1-sample (identity) IR under nam_irs/other/. The per-amp loudness
+    trim rides this as a clean gain stage right after the amp."""
+    if not _config_dir:
+        return None
+    p = _config_dir / "nam_irs" / "other" / "_rb_unit_impulse.wav"
+    if not p.exists():
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            _write_ir_f32(p, [1.0], 48000)
+        except OSError:
+            log.warning("could not write unit-impulse IR for amp trim", exc_info=True)
+            return None
+    return p
+
+
+def _amp_trim_stage(trim_mult: float, *, tone_key=None) -> dict | None:
+    """A unit-impulse IR stage carrying `trim_mult` as a clean gain — the per-amp
+    loudness trim, inserted right after the amp VST. None when the trim is a
+    no-op or the impulse IR can't be written. The top-level `amp_trim` marker
+    keeps mega_chain's IR dedupe from merging amps that need different trims."""
+    if abs(trim_mult - 1.0) < 1e-3:
+        return None
+    ir = _unit_impulse_ir_path()
+    if not ir:
+        return None
+    st = _ir_stage(ir, bypassed=False, gain=trim_mult,
+                   slot="amp", rs_gear=_AMP_TRIM_RS_GEAR, tone_key=tone_key)
+    st["amp_trim"] = round(trim_mult, 4)
+    return st
 
 
 # Per-cab RMS matching. A cab IR's broadband convolution gain — i.e. how much
@@ -7038,6 +7190,13 @@ def setup(app, context):
                     vst_path_p, vst_format, bypassed=bypassed,
                     state=_vst_stage_state(str(vst_path_p), vst_format, effective_vst_state),
                     slot=slot, rs_gear=gear))
+                # Per-amp loudness trim: a clean gain right after the amp so all
+                # amps sit at the target LUFS (Gain still saturates — untouched).
+                if slot == "amp" and not bypassed:
+                    _ts = _amp_trim_stage(
+                        _amp_trim_mult_for_state(str(vst_path_p), effective_vst_state))
+                    if _ts:
+                        chain.append(_ts)
 
         # One cab IR at the tail (prefer the cabinet slot). Indexed in the
         # original `rows` tuples — column order: slot, kind, file, rs_gear,
@@ -7203,6 +7362,15 @@ def setup(app, context):
                         vp, vst_format, bypassed=persisted_bypassed,
                         state=_state_b64(state_obj),
                         slot=slot, rs_gear=gear, tone_key=tone_key))
+                    # Per-amp loudness trim (clean gain after the amp). Tagged
+                    # tone_key + amp_trim so the dedupe below keeps per-tone
+                    # trims distinct. Gain itself is untouched (still saturates).
+                    if slot == "amp" and not persisted_bypassed:
+                        _ts = _amp_trim_stage(
+                            _amp_trim_mult_for_state(str(vp), effective_vst_state),
+                            tone_key=tone_key)
+                        if _ts:
+                            tone_stages.append(_ts)
 
             # Cab IR at the tail of the tone (prefer cabinet slot).
             ir_rows = [(r[0], r[2], r[3], bool(r[4]), r[1]) for r in rows
@@ -7263,8 +7431,11 @@ def setup(app, context):
                 stype = stage.get("type")
                 if stype == 1:        # NAM
                     dkey = ("nam", stage.get("path"))
-                elif stype == 2:      # IR
-                    dkey = ("ir", stage.get("path"))
+                elif stype == 2:      # IR. Cabs dedupe across tones by path; the
+                    # per-amp trim stage stays PER-TONE so it always sits right
+                    # after its own amp (never shared/reordered before another).
+                    dkey = (("amp_trim", tone_key) if stage.get("amp_trim") is not None
+                            else ("ir", stage.get("path")))
                 else:                  # VST — always unique per tone
                     dkey = ("vst", tone_key, stage.get("name") or stage.get("path"))
                 bucket = slots_by_type.setdefault(slot_type, {})
@@ -7327,7 +7498,8 @@ def setup(app, context):
                 if stype == 1:
                     dkey = ("nam", stage.get("path"))
                 elif stype == 2:
-                    dkey = ("ir", stage.get("path"))
+                    dkey = (("amp_trim", tone_key) if stage.get("amp_trim") is not None
+                            else ("ir", stage.get("path")))
                 else:
                     dkey = ("vst", tone_key, stage.get("name") or stage.get("path"))
                 idx = index_of_dkey.get((slot_type, dkey))
@@ -7407,6 +7579,10 @@ def setup(app, context):
                 vp, vst_format or "VST3", bypassed=False,
                 state=_state_b64({"pluginPath": str(vp),
                                   "format": vst_format or "VST3"}))
+            # Loudness-match amp auditions too (state is None → the model's
+            # measured defaults, which the plugin also opens at): even level
+            # when comparing amps in the Gear catalog.
+            _audition_trim = _amp_trim_stage(_amp_trim_mult_for_state(str(vp), None))
         elif kind in ("ir", "rs_ir"):
             p = _safe_child(irs_dir, file)
             if not p or not p.exists():
@@ -7438,6 +7614,8 @@ def setup(app, context):
             stage = _nam_stage(p, bypassed=False, input_level=_drive,
                                output_drive=_drive, output_mult=float(gain))
         chain = [stage]
+        if kind == "vst" and _audition_trim:
+            chain.append(_audition_trim)
         missing = []
         _append_final_leveler(chain, missing)
         return {"native_preset": {"version": 1, "chain": chain}, "missing": missing}

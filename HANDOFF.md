@@ -1,5 +1,61 @@
 # Rig Builder — handoff doc
 
+> **Per-amp loudness normalization — in rig builder, NOT in the VSTs (2026-06-11,
+> branch `feat/amp-loudness-normalize`).** Every bundled amp VST3 bakes its own
+> output coeff (`kLvl`), so amps drifted across a ~23 dB loudness range (measured
+> `jc90` ≈ −1.8 LUFS … `ua610` ≈ −25.3 LUFS) and cranking Gain raised level. Fixed
+> at the chain-build layer so no VST is recompiled and saved `vst_state` stays
+> valid. Two pieces:
+> 1. **Measurement** — `tools/measure_amp_loudness.py` + `tools/amp_lufs_harness.cpp.in`
+>    compile a per-amp DPF offline probe (includes the amp's `*Plugin.cpp`, a
+>    `Probe` subclass reaches `run()/setParameterValue()/sampleRateChanged()`),
+>    feed a 110–1760 Hz multitone @ RMS 0.10 and measure **BS.1770-4 integrated
+>    LUFS** (K-weighting + gating, mono/left) while sweeping each loudness param
+>    (the param RS "Gain" maps to — from `rs_knob_to_vst_param.json` — plus any
+>    Volume/Master pot). Output: `data/amp_loudness_model.json` (60 amps). Re-run
+>    after adding/retuning an amp. Needs `/usr/bin/clang++`; ~9 min for all 60.
+> 2. **Compensation** — `routes.py` (`_amp_loudness_trim_db` / `_amp_trim_mult_for_state`
+>    / `_amp_trim_stage`). From the amp's resolved params it interpolates the
+>    measured LUFS and computes a CLEAN trim: target **−14 LUFS**, with the Gain
+>    contribution soft-capped (tanh) at **+2 dB (→ −12)** and Volume/Master at
+>    **+3 dB (→ −11)**; clamp [−24, +9] dB. The trim rides a **1-sample
+>    (identity) unit-impulse IR stage** inserted right after the amp (a clean gain
+>    the engine already applies to IR stages) — **the amp's Gain param is never
+>    touched, so it still saturates exactly as before**. Wired into all 3 chain
+>    builders (`native_preset_full`, mega_chain's `_build_tone_stages`,
+>    `native_preset_one` audition). The trim stage carries `rs_gear="__rb_amp_trim"`
+>    + a top-level `amp_trim` marker so mega_chain's IR dedupe keeps per-amp trims
+>    distinct (and `screen.js` `rbChainGainTargetFor` skips it so it isn't counted
+>    as a cab). The **RB Final Leveler stays** as a safety net — the per-amp trim
+>    just hands it an already-even level. Constants `_AMP_TARGET_LUFS / _AMP_CAP_*`
+>    in routes.py are tunable by ear without re-measuring. Limitation: LUFS is
+>    measured at the multitone point (consistent with `kLvl`); absolute playback
+>    LUFS with a real guitar differs, but the relative leveling + caps hold, and a
+>    couple of very quiet DI preamps (ua610/meve1073) only reach ~−16 LUFS (the +9
+>    dB boost clamp, to limit hiss). See AMP_LOUDNESS.md for the loudness standard.
+
+> **Loudness fixes (2026-06-09).** (1) Bundled COMPRESSORS had open-loop makeup
+> that ballooned with the comp knob (BassMultiComp +16 dB, DynamicsCompression
+> +21 dB, StudioComp ~+18 dB at extremes) → volume jumped when you turned up
+> Compress. All three now use **closed-loop makeup**: match the post-compression
+> smoothed RMS (~250 ms) to the input's so output loudness stays constant
+> (range-limited −12..+18 dB; StudioComp keeps the Output knob as a trim).
+> Verified flat offline (DPF harness, steady tone). (2) **RBFinalLeveler** (the
+> end-of-chain limit/comp, JUCE) reworked for song/tone consistency: detector is
+> now a fixed ~30 ms running mean-square (block-size independent, was averaging
+> one ~3-10 ms block), and gain uses **adaptive convergence** — snaps fast
+> (~20 ms) on a big sustained level gap (a drive→clean tone switch, which used to
+> fade in over ~600 ms) but stays slow on small drift so dynamics aren't
+> flattened (no pumping). Offline algo check: all levels converge to −14 dBFS
+> RMS; drive→clean re-levels in ~400 ms. Build the leveler with `cmake --build
+> vst/src/RBFinalLeveler/build --config Release`, copy the artefact binary into
+> `vst/racks/RB Final Leveler.vst3` + ad-hoc re-sign. **GIT GOTCHA:** the working
+> tree carries persistent pre-existing noise (deleted pedal .vst3 bundles, RBFinalLeveler/build
+> artifacts, an app-regenerated data/rs_to_real.json). `git add` ONLY the exact
+> files you changed and check `git diff --cached --stat` before committing — never
+> `git add -A`/`commit -a`, and watch `pull --rebase --autostash` (it can stage
+> that noise into your commit, as happened in c93b7d8 → fixed in a0b828a).
+
 > **RS-knob → VST param mapping fixed for pedals/racks (2026-06-09).** Symptom:
 > only AMPs responded to a song's knobs; pedals/racks played at plugin defaults.
 > Root cause: the bundled pedal/rack VSTs were **renamed** for the no-copyright
