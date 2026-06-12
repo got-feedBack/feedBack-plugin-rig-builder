@@ -898,13 +898,14 @@ async function rbPreLoadMute(chainLen, targetGain, opts) {
     // resolves, however long that takes on a slow PC). Otherwise the timer IS
     // the unmute, sized to the load estimate.
     const fallbackMs = deferUnmute ? Math.max(hold, 10000) : hold;
-    // During load we want the player to hear ONLY the clean dry guitar/bass,
-    // not the chain forming. chain gain 0 kills the wet path (and its load
-    // peaks); leaving the input monitor UN-muted lets the dry signal through so
-    // it's "clean guitar while it loads", then the effects fade in once loaded.
-    // Kill-switch for the dry behaviour: `window.__rbDryDuringLoad = false`
-    // (falls back to the old full-silence mute).
-    const dryDuringLoad = window.__rbDryDuringLoad !== false;
+    // During load we FULL-MUTE (monitor muted + chain gain 0): silence while the
+    // chain loads, then the processed chain fades in. The old default left the
+    // input monitor UN-muted ("clean guitar while it loads"), but that played the
+    // RAW DI at full, un-leveled volume — the user heard the instrument blast on
+    // load and then drop to the processed level ("escucho fuerte el instrumento y
+    // después se baja"). Opt back into the dry-passthrough behaviour with
+    // `window.__rbDryDuringLoad = true`.
+    const dryDuringLoad = window.__rbDryDuringLoad === true;
     let wasMuted = false;
     try { if (typeof audio.isMonitorMuted === 'function') wasMuted = !!(await audio.isMonitorMuted()); } catch (_) {}
     try {
@@ -1510,12 +1511,22 @@ const RbMegaChain = (function () {
         // and applies it then. Brief silence is a better failure mode
         // than playing the wrong tone confidently.
         const initialKey = _resolveActiveToneKey();
-        const initialTone = initialKey ? _findToneByKey(initialKey) : null;
+        // Single-tone song: there's nothing to resolve from the highway — apply
+        // that one tone NOW so the un-mute below fires with the REAL tone active
+        // (not a blast of silence-then-tone). Multi-tone songs fall back to the
+        // highway resolve and stay muted until the first real tone lands.
+        const initialTone = (Array.isArray(mega.tones) && mega.tones.length === 1)
+            ? mega.tones[0]
+            : (initialKey ? _findToneByKey(initialKey) : null);
         await _applyActiveTone(initialTone ? initialTone.tone_key : null);
         // The chain is fully loaded, VST params re-applied, and the active tone's
-        // bypass is set — NOW it's safe to un-mute (event-driven, not on a timer
-        // that could fire mid-load on a slow PC).
-        await rbSignalChainLoaded();
+        // bypass is set — un-mute ONLY if a REAL tone is active. If the highway
+        // wasn't ready (initialTone null → everything bypassed), STAY muted; the
+        // recheck / default-tone path below fires rbSignalChainLoaded() the moment
+        // it applies the first real tone. Un-muting on the bypassed/NONE state let
+        // the real tone (loud amp) come in un-muted later and blast before the
+        // leveler caught up. (The 15 s safety net still backstops a stuck load.)
+        if (initialTone) await rbSignalChainLoaded();
         console.log(`[rig_builder mega-chain] initial tone → ${initialTone
             ? `"${initialTone.tone_key}" (from highway)`
             : 'NONE (highway not ready yet — waiting for first recheck)'}`);
@@ -1590,6 +1601,7 @@ const RbMegaChain = (function () {
                 const tone = _findToneByKey(key);
                 if (!tone) return;
                 _applyActiveTone(tone.tone_key).then(() => {
+                    rbSignalChainLoaded().catch(() => {});   // un-mute on the first real tone
                     const src = allowFirstChange ? 'first-change-or-base' : 'base';
                     console.log(`[rig_builder mega-chain] initial-recheck #${i+1} (t+${delay}ms, ${src}) → switched to "${tone.tone_key}"`);
                 }).catch(() => {});
@@ -1650,6 +1662,7 @@ const RbMegaChain = (function () {
             const tone = _pickDefaultTone();
             if (!tone) return;
             _applyActiveTone(tone.tone_key).then(() => {
+                rbSignalChainLoaded().catch(() => {});   // un-mute on the first real tone
                 console.log(
                     `[rig_builder mega-chain] no schedule in PSARC for this song — `
                     + `applying default tone "${tone.tone_key}". `
@@ -1680,6 +1693,7 @@ const RbMegaChain = (function () {
                 const tone = _findToneByKey(lastShot);
                 if (tone) {
                     _applyActiveTone(tone.tone_key).then(() => {
+                        rbSignalChainLoaded().catch(() => {});   // un-mute on the first real tone
                         console.log(`[rig_builder mega-chain] late base/first-change → "${tone.tone_key}"`);
                     }).catch(() => {});
                     return;
@@ -1688,6 +1702,7 @@ const RbMegaChain = (function () {
             const fallback = _pickDefaultTone();
             if (!fallback) return;
             _applyActiveTone(fallback.tone_key).then(() => {
+                rbSignalChainLoaded().catch(() => {});   // un-mute on the first real tone
                 console.warn(
                     `[rig_builder mega-chain] FALLBACK after 10s: applying `
                     + `"${fallback.tone_key}" — highway never published a tone `

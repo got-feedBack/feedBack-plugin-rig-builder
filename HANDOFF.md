@@ -1,5 +1,28 @@
 # Rig Builder — handoff doc
 
+> **Load-mute: full silence + un-mute on the FIRST REAL TONE (2026-06-12, branch
+> `feat/amp-loudness-normalize`).** User still heard "el instrumento fuerte y
+> después baja" on song load. Two causes, both in `screen.js`:
+> 1. **Dry-during-load played the RAW DI at full volume.** `rbPreLoadMute` left the
+>    input monitor UN-muted during load ("clean guitar while it loads"), so the
+>    un-leveled instrument blasted, then dropped to the processed −14 LUFS chain.
+>    Flipped the default to **full silence** (monitor muted + chain 0); opt back in
+>    with `window.__rbDryDuringLoad = true`.
+> 2. **The un-mute fired while the active tone was NONE.** `buildForSong` resolved
+>    the tone from the highway, which often isn't ready yet (`initial tone → NONE`),
+>    un-muted on the bypassed/silent state, and the REAL tone (`stpinte_bass`…) was
+>    applied LATER by the recheck / default-tone path UN-MUTED → the amp came in
+>    loud before the leveler caught up. Fix: (a) for a **single-tone song** apply
+>    that one tone immediately (no highway wait); (b) only `rbSignalChainLoaded()`
+>    (un-mute) once a REAL tone is active — if NONE, stay muted and let the recheck
+>    (`~screen.js:1592`), early no-schedule detector (t+1500, `~1652`), late
+>    base/first-change and 10 s fallback paths each call `rbSignalChainLoaded()`
+>    when they apply the first real tone. The 15 s coalesce safety net still
+>    backstops a stuck load. Net: silence during load → processed chain fades in
+>    with the right tone already active, leveler converged. (Cross-song level
+>    differences the user also noted: the leveler only levels the GUITAR chain to
+>    −14 LUFS — the PSARC BACKING-TRACK volume is the bundle's, not ours.)
+
 > **Leveler limiter ORDER + load-mute event fix (2026-06-12, branch
 > `feat/amp-loudness-normalize`).** Two follow-ups:
 > 1. **Limiter must sit BEFORE the makeup, not after.** In the leveler the
