@@ -863,7 +863,19 @@ async function rbPreLoadMute(chainLen, targetGain, opts) {
     const deferUnmute = !!(opts && opts.deferUnmute);
     const pendingTarget = rbClampChainGainTarget(targetGain);
     window.__rbPendingChainGainTarget = pendingTarget;
-    if (_rbMuteInFlight) return;            // coalesce rapid tone changes
+    if (_rbMuteInFlight) {
+        // Already muted (e.g. the fetch-interceptor's SHORT timer-based mute
+        // fired first, at song:loaded). If THIS caller (the mega-chain preload)
+        // will signal real completion, UPGRADE the pending unmute to the long
+        // safety net so that short timer can't fire mid-load and let the VST/NAM
+        // load peaks through — the un-mute then comes from rbSignalChainLoaded()
+        // (flag/event-driven, as intended) the moment the load truly finishes.
+        if (deferUnmute && _rbUnmuteRun && _rbUnmuteTimer) {
+            clearTimeout(_rbUnmuteTimer);
+            _rbUnmuteTimer = setTimeout(_rbUnmuteRun, 15000);
+        }
+        return;                            // coalesce rapid tone changes
+    }
     _rbMuteInFlight = true;
     const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
     if (!audio) { _rbMuteInFlight = false; return; }

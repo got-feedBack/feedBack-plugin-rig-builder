@@ -1,5 +1,29 @@
 # Rig Builder — handoff doc
 
+> **Leveler limiter ORDER + load-mute event fix (2026-06-12, branch
+> `feat/amp-loudness-normalize`).** Two follow-ups:
+> 1. **Limiter must sit BEFORE the makeup, not after.** In the leveler the
+>    brickwall limiter was operating on the gain that already included the
+>    Output-Trim makeup (Chain volume ×5 = +14 dB), so it clawed the makeup back
+>    down to the ceiling → "se escucha todo muy despacio". Fixed in
+>    `PluginProcessor.cpp`: `currentGain`/`nextAgcGain` now track the AGC gain
+>    WITHOUT the makeup; the limiter caps the NORMALIZED peaks; `makeupGain` is
+>    applied last as a clean output gain. Sim: two distorted tones 17 dB apart →
+>    both land ~0 LUFS (loud, makeup preserved) and within 0.1 dB (even); the old
+>    'after' order landed ~−2..−3 LUFS (quiet). TRADE-OFF (by user request): the
+>    makeup is now unconstrained, so a high Chain volume CAN clip — tell the user
+>    to keep Chain volume ~×2–3 (the leveler already evens loudness; Chain volume
+>    is just the final clean level).
+> 2. **Song-load mute stayed timer-based.** The fetch-interceptor mutes first at
+>    `song:loaded` with a SHORT fallback timer (no `deferUnmute`); when the
+>    mega-chain preload then calls `rbPreLoadMute(...,{deferUnmute:true})` it hit
+>    `if (_rbMuteInFlight) return` and LOST the defer → the short timer un-muted
+>    mid-load and the VST/NAM load peaks leaked ("se escucha cómo cargan los
+>    VST"). Fixed in `screen.js`: when a `deferUnmute` call coalesces onto an
+>    in-flight mute, UPGRADE the pending unmute timer to the long (15 s) safety
+>    net so the real un-mute comes from `rbSignalChainLoaded()` (event-driven, the
+>    moment the load truly finishes), never the short timer.
+
 > **RB Final Leveler → un-starve the boost + brickwall limiter (2026-06-12,
 > branch `feat/amp-loudness-normalize`).** Even with the LUFS detector a song's
 > tones still sounded uneven ("muy distintos"), specifically: loud tones clean

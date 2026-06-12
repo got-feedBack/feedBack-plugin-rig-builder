@@ -133,7 +133,7 @@ public:
         if (hasSignal && !levelInitialized)
         {
             currentGainDb = juce::jlimit(-maxCutDb, maxBoostDb, wantedGainDb);
-            currentGain = juce::Decibels::decibelsToGain(currentGainDb + trimDb);
+            currentGain = juce::Decibels::decibelsToGain(currentGainDb);   // AGC gain only (makeup applied later)
             levelInitialized = true;
         }
 
@@ -157,15 +157,15 @@ public:
         currentGainDb += (wantedGainDb - currentGainDb) * juce::jlimit(0.0f, 1.0f, alpha);
         currentGainDb = juce::jlimit(-maxCutDb, maxBoostDb, currentGainDb);
 
-        const float finalGainDb = currentGainDb + trimDb;
-        const float nextGain = juce::Decibels::decibelsToGain(finalGainDb);
-
-        // Apply the AGC gain ramp, then a brickwall peak limiter at the ceiling.
-        // Boosting quiet/dynamic tones to the loudness target makes their peaks
-        // hot; the limiter (instant attack so it never overshoots, ~80 ms
-        // release for transparency) keeps the output under the ceiling without
-        // starving the loudness normalization. The makeup (Output Trim) is part
-        // of `nextGain`, so the limiter sees the real output level.
+        // Order matters: AGC (loudness normalize) -> brickwall limiter on the
+        // NORMALIZED signal -> makeup (Output Trim, the user's loudness) LAST.
+        // The limiter must sit BEFORE the makeup; if it sits after, it claws the
+        // makeup straight back down to the ceiling and everything plays quiet.
+        // So `currentGain`/`nextAgcGain` track the AGC gain WITHOUT the makeup;
+        // the limiter caps the normalized peaks; `makeupGain` is applied clean on
+        // top (loud, the way the Chain-volume knob intends).
+        const float nextAgcGain = juce::Decibels::decibelsToGain(currentGainDb);
+        const float makeupGain  = juce::Decibels::decibelsToGain(trimDb);
         const float ceilLin = juce::Decibels::decibelsToGain(ceilingDb);
         const float relCoef = 1.0f - std::exp(-1.0f / std::max(1.0f, 0.080f * float(sr)));
         const float invN = numSamples > 1 ? 1.0f / float(numSamples - 1) : 0.0f;
@@ -174,19 +174,19 @@ public:
 
         for (int i = 0; i < numSamples; ++i)
         {
-            const float g = currentGain + (nextGain - currentGain) * (float(i) * invN);
+            const float gAgc = currentGain + (nextAgcGain - currentGain) * (float(i) * invN);
             float pk = 0.0f;
             for (int ch = 0; ch < chN; ++ch)
-                pk = std::max(pk, std::abs(wch[ch][i]) * g);
+                pk = std::max(pk, std::abs(wch[ch][i]) * gAgc);   // peak at the normalized (pre-makeup) stage
             const float need = (pk > ceilLin && pk > 0.0f) ? (ceilLin / pk) : 1.0f;
             if (need < limGain) limGain = need;                       // instant attack: no overshoot
             else                limGain += relCoef * (need - limGain); // slow release
-            const float tot = g * limGain;
+            const float tot = gAgc * limGain * makeupGain;            // ...makeup applied last, clean
             for (int ch = 0; ch < numChannels; ++ch)
                 buffer.getWritePointer(ch)[i] *= tot;
         }
 
-        currentGain = nextGain;
+        currentGain = nextAgcGain;   // currentGain now tracks the AGC gain (no makeup)
     }
 
     bool hasEditor() const override { return false; }
