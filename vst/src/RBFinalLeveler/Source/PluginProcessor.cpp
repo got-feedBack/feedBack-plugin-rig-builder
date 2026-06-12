@@ -37,6 +37,8 @@ public:
         currentGain = 1.0f;
         levelInitialized = false;
         msEnv = 0.0;
+        designKWeighting(sr);
+        for (int ch = 0; ch < 2; ++ch) { kPre[ch].reset(); kRlb[ch].reset(); }
     }
 
     void releaseResources() override {}
@@ -72,10 +74,13 @@ public:
         const float ceilingDb = *apvts.getRawParameterValue("ceiling_db");
         const float trimDb = *apvts.getRawParameterValue("trim_db");
 
-        // Loudness detector: a FIXED-TIME (~30 ms) running mean-square,
-        // integrated per sample so it is independent of the host block size
-        // (the old code averaged a single block, ~3-10 ms). 30 ms reacts
-        // quickly to a tone change while the gain follower below smooths any
+        // Loudness detector: a FIXED-TIME (~30 ms) running mean-square of the
+        // K-WEIGHTED signal (ITU-R BS.1770), integrated per sample so it is
+        // independent of host block size. K-weighting makes this measure
+        // PERCEIVED loudness (LUFS), not raw RMS — so spectrally/dynamically
+        // different tones (bass vs guitar, clean vs fuzz) are leveled to equal
+        // perceived loudness instead of equal RMS (which sounded uneven). 30 ms
+        // reacts quickly to a tone change; the gain follower below smooths any
         // residual per-cycle ripple on low bass notes.
         const float rmsTauMs = 30.0f;
         const float rmsCoef = 1.0f - std::exp(-1.0f / std::max(1.0f, (rmsTauMs / 1000.0f) * float(sr)));
@@ -92,20 +97,23 @@ public:
             for (int ch = 0; ch < chN; ++ch)
             {
                 const float x = chData[ch][i];
-                sq += double(x) * double(x);
-                peak = std::max(peak, std::abs(x));
+                peak = std::max(peak, std::abs(x));            // raw peak for anti-clip
+                const double w = kRlb[ch].process(kPre[ch].process(double(x)));
+                sq += w * w;                                   // K-weighted power
             }
             sq /= double(std::max(1, chN));
             msEnv += double(rmsCoef) * (sq - msEnv);
         }
 
-        const float rms = std::sqrt(float(msEnv));
+        // BS.1770 loudness of the smoothed K-weighted power (mono-equivalent).
+        const float loudnessLufs = (msEnv > 1.0e-12)
+            ? float(-0.691 + 10.0 * std::log10(msEnv))
+            : -120.0f;
 
-        const float rmsDb = juce::Decibels::gainToDecibels(rms, -120.0f);
         const float peakDb = juce::Decibels::gainToDecibels(peak, -120.0f);
 
         float wantedGainDb = currentGainDb;
-        const bool hasSignal = rmsDb >= gateDb;
+        const bool hasSignal = loudnessLufs >= gateDb;
 
         if (!hasSignal)
         {
@@ -115,7 +123,8 @@ public:
         }
         else
         {
-            wantedGainDb = targetRmsDb - rmsDb;
+            // targetRmsDb is now a target LUFS (param name kept for state compat).
+            wantedGainDb = targetRmsDb - loudnessLufs;
             wantedGainDb = juce::jlimit(-maxCutDb, maxBoostDb, wantedGainDb);
 
             // Anti-clip: si el peak ya está cerca de 0 dBFS, limita el boost.
@@ -193,7 +202,55 @@ private:
     float currentGainDb = 0.0f;
     float currentGain = 1.0f;
     bool levelInitialized = false;
-    double msEnv = 0.0;   // running mean-square (fixed ~100 ms loudness window)
+    double msEnv = 0.0;   // running mean-square of the K-weighted signal (~30 ms)
+
+    // ── ITU-R BS.1770 K-weighting (perceptual loudness) ───────────────────
+    // Two biquads per channel: a high-shelf pre-filter + an RLB high-pass.
+    // Coefficients are recomputed for the actual sample rate in prepareToPlay
+    // (libebur128 derivation), so it's correct at 44.1 k and 48 k alike.
+    struct Biquad
+    {
+        double b0 = 1.0, b1 = 0.0, b2 = 0.0, a1 = 0.0, a2 = 0.0;  // a0 normalized
+        double z1 = 0.0, z2 = 0.0;
+        inline double process(double x)
+        {
+            const double y = b0 * x + z1;
+            z1 = b1 * x - a1 * y + z2;
+            z2 = b2 * x - a2 * y;
+            return y;
+        }
+        void reset() { z1 = z2 = 0.0; }
+    };
+    Biquad kPre[2], kRlb[2];   // stage 1 (shelf), stage 2 (high-pass) per channel
+
+    void designKWeighting(double fs)
+    {
+        // Stage 1 — high-shelf pre-filter.
+        {
+            const double f0 = 1681.974450955533, G = 3.999843853973347, Q = 0.7071752369554196;
+            const double K = std::tan(juce::MathConstants<double>::pi * f0 / fs);
+            const double Vh = std::pow(10.0, G / 20.0), Vb = std::pow(Vh, 0.4996667741545416);
+            const double a0 = 1.0 + K / Q + K * K;
+            Biquad b;
+            b.b0 = (Vh + Vb * K / Q + K * K) / a0;
+            b.b1 = 2.0 * (K * K - Vh) / a0;
+            b.b2 = (Vh - Vb * K / Q + K * K) / a0;
+            b.a1 = 2.0 * (K * K - 1.0) / a0;
+            b.a2 = (1.0 - K / Q + K * K) / a0;
+            kPre[0] = b; kPre[1] = b;
+        }
+        // Stage 2 — RLB high-pass (numerator 1, -2, 1).
+        {
+            const double f0 = 38.13547087602444, Q = 0.5003270373238773;
+            const double K = std::tan(juce::MathConstants<double>::pi * f0 / fs);
+            const double a0 = 1.0 + K / Q + K * K;
+            Biquad b;
+            b.b0 = 1.0; b.b1 = -2.0; b.b2 = 1.0;
+            b.a1 = 2.0 * (K * K - 1.0) / a0;
+            b.a2 = (1.0 - K / Q + K * K) / a0;
+            kRlb[0] = b; kRlb[1] = b;
+        }
+    }
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     {

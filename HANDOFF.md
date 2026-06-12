@@ -1,5 +1,31 @@
 # Rig Builder — handoff doc
 
+> **RB Final Leveler → perceptual LUFS detector (2026-06-12, branch
+> `feat/amp-loudness-normalize`).** Symptom: a song's tones still sounded at
+> different volumes even with per-amp leveling — because tone loudness is
+> dominated by the WHOLE chain (fuzz/distortion/octave pedals, bass vs guitar
+> cab, racks), not the amp, and the end-of-chain RB Final Leveler equalized
+> **RMS**, which doesn't match perceived loudness across spectrally/dynamically
+> different tones (a bass at −14 RMS sounds ~5 dB quieter than a guitar at −14
+> RMS). Fix: `vst/src/RBFinalLeveler/Source/PluginProcessor.cpp` now runs the
+> detector signal through an **ITU-R BS.1770 K-weighting** filter (2 biquads/ch,
+> coefficients computed per sample-rate via the libebur128 derivation — verified
+> byte-exact vs the standard at 48 k) before the 30 ms running mean-square, and
+> reads loudness as `−0.691 + 10·log10(meanSquare)` LUFS. The AGC (target/boost/
+> cut/ceiling/adaptive convergence) is unchanged; the peak/ceiling anti-clip
+> still uses the RAW peak. Param NAMES unchanged ("Target RMS dB" is now a target
+> LUFS — kept for the name-keyed state restore) and the −14 default still
+> applies. Now the leveler AND the per-amp trim use the SAME metric (−14 LUFS).
+> Diagnosis verified on `musetime_p.psarc` (Time is Running Out): all 6 tones use
+> in-model VST amps but their amp trims were tiny (−0.4..+4.2 dB) — the spread is
+> from pedals/cabs. **Build:** `cmake --build vst/src/RBFinalLeveler/build --config
+> Release`, then copy the artefact binary into
+> `vst/racks/RB Final Leveler.vst3/Contents/MacOS/RB Final Leveler` (macOS slot
+> only — keep linux/win) + `codesign --force --sign - "vst/racks/RB Final Leveler.vst3"`.
+> Restart Slopsmith (Cmd+Q + `pkill -f 'uvicorn server:app'` + reopen — orphan
+> backend serves stale code). DON'T commit the `build/` artifacts (persistent
+> noise); commit only the Source .cpp + the shipped bundle binary + CodeResources.
+
 > **Per-amp loudness normalization — in rig builder, NOT in the VSTs (2026-06-11,
 > branch `feat/amp-loudness-normalize`).** Every bundled amp VST3 bakes its own
 > output coeff (`kLvl`), so amps drifted across a ~23 dB loudness range (measured

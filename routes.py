@@ -344,6 +344,8 @@ def _final_leveler_params_state() -> str:
             v = lo
         return max(0.0, min(1.0, (v - lo) / (hi - lo)))
 
+    # As of the K-weighting upgrade the leveler measures BS.1770 LUFS, so this
+    # "Target RMS dB" is really a target LUFS (param name kept for state compat).
     target_rms = float(s.get("final_chain_target_rms_db", -14.0))
     max_boost = float(s.get("final_chain_max_gain_db", 20.0))
     max_cut = abs(float(s.get("final_chain_min_gain_db", -20.0)))
