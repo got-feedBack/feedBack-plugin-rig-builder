@@ -270,11 +270,13 @@ _DEFAULT_SETTINGS = {
     # bass players reported amps sounding over-distorted. Users who WANT more
     # amp saturation can raise it with the "Amp drive" slider in Settings.
     "nam_chain_input_drive": 1.0,
-    # When toggled, bypasses (or un-bypasses) the cabinet slot on EVERY song's
-    # tones in one shot — for users who'd rather run no cab (raw amp) or their
-    # own external cab sim. Stored just for the checkbox state; the actual
-    # effect is the per-piece `bypassed` flag the toggle writes.
-    "bypass_all_cabs": False,
+    # When ON, bypasses the cabinet slot on EVERY song's tones — for users who'd
+    # rather run no cab (raw amp) or their own external cab sim. Default ON: the
+    # extracted Rocksmith cab IRs are weak/colourless, so out of the box we skip
+    # them and let the user add their own cab/IR. Enforced two ways: the /settings
+    # toggle bulk-flips per-piece `bypassed` (UI state for opened songs) AND the
+    # chain builder force-bypasses RS cabs at build time (authoritative, all songs).
+    "bypass_all_cabs": True,
     # Bass DI + Cab blend (real bass rigs run mostly DI with a little mic'd cab).
     # When on, every BASS cab IR is replaced by a single IR that bakes a fixed
     # 70% DI (dry) + 30% cab blend, level-matched so the cab is audible and the
@@ -3316,9 +3318,12 @@ def _nam_stage(path, *, bypassed, input_level=1.0, output_drive=None,
 # dB) — discarding the extractor's L2=2.4 (+7.6 dB) calibration. That flat −18
 # dB is what made cabs (esp. bass, energy in 40–250 Hz) sound quiet/thin. This
 # per-cab gain recovers it at the IR stage (robust on every chain path, unlike
-# the fragile `setGain('chain')` makeup). 4.0 (+12 dB) lands the RS cab at a
-# healthy level with the existing chain_makeup untouched; tune by ear.
-_RS_IR_MAKEUP = 4.0
+# the fragile `setGain('chain')` makeup). 8.0 (+18.1 dB) = 1/0.125 EXACTLY
+# cancels JUCE's force-normalize so the cab sits at its natural broadband level.
+# The previous 4.0 (+12 dB) was a half-correction (net ~-6 dB) -> cabs still too
+# quiet to hear ("varios cabs no suenan", esp. Marshall/guitar cabs); tune by ear
+# (dial to 6.3 ~+16 dB if it runs hot).
+_RS_IR_MAKEUP = 8.0
 
 
 def _is_rocksmith_ir_file(value: str | Path | None) -> bool:
@@ -3712,6 +3717,13 @@ def _ir_stage(ir_path, *, bypassed, gain=1.0,
     `di_cab` (set only by the per-tone chain builders) swaps a BASS cab IR for
     its DI+cab blend when the feature is on — see the DI+Cab helpers."""
     ir_path = str(ir_path)
+    # Global "Bypass all Rocksmith cabs" (Settings): force-skip the RS cab on the
+    # song chain (di_cab path) so the user can run their own cab/IR. This makes the
+    # toggle authoritative even for songs whose preset_pieces row predates / wasn't
+    # touched by the /settings DB bulk-flip. Catalog auditions (di_cab=False) still
+    # play, so cabs remain comparable.
+    if di_cab and _is_rocksmith_ir_file(ir_path) and _load_settings().get("bypass_all_cabs"):
+        bypassed = True
     di_cab_blend = False
     if di_cab and _is_bass_cab_ir(ir_path) and _di_cab_enabled():
         blended = _di_cab_blend_file(Path(ir_path))
@@ -6331,7 +6343,7 @@ def setup(app, context):
             "curated_only": s.get("curated_only", False),
             "preferred_size": s.get("preferred_size", "standard"),
             "mega_chain_mode": s.get("mega_chain_mode", True),
-            "bypass_all_cabs": s.get("bypass_all_cabs", False),
+            "bypass_all_cabs": s.get("bypass_all_cabs", True),
             # Chain-input drive (engine setGain('input', X)). Read by JS
             # at every chain load — value of 8.0 = +18 dB feeds NAM amps
             # at capture-time levels so they actually saturate.

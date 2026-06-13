@@ -390,6 +390,27 @@
             <div id="rb-extract-all-status" class="text-xs text-gray-500"></div>
         </div>
 
+        <!-- Cabinets — bypass the Rocksmith cab IRs and use your own -->
+        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+            <h3 class="text-white font-semibold mb-2">Cabinets</h3>
+            <label class="flex items-start gap-2 text-sm cursor-pointer">
+                <input type="checkbox" id="rb-bypass-all-cabs"
+                       onchange="rbSetBypassAllCabs(this.checked)"
+                       class="mt-1 accent-amber-500">
+                <span class="text-gray-300">
+                    <span class="font-medium text-amber-300">Bypass all Rocksmith cabs</span>
+                    <div class="text-gray-500 mt-1 leading-snug">
+                        Skips the Rocksmith cab IR in every tone (the signal passes
+                        through un-cab'd) so you can add your own cab / IR per tone
+                        instead. Flipping this rewrites the bypass flag on every
+                        cabinet stage; reopen the song to hear the change. Catalog
+                        auditions (▶) still play cabs so you can compare.
+                    </div>
+                    <div id="rb-bypass-all-cabs-status" class="text-emerald-400 mt-1 leading-snug"></div>
+                </span>
+            </label>
+        </div>
+
         <!-- Original Settings panels below -->
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
             <h3 class="text-white font-semibold mb-3">VST / Audio Unit plugins</h3>

@@ -9111,6 +9111,10 @@ async function rbLoadSettings() {
     // setting is still `curated_only`; the UI just shows the opposite.
     const allowFuzzy = document.getElementById('rb-allow-tone3000-fallback');
     if (allowFuzzy) allowFuzzy.checked = !s.curated_only;
+    // "Bypass all Rocksmith cabs" — reflects the persisted setting; toggling
+    // it POSTs to /settings which bulk-flips preset_pieces.bypassed for cabs.
+    const bypassCabs = document.getElementById('rb-bypass-all-cabs');
+    if (bypassCabs) bypassCabs.checked = !!s.bypass_all_cabs;
     // Mirror the persisted flag onto the runtime mirror so RbMegaChain
     // sees it even if the user never opens Settings. rbLoadSettings is
     // called from rbInit so this runs at page-load.
@@ -9221,6 +9225,27 @@ async function rbSetAllowTone3000Fallback(checked) {
             body: JSON.stringify({ curated_only: !checked }),
         });
     } catch (e) { /* best-effort */ }
+}
+
+// "Bypass all Rocksmith cabs" toggle. Posting bypass_all_cabs to /settings
+// bulk-flips preset_pieces.bypassed for every cabinet stage (backend side-
+// effect), so every tone skips its RS cab and the user can add their own.
+async function rbSetBypassAllCabs(checked) {
+    const status = document.getElementById('rb-bypass-all-cabs-status');
+    if (status) status.textContent = checked ? 'Bypassing every Rocksmith cab…' : 'Re-enabling Rocksmith cabs…';
+    try {
+        const r = await fetch(`${window.RB_API}/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bypass_all_cabs: !!checked }),
+        });
+        if (!r.ok) throw new Error('save failed');
+        if (status) status.textContent = checked
+            ? '✓ All Rocksmith cabs bypassed. Add your own cab/IR per tone; reopen the song to hear it.'
+            : '✓ Rocksmith cabs re-enabled.';
+    } catch (e) {
+        if (status) status.textContent = '⚠ Could not save — try again.';
+    }
 }
 
 // Open a native file picker (Electron desktop bridge) and drop the chosen
