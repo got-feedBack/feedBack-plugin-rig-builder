@@ -32,16 +32,20 @@ jobs:
       - name: Configure + build (MSVC, Release, x64)
         shell: bash
         run: |
-          cmake -S "$LEVELER_SRC" -B "$LEVELER_SRC/build" -A x64
-          cmake --build "$LEVELER_SRC/build" --config Release -j 2
+          # Build in a FRESH dir, never the committed vst/src/RBFinalLeveler/build
+          # (it ships a macOS-generated CMakeCache.txt whose absolute paths make
+          # cmake abort: "source ... does not match the source used to generate cache").
+          rm -rf "$LEVELER_SRC/cibuild"
+          cmake -S "$LEVELER_SRC" -B "$LEVELER_SRC/cibuild" -A x64
+          cmake --build "$LEVELER_SRC/cibuild" --config Release -j 2
 
       - name: Inject x86_64-win binary into the committed bundle
         shell: bash
         run: |
           # JUCE writes the built VST3 under
           # <build>/RBFinalLeveler_artefacts/<cfg>/VST3/RB Final Leveler.vst3/Contents/x86_64-win
-          src=$(find "$LEVELER_SRC/build" -type d -path '*/RB Final Leveler.vst3/Contents/x86_64-win' | head -1)
-          if [ -z "$src" ]; then echo "ERROR: built x86_64-win not found"; find "$LEVELER_SRC/build" -name '*.vst3' -maxdepth 6 | head; exit 1; fi
+          src=$(find "$LEVELER_SRC/cibuild" -type d -path '*/RB Final Leveler.vst3/Contents/x86_64-win' | head -1)
+          if [ -z "$src" ]; then echo "ERROR: built x86_64-win not found"; find "$LEVELER_SRC/cibuild" -name '*.vst3' -maxdepth 6 | head; exit 1; fi
           dest="$LEVELER_BUNDLE/Contents/x86_64-win"
           rm -rf "$dest"; mkdir -p "$dest"
           cp -R "$src/." "$dest/"
@@ -70,7 +74,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: leveler-windows
-          path: ${{ env.LEVELER_SRC }}/build/**/RB Final Leveler.vst3/Contents/x86_64-win/**
+          path: ${{ env.LEVELER_SRC }}/cibuild/**/RB Final Leveler.vst3/Contents/x86_64-win/**
           if-no-files-found: warn
 
   linux:
@@ -90,13 +94,14 @@ jobs:
 
       - name: Configure + build (gcc, Release)
         run: |
-          cmake -S "$LEVELER_SRC" -B "$LEVELER_SRC/build" -DCMAKE_BUILD_TYPE=Release
-          cmake --build "$LEVELER_SRC/build" -j 2
+          rm -rf "$LEVELER_SRC/cibuild"
+          cmake -S "$LEVELER_SRC" -B "$LEVELER_SRC/cibuild" -DCMAKE_BUILD_TYPE=Release
+          cmake --build "$LEVELER_SRC/cibuild" -j 2
 
       - name: Inject x86_64-linux binary into the committed bundle
         run: |
-          src=$(find "$LEVELER_SRC/build" -type d -path '*/RB Final Leveler.vst3/Contents/x86_64-linux' | head -1)
-          if [ -z "$src" ]; then echo "ERROR: built x86_64-linux not found"; find "$LEVELER_SRC/build" -name '*.so' -path '*RB Final Leveler*' | head; exit 1; fi
+          src=$(find "$LEVELER_SRC/cibuild" -type d -path '*/RB Final Leveler.vst3/Contents/x86_64-linux' | head -1)
+          if [ -z "$src" ]; then echo "ERROR: built x86_64-linux not found"; find "$LEVELER_SRC/cibuild" -name '*.so' -path '*RB Final Leveler*' | head; exit 1; fi
           dest="$LEVELER_BUNDLE/Contents/x86_64-linux"
           rm -rf "$dest"; mkdir -p "$dest"
           cp -R "$src/." "$dest/"
@@ -124,5 +129,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: leveler-linux
-          path: ${{ env.LEVELER_SRC }}/build/**/RB Final Leveler.vst3/Contents/x86_64-linux/**
+          path: ${{ env.LEVELER_SRC }}/cibuild/**/RB Final Leveler.vst3/Contents/x86_64-linux/**
           if-no-files-found: warn
