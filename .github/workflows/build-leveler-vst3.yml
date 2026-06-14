@@ -1,0 +1,128 @@
+name: Build RB Final Leveler (Windows + Linux)
+
+# Why: the RB Final Leveler is a JUCE/CMake plugin (NOT a DPF Makefile plugin),
+# so the build-windows-vst3.yml / build-linux-vst3.yml workflows skip it
+# (`RBFinalLeveler/*) continue`). Its committed bundle therefore ships a macOS
+# binary only — on Windows/Linux the host has no binary to load. This workflow
+# builds it via JUCE 8.0.7 (FetchContent) for both platforms and injects the
+# x86_64-win / x86_64-linux binary into the committed bundle so it becomes
+# cross-platform like the DPF effects.
+#
+# Run manually (workflow_dispatch). The two jobs run SEQUENTIALLY (linux needs
+# windows) so they never push concurrently — the DPF workflows' concurrent-push
+# race (git pull --rebase aborting on a moved remote) can't happen here. Each
+# job also pulls with --autostash before pushing, as a belt-and-suspenders.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  LEVELER_SRC: vst/src/RBFinalLeveler
+  LEVELER_BUNDLE: vst/racks/RB Final Leveler.vst3
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure + build (MSVC, Release, x64)
+        shell: bash
+        run: |
+          cmake -S "$LEVELER_SRC" -B "$LEVELER_SRC/build" -A x64
+          cmake --build "$LEVELER_SRC/build" --config Release -j 2
+
+      - name: Inject x86_64-win binary into the committed bundle
+        shell: bash
+        run: |
+          # JUCE writes the built VST3 under
+          # <build>/RBFinalLeveler_artefacts/<cfg>/VST3/RB Final Leveler.vst3/Contents/x86_64-win
+          src=$(find "$LEVELER_SRC/build" -type d -path '*/RB Final Leveler.vst3/Contents/x86_64-win' | head -1)
+          if [ -z "$src" ]; then echo "ERROR: built x86_64-win not found"; find "$LEVELER_SRC/build" -name '*.vst3' -maxdepth 6 | head; exit 1; fi
+          dest="$LEVELER_BUNDLE/Contents/x86_64-win"
+          rm -rf "$dest"; mkdir -p "$dest"
+          cp -R "$src/." "$dest/"
+          echo "injected from: $src"
+          ls -la "$dest"
+
+      - name: Commit + push
+        shell: bash
+        run: |
+          git config user.name  "leveler-vst-bot"
+          git config user.email "leveler-vst-bot@users.noreply.github.com"
+          git add "$LEVELER_BUNDLE/Contents/x86_64-win" || true
+          if git diff --cached --quiet; then
+            echo "No Windows leveler binary to commit (build may have failed)."
+          else
+            git commit -m "Add Windows (x86_64-win) RB Final Leveler binary"
+            for i in 1 2 3 4 5; do
+              git pull --rebase --autostash origin "${{ github.ref_name }}" || true
+              git push && break
+              echo "push attempt $i failed — retrying"; sleep 5
+            done
+          fi
+
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: leveler-windows
+          path: ${{ env.LEVELER_SRC }}/build/**/RB Final Leveler.vst3/Contents/x86_64-win/**
+          if-no-files-found: warn
+
+  linux:
+    runs-on: ubuntu-latest
+    needs: windows          # sequential — never push concurrently with the windows job
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install JUCE Linux build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev libjack-jackd2-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev \
+            libfreetype6-dev libfontconfig1-dev libgl1-mesa-dev
+
+      - name: Configure + build (gcc, Release)
+        run: |
+          cmake -S "$LEVELER_SRC" -B "$LEVELER_SRC/build" -DCMAKE_BUILD_TYPE=Release
+          cmake --build "$LEVELER_SRC/build" -j 2
+
+      - name: Inject x86_64-linux binary into the committed bundle
+        run: |
+          src=$(find "$LEVELER_SRC/build" -type d -path '*/RB Final Leveler.vst3/Contents/x86_64-linux' | head -1)
+          if [ -z "$src" ]; then echo "ERROR: built x86_64-linux not found"; find "$LEVELER_SRC/build" -name '*.so' -path '*RB Final Leveler*' | head; exit 1; fi
+          dest="$LEVELER_BUNDLE/Contents/x86_64-linux"
+          rm -rf "$dest"; mkdir -p "$dest"
+          cp -R "$src/." "$dest/"
+          echo "injected from: $src"
+          ls -la "$dest"
+
+      - name: Commit + push
+        run: |
+          git config user.name  "leveler-vst-bot"
+          git config user.email "leveler-vst-bot@users.noreply.github.com"
+          git add "$LEVELER_BUNDLE/Contents/x86_64-linux" || true
+          if git diff --cached --quiet; then
+            echo "No Linux leveler binary to commit (build may have failed)."
+          else
+            git commit -m "Add Linux (x86_64-linux) RB Final Leveler binary"
+            for i in 1 2 3 4 5; do
+              git pull --rebase --autostash origin "${{ github.ref_name }}" || true
+              git push && break
+              echo "push attempt $i failed — retrying"; sleep 5
+            done
+          fi
+
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: leveler-linux
+          path: ${{ env.LEVELER_SRC }}/build/**/RB Final Leveler.vst3/Contents/x86_64-linux/**
+          if-no-files-found: warn
