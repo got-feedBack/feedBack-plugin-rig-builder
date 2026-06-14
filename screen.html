@@ -341,15 +341,15 @@
                 </span>
             </label>
             <div class="flex flex-wrap gap-3">
-                <button class="rb-batch-btn bg-dark-600 hover:bg-dark-500 text-gray-200 px-5 py-2 rounded-xl text-sm transition"
-                        onclick="rbStartBatch('new')"
-                        title="Only assign for songs that have no preset yet — never touches what you've already configured">
-                    Scan only new songs
-                </button>
                 <button class="rb-batch-btn bg-accent hover:bg-accent/80 text-white px-5 py-2 rounded-xl text-sm transition"
                         onclick="rbStartBatch('all')"
                         title="Rescan every song. Re-resolves captures with the current/default presets. Preserves per-tone bypass + manual swaps (assigned_mode='manual')">
                     Rescan all (keeps manual edits)
+                </button>
+                <button class="rb-batch-btn bg-red-700 hover:bg-red-600 text-white px-5 py-2 rounded-xl text-sm transition"
+                        onclick="rbFactoryReset()"
+                        title="Reset every tone to the default factory mapping. Re-resolves ALL pieces — including your manual gear swaps (assigned_mode is ignored). Per-tone bypass is kept. Cannot be undone.">
+                    Reset to factory (ignores manual)
                 </button>
             </div>
             <div id="rb-batch-progress" class="hidden mt-4">

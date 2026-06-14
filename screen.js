@@ -2331,6 +2331,18 @@ async function rbLoadCoverage() {
 
 // ── Dashboard: batch ───────────────────────────────────────────────
 
+// "Reset to factory": re-resolve EVERY tone to its default mapping, ignoring
+// assigned_mode (manual swaps are discarded). Destructive → confirm first.
+async function rbFactoryReset() {
+    if (!confirm(
+        'Reset ALL tones to the factory mapping?\n\n' +
+        'Every piece is re-resolved to its default bundled VST / capture / IR. '
+        + 'Your manual gear swaps are DISCARDED (assigned_mode is ignored). '
+        + 'Per-tone bypass is kept. This cannot be undone.'
+    )) return;
+    await rbStartBatch('factory');
+}
+
 async function rbStartBatch(mode) {
     mode = mode || 'all';
     const btns = document.querySelectorAll('.rb-batch-btn');

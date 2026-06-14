@@ -1,3 +1,0 @@
-/Users/jorgemacv3/Library/Application Support/slopsmith-desktop/plugins/rig_builder/vst/src/RBFinalLeveler/build/_deps/juce-subbuild/CMakeFiles/juce-populate.dir
-/Users/jorgemacv3/Library/Application Support/slopsmith-desktop/plugins/rig_builder/vst/src/RBFinalLeveler/build/_deps/juce-subbuild/CMakeFiles/edit_cache.dir
-/Users/jorgemacv3/Library/Application Support/slopsmith-desktop/plugins/rig_builder/vst/src/RBFinalLeveler/build/_deps/juce-subbuild/CMakeFiles/rebuild_cache.dir

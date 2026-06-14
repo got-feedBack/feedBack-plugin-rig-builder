@@ -1,3 +1,36 @@
+# Rig Builder 2.2.0 — Amp VSTs for every amp + cross-platform binaries + factory reset (2026-06-14)
+
+**Every modeled amp now plays as its own bundled VST3.** Guitar and bass amps
+(~60 in all) map straight to a faithful built-in amp plugin instead of a generic
+NAM capture, so each tone gets the right amp voicing out of the box. Amps with no
+dedicated VST keep their NAM as before.
+
+**Amp voicing pass.** Brighter guitar cabs and an AmpliTube-style voicing/
+gain-staging pass so the dirty amps sit at the right level and character.
+
+**Per-amp loudness normalization.** A measured per-amp LUFS model levels the amps
+at the rig-builder layer (target −14, Gain → −12, Volume → −11), so switching
+amps no longer jumps the loudness around.
+
+**"Bypass all Rocksmith cabs" toggle (Setup → Cabinets, default on).** The
+extracted RS cabs are weak/colourless, so out of the box every tone skips its RS
+cab and you add your own cab/IR. Applies both when auditioning tones (▶ Listen)
+and when playing songs. Uncheck to restore the RS cabs.
+
+**No song-start blast from the leveler.** The load-mute holds silence until the
+first real tone, and the RB Final Leveler now warms up its detector so it no
+longer ramps loud when it kicks in.
+
+**Cross-platform binaries.** All amp VSTs and the RB Final Leveler now ship
+Windows (x86_64-win) and Linux (x86_64-linux) binaries, not just macOS.
+
+**New "Reset to factory" button (Setup).** Re-resolves every tone to its default
+factory mapping — including manual gear swaps (assigned_mode is ignored) — for a
+clean slate. The old "Scan only new songs" button is gone; Setup now has just
+**Rescan all (keeps manual edits)** and **Reset to factory (ignores manual)**.
+
+---
+
 # Rig Builder 2.1.0 — Every pedal & rack now has its own UI + volume fixes across the board (2026-06-02)
 
 **Every pedal and rack now has its own faithful in-app UI — 100% coverage.**

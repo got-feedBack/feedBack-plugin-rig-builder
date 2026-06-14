@@ -37,3 +37,15 @@ PEDAL_DSP_GUIDE.md
 PEDAL_UI_GUIDE.md
 pedal_inspirations.csv
 
+# Internal dev docs — kept locally, not distributed in the repo.
+docs/schematics/
+docs/HOST_VST_SANDBOX_CRASH_0.2.9.md
+vst/src/README.md
+vst/src/**/README.md
+
+# Local VST build outputs (CMake/JUCE + DPF). Binaries ship inside the
+# committed .vst3 bundles under vst/<cat>/; the source build trees do not.
+vst/src/**/build/
+vst/src/**/cibuild/
+*.bak-*
+

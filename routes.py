@@ -4956,6 +4956,10 @@ def _batch_worker(mode: str = "all"):
     - "new" — only map tones that have NO preset yet; already-mapped tones
       are left completely untouched. New songs inherit the captures you've
       already assigned to the same gear elsewhere.
+    - "factory" — like "all" but IGNORES assigned_mode: even manual swaps are
+      re-resolved to the default mapping (bundled VST / curated capture / IR).
+      Backs nothing up by itself — it's the "Reset to factory" button. Per-tone
+      bypass and the chosen cab-IR variant are still preserved.
     """
     global _batch_disk_bytes
     try:
@@ -5075,8 +5079,12 @@ def _batch_worker(mode: str = "all"):
                     #    in THIS tone, keep it exactly as-is — the batch never
                     #    overwrites a per-song manual choice. (Only reachable in
                     #    "all" mode; "new" skips already-mapped tones entirely.)
+                    #    EXCEPTION: "factory" mode ignores assigned_mode entirely
+                    #    and re-resolves every piece to its default mapping (the
+                    #    "Reset to factory" button) — manual swaps are discarded.
                     _prev_piece = existing_by_gear.get(rs_type, {})
-                    if (_prev_piece.get("assigned_mode") in ("manual", "manual_vst")
+                    if (mode != "factory"
+                            and _prev_piece.get("assigned_mode") in ("manual", "manual_vst")
                             and _manual_piece_usable(_prev_piece)):
                         try:
                             _kept_params = json.loads(_prev_piece.get("params_json") or "{}")
@@ -9201,7 +9209,7 @@ def setup(app, context):
     def batch_all(data: dict = Body(default={})):
         global _batch_thread
         mode = (data or {}).get("mode", "all")
-        if mode not in ("all", "new"):
+        if mode not in ("all", "new", "factory"):
             mode = "all"
         with _batch_lock:
             if _batch_state["running"]:

@@ -1,7 +1,7 @@
 {
   "id": "rig_builder",
   "name": "Rig Builder",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": false,
   "nav": { "label": "Rig Builder", "screen": "plugin-rig_builder" },
   "screen": "screen.html",
