@@ -1668,7 +1668,6 @@ function rbRegisterJobsCapability() {
             'rig-builder.curated-preload',
             'rig-builder.download-capture',
             'rig-builder.auto-download-song',
-            'rig-builder.extract-rocksmith',
             'rig-builder.export-defaults',
             'rig-builder.purge-library',
         ],
@@ -1736,8 +1735,7 @@ function rbRegisterPrivilegedCapabilities() {
     const participants = [
         { participantId: 'rig_builder.backend_routes', surface: 'backend-route', roles: ['provider', 'observer'], operationClasses: ['route.inspect', 'route.mutate', 'status'], riskClasses: ['local-data', 'external-service', 'subprocess'], label: 'Rig Builder backend routes', confirmationRequirement: 'not-required-for-inspection', compatibilityMode: 'native' },
         { participantId: 'rig_builder.tone3000_service', surface: 'external-service', roles: ['provider', 'observer'], operationClasses: ['service.request', 'service.download', 'status'], riskClasses: ['external-service'], label: 'tone3000 search and download', confirmationRequirement: 'required', compatibilityMode: 'native' },
-        { participantId: 'rig_builder.media_import_export', surface: 'media-import-export', roles: ['provider', 'observer'], operationClasses: ['media.import', 'media.export', 'status'], riskClasses: ['local-data', 'subprocess'], label: 'Rocksmith gear map and IR import/export', confirmationRequirement: 'required', compatibilityMode: 'native' },
-        { participantId: 'rig_builder.extractors', surface: 'subprocess', roles: ['provider', 'observer'], operationClasses: ['subprocess.run', 'subprocess.status'], riskClasses: ['subprocess', 'local-data'], label: 'Rocksmith extractor subprocesses', confirmationRequirement: 'required', compatibilityMode: 'native' },
+        { participantId: 'rig_builder.media_import_export', surface: 'media-import-export', roles: ['provider', 'observer'], operationClasses: ['media.import', 'media.export', 'status'], riskClasses: ['local-data', 'subprocess'], label: 'Gear capture and IR import/export', confirmationRequirement: 'required', compatibilityMode: 'native' },
     ];
     participants.forEach(participant => {
         void rbCapabilityCommand('privileged-capabilities', 'register-participant', {
@@ -10728,27 +10726,6 @@ async function rbSetBypassAllCabs(checked) {
     }
 }
 
-// Open a native file picker (Electron desktop bridge) and drop the chosen
-// path into the given text input. Falls back to manual entry when there's
-// no desktop bridge (e.g. running in a plain browser).
-async function rbBrowseForPsarc(inputId) {
-    const el = document.getElementById(inputId);
-    const picker = window.slopsmithDesktop && window.slopsmithDesktop.pickFile;
-    if (!picker) {
-        if (el) el.focus();
-        return;
-    }
-    try {
-        const path = await window.slopsmithDesktop.pickFile([
-            { name: 'Rocksmith gear archive', extensions: ['psarc'] },
-            { name: 'All Files', extensions: ['*'] },
-        ]);
-        if (path && el) el.value = path;  // null = user cancelled
-    } catch (e) {
-        console.error('[rig_builder] file picker failed:', e);
-    }
-}
-
 // Triggered from the Suggest modal: download a specific tone3000
 // capture for an rs_gear, then update any open per-song chain so
 // "Save preset" picks the new file up without a re-fetch.
@@ -10823,131 +10800,6 @@ async function rbDownloadForGear(btn, rsGear, toneId) {
         btn.disabled = false;
     }
 }
-
-// Combined "Extract everything" — runs the 3 PSARC extractors back to
-// back against ONE gears.psarc: rebuild rs_to_real.json (gear map),
-// pull every amp/pedal/rack/cab PNG, then the cab IRs. Steps 2 and 3
-// are tolerant of soft failures (e.g. Pillow missing for photos) so a
-// partial setup isn't fatal — the user still gets a usable gear map +
-// IRs, and the catalog falls back to placeholders.
-// Distill a useful one-line reason out of an extractor's failure payload.
-// The backend (extract_gear_map / extract_gear_photos / extract_irs) returns
-// `{error: "extractor failed", stderr: "...", stdout_tail: "..."}` on a
-// non-zero subprocess exit, but the script's ACTUAL reason (e.g.
-// "error: Pillow not installed", an ImportError, a traceback) lives in
-// stderr. Surface the most informative line so the user/tester sees WHY
-// instead of a generic "extractor failed", and dump the full stderr to the
-// console for deeper debugging.
-function rbExtractErrDetail(data, fallback) {
-    const base = (data && data.error) ? String(data.error) : String(fallback);
-    const stderr = (data && typeof data.stderr === 'string') ? data.stderr.trim() : '';
-    const stdoutTail = (data && typeof data.stdout_tail === 'string') ? data.stdout_tail.trim() : '';
-    let detail = '';
-    if (stderr) {
-        const lines = stderr.split('\n').map(s => s.trim()).filter(Boolean);
-        // Prefer an explicit error/exception line (scan from the end — the
-        // real cause is usually the last such line); else fall back to the
-        // very last non-empty stderr line.
-        const reversed = [...lines].reverse();
-        detail = reversed.find(l =>
-            /error|exception|traceback|not installed|no module|importerror|modulenotfound|permission|not found/i.test(l)
-        ) || lines[lines.length - 1] || '';
-        // Full stderr to the console so a tester can copy/paste it to us.
-        console.error('[rig_builder extractor stderr]\n' + stderr);
-    }
-    if (!detail && stdoutTail) {
-        const lines = stdoutTail.split('\n').map(s => s.trim()).filter(Boolean);
-        detail = lines[lines.length - 1] || '';
-    }
-    if (!detail) return base;
-    // Cap so a stray long line / traceback frame doesn't blow up the layout.
-    if (detail.length > 300) detail = detail.slice(0, 300) + '…';
-    return `${base}: ${detail}`;
-}
-
-async function rbExtractAll() {
-    const path = document.getElementById('rb-all-psarc').value.trim();
-    if (!path) return;
-    const status = document.getElementById('rb-extract-all-status');
-    status.textContent = 'Step 1/3: rebuilding gear map…';
-    let jobId = null;
-    try {
-        jobId = await rbStartCapabilityJob('rig-builder.extract-rocksmith', 'Extract Rocksmith gear map, photos, and IRs', {
-            logicalJobKey: 'rig-builder.extract-all',
-            targetKind: 'rocksmith-gears-archive',
-            targetRef: 'gears-psarc',
-        });
-        rbUpdateCapabilityJob(jobId, { mode: 'determinate', percent: 5, step: 'gear-map', message: 'Rebuilding gear map' });
-        let r = await fetch(`${RB_API}/extract_gear_map`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gears_psarc: path }),
-        });
-        let data = await r.json();
-        if (!r.ok) {
-            rbFinishCapabilityJob(jobId, false, rbExtractErrDetail(data, r.status), 'provider-failure');
-            status.innerHTML = `<span class="text-red-400">Gear map failed: ${rbEsc(rbExtractErrDetail(data, r.status))} — is this really gears.psarc?</span>`;
-            return;
-        }
-        const gearCount = data.count;
-
-        // Step 2 — gear photos. Soft failure: a missing Pillow leaves
-        // the catalog using placeholders, which is still useful.
-        status.innerHTML = `<span class="text-gray-400">Gear map: ${gearCount} entries. Step 2/3: extracting gear photos (~10-20s)…</span>`;
-        rbUpdateCapabilityJob(jobId, { mode: 'determinate', percent: 40, step: 'gear-photos', message: 'Extracting gear photos' });
-        let photosNote = '';
-        try {
-            r = await fetch(`${window.RB_API}/extract_gear_photos`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ gears_psarc: path }),
-            });
-            const photoData = await r.json();
-            if (!r.ok) {
-                photosNote = ` <span class="text-yellow-400">(photos skipped: ${rbEsc(rbExtractErrDetail(photoData, r.status))})</span>`;
-            } else {
-                photosNote = ` <span class="text-gray-500">(photos: ${photoData.total} PNGs)</span>`;
-            }
-        } catch (e) {
-            photosNote = ` <span class="text-yellow-400">(photos skipped: ${rbEsc(e.message || e)})</span>`;
-        }
-
-        // Step 3 — cab IRs.
-        status.innerHTML = `<span class="text-gray-400">Gear map: ${gearCount}${photosNote}. Step 3/3: extracting cab IRs (30-60s)…</span>`;
-        rbUpdateCapabilityJob(jobId, { mode: 'determinate', percent: 75, step: 'cab-irs', message: 'Extracting cab IRs' });
-        r = await fetch(`${RB_API}/extract_irs`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gears_psarc: path }),
-        });
-        data = await r.json();
-        if (!r.ok) {
-            rbFinishCapabilityJob(jobId, false, rbExtractErrDetail(data, r.status), 'provider-failure');
-            status.innerHTML = `<span class="text-yellow-400">Gear map OK (${gearCount})${photosNote}, but IR extraction failed: ${rbEsc(rbExtractErrDetail(data, r.status))}</span>`;
-            return;
-        }
-        status.innerHTML = `<span class="text-green-400">Done: ${gearCount} gear entries${photosNote} + ${data.count} cabs with IR. Reloading…</span>`;
-        rbFinishCapabilityJob(jobId, true, `Extracted ${gearCount} gear entries and ${data.count || 0} cab IR mappings`);
-        rbInit();
-    } catch (e) {
-        rbFinishCapabilityJob(jobId, false, e.message || e, 'provider-failure');
-        status.innerHTML = `<span class="text-red-400">${rbEsc(e.message)}</span>`;
-    }
-}
-
-// NOTE: rbNormalizeRsIrs (the "Normalize existing Rocksmith IRs"
-// button) was removed from the Settings UI because peak-normalising
-// the WAV samples didn't change the audible level — the engine
-// ignores the per-stage IR `gain` we tried to write, AND it doesn't
-// have a peak-triggered limiter that the over-unity WEM samples were
-// activating either. The real fix lives in the Cab makeup gain
-// slider, which goes through `setGain('chain', X)` (the only knob
-// the engine actually respects).
-//
-// The backend `/normalize_rocksmith_irs` endpoint and the
-// `_peak_normalize_float32` step inside extract_irs.py are kept —
-// they put the IRs into a standard ±1.0 float32 range, which is
-// good hygiene even if it doesn't move audible level.
 
 async function rbExportDefaults() {
     const status = document.getElementById('rb-export-defaults-status');

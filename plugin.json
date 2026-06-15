@@ -94,7 +94,7 @@
       "ownership": "multi-provider",
       "safety": "privileged",
       "version": 1,
-      "description": "Surfaces Rig Builder batch mapping, curated downloads, and extraction workflows as safe long-running job summaries."
+      "description": "Surfaces Rig Builder batch mapping, curated downloads, and capture import workflows as safe long-running job summaries."
     },
     "privileged-capabilities": {
       "roles": ["provider", "requester", "observer"],
@@ -105,7 +105,7 @@
       "ownership": "privileged",
       "safety": "privileged",
       "version": 1,
-      "description": "Inventories Rig Builder backend routes, media import/export, tone3000 service access, and subprocess-backed extractors for privileged diagnostics."
+      "description": "Inventories Rig Builder backend routes, media import/export, tone3000 service access, and subprocess-backed media tools for privileged diagnostics."
     }
   },
   "privileged_capabilities": [
@@ -135,17 +135,7 @@
       "roles": ["provider", "observer"],
       "operationClasses": ["media.import", "media.export", "status"],
       "riskClasses": ["local-data", "subprocess"],
-      "label": "Rocksmith gear map and IR import/export",
-      "confirmationRequirement": "required",
-      "compatibilityMode": "native"
-    },
-    {
-      "participantId": "rig_builder.extractors",
-      "surface": "subprocess",
-      "roles": ["provider", "observer"],
-      "operationClasses": ["subprocess.run", "subprocess.status"],
-      "riskClasses": ["subprocess", "local-data"],
-      "label": "Rocksmith extractor subprocesses",
+      "label": "Gear capture and IR import/export",
       "confirmationRequirement": "required",
       "compatibilityMode": "native"
     }
@@ -179,7 +169,7 @@
       "surface": "subprocess",
       "bridgeId": "privileged.legacy-subprocess",
       "operationClass": "subprocess.run",
-      "safeReason": "Extractor scripts still execute behind plugin routes and are inventoried by the privileged host."
+      "safeReason": "ffmpeg runs as a subprocess to normalize downloaded tone3000 IRs; inventoried by the privileged host."
     }
   ]
 }
