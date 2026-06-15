@@ -5936,9 +5936,13 @@ function rbMasterRenderInlineVstParams(role, idx) {
     if (params.length === 0) {
         editor.innerHTML = `
             ${header}
-            <div class="text-xs text-gray-500 italic mt-1">
-                This plugin doesn't expose any parameters to the host (or getParameters() failed).
-                Use the plugin's native editor window for tweaks.
+            <div class="text-xs text-gray-400 mt-1 space-y-1">
+                <div>This effect exposes no host-automatable parameters — that's normal
+                for some plugins (denoisers, analyzers, utilities). It's not a failure,
+                and your settings <b>can</b> still be saved.</div>
+                <div>Edit it in the plugin's own editor window, then click
+                <b>📸 Capture state</b> above — that snapshots the plugin's current
+                state into the master chain so it persists and reloads on playback.</div>
             </div>`;
         return;
     }
