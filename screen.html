@@ -65,6 +65,12 @@
     <!-- Songs (per-song chain editor) -->
     <div id="rb-tab-song" class="rb-tab-panel hidden">
         <div class="flex gap-3 mb-6">
+            <select id="rb-library-provider" onchange="rbSetLibraryProvider(this.value)"
+                    aria-label="Library source"
+                    class="bg-dark-700 border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-300 outline-none hidden"
+                    title="Library source">
+                <option value="local">My Library</option>
+            </select>
             <input type="text" id="rb-song-search" placeholder="Filename (e.g. 2minutes_p.psarc)"
                    oninput="rbOnSongSearchInput()"
                    onfocus="rbShowSongList()"

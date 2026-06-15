@@ -13,9 +13,6 @@ history). This file is the quick, self-contained orientation so a Claude
 session on a fresh machine — with none of the prior conversation or memory —
 can pick up safely.
 
-> The user communicates in **Spanish** — respond in Spanish. They like
-> concise technical trade-off tables before deciding.
-
 ---
 
 ## What this is
