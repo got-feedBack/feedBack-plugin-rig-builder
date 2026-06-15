@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Sampleg SBT-CL" — a parody-named clone of the Ampeg SVT-CL all-tube bass
-// head (Rocksmith gear "BT975B"). Preamp behaviour modeled from the documented
+// head (the game gear "BT975B"). Preamp behaviour modeled from the documented
 // SVT-CL circuit; power section from the SVT-CL service schematic (6550 tubes).
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
 #define DISTRHO_PLUGIN_NAME    "SamplegSBTCL"

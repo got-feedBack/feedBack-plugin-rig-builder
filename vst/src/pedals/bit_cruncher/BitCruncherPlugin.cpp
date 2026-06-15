@@ -1,9 +1,9 @@
 /*
- * BitCruncher - ADC0804-style lo-fi converter for Rocksmith Pedal_BitCruncher.
+ * BitCruncher - ADC0804-style lo-fi converter for the game Pedal_BitCruncher.
  *
  * Local reference: pedals/bit crusher.pdf (Beverly BitCrusher). The schematic
  * uses op-amp conditioning into an 8-bit ADC and resistor-ladder output. The
- * Rocksmith pedal adds envelope controls, so Sens/Attack/Release modulate the
+ * the game pedal adds envelope controls, so Sens/Attack/Release modulate the
  * downsample/bit-depth amount while FilterType selects the color path.
  */
 #include "DistrhoPlugin.hpp"

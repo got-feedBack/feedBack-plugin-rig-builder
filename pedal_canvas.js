@@ -4193,13 +4193,13 @@
       textC(d,.8975*W,sy2+.004*H,F.barlow,7,dim,'ECHO CANCEL'); } };
 
   // ── BOX DC30 — Vox AC30 Top Boost (head) parody. Black tolex + gold piping,
-  // 3 louver vents, diamond handle, MAROON control panel. The 6 Rocksmith
+  // 3 louver vents, diamond handle, MAROON control panel. The 6 the game
   // knobs (Gain/Treble/Bass/Mid/Pres/Bright) wear the real panel names
   // (Volume/Treble/Bass/Mid/Tone Cut/Bright). INPUTS jacks + STANDBY/POWER
   // toggles + 'A BOX PRODUCT'. Brand VOX->BOX, AC30->DC30.
   // ── BOX DC30 (Vox AC30C2, Custom series) — full front panel, 1:1 with the
   //    real amp (modelled from Vox_ac30c2.pdf). 10 knobs; the AC30 has NO Bright
-  //    / Mid / EQ control (Standby + Power are real but non-audio). Rocksmith is
+  //    / Mid / EQ control (Standby + Power are real but non-audio). the game is
   //    bridged via rs_knob_to_vst_param.json (Gain→TB Vol, Treble→Treble,
   //    Bass→Bass, Pres→Tone Cut inverted; RS Mid/Bright have no AC30 control).
   //    ids: 0 NormalVol 1 TBVol 2 Treble 3 Bass 4 RevTone 5 RevLevel

@@ -1,5 +1,5 @@
 /*
- * MARSTEN PLEXI - Marshall 1959 Super Lead 100W (Plexi/JMP) for Rocksmith's
+ * MARSTEN PLEXI - Marshall 1959 Super Lead 100W (Plexi/JMP) for the game's
  * Amp_MarshallPlexi. Parody brand "Marsten" (same as the DSL100 / GM-2 / UV-1);
  * the in-app face must never read "Marshall".
  *
@@ -15,7 +15,7 @@
  * grind, early compressing breakup) -> output transformer. PRESENCE taps the
  * power-amp NFB.
  *
- * Rocksmith: no gain knob, so RS Gain -> Loudness I (clean->crunch->roar);
+ * the game: no gain knob, so RS Gain -> Loudness I (clean->crunch->roar);
  * Treble/Bass/Mid -> tone stack, Pres -> Presence. See rs_knob_to_vst_param.json
  * (Loudness II pinned to a musical jumpered blend via _static).
  */

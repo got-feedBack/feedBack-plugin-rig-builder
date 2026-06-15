@@ -18,7 +18,7 @@
  *
  * Only ONE channel is live at a time (the Recto mutes when switching), so the
  * model configures a single signal chain from the ACTIVE channel's knobs + mode
- * in updateComponentValues(); process() just runs that chain. Rocksmith drives
+ * in updateComponentValues(); process() just runs that chain. the game drives
  * the Red channel (Modern, Bold) — its 5 knobs map 1:1 to Red Gain/Treble/Mid/
  * Bass/Presence.
  */

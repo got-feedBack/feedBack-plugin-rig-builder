@@ -1,6 +1,6 @@
 /*
  * MR. Y EMS - Dr. Z EMS (a Marshall JCM800/JTM50-style master-volume head) for
- * Rocksmith's Amp_GB50. Parody brand "Mr. Y"; the in-app face must never read
+ * the game's Amp_GB50. Parody brand "Mr. Y"; the in-app face must never read
  * "Dr. Z". Reference: the EMS is a JCM800 2204 circuit + a HI/LO gain switch.
  *
  * Cascaded 12AX7 preamp (GAIN pot between the two stages, the JCM800 drive) ->

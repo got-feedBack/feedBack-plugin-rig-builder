@@ -1,5 +1,5 @@
 /*
- * SILLA BOOGIE MARK III - Mesa/Boogie Mark III for Rocksmith's Amp_CA85
+ * SILLA BOOGIE MARK III - Mesa/Boogie Mark III for the game's Amp_CA85
  * ("Mesa Boogie Mark III Crunch"). Parody brand "Silla"; the in-app face must
  * never read "Mesa" or "Boogie".
  *
@@ -13,7 +13,7 @@
  * LEAD (Lead Drive cascade -> Lead Master), picked by the LEAD switch. 6L6/EL34
  * Simul-Class power amp (~75W) with a fixed presence NFB.
  *
- * Rocksmith: RS Gain -> LEAD DRIVE; Bass/Mid/Treble -> tone stack. See
+ * the game: RS Gain -> LEAD DRIVE; Bass/Mid/Treble -> tone stack. See
  * rs_knob_to_vst_param.json (Channel pinned LEAD + the GEQ "V" via _static).
  */
 #include "DistrhoPlugin.hpp"

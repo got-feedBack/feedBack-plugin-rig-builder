@@ -3,7 +3,7 @@
  *
  * Local references: pedals/valveecho_1.png and valveecho_2.png. Both are
  * Binson Echorec PE603T schematics: ECC83/ECC82 tube stages around a magnetic
- * drum echo with multiple playback heads and feedback switching. Rocksmith
+ * drum echo with multiple playback heads and feedback switching. the game
  * exposes Time, Feedback, and Mix; hidden head/mode controls are fixed to a
  * musical multi-head echo.
  */
@@ -196,7 +196,7 @@ class ValveEchoCore
 
     float currentDelayMs() const
     {
-        // Existing Rocksmith mapping stores Time as milliseconds / 2000.
+        // Existing the game mapping stores Time as milliseconds / 2000.
         const float ms = time * 2000.0f;
         return std::fmax(70.0f, std::fmin(ms, 1200.0f));
     }

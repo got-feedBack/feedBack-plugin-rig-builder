@@ -1,7 +1,7 @@
 #ifndef PLATE_VERB_PARAMS_H
 #define PLATE_VERB_PARAMS_H
 
-// Rocksmith Pedal_PlateVerb exposes Time, Depth, Mix, and Voice.
+// the game Pedal_PlateVerb exposes Time, Depth, Mix, and Voice.
 enum PlateVerbParamId
 {
     kTime = 0,

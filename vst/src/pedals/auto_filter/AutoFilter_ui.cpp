@@ -1,5 +1,5 @@
 /* AutoFilter stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_AutoFilter); knob count + labels from the plugin params. */
+ * the game art (Pedal_AutoFilter); knob count + labels from the plugin params. */
 #include "AutoFilterParams.h"
 #define PEDAL_TITLE  "AUTO FILTER"
 #define PEDAL_NAMES  kAutoFilterNames

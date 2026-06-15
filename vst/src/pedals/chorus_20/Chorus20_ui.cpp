@@ -1,5 +1,5 @@
 /* Chorus20 stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_Chorus20); knob count + labels from the plugin params. */
+ * the game art (Pedal_Chorus20); knob count + labels from the plugin params. */
 #include "Chorus20Params.h"
 #define PEDAL_TITLE  "CHORUS20"
 #define PEDAL_NAMES  kChorus20Names

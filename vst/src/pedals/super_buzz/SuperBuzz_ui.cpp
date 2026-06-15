@@ -1,5 +1,5 @@
 /* Super-Buzz stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_BuzzOne); knob count + labels from the plugin params. */
+ * the game art (Pedal_BuzzOne); knob count + labels from the plugin params. */
 #include "SuperBuzzParams.h"
 #define PEDAL_TITLE  "SUPER-BUZZ"
 #define PEDAL_NAMES  kSuperBuzzNames

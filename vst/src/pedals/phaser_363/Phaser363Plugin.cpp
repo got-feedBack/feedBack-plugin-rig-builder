@@ -1,8 +1,8 @@
 /*
- * Phaser363 - MXR Phase 90 style one-knob phaser for Rocksmith's Pedal_Phaser.
+ * Phaser363 - MXR Phase 90 style one-knob phaser for the game's Pedal_Phaser.
  *
  * Local reference: pedals/phaser 363.png. The schematic is a four-stage JFET
- * all-pass phase shifter with one Rate control. Rocksmith exposes the same
+ * all-pass phase shifter with one Rate control. the game exposes the same
  * single knob, so depth, feedback, and mix are fixed internally.
  */
 #include "DistrhoPlugin.hpp"

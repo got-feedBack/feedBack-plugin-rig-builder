@@ -1,7 +1,7 @@
 #ifndef STUDIO_FLANGER_PARAMS_H
 #define STUDIO_FLANGER_PARAMS_H
 
-// Rocksmith "Studio Flanger" rack — a stereo flanger. Knobs:
+// the game "Studio Flanger" rack — a stereo flanger. Knobs:
 //   Rate  = LFO speed (RS stores Hz, ~0.3 .. 0.6)
 //   Depth = sweep depth
 //   Regen = feedback / regeneration (the metallic jet)

@@ -1,5 +1,5 @@
 /* NoFiEcho stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_NoFiEcho); knob count + labels from the plugin params. */
+ * the game art (Pedal_NoFiEcho); knob count + labels from the plugin params. */
 #include "NoFiEchoParams.h"
 #define PEDAL_TITLE  "NO FI ECHO"
 #define PEDAL_NAMES  kNoFiEchoNames

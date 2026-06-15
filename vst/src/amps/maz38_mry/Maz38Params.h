@@ -2,7 +2,7 @@
 #define MAZ38_PARAMS_H
 
 /*
- * MR. Y MAZ 38 = Dr. Z Maz 38 (Senior NR) for Rocksmith's Amp_GB38. Parody brand
+ * MR. Y MAZ 38 = Dr. Z Maz 38 (Senior NR) for the game's Amp_GB38. Parody brand
  * "Mr. Y"; the in-app face must never read "Dr. Z" or "Maz".
  *
  * The Maz 38 shares the Maz line's preamp + tone stack (modelled from the Maz 18

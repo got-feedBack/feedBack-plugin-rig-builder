@@ -1,6 +1,6 @@
 /*
  * MEVE 1073 - Neve 1073 channel amplifier (class-A console preamp/EQ as a DI)
- * for Rocksmith's DI_Amp_MixerPre. Parody brand "Meve"; the in-app face must
+ * for the game's DI_Amp_MixerPre. Parody brand "Meve"; the in-app face must
  * never read "Neve".
  *
  * Local reference (modelled component-by-component):
@@ -18,7 +18,7 @@
  *    (0.36/0.7/1.6/3.2/4.8/7.2 kHz, broad class-A Q), HIGH shelf +/-16 dB
  *    fixed @ 12 kHz. A DI: no speaker model.
  *
- * Rocksmith: RS Gain -> Gain; RS Bass -> Low; RS Mid -> Mid; RS Treble -> High.
+ * the game: RS Gain -> Gain; RS Bass -> Low; RS Mid -> Mid; RS Treble -> High.
  */
 #include "DistrhoPlugin.hpp"
 #include "MeveParams.h"

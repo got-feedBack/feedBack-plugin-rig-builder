@@ -1,5 +1,5 @@
 /* StandardDistortion stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_Distortion); knob count + labels from the plugin params. */
+ * the game art (Pedal_Distortion); knob count + labels from the plugin params. */
 #include "StandardDistortionParams.h"
 #define PEDAL_TITLE  "STANDARD DISTORTION"
 #define PEDAL_NAMES  kStandardDistortionNames

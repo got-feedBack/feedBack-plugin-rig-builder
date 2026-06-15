@@ -1,7 +1,7 @@
 /*
- * Chorus - Boss CE-2 style BBD chorus for Rocksmith's Pedal_Chorus.
+ * Chorus - Boss CE-2 style BBD chorus for the game's Pedal_Chorus.
  * The local schematic is a CE-2: MN3007 BBD, MN3101 clock, TL022 LFO, and a
- * dark wet path mixed with dry. Rocksmith exposes Rate, Depth, and Mix.
+ * dark wet path mixed with dry. the game exposes Rate, Depth, and Mix.
  */
 #include "DistrhoPlugin.hpp"
 #include "ChorusParams.h"

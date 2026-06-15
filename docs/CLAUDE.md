@@ -18,7 +18,7 @@ can pick up safely.
 ## What this is
 
 `rig_builder` is a **Slopsmith** plugin. Slopsmith is an Electron
-music/guitar app. The plugin maps **Rocksmith 2014 tones** (amp + cab +
+music/guitar app. The plugin maps **the game tones** (amp + cab +
 pedals + racks) to **NAM captures + IRs from tone3000.com**, and persists
 per-song presets into the sister `nam_tone` plugin's `nam_tone.db` so the
 audio engine plays realistic neural-amp sims instead of generic synth.
@@ -119,7 +119,7 @@ Key paths:
 > amp via `gain_variants` in `rs_to_real.json`), library **Manage** tab + storage
 > subdirs + classify-by-content, **chain preloader** promoted to default (instant
 > tone switching via bypass-flip), and loudness/saturation fixes (per-NAM
-> normalization, input-gain drive into amp NAMs, L2-normalized Rocksmith IRs).
+> normalization, input-gain drive into amp NAMs, L2-normalized the game IRs).
 > Closed issues #12/#13/#14/#15. See `WHATS_NEW.md` (top) for the user summary.
 
 > **v1.1.0 (2026-05-26):** tone3000 auth is now **OAuth 2.0 + PKCE** ("Connect
@@ -162,7 +162,7 @@ All of the below is **plugin-only — no bundle edits**, so install is just
 7. **Gear catalog "Gear" tab (v3.9).** `/gear_catalog` groups mapped
    gears by type with what they're parented to + a **photo** (tone3000
    capture image via `_tone_image_index`, read from the local cache —
-   Rocksmith gear art is not available). ▶ auditions a gear in isolation
+   the game gear art is not available). ▶ auditions a gear in isolation
    (`/native_preset_one` + `rbAuditionFile`). The Suggest modal shows each
    candidate's photo + ▶ that downloads (no assign, `/audition_candidate`)
    and auditions. tone3000 has no audio-clip API, so "listen" =
@@ -212,7 +212,7 @@ See `HANDOFF.md` for the full detail and the route table.
    column migration runs automatically.
 4. Optional but needed for downloads: Settings → paste a tone3000 API key
    (`t3k_…`). Without it, deep-link mode works (manual `.nam` download).
-5. `rs_to_real.json` ships pre-generated; if this machine's Rocksmith DLC
+5. `rs_to_real.json` ships pre-generated; if this machine's the game DLC
    differs, regenerate via Settings → "Regenerate gear map" with its
    `gears.psarc`. `rs_cab_to_ir.json` references extracted RS cab IRs that
    are NOT shipped — absent ones degrade gracefully to tone3000 deep-links;

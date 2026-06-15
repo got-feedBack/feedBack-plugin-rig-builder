@@ -1,8 +1,8 @@
 #ifndef UK_WAH_PARAMS_H
 #define UK_WAH_PARAMS_H
 
-// Rocksmith "UK Wah" -> Vox V847 / Clyde McCoy style wah.
-// Same four Rocksmith controls as the other wah pedals.
+// the game "UK Wah" -> Vox V847 / Clyde McCoy style wah.
+// Same four the game controls as the other wah pedals.
 enum UKWahParamId { kAuto = 0, kPedal, kSens, kSpeed, kParamCount };
 
 static const char* const kUKWahNames[kParamCount]   = { "Auto", "Pedal", "Sens", "Speed" };

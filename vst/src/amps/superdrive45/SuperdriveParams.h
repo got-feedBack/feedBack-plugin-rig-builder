@@ -18,7 +18,7 @@
  *   - MID     pull = "MODERN" (scoops mids, lifts bass+treble; hi-gain only)
  *   - RHYTHM  pull = BRITE    (treble boost on the rhythm/clean channel)
  *
- * Rocksmith mapping (rs_knob_to_vst_param.json): RS Gain -> DRIVE (the hi-gain
+ * the game mapping (rs_knob_to_vst_param.json): RS Gain -> DRIVE (the hi-gain
  * distortion), Bass/Mid/Treble -> tone stack. Channel pinned to Hi-gain + Modern
  * ON via _static (the gain_variants were captured "Modern"); Master/Rhythm sit
  * at musical defaults. All editable by hand (incl. the three pulls on the face).

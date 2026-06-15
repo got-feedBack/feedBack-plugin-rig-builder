@@ -1,7 +1,7 @@
 #ifndef GA88_PARAMS_H
 #define GA88_PARAMS_H
 
-// "Hipzon GA-88" — Gibson GA-88S (stereo) front panel, as Rocksmith models it:
+// "Hipzon GA-88" — Gibson GA-88S (stereo) front panel, as the game models it:
 //   Volume : channel volume — drives the 4x 6BQ5 (EL84) push-pull power (~30 W
 //            stereo; modeled mono). Big clean PA-style headroom.
 //   Bass   : low end of the passive tone stack.

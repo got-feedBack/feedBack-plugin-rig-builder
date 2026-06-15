@@ -1,5 +1,5 @@
 /*
- * LOVOLT DR504 - Hiwatt DR504 "Custom Hiwatt 50" for Rocksmith's Amp_HG500.
+ * LOVOLT DR504 - Hiwatt DR504 "Custom Hiwatt 50" for the game's Amp_HG500.
  * Parody brand "Lovolt" (Hiwatt = high watt -> Lovolt = low volt; same brand as
  * the Lovolt 100). The in-app face must never read "Hiwatt".
  *
@@ -13,7 +13,7 @@
  * EL34 power amp. PRESENCE taps the NFB. Unlike a Plexi it stays clean far
  * longer; breakup comes mostly from cranking the MASTER.
  *
- * Rocksmith: RS Gain -> BRILLIANT VOL (breakup driver); Treble/Bass/Mid -> tone
+ * the game: RS Gain -> BRILLIANT VOL (breakup driver); Treble/Bass/Mid -> tone
  * stack, Pres -> Presence. See rs_knob_to_vst_param.json (input pinned BOTH).
  */
 #include "DistrhoPlugin.hpp"

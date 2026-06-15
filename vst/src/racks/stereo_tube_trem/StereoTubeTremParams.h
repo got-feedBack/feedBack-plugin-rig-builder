@@ -1,6 +1,6 @@
 #ifndef STEREO_TUBE_TREM_PARAMS_H
 #define STEREO_TUBE_TREM_PARAMS_H
-// Rocksmith "Stereo Tube Trem" rack -> tube tremolo (amplitude modulation).
+// the game "Stereo Tube Trem" rack -> tube tremolo (amplitude modulation).
 //   Speed = LFO rate   Mix = depth/intensity   Waveform = LFO shape (sine..square)
 enum StereoTubeTremParamId { kSpeed = 0, kMix, kWaveform, kParamCount };
 static const char* const kStereoTubeTremNames[kParamCount]   = { "Speed", "Mix", "Waveform" };

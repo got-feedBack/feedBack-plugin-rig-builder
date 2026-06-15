@@ -1,5 +1,5 @@
 /* ShaverPhaser stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_ShaverPhaser); knob count + labels from the plugin params. */
+ * the game art (Pedal_ShaverPhaser); knob count + labels from the plugin params. */
 #include "ShaverPhaserParams.h"
 #define PEDAL_TITLE  "SHAVER PHASER"
 #define PEDAL_NAMES  kShaverPhaserNames

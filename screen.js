@@ -1,4 +1,4 @@
-// NAM Rig Builder plugin — Rocksmith tone → NAM preset mapping UI.
+// NAM Rig Builder plugin — the game tone → NAM preset mapping UI.
 window.RB_API = window.RB_API || '/api/plugins/rig_builder';
 
 window.NAM_API = window.NAM_API || '/api/plugins/nam_tone';
@@ -212,7 +212,7 @@ function rbEnsureScopedCss() {
 //
 // The old rule was "all guitars get 8×". That fixes high-gain amps, but it
 // also pushes clean amp captures into breakup. Prefer the active amp's stored
-// Rocksmith Gain when the chain JSON has it, and fall back to the old
+// the game Gain when the chain JSON has it, and fall back to the old
 // guitar/bass split only when the chain has no useful amp metadata.
 //
 // The engine resets input gain to 1.0 on every chain reload, so we
@@ -360,18 +360,18 @@ function rbApplyChainInputDrive(opts) {
 // asymmetry without a slider — the caller passes this to rbPreLoadMute
 // so the fade-in lands at the right level for whatever this chain has.
 //
-//   active amp + Rocksmith cab IR → ×2.0 (RS cabs are raw/quiet — boost +6 dB)
+//   active amp + the game cab IR → ×2.0 (RS cabs are raw/quiet — boost +6 dB)
 //   active amp + non-RS cab IR    → ×1.0 (tone3000 IRs are already loudness-
 //                                         normalized — boosting them over-drove
 //                                         the output, the "too boosted/saturated
-//                                         without the Rocksmith cab" report)
+//                                         without the game cab" report)
 //   active amp + no cab IR        → ×0.5 (knock the raw-amp spike down)
 //   no active amp / fallback      → ×1.0 (don't change anything)
 // Extra lift for VST-amp chains (they output below the NAM loudness reference).
 const RB_VST_AMP_BOOST = 10.0;   // ~+10 dB
 // Acoustic / DI "bare" cabs (e.g. PA600C) play with NO amp, so they never get
 // the amp-path +6 dB RS-cab boost and come out too quiet. Lift an active
-// Rocksmith cab IR that has no amp in front of it. Tunable: window.__rbBareCabBoost.
+// the game cab IR that has no amp in front of it. Tunable: window.__rbBareCabBoost.
 const RB_BARE_CAB_BOOST = 2.5;   // ~+8 dB
 function rbBareCabBoostFor(chainSpec) {
     if (!Array.isArray(chainSpec)) return 1.0;
@@ -415,7 +415,7 @@ function rbChainGainTargetFor(chainSpec) {
                 if (stage.slot === 'amp') hasActiveAmp = true;
             }
             if (stage.type === 0 && stage.slot === 'amp') hasActiveVstAmp = true;
-            // type 2 = IR. A Rocksmith cab IR lives under nam_irs/rocksmith/ and
+            // type 2 = IR. A game cab IR lives under nam_irs/rocksmith/ and
             // is RAW (quiet → needs +6 dB). A tone3000 IR is already normalized
             // (boosting it is what saturated non-RS-cab tones), so 0 dB.
             if (stage.type === 2) {
@@ -431,7 +431,7 @@ function rbChainGainTargetFor(chainSpec) {
                 } else hasOtherCab = true;
             }
         }
-        // Auto makeup (dB): +6 for a Rocksmith cab, 0 for a non-RS (tone3000)
+        // Auto makeup (dB): +6 for a game cab, 0 for a non-RS (tone3000)
         // cab, -6 if amp-only; +2 per extra NAM beyond the first; capped at +18.
         // Applies to an active NAM amp OR a VST amp — the VST-amp case used to be
         // skipped, so VST-amp cabs got no boost and played far quieter than the
@@ -3294,15 +3294,15 @@ function rbRenderStatus() {
     } else {
         apiLine = '<span class="text-gray-500">not connected (deep-link mode)</span>';
     }
-    // Three states for the Rocksmith-IR line:
+    // Three states for the game-IR line:
     //   1. JSON loaded + .wav files on disk → green, count of disk-resident IRs
-    //   2. JSON loaded but no .wav (fresh install / no Rocksmith)  → yellow nudge
+    //   2. JSON loaded but no .wav (fresh install / no the game)  → yellow nudge
     //   3. No JSON at all                                          → just hidden
     let irLine = '';
     if (s.rs_cab_to_ir_loaded && s.rs_irs_on_disk > 0) {
-        irLine = `<span class="text-green-400">${s.rs_irs_on_disk} Rocksmith cab IRs on disk</span>`;
+        irLine = `<span class="text-green-400">${s.rs_irs_on_disk} cab IRs on disk</span>`;
     } else if (s.rs_cab_to_ir_loaded) {
-        irLine = '<span class="text-yellow-400">IR map loaded but the .wav files are not on disk — Settings → Extract Rocksmith IRs</span>';
+        irLine = '<span class="text-yellow-400">Cab IR map loaded, but the .wav files are not on disk.</span>';
     }
     el.innerHTML = `
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-3 text-xs text-gray-500 flex flex-wrap gap-x-4 gap-y-1">
@@ -3843,7 +3843,7 @@ async function rbOpenSuggest(rsGear, queryOverride = '', gearsOverride = '') {
 
             <!-- Editable query controls. The user can override what
                  the plugin sends to tone3000 — useful when the
-                 auto-generated query (a Rocksmith pseudonym) doesn't
+                 auto-generated query (a game pseudonym) doesn't
                  match anything real. "Search" re-runs in place;
                  "Save override" persists the discovery to
                  rs_to_real.json so future batches benefit. -->
@@ -4107,7 +4107,7 @@ async function rbAutoDownloadSong(filename, unmappedCount, container) {
         }
         const parts = [];
         if (result.downloaded) parts.push(`${result.downloaded} downloaded`);
-        if (result.rs_ir_used) parts.push(`${result.rs_ir_used} Rocksmith IRs`);
+        if (result.rs_ir_used) parts.push(`${result.rs_ir_used} IRs`);
         if (result.skipped_assigned) parts.push(`${result.skipped_assigned} reused`);
         if (result.skipped_no_candidate) parts.push(`${result.skipped_no_candidate} unmatched`);
         if (result.failed) parts.push(`${result.failed} failed`);
@@ -4185,13 +4185,13 @@ async function rbMaterializeFromCloud(filename, statusEl) {
 //   │            │ Gain: [clean][crunch][dist] ↺ auto     │
 //   │            │ 🔁 Swap…   ⬇ Replace file              │
 //   │            │ ⬅ position ➡   ✗ Remove                │
-//   │            │ Rocksmith knobs: Rate=50 …             │
+//   │            │ the game knobs: Rate=50 …             │
 //   ├ Footer ─────────────────────────────────────────────┤
 //   │ ＋ Add piece                       ▶ Listen  💾 Save │
 //   └─────────────────────────────────────────────────────┘
 //
 // Photos come from RB_API/gear_photo/<rs_gear> served by routes.py
-// (Rocksmith art extracted via extract_gear_photos.py). Missing photos
+// (the game art extracted via extract_gear_photos.py). Missing photos
 // fall back to a small text placeholder via onerror.
 //
 // Selection state lives on rbState.editor; it's cleared when a new
@@ -4354,7 +4354,7 @@ function rbRenderPieceCard(p, toneIdx, pIdx, isSelected, total) {
     // When bypassed, drop the photo to grayscale + dim it so the card
     // visually reads as "off" — pairs nicely with the dimmed status dot.
     const imgBypassCls = bypassed ? 'grayscale opacity-40' : '';
-    // Photo lookup: backend returns 404 when no Rocksmith art exists for
+    // Photo lookup: backend returns 404 when no the game art exists for
     // this rs_gear. The onerror swaps the broken <img> for the sibling
     // placeholder via plain DOM properties — avoids HTML-in-attribute
     // escaping bugs.
@@ -4448,7 +4448,7 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
 
     // Cab mic-position picker — clickable buttons per mic resolved
     // from rs_cab_mic_map (Dynamic Cone, Condenser Edge, Tube Off-axis,
-    // …). Falls back to the legacy "Rocksmith IR (N):" filename dropdown
+    // …). Falls back to the legacy "the game IR (N):" filename dropdown
     // for cabs whose mic_variants the extractor couldn't resolve
     // (e.g. the user hasn't re-run extract_irs since we added the map).
     let rsIrControl = '';
@@ -4472,7 +4472,7 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
             <div class="bg-sky-900/15 border border-sky-800/30 rounded p-2.5 mt-2">
                 <div class="flex items-center gap-2 mb-1.5">
                     <span class="text-xs text-sky-400">🎙 Mic position</span>
-                    <span class="text-[10px] text-gray-500">Rocksmith-extracted IRs — click to switch</span>
+                    <span class="text-[10px] text-gray-500">Cab IRs — click to switch</span>
                 </div>
                 <div class="flex items-center gap-1.5 flex-wrap">${btns}</div>
             </div>`;
@@ -4482,7 +4482,7 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
         const options = rsIrs.map(f => `<option value="${rbEsc(f)}">${rbEsc(f.split('/').pop())}</option>`).join('');
         rsIrControl = `
             <div class="flex items-center gap-2 bg-green-900/15 border border-green-800/30 rounded px-2 py-1.5 mt-2">
-                <span class="text-xs text-green-400 whitespace-nowrap">Rocksmith IR (${rsIrs.length}):</span>
+                <span class="text-xs text-green-400 whitespace-nowrap">IR (${rsIrs.length}):</span>
                 <select onchange="rbPickRsIr(this, ${toneIdx}, ${pIdx})"
                         class="flex-1 bg-dark-800 border border-gray-800 rounded text-xs text-gray-300 px-1 py-0.5">${options}</select>
                 <button onclick="rbAssignRsIr(this, ${toneIdx}, ${pIdx})"
@@ -4519,7 +4519,7 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
             </div>`;
     }
 
-    // RS knob badges — read-only summary of Rocksmith's per-piece values.
+    // RS knob badges — read-only summary of the game's per-piece values.
     const rsKnobs = p.knobs || {};
     const knobNames = Object.keys(rsKnobs);
     let rsKnobsBlock = '';
@@ -4531,7 +4531,7 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
         }).join('');
         rsKnobsBlock = `
             <div class="bg-dark-900/30 border border-gray-800/40 rounded p-2.5 mt-2">
-                <div class="text-[10px] text-gray-500 mb-1.5">Rocksmith knob values (read-only)</div>
+                <div class="text-[10px] text-gray-500 mb-1.5">Knob values (read-only)</div>
                 <div class="flex flex-wrap">${pairs}</div>
             </div>`;
     }
@@ -4987,7 +4987,7 @@ async function rbToneEditVst(toneIdx, pIdx) {
             const v  = param.value ?? param.current;
             if (id != null && typeof v === 'number') piece._vst_params[id] = v;
         }
-        // Auto-apply this song's Rocksmith knob mapping when the tone has NO
+        // Auto-apply this song's the game knob mapping when the tone has NO
         // captured/saved state yet — so the editor opens reflecting the song's
         // settings instead of plugin defaults. (The manual "Apply RS settings"
         // button still lets you re-apply or override.) Skipped when a curated
@@ -6083,7 +6083,7 @@ async function rbOpenMasterAddPiecePicker(role) {
             _rbGearsCatalog = (data && data.gears) || [];
         } catch (_) { _rbGearsCatalog = []; }
     }
-    // Initialise per-picker state. Defaults: Rocksmith section, DAW
+    // Initialise per-picker state. Defaults: the game section, DAW
     // category that makes sense for each master role.
     picker._rbSection = 'rocksmith';
     picker._rbDawCat = role === 'pre' ? 'compression' : 'reverb';
@@ -6104,7 +6104,7 @@ function rbRenderMasterAddPicker(role, picker) {
             <button onclick="rbMasterAddPickerSetSection('${role}', 'rocksmith')"
                     class="px-3 py-1 rounded text-xs transition ${section === 'rocksmith'
                         ? `bg-${accent}-700 text-white` : 'bg-dark-700 hover:bg-dark-600 text-gray-300'}">
-                🎸 Rocksmith gear <span class="opacity-60 ml-1">${(_rbGearsCatalog || []).length}</span>
+                🎸 Gear <span class="opacity-60 ml-1">${(_rbGearsCatalog || []).length}</span>
             </button>
             <button onclick="rbMasterAddPickerSetSection('${role}', 'vst')"
                     class="px-3 py-1 rounded text-xs transition ${section === 'vst'
@@ -6116,7 +6116,7 @@ function rbRenderMasterAddPicker(role, picker) {
         </div>`;
     let body;
     if (section === 'rocksmith') {
-        body = rbBuildRocksmithPickerBody({
+        body = rbBuildGearPickerBody({
             dawCat, filter: rsFilter,
             onCategoryCall: (k) => `rbMasterAddPickerSetDawCat('${role}', '${rbEsc(k)}')`,
             onFilterCall:   `rbMasterAddPickerSetRsFilter('${role}', this.value)`,
@@ -6480,14 +6480,14 @@ function rbDawCategoryForVst(p) {
     return 'other';
 }
 
-// Per-tone Add picker — now with two top sections: Rocksmith vs VST.
+// Per-tone Add picker — now with two top sections: the game vs VST.
 //
-// The Rocksmith section browses rs_to_real.json grouped by DAW-style
+// The the game section browses rs_to_real.json grouped by DAW-style
 // subcategories so users find pieces the way they'd look in any DAW
 // plugin browser. The VST section lists installed plugins from the
 // engine's scan + a paste-path input, so the user can drop a "pure VST"
 // (e.g. a limiter) straight into the chain without having to first
-// map it to some Rocksmith pedal.
+// map it to some the game pedal.
 //
 // State stored on the modal element so the picker survives re-renders
 // (used by the filter inputs which re-render the whole picker on every
@@ -6503,7 +6503,7 @@ function rbRenderAddPiecePicker(modal, toneIdx, filename) {
             <button onclick="rbAddPickerSetSection(${toneIdx}, '${rbEsc(safeFile)}', 'rocksmith')"
                     class="px-3 py-1 rounded text-xs transition ${section === 'rocksmith'
                         ? 'bg-emerald-700 text-white' : 'bg-dark-700 hover:bg-dark-600 text-gray-300'}">
-                🎸 Rocksmith gear <span class="opacity-60 ml-1">${(_rbGearsCatalog || []).length}</span>
+                🎸 Gear <span class="opacity-60 ml-1">${(_rbGearsCatalog || []).length}</span>
             </button>
             <button onclick="rbAddPickerSetSection(${toneIdx}, '${rbEsc(safeFile)}', 'vst')"
                     class="px-3 py-1 rounded text-xs transition ${section === 'vst'
@@ -6516,7 +6516,7 @@ function rbRenderAddPiecePicker(modal, toneIdx, filename) {
         </div>`;
     let body;
     if (section === 'rocksmith') {
-        body = rbBuildRocksmithPickerBody({
+        body = rbBuildGearPickerBody({
             dawCat, filter: rsFilter,
             onCategoryCall: (k) => `rbAddPickerSetDawCat(${toneIdx}, '${rbEsc(safeFile)}', '${rbEsc(k)}')`,
             onFilterCall:   `rbAddPickerSetRsFilter(${toneIdx}, '${rbEsc(safeFile)}', this.value)`,
@@ -6580,12 +6580,12 @@ function rbAddPickerSetVstFilter(toneIdx, filename, value) {
     rbRenderAddPiecePicker(modal, toneIdx, filename);
 }
 
-// ── Shared section bodies (Rocksmith + VST) ──
+// ── Shared section bodies (the game + VST) ──
 // Both bodies receive the rendering context as inline onclick strings
 // so they work in the per-tone picker AND the master-chain picker
 // without needing closures over the caller.
 
-function rbBuildRocksmithPickerBody({ dawCat, filter, onCategoryCall, onFilterCall, onAddCall, searchId }) {
+function rbBuildGearPickerBody({ dawCat, filter, onCategoryCall, onFilterCall, onAddCall, searchId }) {
     const f = rbNorm(filter || '').trim();
     const matches = (_rbGearsCatalog || []).filter(g => {
         if ((g.daw_category || 'other') !== dawCat) return false;
@@ -6719,7 +6719,7 @@ async function rbAddPiece(toneIdx, filename, rsGearType, category) {
     rbAfterChainEdit(toneIdx);
 }
 
-// Add a "pure VST" piece — no Rocksmith mapping required. Generates a
+// Add a "pure VST" piece — no the game mapping required. Generates a
 // synthetic rs_gear_type from the plugin name so the row still has a
 // unique identifier downstream (preset_pieces.rs_gear_type is NOT NULL),
 // and pre-fills the VST assignment so the user doesn't need to click
@@ -6884,9 +6884,9 @@ function rbRenderVstPanelBody(toneIdx, pIdx, currentVstPath, currentFormat) {
                 ▶ Load &amp; Edit
             </button>
             <button onclick="rbApplyRsSettingsToVst(${toneIdx}, ${pIdx})"
-                    title="Apply this song's Rocksmith knob values to the VST params (requires a curated mapping in rs_knob_to_vst_param.json)"
+                    title="Apply this song's knob values to the VST params (requires a curated mapping in rs_knob_to_vst_param.json)"
                     class="bg-cyan-700/70 hover:bg-cyan-600/70 text-cyan-100 text-xs px-2 py-1 rounded">
-                ⇶ Apply RS settings
+                ⇶ Apply song settings
             </button>
             <button onclick="rbCaptureVstState(${toneIdx}, ${pIdx})"
                     title="Capture the current parameter state of the VST in the engine"
@@ -6903,7 +6903,7 @@ function rbRenderVstPanelBody(toneIdx, pIdx, currentVstPath, currentFormat) {
 
 // Pure compute of the RS-knob→VST-param values for a piece (no engine calls).
 // Fetches the curated mapping for (rs_gear, vst) and translates this piece's
-// Rocksmith knob values + any `_static` pins into a {paramId: value} dict.
+// the game knob values + any `_static` pins into a {paramId: value} dict.
 // Returns null when there's no curated mapping. Shared by the manual "Apply
 // RS settings" button and the auto-apply on editor open.
 async function rbComputeRsMappedParams(rsGearType, rsKnobs, vstStem, paramsList) {
@@ -6979,7 +6979,7 @@ async function rbApplyRsSettingsToVst(toneIdx, pIdx) {
         return setStatus(`mapping lookup failed: ${e.message || e}`);
     }
     if (!mapping) {
-        return setStatus(`No curated mapping for ${piece.type} × ${vstStem}. Replicate manually using the "Rocksmith settings" panel above, then curate rs_knob_to_vst_param.json so future songs auto-apply.`);
+        return setStatus(`No curated mapping for ${piece.type} × ${vstStem}. Replicate manually using the knob-values panel above, then curate rs_knob_to_vst_param.json so future songs auto-apply.`);
     }
     // Resolve VST param IDs once (faster + tolerates name vs index in the table).
     let paramsList = piece._vst_param_meta || [];
@@ -8922,7 +8922,7 @@ function rbRenderCatalogCard(g) {
     // Header (always visible): photo · full name · rs_gear · status pill
     //   ▸ The full name no longer truncates — it wraps over 2 lines so
     //     "Marshall JCM800 2203" et al. stay readable.
-    //   ▸ Rocksmith gear photo (/gear_photo/{rs_gear}) first; if the
+    //   ▸ the game gear photo (/gear_photo/{rs_gear}) first; if the
     //     RS extraction hasn't been run, fall back to the tone3000
     //     capture image when the curator has assigned one.
     //
@@ -8955,14 +8955,14 @@ function rbRenderCatalogCard(g) {
         assignedLine = `<div class="text-xs text-gray-500">(unassigned)</div>`;
     }
 
-    // Rocksmith art with tone3000 image as a fallback. The sibling-swap
+    // the game art with tone3000 image as a fallback. The sibling-swap
     // trick avoids the HTML-in-attribute escaping issue we hit in the
     // song editor — onerror just hides this img and reveals the next
     // sibling, which is the next photo source down the chain.
     const rsArt = `${window.RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}${_RB_GEAR_PHOTO_CB}`;
     const onerrChain = "this.style.display='none'; var n=this.nextElementSibling; if(n){ if(n.tagName==='IMG'){n.style.display=''} else {n.classList.remove('hidden')} }";
     // For gears we've built a VST canvas UI for, show the recreated plugin
-    // face as the thumbnail (instead of the Rocksmith art). dataURL renders
+    // face as the thumbnail (instead of the game art). dataURL renders
     // off-screen at default knob values; if fonts haven't loaded yet the one
     // re-render kicked off by RBPedalCanvas.ready() (see rbApplyGearFilters)
     // repaints it correctly.
@@ -9376,7 +9376,7 @@ async function rbInspectAmpVariant(rsGear, level) {
         }
         // Order matters: the capture's title (which encodes knob
         // settings like "G7 B5 M5 T5 P5 V5") is what the user reads to
-        // match a Rocksmith gain level — put it first. Size/license
+        // match a game gain level — put it first. Size/license
         // are secondary metadata tail-tagged.
         select.innerHTML = `<option value="">(pick a capture for this level)</option>` +
             caps.map(c => {
@@ -9570,7 +9570,7 @@ const _RB_LIB_CATEGORY_LABEL = {
     pedals:    '🎛 Pedals',
     racks:     '📦 Racks',
     cabs:      '🔊 Cabs',
-    rocksmith: '🎮 Rocksmith IRs',
+    rocksmith: '🎮 Cab IRs',
     other:     '… Other',
 };
 
@@ -10587,7 +10587,7 @@ async function rbLoadSettings() {
     // setting is still `curated_only`; the UI just shows the opposite.
     const allowFuzzy = document.getElementById('rb-allow-tone3000-fallback');
     if (allowFuzzy) allowFuzzy.checked = !s.curated_only;
-    // "Bypass all Rocksmith cabs" — reflects the persisted setting; toggling
+    // "Bypass all the game cabs" — reflects the persisted setting; toggling
     // it POSTs to /settings which bulk-flips preset_pieces.bypassed for cabs.
     const bypassCabs = document.getElementById('rb-bypass-all-cabs');
     if (bypassCabs) bypassCabs.checked = !!s.bypass_all_cabs;
@@ -10705,12 +10705,12 @@ async function rbSetAllowTone3000Fallback(checked) {
     } catch (e) { /* best-effort */ }
 }
 
-// "Bypass all Rocksmith cabs" toggle. Posting bypass_all_cabs to /settings
+// "Bypass all the game cabs" toggle. Posting bypass_all_cabs to /settings
 // bulk-flips preset_pieces.bypassed for every cabinet stage (backend side-
 // effect), so every tone skips its RS cab and the user can add their own.
 async function rbSetBypassAllCabs(checked) {
     const status = document.getElementById('rb-bypass-all-cabs-status');
-    if (status) status.textContent = checked ? 'Bypassing every Rocksmith cab…' : 'Re-enabling Rocksmith cabs…';
+    if (status) status.textContent = checked ? 'Bypassing every cab…' : 'Re-enabling cabs…';
     try {
         const r = await fetch(`${window.RB_API}/settings`, {
             method: 'POST',
@@ -10719,8 +10719,8 @@ async function rbSetBypassAllCabs(checked) {
         });
         if (!r.ok) throw new Error('save failed');
         if (status) status.textContent = checked
-            ? '✓ All Rocksmith cabs bypassed. Add your own cab/IR per tone; reopen the song to hear it.'
-            : '✓ Rocksmith cabs re-enabled.';
+            ? '✓ All cabs bypassed. Add your own cab/IR per tone; reopen the song to hear it.'
+            : '✓ Cabs re-enabled.';
     } catch (e) {
         if (status) status.textContent = '⚠ Could not save — try again.';
     }

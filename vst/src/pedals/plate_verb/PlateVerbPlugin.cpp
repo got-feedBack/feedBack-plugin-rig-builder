@@ -1,7 +1,7 @@
 /*
- * PlateVerb - EMT 140-style plate reverb for Rocksmith Pedal_PlateVerb.
+ * PlateVerb - EMT 140-style plate reverb for the game Pedal_PlateVerb.
  *
- * Local reference: pedals/plate reverb.jpg. The useful Rocksmith contract is
+ * Local reference: pedals/plate reverb.jpg. The useful the game contract is
  * Time, Depth, Mix, and Voice, so this uses the shared dense reverb tank with a
  * shorter, brighter plate voicing and a binary normal/bright Voice switch.
  */

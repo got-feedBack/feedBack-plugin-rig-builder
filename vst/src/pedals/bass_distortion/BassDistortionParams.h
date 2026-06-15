@@ -1,7 +1,7 @@
 #ifndef BASS_DISTORTION_PARAMS_H
 #define BASS_DISTORTION_PARAMS_H
 
-// Rocksmith "Bass Distortion" -> Pro Co RAT. The RAT is an LM308 op-amp with
+// the game "Bass Distortion" -> Pro Co RAT. The RAT is an LM308 op-amp with
 // huge gain into a pair of hard silicon clipping diodes, then its signature
 // passive "Filter" low-pass. Real knobs are Distortion / Filter / Volume; RS
 // exposes Gain / Tone / Filter, so:

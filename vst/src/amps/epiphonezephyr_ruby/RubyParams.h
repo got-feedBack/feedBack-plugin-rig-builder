@@ -2,7 +2,7 @@
 #define RUBY_PARAMS_H
 
 // "Epicall Ruby" — Epiphone (Danelectro-built) Electar Zephyr Amp20, ~1949, as
-// Rocksmith models it (3 knobs):
+// the game models it (3 knobs):
 //   Volume : the instrument volume — drives the 2x 6L6G push-pull (~20 W); cranks
 //            into warm vintage breakup.
 //   Bass   : low end of the passive tone stack.

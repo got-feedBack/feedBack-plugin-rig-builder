@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "PeeBee T-Minus" — a parody-named clone of the Peavey T-Max two-channel bass
-// head (Rocksmith gear "BT600B"). Dual preamp (12AX7 tube + solid-state),
+// head (the game gear "BT600B"). Dual preamp (12AX7 tube + solid-state),
 // shelving + 7-band graphic EQ, and a biamp Balance/X-Over, modeled from the
 // Peavey T-Max preamp schematic (Peavey Electronics drawing 70985).
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

@@ -2,7 +2,7 @@
 """Bulk-assign the curated PRIMARY VST suggestion to every preset_piece.
 
 The catalog files (`rs_gear_to_vst.json` + `rs_knob_to_vst_param.json`)
-only SUGGEST plugins — they don't change the actual chain. Each Rocksmith
+only SUGGEST plugins — they don't change the actual chain. Each the game
 tone in `nam_tone.db` keeps `kind='nam'` on its pedal slots until the
 user manually clicks ⚙ VST + Assign in the Gear catalog. For 27 pedals ×
 hundreds of songs, that's not workable.
@@ -320,7 +320,7 @@ def main() -> int:
     print(f"Done: {updated} preset_pieces row(s) updated.")
     print(f"Recomputed primaries for {len(affected_presets)} preset(s).")
     print("Run apply_vst_state.py for the same gear, then reload affected songs")
-    print("so the post-load setParameter path applies the saved Rocksmith knobs.")
+    print("so the post-load setParameter path applies the saved the game knobs.")
     return 0
 
 

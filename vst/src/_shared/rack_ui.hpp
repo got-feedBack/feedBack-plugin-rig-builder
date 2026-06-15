@@ -1,7 +1,7 @@
 /*
- * Shared 1U-rack-style UI for the bundled Rocksmith rack VSTs (DPF NanoVG).
+ * Shared 1U-rack-style UI for the bundled the game rack VSTs (DPF NanoVG).
  *
- * Draws a horizontal rack face like the real Rocksmith rack art: dark metal
+ * Draws a horizontal rack face like the real the game rack art: dark metal
  * face with rack ears + screws at both ends, a POWER button, a coloured
  * sub-panel holding the knobs, a green LCD nameplate, and a decorative INPUT
  * knob on the right. Knobs are rotary with vertical-drag editing.

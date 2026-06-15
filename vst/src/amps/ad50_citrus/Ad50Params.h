@@ -14,7 +14,7 @@
  * 30W Class A = earlier breakup, more compression). Thick midrange-forward Orange
  * voice with more gain/saturation than the OR100/OR50.
  *
- * Rocksmith (Amp_OrangeAD50): RS Gain -> GAIN, Bass/Treble -> the 2-band EQ,
+ * the game (Amp_OrangeAD50): RS Gain -> GAIN, Bass/Treble -> the 2-band EQ,
  * Presence -> Presence. Master + Sustain + Class A pinned to musical defaults via
  * _static; all editable by hand.
  */

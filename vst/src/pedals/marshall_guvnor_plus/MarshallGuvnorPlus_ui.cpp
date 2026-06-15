@@ -1,5 +1,5 @@
 /* MarshallGuvnorPlus stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_MarshallGuvnorPlus); knob count + labels from the plugin params. */
+ * the game art (Pedal_MarshallGuvnorPlus); knob count + labels from the plugin params. */
 #include "MarshallGuvnorPlusParams.h"
 #define PEDAL_TITLE  "MARSHALL GUVNOR PLUS"
 #define PEDAL_NAMES  kMarshallGuvnorPlusNames

@@ -22,7 +22,7 @@
  * Panel (1:1, left->right): PRESENCE, BASS, MIDDLE, TREBLE, LOUDNESS I (High
  * Treble channel), LOUDNESS II (Normal channel) + Power/Standby toggles.
  *
- * Rocksmith mapping (rs_knob_to_vst_param.json): the Plexi has no gain knob, so
+ * the game mapping (rs_knob_to_vst_param.json): the Plexi has no gain knob, so
  * RS Gain -> Loudness I (drives clean->crunch->roar, matching the gain_variants
  * G3/G5/G10 split). Treble/Bass/Mid -> tone stack, Pres -> Presence. Loudness II
  * sits at a musical blend via _static (the jumpered voice) and stays editable.

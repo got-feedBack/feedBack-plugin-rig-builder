@@ -19,7 +19,7 @@ static inline float eqParamToDb(float v) { return (v - 0.5f) * (2.0f * EQ_DB); }
 // that: a constant-0dB-peak bandpass per band, run in PARALLEL, each scaled
 // by g = 10^(dB/20) - 1 and added to the dry. This reproduces the GE-7's two
 // signature traits — adjacent bands INTERACT (they sum, not cascade) and
-// boost/cut are ASYMMETRIC. Band frequencies are Rocksmith's (= choosing the
+// boost/cut are ASYMMETRIC. Band frequencies are the game's (= choosing the
 // gyrator/series cap values); Q ≈ 1.4 gives the GE-7's ~1-octave bandwidth.
 struct GyratorBP {
     float b0, b2, a1, a2, x1, x2, y1, y2;   // RBJ bandpass, constant 0 dB peak (b1 = 0)

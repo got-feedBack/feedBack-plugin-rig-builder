@@ -1,10 +1,10 @@
 /*
  * ModernFlanger - Moog MF-108M/Cluster-Flux style BBD flanger for
- * Rocksmith's Pedal_ModernFlanger.
+ * the game's Pedal_ModernFlanger.
  *
  * Local reference: pedals/modern flange.pdf. The schematic shows a short BBD
  * delay line, 6th-order low-pass filters, LM13700 direct/delay mix VCAs, and
- * feedback controlled by a CV VCA. Rocksmith exposes Rate, Depth, Regen, Mix.
+ * feedback controlled by a CV VCA. the game exposes Rate, Depth, Regen, Mix.
  */
 #include "DistrhoPlugin.hpp"
 #include "ModernFlangerParams.h"

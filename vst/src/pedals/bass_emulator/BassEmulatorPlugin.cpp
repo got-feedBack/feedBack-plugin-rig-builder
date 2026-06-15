@@ -1,7 +1,7 @@
 /*
- * BassEmulator - guitar-to-bass emulator for Rocksmith Pedal_BassEmulator.
+ * BassEmulator - guitar-to-bass emulator for the game Pedal_BassEmulator.
  *
- * No exact schematic is available. The Rocksmith artwork exposes Body and
+ * No exact schematic is available. The the game artwork exposes Body and
  * Tone, so this model uses a fixed -12 semitone pitch shifter and then voices
  * only that shifted signal as a dark bass. Keeping the octave shift fixed
  * avoids the false low notes that pitch trackers can produce on transients.

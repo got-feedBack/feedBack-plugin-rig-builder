@@ -1,5 +1,5 @@
 /*
- * CITRUS OR50 - Orange OR50 (vintage Graphic head) for Rocksmith's
+ * CITRUS OR50 - Orange OR50 (vintage Graphic head) for the game's
  * Amp_OrangeOR50. Parody brand "Citrus"; the in-app face must never read "Orange".
  *
  * Local references (modelled component-by-component / reconstructed):
@@ -16,7 +16,7 @@
  * -> ECC81 long-tail PI -> 2x EL34 (~50W, FULL or HALF power) -> output. A thick,
  * midrange-forward "Orange" voice (the doom/stoner chunk). VOLUME is the master.
  *
- * Rocksmith: RS Gain -> GAIN; Bass/Mid/Treble -> tone stack. See
+ * the game: RS Gain -> GAIN; Bass/Mid/Treble -> tone stack. See
  * rs_knob_to_vst_param.json (Volume + Depth pinned via _static).
  */
 #include "DistrhoPlugin.hpp"

@@ -1,5 +1,5 @@
 /* AmpTrem stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_AmpTrem); knob count + labels from the plugin params. */
+ * the game art (Pedal_AmpTrem); knob count + labels from the plugin params. */
 #include "AmpTremParams.h"
 #define PEDAL_TITLE  "AMP TREM"
 #define PEDAL_NAMES  kAmpTremNames

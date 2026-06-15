@@ -1,5 +1,5 @@
 /*
- * MARSTEN DSL15 - Marshall DSL15H (15 W head) for Rocksmith's Amp_MarshallDSL15H.
+ * MARSTEN DSL15 - Marshall DSL15H (15 W head) for the game's Amp_MarshallDSL15H.
  * Parody brand "Marsten" (matches the GM-2 / UV-1 Marshall-copy pedals and the
  * larger Marsten DSL100); the in-app face must never read "Marshall".
  *
@@ -22,7 +22,7 @@
  *   DEEP switch  : low-frequency power-amp resonance boost
  *   power amp    : Presence (high NFB)
  *
- * Rocksmith: RS Gain -> ULTRA GAIN (Channel pinned Ultra). Bass/Mid/Treble ->
+ * the game: RS Gain -> ULTRA GAIN (Channel pinned Ultra). Bass/Mid/Treble ->
  * tone stack, Pres -> Presence. See rs_knob_to_vst_param.json.
  */
 #include "DistrhoPlugin.hpp"
@@ -242,7 +242,7 @@ class Dsl15Core
     {
         chS = smoothstep(channel);
         // Channel/drive morph. Classic side sweeps clean->crunch via Classic
-        // Gain; Ultra side is the high-gain OD via Ultra Gain. Rocksmith drives
+        // Gain; Ultra side is the high-gain OD via Ultra Gain. the game drives
         // the Ultra channel (Channel pinned 1), so a low Ultra Gain lands in the
         // hot edge and a high one in the searing DSL15 lead.
         const float classicM = 0.03f + 0.48f * classicGain;   // ~0.03..0.51

@@ -1,9 +1,9 @@
 /*
  * EightiesFlanger - MXR Flanger Original style SAD1024 BBD flanger for
- * Rocksmith's Pedal_80sFlanger.
+ * the game's Pedal_80sFlanger.
  *
  * Local reference: pedals/80s flanger.jpg. The schematic exposes Regen,
- * Sweep/Manual, and Width around a SAD1024 delay line. Rocksmith exposes only
+ * Sweep/Manual, and Width around a SAD1024 delay line. the game exposes only
  * Rate, Depth, and Mix, so regeneration and center delay are voiced internally.
  */
 #include "DistrhoPlugin.hpp"

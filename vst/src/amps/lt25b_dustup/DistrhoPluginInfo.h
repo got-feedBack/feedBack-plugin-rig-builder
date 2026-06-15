@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Dustup CDN" — a parody-named clone of the Ashdown ABM EVO (Bass Magnifier)
-// bass head (Rocksmith gear "LT25B"). ECC83 Valve Drive + Bass/Middle/Treble +
+// bass head (the game gear "LT25B"). ECC83 Valve Drive + Bass/Middle/Treble +
 // 6-band graphic EQ + Sub-octave + compressor, modeled from the Ashdown ABM500
 // EVO preamp schematic (APC010).
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

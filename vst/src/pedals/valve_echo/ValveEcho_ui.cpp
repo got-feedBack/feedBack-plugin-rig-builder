@@ -1,5 +1,5 @@
 /* ValveEcho stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_ValveEcho); knob count + labels from the plugin params. */
+ * the game art (Pedal_ValveEcho); knob count + labels from the plugin params. */
 #include "ValveEchoParams.h"
 #define PEDAL_TITLE  "VALVE ECHO"
 #define PEDAL_NAMES  kValveEchoNames

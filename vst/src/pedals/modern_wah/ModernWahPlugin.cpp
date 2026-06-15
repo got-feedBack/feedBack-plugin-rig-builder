@@ -1,5 +1,5 @@
 /*
- * ModernWah - Morley Bad Horsie / optical contour wah for Rocksmith
+ * ModernWah - Morley Bad Horsie / optical contour wah for the game
  * Pedal_ModernWah.
  *
  * The local schematic is a Morley switchless contour wah: optical sweep,
@@ -47,7 +47,7 @@ class OpticalWah
         atk = msCoef(3.0f, fs);
         rel = msCoef(95.0f, fs);
 
-        // Rocksmith uses many high Speed values (77-100) on Modern Wah.
+        // the game uses many high Speed values (77-100) on Modern Wah.
         // The previous 0.16..7.96 Hz range made those presets chatter like a
         // fast LFO; keep the optical auto sweep responsive but cap it lower.
         const float rateHz = 0.10f + std::pow(speed, 1.45f) * 3.45f;

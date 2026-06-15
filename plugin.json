@@ -72,7 +72,7 @@
       "ownership": "multi-provider",
       "safety": "sensitive",
       "version": 1,
-      "description": "Coordinates Rocksmith tone chains into native NAM/VST/IR audio-effects routes while keeping model, IR, preset, and path internals private."
+      "description": "Coordinates song tone chains into native NAM/VST/IR audio-effects routes while keeping model, IR, preset, and path internals private."
     },
     "playback": {
       "roles": ["observer"],
@@ -163,7 +163,7 @@
       "surface": "media-import-export",
       "bridgeId": "privileged.legacy-media-import-export",
       "operationClass": "media.import",
-      "safeReason": "Rocksmith gear-map and IR extraction are visible user-triggered media import workflows."
+      "safeReason": "Gear capture import/export (tone3000 downloads) are visible user-triggered media import workflows."
     },
     {
       "surface": "subprocess",

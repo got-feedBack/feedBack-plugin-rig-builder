@@ -1,5 +1,5 @@
 /* BakedRotatoe stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_BakedRotatoe); knob count + labels from the plugin params. */
+ * the game art (Pedal_BakedRotatoe); knob count + labels from the plugin params. */
 #include "BakedRotatoeParams.h"
 #define PEDAL_TITLE  "BAKED ROTATOE"
 #define PEDAL_NAMES  kBakedRotatoeNames

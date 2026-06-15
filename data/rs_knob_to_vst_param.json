@@ -1,6 +1,6 @@
 {
  "_meta": {
-  "description": "Translation table: Rocksmith gear knob \u2192 VST parameter. Curated around Kilohearts Essentials (free) \u2014 consistent param names across the entire bundle.",
+  "description": "Translation table: the game gear knob \u2192 VST parameter. Curated around Kilohearts Essentials (free) \u2014 consistent param names across the entire bundle.",
   "version": 5,
   "updated": "2026-06-09",
   "schema": {
@@ -86,7 +86,7 @@
    "Rate": {
     "param": "Rate",
     "scale": 0.1666666667,
-    "_hint": "Rocksmith base Chorus Rate is stored around 0..6; normalize that to the CE-2 style LFO range."
+    "_hint": "the game base Chorus Rate is stored around 0..6; normalize that to the CE-2 style LFO range."
    },
    "Depth": {
     "param": "Depth",
@@ -116,7 +116,7 @@
    "Rate": {
     "param": "Rate",
     "scale": 0.1666666667,
-    "_hint": "Rocksmith base Chorus Rate is stored around 0..6; normalize that to the CE-2 style LFO range."
+    "_hint": "the game base Chorus Rate is stored around 0..6; normalize that to the CE-2 style LFO range."
    },
    "Depth": {
     "param": "Depth",
@@ -133,7 +133,7 @@
    "Rate": {
     "param": "Rate",
     "scale": 0.1,
-    "_hint": "Rocksmith Chorus 2 Rate is stored as 0..10, so the bundled plugin receives Rate/10 and applies its BBD speed curve internally."
+    "_hint": "the game Chorus 2 Rate is stored as 0..10, so the bundled plugin receives Rate/10 and applies its BBD speed curve internally."
    },
    "Depth": {
     "param": "Depth",
@@ -163,7 +163,7 @@
    "Rate": {
     "param": "Rate",
     "scale": 0.1,
-    "_hint": "Rocksmith Chorus 2 Rate is stored as 0..10, so the bundled plugin receives Rate/10 and applies its BBD speed curve internally."
+    "_hint": "the game Chorus 2 Rate is stored as 0..10, so the bundled plugin receives Rate/10 and applies its BBD speed curve internally."
    },
    "Depth": {
     "param": "Depth",
@@ -180,7 +180,7 @@
    "Rate": {
     "param": "Rate",
     "scale": 0.1,
-    "_hint": "Rocksmith Digital Chorus Rate is stored as a small 0..10-ish value, so the bundled plugin receives Rate/10 and applies its digital LFO curve internally."
+    "_hint": "the game Digital Chorus Rate is stored as a small 0..10-ish value, so the bundled plugin receives Rate/10 and applies its digital LFO curve internally."
    },
    "Depth": {
     "param": "Depth",
@@ -220,7 +220,7 @@
    "Rate": {
     "param": "Rate",
     "scale": 0.1,
-    "_hint": "Rocksmith Digital Chorus Rate is stored as a small 0..10-ish value, so the bundled plugin receives Rate/10 and applies its digital LFO curve internally."
+    "_hint": "the game Digital Chorus Rate is stored as a small 0..10-ish value, so the bundled plugin receives Rate/10 and applies its digital LFO curve internally."
    },
    "Depth": {
     "param": "Depth",
@@ -247,7 +247,7 @@
    "Rate": {
     "param": "Rate",
     "scale": 0.1,
-    "_hint": "Rocksmith Vintage/Analog Chorus Rate is stored around 1..2, so the bundled plugin receives Rate/10 and keeps the LFO in a slow analog range."
+    "_hint": "the game Vintage/Analog Chorus Rate is stored around 1..2, so the bundled plugin receives Rate/10 and keeps the LFO in a slow analog range."
    },
    "Depth": {
     "param": "Depth",
@@ -277,7 +277,7 @@
    "Rate": {
     "param": "Rate",
     "scale": 0.1,
-    "_hint": "Rocksmith Vintage/Analog Chorus Rate is stored around 1..2, so the bundled plugin receives Rate/10 and keeps the LFO in a slow analog range."
+    "_hint": "the game Vintage/Analog Chorus Rate is stored around 1..2, so the bundled plugin receives Rate/10 and keeps the LFO in a slow analog range."
    },
    "Depth": {
     "param": "Depth",
@@ -356,7 +356,7 @@
     "param": "Clones",
     "scale": 0.01,
     "offset": 0.1,
-    "_hint": "Rocksmith uses low Clones values like 1/11/35. Treat 1 as 'one audible clone' rather than 1%; the plugin's internal curve then turns larger values into more/spread-out voices."
+    "_hint": "the game uses low Clones values like 1/11/35. Treat 1 as 'one audible clone' rather than 1%; the plugin's internal curve then turns larger values into more/spread-out voices."
    },
    "Depth": {
     "param": "Depth",
@@ -372,7 +372,7 @@
     "param": "Clones",
     "scale": 0.01,
     "offset": 0.1,
-    "_hint": "Rocksmith uses low Clones values like 1/11/35. Treat 1 as 'one audible clone' rather than 1%; the plugin's internal curve then turns larger values into more/spread-out voices."
+    "_hint": "the game uses low Clones values like 1/11/35. Treat 1 as 'one audible clone' rather than 1%; the plugin's internal curve then turns larger values into more/spread-out voices."
    },
    "Depth": {
     "param": "Depth",
@@ -571,7 +571,7 @@
    "Regen": {
     "param": "Regen",
     "scale": 0.01,
-    "_hint": "Rocksmith calls the feedback control Regen; the bundled MF-108M style flanger uses it as BBD feedback/regeneration."
+    "_hint": "the game calls the feedback control Regen; the bundled MF-108M style flanger uses it as BBD feedback/regeneration."
    },
    "Feedback": {
     "param": "Regen",
@@ -639,7 +639,7 @@
    "Regen": {
     "param": "Regen",
     "scale": 0.01,
-    "_hint": "Rocksmith calls the feedback control Regen; the bundled MF-108M style flanger uses it as BBD feedback/regeneration."
+    "_hint": "the game calls the feedback control Regen; the bundled MF-108M style flanger uses it as BBD feedback/regeneration."
    },
    "Feedback": {
     "param": "Regen",
@@ -1039,7 +1039,7 @@
    "Mix": {
     "param": "Mix",
     "scale": 0.01,
-    "_hint": "Rocksmith Tremolo Mix is the depth/intensity control for the bundled Colorsound-style tremolo."
+    "_hint": "the game Tremolo Mix is the depth/intensity control for the bundled Colorsound-style tremolo."
    }
   },
   "bertom_freetremolo": {
@@ -1080,7 +1080,7 @@
    "Depth": {
     "param": "Depth",
     "scale": 0.01,
-    "_hint": "Rocksmith Amp Trem Depth maps directly to the optical gain-reduction depth."
+    "_hint": "the game Amp Trem Depth maps directly to the optical gain-reduction depth."
    }
   },
   "bertom_freetremolo": {
@@ -1118,7 +1118,7 @@
    "Depth": {
     "param": "Depth",
     "scale": 0.01,
-    "_hint": "Rocksmith Amp Trem Depth maps directly to the optical gain-reduction depth."
+    "_hint": "the game Amp Trem Depth maps directly to the optical gain-reduction depth."
    }
   }
  },
@@ -1131,7 +1131,7 @@
    "Mix": {
     "param": "Mix",
     "scale": 0.01,
-    "_hint": "Rocksmith Multi Trem Mix is tremolo depth."
+    "_hint": "the game Multi Trem Mix is tremolo depth."
    },
    "Waveform": {
     "param": "Waveform",
@@ -1174,7 +1174,7 @@
    "Mix": {
     "param": "Mix",
     "scale": 0.01,
-    "_hint": "Rocksmith Multi Trem Mix is tremolo depth."
+    "_hint": "the game Multi Trem Mix is tremolo depth."
    },
    "Waveform": {
     "param": "Waveform",
@@ -1244,7 +1244,7 @@
    "Time": {
     "param": "Time",
     "scale": 0.01,
-    "_hint": "Rocksmith Time controls the digital reverb decay."
+    "_hint": "the game Time controls the digital reverb decay."
    },
    "Mix": {
     "param": "Mix",
@@ -1253,12 +1253,12 @@
    "Depth": {
     "param": "Depth",
     "scale": 0.01,
-    "_hint": "Rocksmith Depth controls digital room depth, pre-delay and tail density."
+    "_hint": "the game Depth controls digital room depth, pre-delay and tail density."
    },
    "Tone": {
     "param": "Tone",
     "scale": 0.01,
-    "_hint": "Rocksmith Tone controls brightness/damping."
+    "_hint": "the game Tone controls brightness/damping."
    }
   },
   "khs reverb": {
@@ -1287,7 +1287,7 @@
    "Time": {
     "param": "Time",
     "scale": 0.01,
-    "_hint": "Rocksmith Time controls the digital reverb decay."
+    "_hint": "the game Time controls the digital reverb decay."
    },
    "Mix": {
     "param": "Mix",
@@ -1296,12 +1296,12 @@
    "Depth": {
     "param": "Depth",
     "scale": 0.01,
-    "_hint": "Rocksmith Depth controls digital room depth, pre-delay and tail density."
+    "_hint": "the game Depth controls digital room depth, pre-delay and tail density."
    },
    "Tone": {
     "param": "Tone",
     "scale": 0.01,
-    "_hint": "Rocksmith Tone controls brightness/damping."
+    "_hint": "the game Tone controls brightness/damping."
    }
   }
  },
@@ -1310,12 +1310,12 @@
    "Time": {
     "param": "Time",
     "scale": 0.01,
-    "_hint": "Rocksmith Time controls plate decay."
+    "_hint": "the game Time controls plate decay."
    },
    "Depth": {
     "param": "Depth",
     "scale": 0.01,
-    "_hint": "Rocksmith Depth controls plate size, diffusion, and wet modulation."
+    "_hint": "the game Depth controls plate size, diffusion, and wet modulation."
    },
    "Mix": {
     "param": "Mix",
@@ -1324,7 +1324,7 @@
    "Voice": {
     "param": "Voice",
     "scale": 1.0,
-    "_hint": "Rocksmith Voice is a 0/1 normal/bright plate voicing switch."
+    "_hint": "the game Voice is a 0/1 normal/bright plate voicing switch."
    }
   },
   "khs reverb": {
@@ -1353,12 +1353,12 @@
    "Time": {
     "param": "Time",
     "scale": 0.01,
-    "_hint": "Rocksmith Time controls plate decay."
+    "_hint": "the game Time controls plate decay."
    },
    "Depth": {
     "param": "Depth",
     "scale": 0.01,
-    "_hint": "Rocksmith Depth controls plate size, diffusion, and wet modulation."
+    "_hint": "the game Depth controls plate size, diffusion, and wet modulation."
    },
    "Mix": {
     "param": "Mix",
@@ -1367,7 +1367,7 @@
    "Voice": {
     "param": "Voice",
     "scale": 1.0,
-    "_hint": "Rocksmith Voice is a 0/1 normal/bright plate voicing switch."
+    "_hint": "the game Voice is a 0/1 normal/bright plate voicing switch."
    }
   }
  },
@@ -1380,7 +1380,7 @@
    "Depth": {
     "param": "Depth",
     "scale": 0.01,
-    "_hint": "Rocksmith Tube Spring Depth controls dwell, tank decay, and spring drip intensity."
+    "_hint": "the game Tube Spring Depth controls dwell, tank decay, and spring drip intensity."
    }
   },
   "khs reverb": {
@@ -1401,7 +1401,7 @@
    "Depth": {
     "param": "Depth",
     "scale": 0.01,
-    "_hint": "Rocksmith Tube Spring Depth controls dwell, tank decay, and spring drip intensity."
+    "_hint": "the game Tube Spring Depth controls dwell, tank decay, and spring drip intensity."
    }
   }
  },
@@ -1518,7 +1518,7 @@
    "Time": {
     "param": "Time",
     "scale": 0.0005,
-    "_hint": "RS Time is milliseconds. NpnDelay stores it as ms / 2000 and clamps internally to a DM-2 style 20-420 ms range so Rocksmith presets around 396 ms survive."
+    "_hint": "RS Time is milliseconds. NpnDelay stores it as ms / 2000 and clamps internally to a DM-2 style 20-420 ms range so the game presets around 396 ms survive."
    },
    "Feedback": {
     "param": "Feedback",
@@ -1533,7 +1533,7 @@
    "Time": {
     "param": "Time",
     "scale": 0.0005,
-    "_hint": "RS Time is milliseconds. NpnDelay stores it as ms / 2000 and clamps internally to a DM-2 style 20-420 ms range so Rocksmith presets around 396 ms survive."
+    "_hint": "RS Time is milliseconds. NpnDelay stores it as ms / 2000 and clamps internally to a DM-2 style 20-420 ms range so the game presets around 396 ms survive."
    },
    "Feedback": {
     "param": "Feedback",
@@ -1837,7 +1837,7 @@
    "Voice": {
     "param": "Voice",
     "scale": 1.0,
-    "_hint": "Rocksmith Voice is a binary 0/1 switch. CustomDrive treats <0.5 as the smoother voice and >=0.5 as the tighter/brighter voice."
+    "_hint": "the game Voice is a binary 0/1 switch. CustomDrive treats <0.5 as the smoother voice and >=0.5 as the tighter/brighter voice."
    }
   },
   "khs distortion": {
@@ -1877,7 +1877,7 @@
    "Voice": {
     "param": "Voice",
     "scale": 1.0,
-    "_hint": "Rocksmith Voice is a binary 0/1 switch. CustomDrive treats <0.5 as the smoother voice and >=0.5 as the tighter/brighter voice."
+    "_hint": "the game Voice is a binary 0/1 switch. CustomDrive treats <0.5 as the smoother voice and >=0.5 as the tighter/brighter voice."
    }
   }
  },
@@ -1922,7 +1922,7 @@
    "Middle": {
     "param": "Mid",
     "scale": 0.01,
-    "_hint": "Alias for Rocksmith exports that spell the GV-2 middle control as Middle."
+    "_hint": "Alias for the game exports that spell the GV-2 middle control as Middle."
    },
    "Treble": {
     "param": "Treble",
@@ -1949,7 +1949,7 @@
    "Middle": {
     "param": "Mid",
     "scale": 0.01,
-    "_hint": "Alias for Rocksmith exports that spell the GV-2 middle control as Middle."
+    "_hint": "Alias for the game exports that spell the GV-2 middle control as Middle."
    },
    "Treble": {
     "param": "Treble",
@@ -3167,7 +3167,7 @@
    "Filter": {
     "param": "Filter",
     "scale": 1.0,
-    "_hint": "Rocksmith Filter is a binary 0/1 voicing switch."
+    "_hint": "the game Filter is a binary 0/1 voicing switch."
    }
   },
   "khs filter": {
@@ -3204,7 +3204,7 @@
    "Filter": {
     "param": "Filter",
     "scale": 1.0,
-    "_hint": "Rocksmith Filter is a binary 0/1 voicing switch."
+    "_hint": "the game Filter is a binary 0/1 voicing switch."
    }
   }
  },
@@ -4094,12 +4094,12 @@
    "Attack": {
     "param": "Attack",
     "scale": 0.01,
-    "_hint": "Rocksmith Attack controls the envelope rise time for dynamic crushing."
+    "_hint": "the game Attack controls the envelope rise time for dynamic crushing."
    },
    "FilterType": {
     "param": "FilterType",
     "scale": 0.125,
-    "_hint": "Rocksmith stores FilterType as selector values 3/4/8; /8 preserves the mode positions."
+    "_hint": "the game stores FilterType as selector values 3/4/8; /8 preserves the mode positions."
    },
    "Mix": {
     "param": "Mix",
@@ -4108,12 +4108,12 @@
    "Release": {
     "param": "Release",
     "scale": 0.01,
-    "_hint": "Rocksmith Release controls the envelope fall time for dynamic crushing."
+    "_hint": "the game Release controls the envelope fall time for dynamic crushing."
    },
    "Sens": {
     "param": "Sens",
     "scale": 0.01,
-    "_hint": "Rocksmith Sens controls how hard the input drives the bit depth and sample-rate reduction."
+    "_hint": "the game Sens controls how hard the input drives the bit depth and sample-rate reduction."
    }
   },
   "khs bitcrush": {
@@ -4169,12 +4169,12 @@
    "Smash": {
     "param": "Smash",
     "scale": 0.01,
-    "_hint": "Rocksmith Smash controls heavy compression ratio, makeup and saturation."
+    "_hint": "the game Smash controls heavy compression ratio, makeup and saturation."
    },
    "Rate": {
     "param": "Rate",
     "scale": 0.01,
-    "_hint": "Rocksmith Rate controls compressor recovery speed; higher is faster."
+    "_hint": "the game Rate controls compressor recovery speed; higher is faster."
    }
   },
   "khs filter": {
@@ -4191,12 +4191,12 @@
    "Smash": {
     "param": "Smash",
     "scale": 0.01,
-    "_hint": "Rocksmith Smash controls heavy compression ratio, makeup and saturation."
+    "_hint": "the game Smash controls heavy compression ratio, makeup and saturation."
    },
    "Rate": {
     "param": "Rate",
     "scale": 0.01,
-    "_hint": "Rocksmith Rate controls compressor recovery speed; higher is faster."
+    "_hint": "the game Rate controls compressor recovery speed; higher is faster."
    }
   }
  },
@@ -4245,24 +4245,24 @@
    "Limit": {
     "param": "Limit",
     "scale": 0.01,
-    "_hint": "Rocksmith sends 0-100-ish limiter amount. The plugin uses an internal threshold curve so low library values still limit audibly."
+    "_hint": "the game sends 0-100-ish limiter amount. The plugin uses an internal threshold curve so low library values still limit audibly."
    },
    "Rate": {
     "param": "Rate",
     "scale": 0.01,
-    "_hint": "Recovery speed; higher Rocksmith Rate recovers faster."
+    "_hint": "Recovery speed; higher the game Rate recovers faster."
    }
   },
   "lm-2": {
    "Limit": {
     "param": "Limit",
     "scale": 0.01,
-    "_hint": "Rocksmith sends 0-100-ish limiter amount. The plugin uses an internal threshold curve so low library values still limit audibly."
+    "_hint": "the game sends 0-100-ish limiter amount. The plugin uses an internal threshold curve so low library values still limit audibly."
    },
    "Rate": {
     "param": "Rate",
     "scale": 0.01,
-    "_hint": "Recovery speed; higher Rocksmith Rate recovers faster."
+    "_hint": "Recovery speed; higher the game Rate recovers faster."
    }
   }
  },
@@ -4271,7 +4271,7 @@
    "Sens": {
     "param": "Sens",
     "scale": 0.01,
-    "_hint": "Rocksmith Sens controls detector drive for the envelope tremolo."
+    "_hint": "the game Sens controls detector drive for the envelope tremolo."
    },
    "Attack": {
     "param": "Attack",
@@ -4284,7 +4284,7 @@
    "Mix": {
     "param": "Mix",
     "scale": 0.01,
-    "_hint": "Rocksmith Mix controls tremolo depth."
+    "_hint": "the game Mix controls tremolo depth."
    }
   },
   "mtremolo": {
@@ -4308,7 +4308,7 @@
    "Sens": {
     "param": "Sens",
     "scale": 0.01,
-    "_hint": "Rocksmith Sens controls detector drive for the envelope tremolo."
+    "_hint": "the game Sens controls detector drive for the envelope tremolo."
    },
    "Attack": {
     "param": "Attack",
@@ -4321,7 +4321,7 @@
    "Mix": {
     "param": "Mix",
     "scale": 0.01,
-    "_hint": "Rocksmith Mix controls tremolo depth."
+    "_hint": "the game Mix controls tremolo depth."
    }
   }
  },
@@ -4381,12 +4381,12 @@
    "Mix": {
     "param": "Mix",
     "scale": 0.01,
-    "_hint": "Rocksmith Multi Vib Mix controls wet/depth intensity."
+    "_hint": "the game Multi Vib Mix controls wet/depth intensity."
    },
    "Waveform": {
     "param": "Waveform",
     "scale": 1.0,
-    "_hint": "Rocksmith Waveform is selector-like here; value 1 selects the stronger VB-2 LFO/rise character."
+    "_hint": "the game Waveform is selector-like here; value 1 selects the stronger VB-2 LFO/rise character."
    },
    "Wave": {
     "param": "Waveform",
@@ -4425,12 +4425,12 @@
    "Mix": {
     "param": "Mix",
     "scale": 0.01,
-    "_hint": "Rocksmith Multi Vib Mix controls wet/depth intensity."
+    "_hint": "the game Multi Vib Mix controls wet/depth intensity."
    },
    "Waveform": {
     "param": "Waveform",
     "scale": 1.0,
-    "_hint": "Rocksmith Waveform is selector-like here; value 1 selects the stronger VB-2 LFO/rise character."
+    "_hint": "the game Waveform is selector-like here; value 1 selects the stronger VB-2 LFO/rise character."
    },
    "Wave": {
     "param": "Waveform",
@@ -4461,7 +4461,7 @@
    "Wave": {
     "param": "Wave",
     "scale": 0.01,
-    "_hint": "Rocksmith Wave shapes the Supervibe LFO and sharper rotary/vibe character."
+    "_hint": "the game Wave shapes the Supervibe LFO and sharper rotary/vibe character."
    }
   },
   "mvibrato": {
@@ -4503,7 +4503,7 @@
    "Wave": {
     "param": "Wave",
     "scale": 0.01,
-    "_hint": "Rocksmith Wave shapes the Supervibe LFO and sharper rotary/vibe character."
+    "_hint": "the game Wave shapes the Supervibe LFO and sharper rotary/vibe character."
    }
   }
  },
@@ -4512,7 +4512,7 @@
    "Sens": {
     "param": "Sens",
     "scale": 0.01,
-    "_hint": "Rocksmith Sens controls envelope sensitivity."
+    "_hint": "the game Sens controls envelope sensitivity."
    },
    "Attack": {
     "param": "Attack",
@@ -4525,7 +4525,7 @@
    "Mix": {
     "param": "Mix",
     "scale": 0.01,
-    "_hint": "Rocksmith Mix controls wet vibrato amount."
+    "_hint": "the game Mix controls wet vibrato amount."
    }
   },
   "mvibrato": {
@@ -4550,7 +4550,7 @@
    "Sens": {
     "param": "Sens",
     "scale": 0.01,
-    "_hint": "Rocksmith Sens controls envelope sensitivity."
+    "_hint": "the game Sens controls envelope sensitivity."
    },
    "Attack": {
     "param": "Attack",
@@ -4563,7 +4563,7 @@
    "Mix": {
     "param": "Mix",
     "scale": 0.01,
-    "_hint": "Rocksmith Mix controls wet vibrato amount."
+    "_hint": "the game Mix controls wet vibrato amount."
    }
   }
  },
@@ -4572,24 +4572,24 @@
    "Body": {
     "param": "Body",
     "scale": 0.01,
-    "_hint": "Rocksmith Body controls the octave-down body and low-end weight."
+    "_hint": "the game Body controls the octave-down body and low-end weight."
    },
    "Tone": {
     "param": "Tone",
     "scale": 0.01,
-    "_hint": "Rocksmith Tone controls the bass-emulator brightness."
+    "_hint": "the game Tone controls the bass-emulator brightness."
    }
   },
   "bass emulator": {
    "Body": {
     "param": "Body",
     "scale": 0.01,
-    "_hint": "Rocksmith Body controls the octave-down body and low-end weight."
+    "_hint": "the game Body controls the octave-down body and low-end weight."
    },
    "Tone": {
     "param": "Tone",
     "scale": 0.01,
-    "_hint": "Rocksmith Tone controls the bass-emulator brightness."
+    "_hint": "the game Tone controls the bass-emulator brightness."
    }
   }
  },
@@ -5423,7 +5423,7 @@
     "Rectifier": 1.0,
     "Output": 0.6,
     "Red Master": 0.55,
-    "_note": "Pinned for Rocksmith: Channel = RED, Red Mode = MODERN (the metal voice), Rectifier = BOLD (tight silicon), Output + Red Master at the loudness reference. Green/Orange knobs keep their plugin defaults."
+    "_note": "Pinned for the game: Channel = RED, Red Mode = MODERN (the metal voice), Rectifier = BOLD (tight silicon), Output + Red Master at the loudness reference. Green/Orange knobs keep their plugin defaults."
    }
   }
  },
@@ -5506,7 +5506,7 @@
  },
  "Amp_CS90": {
   "jc90": {
-   "_hint": "Ronald JC-90 = the full Roland JC-90 'Jazz Chorus' panel (solid-state). RS Gain drives DISTORTION (clean at 0 -> gritty diode drive). Treble/Mid/Bass -> tone stack, Pres -> Hi-Treble. Reverb + Chorus are pinned OFF for songs (Rocksmith adds those via its own pedals/racks) and stay editable by hand.",
+   "_hint": "Ronald JC-90 = the full Roland JC-90 'Jazz Chorus' panel (solid-state). RS Gain drives DISTORTION (clean at 0 -> gritty diode drive). Treble/Mid/Bass -> tone stack, Pres -> Hi-Treble. Reverb + Chorus are pinned OFF for songs (the game adds those via its own pedals/racks) and stay editable by hand.",
    "Gain": {
     "param": "Distortion",
     "scale": 0.01,
@@ -5538,7 +5538,7 @@
     "Chorus": 0.5,
     "Rate": 0.4,
     "Depth": 0.5,
-    "_note": "Volume at the loudness reference; Reverb off and Chorus = OFF (the 3-way midpoint) for songs \u2014 Rocksmith brings its own reverb/chorus. All editable by hand (Chorus 1.0 = the iconic stereo chorus, 0.0 = vibrato)."
+    "_note": "Volume at the loudness reference; Reverb off and Chorus = OFF (the 3-way midpoint) for songs \u2014 the game brings its own reverb/chorus. All editable by hand (Chorus 1.0 = the iconic stereo chorus, 0.0 = vibrato)."
    }
   }
  },
@@ -5583,7 +5583,7 @@
     "Speed": 0.3,
     "Depth": 0.0,
     "Master": 0.72,
-    "_note": "Controls Rocksmith songs don't set, pinned to the reference: Input jumpered to Both so RS Mid (-> Normal Vol) can blend the Normal channel in, reverb level off (tone centred), tremolo off (speed parked), Master at the calibrated ~0.40 RMS loudness reference."
+    "_note": "Controls the game songs don't set, pinned to the reference: Input jumpered to Both so RS Mid (-> Normal Vol) can blend the Normal channel in, reverb level off (tone centred), tremolo off (speed parked), Master at the calibrated ~0.40 RMS loudness reference."
    }
   }
  },
@@ -5659,7 +5659,7 @@
    "Res": {
     "param": "Resonance",
     "scale": 0.01,
-    "_hint": "RS Res -> power-amp resonance / deep (low-frequency NFB). Falls back to the _static default if Rocksmith exposes no Res knob."
+    "_hint": "RS Res -> power-amp resonance / deep (low-frequency NFB). Falls back to the _static default if the game exposes no Res knob."
    },
    "_static": {
     "Classic Gain": 0.12,
@@ -5677,7 +5677,7 @@
     "Master 2": 0.5,
     "Master Sel": 0.0,
     "Output": 1.0,
-    "_note": "Gain->Channel sweeps the morph: Classic Gain low (clean at Channel=0) + Ultra Gain high (hot at Channel=1) so one knob covers clean->crunch->ultra. Modes = Clean / OD1, Tone Shift ON by default (the scooped DSL voicing Rocksmith tones are built around), reverb off, masters at the loudness reference, High (100W) output. Per-channel Vol + masters stay editable by hand."
+    "_note": "Gain->Channel sweeps the morph: Classic Gain low (clean at Channel=0) + Ultra Gain high (hot at Channel=1) so one knob covers clean->crunch->ultra. Modes = Clean / OD1, Tone Shift ON by default (the scooped DSL voicing the game tones are built around), reverb off, masters at the loudness reference, High (100W) output. Per-channel Vol + masters stay editable by hand."
    }
   }
  },
@@ -5723,7 +5723,7 @@
     "Gain 2": 0.5,
     "Burn Vol": 0.5,
     "Reverb": 0.0,
-    "_note": "Controls Rocksmith songs don't set: the Vintage channel EQ + Burn Gain/Volume sit at musical defaults so the Gain-driven channel morph and the Burn tone stack do the work. Reverb off."
+    "_note": "Controls the game songs don't set: the Vintage channel EQ + Burn Gain/Volume sit at musical defaults so the Gain-driven channel morph and the Burn tone stack do the work. Reverb off."
    }
   }
  },
@@ -6205,7 +6205,7 @@
     "Reverb A": 0.0,
     "Depth B": 0.0,
     "Depth A": 0.0,
-    "_note": "LEAD channel (B), Level at noon, onboard reverb + chorus OFF for songs (Rocksmith adds its own). Switch to Channel A / dial reverb + chorus on the face by hand."
+    "_note": "LEAD channel (B), Level at noon, onboard reverb + chorus OFF for songs (the game adds its own). Switch to Channel A / dial reverb + chorus on the face by hand."
    }
   }
  },

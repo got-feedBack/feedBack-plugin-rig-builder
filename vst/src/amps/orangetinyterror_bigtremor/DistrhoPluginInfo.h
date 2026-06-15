@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Citrus Big Tremor" — a parody-named clone of the Orange Tiny Terror single-
-// channel all-tube guitar head (Rocksmith gear "OrangeTinyTerror"). Two 12AX7
+// channel all-tube guitar head (the game gear "OrangeTinyTerror"). Two 12AX7
 // gain stages + passive tone + 2x EL84 cathode-biased push-pull, modeled from
 // the Tiny Terror schematic + panel.
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

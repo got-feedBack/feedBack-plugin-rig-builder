@@ -49,7 +49,7 @@ from common import (
 )
 
 
-# Maps each level to the Rocksmith Gain knob range that triggers it.
+# Maps each level to the game Gain knob range that triggers it.
 # Matches the curation CSV / HANDOFF schema; change here if the engine
 # ever reads the knob on a different scale.
 LEVEL_RANGES = {

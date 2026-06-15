@@ -28,7 +28,7 @@
  * Panel (1:1, left->right): PRESENCE, BASS, MIDDLE, TREBLE, LOUDNESS 1 (High
  * Treble channel), LOUDNESS 2 (Normal channel) + Power/Standby toggles.
  *
- * Rocksmith mapping (rs_knob_to_vst_param.json): the JTM45 has no gain knob, so
+ * the game mapping (rs_knob_to_vst_param.json): the JTM45 has no gain knob, so
  * RS Gain -> LOUDNESS 1 (the High-Treble channel volume = the breakup driver,
  * clean -> crunch -> roar). Treble/Bass/Mid -> tone stack, Pres -> Presence.
  * kInput = Bright(0) / Both-jumpered(0.5) / Normal(1), like the Plexi.

@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Epicall Centura" — a parody-named clone of the Epiphone Electar Century
-// (75th reissue) all-tube guitar head (Rocksmith gear "EpiphoneElectarCentury").
+// (75th reissue) all-tube guitar head (the game gear "EpiphoneElectarCentury").
 // Two 12AX7 stages + passive tone + input voicing + 2x 6V6 push-pull, modeled
 // from the Century 75th-reissue schematic + panel.
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

@@ -8,7 +8,7 @@
  * high-passed so the low end stays solid and the feedback can't build up a
  * muddy sub rumble — only the highs flange. Delay range tuned for bass, not
  * the BF-2's guitar BBD clock values.
- * Rocksmith knobs: Rate, Depth, Filter (= Resonance/feedback), Mix.
+ * the game knobs: Rate, Depth, Filter (= Resonance/feedback), Mix.
  */
 #include "DistrhoPlugin.hpp"
 #include "BassFlangerParams.h"

@@ -7,7 +7,7 @@ __pycache__/
 
 # Derived from gears.psarc — regenerate locally via
 # `python3 extract_gear_photos.py /path/to/gears.psarc`.
-# Not redistributed because the art belongs to Rocksmith.
+# Not redistributed because the art belongs to the game.
 # Photos now live under assets/; legacy flat paths kept for old checkouts.
 assets/amp_photos/
 assets/guitar_amp_photos/

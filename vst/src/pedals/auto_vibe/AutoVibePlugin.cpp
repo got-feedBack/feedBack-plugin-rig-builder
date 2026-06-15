@@ -1,7 +1,7 @@
 /*
- * AutoVibe - envelope-controlled vibrato/vibe for Rocksmith Pedal_AutoVibe.
+ * AutoVibe - envelope-controlled vibrato/vibe for the game Pedal_AutoVibe.
  *
- * No exact schematic is available. The Rocksmith pedal has Sens, Attack,
+ * No exact schematic is available. The the game pedal has Sens, Attack,
  * Release, and Mix, so this models an auto-vibrato where the input envelope
  * brings in a BBD-style modulated delay. Attack and Release shape how the vibe
  * blooms after the note.

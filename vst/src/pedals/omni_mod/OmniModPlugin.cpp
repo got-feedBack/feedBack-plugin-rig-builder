@@ -1,10 +1,10 @@
 /*
  * OmniMod - Uni-Vibe/Shin-ei style photocell phase modulation for
- * Rocksmith's Pedal_OmniMod.
+ * the game's Pedal_OmniMod.
  *
  * Local references: pedals/omnimod_1.gif and pedals/omnimod_2.jpg. The
  * schematic family uses four phase stages driven by a lamp/LDR oscillator.
- * Rocksmith exposes Rate, Depth, and Mix.
+ * the game exposes Rate, Depth, and Mix.
  */
 #include "DistrhoPlugin.hpp"
 #include "OmniModParams.h"

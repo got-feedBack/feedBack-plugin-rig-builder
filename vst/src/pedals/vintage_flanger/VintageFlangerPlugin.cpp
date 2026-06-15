@@ -1,10 +1,10 @@
 /*
  * VintageFlanger - Deluxe Electric Mistress style BBD flanger for
- * Rocksmith's Pedal_VintageFlanger.
+ * the game's Pedal_VintageFlanger.
  *
  * Local reference: pedals/vintage flanger.jpg. The schematic shows RD5106A
  * BBD delay, LM324 triangle LFO/range control, and a fixed Color feedback
- * path. Rocksmith exposes only Rate, Depth, and Mix, so Color is voiced
+ * path. the game exposes only Rate, Depth, and Mix, so Color is voiced
  * internally.
  */
 #include "DistrhoPlugin.hpp"
@@ -215,7 +215,7 @@ public:
         float delayMs = baseMs + rangeMs * shaped;
         delayMs = std::fmax(0.48f, std::fmin(13.5f, delayMs));
 
-        // Deluxe Electric Mistress Color is not a Rocksmith knob here. Keep a
+        // Deluxe Electric Mistress Color is not a game knob here. Keep a
         // fixed moderate negative feedback so low Mix presets still flange.
         const float color = 0.24f + 0.22f * d + 0.16f * m;
         const float write = softClip(x - fbState * color);

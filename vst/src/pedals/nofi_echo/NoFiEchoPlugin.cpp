@@ -1,9 +1,9 @@
 /*
- * NoFiEcho - DE7-style stereo lo-fi echo for Rocksmith's Pedal_NoFiEcho.
+ * NoFiEcho - DE7-style stereo lo-fi echo for the game's Pedal_NoFiEcho.
  *
  * Local reference: pedals/nofi echo.png. The schematic is an Ibanez DE7 style
  * digital delay/echo: switched delay range/mode, delay level, repeat, output
- * buffering, and stereo output. Rocksmith exposes Time, Feedback, and Mix, so
+ * buffering, and stereo output. the game exposes Time, Feedback, and Mix, so
  * the hidden mode is fixed to a warm Echo voice with stereo spread.
  */
 #include "DistrhoPlugin.hpp"
@@ -185,7 +185,7 @@ class NoFiEchoCore
 
     float currentDelayMs() const
     {
-        // Existing Rocksmith mapping stores Time as milliseconds / 2000.
+        // Existing the game mapping stores Time as milliseconds / 2000.
         const float ms = time * 2000.0f;
         return std::fmax(24.0f, std::fmin(ms, 1500.0f));
     }

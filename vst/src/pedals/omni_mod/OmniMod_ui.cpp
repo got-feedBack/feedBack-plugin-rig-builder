@@ -1,5 +1,5 @@
 /* OmniMod stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_OmniMod); knob count + labels from the plugin params. */
+ * the game art (Pedal_OmniMod); knob count + labels from the plugin params. */
 #include "OmniModParams.h"
 #define PEDAL_TITLE  "OMNI MOD"
 #define PEDAL_NAMES  kOmniModNames

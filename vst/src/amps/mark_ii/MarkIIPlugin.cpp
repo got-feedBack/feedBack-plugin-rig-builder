@@ -1,5 +1,5 @@
 /*
- * SILLA BOOGIE MARK II - Mesa/Boogie Mark IIB for Rocksmith's Amp_CA38. Parody
+ * SILLA BOOGIE MARK II - Mesa/Boogie Mark IIB for the game's Amp_CA38. Parody
  * brand "Silla"; the in-app face must never read "Mesa" or "Boogie".
  *
  * Local reference (modelled component-by-component):
@@ -14,7 +14,7 @@
  * 1) and LEAD (Lead Drive cascade -> Lead Master), picked by the LEAD relay.
  * 4x 6L6GC power amp (~100W, 60W half) + fixed presence NFB + spring reverb.
  *
- * Rocksmith: RS Gain -> LEAD DRIVE; Bass/Mid/Treble -> tone stack. See
+ * the game: RS Gain -> LEAD DRIVE; Bass/Mid/Treble -> tone stack. See
  * rs_knob_to_vst_param.json (Channel pinned LEAD, reverb/pulls off via _static).
  */
 #include "DistrhoPlugin.hpp"

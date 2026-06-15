@@ -1,5 +1,5 @@
 /* DigitalChorus stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_DigitalChorus); knob count + labels from the plugin params. */
+ * the game art (Pedal_DigitalChorus); knob count + labels from the plugin params. */
 #include "DigitalChorusParams.h"
 #define PEDAL_TITLE  "DIGITAL CHORUS"
 #define PEDAL_NAMES  kDigitalChorusNames

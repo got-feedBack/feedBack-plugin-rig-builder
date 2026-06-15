@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Lovolt 100" — a parody-named clone of the Custom Hiwatt 100 (DR103) all-tube
-// head (Rocksmith gear "HT100B"). 12AX7 Normal/Bright preamp + British tone
+// head (the game gear "HT100B"). 12AX7 Normal/Bright preamp + British tone
 // stack + Presence + 4x EL34 push-pull, modeled from the documented DR103
 // circuit and factory spec.
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

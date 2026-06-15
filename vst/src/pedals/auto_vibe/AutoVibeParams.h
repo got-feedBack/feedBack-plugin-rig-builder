@@ -1,7 +1,7 @@
 #ifndef AUTO_VIBE_PARAMS_H
 #define AUTO_VIBE_PARAMS_H
 
-// Rocksmith Pedal_AutoVibe exposes Sens, Attack, Release, and Mix.
+// the game Pedal_AutoVibe exposes Sens, Attack, Release, and Mix.
 enum AutoVibeParamId
 {
     kSens = 0,

@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Hipzon GA-79 RVT" — a parody-named clone of the Gibson GA-79 RVT Multi Stereo
-// guitar amp (Rocksmith gear "GibsonGA79"). 12AX7 preamp + passive Bass/Treble +
+// guitar amp (the game gear "GibsonGA79"). 12AX7 preamp + passive Bass/Treble +
 // valve spring reverb + 4x 6BQ5 (EL84) push-pull + tremolo, modeled from the
 // GA-79 RVT schematic (mono). RS: Volume/Bass/Treble.
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

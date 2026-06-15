@@ -1,5 +1,5 @@
 /*
- * CITRUS JIMMY BEAN - Orange Jimmy Bean JB150 (1975-76) for Rocksmith's
+ * CITRUS JIMMY BEAN - Orange Jimmy Bean JB150 (1975-76) for the game's
  * Amp_OrangeJimmyBean. Parody brand "Citrus" (Orange -> Citrus); the in-app face
  * must never read "Orange".
  *
@@ -17,7 +17,7 @@
  * DEPTH = amount, 0 = OFF). CHANNEL 0/1 = the two channels (Ch2 a touch brighter
  * / more gain).
  *
- * Rocksmith: RS Gain -> SUSTAIN (the dirt/sustain); Bass/Treble -> tone (no Mid).
+ * the game: RS Gain -> SUSTAIN (the dirt/sustain); Bass/Treble -> tone (no Mid).
  */
 #include "DistrhoPlugin.hpp"
 #include "JimmyBeanParams.h"

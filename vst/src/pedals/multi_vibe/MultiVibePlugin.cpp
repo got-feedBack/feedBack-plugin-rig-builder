@@ -1,9 +1,9 @@
 /*
- * MultiVibe - Boss VB-2 style BBD vibrato for Rocksmith's Pedal_MultiVibe.
+ * MultiVibe - Boss VB-2 style BBD vibrato for the game's Pedal_MultiVibe.
  *
  * Local reference: pedals/multi vibe.jpg. The schematic is a Boss VB-2 with
  * NJM4558 input/output stages, MN3207/MN3102 BBD clock pair, Rate, Depth and
- * Rise Time controls. Rocksmith exposes Speed, Mix and Waveform, so Speed
+ * Rise Time controls. the game exposes Speed, Mix and Waveform, so Speed
  * drives the LFO, Mix controls wet/depth intensity, and Waveform shapes the
  * VB-2-style LFO/rise character.
  */

@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Hipzon GA-8" — a parody-named clone of the Gibson GA-8 Discoverer (GA-8T)
-// guitar amp (Rocksmith gear "GibsonGA8"). 12AX7 preamp + passive Bass/Treble +
+// guitar amp (the game gear "GibsonGA8"). 12AX7 preamp + passive Bass/Treble +
 // 2x 6BM8 push-pull + tremolo, modeled from the GA-8T schematic.
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
 #define DISTRHO_PLUGIN_NAME    "HipzonGA8"

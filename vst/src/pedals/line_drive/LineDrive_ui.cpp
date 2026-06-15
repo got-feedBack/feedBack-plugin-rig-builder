@@ -1,5 +1,5 @@
 /* LineDrive stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_LineDrive); knob count + labels from the plugin params. */
+ * the game art (Pedal_LineDrive); knob count + labels from the plugin params. */
 #include "LineDriveParams.h"
 #define PEDAL_TITLE  "LINE DRIVE"
 #define PEDAL_NAMES  kLineDriveNames

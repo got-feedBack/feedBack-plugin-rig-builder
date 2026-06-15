@@ -1,5 +1,5 @@
 /*
- * NoiseGate - ET-45C/default-gate style expander for Rocksmith's
+ * NoiseGate - ET-45C/default-gate style expander for the game's
  * Pedal_NoiseGate. The reference schematic uses a detector/control path
  * around Sens and Decay, so this model uses a linked sidechain envelope and a
  * smoothed gain cell instead of hard muting the signal.

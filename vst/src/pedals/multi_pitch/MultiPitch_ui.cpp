@@ -1,5 +1,5 @@
 /* MultiPitch stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_MultiPitch); knob count + labels from the plugin params. */
+ * the game art (Pedal_MultiPitch); knob count + labels from the plugin params. */
 #include "MultiPitchParams.h"
 #define PEDAL_TITLE  "MULTI PITCH"
 #define PEDAL_NAMES  kMultiPitchNames

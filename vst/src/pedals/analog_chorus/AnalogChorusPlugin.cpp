@@ -1,7 +1,7 @@
 /*
- * AnalogChorus - warm stereo BBD chorus for Rocksmith's analog/vintage
+ * AnalogChorus - warm stereo BBD chorus for the game's analog/vintage
  * chorus pedal. The local reference shows MN3009-style BBD delay, analog
- * filtering, companding, and dual outputs. Rocksmith exposes Rate, Depth,
+ * filtering, companding, and dual outputs. the game exposes Rate, Depth,
  * and Mix only, so the multi-voice spread is fixed internally.
  */
 #include "DistrhoPlugin.hpp"

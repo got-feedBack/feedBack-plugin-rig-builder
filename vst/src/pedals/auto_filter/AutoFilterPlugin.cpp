@@ -1,11 +1,11 @@
 /*
- * AutoFilter - Mu-Tron III style envelope filter for Rocksmith's
+ * AutoFilter - Mu-Tron III style envelope filter for the game's
  * Pedal_AutoFilter.
  *
  * Local references: pedals/auto filter.gif and pedals/auto filter_2.gif. The
  * schematic/layout show the Mu-Tron/Neutron topology: op-amp preamp, envelope
  * detector, LED/LDR sweep cells, peak control and selectable LP/BP/HP filter.
- * Rocksmith exposes FilterType, Res, Sens, Attack and Release, so gain/range
+ * the game exposes FilterType, Res, Sens, Attack and Release, so gain/range
  * and direction are internally calibrated.
  */
 #include "DistrhoPlugin.hpp"
@@ -134,7 +134,7 @@ class AutoFilterCore
         preTone.setLowPass(sampleRate, 8800.0f - 2600.0f * res);
         postTone.setLowPass(sampleRate, 7600.0f - 2200.0f * res);
 
-        // Rocksmith stores Attack/Release as large raw values. The JSON maps
+        // the game stores Attack/Release as large raw values. The JSON maps
         // them through /1000 so 128 becomes 0.128, which lands in useful
         // Mu-Tron-style envelope times here.
         const float atk = smoothstep(attack);

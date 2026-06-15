@@ -26,7 +26,7 @@
  * Panel (1:1, left->right): SPEED, INTENSITY, PRESENCE, BASS, MIDDLE, TREBLE,
  * LOUDNESS 1 (Volume I), LOUDNESS 2 (Volume II), INPUT (cable/channel).
  *
- * Rocksmith mapping (rs_knob_to_vst_param.json): the 1962 has no gain knob, so
+ * the game mapping (rs_knob_to_vst_param.json): the 1962 has no gain knob, so
  * RS Gain -> LOUDNESS 1 (clean->crunch->roar). Treble/Bass/Mid -> tone stack,
  * Pres -> Presence. Tremolo OFF by default (Intensity 0); Speed/Intensity stay
  * editable by hand. Loudness 2 sits at a musical blend via _static.

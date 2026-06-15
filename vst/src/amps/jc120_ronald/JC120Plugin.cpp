@@ -1,5 +1,5 @@
 /*
- * RONALD JC-120 - Roland JC-120 "Jazz Chorus" for Rocksmith's Amp_CS120. Parody
+ * RONALD JC-120 - Roland JC-120 "Jazz Chorus" for the game's Amp_CS120. Parody
  * brand "Ronald" (Roland -> Ronald); the in-app face must never read "Roland".
  *
  * Local reference (modelled from the service manual):
@@ -12,7 +12,7 @@
  * Vibrato — the dry feeds one speaker and the pitch-modulated wet the other, so
  * the chorus opens up wide. See JC120Params.h.
  *
- * Rocksmith: Gain -> Distortion (clean at 0). Treble/Mid/Bass -> tone stack.
+ * the game: Gain -> Distortion (clean at 0). Treble/Mid/Bass -> tone stack.
  * Reverb/Chorus OFF for songs (RS adds those separately).
  */
 #include "DistrhoPlugin.hpp"

@@ -1,6 +1,6 @@
 #ifndef SYNTH_FILTER_PARAMS_H
 #define SYNTH_FILTER_PARAMS_H
-// Rocksmith "Synth Filterbank" rack -> envelope-following resonant filter.
+// the game "Synth Filterbank" rack -> envelope-following resonant filter.
 //   Sens = envelope sensitivity   Attack/Release = envelope times
 //   FilterType = LP / BP / HP (0..1 → 3 zones)   Mix = dry/wet
 enum SynthFilterParamId { kSens = 0, kAttack, kRelease, kFilterType, kMix, kParamCount };

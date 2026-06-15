@@ -1,5 +1,5 @@
 /* Limiter stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_Limiter); knob count + labels from the plugin params. */
+ * the game art (Pedal_Limiter); knob count + labels from the plugin params. */
 #include "LimiterParams.h"
 #define PEDAL_TITLE  "LIMITER"
 #define PEDAL_NAMES  kLimiterNames

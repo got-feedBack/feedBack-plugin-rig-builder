@@ -1,7 +1,7 @@
 /*
- * AmpVibe - Uni-Vibe style pedal for Rocksmith's Pedal_AmpVibe.
+ * AmpVibe - Uni-Vibe style pedal for the game's Pedal_AmpVibe.
  * The local schematic shows four LDR-controlled phase stages driven by a
- * lamp oscillator, with chorus/vibrato output mixing. Rocksmith exposes only
+ * lamp oscillator, with chorus/vibrato output mixing. the game exposes only
  * Speed and Mix, so this models the chorus/vibe path: Speed drives the lamp
  * LFO, while Mix controls both phase blend and modulation depth.
  */

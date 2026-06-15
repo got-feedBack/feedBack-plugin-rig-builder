@@ -1,7 +1,7 @@
 /*
- * BassMultiComp - multiband bass compressor for Rocksmith's Bass_Pedal_MBComp.
+ * BassMultiComp - multiband bass compressor for the game's Bass_Pedal_MBComp.
  * Reference: local "multi bass comp" EBS MultiComp 2-style schematic. The
- * circuit is reduced to Rocksmith's controls: Compress, Filter, and Rate.
+ * circuit is reduced to the game's controls: Compress, Filter, and Rate.
  */
 #include "DistrhoPlugin.hpp"
 #include "BassMultiCompParams.h"

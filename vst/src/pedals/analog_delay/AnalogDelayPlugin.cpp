@@ -1,9 +1,9 @@
 /*
- * AnalogDelay - MF-104 style BBD delay for Rocksmith's Pedal_AnalogueDelay.
+ * AnalogDelay - MF-104 style BBD delay for the game's Pedal_AnalogueDelay.
  *
  * Local reference: pedals/analog delay.pdf, Moog MF-104/MF-104Z schematics:
  * input drive, SA572 compander, chained MN3008 BBDs, dark filtering, analog
- * feedback loop, and dry/wet VCA mixing. Rocksmith exposes Time, Feedback,
+ * feedback loop, and dry/wet VCA mixing. the game exposes Time, Feedback,
  * and Mix, so the remaining MF-104 controls are fixed internally.
  */
 #include "DistrhoPlugin.hpp"
@@ -173,7 +173,7 @@ class AnalogDelayCore
 
     float currentDelayMs() const
     {
-        // Existing Rocksmith mapping stores Time as milliseconds / 2000.
+        // Existing the game mapping stores Time as milliseconds / 2000.
         const float ms = time * 2000.0f;
         return std::fmax(8.0f, std::fmin(ms, 1050.0f));
     }

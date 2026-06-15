@@ -1,5 +1,5 @@
 /*
- * MARSTEN JVM410 - Marshall JVM410H for Rocksmith's Amp_MarshallJVM410H. Parody
+ * MARSTEN JVM410 - Marshall JVM410H for the game's Amp_MarshallJVM410H. Parody
  * brand "Marsten" (Marshall -> Marsten; same family as the Marsten DSL100 /
  * JCM800 / Bluesbreaker copies). The in-app face must never read "Marshall".
  *
@@ -11,14 +11,14 @@
  *     MASTER 1/2 and the per-channel green/orange/red mode relays.
  *
  * The JVM410H is a 4-CHANNEL 100W EL34 head. The real amp stores all four
- * channels at once; Rocksmith plays one sound at a time, so this models the
+ * channels at once; the game plays one sound at a time, so this models the
  * SELECTED channel + mode (the documented simplification). kChannel selects
  * Clean(0..0.25)/Crunch(.25..0.5)/OD1(.5..0.75)/OD2(.75..1) with increasing
  * cascade gain; kMode (green 0 / orange 0.5 / red 1) adds preamp gain+saturation
  * within the channel. Shared Marshall TMB tone stack + Presence + Resonance +
  * Master + op-amp reverb (off at 0). 4x EL34 power amp with sag.
  *
- * Rocksmith: RS Gain -> GAIN (Channel pinned to OD1 + Mode orange via the song
+ * the game: RS Gain -> GAIN (Channel pinned to OD1 + Mode orange via the song
  * mapping); Bass/Mid/Treble -> tone stack; Pres -> Presence. See
  * rs_knob_to_vst_param.json.
  */

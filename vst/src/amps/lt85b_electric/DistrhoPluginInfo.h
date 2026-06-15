@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Electric B600F" — a parody-named clone of the Acoustic B600H (600 W solid-
-// state bass head, Rocksmith gear "LT85B"). Gain/Volume preamp + sweepable
+// state bass head, the game gear "LT85B"). Gain/Volume preamp + sweepable
 // Notch + 6-band EQ + Class-D power, modeled from the Acoustic B450/B600H
 // schematic + panel.
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

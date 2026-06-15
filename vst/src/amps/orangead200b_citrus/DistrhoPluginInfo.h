@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Citrus AD200" — a parody-named clone of the Orange AD200B (MK3) all-tube bass
-// head (Rocksmith gear "OrangeAD200B"). 12AX7 input + Orange passive subtractive
+// head (the game gear "OrangeAD200B"). 12AX7 input + Orange passive subtractive
 // tone stack + 4x KT88 push-pull, modeled from the AD200B panel + manual (tone-
 // stack character cross-checked against the BAJA AD200B emulator layout).
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

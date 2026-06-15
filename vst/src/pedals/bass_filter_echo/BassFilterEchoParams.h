@@ -1,7 +1,7 @@
 #ifndef BASS_FILTER_ECHO_PARAMS_H
 #define BASS_FILTER_ECHO_PARAMS_H
 
-// Rocksmith "Bass Filter Echo" -> a vintage tape echo (Space Echo / Echoplex
+// the game "Bass Filter Echo" -> a vintage tape echo (Space Echo / Echoplex
 // flavour). Same four knobs as the Bass Filter Delay, but voiced like tape:
 // darker, more saturated repeats with wow & flutter pitch wobble.
 //   Time     = echo time

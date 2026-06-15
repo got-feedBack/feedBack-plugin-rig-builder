@@ -1,5 +1,5 @@
 /*
- * SAMPLEG VH-140C - Ampeg VH-140C for Rocksmith's Amp_AT120. Parody brand
+ * SAMPLEG VH-140C - Ampeg VH-140C for the game's Amp_AT120. Parody brand
  * "Sampleg"; the in-app face must never read "Ampeg".
  *
  * Local reference (modelled component-by-component):
@@ -14,7 +14,7 @@
  * Per-channel spring REVERB + a BBD stereo CHORUS (rate + per-channel depth).
  * A footswitch picks the channel. Solid-state power = high headroom, no sag.
  *
- * Rocksmith: RS Gain -> CHANNEL B Gain; Bass/Mid/Treble -> Channel B Low/Mid/High.
+ * the game: RS Gain -> CHANNEL B Gain; Bass/Mid/Treble -> Channel B Low/Mid/High.
  * See rs_knob_to_vst_param.json (Channel pinned B + reverb/chorus OFF via _static).
  */
 #include "DistrhoPlugin.hpp"

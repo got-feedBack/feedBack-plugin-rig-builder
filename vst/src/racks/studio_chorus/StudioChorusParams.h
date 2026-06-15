@@ -1,7 +1,7 @@
 #ifndef STUDIO_CHORUS_PARAMS_H
 #define STUDIO_CHORUS_PARAMS_H
 
-// Rocksmith "Studio Chorus" rack -> Boss RCE-10 Chorus Ensemble. A lush stereo
+// the game "Studio Chorus" rack -> Boss RCE-10 Chorus Ensemble. A lush stereo
 // BBD-style chorus: two modulated voices per channel, the L/R LFOs spread by a
 // Stereo control, with low/high filtering shaping the wet voice. Seven knobs:
 //   Rate     = LFO speed (RS stores this in Hz, ~0.2 .. 2.5)

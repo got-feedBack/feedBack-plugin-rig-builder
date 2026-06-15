@@ -1,5 +1,5 @@
 /* StudioChamber rack UI — shared rack_ui template. Four knobs (Time/Tone/Depth/Mix) on
- * a tinted sub-panel sampled from the Rocksmith art. */
+ * a tinted sub-panel sampled from the game art. */
 #include "../../_shared/reverb_params.h"
 #define RACK_COUNT   kParamCount
 #define RACK_TITLE   "STUDIO CHAMBER"

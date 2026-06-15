@@ -8,7 +8,7 @@
  *              one extra triode — big clean headroom.
  *   • DIRTY channel : Gain -> cascaded 12AX7 stages -> a 3-band tone stack
  *              (Bass/Middle/Treble) -> channel Volume. The high-gain voice
- *              Rocksmith uses (RS Gain/Bass/Mid/Treble map here).
+ *              the game uses (RS Gain/Bass/Mid/Treble map here).
  *   • REVERB — valve-driven spring (Schroeder comb+allpass), blended by Reverb.
  *   • OUTPUT — master into the 2x EL34 push-pull (~50 W; Full/Half on the panel).
  *

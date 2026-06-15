@@ -1,9 +1,9 @@
 /*
- * USWah - Dunlop Cry Baby GCB-95 style wah for Rocksmith Pedal_USWah.
+ * USWah - Dunlop Cry Baby GCB-95 style wah for the game Pedal_USWah.
  *
  * The local Cry Baby schematic shows the classic JFET input buffer, inductor
  * resonant wah network, sweep pot, and output buffer. This model keeps the
- * Rocksmith four-knob contract while voicing the DSP as a guitar wah: narrower
+ * the game four-knob contract while voicing the DSP as a guitar wah: narrower
  * than BassWah, brighter, less dry blend, and a stronger upper-mid peak.
  */
 #include "DistrhoPlugin.hpp"

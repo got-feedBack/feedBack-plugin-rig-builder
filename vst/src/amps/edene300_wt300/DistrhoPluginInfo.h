@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Aiden GT-300" — a parody-named clone of the Eden WT-300 "Traveler" Valve-Tech
-// hybrid bass preamp (Rocksmith gear "EdenE300"). 12AX7 input + Eden Enhance +
+// hybrid bass preamp (the game gear "EdenE300"). 12AX7 input + Eden Enhance +
 // 3-band semi-parametric EQ, modeled from the Eden WT-300 preamp schematic
 // (David Eden, 2-19-93).
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

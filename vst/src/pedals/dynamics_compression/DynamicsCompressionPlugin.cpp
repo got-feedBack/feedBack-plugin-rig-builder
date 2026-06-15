@@ -1,7 +1,7 @@
 /*
- * DynamicsCompression - Dyna Comp-style compressor for Rocksmith's
+ * DynamicsCompression - Dyna Comp-style compressor for the game's
  * Pedal_Compression. The references are MXR Dynacomp / Dyna Comp CA3080 OTA
- * schematics. Rocksmith exposes Comp, Attack, and Release, so this model keeps
+ * schematics. the game exposes Comp, Attack, and Release, so this model keeps
  * the OTA-style squeeze and sustain while mapping those three controls.
  */
 #include "DistrhoPlugin.hpp"

@@ -200,7 +200,7 @@ class RbMarkAmpCore
         }
         else
         {
-            // Mark III for CA85: treat Rocksmith Gain as the R2/crunch gain.
+            // Mark III for CA85: treat the game Gain as the R2/crunch gain.
             // The schematic's tone controls sit before the gain stages, so Bass
             // tightens heavily as Gain rises and Treble drives the first stages.
             inputHp.highPass(sampleRate, 60.0f + 58.0f * c + 54.0f * (1.0f - bass), 0.71f);

@@ -6,7 +6,7 @@
  * from the local schematic (Vox_ac30c2.pdf: AC30C2 PreAmp / RevFX / Power Amp).
  *
  * The VST exposes the REAL amp controls plus two faithful extras that give the
- * Rocksmith Mid/Bright knobs a home WITHOUT inventing fake pots:
+ * the game Mid/Bright knobs a home WITHOUT inventing fake pots:
  *   - Input: which jack the cable is in — Normal(0) / Both jumpered(0.5) /
  *     Top Boost(1). The classic AC30 channel-jumpering trick. RS Mid rides this
  *     by turning up the Normal channel (its mid-forward voicing fills the Vox
@@ -14,7 +14,7 @@
  *   - Bright: the Top Boost brilliance bright-cap amount (a real preamp treble
  *     bypass, distinct from the power-amp Tone Cut). RS Bright -> this.
  *
- * Rocksmith mapping (rs_knob_to_vst_param.json): Gain->TB Vol, Treble->Treble,
+ * the game mapping (rs_knob_to_vst_param.json): Gain->TB Vol, Treble->Treble,
  * Bass->Bass, Pres->Tone Cut(inv), Mid->Normal Vol(+Input=Both), Bright->Bright.
  *
  * Panel (AC30C2, left -> right), per the schematic pot designators:

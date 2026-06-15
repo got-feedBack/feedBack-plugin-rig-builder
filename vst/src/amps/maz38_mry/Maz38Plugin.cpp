@@ -1,5 +1,5 @@
 /*
- * MR. Y MAZ 38 - Dr. Z Maz 38 (Senior NR) for Rocksmith's Amp_GB38. Parody brand
+ * MR. Y MAZ 38 - Dr. Z Maz 38 (Senior NR) for the game's Amp_GB38. Parody brand
  * "Mr. Y"; the in-app face must never read "Dr. Z" or "Maz".
  *
  * Same Maz front-end as the Maz 18 (shared preamp + tone stack), but a BIGGER
@@ -11,7 +11,7 @@
  *  - 12AX7 phase inverter; CUT 250kA (post treble cut, higher = darker); MASTER.
  *  - Power: 4xEL84 (~38W, 2 pairs), solid-state rectifier -> tight, big headroom.
  *
- * Rocksmith: RS Gain -> VOLUME (the amp's only preamp/drive control); Bass/Mid/
+ * the game: RS Gain -> VOLUME (the amp's only preamp/drive control); Bass/Mid/
  * Treble -> the TMB tone stack. Cut + Master set on the face by hand.
  */
 #include "DistrhoPlugin.hpp"

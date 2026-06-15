@@ -1,5 +1,5 @@
 /*
- * TremOle - envelope-aware stereo tremolo for Rocksmith Pedal_TremOle.
+ * TremOle - envelope-aware stereo tremolo for the game Pedal_TremOle.
  *
  * No exact schematic is available. The pedal art exposes Sens, Attack,
  * Release, and Mix plus main/stereo outputs, so this model uses an envelope to

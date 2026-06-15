@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "SBR Super Redhead" — a parody-named clone of the SWR Super Redhead (all-tube
-// preamp / 350 W bass head, Rocksmith gear "HT300B"). 12AX7 preamp + Aural
+// preamp / 350 W bass head, the game gear "HT300B"). 12AX7 preamp + Aural
 // Enhancer + semi-parametric tone + SS power, modeled from the SWR Red Head
 // preamp schematic.
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

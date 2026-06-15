@@ -1,6 +1,6 @@
 #ifndef STUDIO_WAH_FILTER_PARAMS_H
 #define STUDIO_WAH_FILTER_PARAMS_H
-// Rocksmith "Studio Wah Filter" rack -> auto/envelope wah filter.
+// the game "Studio Wah Filter" rack -> auto/envelope wah filter.
 //   Sens = envelope sensitivity   Attack/Release = envelope times
 //   Pedal = manual position (when Auto off)   Auto = envelope on/off (switch)
 enum StudioWahFilterParamId { kSens = 0, kAttack, kRelease, kPedal, kAuto, kParamCount };

@@ -1,10 +1,10 @@
 /*
- * MarshallGuvnorPlus - Marshall GV-2/Guv'nor Plus style drive for Rocksmith.
+ * MarshallGuvnorPlus - Marshall GV-2/Guv'nor Plus style drive for the game.
  *
  * Local references: pedals/Marshall GV2_1.png and pedals/marshall gv2_2.gif.
  * The circuit uses TL072 gain stages, LED/diode clipping, Bass/Mid/Treble tone
  * stack, and a Deep low-end control. The real Volume control is internally
- * compensated because Rocksmith pedal slots generally do not expose output.
+ * compensated because the game pedal slots generally do not expose output.
  */
 #include "DistrhoPlugin.hpp"
 #include "MarshallGuvnorPlusParams.h"

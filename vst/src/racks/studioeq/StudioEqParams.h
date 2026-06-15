@@ -1,6 +1,6 @@
 #pragma once
 #include <cmath>
-// Rocksmith Studio EQ — 4-band parametric (GML-style clean). Param names match
+// the game Studio EQ — 4-band parametric (GML-style clean). Param names match
 // the RS knobs 1:1. Freq ranges (Hz) and Q range MUST match the apply_vst_state
 // ranges for the 'studioeq' stem so RS values reproduce exactly.
 enum { kBass, kBassFreq, kLoMid, kLoMidFreq, kLoMidQ, kHiMid, kHiMidFreq, kHiMidQ, kTreble, kTrebleFreq, kNumParams };

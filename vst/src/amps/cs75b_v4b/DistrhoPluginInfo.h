@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Sampleg V-4B" — a parody-named clone of the Ampeg V-4B all-tube bass head
-// (Rocksmith gear "CS75B"). Preamp + tone stack modeled from the 1971 V-4B
+// (the game gear "CS75B"). Preamp + tone stack modeled from the 1971 V-4B
 // factory schematic; power section is the 4x 7027A push-pull (~100W).
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
 #define DISTRHO_PLUGIN_NAME    "SamplegV4B"

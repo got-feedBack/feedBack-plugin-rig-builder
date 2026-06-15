@@ -179,10 +179,10 @@
         </p>
         <div class="text-xs text-gray-400 bg-dark-800/50 border border-gray-800/50 rounded p-2 mb-4 leading-snug">
             <strong class="text-gray-300">How to use:</strong>
-            (1) <span class="text-gray-200">＋ Add piece</span> &rarr; pick a stock effect OR a VST plug-in.
+            (1) <span class="text-gray-200">＋ Add piece</span> &rarr; pick a gear piece OR a VST plug-in.
             VST pieces are <strong class="text-purple-300">ready to use immediately</strong> —
             just hit <span class="text-purple-300">🎛 Edit VST</span> to tweak its parameters.
-            Stock pieces start <em>unassigned</em>: click <span class="text-emerald-300">Assign…</span>
+            Gear pieces start <em>unassigned</em>: click <span class="text-emerald-300">Assign…</span>
             then pick a NAM/IR from your library or paste a VST plug-in path.
             (2) Master pieces are <strong>global</strong> — they don't appear on the Gear tab.
         </div>
@@ -354,7 +354,7 @@
             </div>
         </div>
 
-        <!-- Cabinets — bypass the stock cab IRs and use your own -->
+        <!-- Cabinets — bypass the cab IRs and use your own -->
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
             <h3 class="text-white font-semibold mb-2">Cabinets</h3>
             <label class="flex items-start gap-2 text-sm cursor-pointer">
@@ -362,9 +362,9 @@
                        onchange="rbSetBypassAllCabs(this.checked)"
                        class="mt-1 accent-amber-500">
                 <span class="text-gray-300">
-                    <span class="font-medium text-amber-300">Bypass all stock cabs</span>
+                    <span class="font-medium text-amber-300">Bypass all cabs</span>
                     <div class="text-gray-500 mt-1 leading-snug">
-                        Skips the stock cab IR in every tone (the signal passes
+                        Skips the cab IR in every tone (the signal passes
                         through un-cab'd) so you can add your own cab / IR per tone
                         instead. Flipping this rewrites the bypass flag on every
                         cabinet stage; reopen the song to hear the change. Catalog

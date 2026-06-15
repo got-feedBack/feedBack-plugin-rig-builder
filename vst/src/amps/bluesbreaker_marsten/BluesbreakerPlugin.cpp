@@ -1,5 +1,5 @@
 /*
- * MARSTEN BLUESBREAKER - Marshall 1962 Bluesbreaker combo for Rocksmith's
+ * MARSTEN BLUESBREAKER - Marshall 1962 Bluesbreaker combo for the game's
  * Amp_Marshall1962Bluesbreaker. Parody brand "Marsten" (same as the Plexi /
  * DSL100 / JCM800); the in-app face must never read "Marshall".
  *
@@ -15,7 +15,7 @@
  * NFB. The TREMOLO (V6 phase-shift LFO + J174 FET) amplitude-modulates the
  * output: SPEED = rate (~2..8 Hz), INTENSITY = depth (0 = OFF).
  *
- * Rocksmith: no gain knob, so RS Gain -> LOUDNESS 1 (clean->crunch->roar);
+ * the game: no gain knob, so RS Gain -> LOUDNESS 1 (clean->crunch->roar);
  * Treble/Bass/Mid -> tone stack, Pres -> Presence. Tremolo off by default
  * (Intensity 0). See rs_knob_to_vst_param.json (Loudness 2 pinned to a musical
  * jumpered blend via _static; Speed/Intensity editable by hand).

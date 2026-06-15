@@ -1,9 +1,9 @@
 /*
- * ShredZone - Boss MT-2 Metal Zone style distortion for Rocksmith's
+ * ShredZone - Boss MT-2 Metal Zone style distortion for the game's
  * Pedal_ShredZone.
  *
  * Local reference: pedals/shred zone.pdf. The MT-2 uses dual-gain high
- * saturation and a very active EQ. Rocksmith exposes Gain, Bass, Mid, and
+ * saturation and a very active EQ. the game exposes Gain, Bass, Mid, and
  * Treble, so Level and mid-frequency are compensated/fixed internally.
  */
 #include "DistrhoPlugin.hpp"
@@ -182,7 +182,7 @@ class ShredZoneCore
         clipRollOff.setLowPass(sampleRate, 6400.0f - 2300.0f * g + 900.0f * treble, 0.68f);
 
         bassShelf.setLowShelf(sampleRate, 120.0f, 0.78f, bassDb);
-        // Rocksmith exposes Mid but not MT-2 Mid Freq. Move the center a bit
+        // the game exposes Mid but not MT-2 Mid Freq. Move the center a bit
         // with the control so cuts scoop lower and boosts focus upper mids.
         midEq.setPeaking(sampleRate, 720.0f + 720.0f * mid, 0.72f, midDb);
         biteEq.setPeaking(sampleRate, 2300.0f + 900.0f * treble, 0.68f,
@@ -259,7 +259,7 @@ public:
         y = trebleShelf.process(y);
         y = outputLp.process(y);
 
-        // No Rocksmith Level knob. Keep level controlled despite very large
+        // No the game Level knob. Keep level controlled despite very large
         // active-EQ boosts, but retain enough sustain for the high-gain presets.
         const float eqEnergy = 1.0f
             + 0.018f * std::fabs((bass - 0.5f) * 28.0f)

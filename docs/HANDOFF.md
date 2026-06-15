@@ -270,7 +270,7 @@
 > #14 (mac IR extraction), #15 (quiet NAMs). See `WHATS_NEW.md` for the
 > user-facing summary.
 
-A Slopsmith plugin that maps **Rocksmith 2014 tones** (amp + cab + pedals + racks)
+A Slopsmith plugin that maps **the game tones** (amp + cab + pedals + racks)
 to **NAM captures and IRs from tone3000.com**, persisting per-song mappings in
 `nam_tone.db` so the existing NAM runtime plays them back automatically.
 
@@ -311,7 +311,7 @@ participants at runtime when `rbInit()` runs:
   lives in existing FastAPI routes.
 - `privileged-capabilities`: manifest + runtime participants inventory
   backend routes, tone3000 external-service access, media import/export, and
-  subprocess-backed Rocksmith extractors.
+  subprocess-backed the game extractors.
 
 Privacy rule: diagnostics must never include local paths, filenames, NAM/IR
 model names, preset names, VST paths/state, OAuth tokens, tone3000 URLs, raw
@@ -396,7 +396,7 @@ may remain as the implementation behind native capability handlers.
 
 3. **Replace the NAM fetch bridge.** Use the extracted core `audio-effects` host for provider selection, mapping lookup, and executable chain resolution during `nam_tone` playback. Rig Builder already exposes provider handlers that return safe chain plans for a preset or current song tone; `nam_tone` should request the selected provider ref instead of Rig Builder monkey-patching `window.fetch`. Core must store only mapping refs and safe summaries/outcomes, not raw returned chain payloads. Removal gate: normal song playback, Listen preview, mega-chain/preloader mode, bypass toggles, and fallback-to-2-stage all work with zero `audio-effects.legacy-nam-routing` bridge hits.
 
-4. **Move long-running work behind `jobs`.** Convert each expensive action into a job-capable backend entry point: batch map, curated preload, candidate download/audition, song auto-download, Rocksmith extraction, default export, library purge, and any future VST scan/import work. The UI should enqueue through `jobs`, receive a job ID, update progress through the host, and support cancellation where the backend can safely stop. Route responses should expose safe summaries only, never raw file paths, tone3000 URLs, model names, or subprocess command lines.
+4. **Move long-running work behind `jobs`.** Convert each expensive action into a job-capable backend entry point: batch map, curated preload, candidate download/audition, song auto-download, the game extraction, default export, library purge, and any future VST scan/import work. The UI should enqueue through `jobs`, receive a job ID, update progress through the host, and support cancellation where the backend can safely stop. Route responses should expose safe summaries only, never raw file paths, tone3000 URLs, model names, or subprocess command lines.
 
 5. **Put privileged actions behind policy.** tone3000 OAuth/request/download, native file pickers, PSARC/IR extraction, DB writes, media import/export, and subprocess execution should check the privileged host before they run. Long-running privileged actions must link the authorization record to the `jobs` job ID. Removal gate: background/unconfirmed execution is blocked, user-action flows are accepted, and diagnostics show authorized/blocked/degraded outcomes without raw payloads.
 
@@ -442,7 +442,7 @@ returned `filename` / `localFilename`. If sync succeeds without a local filename
 
 ## Amp gain variants (`feat/amp-gain-variants` — experimental)
 
-Rocksmith amps respond to their Gain knob (a Twin at gain=10 is sparkling
+the game amps respond to their Gain knob (a Twin at gain=10 is sparkling
 clean; at gain=80 it's snarling). Tone3000 captures are **fixed-setting
 snapshots** — one NAM is one (amp + knob position). So if we ship a single
 "Twin clean" capture for `Amp_Twin`, every Twin tone in every song uses that
@@ -586,7 +586,7 @@ per-gear resolution order in `_batch_worker`:
 0. **Manual is sacred** — if the *current* tone has a hand-assigned
    (`assigned_mode in manual/manual_vst`) piece for this gear that's still on
    disk, keep it **verbatim** (incl. VST path/format/state). Never overwritten.
-1. Rocksmith cab IR on disk (unchanged).
+1. the game cab IR on disk (unchanged).
 2. **Reuse** a capture already assigned to this gear in **any** song
    (`_existing_assignment_for_gear`, manual preferred) → so a manual pick
    spreads to the auto/untouched songs.
@@ -601,7 +601,7 @@ all manual ones.
 ### Native file picker
 
 `Browse…` buttons next to the two `gears.psarc` inputs (Regenerate gear map,
-Extract Rocksmith IRs) call `window.slopsmithDesktop.pickFile([...])` (the
+Extract the game IRs) call `window.slopsmithDesktop.pickFile([...])` (the
 host's `dialog:pickFile` IPC — same one `audio_engine` uses) →
 `rbBrowseForPsarc`. Degrades to manual entry if no desktop bridge.
 
@@ -609,7 +609,7 @@ host's `dialog:pickFile` IPC — same one `audio_engine` uses) →
 
 ## What the user wanted
 
-Take Rocksmith tones (amp, cab, pedals, racks already exposed by the
+Take the game tones (amp, cab, pedals, racks already exposed by the
 existing `tones` plugin) and **map them to real NAM `.nam` captures and
 `.wav` IRs** so that playing a CDLC song in Slopsmith uses
 realistic neural amp simulations instead of generic synth.
@@ -624,7 +624,7 @@ Confirmed design decisions (in conversation, before code):
   when available (not one full-rig capture).
 - **Manual deep-link as default**, **automatic batch as opt-in** once an
   API key is configured.
-- **Extract Rocksmith's own IRs from the game** for cabs/pedals/racks
+- **Extract the game's own IRs from the game** for cabs/pedals/racks
   where possible (deferred — see "v2 work" below).
 - **Conservative auto policy**: CC0/CC-BY licenses only, ≥50 downloads,
   prefer standard-size captures.
@@ -745,9 +745,9 @@ When we save a preset, we pick the **amp slot's NAM** as `model_file`
 
 ---
 
-## Rocksmith gear naming
+## the game gear naming
 
-Rocksmith ships `gears.psarc` containing 613 gear entities. Each has:
+the game ships `gears.psarc` containing 613 gear entities. Each has:
 
 - An entity name in one of two formats:
   - **Real-brand** — e.g. `Amp_Marshall1962Bluesbreaker`,
@@ -786,7 +786,7 @@ tier resolved each gear in a new `query_source` field. Tiers, in order:
 3. `series` — codename family in `_SERIES_PREFIX_OVERRIDES`. **Brand-only
    query** ("Vox", "Peavey"); the codename number is kept in `model`/
    display but deliberately **excluded** from the query. Reason: the
-   number (Amp_HG500 → "500") is a Rocksmith-internal id, not a real
+   number (Amp_HG500 → "500") is a game-internal id, not a real
    product number — `"Vox 600B"`/`"Marshall 38"` returned ~zero tone3000
    hits and the gear stayed pending forever. Bass series queries are
    anchored with "bass".
@@ -802,7 +802,7 @@ tier resolved each gear in a new `query_source` field. Tiers, in order:
    camel-split codename (cabs use RS IRs so their query rarely matters).
 
 **Series table is keyed by `(instrument, prefix)`** — instrument is
-"guitar"/"bass" — because Rocksmith reuses prefix letters across both
+"guitar"/"bass" — because the game reuses prefix letters across both
 (BT is a Vox AC on guitar but a different head on bass; CS appears in
 both). A single `(category)` key mis-mapped the bass variants.
 
@@ -939,14 +939,14 @@ The script's top of file adds `slopsmith/lib` to `sys.path` so the
 | GET | `/api/plugins/rig_builder/gear_catalog` | Gears grouped by category with parenting (real make/model + assigned capture/VST) + a tone3000 photo. Powers the Gear tab. |
 | POST | `/api/plugins/rig_builder/audition_candidate` | Body `{rs_gear, tone3000_id}`. Downloads a candidate (no assign) so the Suggest modal's ▶ can audition it. Returns `{kind, file}`. |
 | POST | `/api/plugins/rig_builder/export_default_captures` | Snapshots the current DB's gear→capture choices into `default_captures.json`. Returns `{count}`. (Settings → "Export defaults".) |
-| GET | `/api/plugins/rig_builder/local_files?kind=nam\|ir` | Lists locally-downloaded NAMs (`nam_models/*.nam`) or IRs (`nam_irs/**/*.wav` recursive, so the 888 Rocksmith-extracted cab IRs are included). Each entry has `use_count` + `used_for_gears` so the UI can sort by most-used. Powers the Library picker in both Songs and Gear tabs. |
+| GET | `/api/plugins/rig_builder/local_files?kind=nam\|ir` | Lists locally-downloaded NAMs (`nam_models/*.nam`) or IRs (`nam_irs/**/*.wav` recursive, so the 888 the game-extracted cab IRs are included). Each entry has `use_count` + `used_for_gears` so the UI can sort by most-used. Powers the Library picker in both Songs and Gear tabs. |
 | POST | `/api/plugins/rig_builder/use_local_for_gear` | Bulk-assign an already-local file to every `preset_pieces` row for an rs_gear_type. Skips the tone3000 round-trip. Body `{rs_gear, local_file, local_kind}`. |
 | GET | `/api/plugins/rig_builder/vst/known` | Returns the cached list of installed VST3/AU plugins (populated by the frontend after a successful `scanPlugins()`). |
 | POST | `/api/plugins/rig_builder/vst/sync_known` | Frontend pushes the result of `getKnownPlugins()` so the dropdown survives a server restart. Body `{plugins: [...]}`. |
 | POST | `/api/plugins/rig_builder/vst/scan` | Triggers the native engine's `scanPlugins()` via JS bridge (proxied — can crash if user has a malformed VST, the UI prefers the file-picker / paste-path flow). |
 | POST | `/api/plugins/rig_builder/vst/assign` | Bulk-assign a VST3/AU plugin to every `preset_pieces` row for a given rs_gear_type. Body `{rs_gear_type, vst_path, vst_format, vst_state?}`. |
 | POST | `/api/plugins/rig_builder/vst/capture_state` | Persist a captured plugin state blob for an existing VST piece. Body `{rs_gear_type, vst_state, preset_id?}`. |
-| GET | `/api/plugins/rig_builder/vst/knob_mapping?rs_gear_type=&vst_name=` | Looks up `rs_knob_to_vst_param.json` for the curated translation table between a Rocksmith gear's knobs and a specific VST's params. Used by the "⇶ Apply RS settings" button. |
+| GET | `/api/plugins/rig_builder/vst/knob_mapping?rs_gear_type=&vst_name=` | Looks up `rs_knob_to_vst_param.json` for the curated translation table between a game gear's knobs and a specific VST's params. Used by the "⇶ Apply RS settings" button. |
 | GET | `/api/plugins/rig_builder/vst/suggest/{rs_gear_type}` | Returns suggested VSTs (from `rs_gear_to_vst.json`) cross-referenced with the user's installed list so the UI can mark `✓ installed` vs `↓ download`. |
 
 UI files (`screen.html` + `screen.js`) use the standard slopsmith
@@ -1058,15 +1058,15 @@ discussion in the conversation that produced this.
 
 ## Cab IR extraction (v2 — DONE)
 
-`extract_irs.py` pulls all 444 cab IRs out of Rocksmith's
+`extract_irs.py` pulls all 444 cab IRs out of the game's
 `gears.psarc` and writes them as 48 kHz mono float32 WAVs into
 `<config_dir>/nam_irs/rocksmith/`. The mapping from RS entity name to
 extracted IRs lives in `rs_cab_to_ir.json`. The batch worker prefers
 these over tone3000 for any cab piece, and the per-song UI shows a
-"Rocksmith IR" green strip on each cab piece with a dropdown for the
+"the game IR" green strip on each cab piece with a dropdown for the
 mic-position variants (9 per cab typically).
 
-### Rocksmith cab IR binary format
+### the game cab IR binary format
 
 Discovered by reverse-engineering the cab `.bnk` files:
 
@@ -1088,7 +1088,7 @@ Discovered by reverse-engineering the cab `.bnk` files:
 - Peak amplitudes can exceed 1.0 — that's expected for IRs (the
   impulse response is a scale factor, not normalized PCM).
 
-If a future Rocksmith version adds DLC cabs at a different sample
+If a future the game version adds DLC cabs at a different sample
 rate or channel count, the extractor checks the header and skips
 unfamiliar configurations rather than producing garbage.
 
@@ -1226,7 +1226,7 @@ Notes / gotchas:
   single-NAM `model_file`/`ir_file` (`_persist_preset_chain` +
   `_recompute_preset_primaries`), keeping real-playback consistent.
 - **Immediate gear refresh** (`rbAfterGearChange`): uploading a file,
-  assigning a Rocksmith IR, or download-and-assign now re-render the open
+  assigning a game IR, or download-and-assign now re-render the open
   song from in-memory state and (if that tone is previewing) re-save +
   reload the chain — no more re-selecting the song. `rbRenderPiece` reads
   `_uploaded_file` (pending change) before `assigned.file`.
@@ -1279,7 +1279,7 @@ tone3000 link, and ▶ to audition.
 
 - **Photos** are tone3000 **capture** images (the real modeled gear),
   available only for captures whose uploader added an image; otherwise a
-  "sin foto" placeholder. Rocksmith's own gear art is NOT used (3D assets,
+  "sin foto" placeholder. the game's own gear art is NOT used (3D assets,
   not locally extractable; `art_cache/` holds only song cover art).
 - **Single-stage audition:** `GET /native_preset_one?file=&kind=` builds a
   one-stage native_preset; `rbAuditionFile` loads it into the engine to
@@ -1462,7 +1462,7 @@ back to the old wrapper (they still only apply in preview).
    in `tone3000_client.py`, falling back through standard → lite →
    feather → nano), and streams the binary to `nam_models/` (for
    .nam) or through ffmpeg into `nam_irs/` (for cab IRs that lacked
-   a Rocksmith IR). Filenames embed the tone3000 tone+model id
+   a game IR). Filenames embed the tone3000 tone+model id
    (`tone3000_{tone_id}_m{model_id}_{rs_gear}.nam`) so subsequent
    batches across the library skip the network entirely. A
    `disk_budget_mb` setting (default 2000) caps total download size
@@ -1483,11 +1483,11 @@ back to the old wrapper (they still only apply in preview).
 3. **Amp/pedal/rack IR extraction.** Investigated and **abandoned**.
    The `.bnk` files for amps (avg 2.5 KB), pedals (1 KB), and racks
    (1.2 KB) contain only `BKHD` + `HIRC` chunks — DSP graph metadata,
-   not embedded audio. Rocksmith's amp DSP is implemented as Wwise
+   not embedded audio. the game's amp DSP is implemented as Wwise
    DSP plugins, not convolution, so there's no IR to extract. Cabs
    are the only category where this works.
 
-4. **Other Rocksmith PSARCs (session.psarc, etudes.psarc,
+4. **Other the game PSARCs (session.psarc, etudes.psarc,
    audio.psarc).** Checked — they hold `.bnk` files but they're
    standard Wwise RIFF/.wem audio (Session Mode backing tracks,
    lesson etudes, UI sounds), not gear IRs. The custom
@@ -1532,7 +1532,7 @@ back to the old wrapper (they still only apply in preview).
 3. Unzip this plugin into
    `~/Library/Application Support/slopsmith-desktop/plugins/rig_builder/`.
 4. The included `rs_to_real.json` was generated from one specific
-   Rocksmith install; if the new Mac has DLC the first one didn't (or
+   the game install; if the new Mac has DLC the first one didn't (or
    vice-versa), regenerate via Settings → "Regenerate gear map" with
    that machine's `gears.psarc`.
 5. Open Slopsmith. "Rig Builder" appears in the nav.

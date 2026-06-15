@@ -1,9 +1,9 @@
 /*
- * Shared stompbox-style UI for the bundled Rocksmith pedal VSTs (DPF NanoVG).
+ * Shared stompbox-style UI for the bundled the game pedal VSTs (DPF NanoVG).
  *
  * Draws a portrait pedal body (rounded rect + metallic gradient + accent
  * border), the pedal name, an LED + footswitch graphic, and the pedal's knobs
- * at per-pedal positions taken from the real Rocksmith pedal art. Knobs are
+ * at per-pedal positions taken from the real the game pedal art. Knobs are
  * rotary with vertical-drag editing, a value arc, a pointer, a top label and a
  * 0–10 readout.
  *

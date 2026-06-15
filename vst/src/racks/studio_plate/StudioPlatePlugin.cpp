@@ -1,4 +1,4 @@
-/* StudioPlate — Rocksmith reverb rack (Studio plate reverb). Shared Freeverb-style core; this file
+/* StudioPlate — the game reverb rack (Studio plate reverb). Shared Freeverb-style core; this file
  * only sets the voicing + identity. */
 #define REVERB_LABEL "StudioPlate"
 #define REVERB_DESC  "Studio plate reverb"

@@ -2,7 +2,7 @@
 #define SINAMP_PARAMS_H
 
 /*
- * SINAMP BASS DRIVER = Tech 21 SansAmp Bass Driver DI (V2), for Rocksmith's
+ * SINAMP BASS DRIVER = Tech 21 SansAmp Bass Driver DI (V2), for the game's
  * DI_Amp_BassDriver ("Amp_Bass Driver"). Parody brand "SinAmp" (sans = "sin"
  * en español — same joke, different language); the in-app face must never
  * read "Tech 21" / "SansAmp".

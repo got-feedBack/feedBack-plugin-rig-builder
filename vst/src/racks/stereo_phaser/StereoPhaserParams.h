@@ -1,6 +1,6 @@
 #ifndef STEREO_PHASER_PARAMS_H
 #define STEREO_PHASER_PARAMS_H
-// Rocksmith "Stereo Phaser" rack — a stereo phaser. Knobs: Rate (Hz), Depth, Mix.
+// the game "Stereo Phaser" rack — a stereo phaser. Knobs: Rate (Hz), Depth, Mix.
 enum StereoPhaserParamId { kRate = 0, kDepth, kMix, kParamCount };
 static const char* const kStereoPhaserNames[kParamCount]   = { "Rate", "Depth", "Mix" };
 static const char* const kStereoPhaserSymbols[kParamCount] = { "rate", "depth", "mix" };

@@ -16,7 +16,7 @@
  * BRIGHT. Baxandall-ish BASS/TREBLE (no MID). BRIGHT = a high-shelf switch.
  * CHANNEL 0/1 = the two channels (Ch2 a touch brighter / more gain).
  *
- * Rocksmith mapping: RS Gain -> SUSTAIN (the dirt/sustain), RS Bass -> Bass,
+ * the game mapping: RS Gain -> SUSTAIN (the dirt/sustain), RS Bass -> Bass,
  * RS Treble -> Treble (no Mid on this amp).
  */
 enum JimmyBeanParamId

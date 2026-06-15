@@ -1,5 +1,5 @@
 #pragma once
-// Rocksmith Bass EQ8 bands, modeled on the Boss GE-7B gyrator topology
+// the game Bass EQ8 bands, modeled on the Boss GE-7B gyrator topology
 // (same circuit as the GE-7, bass-tuned caps). Freqs are RS's.
 static const int kEqBands = 8;
 static const float kEqFreqs[kEqBands] = { 30.f, 75.f, 185.f, 460.f, 1100.f, 2700.f, 6800.f, 16000.f };

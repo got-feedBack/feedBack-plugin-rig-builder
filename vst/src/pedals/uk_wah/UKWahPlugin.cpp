@@ -1,5 +1,5 @@
 /*
- * UKWah - Vox V847 / Clyde McCoy style wah for Rocksmith Pedal_UKWah.
+ * UKWah - Vox V847 / Clyde McCoy style wah for the game Pedal_UKWah.
  *
  * The local V847 schematic keeps the same inductor wah topology as a Cry Baby
  * but with a softer, lower-mid voice. This model narrows the sweep, lowers the

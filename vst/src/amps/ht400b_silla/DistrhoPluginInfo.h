@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Silla Boogie 400" — a parody-named clone of the Mesa/Boogie Bass 400+
-// all-tube head (Rocksmith gear "HT400B"). 12AX7 preamp + tone stack + the
+// all-tube head (the game gear "HT400B"). 12AX7 preamp + tone stack + the
 // Mesa 6-band graphic EQ + 12x 6L6 push-pull, modeled from the Bass 400+ panel
 // and documented circuit.
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

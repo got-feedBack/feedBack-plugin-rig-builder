@@ -3,7 +3,7 @@
  *
  * From the GA-79 RVT schematic (3x 6EU7 preamps, 7199 reverb driver/recovery,
  * 12AU7 phase inverter, 4x 6BQ5/EL84 push-pull = stereo power, tremolo oscillator
- * + Frequency/Depth, Stereo/Mono switch). Rocksmith exposes Volume/Bass/Treble;
+ * + Frequency/Depth, Stereo/Mono switch). the game exposes Volume/Bass/Treble;
  * this model adds the amp's signature RVT (Reverb + Vibrato/Tremolo):
  *   • 12AX7 preamp -> passive Bass/Treble -> driver
  *   • valve spring REVERB (Schroeder comb+allpass) blended by Reverb

@@ -1,7 +1,7 @@
 /*
- * BobFilter - Moogerfooger/MuRF-inspired analog filter for Rocksmith's
+ * BobFilter - Moogerfooger/MuRF-inspired analog filter for the game's
  * Pedal_BobFilter. The local schematic shows a direct VCA and 8 FILT/VCA
- * cells under control voltage. Rocksmith exposes only Sens, Attack, Release,
+ * cells under control voltage. the game exposes only Sens, Attack, Release,
  * Mix, and Filter, so this approximates the circuit as an envelope-controlled
  * 8-band resonant filter bank plus a smooth analog sweep voice.
  */

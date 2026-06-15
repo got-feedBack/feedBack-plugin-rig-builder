@@ -1,7 +1,7 @@
 /*
- * Limiter - two-knob peak limiter for Rocksmith's Pedal_Limiter.
+ * Limiter - two-knob peak limiter for the game's Pedal_Limiter.
  *
- * Rocksmith exposes Limit and Rate only. Limit controls the amount/threshold;
+ * the game exposes Limit and Rate only. Limit controls the amount/threshold;
  * Rate controls recovery speed. The detector is stereo-linked so limiting
  * does not pull the image left or right.
  */

@@ -1,5 +1,5 @@
 /*
- * MULTIVERSAL 610 - Universal Audio 610-A tube DI/preamp for Rocksmith's
+ * MULTIVERSAL 610 - Universal Audio 610-A tube DI/preamp for the game's
  * DI_Amp_TubePre. Parody brand "Multiversal"; the in-app face must never read
  * "Universal Audio" / "UA".
  *
@@ -16,7 +16,7 @@
  *   T2 UTC PA-5946 30K:600 output transformer (~7 mA standing current; the
  *   low-end limit lives here) -> Line Out. A DI: NO speaker / cab voicing.
  *
- * Rocksmith: RS Gain -> Gain; RS Bass -> Low EQ; RS Treble -> High EQ.
+ * the game: RS Gain -> Gain; RS Bass -> Low EQ; RS Treble -> High EQ.
  */
 #include "DistrhoPlugin.hpp"
 #include "M610Params.h"
@@ -166,7 +166,7 @@ public:
         x *= mic ? 1.8f : 1.0f;
 
         // --- V1/V2 12AX7+12AY7 — modelled as a CLEAN, transparent DI by default.
-        //     This unit is Rocksmith's acoustic-guitar DI (used by hundreds of
+        //     This unit is the game's acoustic-guitar DI (used by hundreds of
         //     acoustic tones), so at normal Gain it must stay clean; the tube
         //     colour/grit only emerges as Gain is cranked (or Hi Gain engaged).
         //     We blend a near-linear clean path with a gentle asymmetric tube

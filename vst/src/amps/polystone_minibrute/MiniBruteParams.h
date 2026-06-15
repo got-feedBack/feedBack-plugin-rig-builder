@@ -16,7 +16,7 @@
  *
  * Panel (1:1): BASS, TREBLE, VOLUME + a BRITE switch + Hi/Lo inputs.
  *
- * Rocksmith mapping: RS Gain -> VOLUME (the only level/drive; mostly clean),
+ * the game mapping: RS Gain -> VOLUME (the only level/drive; mostly clean),
  * RS Bass -> Bass, RS Treble -> Treble (no Mid on this amp).
  */
 enum MiniBruteParamId

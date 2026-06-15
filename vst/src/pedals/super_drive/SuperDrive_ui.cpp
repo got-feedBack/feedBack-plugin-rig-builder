@@ -1,5 +1,5 @@
 /* SuperDrive stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_SuperDrive); knob count + labels from the plugin params. */
+ * the game art (Pedal_SuperDrive); knob count + labels from the plugin params. */
 #include "SuperDriveParams.h"
 #define PEDAL_TITLE  "SUPER DRIVE"
 #define PEDAL_NAMES  kSuperDriveNames

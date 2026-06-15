@@ -1,7 +1,7 @@
 #ifndef BASS_ENBIG_PARAMS_H
 #define BASS_ENBIG_PARAMS_H
 
-// Rocksmith "Bass Enbiggenator" -> a fictional Rocksmith pedal (no real-world
+// the game "Bass Enbiggenator" -> a fictional the game pedal (no real-world
 // counterpart). Its knobs (Rate / Depth / Mix / Filter) say "LFO-modulated
 // filter", so it's modeled as a resonant band-pass that an LFO wobbles up and
 // down around a base frequency — a sci-fi "vibe/throb" filter, distinct from

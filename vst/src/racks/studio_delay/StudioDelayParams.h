@@ -1,7 +1,7 @@
 #ifndef STUDIO_DELAY_PARAMS_H
 #define STUDIO_DELAY_PARAMS_H
 
-// Rocksmith "Studio Delay" rack — a stereo delay with independent left/right
+// the game "Studio Delay" rack — a stereo delay with independent left/right
 // times. Knobs:
 //   TimeL    = left delay time  (RS stores ms, ~40 .. 360)
 //   TimeR    = right delay time (RS stores ms)

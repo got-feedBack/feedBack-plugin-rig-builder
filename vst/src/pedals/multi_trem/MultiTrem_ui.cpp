@@ -1,5 +1,5 @@
 /* MultiTrem stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_MultiTrem); knob count + labels from the plugin params. */
+ * the game art (Pedal_MultiTrem); knob count + labels from the plugin params. */
 #include "MultiTremParams.h"
 #define PEDAL_TITLE  "MULTI TREM"
 #define PEDAL_NAMES  kMultiTremNames
