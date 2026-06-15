@@ -1,8 +1,8 @@
 /*
- * AcousticSimulator - acoustic-emulator pedal for Rocksmith's
+ * AcousticSimulator - acoustic-emulator pedal for the game's
  * Pedal_AcousticEmulator. Reference: local "acoustic simulator" schematic
  * with clean op-amp filtering, a very mild FET/diode voice, and top/body EQ.
- * Rocksmith exposes Tone, MidShift, Body, and Mid, so those are the only
+ * the game exposes Tone, MidShift, Body, and Mid, so those are the only
  * controls implemented here.
  */
 #include "DistrhoPlugin.hpp"

@@ -1,5 +1,5 @@
 /*
- * GermaniumDrive — germanium boost/overdrive for Rocksmith's
+ * GermaniumDrive — germanium boost/overdrive for the game's
  * Pedal_GermaniumDrive. Character reference: the Skywave (Aion) adaptation of
  * the Hudson Electronics Broadcast (pedals/germanium drive.pdf).
  *
@@ -13,7 +13,7 @@
  *   the warm even-harmonic core) -> TY-141P output transformer (even-harmonic
  *   rounding that engages with level) -> LEVEL.
  *
- * Rocksmith exposes only Gain and Tone, so:
+ * the game exposes only Gain and Tone, so:
  *   - Gain : silicon feedback drive into the germanium + transformer saturation.
  *   - Tone : post brightness (the real pedal has no treble control; this is a
  *            musical brightness tilt over the warm voicing).

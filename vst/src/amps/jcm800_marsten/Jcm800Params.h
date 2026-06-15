@@ -12,7 +12,7 @@
  * Middle 22k, slope 33k, 470pF/22n/22n) -> MASTER VOL -> 2x EL34 (~50W) +
  * PRESENCE (power-amp NFB). The EMS is this same circuit + a HI/LO switch.
  *
- * Rocksmith gear Amp_MarshallJCM800. RS: Gain -> PREAMP VOL (the 2204 drive),
+ * the game gear Amp_MarshallJCM800. RS: Gain -> PREAMP VOL (the 2204 drive),
  * Bass/Mid/Treble -> tone stack, Pres -> Presence. Master pinned via _static.
  */
 enum Jcm800ParamId

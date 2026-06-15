@@ -1,5 +1,5 @@
 /* EN30 stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Amp_EN30); knob count + labels from the plugin params. */
+ * the game art (Amp_EN30); knob count + labels from the plugin params. */
 #include "EN30Params.h"
 #define PEDAL_TITLE  "BOX DC30"
 #define PEDAL_NAMES  kEN30Names

@@ -7,7 +7,7 @@
  * output. Modeled:
  *   input HP → Drive gain → pre-clip LP (Tone = grit character) → hard clip
  *   → post-clip LP (Filter = the RAT tone) → make-up.
- * Rocksmith knobs: Gain (=Distortion), Filter (=the RAT Filter), Tone (pre-clip).
+ * the game knobs: Gain (=Distortion), Filter (=the RAT Filter), Tone (pre-clip).
  */
 #include "DistrhoPlugin.hpp"
 #include "BassDistortionParams.h"

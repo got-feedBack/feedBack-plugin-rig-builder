@@ -2,7 +2,7 @@
  * Hipzon GA-88 — Gibson GA-88S (stereo PA amp), COMPONENT-LEVEL model.
  *
  * From the GA-88S schematic (2x 12AX7 channel preamps -> 4x 6BQ5/EL84 push-pull,
- * GZ34 rectifier, OFF/STANDBY/STEREO/MONO function switch). Rocksmith abstracts
+ * GZ34 rectifier, OFF/STANDBY/STEREO/MONO function switch). the game abstracts
  * it to Volume/Bass/Treble, so the model is a 12AX7 front end -> passive
  * Bass/Treble -> a big, clean 4x EL84 push-pull power section (lots of headroom;
  * blooms only when really pushed). Modeled mono.

@@ -1,5 +1,5 @@
 /* VintageDistortion stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_VintageDistortion); knob count + labels from the plugin params. */
+ * the game art (Pedal_VintageDistortion); knob count + labels from the plugin params. */
 #include "VintageDistortionParams.h"
 #define PEDAL_TITLE  "VINTAGE DISTORTION"
 #define PEDAL_NAMES  kVintageDistortionNames

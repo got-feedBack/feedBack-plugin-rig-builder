@@ -1,11 +1,11 @@
 /*
- * MarshallSupervibe - SV-1/MN3007 BBD vibe for Rocksmith's
+ * MarshallSupervibe - SV-1/MN3007 BBD vibe for the game's
  * Pedal_MarshallSupervibe.
  *
  * Local reference: pedals/marshall super vibe.pdf. The schematic shows TL072
  * input/mix stages, an MN3007 BBD clocked by MN3101, direct and delay paths,
  * and control-board pots for sweep/rate, depth, tone and wave-like shaping.
- * Rocksmith exposes Rate, Depth, Mix and Wave.
+ * the game exposes Rate, Depth, Mix and Wave.
  */
 #include "DistrhoPlugin.hpp"
 #include "MarshallSupervibeParams.h"
@@ -324,7 +324,7 @@ public:
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kMarshallSupervibeDef[i];
         // Keep phase linked; previous vibe tests showed auto-pan is not the
-        // desired Rocksmith behavior here.
+        // desired the game behavior here.
         left.setPhaseOffset(0.00f);
         right.setPhaseOffset(0.00f);
         left.setSampleRate((float)getSampleRate());

@@ -3,7 +3,7 @@
 
 // "Marsten DBS 7400" — Marshall DBS 7400 (Dynamic Bass System) front panel,
 // modeled 1:1 from the 7400 service schematic (boards 7400-60-0A/0B) + panel.
-// EVERY real control is a working knob/switch (the ones Rocksmith doesn't drive
+// EVERY real control is a working knob/switch (the ones the game doesn't drive
 // just sit at their default and the player can still move them):
 //   Gain          : op-amp preamp gain (clean SS — no tube saturation). PEAK LED.
 //   Pre-amp Blend : blends the VALVE voicing (warm, soft) <-> SOLID-STATE (clean).
@@ -19,7 +19,7 @@
 //   Graphic       : graphic-EQ in/out switch.
 //   Volume        : master into the SS power amp (~400 W).
 //   Lo Input      : the padded (Lo) input jack.
-// Rocksmith ("CLH-350B") drives Gain, Bass->Lo, Treble->Hi and the graphic bands
+// the game ("CLH-350B") drives Gain, Bass->Lo, Treble->Hi and the graphic bands
 // (RS sends 7 bands, remapped to the nearest of the real 9; see rs_knob_to_vst_param).
 enum DbsParamId {
     kGain = 0, kBlend, kLo, kHi, kDepth, kVolume,                            // knobs

@@ -1,5 +1,5 @@
 /* Phaser363 stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_Phaser); knob count + labels from the plugin params. */
+ * the game art (Pedal_Phaser); knob count + labels from the plugin params. */
 #include "Phaser363Params.h"
 #define PEDAL_TITLE  "PHASER363"
 #define PEDAL_NAMES  kPhaser363Names

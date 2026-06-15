@@ -24,7 +24,7 @@
  * (fixed bias + NFB + LTP PI + GZ34), and is the basis of the British crunch
  * that Marshall copied for the JTM45.
  *
- * Rocksmith: the 5F6-A has no gain knob, so RS Gain -> Bright Volume (the drive
+ * the game: the 5F6-A has no gain knob, so RS Gain -> Bright Volume (the drive
  * into breakup); Treble/Bass/Mid -> tone stack, Pres -> Presence. A clickable
  * input cable picks Bright / Both(jumpered) / Normal.
  */

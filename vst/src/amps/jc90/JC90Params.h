@@ -15,9 +15,9 @@
  * Panel (1:1): DISTORTION, VOLUME, HI-TREBLE, TREBLE, MIDDLE, BASS, REVERB,
  * RATE, DEPTH + a CHORUS 3-way (Vibrato / Off / Chorus).
  *
- * Rocksmith mapping (rs_knob_to_vst_param.json): Gain -> Distortion (clean at 0
+ * the game mapping (rs_knob_to_vst_param.json): Gain -> Distortion (clean at 0
  * -> the gritty solid-state drive), Treble/Mid/Bass -> tone stack, Pres ->
- * Hi-Treble. Reverb + Chorus sit OFF for songs (Rocksmith adds those via its
+ * Hi-Treble. Reverb + Chorus sit OFF for songs (the game adds those via its
  * own pedals/racks) and stay editable by hand.
  */
 enum JC90ParamId
@@ -48,7 +48,7 @@ static const char* const kJC90Symbols[kParamCount] = {
 static const float kJC90Min[kParamCount] = { 0,0,0,0,0,0,0,0,0,0 };
 static const float kJC90Max[kParamCount] = { 1,1,1,1,1,1,1,1,1,1 };
 // Defaults: the JC clean (Distortion off), Chorus OFF (0.5 = the 3-way midpoint)
-// so Rocksmith songs aren't chorused by default — RS adds chorus via its own
+// so the game songs aren't chorused by default — RS adds chorus via its own
 // pedal; turn the Chorus knob to FIXED(0)/MANUAL(1) by hand for the iconic JC.
 static const float kJC90Def[kParamCount] = {
     0.00f, 0.60f, 0.50f, 0.60f, 0.50f, 0.50f,

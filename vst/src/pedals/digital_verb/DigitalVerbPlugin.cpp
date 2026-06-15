@@ -1,9 +1,9 @@
 /*
- * DigitalVerb - early digital reverb for Rocksmith's Pedal_DigitalVerb.
+ * DigitalVerb - early digital reverb for the game's Pedal_DigitalVerb.
  *
  * Local reference: pedals/digital verb.png, a Boss RV-2 schematic dated 1987.
  * The analog board shows pre/de-emphasis around a digital reverb board. The
- * useful Rocksmith surface is Time, Mix, Depth and Tone, so this models an
+ * useful the game surface is Time, Mix, Depth and Tone, so this models an
  * RV-2-like clean algorithmic verb: short pre-delay, serial diffusion,
  * parallel damped delay tanks, and tone-controlled digital damping.
  */

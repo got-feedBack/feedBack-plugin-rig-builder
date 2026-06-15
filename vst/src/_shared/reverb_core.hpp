@@ -1,5 +1,5 @@
 /*
- * Shared Freeverb-style stereo reverb core for the bundled Rocksmith reverb
+ * Shared Freeverb-style stereo reverb core for the bundled the game reverb
  * racks (Studio Verb / Chamber / Plate). Eight damped feedback combs in
  * parallel into four series all-pass diffusers per channel, plus a light post
  * modulation on the wet (the "Depth" knob) for a lush, slightly chorused tail.

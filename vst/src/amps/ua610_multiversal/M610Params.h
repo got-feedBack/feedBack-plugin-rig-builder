@@ -3,7 +3,7 @@
 
 /*
  * MULTIVERSAL 610 = Universal Audio 610-A console module (the 1960s tube DI /
- * preamp), for Rocksmith's DI_Amp_TubePre ("Amp_Tube Pre"). Parody brand
+ * preamp), for the game's DI_Amp_TubePre ("Amp_Tube Pre"). Parody brand
  * "Multiversal" — the in-app face must never read "Universal Audio" / "UA".
  *
  * Modelled component-by-component from the local schematic:

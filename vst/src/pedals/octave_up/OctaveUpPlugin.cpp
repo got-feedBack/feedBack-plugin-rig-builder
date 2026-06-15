@@ -1,7 +1,7 @@
 /*
- * OctaveUp - clean +12 octave pedal for Rocksmith's Pedal_OctaveUp.
+ * OctaveUp - clean +12 octave pedal for the game's Pedal_OctaveUp.
  *
- * Rocksmith exposes only Tone and Mix. The local Tentacle/Octron references
+ * the game exposes only Tone and Mix. The local Tentacle/Octron references
  * explain the two-path octave-up family, but the in-game pedal needs the wet
  * voice to read as a clean octave above the dry guitar. The wet path therefore
  * uses a fixed 2x phase-vocoder pitch shifter instead of rectifier waveshaping,

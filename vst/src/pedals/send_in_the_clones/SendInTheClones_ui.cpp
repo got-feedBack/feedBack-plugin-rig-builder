@@ -1,5 +1,5 @@
 /* SendInTheClones stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_SendInTheClones); knob count + labels from the plugin params. */
+ * the game art (Pedal_SendInTheClones); knob count + labels from the plugin params. */
 #include "SendInTheClonesParams.h"
 #define PEDAL_TITLE  "SEND IN THE CLONES"
 #define PEDAL_NAMES  kSitcNames

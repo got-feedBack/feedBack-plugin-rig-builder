@@ -1,9 +1,9 @@
 /*
- * LineDrive - Boss OS-2 style drive for Rocksmith's Pedal_LineDrive.
+ * LineDrive - Boss OS-2 style drive for the game's Pedal_LineDrive.
  *
  * Local reference: pedals/line drive.png. The OS-2 has input/output buffers,
  * two op-amp clipping paths, a Color blend between overdrive and distortion,
- * Tone, and Level. Rocksmith exposes only Gain and Tone, so Color is fixed to
+ * Tone, and Level. the game exposes only Gain and Tone, so Color is fixed to
  * a practical drive/distortion blend and Level is internally compensated.
  */
 #include "DistrhoPlugin.hpp"
@@ -199,7 +199,7 @@ public:
         const float g = smoothstep(gain);
         float x = inputHp.process(in);
 
-        // OS-2 has two clipping paths mixed by Color. Rocksmith has no Color,
+        // OS-2 has two clipping paths mixed by Color. the game has no Color,
         // so keep a fixed modern blend that leans distortion as Gain rises.
         float od = odVoice.process(x);
         od *= 1.15f + 5.0f * gain + 9.0f * g;

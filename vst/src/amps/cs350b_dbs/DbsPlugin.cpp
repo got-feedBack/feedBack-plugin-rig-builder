@@ -18,7 +18,7 @@
  * compressor has just a DEPTH knob (VR5) with a FIXED internal threshold
  * (SSM2252 VCA); the panel "Threshold" is only the INDICATOR LED, not a knob.
  *
- * Rocksmith ("CLH-350B") drives Gain, Bass->Lo, Treble->Hi and the graphic bands;
+ * the game ("CLH-350B") drives Gain, Bass->Lo, Treble->Hi and the graphic bands;
  * the rest sit at faithful defaults. The graphic EQ is the REAL 7400 9-band set
  * (50/80/160/320/640/1.25k/2.5k/5k/8k); RS sends 7 bands, remapped to the nearest.
  * Nodal op-amp / RC / MFB primitives are shared with the

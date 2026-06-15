@@ -1,11 +1,11 @@
 #ifndef BASS_SUB_OCTAVE_PARAMS_H
 #define BASS_SUB_OCTAVE_PARAMS_H
 
-// Rocksmith "Bass Sub Octave" -> Boss OC-2 Octave. The OC-2 is a monophonic
+// the game "Bass Sub Octave" -> Boss OC-2 Octave. The OC-2 is a monophonic
 // ANALOG octaver: a comparator squares the input, flip-flops divide that
 // square's frequency by two (one octave down), and the divided square is
 // amplitude-tracked by the input envelope so the sub follows your dynamics.
-// The real pedal has three knobs (OCT2 / Direct Level / OCT1); Rocksmith
+// The real pedal has three knobs (OCT2 / Direct Level / OCT1); the game
 // simplifies it to two:
 //   Mix  = blend of the generated sub-octave against the dry signal
 //   Tone = low-pass on the sub-octave (square → rounder, deeper sub)

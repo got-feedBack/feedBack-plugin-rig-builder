@@ -18,7 +18,7 @@
  *   TONE SHIFT   : mid-scoop switch on the EQ board
  *   power amp    : Presence (VR8 C10K, high-frequency NFB)
  *
- * Rocksmith mapping (rs_knob_to_vst_param.json): RS Gain -> ULTRA GAIN with the
+ * the game mapping (rs_knob_to_vst_param.json): RS Gain -> ULTRA GAIN with the
  * Channel pinned to Ultra (the DSL15 lead voice). Bass/Mid/Treble -> tone stack,
  * Pres -> Presence. The per-channel Gain/Vol + Deep/Tone Shift sit at musical
  * defaults (_static) and stay editable by hand.

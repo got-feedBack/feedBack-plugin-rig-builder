@@ -11,7 +11,7 @@
  *   AOR CHANNEL : Preamp Volume (Pull-AOR-On) + Master (Pull-Bright) — cascaded lead
  *   shared      : Bass (Pull-Deep), Middle (Pull-Boost), Treble, Presence (NFB)
  *
- * Rocksmith mapping (rs_knob_to_vst_param.json): the single Gain knob DRIVES THE
+ * the game mapping (rs_knob_to_vst_param.json): the single Gain knob DRIVES THE
  * CHANNEL — low Gain = Channel One (clean), high Gain morphs into the AOR lead
  * (matching the gain_variants clean/crunch/dist split). Bass/Mid/Treble -> tone
  * stack, Pres -> Presence. Per-channel preamp/master volumes + the pull

@@ -1,10 +1,10 @@
 #ifndef BASS_FILTER_DELAY_PARAMS_H
 #define BASS_FILTER_DELAY_PARAMS_H
 
-// Rocksmith "Bass Filter Delay" -> Boss DM-2 analog (BBD) delay. The DM-2's
+// the game "Bass Filter Delay" -> Boss DM-2 analog (BBD) delay. The DM-2's
 // repeats are warm and progressively darker (the BBD + companding + anti-alias
 // filtering roll the highs off a little more on every pass). Real DM-2 knobs
-// are Repeat Rate / Intensity / Echo; Rocksmith exposes Time / Feedback / Mix
+// are Repeat Rate / Intensity / Echo; the game exposes Time / Feedback / Mix
 // plus a dedicated Filter that sets how dark the repeats are:
 //   Time     = delay time (Repeat Rate)
 //   Feedback = number of repeats (Intensity)

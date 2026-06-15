@@ -1,9 +1,9 @@
 /*
- * Chorus20 - stereo BBD chorus/flanger for Rocksmith's Pedal_Chorus20.
+ * Chorus20 - stereo BBD chorus/flanger for the game's Pedal_Chorus20.
  *
  * Local reference: pedals/chorus 2.0.jpg, labelled "Stereo Chorus Flanger".
  * It shows clocked BBD delay, companding/filtering around the delay line, and
- * stereo wet outputs. Rocksmith exposes Rate, Depth, and Mix only, so this
+ * stereo wet outputs. the game exposes Rate, Depth, and Mix only, so this
  * keeps regeneration, tone, and stereo offset as internal voicing.
  */
 #include "DistrhoPlugin.hpp"

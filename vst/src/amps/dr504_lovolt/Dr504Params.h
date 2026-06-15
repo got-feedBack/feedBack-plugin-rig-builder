@@ -17,7 +17,7 @@
  * Panel (1:1, left->right): NORMAL VOL, BRILLIANT VOL, BASS, TREBLE, MIDDLE,
  * PRESENCE, MASTER VOL + 4 inputs (Normal Hi/Lo, Brilliant Hi/Lo) + STANDBY/MAINS.
  *
- * Rocksmith mapping (rs_knob_to_vst_param.json): no gain knob, so RS Gain ->
+ * the game mapping (rs_knob_to_vst_param.json): no gain knob, so RS Gain ->
  * BRILLIANT VOL (the bright channel volume = the breakup driver); Bass/Mid/Treble
  * -> tone stack, Pres -> Presence. Input pinned to BOTH (jumpered) with Normal
  * Vol + Master at musical defaults via _static; all editable by hand.

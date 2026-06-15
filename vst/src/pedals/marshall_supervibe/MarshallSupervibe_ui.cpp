@@ -1,5 +1,5 @@
 /* MarshallSupervibe stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_MarshallSupervibe); knob count + labels from the plugin params. */
+ * the game art (Pedal_MarshallSupervibe); knob count + labels from the plugin params. */
 #include "MarshallSupervibeParams.h"
 #define PEDAL_TITLE  "MARSHALL SUPERVIBE"
 #define PEDAL_NAMES  kMarshallSupervibeNames

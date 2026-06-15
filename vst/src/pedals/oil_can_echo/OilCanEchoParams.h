@@ -1,8 +1,8 @@
 #ifndef OIL_CAN_ECHO_PARAMS_H
 #define OIL_CAN_ECHO_PARAMS_H
 
-// Rocksmith "Oil Can Echo" -> Tel-Ray / OK Pacemaker oil-can style echo.
-// Rocksmith exposes only Time, Feedback, and Mix.
+// the game "Oil Can Echo" -> Tel-Ray / OK Pacemaker oil-can style echo.
+// the game exposes only Time, Feedback, and Mix.
 enum OilCanEchoParamId
 {
     kTime = 0,

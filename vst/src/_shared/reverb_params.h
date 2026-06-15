@@ -1,7 +1,7 @@
 #ifndef REVERB_PARAMS_H
 #define REVERB_PARAMS_H
 
-// Shared params for the three Rocksmith reverb racks (Studio Verb / Chamber /
+// Shared params for the three the game reverb racks (Studio Verb / Chamber /
 // Plate). They all expose the same four knobs:
 //   Time  = decay length
 //   Tone  = damping (dark .. bright)

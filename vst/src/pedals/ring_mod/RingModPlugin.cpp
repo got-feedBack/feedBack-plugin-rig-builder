@@ -1,9 +1,9 @@
 /*
- * RingMod - Maestro/Oberheim RM-1A style ring modulator for Rocksmith's
+ * RingMod - Maestro/Oberheim RM-1A style ring modulator for the game's
  * Pedal_RingMod.
  *
  * The local schematic shows a preamp, oscillator, squelch/envelope section and
- * MC1495 balanced modulator with signal/carrier null trims. Rocksmith exposes
+ * MC1495 balanced modulator with signal/carrier null trims. the game exposes
  * Depth, Waveform, Sensitivity and Attack, so the trim controls are fixed and
  * the carrier is driven by a dynamic oscillator.
  */

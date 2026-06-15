@@ -4,7 +4,7 @@
 Workflow:
 
 1. Maintain a shared Google Sheet with curated tone3000 picks per
-   Rocksmith gear. Columns (header row required, order flexible):
+   the game gear. Columns (header row required, order flexible):
 
        rs_gear_type, name, category, level, tone3000_id,
        tone3000_url, rs_gain_lo, rs_gain_hi, notes, curator

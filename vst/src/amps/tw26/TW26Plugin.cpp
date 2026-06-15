@@ -1,5 +1,5 @@
 /*
- * TW26 - BENDER DELUXE / Fender '57 Deluxe (5E3 tweed) amp for Rocksmith's Amp_TW26.
+ * TW26 - BENDER DELUXE / Fender '57 Deluxe (5E3 tweed) amp for the game's Amp_TW26.
  *
  * DPF wrapper (VST3 + AU). All the DSP lives in TW26Core.h (plain C++,
  * offline-testable); see that header for the circuit topology + schematic ref.

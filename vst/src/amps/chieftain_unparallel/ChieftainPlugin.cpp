@@ -1,6 +1,6 @@
 /*
  * UNPARALLEL CHIEFTAIN - Matchless Chieftain (Reverb), Mark Sampson, for
- * Rocksmith's Amp_BT15. Parody brand "RigBuilder"; the in-app face must never
+ * the game's Amp_BT15. Parody brand "RigBuilder"; the in-app face must never
  * read "Matchless" or "Chieftain".
  *
  * Reference (modelled component-by-component): a hand-traced 7-page schematic of
@@ -15,7 +15,7 @@
  * Voice: Fender-meets-Marshall, lots of clean before breakup. Stays cleaner and
  * has more headroom than the Mark/Boogie -- deliberately NOT over-saturated.
  *
- * Rocksmith: RS Gain -> VOLUME (drives the preamp into the EL34s); Bass/Mid/
+ * the game: RS Gain -> VOLUME (drives the preamp into the EL34s); Bass/Mid/
  * Treble -> tone stack. Brilliance/Master/Reverb set on the face.
  */
 #include "DistrhoPlugin.hpp"

@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Aiden GT-880" — a parody-named clone of the Eden WT-880 "World Tour"
-// Valve-Tech hybrid bass head (Rocksmith gear "EdenWt800"). Eden Valve-Tech
+// Valve-Tech hybrid bass head (the game gear "EdenWt800"). Eden Valve-Tech
 // preamp + 3-band semi-parametric EQ + bi-amp crossover, modeled from the Eden
 // WT-800C factory schematic.
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

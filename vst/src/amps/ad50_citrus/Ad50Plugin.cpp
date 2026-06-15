@@ -1,5 +1,5 @@
 /*
- * CITRUS AD50 - Orange AD50 (Custom Shop) for Rocksmith's Amp_OrangeAD50.
+ * CITRUS AD50 - Orange AD50 (Custom Shop) for the game's Amp_OrangeAD50.
  * Parody brand "Citrus"; the in-app face must never read "Orange".
  *
  * The AD50 is a simple British EL34 tube head — Orange describes it as aiming to
@@ -18,7 +18,7 @@
  *   - adds SUSTAIN (>=0.5 = an EQ-bypass gain/sustain boost = extra drive) and the
  *     Class A/AB power switch (ClassA>=0.5 -> earlier breakup, more compression).
  *
- * Rocksmith (Amp_OrangeAD50): RS Gain -> GAIN; Bass/Treble -> EQ; Presence ->
+ * the game (Amp_OrangeAD50): RS Gain -> GAIN; Bass/Treble -> EQ; Presence ->
  * Presence. Master/Sustain/ClassA via _static defaults; all editable by hand.
  */
 #include "DistrhoPlugin.hpp"

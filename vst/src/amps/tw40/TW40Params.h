@@ -13,7 +13,7 @@
  *   VOL.BRIGHT (1M, with the 100pF bright cap), VOL.NORMAL (1M)
  * Inputs: a clickable cable selects BRIGHT / BOTH(jumpered) / NORMAL.
  *
- * Rocksmith mapping (rs_knob_to_vst_param.json): the 5F6-A has no "gain" knob —
+ * the game mapping (rs_knob_to_vst_param.json): the 5F6-A has no "gain" knob —
  * the volumes are the gain. RS Gain -> Bright Volume (drives the breakup);
  * Treble/Bass/Mid -> the FMV tone stack, Pres -> Presence. The input sits at
  * BOTH (jumpered, the signature Bassman tone) with Normal Vol at a musical

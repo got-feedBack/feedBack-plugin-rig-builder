@@ -1,5 +1,5 @@
 /*
- * UNPARALLEL DC30 — Matchless DC30 for Rocksmith's Amp_BT30. Parody brand; the
+ * UNPARALLEL DC30 — Matchless DC30 for the game's Amp_BT30. Parody brand; the
  * in-app face must never read "Matchless".
  *
  * A hand-wired AC30-class boutique combo: TWO independent channels into a shared
@@ -12,7 +12,7 @@
  *     TONE rotary modelled as a continuous dark(fat)->bright sweep. Thick mids.
  *   Shared: CUT (post/PI treble cut, higher = darker) + MASTER.
  *
- * Rocksmith: RS Gain -> CH1 VOLUME (drives the EL84 breakup), Channel pinned to
+ * the game: RS Gain -> CH1 VOLUME (drives the EL84 breakup), Channel pinned to
  * Ch1 Brilliant via _static; Bass/Treble -> the Ch1 top-boost stack. The DSP
  * channel-select morphs between the Ch1 top-boost voice and the Ch2 EF86 voice.
  * Class-A EL84: gentle even-harmonic soft clip, compression that rises with

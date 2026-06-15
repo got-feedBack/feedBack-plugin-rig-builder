@@ -23,9 +23,9 @@
  * REVERB + a VIB/CHORUS section (SPEED, DEPTH + a 3-way Off/Chorus/Vibrato
  * switch — the real ESL-3654 lever).
  *
- * Rocksmith mapping (rs_knob_to_vst_param.json): Gain -> Distortion (clean at 0
+ * the game mapping (rs_knob_to_vst_param.json): Gain -> Distortion (clean at 0
  * -> the gritty solid-state drive), Treble/Mid/Bass -> tone stack. Reverb +
- * Chorus sit OFF for songs (Rocksmith adds those via its own pedals/racks) and
+ * Chorus sit OFF for songs (the game adds those via its own pedals/racks) and
  * stay editable by hand.
  */
 enum JC120ParamId
@@ -55,7 +55,7 @@ static const char* const kJC120Symbols[kParamCount] = {
 static const float kJC120Min[kParamCount] = { 0,0,0,0,0,0,0,0,0 };
 static const float kJC120Max[kParamCount] = { 1,1,1,1,1,1,1,1,1 };
 // Defaults: the JC clean (Distortion off), Chorus OFF (0 = the 3-way left
-// position) so Rocksmith songs aren't chorused by default — turn the Chorus
+// position) so the game songs aren't chorused by default — turn the Chorus
 // switch to Chorus(0.5)/Vibrato(1) by hand for the iconic JC shimmer.
 static const float kJC120Def[kParamCount] = {
     0.50f, 0.55f, 0.50f, 0.50f, 0.00f,

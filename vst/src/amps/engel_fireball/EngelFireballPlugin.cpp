@@ -1,5 +1,5 @@
 /*
- * ENGEL FIREBALL - ENGL Fireball 100 (EN-50) for Rocksmith's Amp_EN50. Parody
+ * ENGEL FIREBALL - ENGL Fireball 100 (EN-50) for the game's Amp_EN50. Parody
  * brand "Engel" (ENGL -> Engel); the in-app face must never read "ENGL".
  *
  * Local reference (modelled block-by-block):
@@ -19,7 +19,7 @@
  * picked by the channel relay. BRIGHT = treble-boost switch, BOTTOM = low-end
  * boost, MID BOOST = a mid push. Dual master.
  *
- * Rocksmith: RS Gain -> LEAD GAIN (Channel pinned LEAD); Bass/Mid/Treble -> tone
+ * the game: RS Gain -> LEAD GAIN (Channel pinned LEAD); Bass/Mid/Treble -> tone
  * stack; Pres -> Presence. See rs_knob_to_vst_param.json.
  */
 #include "DistrhoPlugin.hpp"

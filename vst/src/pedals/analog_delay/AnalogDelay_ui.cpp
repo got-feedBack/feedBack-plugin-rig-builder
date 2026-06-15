@@ -1,5 +1,5 @@
 /* AnalogDelay stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_AnalogueDelay); knob count + labels from the plugin params. */
+ * the game art (Pedal_AnalogueDelay); knob count + labels from the plugin params. */
 #include "AnalogDelayParams.h"
 #define PEDAL_TITLE  "ANALOG DELAY"
 #define PEDAL_NAMES  kAnalogDelayNames

@@ -1,5 +1,5 @@
 /*
- * BakedRotatoe - Leslie/RT-20 style rotary speaker for Rocksmith's
+ * BakedRotatoe - Leslie/RT-20 style rotary speaker for the game's
  * Pedal_BakedRotatoe.
  *
  * Local reference: pedals/baked rotatoe.pdf. The PDF is R.G. Keen's LERA,

@@ -1,7 +1,7 @@
 /*
- * SpringReverb - spring tank reverb for Rocksmith's Pedal_SpringReverb.
+ * SpringReverb - spring tank reverb for the game's Pedal_SpringReverb.
  * The local Holy Grail-style schematic shows buffered input/output stages,
- * a dry/effect blend, and a reverb block. Rocksmith exposes Time, Mix, and
+ * a dry/effect blend, and a reverb block. the game exposes Time, Mix, and
  * Depth, so this models the useful spring mode: band-limited dwell drive,
  * metallic multi-delay tank resonances, diffusion, and transient drip.
  */
@@ -376,7 +376,7 @@ public:
         wet = tankLp.process(wet);
         wet += drip * (0.026f + 0.030f * depth);
 
-        // Rocksmith uses large Mix values on normal guitar tones, so this must
+        // the game uses large Mix values on normal guitar tones, so this must
         // behave like a pedal blend that keeps the dry guitar present.
         const float dryLevel = 1.0f - 0.22f * mix;
         const float wetLevel = mix * (0.54f + 0.48f * depth);

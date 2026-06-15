@@ -1,5 +1,5 @@
 /*
- * Enbiggenator - Rocksmith widening/thickening pedal.
+ * Enbiggenator - the game widening/thickening pedal.
  *
  * No exact schematic is available. The pedal art and knobs point to a
  * modulated thickener: Rate controls a slow LFO, Depth controls detune/delay

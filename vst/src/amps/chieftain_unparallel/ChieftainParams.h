@@ -4,7 +4,7 @@
 /*
  * UNPARALLEL CHIEFTAIN = Matchless Chieftain (Reverb), Mark Sampson, hand-traced
  * 7-page schematic. Parody brand "RigBuilder"; the face must never read
- * "Matchless" or "Chieftain" (parody "Unparallel Chieftain"). Rocksmith gear:
+ * "Matchless" or "Chieftain" (parody "Unparallel Chieftain"). the game gear:
  * Amp_BT15.
  *
  * A single-channel CLEAN/crunch boutique head: 2x EL34 CATHODE-BIASED class AB
@@ -23,7 +23,7 @@
  *   Spring REVERB (12AX7 driver + tank + 12AX7 recovery + 100kA Reverb level).
  *   Power: 2x EL34, 270ohm/250uF cathode bias, OT WTI9356, GZ34 rect, 4/8/16 ohm.
  *
- * Rocksmith: RS exposes Gain/Bass/Mid/Treble. RS Gain -> VOLUME (drives the
+ * the game: RS exposes Gain/Bass/Mid/Treble. RS Gain -> VOLUME (drives the
  * preamp into the EL34s). Bass/Mid/Treble -> the TMB tone stack. Brilliance /
  * Master / Reverb set by hand on the face.
  */

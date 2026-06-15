@@ -11,7 +11,7 @@
  * EQ, and the famous trick is to JUMPER the two channels so the Mic volume fills
  * body/mids underneath the Instrument channel.
  *
- * Rocksmith mapping (rs_knob_to_vst_param.json):
+ * the game mapping (rs_knob_to_vst_param.json):
  *   Gain  -> Inst Vol (the 5E3 gain = volume)
  *   Treble-> Tone     (the single tweed Tone control)
  *   Mid   -> Mic Vol  (jumper the Mic channel in for body/mids)
@@ -19,7 +19,7 @@
  *   Bass  -> Bass      (no 5E3 bass pot -> a hidden low shelf)
  *   Pres  -> Presence  (no 5E3 presence pot -> a hidden power-amp top lift)
  * Bright/Bass/Presence have no front-panel knob (the real amp has none); they are
- * driven only by the Rocksmith transformation. Bright is shown as the input cable.
+ * driven only by the game transformation. Bright is shown as the input cable.
  */
 enum TW26ParamId
 {

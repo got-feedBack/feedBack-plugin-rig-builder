@@ -1,7 +1,7 @@
 #ifndef BASS_CHORUS_PARAMS_H
 #define BASS_CHORUS_PARAMS_H
 
-// Rocksmith "Bass Chorus" -> Boss CEB-3 Bass Chorus. BBD-style chorus (an LFO
+// the game "Bass Chorus" -> Boss CEB-3 Bass Chorus. BBD-style chorus (an LFO
 // modulates a short delay, mixed with the dry signal). The CEB-3's bass trick
 // is the LOW FILTER: it keeps the low frequencies OUT of the chorus so the
 // bass fundamental stays solid/centred (the CE-3 guitar version lacks this).

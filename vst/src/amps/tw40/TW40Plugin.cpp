@@ -1,5 +1,5 @@
 /*
- * BENDER BASSMAN - Fender Bassman 5F6-A tweed for Rocksmith's Amp_TW40.
+ * BENDER BASSMAN - Fender Bassman 5F6-A tweed for the game's Amp_TW40.
  * Parody brand "Bender" (same as the SuperNova 22 / Deluxe); the in-app face
  * must never read "Fender".
  *
@@ -13,7 +13,7 @@
  * a 1-out (mono) plugin to a single side -> imbalanced; dual-mono output keeps
  * it centered. (Matches en30/tw26.)
  *
- * Rocksmith: the 5F6-A has no gain knob, so RS Gain -> Bright Volume (the drive
+ * the game: the 5F6-A has no gain knob, so RS Gain -> Bright Volume (the drive
  * into breakup); Treble/Bass/Mid -> tone stack, Pres -> Presence. See
  * rs_knob_to_vst_param.json (input pinned to Both/jumpered for songs).
  */

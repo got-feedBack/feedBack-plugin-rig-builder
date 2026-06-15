@@ -1,6 +1,6 @@
 /*
  * MARSTEN JTM45 - Marshall JTM45 (~30W, 2x KT66 + GZ34 tube rectifier) for
- * Rocksmith's Amp_MarshallJTM45. Parody brand "Marsten" (same as the Plexi /
+ * the game's Amp_MarshallJTM45. Parody brand "Marsten" (same as the Plexi /
  * DSL100); the in-app face must never read "Marshall".
  *
  * Local reference (modelled component-by-component):
@@ -23,7 +23,7 @@
  * cathode follower -> Marshall tone stack -> long-tail PI -> 2x KT66 (~30W) +
  * GZ34 sag -> output transformer. PRESENCE (5K) taps the power-amp NFB.
  *
- * Rocksmith: no gain knob, so RS Gain -> LOUDNESS 1 (clean->crunch->roar).
+ * the game: no gain knob, so RS Gain -> LOUDNESS 1 (clean->crunch->roar).
  * Treble/Bass/Mid -> tone stack, Pres -> Presence. kInput = Bright(0) /
  * Both-jumpered(0.5) / Normal(1).
  */

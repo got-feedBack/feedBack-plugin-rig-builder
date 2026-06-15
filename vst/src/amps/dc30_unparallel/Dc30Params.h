@@ -18,7 +18,7 @@
  *     dark(fat)->bright; then 180pF -> 1MA Volume. Thick midrange, more gain.
  *   SHARED — CUT (250kA, post/PI treble cut -> higher = darker), MASTER (1MA).
  *
- * Rocksmith gear: Amp_BT30. RS exposes only Gain/Bass/Mid/Treble, so RS Gain ->
+ * the game gear: Amp_BT30. RS exposes only Gain/Bass/Mid/Treble, so RS Gain ->
  * "Ch1 Volume" (drives the EL84 breakup, Channel pinned to Ch1 Brilliant), and
  * Bass/Treble -> the Ch1 top-boost stack. The DSP channel-select morphs between
  * the Ch1 top-boost voice and the Ch2 EF86 voice.

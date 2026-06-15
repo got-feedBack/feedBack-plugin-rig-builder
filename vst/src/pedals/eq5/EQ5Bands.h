@@ -1,5 +1,5 @@
 #pragma once
-// Rocksmith EQ5 bands, modeled on the Mesa Boogie 5-band graphic EQ. The Mesa
+// the game EQ5 bands, modeled on the Mesa Boogie 5-band graphic EQ. The Mesa
 // uses real series-LC resonators (≈60/240/750/2200/6600 Hz) summed in parallel
 // — same resonant-bandpass model as the gyrator EQs, but with BROAD bands
 // (low Q) which is the Mesa's signature. Freqs are RS's (the cap/L values).

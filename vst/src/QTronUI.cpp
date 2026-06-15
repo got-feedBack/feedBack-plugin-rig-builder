@@ -1,5 +1,5 @@
 /*
- * AutoSweep — DPF NanoVG UI, LANDSCAPE stompbox like the Rocksmith "Auto
+ * AutoSweep — DPF NanoVG UI, LANDSCAPE stompbox like the game "Auto
  * Filter" art: taupe body, a single row of knobs (Sens / Attack / Release /
  * FilterType / Res / Mix), big pedal name, footswitch. Rotary knobs drag
  * vertically; meaningful readouts kept (LP/BP/HP, ms, %).

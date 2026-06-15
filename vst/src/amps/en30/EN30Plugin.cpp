@@ -1,5 +1,5 @@
 /*
- * BOX DC30 - AC30 Top Boost-style amp for Rocksmith's Amp_EN30.
+ * BOX DC30 - AC30 Top Boost-style amp for the game's Amp_EN30.
  *
  * DPF wrapper (VST3 + AU). All the DSP lives in EN30Core.h (plain C++,
  * offline-testable); see that header for the circuit topology and schematic refs.

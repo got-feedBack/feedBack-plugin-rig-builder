@@ -56,10 +56,6 @@ DATA_DIR = Path(_DATA_DIR_OVERRIDE) if _DATA_DIR_OVERRIDE else (PLUGIN_ROOT / "d
 if str(PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGIN_ROOT))
 
-# Host code (psarc reader, etc.). Absolute, install-location dependent —
-# the extractors append this before `from psarc import …`.
-SLOP_LIB = "/Applications/Slopsmith.app/Contents/Resources/slopsmith/lib"
-
 
 def config_dir() -> Path | None:
     """Locate Slopsmith's per-user config dir across the supported OSes.

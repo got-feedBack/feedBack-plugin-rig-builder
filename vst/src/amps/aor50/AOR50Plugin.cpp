@@ -1,5 +1,5 @@
 /*
- * RANEY AOR50 - Laney AOR 50 "Pro Tube Lead" (A50 Series II) for Rocksmith's
+ * RANEY AOR50 - Laney AOR 50 "Pro Tube Lead" (A50 Series II) for the game's
  * Amp_GB100. Parody brand "Raney"; the in-app face must never read "Laney".
  *
  * Local reference (modelled component-by-component):
@@ -11,7 +11,7 @@
  *   AOR CHANNEL : Preamp (Pull-AOR-On) + Master (Bright) — cascaded lead/overdrive
  *   shared tone : Bass (Pull-Deep), Middle (Pull-Boost), Treble, Presence (NFB)
  *
- * Rocksmith: the Gain knob drives the channel morph (Channel One clean -> AOR
+ * the game: the Gain knob drives the channel morph (Channel One clean -> AOR
  * lead), matching the gain_variants clean/crunch/dist split. See
  * rs_knob_to_vst_param.json.
  */

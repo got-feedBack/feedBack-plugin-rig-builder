@@ -1,8 +1,8 @@
 /*
- * PlanePhase - AP-7 style eight-stage phaser for Rocksmith's Pedal_PlanePhase.
+ * PlanePhase - AP-7 style eight-stage phaser for the game's Pedal_PlanePhase.
  *
  * Local reference: pedals/plane phase.gif. The schematic shows a driven input,
- * 8-stage phase converter, Resonance, Jet Level, and Rate controls. Rocksmith
+ * 8-stage phase converter, Resonance, Jet Level, and Rate controls. the game
  * exposes Rate, Depth, and Mix, so resonance and jet emphasis are internal.
  */
 #include "DistrhoPlugin.hpp"

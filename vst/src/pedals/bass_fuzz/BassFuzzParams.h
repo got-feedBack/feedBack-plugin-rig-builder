@@ -1,8 +1,8 @@
 #ifndef BASS_FUZZ_PARAMS_H
 #define BASS_FUZZ_PARAMS_H
 
-// Rocksmith "Bass Fuzz" -> EHX Bass Big Muff Pi model. Param NAMES match the
-// Rocksmith knobs 1:1: Gain (= Big Muff Sustain, drive into the clipping
+// the game "Bass Fuzz" -> EHX Bass Big Muff Pi model. Param NAMES match the
+// the game knobs 1:1: Gain (= Big Muff Sustain, drive into the clipping
 // stages), Tone (Big Muff tone stack — LP/HP blend with the mid scoop), and
 // Filter (the bass-specific clean low-end blend, so the fuzz keeps its lows).
 enum BassFuzzParamId { kGain = 0, kTone, kFilter, kParamCount };

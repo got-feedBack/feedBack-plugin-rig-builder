@@ -12,7 +12,7 @@ gain-staging pass so the dirty amps sit at the right level and character.
 at the rig-builder layer (target −14, Gain → −12, Volume → −11), so switching
 amps no longer jumps the loudness around.
 
-**"Bypass all Rocksmith cabs" toggle (Setup → Cabinets, default on).** The
+**"Bypass all the game cabs" toggle (Setup → Cabinets, default on).** The
 extracted RS cabs are weak/colourless, so out of the box every tone skips its RS
 cab and you add your own cab/IR. Applies both when auditioning tones (▶ Listen)
 and when playing songs. Uncheck to restore the RS cabs.
@@ -56,15 +56,15 @@ once everything is ready — no bursts, clicks, or garbage during load.
 editor on a song now auditions it *in context* (the whole signal chain), not
 the isolated solo plugin — so what you hear while tweaking is what you'll get.
 
-**Rocksmith cabinet volume fixes.** The cab "volume drop" is fixed: extracted
+**the game cabinet volume fixes.** The cab "volume drop" is fixed: extracted
 cab IRs whose peaks ran over the convolver's ±1.0 range were saturating and
 tripping the post-IR limiter (−10..−20 dB + squashed low end). The IR peak cap
 is now clip-safe (0.95), and each cab is loudness-matched to the others
 (measured cab-to-cab spread **8 dB → 0 dB**), so swapping cab or mic no longer
-changes the volume. Existing installs: Settings → *Normalize existing Rocksmith
+changes the volume. Existing installs: Settings → *Normalize existing the game
 IRs* (idempotent, keeps a `.unnormalized.bak`). Level only — never the tone.
 A cab that still sounds thin is on a bright mic (Edge/Off-axis); switch it to
-*Cone (close)* for full low end (faithful to Rocksmith, not a bug).
+*Cone (close)* for full low end (faithful to the game, not a bug).
 
 ---
 
@@ -103,7 +103,7 @@ The big one. Rig Builder now ships **100 copyright-free VST3 effects** (pedals
 and rack units) built into the plugin, and recreates each one's UI **inside the
 app** — so you can see and tweak a pedal without any external plugin window.
 
-**Bundled effects (no external installs for these).** Every Rocksmith pedal and
+**Bundled effects (no external installs for these).** Every the game pedal and
 rack now maps to a faithful, brand-free in-house VST3 — distortions, fuzzes,
 overdrives, choruses, flangers, phasers, delays/echoes, reverbs, octavers,
 wahs/filters, tremolos/vibes, compressors, graphic EQs, rotary, and the Studio
@@ -114,7 +114,7 @@ alternatives, but a fresh install needs nothing extra to play the full chain.
 chain, the master chain, or the Gear tab — now shows the pedal's face right
 inline, with **draggable knobs/faders** that drive the plugin live. No more
 separate native editor window. Gear thumbnails show the recreated pedal face
-instead of the Rocksmith art for any effect we bundle a VST for. Plugins we
+instead of the game art for any effect we bundle a VST for. Plugins we
 don't have a hand-drawn face for fall back to a clean auto-generated knob panel
 built from their parameters, so **nothing opens in an external window**.
 
@@ -122,8 +122,8 @@ built from their parameters, so **nothing opens in an external window**.
 vertical faders, a ±15 dB grid, and frequency labels — Boss-style (portrait) or
 Mesa-style (landscape).
 
-**Rocksmith settings now load on Edit.** Opening a pedal applies the song's
-Rocksmith knob values through the curated translation table automatically, so
+**the game settings now load on Edit.** Opening a pedal applies the song's
+the game knob values through the curated translation table automatically, so
 the editor opens reflecting the song (not plugin defaults). Your own captured
 tweaks are never overwritten.
 
@@ -199,12 +199,12 @@ new bundled effect.
   chain preloader was quietly knocking 12 dB off every tone the moment a song
   loaded. Gone.
 
-- **Bundled AutoSweep envelope filter — no install needed.** Rocksmith's
+- **Bundled AutoSweep envelope filter — no install needed.** the game's
   **Auto Tone** (auto-wah) pedal now maps to a bundled `AutoSweep.vst3`
   (a real envelope follower → biquad sweep, ported from the user's hardware
   design). Per-song downloads auto-assign it; the UI shows only the
   RS-driven knobs (FilterType / Resonance / Sensitivity / Attack / Release +
-  Mix) with the Rocksmith names, and Attack/Release/Sens scaling is calibrated
+  Mix) with the game names, and Attack/Release/Sens scaling is calibrated
   to the RS values.
 
 - **VST-mapping corrections across many gears** (curated against real songs):
@@ -225,7 +225,7 @@ new bundled effect.
 
 - **Repo restructure** — code reorganized into `rb_core/` + `tools/` +
   `data/` + `assets/` with de-duplication (no behavior change; easier to
-  maintain). Rocksmith cab IRs get a +1.5× make-up; tone3000 IRs unchanged.
+  maintain). the game cab IRs get a +1.5× make-up; tone3000 IRs unchanged.
 
 - **Clearer setup errors** — a failed `gears.psarc` extraction now surfaces
   the real underlying error instead of a generic "extractor failed".
@@ -259,7 +259,7 @@ extracting from gears.psarc:
   to Rescan all afterwards before any cab actually used the new IRs.
   The endpoint now calls `_wire_cabs_to_presets(replace_auto=True)`
   as a tail step: every cab row that wasn't manually overridden gets
-  re-pointed at the freshly-extracted Rocksmith IR, even if it already
+  re-pointed at the freshly-extracted the game IR, even if it already
   had a tone3000 IR assigned. Manual overrides stay sacred. Response
   payload reports `cabs_wired` so the UI can show "extracted N IRs,
   wired M cab rows".
@@ -448,7 +448,7 @@ release closes the four open issues (#12, #13, #14, #15).
 
 - **🔉 Loudness & saturation fixes.** Per-NAM loudness normalization, chain
   makeup gain scaled by NAM count (asymmetric cap), and the engine now drives
-  amp NAMs with enough input level to actually saturate. Rocksmith cab IRs are
+  amp NAMs with enough input level to actually saturate. the game cab IRs are
   L2-normalized to match tone3000 IRs (they were 10–20 dB quieter). NAMs are no
   longer almost-inaudible. *(fixes #15)*
 
@@ -463,7 +463,7 @@ release closes the four open issues (#12, #13, #14, #15).
 
 - **🎛 Bigger free-VST catalog + RS knob mapping.** Pedal VST suggestions grew
   23 → 81 (free plugins only), standardized on the free **Kilohearts Essentials**
-  bundle, with 41 seeded Rocksmith-knob → VST-param mappings. RS knob values are
+  bundle, with 41 seeded the game-knob → VST-param mappings. RS knob values are
   shown per piece so you can dial them in by hand.
 
 - **🖼 Generic gear-photo extraction** for pedals, racks, cabs and amps
@@ -472,11 +472,11 @@ release closes the four open issues (#12, #13, #14, #15).
 ## Issue fixes
 
 - **#15 — NAMs very quiet.** Per-NAM normalization + input-gain drive into the
-  amp NAMs + Rocksmith-IR L2-normalization.
+  amp NAMs + the game-IR L2-normalization.
 - **#12 — feedback spike on tone change.** Chain preload + monitor mute/fade.
 - **#13 — master chain not applying to song.** Chain preloader + AMP-toggle
   auto-apply + persisted bypass.
-- **#14 — Extract Rocksmith IRs on mac.** IR extraction pipeline reworked
+- **#14 — Extract the game IRs on mac.** IR extraction pipeline reworked
   (auto-locate the extracted-IR directory + L2 normalization). If a mac
   `gears.psarc` still yields 0 IRs, the Windows `gears.psarc` extracts cleanly.
 
@@ -518,7 +518,7 @@ the library-wide mapping behave the way you'd expect.
   - *Map new songs only* fills just the unmapped tones, inheriting your
     existing per-gear choices; *Remap all* refreshes auto pieces while keeping
     every manual pick.
-- **📂 Browse… buttons.** The *Regenerate gear map* and *Extract Rocksmith IRs*
+- **📂 Browse… buttons.** The *Regenerate gear map* and *Extract the game IRs*
   settings now have a native **Browse…** file picker — no more typing the
   `gears.psarc` path by hand.
 
@@ -533,7 +533,7 @@ the library-wide mapping behave the way you'd expect.
 # Rig Builder 1.0.0 — first stable release (2026-05-25)
 
 The first stable release of **Rig Builder** (formerly `nam_rig_builder`). It
-maps Rocksmith 2014 tones (amp + cab + pedals + racks) to NAM captures + IRs
+maps the game tones (amp + cab + pedals + racks) to NAM captures + IRs
 from tone3000.com — and now also to your own **VST3 / AU plugins** — so playing
 a CDLC in Slopsmith uses the full, realistic chain instead of generic sounds.
 
@@ -627,7 +627,7 @@ up end-to-end.
    from the catalog applies it to every `preset_pieces` row with that
    `rs_gear_type` (one click, dozens of songs updated).
 
-5. **Rocksmith knob display per piece** — under each gear row in
+5. **the game knob display per piece** — under each gear row in
    Songs, the in-game RS knob settings are now visible (e.g.
    `Rate=50 · Depth=30 · Mix=70`). Always there, no curation needed.
 

@@ -8,7 +8,7 @@ has to either click ⇶ Apply RS settings on every slot, or open every
 editor by hand.
 
 This script walks every `kind='vst'` row, reads its `params_json` (the
-parsed Rocksmith knob values for that gear instance), looks the gear up
+parsed the game knob values for that gear instance), looks the gear up
 in `rs_knob_to_vst_param.json` for the loaded VST's stem, translates each
 RS knob → VST param using `scale` + `offset` + `invert`, and writes back
 into `vst_state` as the JSON envelope `{"params": {paramId: value, ...}}`.

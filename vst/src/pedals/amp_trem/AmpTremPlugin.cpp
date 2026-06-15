@@ -1,7 +1,7 @@
 /*
- * AmpTrem - Demeter Tremulator-style optical amp tremolo for Rocksmith's
+ * AmpTrem - Demeter Tremulator-style optical amp tremolo for the game's
  * Pedal_AmpTrem. The local schematic shows an op-amp LFO driving an LED/LDR
- * optocoupler into a TL061 audio stage. Rocksmith exposes Speed and Depth.
+ * optocoupler into a TL061 audio stage. the game exposes Speed and Depth.
  */
 #include "DistrhoPlugin.hpp"
 #include "AmpTremParams.h"
@@ -77,7 +77,7 @@ class AmpTremCore
     void updateCoeffs()
     {
         // The LED responds fast; the LDR falls slower. Higher Speed tightens
-        // the lag so fast Rocksmith settings do not smear into a flat level.
+        // the lag so fast the game settings do not smear into a flat level.
         lampRiseA = onePoleCoeffMs(5.0f + 7.0f * (1.0f - speed), sampleRate);
         lampFallA = onePoleCoeffMs(34.0f + 70.0f * (1.0f - speed), sampleRate);
         gainA = onePoleCoeffMs(3.0f, sampleRate);

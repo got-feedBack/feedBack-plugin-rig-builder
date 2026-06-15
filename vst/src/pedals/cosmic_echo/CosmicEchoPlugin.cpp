@@ -1,10 +1,10 @@
 /*
- * CosmicEcho - Synthrotek ECHO / PT2399-style delay for Rocksmith
+ * CosmicEcho - Synthrotek ECHO / PT2399-style delay for the game
  * Pedal_CosmicEcho.
  *
  * Local reference: pedals/cosmic echo.png. The schematic shows a PT2399 delay
  * with an op-amp CV delay control, feedback tone shaping, and op-amp input/
- * output mixers. Rocksmith exposes Time, Feedback, and Mix, so this fixes the
+ * output mixers. the game exposes Time, Feedback, and Mix, so this fixes the
  * hidden tone/modulation character to a dark, spacey PT2399 echo.
  */
 #include "DistrhoPlugin.hpp"
@@ -185,7 +185,7 @@ class CosmicEchoCore
 
     float currentDelayMs() const
     {
-        // Existing Rocksmith mapping stores Time as milliseconds / 2000.
+        // Existing the game mapping stores Time as milliseconds / 2000.
         const float ms = time * 2000.0f;
         return std::fmax(55.0f, std::fmin(ms, 950.0f));
     }

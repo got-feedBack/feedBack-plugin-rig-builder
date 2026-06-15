@@ -1,7 +1,7 @@
 #ifndef BASS_EMULATOR_PARAMS_H
 #define BASS_EMULATOR_PARAMS_H
 
-// Rocksmith Pedal_BassEmulator exposes Body and Tone.
+// the game Pedal_BassEmulator exposes Body and Tone.
 enum BassEmulatorParamId
 {
     kBody = 0,

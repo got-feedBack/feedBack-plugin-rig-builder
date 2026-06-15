@@ -1,5 +1,5 @@
 /* RingMod stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_RingMod); knob count + labels from the plugin params. */
+ * the game art (Pedal_RingMod); knob count + labels from the plugin params. */
 #include "RingModParams.h"
 #define PEDAL_TITLE  "RING MOD"
 #define PEDAL_NAMES  kRingModNames

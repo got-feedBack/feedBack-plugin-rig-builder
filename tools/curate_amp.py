@@ -11,7 +11,7 @@ Prints:
     and human-readable title.
 
 No auto-assignment, no JSON emission, no opinions. You eyeball the
-table, pick which model_id goes to which Rocksmith gain level, then
+table, pick which model_id goes to which the game gain level, then
 hand-edit `rs_to_real.json` (or the curation CSV).
 
 Auth: reuses the API key (or OAuth tokens) already in the plugin's

@@ -1,7 +1,7 @@
 /*
- * RangeBooster - Rangemaster-style treble booster for Rocksmith's
+ * RangeBooster - Rangemaster-style treble booster for the game's
  * Pedal_RangeBooster. Reference: single OC44 germanium transistor, tiny input
- * coupling cap, fixed bias, and one Boost pot. Rocksmith exposes only Boost,
+ * coupling cap, fixed bias, and one Boost pot. the game exposes only Boost,
  * so the DSP uses that one control for range emphasis and transistor color.
  */
 #include "DistrhoPlugin.hpp"
@@ -119,7 +119,7 @@ public:
         const float high = x - (0.58f + 0.18f * boost) * low;
         x = low * (0.42f - 0.20f * boost) + high * (1.10f + 1.65f * boost);
 
-        // One germanium transistor stage. Rocksmith presets often put this in
+        // One germanium transistor stage. the game presets often put this in
         // front of clean amps, so the transistor adds bite without acting like
         // a hidden output knob.
         const float boost2 = boost * boost;
@@ -132,7 +132,7 @@ public:
         y = outputHighPass(y);
         y = lowPass(y, topY, topA);
 
-        // Rocksmith does not expose output level here. Keep the pedal close to
+        // the game does not expose output level here. Keep the pedal close to
         // unity and let Boost mostly change the emphasized frequency range.
         const float level = 0.70f + 0.40f * boost;
         return y * level;

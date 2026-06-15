@@ -1,5 +1,5 @@
 /* TW22 stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Amp_TW22); knob count + labels from the plugin params. */
+ * the game art (Amp_TW22); knob count + labels from the plugin params. */
 #include "TW22Params.h"
 #define PEDAL_TITLE  "Bender SuperNova 22"
 #define PEDAL_NAMES  kTW22Names

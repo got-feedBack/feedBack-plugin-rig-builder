@@ -1,7 +1,7 @@
 /*
- * Swole - heavy saturated compressor for Rocksmith Pedal_Swole.
+ * Swole - heavy saturated compressor for the game Pedal_Swole.
  *
- * Rocksmith description: "Adds a very heavy saturated compression effect."
+ * the game description: "Adds a very heavy saturated compression effect."
  * The local SG-1/Lazy Sprocket schematic is useful for the envelope/FET
  * control idea, but the game behavior is a smash compressor/saturator:
  * Smash controls ratio/saturation and Rate controls recovery speed.

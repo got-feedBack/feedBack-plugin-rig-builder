@@ -1,4 +1,4 @@
-/* StudioVerb — Rocksmith reverb rack (Studio hall reverb). Shared Freeverb-style core; this file
+/* StudioVerb — the game reverb rack (Studio hall reverb). Shared Freeverb-style core; this file
  * only sets the voicing + identity. */
 #define REVERB_LABEL "StudioVerb"
 #define REVERB_DESC  "Studio hall reverb"

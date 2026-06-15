@@ -1,10 +1,10 @@
 /*
- * ClassicFlanger - Boss BF-2 style MN3207 BBD flanger for Rocksmith's
+ * ClassicFlanger - Boss BF-2 style MN3207 BBD flanger for the game's
  * Pedal_ClassicFlanger.
  *
  * Local reference: pedals/classic flanger.pdf. The BF-2 has Manual, Depth,
  * Rate, and Resonance controls with a 1 ms - 13 ms BBD delay range.
- * Rocksmith exposes only Rate, Depth, and Mix, so Manual and Resonance are
+ * the game exposes only Rate, Depth, and Mix, so Manual and Resonance are
  * fixed internally.
  */
 #include "DistrhoPlugin.hpp"

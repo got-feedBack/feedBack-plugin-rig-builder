@@ -17,7 +17,7 @@
  *   A Vintage/Burn switch picks the channel; a shared spring Reverb; 12AT7 PI ->
  *   2x 6V6GT push-pull (~22 W), solid-state rectifier (mild sag), Celestion V30.
  *
- * Rocksmith's single Gain knob DRIVES THE CHANNEL: the `channel` param crossfades
+ * the game's single Gain knob DRIVES THE CHANNEL: the `channel` param crossfades
  * Vintage(0) -> Burn(1). Because the two channels have very different inherent
  * gain (clean vs cascaded), the morph alone sweeps clean -> cranked. Treble/Bass/
  * Mid map to the Burn tone stack; Bright -> Norm/Fat; Pres -> the power presence.

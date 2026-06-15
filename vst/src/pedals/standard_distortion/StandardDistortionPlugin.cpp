@@ -1,10 +1,10 @@
 /*
- * StandardDistortion - Boss DS-1 style distortion for Rocksmith's
+ * StandardDistortion - Boss DS-1 style distortion for the game's
  * Pedal_Distortion.
  *
  * Local reference: pedals/standard distortion.pdf. The DS-1 uses transistor
  * buffers, a high-gain TA7136-style stage, hard silicon diode clipping, and a
- * post-clipping tone network. Rocksmith exposes only Gain and Tone, so Level
+ * post-clipping tone network. the game exposes only Gain and Tone, so Level
  * is internally compensated.
  */
 #include "DistrhoPlugin.hpp"
@@ -198,7 +198,7 @@ public:
         x = preEmphasis.process(x);
 
         // DS-1-style high gain into hard clipping. Keep a little distortion at
-        // low Rocksmith Gain without making Gain=7 behave like a full metal box.
+        // low the game Gain without making Gain=7 behave like a full metal box.
         const float drive = 1.55f + 7.0f * gain + 24.0f * g;
         float y = x * drive;
         y = clipLowPass.process(y);
@@ -215,7 +215,7 @@ public:
         y = toneShelf.process(y);
         y = toneLowPass.process(y);
 
-        // No Rocksmith Level knob. DS-1 can be very loud after clipping, so
+        // No the game Level knob. DS-1 can be very loud after clipping, so
         // normalize high Gain without turning low-gain presets into silence.
         const float level = 0.70f / (1.0f + 0.42f * gain + 0.32f * g);
         return softClip(y * level) * 0.98f;

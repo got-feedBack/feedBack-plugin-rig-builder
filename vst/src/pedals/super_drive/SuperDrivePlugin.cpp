@@ -1,9 +1,9 @@
 /*
- * SuperDrive - Boss SD-1 style overdrive for Rocksmith's Pedal_SuperDrive.
+ * SuperDrive - Boss SD-1 style overdrive for the game's Pedal_SuperDrive.
  *
  * Local reference: pedals/super drive.pdf. The SD-1 uses a uPC4558 op-amp with
  * asymmetric silicon diode clipping in the feedback path, a pronounced mid
- * voice, and a tone network after clipping. Rocksmith exposes only Gain and
+ * voice, and a tone network after clipping. the game exposes only Gain and
  * Tone, so the real pedal's Level control is internally compensated.
  */
 #include "DistrhoPlugin.hpp"
@@ -201,7 +201,7 @@ public:
         float x = inputHp.process(in);
         x = feedbackVoice.process(x);
 
-        // Drive pot around the op-amp. Gain=1 in Rocksmith still should retain
+        // Drive pot around the op-amp. Gain=1 in the game still should retain
         // a mild SD-1 voice, while Gain=80 reaches obvious overdrive.
         const float drive = 1.15f + 6.0f * gain + 18.5f * g;
         float y = x * drive;
@@ -211,7 +211,7 @@ public:
         const float opAmpHair = softClip(y * (0.18f + 0.30f * gain)) * 0.22f;
         y = clipped * (0.96f + 0.05f * gain) + opAmpHair;
 
-        // Low Rocksmith Gain settings are used as almost-clean color in a few
+        // Low the game Gain settings are used as almost-clean color in a few
         // presets, so keep some unclipped op-amp path near the bottom.
         const float cleanLeak = 0.22f * (1.0f - gain);
         y = y * (1.0f - cleanLeak) + x * cleanLeak;

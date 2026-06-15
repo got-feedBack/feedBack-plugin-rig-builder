@@ -1,8 +1,8 @@
 /*
- * ShaverPhaser - ET-25B style phaser for Rocksmith's Pedal_ShaverPhaser.
+ * ShaverPhaser - ET-25B style phaser for the game's Pedal_ShaverPhaser.
  *
  * Local reference: pedals/shaver phaser.jpeg. The schematic uses Rate and
- * Depth around a compact JFET/OTA phase network. Rocksmith exposes only those
+ * Depth around a compact JFET/OTA phase network. the game exposes only those
  * two controls, so mix and feedback are voiced internally.
  */
 #include "DistrhoPlugin.hpp"

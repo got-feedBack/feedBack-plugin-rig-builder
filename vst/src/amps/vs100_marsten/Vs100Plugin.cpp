@@ -1,5 +1,5 @@
 /*
- * MARSTEN VS100 - Marshall Valvestate VS100RH for Rocksmith's Amp_HG180. Parody
+ * MARSTEN VS100 - Marshall Valvestate VS100RH for the game's Amp_HG180. Parody
  * brand "Marsten"; the in-app face must never read "Marshall".
  *
  * Local reference (modelled component-by-component):
@@ -13,7 +13,7 @@
  *             Bass/Middle/Treble (the Valvestate diode-clip lead).
  * Plus FX MIX + Clean/OD reverb.
  *
- * Rocksmith: RS Gain -> OD2 Gain; Bass/Mid/Treble -> OD2 Bass/Middle/Treble. See
+ * the game: RS Gain -> OD2 Gain; Bass/Mid/Treble -> OD2 Bass/Middle/Treble. See
  * rs_knob_to_vst_param.json (Channel pinned OD2 + reverb/FX off via _static).
  */
 #include "DistrhoPlugin.hpp"

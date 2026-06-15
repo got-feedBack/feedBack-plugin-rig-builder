@@ -16,7 +16,7 @@
  *   voicing: Bright (treble boost), Bottom (low-end boost), Mid Boost (mid push)
  *   power  : Presence (high-frequency NFB) + dual Master
  *
- * Rocksmith gear: Amp_EN50. RS Gain -> LEAD GAIN (Channel pinned to LEAD via
+ * the game gear: Amp_EN50. RS Gain -> LEAD GAIN (Channel pinned to LEAD via
  * _static); Bass/Mid/Treble -> tone stack; Pres -> Presence. The clean gain,
  * masters and voicing switches sit at musical defaults and stay editable.
  */

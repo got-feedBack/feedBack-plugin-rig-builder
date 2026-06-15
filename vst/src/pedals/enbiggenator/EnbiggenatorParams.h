@@ -1,7 +1,7 @@
 #ifndef ENBIGGENATOR_PARAMS_H
 #define ENBIGGENATOR_PARAMS_H
 
-// Rocksmith Pedal_Enbiggenator exposes Rate, Depth, and Mix.
+// the game Pedal_Enbiggenator exposes Rate, Depth, and Mix.
 enum EnbiggenatorParamId
 {
     kRate = 0,

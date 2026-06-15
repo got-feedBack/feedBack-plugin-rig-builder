@@ -1,9 +1,9 @@
 /*
- * DigitalChorus - clean digital chorus for Rocksmith's Pedal_DigitalChorus.
+ * DigitalChorus - clean digital chorus for the game's Pedal_DigitalChorus.
  *
  * Local reference: pedals/digital chorus.png. The circuit uses an ESS digital
  * delay core with separate rate/depth modulation, low/high filter networks,
- * and an effect level control. Rocksmith exposes Rate, Depth, LoFilter,
+ * and an effect level control. the game exposes Rate, Depth, LoFilter,
  * HiFilter, and Mix.
  */
 #include "DistrhoPlugin.hpp"

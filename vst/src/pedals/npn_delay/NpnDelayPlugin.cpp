@@ -1,10 +1,10 @@
 /*
- * NpnDelay - Boss DM-2 style BBD delay for Rocksmith's Pedal_NPNDelay.
+ * NpnDelay - Boss DM-2 style BBD delay for the game's Pedal_NPNDelay.
  *
  * Local reference: pedals/classic npn delay.pdf. The circuit has a short
  * MN3005/MN3205 BBD line, NE570 companding, dark low-pass repeat filtering,
  * NPN buffer/switching stages, and the DM-2 control set: Repeat Rate, Echo,
- * and Intensity. Rocksmith exposes Time, Feedback, and Mix. Some RS presets
+ * and Intensity. the game exposes Time, Feedback, and Mix. Some RS presets
  * push Time above the original DM-2 spec, so the model accepts a slightly
  * extended BBD range while keeping the repeats dark and compressed.
  */
@@ -189,7 +189,7 @@ class NpnDelayCore
 
     float currentDelayMs() const
     {
-        // Rocksmith stores Time as milliseconds / 2000 in the VST state.
+        // the game stores Time as milliseconds / 2000 in the VST state.
         const float ms = time * 2000.0f;
         return std::fmax(18.0f, std::fmin(ms, 420.0f));
     }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect the Rocksmith knob names that real songs actually use, per gear.
+"""Inspect the game knob names that real songs actually use, per gear.
 
 Scans every `preset_pieces.params_json` row in the user's `nam_tone.db` and
 prints, per `rs_gear_type`, the distinct knob names observed plus how many

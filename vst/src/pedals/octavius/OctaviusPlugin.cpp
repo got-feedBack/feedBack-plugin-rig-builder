@@ -1,5 +1,5 @@
 /*
- * Octavius - Boss OC-2 style octave-down pedal for Rocksmith's Pedal_Octavius.
+ * Octavius - Boss OC-2 style octave-down pedal for the game's Pedal_Octavius.
  *
  * Local reference: pedals/octavius.pdf. The real OC-2 uses flip-flop frequency
  * dividers, but a literal divider model sounds buzzy/synthetic and its
@@ -7,7 +7,7 @@
  * "distorted and terrible". So this reuses the BassEmulator's smooth
  * time-domain pitch shifter (a delay read head running at half / quarter speed
  * with a windowed crossfade splice = exactly -12 / -24 semitones, no square
- * waves, no detector glitches). Rocksmith exposes Tone and Mix:
+ * waves, no detector glitches). the game exposes Tone and Mix:
  *   - Tone : octave brightness + the OCT1(-1)/OCT2(-2) balance (low = darker,
  *            more sub; high = clearer single octave).
  *   - Mix  : dry / octave blend.

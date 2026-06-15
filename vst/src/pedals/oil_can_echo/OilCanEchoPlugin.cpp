@@ -1,11 +1,11 @@
 /*
- * OilCanEcho - Tel-Ray / OK Pacemaker oil-can echo for Rocksmith
+ * OilCanEcho - Tel-Ray / OK Pacemaker oil-can echo for the game
  * Pedal_OilCanEcho.
  *
  * Local references: pedals/oilcan_1.png and oilcan_2.jpg. The schematics show
  * the old electrostatic oil-can delay style: discrete transistor preamp,
  * rotating storage can, bias oscillator/power section, and a simple wet/dry
- * output mixer. Rocksmith exposes Time, Feedback, and Mix, so the mechanical
+ * output mixer. the game exposes Time, Feedback, and Mix, so the mechanical
  * modulation, loss, and smear are fixed inside the model.
  */
 #include "DistrhoPlugin.hpp"
@@ -189,7 +189,7 @@ class OilCanEchoCore
 
     float currentDelayMs() const
     {
-        // Existing Rocksmith mapping stores Time as milliseconds / 2000.
+        // Existing the game mapping stores Time as milliseconds / 2000.
         const float ms = time * 2000.0f;
         return std::fmax(80.0f, std::fmin(ms, 620.0f));
     }

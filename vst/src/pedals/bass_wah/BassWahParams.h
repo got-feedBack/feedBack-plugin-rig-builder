@@ -1,8 +1,8 @@
 #ifndef BASS_WAH_PARAMS_H
 #define BASS_WAH_PARAMS_H
 
-// Rocksmith "Bass Wah" -> Dunlop Cry Baby Bass Wah (105Q). A resonant band-pass
-// "wah" filter swept across a bass-friendly range. Rocksmith drives it through
+// the game "Bass Wah" -> Dunlop Cry Baby Bass Wah (105Q). A resonant band-pass
+// "wah" filter swept across a bass-friendly range. the game drives it through
 // four knobs shared by the whole wah family (Pedal_UKWah etc.):
 //   Auto  = auto-sweep on/off (switch). When on, an LFO moves the wah; when
 //           off, the filter sits at the manual Pedal position (cocked wah).

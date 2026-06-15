@@ -1,7 +1,7 @@
 #ifndef BASS_FLANGER_PARAMS_H
 #define BASS_FLANGER_PARAMS_H
 
-// Rocksmith "Bass Flanger" -> Boss BF-2/BF-3 flanger, adapted for bass. A
+// the game "Bass Flanger" -> Boss BF-2/BF-3 flanger, adapted for bass. A
 // flanger is a SHORT modulated delay with FEEDBACK (the resonant "jet"). The
 // bass adaptation keeps the low end out of the swept comb + feedback so the
 // fundamental stays solid (only the highs flange) — and the delay range is

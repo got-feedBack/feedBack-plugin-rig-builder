@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Hipzon GA-88" — a parody-named clone of the Gibson GA-88S stereo guitar amp
-// (Rocksmith gear "GibsonGA88"). 12AX7 preamp + passive Bass/Treble + 4x 6BQ5
+// (the game gear "GibsonGA88"). 12AX7 preamp + passive Bass/Treble + 4x 6BQ5
 // (EL84) push-pull, modeled from the GA-88S schematic (mono). RS: Volume/Bass/Treble.
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
 #define DISTRHO_PLUGIN_NAME    "HipzonGA88"

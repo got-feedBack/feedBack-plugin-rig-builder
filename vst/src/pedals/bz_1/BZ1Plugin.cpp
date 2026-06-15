@@ -1,7 +1,7 @@
 /*
- * BZ-1 - Chief-style silicon fuzz for Rocksmith's Pedal_FuzzWasHe.
+ * BZ-1 - Chief-style silicon fuzz for the game's Pedal_FuzzWasHe.
  * The local reference is a JFET-input silicon transistor fuzz with a
- * muff-style tone stack and output buffer. Rocksmith exposes only Gain and
+ * muff-style tone stack and output buffer. the game exposes only Gain and
  * Tone, so the DSP keeps those character controls and fixes output level
  * internally.
  */

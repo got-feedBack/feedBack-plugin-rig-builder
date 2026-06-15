@@ -1,4 +1,4 @@
-/* StudioChamber — Rocksmith reverb rack (Studio chamber reverb). Shared Freeverb-style core; this file
+/* StudioChamber — the game reverb rack (Studio chamber reverb). Shared Freeverb-style core; this file
  * only sets the voicing + identity. */
 #define REVERB_LABEL "StudioChamber"
 #define REVERB_DESC  "Studio chamber reverb"

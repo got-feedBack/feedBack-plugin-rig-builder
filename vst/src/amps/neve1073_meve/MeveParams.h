@@ -3,7 +3,7 @@
 
 /*
  * MEVE 1073 = Neve 1073 channel amplifier (the class-A console preamp/EQ used
- * as a DI), for Rocksmith's DI_Amp_MixerPre ("Amp_Mixer Pre"). Parody brand
+ * as a DI), for the game's DI_Amp_MixerPre ("Amp_Mixer Pre"). Parody brand
  * "Meve" — the in-app face must never read "Neve".
  *
  * Modelled component-by-component from the local schematics:

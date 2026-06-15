@@ -1,9 +1,9 @@
 /*
- * TubeSpring - two-knob tube/tank spring reverb for Rocksmith's
+ * TubeSpring - two-knob tube/tank spring reverb for the game's
  * Pedal_TubeSpring.
  *
  * Local reference: pedals/spring reverb.gif, a high-voltage spring tank
- * driver/recovery circuit. Rocksmith exposes Mix and Depth only, so Depth
+ * driver/recovery circuit. the game exposes Mix and Depth only, so Depth
  * controls dwell, tank decay, and drip intensity while Mix is the pedal blend.
  * The dry path stays clean; the tube-like compression is applied only to the
  * virtual tank drive so this does not become a hidden boost/distortion pedal.

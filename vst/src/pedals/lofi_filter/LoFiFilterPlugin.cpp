@@ -1,7 +1,7 @@
 /*
- * LoFiFilter - Lofinator-inspired filter for Rocksmith's Pedal_LoFiFilter.
+ * LoFiFilter - Lofinator-inspired filter for the game's Pedal_LoFiFilter.
  * The local PedalPCB schematic has an op-amp drive stage, clipping diodes,
- * two NJM13600 OTA filter stages, and Lo/Hi controls. Rocksmith exposes only
+ * two NJM13600 OTA filter stages, and Lo/Hi controls. the game exposes only
  * FilterType and Mix, so FilterType moves the Lo/Hi filter window while Mix
  * controls drive, resonance, texture, and wet intensity.
  */
@@ -245,7 +245,7 @@ public:
 
         // Low FilterType settings are intentionally darker and more choked;
         // high settings keep more dry edge for the Lofinator's bright band.
-        // Rocksmith chains often place this pedal before clean amps, so the
+        // the game chains often place this pedal before clean amps, so the
         // filter must not work like an output boost when Mix is high.
         const float wetShare = 0.48f + 0.26f * amount;
         const float dryLevel = (1.0f - 0.42f * wetShare) * (0.94f + 0.06f * t);

@@ -1,7 +1,7 @@
 #ifndef BASS_OVERDRIVE_PARAMS_H
 #define BASS_OVERDRIVE_PARAMS_H
 
-// Rocksmith "Bass Overdrive" -> Darkglass Microtubes B3K (CMOS bass overdrive).
+// the game "Bass Overdrive" -> Darkglass Microtubes B3K (CMOS bass overdrive).
 // B3K topology: a clean path blended with a distortion path. The distortion is
 // CMOS-inverter clipping (asymmetric diodes: 1N4148 + 1N5817 Schottky). RS knobs
 // map 1:1 to the B3K controls:

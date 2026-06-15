@@ -1,5 +1,5 @@
 /* AmpVibe stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_AmpVibe); knob count + labels from the plugin params. */
+ * the game art (Pedal_AmpVibe); knob count + labels from the plugin params. */
 #include "AmpVibeParams.h"
 #define PEDAL_TITLE  "AMP VIBE"
 #define PEDAL_NAMES  kAmpVibeNames

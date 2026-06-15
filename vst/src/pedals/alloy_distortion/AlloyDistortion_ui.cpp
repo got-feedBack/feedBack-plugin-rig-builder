@@ -1,5 +1,5 @@
 /* AlloyDistortion stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_MetalDistortion); knob count + labels from the plugin params. */
+ * the game art (Pedal_MetalDistortion); knob count + labels from the plugin params. */
 #include "AlloyDistortionParams.h"
 #define PEDAL_TITLE  "ALLOY DISTORTION"
 #define PEDAL_NAMES  kAlloyDistortionNames

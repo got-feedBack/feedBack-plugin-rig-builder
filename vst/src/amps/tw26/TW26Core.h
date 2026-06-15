@@ -21,7 +21,7 @@
  * and "blooms" early because of the tube rectifier + cathode bias, and breaks
  * up into a loose tweed grind when pushed.
  *
- * Rocksmith exposes Gain, Bass, Mid, Treble, Pres. The real amp has only two
+ * the game exposes Gain, Bass, Mid, Treble, Pres. The real amp has only two
  * Volumes + one Tone, so: Gain drives clean->tweed-breakup; Bass/Mid/Treble are
  * a tweed-voiced 3-band expansion of the single Tone control (kept mid-rich);
  * Pres is a gentle top-end lift (the 5E3 has no presence pot).
@@ -413,7 +413,7 @@ public:
         // The heavy 5Y3/cathode-bias sag pulls the steady level DOWN as the volume
         // rises, so the makeup RISES with it to hold loudness ~constant while
         // keeping the sag bloom/compression dynamics intact.
-        // RS Gain = distortion ONLY; Rocksmith holds the output VOLUME fixed. The base
+        // RS Gain = distortion ONLY; the game holds the output VOLUME fixed. The base
         // makeup (rising with g) offsets the 5Y3 sag; the extra low-gain term normalizes
         // the clean/quiet end so LOW RS Gain plays at full volume too (was ~10 dB down).
         const float makeup = (1.50f + 0.40f * g + 0.70f * hot) * (1.0f + 2.0f / (1.0f + g * 36.0f));

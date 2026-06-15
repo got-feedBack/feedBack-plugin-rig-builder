@@ -1,9 +1,9 @@
 /*
- * ModDelay - modulated digital delay for Rocksmith's Pedal_ModDelay.
+ * ModDelay - modulated digital delay for the game's Pedal_ModDelay.
  * Reference: local Ibanez DLL10 schematics used as a practical stand-in for
- * the DML10-style Rocksmith pedal. The source circuit has delay time, regen,
+ * the DML10-style the game pedal. The source circuit has delay time, regen,
  * speed, and width controls around a digital delay line, with companding and
- * filtered repeats. Rocksmith exposes Time, Feedback, Mix, Rate, and Depth.
+ * filtered repeats. the game exposes Time, Feedback, Mix, Rate, and Depth.
  */
 #include "DistrhoPlugin.hpp"
 #include "ModDelayParams.h"

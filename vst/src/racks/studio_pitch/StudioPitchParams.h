@@ -1,6 +1,6 @@
 #ifndef STUDIO_PITCH_PARAMS_H
 #define STUDIO_PITCH_PARAMS_H
-// Rocksmith "Studio Pitch" rack -> pitch shifter. Knobs:
+// the game "Studio Pitch" rack -> pitch shifter. Knobs:
 //   Pitch = shift amount (0.5 = unison; down an octave .. up an octave)
 //   Tone  = low-pass on the shifted voice   Mix = dry/wet   Pan = wet L/R pan
 enum StudioPitchParamId { kPitch = 0, kTone, kMix, kPan, kParamCount };

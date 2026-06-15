@@ -1,5 +1,5 @@
 /* VintageFlanger stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_VintageFlanger); knob count + labels from the plugin params. */
+ * the game art (Pedal_VintageFlanger); knob count + labels from the plugin params. */
 #include "VintageFlangerParams.h"
 #define PEDAL_TITLE  "VINTAGE FLANGER"
 #define PEDAL_NAMES  kVintageFlangerNames

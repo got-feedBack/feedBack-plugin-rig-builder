@@ -1,5 +1,5 @@
 /* ShredZone stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_ShredZone); knob count + labels from the plugin params. */
+ * the game art (Pedal_ShredZone); knob count + labels from the plugin params. */
 #include "ShredZoneParams.h"
 #define PEDAL_TITLE  "SHRED ZONE"
 #define PEDAL_NAMES  kShredZoneNames

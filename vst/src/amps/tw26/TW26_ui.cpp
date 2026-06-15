@@ -1,5 +1,5 @@
 /* TW26 stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Amp_TW26); knob count + labels from the plugin params. */
+ * the game art (Amp_TW26); knob count + labels from the plugin params. */
 #include "TW26Params.h"
 #define PEDAL_TITLE  "Bender Deluxe"
 #define PEDAL_NAMES  kTW26Names

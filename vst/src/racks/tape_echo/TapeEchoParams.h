@@ -1,7 +1,7 @@
 #ifndef TAPE_ECHO_PARAMS_H
 #define TAPE_ECHO_PARAMS_H
 
-// Rocksmith "Tape Echo" rack -> Roland RE-201 Space Echo. A stereo tape echo:
+// the game "Tape Echo" rack -> Roland RE-201 Space Echo. A stereo tape echo:
 // dark, saturated repeats with wow & flutter, the two channels spread by Stereo.
 //   Time     = echo time (RS stores ms, ~110 .. 120 in the test songs)
 //   Feedback = repeats

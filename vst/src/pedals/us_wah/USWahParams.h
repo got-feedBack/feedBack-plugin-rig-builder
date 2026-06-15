@@ -1,7 +1,7 @@
 #ifndef US_WAH_PARAMS_H
 #define US_WAH_PARAMS_H
 
-// Rocksmith "US Wah" -> Dunlop Cry Baby GCB-95 style wah.
+// the game "US Wah" -> Dunlop Cry Baby GCB-95 style wah.
 //   Auto  = auto sweep on/off
 //   Pedal = treadle position / sweep bias
 //   Sens  = envelope sensitivity and resonant bite

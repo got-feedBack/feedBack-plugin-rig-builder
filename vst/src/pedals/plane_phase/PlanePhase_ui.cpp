@@ -1,5 +1,5 @@
 /* PlanePhase stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_PlanePhase); knob count + labels from the plugin params. */
+ * the game art (Pedal_PlanePhase); knob count + labels from the plugin params. */
 #include "PlanePhaseParams.h"
 #define PEDAL_TITLE  "PLANE PHASE"
 #define PEDAL_NAMES  kPlanePhaseNames

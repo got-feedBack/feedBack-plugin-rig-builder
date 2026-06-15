@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Bender Fumble 800" — a parody-named clone of the Fender Rumble 800 (modern
-// Class-D bass head, Rocksmith gear "CS300B"). Solid-state Gain + Bright/Contour/
+// Class-D bass head, the game gear "CS300B"). Solid-state Gain + Bright/Contour/
 // Vintage voicing + footswitch-style Overdrive (Drive/Level) + 4-band EQ +
 // Class-D power, modeled from the Rumble 800 front panel.
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

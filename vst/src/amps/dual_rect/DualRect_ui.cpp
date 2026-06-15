@@ -1,5 +1,5 @@
 /* DualRect stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Amp_CA100); knob count + labels from the plugin params. */
+ * the game art (Amp_CA100); knob count + labels from the plugin params. */
 #include "DualRectParams.h"
 #define PEDAL_TITLE  "DUAL RECTIFIER"
 #define PEDAL_NAMES  kDualRectNames

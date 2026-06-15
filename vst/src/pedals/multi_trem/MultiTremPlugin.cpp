@@ -1,7 +1,7 @@
 /*
- * MultiTrem - Boss TR-2 style multi-wave tremolo for Rocksmith's
+ * MultiTrem - Boss TR-2 style multi-wave tremolo for the game's
  * Pedal_MultiTrem. The local PDF is a TR-2 schematic: JFET input, LFO with a
- * Wave control, and a linear VCA. Rocksmith exposes Speed, Mix, and Waveform.
+ * Wave control, and a linear VCA. the game exposes Speed, Mix, and Waveform.
  */
 #include "DistrhoPlugin.hpp"
 #include "MultiTremParams.h"
@@ -67,7 +67,7 @@ class MultiTremCore
 
     float rateHz() const
     {
-        // Rocksmith Multi Trem presets sit mostly around Speed 0.5-0.8. Make
+        // the game Multi Trem presets sit mostly around Speed 0.5-0.8. Make
         // 0.6 already feel medium-fast while keeping the top end usable.
         return 0.65f * std::pow(26.0f, speed);
     }

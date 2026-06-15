@@ -7,7 +7,7 @@
  * Parody brand "Silla" (Mesa = table -> Silla = chair; same family as the Silla
  * Boogie Duo Rectifier). The face must never read "Mesa" or "Boogie".
  *
- * Rocksmith gear: Amp_CA85 ("Mesa Boogie Mark III Crunch"). RS exposes only
+ * the game gear: Amp_CA85 ("Mesa Boogie Mark III Crunch"). RS exposes only
  * Gain/Bass/Mid/Treble, so RS Gain -> LEAD DRIVE (the cascaded lead distortion),
  * Channel pinned to LEAD via _static; Bass/Mid/Treble -> the (scooped) tone stack.
  *

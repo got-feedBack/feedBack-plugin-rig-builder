@@ -6,7 +6,7 @@
  * WET path so the low end stays dry and solid (only the highs get chorused) —
  * that's what keeps a bass from going wobbly/thin, and what the CE-3 guitar
  * version lacks. Frequencies tuned for bass (not the CE-3's guitar R/C values).
- * Rocksmith knobs: Rate, Depth, LoFilter, Mix.
+ * the game knobs: Rate, Depth, LoFilter, Mix.
  */
 #include "DistrhoPlugin.hpp"
 #include "BassChorusParams.h"

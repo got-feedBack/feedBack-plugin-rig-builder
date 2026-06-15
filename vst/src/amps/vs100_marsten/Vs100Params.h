@@ -14,7 +14,7 @@
  *              Bass/Middle/Treble (the Valvestate solid-state lead distortion).
  * Plus an FX MIX (loop blend) and per-mode reverb (Clean Reverb / OD Reverb).
  *
- * Rocksmith (Amp_HG180): the OD2 lead is the voice, so RS Gain -> OD2 Gain,
+ * the game (Amp_HG180): the OD2 lead is the voice, so RS Gain -> OD2 Gain,
  * Bass/Mid/Treble -> OD2 Bass/Middle/Treble. Channel pinned to OD2 + reverb/FX
  * off via _static; everything editable by hand.
  */

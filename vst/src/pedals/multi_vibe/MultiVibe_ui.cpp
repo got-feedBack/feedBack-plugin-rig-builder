@@ -1,5 +1,5 @@
 /* MultiVibe stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_MultiVibe); knob count + labels from the plugin params. */
+ * the game art (Pedal_MultiVibe); knob count + labels from the plugin params. */
 #include "MultiVibeParams.h"
 #define PEDAL_TITLE  "MULTI VIBE"
 #define PEDAL_NAMES  kMultiVibeNames

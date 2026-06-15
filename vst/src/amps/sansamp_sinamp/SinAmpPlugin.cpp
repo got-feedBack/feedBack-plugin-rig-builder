@@ -1,5 +1,5 @@
 /*
- * SINAMP BASS DRIVER - Tech 21 SansAmp Bass Driver DI (V2) for Rocksmith's
+ * SINAMP BASS DRIVER - Tech 21 SansAmp Bass Driver DI (V2) for the game's
  * DI_Amp_BassDriver. Parody brand "SinAmp"; the in-app face must never read
  * "Tech 21" / "SansAmp".
  *
@@ -14,7 +14,7 @@
  * tone (+ BASS-SHIFT 80->40 Hz, MID-SHIFT 1k->500 Hz), LEVEL. A DI: the
  * speaker-ish voicing is part of the box itself.
  *
- * Rocksmith: RS Gain -> Drive; RS Bass -> Bass; RS Mid -> Mid;
+ * the game: RS Gain -> Drive; RS Bass -> Bass; RS Mid -> Mid;
  * RS Treble -> Treble; RS Pres -> Presence.
  */
 #include "DistrhoPlugin.hpp"

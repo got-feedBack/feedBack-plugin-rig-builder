@@ -7,7 +7,7 @@
  * brand "Silla" (Mesa = table -> Silla = chair; same family as the Silla Boogie
  * Mark III / Duo Rectifier). The face must never read "Mesa" or "Boogie".
  *
- * Rocksmith gear: Amp_CA38 (the gear-map name said "Mark IV", but the CA_38
+ * the game gear: Amp_CA38 (the gear-map name said "Mark IV", but the CA_38
  * folder + schematic + photos are the Mark IIB). RS exposes only Gain/Bass/Mid/
  * Treble, so RS Gain -> LEAD DRIVE (the cascaded lead distortion), Channel pinned
  * to LEAD via _static; Bass/Mid/Treble -> the (scooped) Fender-derived tone stack.

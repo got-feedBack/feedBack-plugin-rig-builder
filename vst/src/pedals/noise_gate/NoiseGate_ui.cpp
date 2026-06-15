@@ -1,5 +1,5 @@
 /* NoiseGate stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_NoiseGate); knob count + labels from the plugin params. */
+ * the game art (Pedal_NoiseGate); knob count + labels from the plugin params. */
 #include "NoiseGateParams.h"
 #define PEDAL_TITLE  "NOISE GATE"
 #define PEDAL_NAMES  kNoiseGateNames

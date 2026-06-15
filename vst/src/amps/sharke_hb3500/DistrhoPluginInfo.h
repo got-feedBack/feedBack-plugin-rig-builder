@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Sharke HB3500" — a parody-named clone of the Hartke HA3500 bass head
-// (Rocksmith gear "CS300B"): tube + solid-state preamp blend, compressor,
+// (the game gear "CS300B"): tube + solid-state preamp blend, compressor,
 // 10-band graphic EQ, variable low/high-pass, master. Modeled from the
 // HA3500 circuit diagram (Samson/Hartke, board 400518280).
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

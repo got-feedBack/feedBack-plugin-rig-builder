@@ -1,6 +1,6 @@
 #pragma once
 #include <cmath>
-// Rocksmith Studio Graphic EQ — 5-band sweepable EQ, API-550 style. No Q knob:
+// the game Studio Graphic EQ — 5-band sweepable EQ, API-550 style. No Q knob:
 // the peaking bands use PROPORTIONAL Q (Q widens at low gain, narrows at high
 // gain — the API signature). Bass/Treble are sweepable shelves. Param names
 // match RS 1:1. Freq ranges (Hz) MUST match the apply_vst_state 'studiographiceq'

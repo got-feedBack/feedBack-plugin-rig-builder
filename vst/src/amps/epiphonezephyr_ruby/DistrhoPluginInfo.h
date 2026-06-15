@@ -2,9 +2,9 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Epicall Ruby" — a parody-named clone of the Epiphone Electar Zephyr Amp20
-// (~1949, Danelectro-built) vintage guitar amp (Rocksmith gear "EpiphoneZephyr").
+// (~1949, Danelectro-built) vintage guitar amp (the game gear "EpiphoneZephyr").
 // 12AX7 preamp + passive Bass/Treble + 2x 6L6G push-pull, modeled from the 1949
-// Zephyr schematic; Rocksmith exposes Volume/Bass/Treble.
+// Zephyr schematic; the game exposes Volume/Bass/Treble.
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"
 #define DISTRHO_PLUGIN_NAME    "EpicallRuby"
 #define DISTRHO_PLUGIN_URI     "urn:rigbuilder:epicallruby"

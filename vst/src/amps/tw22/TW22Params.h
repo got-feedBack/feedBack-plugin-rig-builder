@@ -11,9 +11,9 @@
  *   BURN channel (cascaded hi-gain): Gain 1, Gain 2, Treble, Bass, Middle, Volume
  *   shared Reverb
  * Plus a hidden Presence (the power-amp NFB brightness — the SS22 has no front
- * presence pot, so it only exists for the Rocksmith Pres knob).
+ * presence pot, so it only exists for the game Pres knob).
  *
- * Rocksmith mapping (rs_knob_to_vst_param.json): the single Gain knob DRIVES THE
+ * the game mapping (rs_knob_to_vst_param.json): the single Gain knob DRIVES THE
  * CHANNEL — low Gain morphs to the Vintage clean, high Gain to the cascaded Burn.
  *   Gain->Channel, Treble->Burn Treble, Bass->Burn Bass, Mid->Burn Middle,
  *   Bright->Norm/Fat, Pres->Presence. The Vintage knobs + Burn Gain/Vol sit at

@@ -2,7 +2,7 @@
 #define QTRON_PARAMS_H
 
 // Shared parameter metadata for the plugin + its UI (keeps them in sync).
-// Param NAMES match Rocksmith's Auto Tone knobs (FilterType/Res/Sens/Attack/
+// Param NAMES match the game's Auto Tone knobs (FilterType/Res/Sens/Attack/
 // Release) so the mapping is 1:1; Mix is an extra dry/wet; Range/Boost exist
 // but have no knob (fixed via the preset state). Enum IDs stay internal.
 enum QTronParamId { kMode = 0, kAttack, kRelease, kRange, kPeak, kMix, kGain, kBoost, kParamCount };

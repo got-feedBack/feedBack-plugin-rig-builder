@@ -1,5 +1,5 @@
 /*
- * Bender SuperNova22 - Fender Super-Sonic 22 / 6V6-style amp for Rocksmith's Amp_TW22.
+ * Bender SuperNova22 - Fender Super-Sonic 22 / 6V6-style amp for the game's Amp_TW22.
  *
  * DPF/VST3 wrapper. All the DSP lives in TW22Core.h (plain C++, offline-testable);
  * see that header for the circuit topology and the schematic reference.

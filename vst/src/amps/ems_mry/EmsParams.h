@@ -11,7 +11,7 @@
  * the 0.68uF cathode-bypass on the 2nd gain stage). Panel (per the photo, l->r):
  *   PRESENCE, BASS, MIDDLE, TREBLE, VOLUME (master), GAIN (preamp) + HI/LO.
  * Cascaded 12AX7 preamp -> Marshall TMB tone stack -> master volume -> 2x EL34
- * (~50W). Rocksmith gear Amp_GB50.
+ * (~50W). the game gear Amp_GB50.
  *
  * RS: Gain -> GAIN (the JCM800 preamp drive), Bass/Mid/Treble -> tone stack,
  * Pres -> Presence. Master (Volume) + HI/LO pinned via _static.

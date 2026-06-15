@@ -4,7 +4,7 @@
  * A lush stereo chorus: a modulated delay line per channel with TWO LFO voices
  * (offset in phase) for the "ensemble" thickness, the left/right LFOs spread
  * apart by the Stereo control, and a high-pass + low-pass shaping the wet voice
- * (LoFilter / HiFilter). Rate is taken in Hz to match the Rocksmith data.
+ * (LoFilter / HiFilter). Rate is taken in Hz to match the game data.
  *   Rate     -> 0.1 .. 6 Hz LFO
  *   Depth    -> 0 .. ~7 ms modulation swing
  *   Delay    -> 5 .. 28 ms base delay

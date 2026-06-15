@@ -13,7 +13,7 @@
  * Globals: Channel select, Output (master output), Rectifier Bold(silicon)/
  * Spongy(tube) — the "Dual Rectifier" feature (silicon = tight, tube = saggy).
  *
- * Rocksmith mapping (rs_knob_to_vst_param.json): the 5 RS knobs map 1:1 onto the
+ * the game mapping (rs_knob_to_vst_param.json): the 5 RS knobs map 1:1 onto the
  * Red channel (the signature high-gain voice), with the channel pinned to RED in
  * MODERN mode and a Bold (tight) rectifier:
  *   Gain->Red Gain, Treble->Red Treble, Mid->Red Mid, Bass->Red Bass,
@@ -32,7 +32,7 @@ enum DualRectParamId
     // --- CH2 ORANGE ---
     kC2Gain, kC2Treble, kC2Mid, kC2Bass, kC2Presence, kC2Master,
     kC2Mode,        // Raw(0) / Vintage(0.5) / Modern(1)
-    // --- CH3 RED (the Rocksmith high-gain channel) ---
+    // --- CH3 RED (the game high-gain channel) ---
     kC3Gain, kC3Treble, kC3Mid, kC3Bass, kC3Presence, kC3Master,
     kC3Mode,        // Raw(0) / Vintage(0.5) / Modern(1)
     kParamCount

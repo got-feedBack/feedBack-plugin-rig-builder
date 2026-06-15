@@ -1,8 +1,8 @@
 /*
- * Buzz-Tone - low-headroom germanium fuzz for Rocksmith's
+ * Buzz-Tone - low-headroom germanium fuzz for the game's
  * Pedal_CaptFuzzle. The reference schematic is a three-2N1305 circuit running
  * from 1.5 V with fixed volume, a fuzz bias network, and small coupling caps.
- * Rocksmith exposes only Gain and Tone, so this DSP keeps the audible behavior:
+ * the game exposes only Gain and Tone, so this DSP keeps the audible behavior:
  * narrow coupling, asymmetric germanium clipping, starved-supply compression,
  * and a post-fuzz brightness control.
  */
@@ -159,7 +159,7 @@ public:
         y *= tailLift;
 
         // The 0.01 uF output cap into the volume control thins the fuzz before
-        // the tone control. Rocksmith has no Level knob, so output stays fixed.
+        // the tone control. the game has no Level knob, so output stays fixed.
         y = outputHighPass(y);
 
         const float dark = toneLowPass(y);

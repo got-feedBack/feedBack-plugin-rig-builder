@@ -1,6 +1,6 @@
 {
  "_meta": {
-  "description": "Seed catalog: Rocksmith gear type → recommended VST3/AU plugins. Free plugins only. Used by /vst/suggest endpoint and the per-piece VST panel hint.",
+  "description": "Seed catalog: the game gear type → recommended VST3/AU plugins. Free plugins only. Used by /vst/suggest endpoint and the per-piece VST panel hint.",
   "version": 6,
   "updated": "2026-06-14",
   "notes": "v6: bundled clones only. Every gear resolves to its Rig Builder bundled VST (or NAM if none). No external/third-party plugins."
@@ -13,7 +13,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Acoustic Emulator.vst3",
-   "notes": "Bundled acoustic simulator based on the local blue-button acoustic pedal schematic, using Rocksmith's Tone, MidShift, Body, and Mid knobs."
+   "notes": "Bundled acoustic simulator based on the local blue-button acoustic pedal schematic, using the game's Tone, MidShift, Body, and Mid knobs."
   }
  ],
  "Pedal_Chorus": [
@@ -24,7 +24,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/CH-2.vst3",
-   "notes": "Bundled Boss CE-2 style BBD chorus based on the local schematic, using Rocksmith's Rate, Depth, and Mix knobs."
+   "notes": "Bundled Boss CE-2 style BBD chorus based on the local schematic, using the game's Rate, Depth, and Mix knobs."
   }
  ],
  "Pedal_Chorus20": [
@@ -35,7 +35,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Deja Chorus.vst3",
-   "notes": "Bundled stereo BBD chorus/flanger based on the local Chorus 2.0 schematic, using Rocksmith's Rate, Depth, and Mix knobs."
+   "notes": "Bundled stereo BBD chorus/flanger based on the local Chorus 2.0 schematic, using the game's Rate, Depth, and Mix knobs."
   }
  ],
  "Pedal_StereoChorus": [
@@ -46,7 +46,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/134 Stereo Chorus.vst3",
-   "notes": "Bundled stereo BBD chorus clone using Rocksmith's Rate, Depth, and Mix knobs."
+   "notes": "Bundled stereo BBD chorus clone using the game's Rate, Depth, and Mix knobs."
   }
  ],
  "Pedal_DigitalChorus": [
@@ -57,7 +57,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/CH-5.vst3",
-   "notes": "Bundled clean digital chorus based on the local digital chorus schematic, using Rocksmith's Rate, Depth, LoFilter, HiFilter, and Mix knobs."
+   "notes": "Bundled clean digital chorus based on the local digital chorus schematic, using the game's Rate, Depth, LoFilter, HiFilter, and Mix knobs."
   }
  ],
  "Pedal_VintageChorus": [
@@ -68,7 +68,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/134 Stereo Chorus.vst3",
-   "notes": "Bundled warm analog stereo BBD chorus based on the local analog chorus schematic, using Rocksmith's Rate, Depth, and Mix knobs."
+   "notes": "Bundled warm analog stereo BBD chorus based on the local analog chorus schematic, using the game's Rate, Depth, and Mix knobs."
   }
  ],
  "Bass_Pedal_BassChorus": [
@@ -89,7 +89,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/FL-2.vst3",
-   "notes": "Bundled BBD flanger clone using Rocksmith's Rate, Depth, and Mix knobs."
+   "notes": "Bundled BBD flanger clone using the game's Rate, Depth, and Mix knobs."
   }
  ],
  "Pedal_80sFlanger": [
@@ -100,7 +100,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/N117R Flanger.vst3",
-   "notes": "Bundled MXR Flanger Original/SAD1024 style BBD flanger based on the local 80s flanger schematic, using Rocksmith's Rate, Depth, and Mix knobs."
+   "notes": "Bundled MXR Flanger Original/SAD1024 style BBD flanger based on the local 80s flanger schematic, using the game's Rate, Depth, and Mix knobs."
   }
  ],
  "Pedal_ClassicFlanger": [
@@ -111,7 +111,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/FL-2.vst3",
-   "notes": "Bundled Boss BF-2/MN3207 style BBD flanger based on the local classic flanger schematic, using Rocksmith's Rate, Depth, and Mix knobs."
+   "notes": "Bundled Boss BF-2/MN3207 style BBD flanger based on the local classic flanger schematic, using the game's Rate, Depth, and Mix knobs."
   }
  ],
  "Pedal_ModernFlanger": [
@@ -122,7 +122,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/FM107.vst3",
-   "notes": "Bundled MF-108M/Cluster Flux style BBD flanger based on the local modern flange schematic, using Rocksmith's Rate, Depth, Regen, and Mix knobs."
+   "notes": "Bundled MF-108M/Cluster Flux style BBD flanger based on the local modern flange schematic, using the game's Rate, Depth, Regen, and Mix knobs."
   }
  ],
  "Pedal_VintageFlanger": [
@@ -133,7 +133,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Deluxe Servant.vst3",
-   "notes": "Bundled Deluxe Electric Mistress style BBD flanger based on the local vintage flanger schematic, using Rocksmith's Rate, Depth, and Mix knobs."
+   "notes": "Bundled Deluxe Electric Mistress style BBD flanger based on the local vintage flanger schematic, using the game's Rate, Depth, and Mix knobs."
   }
  ],
  "Bass_Pedal_BassFlanger": [
@@ -154,7 +154,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/phase 90.vst3",
-   "notes": "Bundled MXR Phase 90 style four-stage phaser based on the local Phaser 363 schematic, using Rocksmith's single Rate knob."
+   "notes": "Bundled MXR Phase 90 style four-stage phaser based on the local Phaser 363 schematic, using the game's single Rate knob."
   }
  ],
  "Pedal_ShaverPhaser": [
@@ -165,7 +165,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/PH-1.vst3",
-   "notes": "Bundled ET-25B style phaser based on the local shaver phaser schematic, using Rocksmith's Rate and Depth knobs with fixed internal mix."
+   "notes": "Bundled ET-25B style phaser based on the local shaver phaser schematic, using the game's Rate and Depth knobs with fixed internal mix."
   }
  ],
  "Pedal_PlanePhase": [
@@ -176,7 +176,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Rocket Phase.vst3",
-   "notes": "Bundled AP-7 style eight-stage phaser based on the local Plane Phase schematic, using Rocksmith's Rate, Depth, and Mix knobs."
+   "notes": "Bundled AP-7 style eight-stage phaser based on the local Plane Phase schematic, using the game's Rate, Depth, and Mix knobs."
   }
  ],
  "Bass_Pedal_BassPhase": [
@@ -197,7 +197,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Tremolo.vst3",
-   "notes": "Bundled Colorsound Tremolo/Tremola style transistor tremolo based on the local schematic, using Rocksmith's Speed and Mix knobs."
+   "notes": "Bundled Colorsound Tremolo/Tremola style transistor tremolo based on the local schematic, using the game's Speed and Mix knobs."
   }
  ],
  "Pedal_AmpTrem": [
@@ -208,7 +208,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Mega-Trem.vst3",
-   "notes": "Bundled Demeter Tremulator-style optical amp tremolo based on the local schematic, using Rocksmith's Speed and Depth knobs."
+   "notes": "Bundled Demeter Tremulator-style optical amp tremolo based on the local schematic, using the game's Speed and Depth knobs."
   }
  ],
  "Pedal_MultiTrem": [
@@ -219,7 +219,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/TR-2.vst3",
-   "notes": "Bundled Boss TR-2 style multi-wave tremolo based on the local schematic, using Rocksmith's Speed, Mix, and Waveform knobs."
+   "notes": "Bundled Boss TR-2 style multi-wave tremolo based on the local schematic, using the game's Speed, Mix, and Waveform knobs."
   }
  ],
  "Pedal_TremOle": [
@@ -230,7 +230,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Dyna-Trem.vst3",
-   "notes": "Bundled envelope-aware stereo tremolo using Rocksmith's Sens, Attack, Release, and Mix knobs."
+   "notes": "Bundled envelope-aware stereo tremolo using the game's Sens, Attack, Release, and Mix knobs."
   }
  ],
  "Pedal_AmpVibe": [
@@ -241,7 +241,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Multi-Vibe.vst3",
-   "notes": "Bundled Uni-Vibe style four-stage phase modulation based on the local schematic, using Rocksmith's Speed and Mix knobs."
+   "notes": "Bundled Uni-Vibe style four-stage phase modulation based on the local schematic, using the game's Speed and Mix knobs."
   }
  ],
  "Pedal_MultiVibe": [
@@ -252,7 +252,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/VB-2.vst3",
-   "notes": "Bundled Boss VB-2 style BBD vibrato based on the local schematic, using Rocksmith's Speed, Mix and Waveform knobs."
+   "notes": "Bundled Boss VB-2 style BBD vibrato based on the local schematic, using the game's Speed, Mix and Waveform knobs."
   }
  ],
  "Pedal_AutoVibe": [
@@ -263,7 +263,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Oceanduct.vst3",
-   "notes": "Bundled envelope-controlled vibrato/vibe using Rocksmith's Sens, Attack, Release, and Mix knobs."
+   "notes": "Bundled envelope-controlled vibrato/vibe using the game's Sens, Attack, Release, and Mix knobs."
   }
  ],
  "Pedal_BassEmulator": [
@@ -274,7 +274,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Bass Emulator.vst3",
-   "notes": "Bundled guitar-to-bass octave emulator using Rocksmith's Body and Tone knobs."
+   "notes": "Bundled guitar-to-bass octave emulator using the game's Body and Tone knobs."
   }
  ],
  "Pedal_MarshallSupervibe": [
@@ -285,7 +285,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/UV-1.vst3",
-   "notes": "Bundled Marshall SV-1/Supervibe style MN3007 BBD vibe based on the local schematic, using Rocksmith's Rate, Depth, Mix and Wave knobs."
+   "notes": "Bundled Marshall SV-1/Supervibe style MN3007 BBD vibe based on the local schematic, using the game's Rate, Depth, Mix and Wave knobs."
   }
  ],
  "Pedal_BakedRotatoe": [
@@ -296,7 +296,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/RT-2.vst3",
-   "notes": "Bundled Leslie/RT-20 style rotary speaker based on the local LERA Leslie rotor adapter reference, using Rocksmith's Rate, Depth, Mix and Balance knobs."
+   "notes": "Bundled Leslie/RT-20 style rotary speaker based on the local LERA Leslie rotor adapter reference, using the game's Rate, Depth, Mix and Balance knobs."
   }
  ],
  "Pedal_OmniMod": [
@@ -307,7 +307,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/UniMod.vst3",
-   "notes": "Bundled Uni-Vibe/Shin-ei style photocell phase modulation based on the local Omni Mod schematics, using Rocksmith's Rate, Depth, and Mix knobs."
+   "notes": "Bundled Uni-Vibe/Shin-ei style photocell phase modulation based on the local Omni Mod schematics, using the game's Rate, Depth, and Mix knobs."
   }
  ],
  "Pedal_AnalogueDelay": [
@@ -317,7 +317,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/FM104.vst3",
    "free": true,
-   "notes": "Bundled MF-104 style BBD delay using Rocksmith Time, Feedback and Mix controls"
+   "notes": "Bundled MF-104 style BBD delay using the game Time, Feedback and Mix controls"
   }
  ],
  "Pedal_ValveEcho": [
@@ -327,7 +327,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/Valve Echo.vst3",
    "free": true,
-   "notes": "Bundled Binson Echorec style valve drum echo using Rocksmith Time, Feedback and Mix controls"
+   "notes": "Bundled Binson Echorec style valve drum echo using the game Time, Feedback and Mix controls"
   }
  ],
  "Pedal_NPNDelay": [
@@ -337,7 +337,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/DM-2.vst3",
    "free": true,
-   "notes": "Bundled DM-2 style BBD/NPN delay using Rocksmith Time, Feedback and Mix controls"
+   "notes": "Bundled DM-2 style BBD/NPN delay using the game Time, Feedback and Mix controls"
   }
  ],
  "Pedal_NoFiEcho": [
@@ -347,7 +347,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/No Fi Echo.vst3",
    "free": true,
-   "notes": "Bundled DE7-style stereo no-fi echo using Rocksmith Time, Feedback and Mix controls"
+   "notes": "Bundled DE7-style stereo no-fi echo using the game Time, Feedback and Mix controls"
   }
  ],
  "Pedal_OilCanEcho": [
@@ -358,7 +358,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Oil Can Echo.vst3",
-   "notes": "Bundled Tel-Ray / OK Pacemaker oil-can echo based on the local schematics, using Rocksmith's Time, Feedback, and Mix knobs."
+   "notes": "Bundled Tel-Ray / OK Pacemaker oil-can echo based on the local schematics, using the game's Time, Feedback, and Mix knobs."
   }
  ],
  "Pedal_CosmicEcho": [
@@ -369,7 +369,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Galaxy Echo.vst3",
-   "notes": "Bundled Synthrotek ECHO / PT2399-style cosmic delay based on the local schematic, using Rocksmith's Time, Feedback, and Mix knobs."
+   "notes": "Bundled Synthrotek ECHO / PT2399-style cosmic delay based on the local schematic, using the game's Time, Feedback, and Mix knobs."
   }
  ],
  "Pedal_ModDelay": [
@@ -380,7 +380,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/DL9.vst3",
-   "notes": "Bundled DLL10/DML10-style modulated delay using Rocksmith's Time, Feedback, Mix, Rate, and Depth knobs."
+   "notes": "Bundled DLL10/DML10-style modulated delay using the game's Time, Feedback, Mix, Rate, and Depth knobs."
   }
  ],
  "Bass_Pedal_BassFilterDelay": [
@@ -411,7 +411,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Holy Spring.vst3",
-   "notes": "Bundled Holy Grail-style spring tank reverb using Rocksmith's Time, Mix, and Depth knobs."
+   "notes": "Bundled Holy Grail-style spring tank reverb using the game's Time, Mix, and Depth knobs."
   }
  ],
  "Pedal_DigitalVerb": [
@@ -422,7 +422,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/RV-2.vst3",
-   "notes": "Bundled Boss RV-2 style early digital reverb based on the local schematic, using Rocksmith's Time, Mix, Depth, and Tone knobs."
+   "notes": "Bundled Boss RV-2 style early digital reverb based on the local schematic, using the game's Time, Mix, Depth, and Tone knobs."
   }
  ],
  "Pedal_PlateVerb": [
@@ -433,7 +433,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/VOODOO.vst3",
-   "notes": "Bundled EMT 140-style plate reverb based on the local schematic, using Rocksmith's Time, Depth, Mix, and Voice knobs."
+   "notes": "Bundled EMT 140-style plate reverb based on the local schematic, using the game's Time, Depth, Mix, and Voice knobs."
   }
  ],
  "Pedal_TubeSpring": [
@@ -444,7 +444,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Real Spring.vst3",
-   "notes": "Bundled tube/spring tank reverb based on the local spring driver schematic, using Rocksmith's Mix and Depth knobs."
+   "notes": "Bundled tube/spring tank reverb based on the local spring driver schematic, using the game's Mix and Depth knobs."
   }
  ],
  "Pedal_Compression": [
@@ -455,7 +455,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/dyna comp.vst3",
-   "notes": "Bundled Dyna Comp-style pedal compressor using Rocksmith's Comp, Attack, and Release knobs."
+   "notes": "Bundled Dyna Comp-style pedal compressor using the game's Comp, Attack, and Release knobs."
   }
  ],
  "Pedal_Compressor": [
@@ -466,7 +466,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/dyna comp.vst3",
-   "notes": "Bundled Dyna Comp-style compressor using Rocksmith's Comp, Attack, and Release knobs."
+   "notes": "Bundled Dyna Comp-style compressor using the game's Comp, Attack, and Release knobs."
   }
  ],
  "Bass_Pedal_MBComp": [
@@ -477,7 +477,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Multi Comp.vst3",
-   "notes": "Bundled EBS MultiComp-style multiband bass compressor based on the local schematic, using Rocksmith's Compress, Filter, and Rate knobs."
+   "notes": "Bundled EBS MultiComp-style multiband bass compressor based on the local schematic, using the game's Compress, Filter, and Rate knobs."
   }
  ],
  "Pedal_EQ5": [
@@ -497,7 +497,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/GE-8.vst3",
    "free": true,
-   "notes": "Bundled 8-band graphic EQ clone of Rocksmith EQ8"
+   "notes": "Bundled 8-band graphic EQ clone of the game EQ8"
   }
  ],
  "Pedal_AmpEQ": [
@@ -558,7 +558,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/NF-1.vst3",
-   "notes": "Bundled ET-45C/default-gate style gate using Rocksmith's Thresh and Rate knobs"
+   "notes": "Bundled ET-45C/default-gate style gate using the game's Thresh and Rate knobs"
   }
  ],
  "Pedal_Limiter": [
@@ -568,7 +568,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/LM-2.vst3",
    "free": true,
-   "notes": "Bundled two-knob stereo peak limiter using Rocksmith's Limit and Rate controls"
+   "notes": "Bundled two-knob stereo peak limiter using the game's Limit and Rate controls"
   }
  ],
  "Pedal_USWah": [
@@ -579,7 +579,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Cry Man.vst3",
-   "notes": "Bundled Dunlop Cry Baby GCB-95 style wah based on the local US Wah schematic, using Rocksmith's Auto, Pedal, Sens, and Speed knobs."
+   "notes": "Bundled Dunlop Cry Baby GCB-95 style wah based on the local US Wah schematic, using the game's Auto, Pedal, Sens, and Speed knobs."
   }
  ],
  "Pedal_UKWah": [
@@ -590,7 +590,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/BOX B847.vst3",
-   "notes": "Bundled Vox V847 / Clyde McCoy style wah based on the local UK Wah schematic, using Rocksmith's Auto, Pedal, Sens, and Speed knobs."
+   "notes": "Bundled Vox V847 / Clyde McCoy style wah based on the local UK Wah schematic, using the game's Auto, Pedal, Sens, and Speed knobs."
   }
  ],
  "Bass_Pedal_BassWah": [
@@ -611,7 +611,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Jockey Bad.vst3",
-   "notes": "Bundled Morley Bad Horsie / optical contour wah based on the local Modern Wah schematic, using Rocksmith's Auto, Pedal, Sens, and Speed knobs."
+   "notes": "Bundled Morley Bad Horsie / optical contour wah based on the local Modern Wah schematic, using the game's Auto, Pedal, Sens, and Speed knobs."
   }
  ],
  "Pedal_LoFiFilter": [
@@ -622,7 +622,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Lo Fi Filter.vst3",
-   "notes": "Bundled Lofinator-style lo-fi filter based on the local schematic, using Rocksmith's FilterType and Mix knobs."
+   "notes": "Bundled Lofinator-style lo-fi filter based on the local schematic, using the game's FilterType and Mix knobs."
   }
  ],
  "Pedal_BobFilter": [
@@ -633,7 +633,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/FM105.vst3",
-   "notes": "Bundled Moog/MuRF-style analog filter based on the local MF-105 schematic, using Rocksmith's Sens, Attack, Release, Mix, and Filter knobs."
+   "notes": "Bundled Moog/MuRF-style analog filter based on the local MF-105 schematic, using the game's Sens, Attack, Release, Mix, and Filter knobs."
   }
  ],
  "Pedal_AutoFilter": [
@@ -643,7 +643,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/BU-TRON III.vst3",
    "free": true,
-   "notes": "Bundled Mu-Tron III style envelope filter based on the local Auto Filter schematic, using Rocksmith's FilterType, Res, Sens, Attack and Release knobs."
+   "notes": "Bundled Mu-Tron III style envelope filter based on the local Auto Filter schematic, using the game's FilterType, Res, Sens, Attack and Release knobs."
   },
   {
    "name": "AutoSweep",
@@ -661,7 +661,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/Qtrix.vst3",
    "free": true,
-   "notes": "Bundled Q-Tron-style envelope filter kept for Rocksmith Bass Auto Filter/Bass Auto Tone, with bass-range sweep calibration; guitar Auto Tone uses the Mu-Tron III clone."
+   "notes": "Bundled Q-Tron-style envelope filter kept for the game Bass Auto Filter/Bass Auto Tone, with bass-range sweep calibration; guitar Auto Tone uses the Mu-Tron III clone."
   }
  ],
  "Pedal_GermaniumDrive": [
@@ -672,7 +672,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Germanium Drive.vst3",
-   "notes": "Bundled two-knob smooth germanium overdrive for Rocksmith's Gain/Tone pedal."
+   "notes": "Bundled two-knob smooth germanium overdrive for the game's Gain/Tone pedal."
   }
  ],
  "Pedal_CustomDrive": [
@@ -683,7 +683,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/CDO.vst3",
-   "notes": "Bundled MOSFET/diode custom overdrive based on the local Custom Drive schematic, using Rocksmith's Gain, Tone, and Voice knobs."
+   "notes": "Bundled MOSFET/diode custom overdrive based on the local Custom Drive schematic, using the game's Gain, Tone, and Voice knobs."
   }
  ],
  "Pedal_LineDrive": [
@@ -693,7 +693,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/OS-2.vst3",
    "free": true,
-   "notes": "Bundled Boss OS-2 style drive/distortion blend using Rocksmith Gain and Tone controls"
+   "notes": "Bundled Boss OS-2 style drive/distortion blend using the game Gain and Tone controls"
   }
  ],
  "Pedal_MarshallGuvnorPlus": [
@@ -703,7 +703,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/GM-2.vst3",
    "free": true,
-   "notes": "Bundled Marshall GV-2 Guv'nor Plus style drive using Rocksmith Gain, Bass, Mid, Treble and Deep controls"
+   "notes": "Bundled Marshall GV-2 Guv'nor Plus style drive using the game Gain, Bass, Mid, Treble and Deep controls"
   }
  ],
  "Pedal_SuperDrive": [
@@ -713,7 +713,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/SD-1.vst3",
    "free": true,
-   "notes": "Bundled Boss SD-1 style asymmetric feedback overdrive using Rocksmith Gain and Tone controls"
+   "notes": "Bundled Boss SD-1 style asymmetric feedback overdrive using the game Gain and Tone controls"
   }
  ],
  "Pedal_RangeBooster": [
@@ -724,7 +724,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Range Booster.vst3",
-   "notes": "Bundled Rangemaster-style treble booster based on the local OC44 Range Booster schematic, using Rocksmith's Boost knob."
+   "notes": "Bundled Rangemaster-style treble booster based on the local OC44 Range Booster schematic, using the game's Boost knob."
   }
  ],
  "Pedal_Distortion": [
@@ -734,7 +734,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/DS-1.vst3",
    "free": true,
-   "notes": "Bundled Boss DS-1 style standard distortion using Rocksmith Gain and Tone controls"
+   "notes": "Bundled Boss DS-1 style standard distortion using the game Gain and Tone controls"
   }
  ],
  "Pedal_VintageDistortion": [
@@ -744,7 +744,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/Vintage Distortion.vst3",
    "free": true,
-   "notes": "Bundled DOD 250 style op-amp/asymmetric diode distortion using Rocksmith Gain and Tone controls"
+   "notes": "Bundled DOD 250 style op-amp/asymmetric diode distortion using the game Gain and Tone controls"
   }
  ],
  "Pedal_MetalDistortion": [
@@ -754,7 +754,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/HM-2.vst3",
    "free": true,
-   "notes": "Bundled Boss HM-2 style alloy/heavy metal distortion using Rocksmith Gain and Tone controls"
+   "notes": "Bundled Boss HM-2 style alloy/heavy metal distortion using the game Gain and Tone controls"
   }
  ],
  "Bass_Pedal_BassDistortion": [
@@ -807,7 +807,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Super-Buzz.vst3",
-   "notes": "Bundled octave fuzz based on the local schematic, using Rocksmith's Gain and Tone knobs."
+   "notes": "Bundled octave fuzz based on the local schematic, using the game's Gain and Tone knobs."
   }
  ],
  "Pedal_BuzzToo": [
@@ -818,7 +818,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Big Buzz.vst3",
-   "notes": "Bundled triangle-era four-transistor fuzz based on the local schematic, using Rocksmith's Gain and Tone knobs."
+   "notes": "Bundled triangle-era four-transistor fuzz based on the local schematic, using the game's Gain and Tone knobs."
   }
  ],
  "Bass_Pedal_BassFuzz": [
@@ -839,7 +839,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/OCTUP.vst3",
-   "notes": "Bundled clean +12 octave-up inspired by Foxrox Octron and EQD Tentacle two-path octave references, using Rocksmith's Tone and Mix knobs."
+   "notes": "Bundled clean +12 octave-up inspired by Foxrox Octron and EQD Tentacle two-path octave references, using the game's Tone and Mix knobs."
   }
  ],
  "Pedal_Octavius": [
@@ -850,7 +850,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/OC-5.vst3",
-   "notes": "Bundled Boss OC-2 style octave-down pedal based on the local Octavius schematic, using Rocksmith's Tone and Mix knobs."
+   "notes": "Bundled Boss OC-2 style octave-down pedal based on the local Octavius schematic, using the game's Tone and Mix knobs."
   }
  ],
  "Pedal_MultiPitch": [
@@ -861,7 +861,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Multi Pitch.vst3",
-   "notes": "Bundled MF-102 style ring mod pitch-sideband pedal based on the local multipitch schematic, using Rocksmith's Pitch1, Tone and Mix knobs."
+   "notes": "Bundled MF-102 style ring mod pitch-sideband pedal based on the local multipitch schematic, using the game's Pitch1, Tone and Mix knobs."
   }
  ],
  "Bass_Pedal_BassSubOctave": [
@@ -882,7 +882,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/BitCruncher.vst3",
-   "notes": "Bundled Beverly BitCrusher/ADC0804-style lo-fi converter using Rocksmith's Attack, FilterType, Mix, Release, and Sens knobs."
+   "notes": "Bundled Beverly BitCrusher/ADC0804-style lo-fi converter using the game's Attack, FilterType, Mix, Release, and Sens knobs."
   }
  ],
  "Pedal_RingMod": [
@@ -893,7 +893,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/RingMod.vst3",
-   "notes": "Bundled Maestro/Oberheim RM-1A style ring modulator using Rocksmith's Depth, Waveform, Sensitivity and Attack knobs."
+   "notes": "Bundled Maestro/Oberheim RM-1A style ring modulator using the game's Depth, Waveform, Sensitivity and Attack knobs."
   }
  ],
  "Pedal_Swole": [
@@ -904,7 +904,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Beta Fist.vst3",
-   "notes": "Bundled heavy saturated compressor based on Rocksmith's description, using Rocksmith's Smash and Rate knobs."
+   "notes": "Bundled heavy saturated compressor based on the game's description, using the game's Smash and Rate knobs."
   }
  ],
  "Pedal_ShredZone": [
@@ -914,7 +914,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/MT-2.vst3",
    "free": true,
-   "notes": "Bundled Boss MT-2 style high-gain distortion using Rocksmith Gain, Bass, Mid and Treble controls"
+   "notes": "Bundled Boss MT-2 style high-gain distortion using the game Gain, Bass, Mid and Treble controls"
   }
  ],
  "Pedal_Enbiggenator": [
@@ -925,7 +925,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/MIME.vst3",
-   "notes": "Bundled Rocksmith-style modulated thickener/widener using Rocksmith's Rate, Depth, and Mix knobs."
+   "notes": "Bundled the game-style modulated thickener/widener using the game's Rate, Depth, and Mix knobs."
   }
  ],
  "Rack_StereoPhaser": [
@@ -1005,7 +1005,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/Attack of the Clones.vst3",
    "free": true,
-   "notes": "Bundled Clone Theory style BBD chorus/doubler. Clones increases voice count/spread; Depth and Mix mirror Rocksmith."
+   "notes": "Bundled Clone Theory style BBD chorus/doubler. Clones increases voice count/spread; Depth and Mix mirror the game."
   }
  ],
  "Bass_Pedal_EdenWTDI": [
@@ -1106,7 +1106,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/DualRect.vst3",
-   "notes": "Bundled Mesa-Boogie Dual Rectifier Red-channel style amp based on the local Cali_100 schematic, using Rocksmith's Gain, Bass, Mid, Treble, and Pres knobs."
+   "notes": "Bundled Mesa-Boogie Dual Rectifier Red-channel style amp based on the local Cali_100 schematic, using the game's Gain, Bass, Mid, Treble, and Pres knobs."
   }
  ],
  "Amp_CA38": [
@@ -1117,7 +1117,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MarkII.vst3",
-   "notes": "Bundled Mesa/Boogie Mark IIB style amp (parody brand 'Silla'), full head panel (Volume 1[pull Bright], Treble[pull Shift], Bass, Middle, Master 1[pull Gain Boost], Lead Drive[pull Lead], Lead Master[pull Bright], Reverb, 100/60 RMS power) modelled component-by-component from the local Mark II schematic (boogie_mkii.pdf) + the panel photos. The CA_38 folder/schematic/photos are the Mark IIB (the gear-map name wrongly said 'Mark IV'). NO graphic EQ (unlike the III/IV). Two voices off the scooped Boogie tone stack (Rhythm Volume->Master, Lead Drive cascade->Lead Master), 4x6L6 ~100W. Rocksmith's Gain drives the Lead Drive; Bass/Mid/Treble->tone stack (Channel pinned Lead, reverb/pulls off via _static)."
+   "notes": "Bundled Mesa/Boogie Mark IIB style amp (parody brand 'Silla'), full head panel (Volume 1[pull Bright], Treble[pull Shift], Bass, Middle, Master 1[pull Gain Boost], Lead Drive[pull Lead], Lead Master[pull Bright], Reverb, 100/60 RMS power) modelled component-by-component from the local Mark II schematic (boogie_mkii.pdf) + the panel photos. The CA_38 folder/schematic/photos are the Mark IIB (the gear-map name wrongly said 'Mark IV'). NO graphic EQ (unlike the III/IV). Two voices off the scooped Boogie tone stack (Rhythm Volume->Master, Lead Drive cascade->Lead Master), 4x6L6 ~100W. the game's Gain drives the Lead Drive; Bass/Mid/Treble->tone stack (Channel pinned Lead, reverb/pulls off via _static)."
   }
  ],
  "Amp_CA85": [
@@ -1128,7 +1128,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MarkIII.vst3",
-   "notes": "Bundled Mesa/Boogie Mark III style amp (parody brand 'Silla'), full head panel (Volume[pull Bright], Treble, Bass, Middle, Master, Lead Drive, Lead Master, 5-band graphic EQ, Lead/EQ switches) modelled component-by-component from the local Mark III schematic. Two voices (Rhythm + cascaded Lead) off the scooped Boogie tone stack; 6L6/EL34 Simul-Class power. Rocksmith's Gain drives the Lead Drive (lead distortion); Bass/Mid/Treble->tone stack (Channel pinned Lead + the GEQ 'V' via _static)."
+   "notes": "Bundled Mesa/Boogie Mark III style amp (parody brand 'Silla'), full head panel (Volume[pull Bright], Treble, Bass, Middle, Master, Lead Drive, Lead Master, 5-band graphic EQ, Lead/EQ switches) modelled component-by-component from the local Mark III schematic. Two voices (Rhythm + cascaded Lead) off the scooped Boogie tone stack; 6L6/EL34 Simul-Class power. the game's Gain drives the Lead Drive (lead distortion); Bass/Mid/Treble->tone stack (Channel pinned Lead + the GEQ 'V' via _static)."
   }
  ],
  "Amp_CS90": [
@@ -1139,7 +1139,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/JC90.vst3",
-   "notes": "Bundled Roland JC-90 'Jazz Chorus' style SOLID-STATE amp (parody brand 'Ronald'), full front panel (Distortion, Volume, Hi-Treble/Treble/Middle/Bass, Reverb, Rate/Depth/Chorus stereo BBD chorus) modelled component-by-component from the local JC-90 schematic. Rocksmith's Gain knob drives the Distortion (clean at 0); Bass/Mid/Treble->tone stack, Pres->Hi-Treble. Reverb/Chorus off for songs."
+   "notes": "Bundled Roland JC-90 'Jazz Chorus' style SOLID-STATE amp (parody brand 'Ronald'), full front panel (Distortion, Volume, Hi-Treble/Treble/Middle/Bass, Reverb, Rate/Depth/Chorus stereo BBD chorus) modelled component-by-component from the local JC-90 schematic. the game's Gain knob drives the Distortion (clean at 0); Bass/Mid/Treble->tone stack, Pres->Hi-Treble. Reverb/Chorus off for songs."
   }
  ],
  "Amp_EN30": [
@@ -1150,7 +1150,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/BOX DC30.vst3",
-   "notes": "Bundled Vox AC30 Top Boost / EL84 style amp based on the local EN30 schematics, using Rocksmith's Gain, Bass, Mid, Treble, Pres, and Bright knobs."
+   "notes": "Bundled Vox AC30 Top Boost / EL84 style amp based on the local EN30 schematics, using the game's Gain, Bass, Mid, Treble, Pres, and Bright knobs."
   }
  ],
  "Amp_GB100": [
@@ -1161,7 +1161,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/AOR50.vst3",
-   "notes": "Bundled Laney AOR 50 'Pro Tube Lead' (A50 Series II) style amp (parody brand 'Raney'), full 2-channel front panel (Channel One + AOR lead, each Preamp/Master with Pull-Bright, shared Bass/Pull-Deep, Middle/Pull-Boost, Treble, Presence) modelled component-by-component from the local AOR50 schematic. Rocksmith's Gain knob drives the channel morph (Channel One clean -> AOR lead); Bass/Mid/Treble->tone stack, Pres->Presence."
+   "notes": "Bundled Laney AOR 50 'Pro Tube Lead' (A50 Series II) style amp (parody brand 'Raney'), full 2-channel front panel (Channel One + AOR lead, each Preamp/Master with Pull-Bright, shared Bass/Pull-Deep, Middle/Pull-Boost, Treble, Presence) modelled component-by-component from the local AOR50 schematic. the game's Gain knob drives the channel morph (Channel One clean -> AOR lead); Bass/Mid/Treble->tone stack, Pres->Presence."
   }
  ],
  "Amp_MarshallDSL100H": [
@@ -1172,7 +1172,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/DSL100.vst3",
-   "notes": "Bundled Marshall JCM2000 DSL100 style amp (parody brand 'Marsten'), full 2-channel front panel (Classic Clean/Crunch + Ultra OD1/OD2, Tone Shift, Resonance, Presence, dual Master, per-channel reverb, Low/High output) modelled component-by-component from the local DSL100 schematics. Rocksmith's Gain knob drives the channel morph (clean->crunch->ultra); Bass/Mid/Treble->tone stack, Pres->Presence, Res->Resonance."
+   "notes": "Bundled Marshall JCM2000 DSL100 style amp (parody brand 'Marsten'), full 2-channel front panel (Classic Clean/Crunch + Ultra OD1/OD2, Tone Shift, Resonance, Presence, dual Master, per-channel reverb, Low/High output) modelled component-by-component from the local DSL100 schematics. the game's Gain knob drives the channel morph (clean->crunch->ultra); Bass/Mid/Treble->tone stack, Pres->Presence, Res->Resonance."
   }
  ],
  "Amp_MarshallPlexi": [
@@ -1183,7 +1183,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/Plexi.vst3",
-   "notes": "Bundled Marshall 1959 Super Lead 100W (Plexi/JMP) style amp (parody brand 'Marsten'), full 1959 front panel (Presence, Bass, Middle, Treble, Loudness I + Loudness II, 4 inputs) modelled component-by-component from the local 1959SLP schematic. NON-master amp: the Loudness pots ARE the gain, so Rocksmith's Gain knob drives Loudness I (clean->crunch->roar); Bass/Mid/Treble->Marshall tone stack (33K slope, 500pF treble cap), Pres->Presence. 4x EL34 power-amp grind."
+   "notes": "Bundled Marshall 1959 Super Lead 100W (Plexi/JMP) style amp (parody brand 'Marsten'), full 1959 front panel (Presence, Bass, Middle, Treble, Loudness I + Loudness II, 4 inputs) modelled component-by-component from the local 1959SLP schematic. NON-master amp: the Loudness pots ARE the gain, so the game's Gain knob drives Loudness I (clean->crunch->roar); Bass/Mid/Treble->Marshall tone stack (33K slope, 500pF treble cap), Pres->Presence. 4x EL34 power-amp grind."
   }
  ],
  "Amp_BT45": [
@@ -1194,7 +1194,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/Superdrive45.vst3",
-   "notes": "Bundled Budda Superdrive 45 Series II style amp (parody brand 'Ganddi'), full front panel (Master[pull Channel], Bass, Mid[pull Modern], Treble, Drive, Rhythm[pull Brite], Input/Footswitch) modelled component-by-component from the local Superdrive45 manual + schematic. Two channels (Rhythm clean + Hi-gain lead off the cascaded Drive); 3x12AX7 + 2xKT66. Rocksmith's Gain knob drives the Drive (hi-gain distortion); Bass/Mid/Treble->Budda tone stack (Channel pinned Hi-gain + Modern ON via _static)."
+   "notes": "Bundled Budda Superdrive 45 Series II style amp (parody brand 'Ganddi'), full front panel (Master[pull Channel], Bass, Mid[pull Modern], Treble, Drive, Rhythm[pull Brite], Input/Footswitch) modelled component-by-component from the local Superdrive45 manual + schematic. Two channels (Rhythm clean + Hi-gain lead off the cascaded Drive); 3x12AX7 + 2xKT66. the game's Gain knob drives the Drive (hi-gain distortion); Bass/Mid/Treble->Budda tone stack (Channel pinned Hi-gain + Modern ON via _static)."
   }
  ],
  "Amp_HG500": [
@@ -1205,7 +1205,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/LovoltDR504.vst3",
-   "notes": "Bundled Hiwatt DR504 'Custom Hiwatt 50' style amp (parody brand 'Lovolt'), full front panel (Normal Vol, Brilliant Vol, Bass, Treble, Middle, Presence, Master Vol, 4 jumperable inputs) modelled component-by-component from the local DR504 schematic. A high-headroom clean-and-loud EL34 amp (3xECC83 + ECC81 PI + 2xEL34 ~50W) with two jumperable channels + a shared tone stack (strong Hiwatt mids, 100K mid pot) + Master Volume. Rocksmith's Gain knob drives the Brilliant Vol (the breakup driver); Bass/Mid/Treble->tone stack, Pres->Presence (input pinned BOTH/jumpered via _static)."
+   "notes": "Bundled Hiwatt DR504 'Custom Hiwatt 50' style amp (parody brand 'Lovolt'), full front panel (Normal Vol, Brilliant Vol, Bass, Treble, Middle, Presence, Master Vol, 4 jumperable inputs) modelled component-by-component from the local DR504 schematic. A high-headroom clean-and-loud EL34 amp (3xECC83 + ECC81 PI + 2xEL34 ~50W) with two jumperable channels + a shared tone stack (strong Hiwatt mids, 100K mid pot) + Master Volume. the game's Gain knob drives the Brilliant Vol (the breakup driver); Bass/Mid/Treble->tone stack, Pres->Presence (input pinned BOTH/jumpered via _static)."
   }
  ],
  "Amp_HG100": [
@@ -1216,7 +1216,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/LovoltDR103.vst3",
-   "notes": "Bundled Hiwatt DR103 'Custom Hiwatt 100' style amp (parody brand 'Lovolt'), the 100W sibling of the DR504. Same panel (Normal Vol, Brilliant Vol, Bass, Treble, Middle, Presence, Master Vol, 4 jumperable inputs) + same preamp/tone stack, but a 4xEL34 (~100W) power amp: even more clean headroom, less sag, bigger/tighter lows (the big clean-and-loud DR103, incl. the bridged jumpered voice). Rocksmith's Gain drives the Brilliant Vol; Bass/Mid/Treble->tone stack, Pres->Presence (input pinned BOTH via _static)."
+   "notes": "Bundled Hiwatt DR103 'Custom Hiwatt 100' style amp (parody brand 'Lovolt'), the 100W sibling of the DR504. Same panel (Normal Vol, Brilliant Vol, Bass, Treble, Middle, Presence, Master Vol, 4 jumperable inputs) + same preamp/tone stack, but a 4xEL34 (~100W) power amp: even more clean headroom, less sag, bigger/tighter lows (the big clean-and-loud DR103, incl. the bridged jumpered voice). the game's Gain drives the Brilliant Vol; Bass/Mid/Treble->tone stack, Pres->Presence (input pinned BOTH via _static)."
   }
  ],
  "Amp_HG180": [
@@ -1227,7 +1227,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MarstenVS100.vst3",
-   "notes": "Bundled Marshall Valvestate VS100RH style HYBRID head (parody brand 'Marsten'), full front panel (Clean Volume/Bass/Middle/Treble, Overdrive 1 Gain/Volume, Overdrive 2 Gain/Contour/Volume/Bass/Middle/Treble, FX Mix, Clean Reverb, OD Reverb, 3-mode channel) modelled component-by-component from the local v100-6x schematics. Solid-state op-amp preamp + a 12AX7 warmth stage into a solid-state power amp: CLEAN, OD1 crunch, and the OD2 diode-clip high-gain lead. Rocksmith's Gain drives OD2 Gain (the lead voice); Bass/Mid/Treble->OD2 stack (Channel pinned OD2 + reverb/FX off via _static)."
+   "notes": "Bundled Marshall Valvestate VS100RH style HYBRID head (parody brand 'Marsten'), full front panel (Clean Volume/Bass/Middle/Treble, Overdrive 1 Gain/Volume, Overdrive 2 Gain/Contour/Volume/Bass/Middle/Treble, FX Mix, Clean Reverb, OD Reverb, 3-mode channel) modelled component-by-component from the local v100-6x schematics. Solid-state op-amp preamp + a 12AX7 warmth stage into a solid-state power amp: CLEAN, OD1 crunch, and the OD2 diode-clip high-gain lead. the game's Gain drives OD2 Gain (the lead voice); Bass/Mid/Treble->OD2 stack (Channel pinned OD2 + reverb/FX off via _static)."
   }
  ],
  "Amp_BT30": [
@@ -1238,7 +1238,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/UnparallelDC30.vst3",
-   "notes": "Bundled Matchless DC30 style boutique head (parody brand 'Unparallel'), full front panel (Channel 1 Brilliant: Volume/Bass/Treble; Channel 2 EF86: Volume/Tone; shared Cut/Master) modelled component-by-component from the local DC30 schematic. A hand-wired AC30-class amp: 4xEL84 CLASS-A power, no global negative feedback (very chimey, jangly, blooms at volume). Rocksmith's Gain drives the Channel 1 Volume (the EL84 breakup); Bass/Treble->Ch1 top-boost stack (Channel pinned Ch1 Brilliant, Ch2/Tone/Cut/Master via _static)."
+   "notes": "Bundled Matchless DC30 style boutique head (parody brand 'Unparallel'), full front panel (Channel 1 Brilliant: Volume/Bass/Treble; Channel 2 EF86: Volume/Tone; shared Cut/Master) modelled component-by-component from the local DC30 schematic. A hand-wired AC30-class amp: 4xEL84 CLASS-A power, no global negative feedback (very chimey, jangly, blooms at volume). the game's Gain drives the Channel 1 Volume (the EL84 breakup); Bass/Treble->Ch1 top-boost stack (Channel pinned Ch1 Brilliant, Ch2/Tone/Cut/Master via _static)."
   }
  ],
  "Amp_BT15": [
@@ -1249,7 +1249,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/UnparallelChieftain.vst3",
-   "notes": "Bundled Matchless Chieftain (Reverb) style boutique head (parody brand 'Unparallel'), full front panel (Volume, Bass, Middle, Treble, Brilliance, Master, Reverb) modelled component-by-component from the local Chieftain schematic. A single-channel clean/crunch amp with big headroom: 2xEL34 cathode-biased class AB (~40W), Marshall-style TMB stack with a warm 5.1nF treble cap, presence (Brilliance) on the PI, spring reverb. Rocksmith's Gain drives the Volume; Bass/Mid/Treble->tone stack (Brilliance/Master/Reverb via _static)."
+   "notes": "Bundled Matchless Chieftain (Reverb) style boutique head (parody brand 'Unparallel'), full front panel (Volume, Bass, Middle, Treble, Brilliance, Master, Reverb) modelled component-by-component from the local Chieftain schematic. A single-channel clean/crunch amp with big headroom: 2xEL34 cathode-biased class AB (~40W), Marshall-style TMB stack with a warm 5.1nF treble cap, presence (Brilliance) on the PI, spring reverb. the game's Gain drives the Volume; Bass/Mid/Treble->tone stack (Brilliance/Master/Reverb via _static)."
   }
  ],
  "Amp_GB38": [
@@ -1260,7 +1260,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MrYMaz38.vst3",
-   "notes": "Bundled Dr. Z Maz 38 (Senior NR) style head (parody brand 'Mr. Y'). Amp_GB38 is the Maz 38; no Maz 38 schematic was found, but the Maz line shares one preamp + tone stack (traced from the Maz 18 Jr schematic) and only the power amp differs. Panel (Volume, Treble, Middle, Bass, Cut, Master) -> Vox-meets-Fender TMB tone stack -> 4x EL84 (~38W) + solid-state rectifier: big headroom, tighter/firmer lows, breaks up later, far less sag than the 2xEL84/GZ34 Maz 18. Rocksmith's Gain drives the Volume (preamp/drive); Bass/Mid/Treble->tone stack (Cut + Master via _static)."
+   "notes": "Bundled Dr. Z Maz 38 (Senior NR) style head (parody brand 'Mr. Y'). Amp_GB38 is the Maz 38; no Maz 38 schematic was found, but the Maz line shares one preamp + tone stack (traced from the Maz 18 Jr schematic) and only the power amp differs. Panel (Volume, Treble, Middle, Bass, Cut, Master) -> Vox-meets-Fender TMB tone stack -> 4x EL84 (~38W) + solid-state rectifier: big headroom, tighter/firmer lows, breaks up later, far less sag than the 2xEL84/GZ34 Maz 18. the game's Gain drives the Volume (preamp/drive); Bass/Mid/Treble->tone stack (Cut + Master via _static)."
   }
  ],
  "Amp_GB50": [
@@ -1271,7 +1271,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MrYEMS.vst3",
-   "notes": "Bundled Dr. Z EMS style head (parody brand 'Mr. Y'), a Marshall JCM800/JTM50-style master-volume amp: full panel (Presence, Bass, Middle, Treble, Volume[master], Gain[preamp] + HI/LO gain switch) modelled from the EMS reference (a JCM800 2204 + HI/LO). Cascaded 12AX7 preamp -> Marshall TMB tone stack -> master -> 2xEL34 (~50W) + presence NFB; HI = full JCM800 gain, LO = JTM50 levels. Rocksmith's Gain drives the GAIN (preamp drive); Bass/Mid/Treble->tone stack, Pres->Presence (Master + HI via _static)."
+   "notes": "Bundled Dr. Z EMS style head (parody brand 'Mr. Y'), a Marshall JCM800/JTM50-style master-volume amp: full panel (Presence, Bass, Middle, Treble, Volume[master], Gain[preamp] + HI/LO gain switch) modelled from the EMS reference (a JCM800 2204 + HI/LO). Cascaded 12AX7 preamp -> Marshall TMB tone stack -> master -> 2xEL34 (~50W) + presence NFB; HI = full JCM800 gain, LO = JTM50 levels. the game's Gain drives the GAIN (preamp drive); Bass/Mid/Treble->tone stack, Pres->Presence (Master + HI via _static)."
   }
  ],
  "Amp_TW22": [
@@ -1282,7 +1282,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/BENDER SUPERNOVA 22.vst3",
-   "notes": "Bundled Fender Super-Sonic 22 / 6V6 style amp based on the local TW22 schematic, using Rocksmith's Gain, Bass, Mid, and Treble knobs."
+   "notes": "Bundled Fender Super-Sonic 22 / 6V6 style amp based on the local TW22 schematic, using the game's Gain, Bass, Mid, and Treble knobs."
   }
  ],
  "Amp_TW26": [
@@ -1293,7 +1293,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/BENDER DELUXE.vst3",
-   "notes": "Bundled Fender 57 Deluxe / 5E3 tweed style amp based on the local TW26 schematic, using Rocksmith's Gain, Bass, Mid, Treble, and Pres knobs."
+   "notes": "Bundled Fender 57 Deluxe / 5E3 tweed style amp based on the local TW26 schematic, using the game's Gain, Bass, Mid, Treble, and Pres knobs."
   }
  ],
  "Amp_TW40": [
@@ -1304,7 +1304,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/TW40.vst3",
-   "notes": "Bundled Fender Bassman 5F6-A tweed style amp (parody brand 'Bender'), full front panel (2 jumperable channels Bright/Normal with their own Volume, real FMV tone stack Treble/Bass/Middle, Presence, clickable input cable) modelled component-by-component from the local 5F6-A schematic. The 5F6-A has no gain knob, so Rocksmith's Gain drives the Bright Volume; Bass/Mid/Treble->tone stack, Pres->Presence."
+   "notes": "Bundled Fender Bassman 5F6-A tweed style amp (parody brand 'Bender'), full front panel (2 jumperable channels Bright/Normal with their own Volume, real FMV tone stack Treble/Bass/Middle, Presence, clickable input cable) modelled component-by-component from the local 5F6-A schematic. The 5F6-A has no gain knob, so the game's Gain drives the Bright Volume; Bass/Mid/Treble->tone stack, Pres->Presence."
   }
  ],
  "Bass_Amp_BT880B": [
@@ -1315,7 +1315,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/FreddyKrueger800BR.vst3",
-   "notes": "Bundled Gallien-Krueger 800RB style bass head (Rocksmith 'BT880B' = GK RB800) modeled from the 800RB service manual, using Rocksmith's Gain, Bass, Mid, and Treble knobs."
+   "notes": "Bundled Gallien-Krueger 800RB style bass head (the game 'BT880B' = GK RB800) modeled from the 800RB service manual, using the game's Gain, Bass, Mid, and Treble knobs."
   }
  ],
  "Amp_AT20": [
@@ -1326,7 +1326,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/SamplegSBTCL.vst3",
-   "notes": "Rocksmith's Amp_AT20 is the Ampeg SVT-CL (the gear map's generic name is 'Marshall JCM 1'). It reuses the SAME bundled amp as Bass_Amp_BT975B — the Sampleg SBT-CL (Ampeg SVT-CL parody) — so AT-20 songs play the SVT-CL model. RS Gain/Bass/Mid/Treble map exactly as the BT975B."
+   "notes": "the game's Amp_AT20 is the Ampeg SVT-CL (the gear map's generic name is 'Marshall JCM 1'). It reuses the SAME bundled amp as Bass_Amp_BT975B — the Sampleg SBT-CL (Ampeg SVT-CL parody) — so AT-20 songs play the SVT-CL model. RS Gain/Bass/Mid/Treble map exactly as the BT975B."
   }
  ],
  "Amp_AT120": [
@@ -1337,7 +1337,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/SamplegVH140C.vst3",
-   "notes": "Bundled Ampeg VH-140C style amp (parody brand 'Sampleg'), full front panel (Chorus Rate/Depth A/B, Reverb A/B, Channel B Level/High/Mid/Low/Gain, Channel A Level/High/Ultra-Mid/Low/Gain, channel select) modelled component-by-component from the local VH-140C service schematic. A SOLID-STATE 2x70W head (op-amps + 1N914 diode clipping, TDA power): Channel A clean + Channel B the famous tight diode-clipped lead/metal distortion. Rocksmith's Gain drives Channel B Gain; Bass/Mid/Treble->Channel B Low/Mid/High (Channel pinned B + reverb/chorus OFF via _static)."
+   "notes": "Bundled Ampeg VH-140C style amp (parody brand 'Sampleg'), full front panel (Chorus Rate/Depth A/B, Reverb A/B, Channel B Level/High/Mid/Low/Gain, Channel A Level/High/Ultra-Mid/Low/Gain, channel select) modelled component-by-component from the local VH-140C service schematic. A SOLID-STATE 2x70W head (op-amps + 1N914 diode clipping, TDA power): Channel A clean + Channel B the famous tight diode-clipped lead/metal distortion. the game's Gain drives Channel B Gain; Bass/Mid/Treble->Channel B Low/Mid/High (Channel pinned B + reverb/chorus OFF via _static)."
   }
  ],
  "Amp_OrangeOR100": [
@@ -1348,7 +1348,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/CitrusOR100.vst3",
-   "notes": "Bundled Orange OR100 (vintage 'Graphic' head) style amp (parody brand 'Citrus'), full panel (Gain[HF Drive], Bass, Middle[FAC], Treble, Depth, Volume + FULL/HALF) modelled component-by-component from the complete local OR100 hand-drawn schematic. Single-channel British EL34 (~100W) with a thick, midrange-forward 'Orange' voice (the doom/stoner chunk) and the Depth low-end voicing. Rocksmith's Gain drives the Gain; Bass/Mid/Treble->tone stack (Volume + Depth pinned via _static)."
+   "notes": "Bundled Orange OR100 (vintage 'Graphic' head) style amp (parody brand 'Citrus'), full panel (Gain[HF Drive], Bass, Middle[FAC], Treble, Depth, Volume + FULL/HALF) modelled component-by-component from the complete local OR100 hand-drawn schematic. Single-channel British EL34 (~100W) with a thick, midrange-forward 'Orange' voice (the doom/stoner chunk) and the Depth low-end voicing. the game's Gain drives the Gain; Bass/Mid/Treble->tone stack (Volume + Depth pinned via _static)."
   }
  ],
  "Amp_OrangeOR50H": [
@@ -1359,7 +1359,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/CitrusOR50.vst3",
-   "notes": "Bundled Orange OR50H style amp (parody brand 'Citrus'), the 50W sibling of the OR100. No separate OR50 schematic was available, so it is reconstructed from the complete OR100 schematic with a 2xEL34 (~50W) power amp: same panel (Gain, Bass, Middle, Treble, Depth, Volume + FULL/HALF) + preamp/tone stack, but less headroom, earlier breakup, a bit more sag and tighter lows. Rocksmith's Gain drives the Gain; Bass/Mid/Treble->tone stack (Volume + Depth pinned via _static)."
+   "notes": "Bundled Orange OR50H style amp (parody brand 'Citrus'), the 50W sibling of the OR100. No separate OR50 schematic was available, so it is reconstructed from the complete OR100 schematic with a 2xEL34 (~50W) power amp: same panel (Gain, Bass, Middle, Treble, Depth, Volume + FULL/HALF) + preamp/tone stack, but less headroom, earlier breakup, a bit more sag and tighter lows. the game's Gain drives the Gain; Bass/Mid/Treble->tone stack (Volume + Depth pinned via _static)."
   }
  ],
  "Bass_Amp_BT975B": [
@@ -1370,7 +1370,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/SamplegSBTCL.vst3",
-   "notes": "Bundled Ampeg SVT-CL style all-tube bass head (Rocksmith 'BT975B'); preamp modeled from the documented SVT-CL circuit, using Rocksmith's Gain, Bass, Mid, and Treble knobs."
+   "notes": "Bundled Ampeg SVT-CL style all-tube bass head (the game 'BT975B'); preamp modeled from the documented SVT-CL circuit, using the game's Gain, Bass, Mid, and Treble knobs."
   }
  ],
  "Bass_Amp_CH300B": [
@@ -1381,7 +1381,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/SharkeHB3500.vst3",
-   "notes": "Bundled Hartke HA3500 style bass head (assigned to Rocksmith 'CH300B'/'CLH-300B', which exposes Gain/Bass/Mid/Treble + Mid-Freq/Enhance): tube+solid-state preamp blend, compressor, 10-band graphic EQ, low/high-pass, master. Modeled from the HA3500 circuit diagram. RS Gain->Solid State; RS Bass/Mid/Treble->graphic-EQ 125/500/4k bands. (CS300B freed for a Fender Rumble.)"
+   "notes": "Bundled Hartke HA3500 style bass head (assigned to the game 'CH300B'/'CLH-300B', which exposes Gain/Bass/Mid/Treble + Mid-Freq/Enhance): tube+solid-state preamp blend, compressor, 10-band graphic EQ, low/high-pass, master. Modeled from the HA3500 circuit diagram. RS Gain->Solid State; RS Bass/Mid/Treble->graphic-EQ 125/500/4k bands. (CS300B freed for a Fender Rumble.)"
   }
  ],
  "Bass_Amp_CH600B": [
@@ -1392,7 +1392,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/SharkeHB5000.vst3",
-   "notes": "Bundled Hartke HA5000 style bass head (Rocksmith 'CH600B'): 2x250W bi-amp, tube+solid-state preamp blend, compressor, 10-band graphic EQ, contour low/high-pass, master. Modeled from the HA5000 circuit diagram (board 4005182801). RS Gain->Solid State; RS Bass/Mid/Treble->graphic-EQ 125/500/5k bands."
+   "notes": "Bundled Hartke HA5000 style bass head (the game 'CH600B'): 2x250W bi-amp, tube+solid-state preamp blend, compressor, 10-band graphic EQ, contour low/high-pass, master. Modeled from the HA5000 circuit diagram (board 4005182801). RS Gain->Solid State; RS Bass/Mid/Treble->graphic-EQ 125/500/5k bands."
   }
  ],
  "Bass_Amp_BT600B": [
@@ -1403,7 +1403,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/PeeBeeTMinus.vst3",
-   "notes": "Bundled Peavey T-Max style two-channel bass head (Rocksmith 'BT600B'): component-level model from the T-Max preamp schematic (Peavey drawing 70985). 12AX7 tube channel (Tube Pre/Post) + solid-state channel (rail-clipping CLIP), Channel Select/Combine, Shelving Low/High, 7-band graphic EQ (40/100/250/625/1.6k/4k/10k), biamp Balance/X-Over, Master. RS Gain->Tube Pre; RS Bass/Mid/Treble->graphic-EQ 100/625/4k bands."
+   "notes": "Bundled Peavey T-Max style two-channel bass head (the game 'BT600B'): component-level model from the T-Max preamp schematic (Peavey drawing 70985). 12AX7 tube channel (Tube Pre/Post) + solid-state channel (rail-clipping CLIP), Channel Select/Combine, Shelving Low/High, 7-band graphic EQ (40/100/250/625/1.6k/4k/10k), biamp Balance/X-Over, Master. RS Gain->Tube Pre; RS Bass/Mid/Treble->graphic-EQ 100/625/4k bands."
   }
  ],
  "Bass_Amp_CS300B": [
@@ -1414,7 +1414,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/BenderFumble800.vst3",
-   "notes": "Bundled Fender Rumble 800 style modern Class-D bass head (Rocksmith 'CS300B'): model from the Rumble 800 front panel — solid-state Gain, Bright/Contour/Vintage voicing, footswitch-style Overdrive (Drive/Level), 4-band EQ (Bass/Low Mid/High Mid/Treble), Class-D power. RS Gain->Gain; RS Bass/Mid/Treble->Bass/Low Mid/Treble."
+   "notes": "Bundled Fender Rumble 800 style modern Class-D bass head (the game 'CS300B'): model from the Rumble 800 front panel — solid-state Gain, Bright/Contour/Vintage voicing, footswitch-style Overdrive (Drive/Level), 4-band EQ (Bass/Low Mid/High Mid/Treble), Class-D power. RS Gain->Gain; RS Bass/Mid/Treble->Bass/Low Mid/Treble."
   }
  ],
  "Bass_Amp_EdenE300": [
@@ -1425,7 +1425,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/AidenGT300.vst3",
-   "notes": "Bundled Eden WT-300 'Traveler' Valve-Tech style hybrid bass preamp (Rocksmith 'EdenE300'): component-level model from the Eden WT-300 preamp schematic (2-19-93) — 12AX7 input, Eden opto Comp, Enhance contour, Bass/Treble shelves, 3-band semi-parametric EQ (30-300/200-2k/1.2-12k), Master. RS Gain->Gain; RS Bass/Mid/Treble->Bass/EQ2 mid/Treble."
+   "notes": "Bundled Eden WT-300 'Traveler' Valve-Tech style hybrid bass preamp (the game 'EdenE300'): component-level model from the Eden WT-300 preamp schematic (2-19-93) — 12AX7 input, Eden opto Comp, Enhance contour, Bass/Treble shelves, 3-band semi-parametric EQ (30-300/200-2k/1.2-12k), Master. RS Gain->Gain; RS Bass/Mid/Treble->Bass/EQ2 mid/Treble."
   }
  ],
  "Bass_Amp_EdenWT550": [
@@ -1436,7 +1436,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/AidenGT550.vst3",
-   "notes": "Bundled Eden WT-550 'Traveler 550' Valve-Tech style hybrid bass preamp (Rocksmith 'EdenWT550'): same Valve-Tech Twin-Triode preamp as the WT-300 in the 550 W head, modeled from the WT-550 preamp schematic (WT550PreEQ). 12AX7 input, Eden Comp, Enhance, Bass/Treble shelves, 3-band semi-parametric EQ (Low/Mid/High), Master. RS Gain->Gain; RS Bass/Mid/Treble->Bass/EQ2 mid/Treble."
+   "notes": "Bundled Eden WT-550 'Traveler 550' Valve-Tech style hybrid bass preamp (the game 'EdenWT550'): same Valve-Tech Twin-Triode preamp as the WT-300 in the 550 W head, modeled from the WT-550 preamp schematic (WT550PreEQ). 12AX7 input, Eden Comp, Enhance, Bass/Treble shelves, 3-band semi-parametric EQ (Low/Mid/High), Master. RS Gain->Gain; RS Bass/Mid/Treble->Bass/EQ2 mid/Treble."
   }
  ],
  "Bass_Amp_EdenWT800": [
@@ -1447,7 +1447,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/AidenGT880.vst3",
-   "notes": "Bundled Eden WT-880 'World Tour' Valve-Tech style hybrid bass head (Rocksmith 'EdenWt800'): component-level model from the Eden WT-800C schematic. Same Eden preamp as the WT-300/550 (12AX7 input, Comp, Enhance, Bass/Treble shelves, 3-band semi-parametric Low/Mid/High EQ) plus the WT-880 bi-amp (Crossover Freq + Balance + X-Over on/off), Master. RS Gain->Gain; RS Bass/Mid/Treble->Bass/Mid Level/Treble."
+   "notes": "Bundled Eden WT-880 'World Tour' Valve-Tech style hybrid bass head (the game 'EdenWt800'): component-level model from the Eden WT-800C schematic. Same Eden preamp as the WT-300/550 (12AX7 input, Comp, Enhance, Bass/Treble shelves, 3-band semi-parametric Low/Mid/High EQ) plus the WT-880 bi-amp (Crossover Freq + Balance + X-Over on/off), Master. RS Gain->Gain; RS Bass/Mid/Treble->Bass/Mid Level/Treble."
   }
  ],
  "Bass_Amp_HT100B": [
@@ -1458,7 +1458,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/Lovolt100.vst3",
-   "notes": "Bundled Custom Hiwatt 100 (DR103) style all-tube head (Rocksmith 'HT100B'): component-level model from the documented DR103 circuit + factory spec — 12AX7 Normal/Bright preamp, British (FMV) Bass/Middle/Treble tone stack, Presence (NFB), 4x EL34 push-pull (~100 W, big clean Hiwatt headroom). RS Gain->Normal Vol; RS Bass/Mid/Treble->tone stack."
+   "notes": "Bundled Custom Hiwatt 100 (DR103) style all-tube head (the game 'HT100B'): component-level model from the documented DR103 circuit + factory spec — 12AX7 Normal/Bright preamp, British (FMV) Bass/Middle/Treble tone stack, Presence (NFB), 4x EL34 push-pull (~100 W, big clean Hiwatt headroom). RS Gain->Normal Vol; RS Bass/Mid/Treble->tone stack."
   }
  ],
  "Bass_Amp_HT400B": [
@@ -1469,7 +1469,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/SillaBoogieBass400.vst3",
-   "notes": "Bundled Mesa/Boogie Bass 400+ style all-tube head (Rocksmith 'HT400B'): component-level model from the Bass 400+ panel + circuit — 12AX7 preamp (Volume 1/2, pull-Bright), passive Middle/Bass/Treble (pull-Shift) tone stack, Mesa 6-band graphic EQ (40/100/250/625/1560/3900), 12x 6L6 push-pull (~500 W, huge clean tube headroom). RS Gain->Volume 1; RS Bass/Mid/Treble->tone stack."
+   "notes": "Bundled Mesa/Boogie Bass 400+ style all-tube head (the game 'HT400B'): component-level model from the Bass 400+ panel + circuit — 12AX7 preamp (Volume 1/2, pull-Bright), passive Middle/Bass/Treble (pull-Shift) tone stack, Mesa 6-band graphic EQ (40/100/250/625/1560/3900), 12x 6L6 push-pull (~500 W, huge clean tube headroom). RS Gain->Volume 1; RS Bass/Mid/Treble->tone stack."
   }
  ],
  "Bass_Amp_OrangeAD200B": [
@@ -1480,7 +1480,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/CitrusAD200.vst3",
-   "notes": "Bundled Orange AD200B (MK3) style all-tube bass head (Rocksmith 'OrangeAD200B'): component-level model from the AD200B panel + manual (tone-stack character cross-checked vs the BAJA AD200B emulator). 12AX7 input (Gain), Orange PASSIVE SUBTRACTIVE tone stack (Bass/Middle/Treble flat at full up, cut below), 4x KT88 push-pull (~200 W, big clean headroom). RS Gain->Gain; RS Bass/Mid/Treble->tone stack (offset so RS-flat=flat, lower cuts)."
+   "notes": "Bundled Orange AD200B (MK3) style all-tube bass head (the game 'OrangeAD200B'): component-level model from the AD200B panel + manual (tone-stack character cross-checked vs the BAJA AD200B emulator). 12AX7 input (Gain), Orange PASSIVE SUBTRACTIVE tone stack (Bass/Middle/Treble flat at full up, cut below), 4x KT88 push-pull (~200 W, big clean headroom). RS Gain->Gain; RS Bass/Mid/Treble->tone stack (offset so RS-flat=flat, lower cuts)."
   }
  ],
  "Bass_Amp_CS240B": [
@@ -1491,7 +1491,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/TracerV8.vst3",
-   "notes": "Bundled Trace Elliot V-Type V8 style 400 W all-valve bass head (Rocksmith 'CS240B'): component-level model from the V-Type V8 schematic (cd0119/cd0120). All-ECC83 preamp (Gain I+Bright, Gain II+Pull, Level), Trace tone stack (Bass+Deep, Middle+Shift, Treble), opto compressor, 8x KT88 push-pull (~400 W). RS Gain->Gain I; RS Bass/Mid/Treble->tone stack."
+   "notes": "Bundled Trace Elliot V-Type V8 style 400 W all-valve bass head (the game 'CS240B'): component-level model from the V-Type V8 schematic (cd0119/cd0120). All-ECC83 preamp (Gain I+Bright, Gain II+Pull, Level), Trace tone stack (Bass+Deep, Middle+Shift, Treble), opto compressor, 8x KT88 push-pull (~400 W). RS Gain->Gain I; RS Bass/Mid/Treble->tone stack."
   }
  ],
  "Bass_Amp_HT300B": [
@@ -1502,7 +1502,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/SbrRedhead.vst3",
-   "notes": "Bundled SWR Super Redhead style hybrid bass head (Rocksmith 'HT300B'): component-level model from the SWR Red Head preamp schematic. 12AX7 preamp (Gain+Turbo), SWR Aural Enhancer contour, Bass shelf, semi-parametric Mid (Level+Freq), Treble shelf (+Transparency), 350 W solid-state power (clean hi-fi). RS Gain->Gain; RS Bass/Mid/Treble->Bass/Mid Level/Treble."
+   "notes": "Bundled SWR Super Redhead style hybrid bass head (the game 'HT300B'): component-level model from the SWR Red Head preamp schematic. 12AX7 preamp (Gain+Turbo), SWR Aural Enhancer contour, Bass shelf, semi-parametric Mid (Level+Freq), Treble shelf (+Transparency), 350 W solid-state power (clean hi-fi). RS Gain->Gain; RS Bass/Mid/Treble->Bass/Mid Level/Treble."
   }
  ],
  "Bass_Amp_LT25B": [
@@ -1513,7 +1513,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/DustupCDN.vst3",
-   "notes": "Bundled Ashdown ABM EVO (Bass Magnifier) style head (Rocksmith 'LT25B'): component-level model from the Ashdown ABM500 EVO preamp schematic. ECC83 Valve Drive, Bass/Middle/Treble, 6-band graphic EQ (100/180/340/1.3k/3.6k/5k), Sub-octave generator, opto Comp, Shape, Output. RS Gain->Input; RS Bass/Mid/Treble->Bass/Middle/Treble."
+   "notes": "Bundled Ashdown ABM EVO (Bass Magnifier) style head (the game 'LT25B'): component-level model from the Ashdown ABM500 EVO preamp schematic. ECC83 Valve Drive, Bass/Middle/Treble, 6-band graphic EQ (100/180/340/1.3k/3.6k/5k), Sub-octave generator, opto Comp, Shape, Output. RS Gain->Input; RS Bass/Mid/Treble->Bass/Middle/Treble."
   }
  ],
  "Bass_Amp_LT85B": [
@@ -1524,7 +1524,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/ElectricB600F.vst3",
-   "notes": "Bundled Acoustic B600H style 600 W solid-state bass head (Rocksmith 'LT85B'): component-level model from the Acoustic B450/B600H schematic. Gain/Volume preamp, sweepable Notch (Freq+On), 6-band EQ (40/120/350/800/2k/5k), Mute, Class-D power (clean). RS Gain->Gain; RS Bass/Mid/Treble->EQ 120/800/5k bands."
+   "notes": "Bundled Acoustic B600H style 600 W solid-state bass head (the game 'LT85B'): component-level model from the Acoustic B450/B600H schematic. Gain/Volume preamp, sweepable Notch (Freq+On), 6-band EQ (40/120/350/800/2k/5k), Mute, Class-D power (clean). RS Gain->Gain; RS Bass/Mid/Treble->EQ 120/800/5k bands."
   }
  ],
  "Bass_Amp_CS75B": [
@@ -1535,7 +1535,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/SamplegV4B.vst3",
-   "notes": "Bundled Ampeg V-4B style all-tube bass head (Rocksmith 'CS75B'); component-level model from the 1971 V-4B schematic (12AX7 preamp, 4x 7027A ~100W), using Rocksmith's Gain, Bass, Mid, and Treble knobs."
+   "notes": "Bundled Ampeg V-4B style all-tube bass head (the game 'CS75B'); component-level model from the 1971 V-4B schematic (12AX7 preamp, 4x 7027A ~100W), using the game's Gain, Bass, Mid, and Treble knobs."
   }
  ],
  "Bass_Amp_CH350B": [
@@ -1546,7 +1546,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MarstenDBS7400.vst3",
-   "notes": "Bundled Marshall DBS 7400 (Dynamic Bass System) style solid-state bass head (Rocksmith 'CS350B'/'CLH-350B'); component-level model from the 7400 schematic (op-amp preamp + Lo/Hi Primary EQ + Depth-only compressor + the real 9-band gyrator graphic EQ 50/80/160/320/640/1.25k/2.5k/5k/8k). Uses RS Gain, Bass->Lo, Treble->Hi; RS's 7 graphic bands are remapped to the nearest of the 9."
+   "notes": "Bundled Marshall DBS 7400 (Dynamic Bass System) style solid-state bass head (the game 'CS350B'/'CLH-350B'); component-level model from the 7400 schematic (op-amp preamp + Lo/Hi Primary EQ + Depth-only compressor + the real 9-band gyrator graphic EQ 50/80/160/320/640/1.25k/2.5k/5k/8k). Uses RS Gain, Bass->Lo, Treble->Hi; RS's 7 graphic bands are remapped to the nearest of the 9."
   }
  ],
  "Amp_OrangeTinyTerror": [
@@ -1557,7 +1557,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/CitrusBigTremor.vst3",
-   "notes": "Bundled Orange Tiny Terror style single-channel guitar head (Rocksmith 'OrangeTinyTerror'): component-level model from the Tiny Terror schematic. Two 12AX7 gain stages, single passive Tone, Volume, 2x EL84 cathode-biased push-pull (~15 W; 7 W Half mode). RS Gain->Gain; RS Tone->Tone."
+   "notes": "Bundled Orange Tiny Terror style single-channel guitar head (the game 'OrangeTinyTerror'): component-level model from the Tiny Terror schematic. Two 12AX7 gain stages, single passive Tone, Volume, 2x EL84 cathode-biased push-pull (~15 W; 7 W Half mode). RS Gain->Gain; RS Tone->Tone."
   }
  ],
  "Amp_OrangeRockerverb": [
@@ -1568,7 +1568,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/CitrusRumbleverb50.vst3",
-   "notes": "Bundled Orange Rockerverb 50 MkII style 2-channel guitar head (Rocksmith 'OrangeRockerverb'): component-level model from the Rockerverb 50 schematic. Clean (Vol/Bass/Treble) + Dirty (Gain/Bass/Middle/Treble/Vol) channels, valve spring Reverb, Output master, 2x EL34 push-pull. RS Gain/Bass/Mid/Treble drive the Dirty channel (default channel)."
+   "notes": "Bundled Orange Rockerverb 50 MkII style 2-channel guitar head (the game 'OrangeRockerverb'): component-level model from the Rockerverb 50 schematic. Clean (Vol/Bass/Treble) + Dirty (Gain/Bass/Middle/Treble/Vol) channels, valve spring Reverb, Output master, 2x EL34 push-pull. RS Gain/Bass/Mid/Treble drive the Dirty channel (default channel)."
   }
  ],
  "Amp_EpiphoneElectarCentury": [
@@ -1579,7 +1579,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/EpicallCentura.vst3",
-   "notes": "Bundled Epiphone Electar Century (75th reissue) style 15W guitar head (Rocksmith 'EpiphoneElectarCentury'): component-level model from the Century 75th-reissue schematic. Two 12AX7 stages, passive Tone, input Voice (Dark/Normal/Bright), pull-Boost, 2x 6V6 push-pull. RS Volume(Gain)->Volume."
+   "notes": "Bundled Epiphone Electar Century (75th reissue) style 15W guitar head (the game 'EpiphoneElectarCentury'): component-level model from the Century 75th-reissue schematic. Two 12AX7 stages, passive Tone, input Voice (Dark/Normal/Bright), pull-Boost, 2x 6V6 push-pull. RS Volume(Gain)->Volume."
   }
  ],
  "Amp_EpiphoneZephyr": [
@@ -1590,7 +1590,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/EpicallRuby.vst3",
-   "notes": "Bundled Epiphone Electar Zephyr Amp20 (~1949) style vintage guitar amp (Rocksmith 'EpiphoneZephyr'): component-level model from the 1949 Zephyr schematic. 12AX7 preamp, passive Bass/Treble, 2x 6L6G push-pull (~20W). RS Volume(Gain)/Bass/Treble."
+   "notes": "Bundled Epiphone Electar Zephyr Amp20 (~1949) style vintage guitar amp (the game 'EpiphoneZephyr'): component-level model from the 1949 Zephyr schematic. 12AX7 preamp, passive Bass/Treble, 2x 6L6G push-pull (~20W). RS Volume(Gain)/Bass/Treble."
   }
  ],
  "Amp_GibsonGA8": [
@@ -1601,7 +1601,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/HipzonGA8.vst3",
-   "notes": "Bundled Gibson GA-8 Discoverer (GA-8T) style guitar amp (Rocksmith 'GibsonGA8'): component-level from the GA-8T schematic. 12AX7 preamp, passive Bass/Treble, 2x 6BM8 push-pull (~10W), on-board tremolo (Speed/Depth). RS Volume(Loudness)/Bass/Treble."
+   "notes": "Bundled Gibson GA-8 Discoverer (GA-8T) style guitar amp (the game 'GibsonGA8'): component-level from the GA-8T schematic. 12AX7 preamp, passive Bass/Treble, 2x 6BM8 push-pull (~10W), on-board tremolo (Speed/Depth). RS Volume(Loudness)/Bass/Treble."
   }
  ],
  "Amp_GibsonGA79": [
@@ -1612,7 +1612,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/HipzonGA79RVT.vst3",
-   "notes": "Bundled Gibson GA-79 RVT Multi Stereo style guitar amp (Rocksmith 'GibsonGA79'): component-level from the GA-79 RVT schematic. 12AX7 preamp, passive Bass/Treble, valve spring Reverb, 4x 6BQ5 (EL84) push-pull, tremolo (Speed/Depth); modeled mono. RS Volume/Bass/Treble."
+   "notes": "Bundled Gibson GA-79 RVT Multi Stereo style guitar amp (the game 'GibsonGA79'): component-level from the GA-79 RVT schematic. 12AX7 preamp, passive Bass/Treble, valve spring Reverb, 4x 6BQ5 (EL84) push-pull, tremolo (Speed/Depth); modeled mono. RS Volume/Bass/Treble."
   }
  ],
  "Amp_GibsonGA88": [
@@ -1623,7 +1623,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/HipzonGA88.vst3",
-   "notes": "Bundled Gibson GA-88S stereo style guitar amp (Rocksmith 'GibsonGA88'): component-level from the GA-88S schematic. 12AX7 preamp, passive Bass/Treble, 4x 6BQ5 (EL84) push-pull (~30W, clean PA headroom); modeled mono. RS Volume/Bass/Treble."
+   "notes": "Bundled Gibson GA-88S stereo style guitar amp (the game 'GibsonGA88'): component-level from the GA-88S schematic. 12AX7 preamp, passive Bass/Treble, 4x 6BQ5 (EL84) push-pull (~30W, clean PA headroom); modeled mono. RS Volume/Bass/Treble."
   }
  ],
  "Amp_MarshallJCM800": [
@@ -1634,7 +1634,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MarstenJCM800.vst3",
-   "notes": "Bundled Marshall JCM800 2204 (50W master-volume) style head (parody brand 'Marsten'), full front panel (Presence, Bass, Middle, Treble, Master Vol, Preamp Vol + High/Low inputs) modelled component-by-component from the official Marshall 2204 STD schematic (2204prem/2204pwrm). Cascaded 12AX7 preamp (Preamp Vol = the drive) -> Marshall TMB tone stack (Treble 220k, Bass 1M, Middle 22k, slope 33k, 470pF/22n) -> master -> 2xEL34 (~50W) + Presence NFB. Rocksmith's Gain drives the Preamp Vol; Bass/Mid/Treble->tone stack, Pres->Presence (Master via _static)."
+   "notes": "Bundled Marshall JCM800 2204 (50W master-volume) style head (parody brand 'Marsten'), full front panel (Presence, Bass, Middle, Treble, Master Vol, Preamp Vol + High/Low inputs) modelled component-by-component from the official Marshall 2204 STD schematic (2204prem/2204pwrm). Cascaded 12AX7 preamp (Preamp Vol = the drive) -> Marshall TMB tone stack (Treble 220k, Bass 1M, Middle 22k, slope 33k, 470pF/22n) -> master -> 2xEL34 (~50W) + Presence NFB. the game's Gain drives the Preamp Vol; Bass/Mid/Treble->tone stack, Pres->Presence (Master via _static)."
   }
  ],
  "Amp_MarshallJTM45": [
@@ -1722,7 +1722,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/CitrusAD50.vst3",
-   "notes": "Bundled Orange AD50 Custom Shop style single-channel head (parody brand 'Citrus'), Rocksmith 'OrangeAD50'. No AD50 schematic exists; reconstructed in the OR/OR120 lineage (the user confirmed the online AD30 schematic is a different 2-channel EL84 circuit and does not apply). Extra-hot 12AX7 gain stage, 2-band shelving EQ (Bass/Treble), power-amp NFB Presence, Master, Sustain (EQ-bypass boost) + Class A (30W, earlier breakup) / AB (50W). RS Gain->Gain; Bass/Treble->EQ; Pres->Presence (Master + Sustain + Class A via _static)."
+   "notes": "Bundled Orange AD50 Custom Shop style single-channel head (parody brand 'Citrus'), the game 'OrangeAD50'. No AD50 schematic exists; reconstructed in the OR/OR120 lineage (the user confirmed the online AD30 schematic is a different 2-channel EL84 circuit and does not apply). Extra-hot 12AX7 gain stage, 2-band shelving EQ (Bass/Treble), power-amp NFB Presence, Master, Sustain (EQ-bypass boost) + Class A (30W, earlier breakup) / AB (50W). RS Gain->Gain; Bass/Treble->EQ; Pres->Presence (Master + Sustain + Class A via _static)."
   }
  ],
  "Amp_OrangeJimmyBean": [
@@ -1733,7 +1733,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/CitrusJimmyBean.vst3",
-   "notes": "Bundled Orange Jimmy Bean (JB150, 1975) style ~150W SOLID-STATE twin-channel combo (parody brand 'Citrus'), Rocksmith 'OrangeJimmyBean'. No schematic exists; reconstructed from web research (denim/leather op-amp era twin-channel with built-in tremolo + sustain). Op-amp clean stage, Baxandall Bass/Treble, Bright shelf, Channel voicing, Sustain (compressor/soft-clip), tremolo (Speed 2-8Hz / Depth, 0=off). RS Gain->Sustain; Bass/Treble->EQ (Volume + Speed/Depth/Channel/Bright via _static)."
+   "notes": "Bundled Orange Jimmy Bean (JB150, 1975) style ~150W SOLID-STATE twin-channel combo (parody brand 'Citrus'), the game 'OrangeJimmyBean'. No schematic exists; reconstructed from web research (denim/leather op-amp era twin-channel with built-in tremolo + sustain). Op-amp clean stage, Baxandall Bass/Treble, Bright shelf, Channel voicing, Sustain (compressor/soft-clip), tremolo (Speed 2-8Hz / Depth, 0=off). RS Gain->Sustain; Bass/Treble->EQ (Volume + Speed/Depth/Channel/Bright via _static)."
   }
  ],
  "DI_Amp_TubePre": [
@@ -1744,7 +1744,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/Multiversal610.vst3",
-   "notes": "Bundled Universal Audio 610-A console tube DI/preamp (parody brand 'Multiversal'), Rocksmith 'DI_Amp_TubePre'/'Amp Tube Pre'. Component-level model from the local 610-A schematic (John Hinson redraw): UTC O-1 input transformer -> 12AX7 cascade -> Lo/Hi gain -> passive stepped LF/HF shelf EQ -> 12AY7 -> UTC PA-5946 output transformer. A DI (no cab). RS Gain->Gain; Bass->Low EQ; Treble->High EQ (the real 610 has no mid, so RS Mid/MidFreq are dropped). Level/Hi Gain/Mic pinned via _static."
+   "notes": "Bundled Universal Audio 610-A console tube DI/preamp (parody brand 'Multiversal'), the game 'DI_Amp_TubePre'/'Amp Tube Pre'. Component-level model from the local 610-A schematic (John Hinson redraw): UTC O-1 input transformer -> 12AX7 cascade -> Lo/Hi gain -> passive stepped LF/HF shelf EQ -> 12AY7 -> UTC PA-5946 output transformer. A DI (no cab). RS Gain->Gain; Bass->Low EQ; Treble->High EQ (the real 610 has no mid, so RS Mid/MidFreq are dropped). Level/Hi Gain/Mic pinned via _static."
   }
  ],
  "DI_Amp_BassDriver": [
@@ -1755,7 +1755,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/SinAmpBassDriver.vst3",
-   "notes": "Bundled Tech 21 SansAmp Bass Driver DI (V2) style analog bass preamp (parody brand 'SinAmp'), Rocksmith 'DI_Amp_BassDriver'/'Amp Bass Driver'. Component-level model from the local V2 schematic: TLC2272 op-amp chain, PRESENCE pre-clip HF boost, DRIVE into 3.3V zener clippers, fixed post-clip speaker-emulation filters, BLEND (dry vs amp), BASS/MID/TREBLE active tone (+ shifts), LEVEL. The speaker voicing is part of the box. RS Gain->Drive; Bass->Bass; Treble->Treble; Blend->Blend; Pres->Presence (Mid/Level/shifts via _static)."
+   "notes": "Bundled Tech 21 SansAmp Bass Driver DI (V2) style analog bass preamp (parody brand 'SinAmp'), the game 'DI_Amp_BassDriver'/'Amp Bass Driver'. Component-level model from the local V2 schematic: TLC2272 op-amp chain, PRESENCE pre-clip HF boost, DRIVE into 3.3V zener clippers, fixed post-clip speaker-emulation filters, BLEND (dry vs amp), BASS/MID/TREBLE active tone (+ shifts), LEVEL. The speaker voicing is part of the box. RS Gain->Drive; Bass->Bass; Treble->Treble; Blend->Blend; Pres->Presence (Mid/Level/shifts via _static)."
   }
  ],
  "DI_Amp_MixerPre": [
@@ -1766,7 +1766,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/Meve1073.vst3",
-   "notes": "Bundled Neve 1073 channel amplifier (class-A console preamp/EQ used as a DI; parody brand 'Meve'), Rocksmith 'DI_Amp_MixerPre'/'Amp Mixer Pre'. Component-level model from the local 1073 schematics (EH10023 + BA283/BA284 class-A cards + B182/C HPF + B205 hi/lo EQ + B211 presence + LO1166 output trafo): Marinair-ish input iron, progressive class-A 'Neve push', LOW shelf, PRESENCE mid peak, HIGH shelf, 3rd-order HPF. A DI (no cab). RS Gain->Gain; Bass->Low; Mid->Mid; Treble->High (Low/Mid freq + HPF + Output via _static)."
+   "notes": "Bundled Neve 1073 channel amplifier (class-A console preamp/EQ used as a DI; parody brand 'Meve'), the game 'DI_Amp_MixerPre'/'Amp Mixer Pre'. Component-level model from the local 1073 schematics (EH10023 + BA283/BA284 class-A cards + B182/C HPF + B205 hi/lo EQ + B211 presence + LO1166 output trafo): Marinair-ish input iron, progressive class-A 'Neve push', LOW shelf, PRESENCE mid peak, HIGH shelf, 3rd-order HPF. A DI (no cab). RS Gain->Gain; Bass->Low; Mid->Mid; Treble->High (Low/Mid freq + HPF + Output via _static)."
   }
  ]
 }

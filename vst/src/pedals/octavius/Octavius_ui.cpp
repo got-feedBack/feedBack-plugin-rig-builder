@@ -1,5 +1,5 @@
 /* Octavius stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_Octavius); knob count + labels from the plugin params. */
+ * the game art (Pedal_Octavius); knob count + labels from the plugin params. */
 #include "OctaviusParams.h"
 #define PEDAL_TITLE  "OCTAVIUS"
 #define PEDAL_NAMES  kOctaviusNames

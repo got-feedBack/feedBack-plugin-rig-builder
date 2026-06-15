@@ -1,5 +1,5 @@
 /* ModernFlanger stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_ModernFlanger); knob count + labels from the plugin params. */
+ * the game art (Pedal_ModernFlanger); knob count + labels from the plugin params. */
 #include "ModernFlangerParams.h"
 #define PEDAL_TITLE  "MODERN FLANGER"
 #define PEDAL_NAMES  kModernFlangerNames

@@ -1,5 +1,5 @@
 /* Tremolo stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_Tremolo); knob count + labels from the plugin params. */
+ * the game art (Pedal_Tremolo); knob count + labels from the plugin params. */
 #include "TremoloParams.h"
 #define PEDAL_TITLE  "TREMOLO"
 #define PEDAL_NAMES  kTremoloNames

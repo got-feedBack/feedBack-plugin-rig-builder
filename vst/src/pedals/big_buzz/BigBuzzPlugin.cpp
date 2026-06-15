@@ -1,9 +1,9 @@
 /*
- * Big Buzz - triangle-era four-transistor fuzz for Rocksmith's Pedal_BuzzToo.
+ * Big Buzz - triangle-era four-transistor fuzz for the game's Pedal_BuzzToo.
  *
  * Local reference: pedals/buzz 2.jpg. The schematic has four NPN transistor
  * stages, two silicon diode clipping stages, a passive bass/treble tone stack,
- * and output volume. Rocksmith exposes Gain and Tone only, so output is
+ * and output volume. the game exposes Gain and Tone only, so output is
  * level-compensated internally.
  */
 #include "DistrhoPlugin.hpp"

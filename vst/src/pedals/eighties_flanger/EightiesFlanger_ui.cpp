@@ -1,5 +1,5 @@
 /* EightiesFlanger stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_80sFlanger); knob count + labels from the plugin params. */
+ * the game art (Pedal_80sFlanger); knob count + labels from the plugin params. */
 #include "EightiesFlangerParams.h"
 #define PEDAL_TITLE  "EIGHTIES FLANGER"
 #define PEDAL_NAMES  kEightiesFlangerNames

@@ -1,5 +1,5 @@
 /* Big Buzz stompbox UI — shared pedal_ui template. Colour sampled from the
- * Rocksmith art (Pedal_BuzzToo); knob count + labels from the plugin params. */
+ * the game art (Pedal_BuzzToo); knob count + labels from the plugin params. */
 #include "BigBuzzParams.h"
 #define PEDAL_TITLE  "BIG BUZZ"
 #define PEDAL_NAMES  kBigBuzzNames

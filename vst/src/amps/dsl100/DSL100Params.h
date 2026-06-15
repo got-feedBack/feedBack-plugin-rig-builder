@@ -13,7 +13,7 @@
  *   power amp    : Resonance (low NFB) + Presence (high NFB), Output Low/High
  *   reverb       : per-channel level (Classic / Ultra), dual Master (1/2 select)
  *
- * Rocksmith mapping (rs_knob_to_vst_param.json): the single Gain knob DRIVES THE
+ * the game mapping (rs_knob_to_vst_param.json): the single Gain knob DRIVES THE
  * CHANNEL — low Gain = Classic clean, mid = Classic crunch, high = Ultra OD
  * (matching the gain_variants split). Treble/Mid/Bass -> tone stack,
  * Pres -> Presence, Res -> Resonance. The per-channel Gain/Vol + masters sit at

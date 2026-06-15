@@ -1,5 +1,5 @@
 /*
- * GANDDI SUPERDRIVE 45 - Budda Superdrive 45 Series II for Rocksmith's Amp_BT45.
+ * GANDDI SUPERDRIVE 45 - Budda Superdrive 45 Series II for the game's Amp_BT45.
  * Parody brand "Ganddi"; the in-app face must never read "Budda".
  *
  * Local reference (modelled component-by-component):
@@ -14,7 +14,7 @@
  *   Bass/Mid/Treble (Treble 500K/220pF, Bass 500K/22nF, Mid 50K/22nF, 56K slope)
  *   -> long-tail PI -> 2x KT66 -> output transformer with a fixed presence NFB.
  *
- * Rocksmith: RS Gain -> DRIVE; Bass/Mid/Treble -> tone stack. See
+ * the game: RS Gain -> DRIVE; Bass/Mid/Treble -> tone stack. See
  * rs_knob_to_vst_param.json (Channel pinned Hi-gain + Modern ON via _static).
  */
 #include "DistrhoPlugin.hpp"

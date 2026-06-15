@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Citrus Rumbleverb 50" — a parody-named clone of the Orange Rockerverb 50 MkII
-// 2-channel all-tube guitar head (Rocksmith gear "OrangeRockerverb"). Shared
+// 2-channel all-tube guitar head (the game gear "OrangeRockerverb"). Shared
 // 12AX7 input, Clean + Dirty channels, valve spring reverb, 2x EL34 push-pull,
 // modeled from the Rockerverb 50 schematic + panel.
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

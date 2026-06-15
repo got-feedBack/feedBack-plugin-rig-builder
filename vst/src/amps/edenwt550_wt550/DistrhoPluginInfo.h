@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Aiden GT-550" — a parody-named clone of the Eden WT-550 "Traveler 550"
-// Valve-Tech hybrid bass preamp (Rocksmith gear "EdenWT550"). Same Valve-Tech
+// Valve-Tech hybrid bass preamp (the game gear "EdenWT550"). Same Valve-Tech
 // Twin-Triode preamp as the WT-300 in the 550 W head; modeled from the Eden
 // WT-550 preamp schematic (WT550PreEQ).
 #define DISTRHO_PLUGIN_BRAND   "RigBuilder"

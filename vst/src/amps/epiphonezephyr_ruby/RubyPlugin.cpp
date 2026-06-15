@@ -3,7 +3,7 @@
  * COMPONENT-LEVEL model.
  *
  * From the 1949 Zephyr schematic (5879 pentode + 6SL7 + 6SF5 preamp/tremolo ->
- * 2x 6L6G push-pull, 5U4G rectifier, ~20 W). Rocksmith abstracts it to three
+ * 2x 6L6G push-pull, 5U4G rectifier, ~20 W). the game abstracts it to three
  * controls, so the model is:
  *   • V1 12AX7 input stage (stands in for the 5879/6SL7 vintage front end)
  *   • TONE  — passive Bass + Treble shelves

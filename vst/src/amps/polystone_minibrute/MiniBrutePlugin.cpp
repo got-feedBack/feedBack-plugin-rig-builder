@@ -1,5 +1,5 @@
 /*
- * POLYSTONE MINIBRUTE - Polytone Mini Brute (CS-100) for Rocksmith's Amp_CS100.
+ * POLYSTONE MINIBRUTE - Polytone Mini Brute (CS-100) for the game's Amp_CS100.
  * Parody brand "Polystone" (Polytone -> Polystone); the in-app face must never
  * read "Polytone".
  *
@@ -17,7 +17,7 @@
  * DIST channel (1N4002 diode clipper) + spring reverb are NOT part of this clean
  * voice and are omitted; the PA378B power amp is a clean transistor push-pull.
  *
- * Rocksmith: RS Gain -> VOLUME (the only level/drive; mostly clean), RS Bass ->
+ * the game: RS Gain -> VOLUME (the only level/drive; mostly clean), RS Bass ->
  * Bass, RS Treble -> Treble (no Mid on this amp).
  */
 #include "DistrhoPlugin.hpp"

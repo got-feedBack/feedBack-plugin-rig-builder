@@ -2,7 +2,7 @@
 #define DISTRHO_PLUGIN_INFO_H_INCLUDED
 
 // "Marsten DBS 7400" — a parody-named clone of the Marshall DBS 7400 (Dynamic
-// Bass System) solid-state bass head (Rocksmith gear "CS350B" / "CLH-350B"):
+// Bass System) solid-state bass head (the game gear "CS350B" / "CLH-350B"):
 // op-amp gain, Bright/Deep, Lo/Hi Primary EQ, Depth-only compressor (fixed
 // threshold + indicator LED), the real 9-band graphic EQ, volume. Modeled 1:1
 // from the 7400 service schematic (boards 7400-60-0A/0B).

@@ -1,8 +1,8 @@
 #ifndef MODERN_WAH_PARAMS_H
 #define MODERN_WAH_PARAMS_H
 
-// Rocksmith "Modern Wah" -> Morley Bad Horsie / optical contour wah style.
-// Same four Rocksmith controls as the wah family.
+// the game "Modern Wah" -> Morley Bad Horsie / optical contour wah style.
+// Same four the game controls as the wah family.
 enum ModernWahParamId { kAuto = 0, kPedal, kSens, kSpeed, kParamCount };
 
 static const char* const kModernWahNames[kParamCount]   = { "Auto", "Pedal", "Sens", "Speed" };
