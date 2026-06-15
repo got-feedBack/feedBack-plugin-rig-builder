@@ -4609,7 +4609,7 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
                             ${rbEsc(bypassLabel)}
                         </button>
                     </div>
-                    <div class="text-xs ${stageClass} truncate" title="${rbEsc(hasVst ? effVstPath : (hasFile ? effFile : ''))}">${rbEsc(stageLabel)}
+                    <div class="text-xs ${stageClass} truncate" title="${rbEsc(hasVst ? (effVstPath || '').split('/').pop() : (hasFile ? effFile : ''))}">${rbEsc(stageLabel)}
                         ${(hasFile || hasVst) && mode ? `<span class="text-[10px] text-gray-600 ml-1">(${rbEsc(mode)})</span>` : ''}
                     </div>
                 </div>
@@ -5822,7 +5822,7 @@ function rbRenderMasterPiece(role, idx, p, total) {
                 </div>
             </div>
             <div class="flex items-center gap-2">
-                <span class="flex-1 text-xs ${labelClass} truncate" title="${rbEsc(effVstPath || effFile || '')}">${rbEsc(label)}</span>
+                <span class="flex-1 text-xs ${labelClass} truncate" title="${rbEsc((effVstPath ? effVstPath.split('/').pop() : '') || effFile || '')}">${rbEsc(label)}</span>
                 ${effVstPath ? `
                 <button onclick="rbMasterEditVst('${role}', ${idx})"
                         title="Load this VST in the engine and edit its parameters with inline sliders"
@@ -9061,7 +9061,7 @@ function rbRenderCatalogCardCompact(g) {
     const file = g.file
         ? `<span class="text-xs text-gray-500 truncate font-mono" title="${rbEsc(g.file)}">${rbEsc(g.file.split('/').pop())}</span>`
         : (g.vst_path
-            ? `<span class="text-xs text-purple-400 truncate" title="${rbEsc(g.vst_path)}">VST: ${rbEsc(g.vst_path.split('/').pop())}</span>`
+            ? `<span class="text-xs text-purple-400 truncate" title="${rbEsc((g.vst_path || '').split('/').pop())}">VST: ${rbEsc(g.vst_path.split('/').pop())}</span>`
             : `<span class="text-xs text-gray-600 italic">unassigned</span>`);
     return `<div class="flex items-center gap-2 px-3 py-2 hover:bg-dark-700/30">
         ${photo}
@@ -9106,7 +9106,7 @@ function rbRenderCatalogCard(g) {
     let assignedLine;
     if (isVst) {
         const vstName = g.vst_path.split('/').pop();
-        assignedLine = `<div class="text-xs text-purple-300/90 break-all" title="${rbEsc(g.vst_path)}">✓ VST: ${rbEsc(vstName)}</div>`;
+        assignedLine = `<div class="text-xs text-purple-300/90 break-all" title="${rbEsc((g.vst_path || '').split('/').pop())}">✓ VST: ${rbEsc(vstName)}</div>`;
     } else if (g.assigned) {
         const label = g.tone3000_title || rbLibShortName(g.file) || 'assigned';
         assignedLine = `<div class="text-xs text-green-400/90 break-all" title="${rbEsc(g.file || '')}">✓ ${rbEsc(label)}</div>`;
@@ -10274,7 +10274,9 @@ async function rbRecoverFailedVstLoad(api, partialSlot = null) {
 }
 
 async function rbSafeLoadStandaloneVst(api, vstPath) {
-    console.log('[rig_builder vst] preparing clean host:', vstPath);
+    // Log only the basename — never the absolute path (leaks the user's home
+    // dir / username in console output and shared logs).
+    console.log('[rig_builder vst] preparing clean host:', (vstPath || '').split('/').pop());
 
     await rbResetStandaloneVstHost(api);
 
