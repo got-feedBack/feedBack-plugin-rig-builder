@@ -265,11 +265,12 @@ _DEFAULT_SETTINGS = {
     # extra NAM but on M-series Macs it's a clear win. Users on weak
     # x86 hardware can flip it off in Settings.
     "mega_chain_mode": True,
-    # When on, the user's default tone (assembled in Settings → Default Tone)
-    # is loaded into the engine at startup and re-loaded whenever they leave a
+    # When on, the user's default tone (assembled in Gear → Default tone) is
+    # loaded into the engine at startup and re-loaded whenever they leave a
     # song or stop a Listen preview — so the idle/menu sound is the chosen
-    # default rather than whatever tone happened to load last.
-    "default_tone_enabled": False,
+    # default rather than whatever tone happened to load last. On by default
+    # (seeded with the Sampleg SBT-CL amp), so a fresh install plays an idle rig.
+    "default_tone_enabled": True,
     # NAM loudness normalization. Each .nam carries an integrated LUFS
     # value in its JSON header; we read it and apply a per-stage
     # `outputLevel` so every NAM lands at `target_lufs`, eliminating
@@ -2475,7 +2476,24 @@ def _get_default_tone_preset_id() -> int | None:
         new_row = conn.execute(
             "SELECT id FROM presets WHERE name = ?", (_DEFAULT_TONE_PRESET_NAME,)
         ).fetchone()
-        return int(new_row[0]) if new_row else None
+        pid = int(new_row[0]) if new_row else None
+        # Seed the out-of-the-box default tone with the Sampleg SBT-CL bundled
+        # amp (Ampeg SVT-CL clone) so a fresh install has an audible idle rig
+        # with zero setup. Only runs once, when the sentinel is first created.
+        if pid is not None:
+            seed_vst = _plugin_dir / "vst" / "amps" / "SamplegSBTCL.vst3"
+            if seed_vst.exists():
+                conn.execute(
+                    "INSERT INTO preset_pieces "
+                    "(preset_id, slot_order, slot, rs_gear_type, kind, file, "
+                    " params_json, tone3000_id, assigned_mode, bypassed, "
+                    " vst_path, vst_format, vst_state) "
+                    "VALUES (?, 0, 'amp', 'Bass_Amp_BT975B', 'vst', NULL, "
+                    "        '{}', NULL, 'default', 0, ?, 'VST3', NULL)",
+                    (pid, str(seed_vst)),
+                )
+                conn.commit()
+        return pid
 
 
 def _load_default_tone_chain() -> list[dict]:

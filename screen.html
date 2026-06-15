@@ -90,10 +90,9 @@
                         class="rb-gear-filter-btn px-3 py-1.5 rounded text-xs text-gray-300 transition">
                     All gear
                 </button>
-                <button onclick="rbGearFilter('pending')" data-rb-gear-filter="pending"
+                <button onclick="rbGearFilter('default')" data-rb-gear-filter="default"
                         class="rb-gear-filter-btn px-3 py-1.5 rounded text-xs text-gray-300 transition">
-                    Pending
-                    <span id="rb-gear-pending-badge" class="ml-1 px-1.5 py-0.5 rounded-full bg-amber-900/40 text-amber-300 text-[10px] hidden"></span>
+                    Default tone
                 </button>
                 <button onclick="rbGearFilter('files')" data-rb-gear-filter="files"
                         class="rb-gear-filter-btn px-3 py-1.5 rounded text-xs text-gray-300 transition">
@@ -140,13 +139,39 @@
             </div>
         </div>
 
-        <!-- View: Pending (unassigned gears) -->
-        <div id="rb-gear-view-pending" class="rb-gear-view hidden">
-            <p class="text-gray-500 text-sm mb-4">
-                Gears referenced by at least one song but still without an assigned
-                file. Click "Search" to resolve via tone3000.
-            </p>
-            <div id="rb-pending-list" class="space-y-2 text-sm">Loading…</div>
+        <!-- View: Default tone (the idle rig — plays when no song is active) -->
+        <div id="rb-gear-view-default" class="rb-gear-view hidden">
+            <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+                <div class="flex items-baseline justify-between mb-2">
+                    <h3 class="text-white font-semibold">Default tone</h3>
+                    <span id="rb-master-default-count" class="text-xs text-gray-500"></span>
+                </div>
+                <p class="text-gray-500 text-sm mb-3">
+                    Build a rig from your gear (pedals → amp → cab) that plays whenever
+                    no song is loaded — at startup, and again when you leave a song or
+                    stop a Listen preview. Without it, the engine just keeps whatever
+                    tone loaded last. Same Library / VST / Bypass / reorder controls as a
+                    song chain; the cab is placed at the end automatically.
+                </p>
+                <label class="flex items-center gap-2 text-sm text-gray-300 mb-3 cursor-pointer">
+                    <input type="checkbox" id="rb-default-tone-enabled"
+                           onchange="rbSetDefaultToneEnabled(this.checked)" class="rounded">
+                    Play this default tone when idle
+                </label>
+                <div id="rb-default-tone-status" class="text-xs text-gray-500 mb-3">Loading…</div>
+                <div id="rb-master-default-chain" class="space-y-3"></div>
+                <div class="flex items-center gap-2 mt-3">
+                    <button onclick="rbOpenMasterAddPiecePicker('default')"
+                            class="bg-cyan-900/30 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-800/40 px-3 py-1.5 rounded text-xs transition">
+                        ＋ Add piece
+                    </button>
+                    <button onclick="rbPreviewDefaultTone(this)"
+                            class="bg-dark-600 hover:bg-dark-500 text-gray-200 border border-gray-700/50 px-3 py-1.5 rounded text-xs transition">
+                        ▶ Test
+                    </button>
+                </div>
+                <div id="rb-master-default-picker" class="hidden mt-2 bg-cyan-900/10 border border-cyan-800/30 rounded p-3"></div>
+            </div>
         </div>
 
         <!-- View: Files (downloaded NAM/IR inventory) -->
