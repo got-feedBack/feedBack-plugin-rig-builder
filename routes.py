@@ -2866,6 +2866,47 @@ def _read_tones_from_sloppak(filename: str, dlc: Path) -> list[dict]:
     return tones
 
 
+def _materialized_cache_dir(name: str) -> Path | None:
+    """Return the unpacked `sloppak_cache` directory for this song, if the
+    cloud loader has already materialized it.
+
+    Cloud-placeholder libraries keep a 0-byte stub in the DLC dir while the
+    real arrangement/tone data lives here, so the seed paths must look here
+    before treating the song as unavailable. Mirrors how the cache is keyed
+    in `_read_tones_from_sloppak` (basename, with the `sloppak__` prefix
+    variant the loader also writes)."""
+    cache_dir = _get_sloppak_cache_dir() if _get_sloppak_cache_dir else None
+    if not cache_dir and _config_dir:
+        cache_dir = _config_dir / "sloppak_cache"
+    if not cache_dir:
+        return None
+    base = name.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    for cand in (cache_dir / base, cache_dir / f"sloppak__{base}"):
+        try:
+            if cand.is_dir() and (cand / "arrangements").exists():
+                return cand
+        except OSError:
+            continue
+    return None
+
+
+def _song_data_available(path: Path) -> bool:
+    """True when the song's tone data can actually be read — either the DLC
+    file itself is materialized (>0 bytes) or the cloud loader has unpacked
+    it into `sloppak_cache`.
+
+    Replaces a bare `st_size == 0` guard in the seed paths, which wrongly
+    rejected cloud-placeholder libraries whose real data lives in the cache
+    (the tone reader already reads from there — see
+    `_read_tones_from_sloppak`)."""
+    try:
+        if path.stat().st_size > 0:
+            return True
+    except OSError:
+        pass
+    return _materialized_cache_dir(path.name) is not None
+
+
 def _resolve_song_file(filename: str) -> Path | None:
     """Return the PSARC/sloppak path inside DLC_DIR, or None if invalid.
 
@@ -4407,11 +4448,12 @@ def _list_library_songs() -> tuple[list[Path], int]:
         return [], 0
     candidates.sort()  # stable ordering for the batch + progress count
     for p in candidates:
-        try:
-            if p.stat().st_size == 0:
-                cloud_only += 1
-                continue
-        except OSError:
+        # Keep a 0-byte cloud stub only when the loader has already unpacked
+        # the real data into sloppak_cache — the tone reader reads from there,
+        # so the batch can map it. Genuinely-unmaterialized stubs are still
+        # reported as cloud_only and skipped (parsing them just errors).
+        if not _song_data_available(p):
+            cloud_only += 1
             continue
         songs.append(p)
     return songs, cloud_only
@@ -5896,10 +5938,13 @@ def _watch_loop():
 
             if to_fire:
                 settings = _load_settings()
-                # No key → nothing to download. We still advanced the
-                # baseline above, so adding a key later won't retro-fire
-                # the whole library — only songs materialized afterward.
-                if settings.get("auto_watch", True) and _get_t3k_client().has_api_access:
+                # Fire on every newly-materialized song. tone3000 is optional:
+                # _watch_fire → _auto_download_for_song assigns VST primaries with
+                # no download and only uses the client for gear lacking a VST,
+                # so a VST-only rig (no token) still gets its chain seeded in the
+                # background. (Previously gated on has_api_access, so users
+                # without a tone3000 key never got background seeding at all.)
+                if settings.get("auto_watch", True):
                     for name in to_fire:
                         if _watcher_stop.is_set():
                             break
@@ -5915,10 +5960,10 @@ def _watch_fire(name: str) -> None:
     if path is None:
         return
     song_key = _db_song_key(name, path)
-    try:
-        if path.stat().st_size == 0:
-            return
-    except OSError:
+    # Cloud-placeholder libraries keep a 0-byte stub in the DLC dir; the real
+    # data lives in sloppak_cache. Don't bail on the stub when the cache copy
+    # is materialized — the tone reader reads from there.
+    if not _song_data_available(path):
         return
     try:
         result = _auto_download_for_song(song_key, path)
@@ -6701,19 +6746,17 @@ def setup(app, context):
             return JSONResponse({"error": "file not found inside DLC dir"}, 404)
         song_key = _db_song_key(filename, path)
 
-        # 0-byte placeholder = cloud_loader stub. Return a structured
-        # signal so the UI can call cloud_loader/materialize before
-        # retrying. Status 409 (Conflict) is the closest fit — the
-        # resource exists in the index but isn't ready to be read.
-        try:
-            if path.stat().st_size == 0:
-                return JSONResponse(
-                    {"error": "cloud_only", "filename": filename,
-                     "hint": "POST /api/cloud_loader/materialize?filename=... then retry"},
-                    409,
-                )
-        except OSError:
-            pass
+        # 0-byte placeholder = cloud_loader stub with no data yet. Return a
+        # structured signal so the UI can call cloud_loader/materialize before
+        # retrying. Status 409 (Conflict) is the closest fit — the resource
+        # exists in the index but isn't ready to be read. A stub whose data is
+        # already unpacked in sloppak_cache is readable, so don't 409 on it.
+        if not _song_data_available(path):
+            return JSONResponse(
+                {"error": "cloud_only", "filename": filename,
+                 "hint": "POST /api/cloud_loader/materialize?filename=... then retry"},
+                409,
+            )
 
         try:
             if path.suffix.lower() == ".sloppak":
@@ -7013,18 +7056,24 @@ def setup(app, context):
         path = _resolve_song_file(filename)
         if path is None:
             return JSONResponse({"error": "file not found"}, 404)
-        try:
-            if path.stat().st_size == 0:
-                return JSONResponse(
-                    {"error": "file is a cloud-only placeholder; materialize it first"},
-                    409,
-                )
-        except OSError:
-            return JSONResponse({"error": "could not stat file"}, 500)
+        # A cloud-placeholder library keeps a 0-byte stub here while the real
+        # arrangement/tone data lives in sloppak_cache. Accept the song when
+        # either is present — the tone reader reads from the cache — so per-song
+        # seeding works for cloud libraries instead of 409-ing on the stub.
+        if not _song_data_available(path):
+            return JSONResponse(
+                {"error": "file is a cloud-only placeholder; materialize it first"},
+                409,
+            )
 
-        if not _get_t3k_client().has_api_access:
-            return JSONResponse({"error": "no tone3000 API key configured"}, 400)
-
+        # tone3000 is OPTIONAL for seeding. VST-primary gear (rs_gear_to_vst.json)
+        # maps with zero downloads, so seed-on-play must work for VST-only rigs
+        # with no tone3000 token — otherwise opening a song directly never
+        # materializes its chain and the user has to seed each one by hand in the
+        # editor first. _auto_download_for_song only touches the client for gear
+        # that has no installed VST primary, and skips it gracefully when
+        # has_api_access is False. (Previously a hard 400 here blocked the whole
+        # direct-play auto-seed path whenever no tone3000 key was configured.)
         try:
             return _auto_download_for_song(_db_song_key(filename, path), path)
         except ValueError as e:
