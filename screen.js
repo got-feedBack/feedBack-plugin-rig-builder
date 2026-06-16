@@ -1134,7 +1134,7 @@ let rbState = {
     songTones: null,        // currently inspected song
     batchPoll: null,        // setInterval handle while batch is running
     currentTab: 'gear',        // default landing tab = Gear (user pref 2026-06)
-    currentGearFilter: 'all',  // chip filter inside the Gear tab
+    currentGearFilter: 'studio',  // chip filter inside the Gear tab (Studio room lands first)
     currentSongFile: null,  // filename of the song open in the per-song view
     listeningTone: null,    // toneIdx currently previewed, or null
     _previewMode: null,     // 'native' (full chain) | 'nam' (WASM fallback)
@@ -3359,7 +3359,7 @@ function rbShowTab(name) {
     // Post-restructure: only 4 active tabs. The old dashboard/pending/
     // manage are absorbed — dashboard → settings (top), pending and
     // manage → gear (chip-filtered sub-views).
-    if (name === 'gear') rbGearFilter(rbState.currentGearFilter || 'all');
+    if (name === 'gear') rbGearFilter(rbState.currentGearFilter || 'studio');
     if (name === 'master') rbLoadMasterChain();
     if (name === 'settings') {
         rbLoadCoverage();        // batch / coverage panel (was dashboard)
@@ -3373,7 +3373,7 @@ function rbShowTab(name) {
 // top-level tab so the user doesn't ping-pong between two tabs to
 // resolve a gear and inspect its file.
 function rbGearFilter(filter) {
-    if (!['all', 'default', 'files'].includes(filter)) filter = 'all';
+    if (!['studio', 'all', 'default', 'files'].includes(filter)) filter = 'studio';
     rbState.currentGearFilter = filter;
     document.querySelectorAll('.rb-gear-view').forEach(v => v.classList.add('hidden'));
     const view = document.getElementById(`rb-gear-view-${filter}`);
@@ -3384,10 +3384,307 @@ function rbGearFilter(filter) {
         b.classList.toggle('text-white', active);
         b.classList.toggle('text-gray-400', !active);
     });
-    if (filter === 'all') rbLoadCatalog();
+    if (filter === 'studio') rbLoadStudioRoom();
+    else if (filter === 'all') rbLoadCatalog();
     else if (filter === 'default') rbLoadDefaultToneEditor();
     else if (filter === 'files') rbLoadManageTab();
 }
+
+// ── Studio room (Phase 1: static premium scene of the Default tone) ──────
+// Renders rbState.master.default as a room: amp head on a cab (left),
+// pedalboard on the floor (center), rack case (right). Reuses the pedal
+// canvas renders (RBPedalCanvas). Click handlers route to the existing
+// Default-tone editor for now; Phase 2 swaps them for an in-room zoom.
+const RB_STUDIO_KNOB_ANGLES = [-135, -70, -10, 45, 110];
+
+function rbStudioPieceStem(p) {
+    const vp = rbEffVstPath(p);
+    if (!vp) return '';
+    return vp.split('/').pop().replace(/\.(vst3|component)$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+function rbStudioPedalImg(p) {
+    const stem = rbStudioPieceStem(p);
+    if (stem && window.RBPedalCanvas && window.RBPedalCanvas.has(stem)) {
+        try { return window.RBPedalCanvas.dataURL(stem, {}); } catch (_) {}
+    }
+    return null;
+}
+function rbStudioIsBypassed(p) { return !!p._bypassed || !!(p.assigned && p.assigned.bypassed); }
+
+function rbStudioGroupDefault() {
+    const pieces = rbState.master.default || [];
+    const g = { amp: [], cab: [], pedal: [], rack: [] };
+    pieces.forEach((p, idx) => {
+        // `category` (derived from the gear via _gear_category) is the reliable
+        // field; `rs_category` can be a stale default (e.g. the master_default
+        // amp piece carries rs_category='pedal'), so it must NOT take priority.
+        // Slot is the final tie-breaker (a lone master_default VST = the amp).
+        const cat = (p.category || p.rs_category || '').toLowerCase();
+        const slot = (p.slot || '').toLowerCase();
+        const entry = { p, idx };
+        if (cat === 'amp' || slot === 'amp' || slot === 'master_default') g.amp.push(entry);
+        else if (cat === 'cab' || slot === 'cabinet') g.cab.push(entry);
+        else if (cat === 'rack' || slot === 'rack') g.rack.push(entry);
+        else g.pedal.push(entry);   // pedals + anything else goes on the floor
+    });
+    return g;
+}
+
+function rbRenderStudioRoom() {
+    const el = document.getElementById('rb-studio-room');
+    if (!el) return;
+    const g = rbStudioGroupDefault();
+    const amp = g.amp[0];
+    const ampName = amp ? (amp.p.real_name || amp.p.type || 'Amp') : 'No amp';
+    const ampIdx = amp ? amp.idx : -1;
+    const cabName = g.cab[0] ? (g.cab[0].p.real_name || 'Cab') : 'Cab';
+    const knobs = RB_STUDIO_KNOB_ANGLES
+        .map(deg => `<span class="rb-knob" style="--rb-knob-rot:${deg}deg"></span>`).join('');
+
+    const ampHtml = `
+        <div class="rb-amp-stack" onclick="rbStudioClickAmp(${ampIdx})" title="${rbEsc(ampName)} — click to edit">
+            <div class="rb-amp-head">
+                <div class="rb-amp-name">${rbEsc(ampName)}</div>
+                <div class="rb-amp-knobs">${knobs}</div>
+            </div>
+            <div class="rb-amp-cab" title="${rbEsc(cabName)}"></div>
+        </div>`;
+
+    const rackHtml = `
+        <div class="rb-rack-case">
+            ${g.rack.length ? g.rack.map(r => {
+                const name = r.p.real_name || r.p.type || 'Rack';
+                return `<div class="rb-rack-unit" onclick="rbStudioClickPiece(${r.idx})" title="${rbEsc(name)}">
+                    <span class="rb-rack-led ${rbStudioIsBypassed(r.p) ? 'off' : ''}"></span>
+                    <span class="text-xs text-gray-300 truncate">${rbEsc(name)}</span>
+                </div>`;
+            }).join('') : `<div class="rb-rack-unit" onclick="rbStudioClickAdd('rack')" title="Add a rack effect">
+                    <span class="rb-rack-led off"></span><span class="text-xs text-gray-500">＋ rack</span>
+                </div>`}
+        </div>`;
+
+    const pedalHtml = `
+        <div class="rb-pedalboard">
+            ${g.pedal.map(pd => {
+                const img = rbStudioPedalImg(pd.p);
+                const name = pd.p.real_name || pd.p.type || 'Pedal';
+                const byp = rbStudioIsBypassed(pd.p) ? 'rb-pedal-bypassed' : '';
+                return `<div class="rb-pedal ${byp}" onclick="rbStudioClickPiece(${pd.idx})" title="${rbEsc(name)}">
+                    ${img ? `<img src="${img}" alt="${rbEsc(name)}">`
+                          : `<div class="rb-pedal-fallback">${rbEsc(name)}</div>`}
+                </div>`;
+            }).join('')}
+            <div class="rb-pedal-add" onclick="rbStudioClickAdd('pre')" title="Add a pedal">
+                <span style="font-size:20px;line-height:1">＋</span><span>add</span>
+            </div>
+        </div>`;
+
+    const empty = !(rbState.master.default && rbState.master.default.length);
+    el.innerHTML = `
+        <div class="rb-studio-head">
+            <div class="rb-studio-label">Studio · <b>Default tone</b></div>
+            <button onclick="rbGearFilter('all')"
+                    class="bg-dark-700/70 hover:bg-dark-600 text-gray-200 border border-gray-700/50 px-3 py-1.5 rounded-lg text-xs transition">
+                Browse gear ▸
+            </button>
+        </div>
+        <div class="rb-studio-floor"></div>
+        <div class="rb-studio-stage">
+            ${ampHtml}
+            ${rackHtml}
+            ${pedalHtml}
+        </div>
+        ${empty ? `<div class="absolute inset-0 flex items-center justify-center text-gray-500 text-sm z-10">
+            No default tone yet —
+            <button onclick="rbGearFilter('default')" class="underline ml-1 text-gray-300 hover:text-white">set one up</button>.
+        </div>` : ''}`;
+}
+
+async function rbLoadStudioRoom() {
+    try { await rbLoadDefaultToneEditor(); } catch (_) {}
+    rbRenderStudioRoom();
+    // Repaint once when the pedal-canvas fonts finish loading (same trick as
+    // the catalog) so the pedal renders come out with the right typeface.
+    if (!rbState._studioFontsRepaint && window.RBPedalCanvas && window.RBPedalCanvas.ready) {
+        rbState._studioFontsRepaint = true;
+        window.RBPedalCanvas.ready().then(() => { try { rbRenderStudioRoom(); } catch (_) {} });
+    }
+}
+
+// Phase 1 click handlers bridge to the existing Default-tone editor (full
+// add / swap / bypass / VST-knob editing). Phase 2 replaces these with the
+// in-room zoom-to-knobs interaction.
+function rbStudioClickAmp(idx) { rbStudioFocusAmp(idx); }
+function rbStudioClickPiece(_idx) { rbGearFilter('default'); }
+function rbStudioClickAdd(_role) { rbGearFilter('default'); }
+
+// ── Phase 2: amp focus — zoom to the real knobs ─────────────────────────
+// Reuses the standalone-VST editor primitives (load / restore / setParameter
+// / capture) that the Default-tone editor uses, but renders into an in-room
+// zoom overlay with rbAttachKnob knobs. Dragging a knob drives the live VST
+// param; closing captures the values back into the Default tone.
+async function rbStudioFocusAmp(idx) {
+    const room = document.getElementById('rb-studio-room');
+    const piece = (rbState.master.default || [])[idx];
+    if (!room) return;
+    if (idx == null || idx < 0 || !piece) { rbGearFilter('default'); return; }  // no amp → editor to add one
+    rbState._studioFocusIdx = idx;
+    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const vstPath = rbEffVstPath(piece);
+    const name = piece.real_name || piece.type || 'Amp';
+
+    let overlay = document.getElementById('rb-studio-focus');
+    if (!overlay) { overlay = document.createElement('div'); overlay.id = 'rb-studio-focus'; room.appendChild(overlay); }
+    overlay.className = 'rb-studio-focus';
+    overlay.innerHTML = `
+        <div class="rb-focus-panel">
+            <div class="rb-focus-bar">
+                <button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Room</button>
+                <div class="rb-focus-title">${rbEsc(name)}</div>
+                <div class="rb-focus-actions">
+                    <button onclick="rbStudioSwapAmp(${idx})" title="Swap this amp for a different one">⇄ Swap</button>
+                    <button onclick="rbPreviewDefaultTone(this)" title="Hear the default tone">▶ Listen</button>
+                </div>
+            </div>
+            <div id="rb-focus-knobs" class="rb-focus-knobs">
+                <div class="text-xs text-gray-500">loading ${rbEsc((vstPath || '').split('/').pop() || '')}…</div>
+            </div>
+        </div>`;
+    requestAnimationFrame(() => overlay.classList.add('rb-focus-open'));
+
+    const knobsHost = () => document.getElementById('rb-focus-knobs');
+    if (!vstPath) {
+        knobsHost().innerHTML = `<div class="text-sm text-gray-400">No VST assigned to this amp yet —
+            <button class="underline text-gray-200" onclick="rbStudioSwapAmp(${idx})">pick one</button>.</div>`;
+        return;
+    }
+    if (!api) { knobsHost().innerHTML = `<div class="text-sm text-red-400">Native VST hosting not available.</div>`; return; }
+    if (rbState._vstEditorBusy) return;
+    rbState._vstEditorBusy = true;
+    try {
+        await rbTeardownVstEditor(api);
+        await api.startAudio().catch(() => {});
+        const slotId = await rbSafeLoadStandaloneVst(api, vstPath);
+        if (slotId == null || slotId < 0) {
+            knobsHost().innerHTML = `<div class="text-sm text-red-400">${rbEsc(rbVstRefusedMsg())}</div>`;
+            return;
+        }
+        rbState._vstEditorSlot = slotId;
+        piece._vst_slot_id = slotId;
+        piece._vst_opaque = piece._vst_opaque
+            || rbParseVstStateOpaque(piece._vst_state)
+            || rbParseVstStateOpaque(piece.assigned && piece.assigned.vst_state);
+        const saved = piece._vst_params
+            || (piece.assigned && piece.assigned.vst_state ? rbParseVstStateParams(piece.assigned.vst_state) : null);
+        const params = await rbRestoreSavedParamsToSlot(api, slotId, saved, vstPath);
+        piece._vst_param_meta = params;
+        piece._vst_params = {};
+        for (const p of params) {
+            const id = p.id ?? p.paramId ?? p.index;
+            const v = p.value ?? p.current;
+            if (id != null && typeof v === 'number') piece._vst_params[id] = v;
+        }
+        rbStudioRenderAmpKnobs(idx);
+    } catch (e) {
+        const k = knobsHost();
+        if (k) k.innerHTML = `<div class="text-sm text-red-400">load failed: ${rbEsc(rbFriendlyVstLoadError(e))}</div>`;
+    } finally {
+        rbState._vstEditorBusy = false;
+    }
+}
+
+function rbStudioRenderAmpKnobs(idx) {
+    const piece = (rbState.master.default || [])[idx];
+    const host = document.getElementById('rb-focus-knobs');
+    if (!piece || !host) return;
+    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const params = rbFilterVstParams(piece._vst_param_meta || []);
+    const stem = rbCanvasStem(piece);
+
+    // Faithful in-app plugin face: render OUR canvas recreation of this VST
+    // (the same one used in the catalog / Default-tone editor). The canvas also
+    // synthesises a generic knob panel for any VST with params, so every plugin
+    // gets the same canvas UI. Dragging a knob drives the live VST param.
+    if (window.RBPedalCanvas && (window.RBPedalCanvas.has(stem) || params.length > 0)) {
+        host.innerHTML = `
+            <div class="flex justify-center w-full">
+                <canvas id="rb-focus-canvas" style="width:${rbCanvasDisplayWidth(stem)}px;max-width:100%;cursor:ns-resize;touch-action:none"></canvas>
+            </div>
+            <div class="text-[10px] text-gray-500 text-center mt-2 w-full">Drag a knob up/down to adjust</div>`;
+        const canvas = document.getElementById('rb-focus-canvas');
+        const draw = () => {
+            const model = rbCanvasParamModel(piece);
+            window.RBPedalCanvas.attach(canvas, stem, {
+                values: model.values,
+                params: model.logicalParams,
+                interactive: true,
+                onChange: (logicalId, val) => {
+                    const realId = model.idMap[logicalId] ?? logicalId;
+                    if (piece._vst_slot_id != null && api) { try { api.setParameter(piece._vst_slot_id, realId, val); } catch (_) {} }
+                    piece._vst_params = piece._vst_params || {};
+                    piece._vst_params[realId] = val;
+                },
+            });
+        };
+        if (window.RBPedalCanvas.ready) window.RBPedalCanvas.ready().then(draw);
+        draw();
+        return;
+    }
+
+    // Fallback: generic SVG knobs (canvas unavailable / UI-less plugin).
+    if (!params.length) {
+        host.innerHTML = `<div class="text-sm text-gray-400">This amp exposes no adjustable parameters.</div>`;
+        return;
+    }
+    const shown = params.slice(0, 8);
+    host.innerHTML = shown.map((p, i) => {
+        const label = String(p.name ?? p.label ?? `P${i + 1}`);
+        return `<div class="rb-focus-knob">
+            <div id="rb-focus-knob-${i}"></div>
+            <div class="rb-focus-knob-label" title="${rbEsc(label)}">${rbEsc(label)}</div>
+        </div>`;
+    }).join('');
+    shown.forEach((p, i) => {
+        const realId = p.id ?? p.paramId ?? p.index;
+        const cur = (typeof (p.value ?? p.current) === 'number') ? (p.value ?? p.current) : 0.5;
+        rbAttachKnob(`rb-focus-knob-${i}`, {
+            min: 0, max: 1, def: cur, value: cur,
+            onChange: (val) => {
+                if (piece._vst_slot_id != null && api) { try { api.setParameter(piece._vst_slot_id, realId, val); } catch (_) {} }
+                piece._vst_params = piece._vst_params || {};
+                piece._vst_params[realId] = val;
+            },
+        });
+    });
+}
+
+async function rbStudioCloseFocus() {
+    const overlay = document.getElementById('rb-studio-focus');
+    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    // Persist the edited knobs into the Default tone, then tear the editor down.
+    try { await rbMasterCaptureVstState('default', rbState._studioFocusIdx); } catch (_) {}
+    try { await rbTeardownVstEditor(api); } catch (_) {}
+    if (overlay) {
+        overlay.classList.remove('rb-focus-open');
+        setTimeout(() => { try { overlay.remove(); } catch (_) {} }, 220);
+    }
+    try { rbRenderStudioRoom(); } catch (_) {}
+}
+
+function rbStudioSwapAmp(idx) {
+    // Phase 2: amp swap routes to the existing Default-tone editor (in-room
+    // swap UI is Phase 3). Close the focus cleanly first.
+    rbStudioCloseFocus();
+    rbGearFilter('default');
+}
+
+// Entry point for the host's main-menu "Studio" item (v3 shell.js): show the
+// Gear tab and land on the Studio room regardless of the last-used tab.
+window.rbOpenStudio = function rbOpenStudio() {
+    rbState.currentGearFilter = 'studio';
+    try { rbShowTab('gear'); } catch (_) {}
+    try { rbGearFilter('studio'); } catch (_) {}
+};
 
 // ── Manage tab: inventory of downloaded NAM/IR files ────────────────
 //
