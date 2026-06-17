@@ -344,14 +344,15 @@
     #rb-studio-room.rb-focus-active .rb-amp-stack:not(.rb-amp-focused){ opacity:0 !important; pointer-events:none; }
     /* extra (parallel) amps sit deeper in the room — dim + desaturate slightly
        so they read as further back, and a touch smaller via inline width. */
-    .rb-amp-extra{ filter:brightness(.84) saturate(.92); z-index:0; }
+    .rb-amp-extra{ filter:brightness(.84) saturate(.92); }
     .rb-amp-extra:hover{ filter:brightness(.97) saturate(.96); }
     /* the right-side amps face INWARD (negative rotateY), so their solid depth
        panel must be on the RIGHT edge — the default ::before sits on the left
        (correct for the primary amp) and would hide behind a left-facing amp,
        making it look like a flat photo. Mirror it for extras. */
-    .rb-amp-extra::before{ left:auto; right:0; width:60px;
-        transform-origin:right center; transform:rotateY(-90deg); }
+    .rb-amp-extra::before{ left:auto; right:0; width:70px;
+        transform-origin:right center; transform:rotateY(-90deg);
+        background:linear-gradient(90deg,#090a0c,#1d2026); }
     .rb-amp-face-canvas{ border-radius:6px; }
 
     /* swap rail — right-docked, translucent-blue carousel of alternative amps */
@@ -412,7 +413,7 @@
     /* ── Rack tower on a table — set back against the RIGHT WALL, on the wood
        floor, angled almost to the left (faces into the room) ── */
     .rb-rack-zone{ position:absolute; right:9%; bottom:6%; width:min(280px,26%); cursor:pointer;
-        transform-style:preserve-3d; transform:translateZ(55px) rotateY(-80deg);
+        transform-style:preserve-3d; transform:translateZ(90px) rotateY(-80deg);
         transform-origin:bottom right; transition:opacity .4s ease, filter .2s; }
     /* highlight only the placeholder on hover — a filter on the preserve-3d zone
        would flatten it and make the table's 3D faces vanish */
