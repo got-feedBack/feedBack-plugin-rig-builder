@@ -12590,8 +12590,6 @@ function rbAdvRenderCables(tempPath) {
     const layer = document.getElementById('rb-adv-nodes');
     const svg = document.getElementById('rb-adv-cables');
     if (!layer || !svg) return;
-    const defs = `<defs><linearGradient id="rb-adv-cablegrad" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0" stop-color="#3a5db0"/><stop offset="1" stop-color="#7fa0e0"/></linearGradient></defs>`;
     // Fall back to the CSS-known node dimensions when offsetWidth/Height read 0
     // (the layer hasn't flushed layout yet) — otherwise the cables come out
     // degenerate and only appear once the user nudges a node.
@@ -12608,7 +12606,7 @@ function rbAdvRenderCables(tempPath) {
         paths += `<path class="rb-adv-cable" data-adv-edge="${idx}" d="M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}"/>`;
     });
     if (tempPath) paths += `<path class="rb-adv-cable rb-adv-cable-temp" d="${tempPath}"/>`;
-    svg.innerHTML = defs + paths;
+    svg.innerHTML = paths;
     svg.querySelectorAll('.rb-adv-cable[data-adv-edge]').forEach(p => {
         p.addEventListener('click', () => rbAdvDeleteEdge(+p.dataset.advEdge));
     });
@@ -12797,6 +12795,13 @@ async function rbAdvMaterializeGear(node) {
     const isCab = cat === 'cab' || cat === 'cabs';
     const isRack = cat === 'rack' || cat === 'racks';
     const slot = isAmp ? 'amp' : isCab ? 'cabinet' : isRack ? 'rack' : 'post_pedal';
+    // The gear_catalog item carries the gear's bundled VST (vst_path/format/state)
+    // + its copyright-free display name. Attach it to the piece so the room shows
+    // the VST FACE (not the generic default head) and it plays with that plugin —
+    // the bare rs_gear alone leaves the piece unassigned. Falls back to the flat
+    // gears list for make/model.
+    const catItem = ((rbState.gearCatalog && rbState.gearCatalog[cat]) || [])
+        .find(g => g.rs_gear === node.rsGear) || {};
     const catalogEntry = (_rbGearsCatalog || []).find(g => g.rs_gear === node.rsGear) || {};
     const piece = {
         type: node.rsGear,
@@ -12805,10 +12810,16 @@ async function rbAdvMaterializeGear(node) {
         // it correctly (it lower-cases `category` and matches 'amp'/'cab'/'rack').
         rs_category: isAmp ? 'amp' : isCab ? 'cab' : isRack ? 'rack' : 'pedal',
         category: isAmp ? 'amp' : isCab ? 'cab' : isRack ? 'rack' : 'pedal',
-        real_name: catalogEntry.name || node.label || node.rsGear,
+        real_name: catItem.real_name || catalogEntry.name || node.label || node.rsGear,
         make: catalogEntry.make || '', model: catalogEntry.model || '',
         assigned: null, _bypassed: false,
     };
+    if (catItem.vst_path) {
+        piece._vst_path = catItem.vst_path;
+        piece._vst_format = catItem.vst_format || 'VST3';
+        piece._vst_state = catItem.vst_state || null;
+        piece._vst_kind = 'vst';
+    }
     const chain = rbStudioCurrentChain();
     chain.push(piece);
     node.pieceIdx = chain.length - 1;     // link the node to its now-real piece

@@ -756,7 +756,10 @@
     .rb-adv-jack-in{ left:-9px; }
     .rb-adv-jack-out{ right:-9px; }
     /* a cable path */
-    .rb-adv-cable{ fill:none; stroke:url(#rb-adv-cablegrad); stroke-width:4; stroke-linecap:round;
+    /* solid stroke (NOT a url(#gradient) ref): an SVG gradient reference rebuilt
+       via innerHTML doesn't repaint until a reflow, so gradient cables only
+       appeared after the user nudged a node. Solid paints on first render. */
+    .rb-adv-cable{ fill:none; stroke:#6f93d6; stroke-width:4; stroke-linecap:round;
         filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); pointer-events:stroke; cursor:pointer; }
     .rb-adv-cable.rb-adv-cable-temp{ stroke:rgba(150,190,255,.7); stroke-dasharray:6 5; }
     .rb-adv-cable:hover{ stroke:var(--rb-accent); }
