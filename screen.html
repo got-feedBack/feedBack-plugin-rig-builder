@@ -666,6 +666,86 @@
     .rb-focus-knob{ display:flex; flex-direction:column; align-items:center; gap:6px; width:84px; }
     .rb-focus-knob-label{ font-size:10px; letter-spacing:.03em; color:#9aa3af; text-align:center; max-width:84px;
         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    /* ── Advanced: node-graph routing editor ─────────────────────────────── */
+    #rb-tab-advanced.rb-adv{ padding:0; overflow:hidden; }
+    .rb-adv-wrap{ position:absolute; inset:0; display:flex; }
+    /* left gear palette (like Gear) */
+    .rb-adv-palette{ flex:0 0 232px; display:flex; flex-direction:column; min-height:0;
+        background:linear-gradient(180deg, rgba(40,62,112,.22), rgba(20,36,72,.26));
+        border-right:1px solid rgba(120,165,225,.16); }
+    .rb-adv-pal-head{ flex:0 0 auto; padding:12px 12px 8px; display:flex; flex-direction:column; gap:8px;
+        border-bottom:1px solid rgba(120,165,225,.12); }
+    .rb-adv-pal-filters{ display:flex; gap:4px; flex-wrap:wrap; }
+    .rb-adv-pal-chip{ border:1px solid rgba(120,170,240,.24); border-radius:8px; padding:5px 9px; font-size:12px;
+        color:#bcc8de; background:rgba(120,160,220,.1); cursor:pointer; transition:background .15s, color .15s; }
+    .rb-adv-pal-chip:hover{ color:#fff; background:rgba(120,160,220,.2); }
+    .rb-adv-pal-chip.rb-adv-pal-on{ color:#fff; background:rgba(120,160,220,.34); box-shadow:inset 0 0 0 1px rgba(140,180,250,.5); }
+    .rb-adv-pal-head input{ background:rgba(8,14,28,.55); border:1px solid rgba(120,160,220,.22); border-radius:9px;
+        padding:8px 11px; font-size:12.5px; color:#dbe4f2; outline:none; }
+    .rb-adv-pal-head input::placeholder{ color:#7e8aa3; }
+    .rb-adv-palette-list{ flex:1 1 auto; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:6px; }
+    .rb-adv-pal-item{ display:flex; align-items:center; gap:9px; padding:6px 8px; border-radius:10px; cursor:grab;
+        background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06); transition:background .15s, border-color .15s; }
+    .rb-adv-pal-item:hover{ background:rgba(120,160,220,.14); border-color:rgba(120,170,240,.4); }
+    .rb-adv-pal-item:active{ cursor:grabbing; }
+    .rb-adv-pal-thumb{ flex:0 0 auto; width:52px; height:34px; border-radius:6px; overflow:hidden; background:#0b0d12;
+        display:flex; align-items:center; justify-content:center; }
+    .rb-adv-pal-thumb img{ width:100%; height:100%; object-fit:contain; }
+    .rb-adv-pal-name{ flex:1 1 auto; min-width:0; font-size:12px; color:#dbe4f2; line-height:1.2;
+        overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rb-adv-pal-empty{ color:#7e8aa3; font-size:12px; padding:14px 8px; text-align:center; }
+
+    /* main canvas area */
+    .rb-adv-main{ flex:1 1 auto; display:flex; flex-direction:column; min-width:0; }
+    .rb-adv-toolbar{ flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:10px;
+        padding:10px 16px; border-bottom:1px solid rgba(120,165,225,.12); }
+    .rb-adv-hint{ font-size:12px; color:#8b96ad; }
+    .rb-adv-actions{ display:flex; gap:7px; }
+    .rb-adv-btn{ font-size:12px; padding:6px 12px; border-radius:8px; color:#dbe2ee; cursor:pointer;
+        background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); transition:.15s; }
+    .rb-adv-btn:hover{ background:rgba(120,160,220,.2); color:#fff; }
+    .rb-adv-canvas{ flex:1 1 auto; position:relative; overflow:auto;
+        background:
+            radial-gradient(circle at 18px 18px, rgba(120,160,220,.10) 1.4px, transparent 1.6px) 0 0 / 34px 34px,
+            linear-gradient(180deg, rgba(8,12,22,.30), rgba(6,9,16,.42)); }
+    .rb-adv-cables{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:1; overflow:visible; }
+    .rb-adv-nodes{ position:absolute; inset:0; z-index:2; }
+
+    /* a node = a gear box with an input jack (left) + output jack (right) */
+    .rb-adv-node{ position:absolute; width:128px; border-radius:12px; cursor:grab; user-select:none;
+        background:linear-gradient(180deg, rgba(30,42,66,.96), rgba(18,26,44,.97));
+        border:1px solid rgba(120,165,225,.28); box-shadow:0 10px 26px rgba(0,0,0,.5);
+        transition:box-shadow .15s, border-color .15s; }
+    .rb-adv-node:hover{ border-color:rgba(140,180,250,.6); box-shadow:0 12px 30px rgba(40,80,160,.4); }
+    .rb-adv-node.rb-adv-sel{ border-color:var(--rb-accent); box-shadow:0 0 0 1px var(--rb-accent), 0 12px 30px rgba(0,0,0,.55); }
+    .rb-adv-node:active{ cursor:grabbing; }
+    .rb-adv-node-bypassed{ opacity:.5; filter:grayscale(.6); }
+    .rb-adv-node-thumb{ height:56px; border-radius:11px 11px 0 0; overflow:hidden; background:#0b0d12;
+        display:flex; align-items:center; justify-content:center; border-bottom:1px solid rgba(255,255,255,.06); }
+    .rb-adv-node-thumb img{ width:100%; height:100%; object-fit:contain; }
+    .rb-adv-node-label{ padding:6px 8px; font-size:11px; color:#dbe4f2; text-align:center; line-height:1.2;
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .rb-adv-node-kind{ font-size:9px; letter-spacing:.08em; text-transform:uppercase; color:#7e8aa3; text-align:center; padding:0 0 6px; }
+    /* terminal nodes (Input / Output) read as small rounded pills */
+    .rb-adv-node.rb-adv-term{ width:96px; background:linear-gradient(180deg, rgba(52,180,120,.18), rgba(30,90,60,.22));
+        border-color:rgba(74,210,150,.4); }
+    .rb-adv-node.rb-adv-term.rb-adv-term-out{ background:linear-gradient(180deg, rgba(120,160,220,.2), rgba(40,70,130,.24));
+        border-color:rgba(120,170,240,.5); }
+    .rb-adv-term-label{ padding:12px 8px; font-size:12px; font-weight:600; color:#e6edf6; text-align:center; }
+    /* cable jacks — guitar 1/4" plug feel: a metal ring with a dark centre */
+    .rb-adv-jack{ position:absolute; top:50%; width:16px; height:16px; border-radius:50%; transform:translateY(-50%);
+        background:radial-gradient(circle at 38% 32%, #c9d3e2, #6c7689 60%, #2a3142);
+        border:1px solid rgba(0,0,0,.5); box-shadow:0 1px 3px rgba(0,0,0,.6); cursor:crosshair; z-index:3; }
+    .rb-adv-jack::after{ content:""; position:absolute; inset:5px; border-radius:50%; background:#11151f; }
+    .rb-adv-jack:hover{ box-shadow:0 0 10px rgba(140,180,250,.8); }
+    .rb-adv-jack-in{ left:-9px; }
+    .rb-adv-jack-out{ right:-9px; }
+    /* a cable path */
+    .rb-adv-cable{ fill:none; stroke:url(#rb-adv-cablegrad); stroke-width:4; stroke-linecap:round;
+        filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); pointer-events:stroke; cursor:pointer; }
+    .rb-adv-cable.rb-adv-cable-temp{ stroke:rgba(150,190,255,.7); stroke-dasharray:6 5; }
+    .rb-adv-cable:hover{ stroke:var(--rb-accent); }
 </style>
 <div id="rb-root" class="rb-immersive max-w-5xl mx-auto px-6 pt-24 pb-16">
     <button onclick="showScreen('home')" class="rb-back text-gray-500 hover:text-white text-sm mb-6 flex items-center gap-1">
@@ -683,6 +763,7 @@
         <button data-rb-tab="studio" onclick="rbShowTab('studio')" class="rb-tab">Studio</button>
         <button data-rb-tab="gear" onclick="rbShowTab('gear')" class="rb-tab">Gear</button>
         <button data-rb-tab="master" onclick="rbShowTab('master')" class="rb-tab">Master chain</button>
+        <button data-rb-tab="advanced" onclick="rbShowTab('advanced')" class="rb-tab">Advanced</button>
         <button data-rb-tab="settings" onclick="rbShowTab('settings')" class="rb-tab">Setup</button>
         <!-- Song search is an action (opens the bottom dock), not a tab -->
         <button id="rb-song-btn" class="rb-songbtn" onclick="rbToggleSongSearch()" title="Load a song's tones">🔎 Song</button>
@@ -856,6 +937,40 @@
                     ＋ Add post piece
                 </button>
                 <div id="rb-master-post-picker" class="hidden mt-2 bg-cyan-900/10 border border-cyan-800/30 rounded p-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced — node-graph routing editor (overlay over the Studio, same
+         translucent-blue panel as Gear/Master). Left = gear palette to drag
+         from; right = the node canvas with guitar-cable links; supports parallel
+         branches (the chain output is the sum of all sink nodes). -->
+    <div id="rb-tab-advanced" class="rb-tab-panel rb-overlay rb-adv hidden">
+        <div class="rb-adv-wrap">
+            <aside class="rb-adv-palette">
+                <div class="rb-adv-pal-head">
+                    <div class="rb-adv-pal-filters">
+                        <button class="rb-adv-pal-chip rb-adv-pal-on" data-rb-adv-pal="amp" onclick="rbAdvPaletteFilter('amp')">Amps</button>
+                        <button class="rb-adv-pal-chip" data-rb-adv-pal="cab" onclick="rbAdvPaletteFilter('cab')">Cabs</button>
+                        <button class="rb-adv-pal-chip" data-rb-adv-pal="pedal" onclick="rbAdvPaletteFilter('pedal')">Pedals</button>
+                        <button class="rb-adv-pal-chip" data-rb-adv-pal="rack" onclick="rbAdvPaletteFilter('rack')">Racks</button>
+                    </div>
+                    <input id="rb-adv-pal-search" type="text" placeholder="Search gear…" oninput="rbAdvPaletteRender()">
+                </div>
+                <div id="rb-adv-palette-list" class="rb-adv-palette-list"></div>
+            </aside>
+            <div class="rb-adv-main">
+                <div class="rb-adv-toolbar">
+                    <span class="rb-adv-hint">Drag gear in · drag a jack ● to another node to wire · branch out for parallel</span>
+                    <div class="rb-adv-actions">
+                        <button onclick="rbAdvAutoLayout()" class="rb-adv-btn">Tidy</button>
+                        <button onclick="rbAdvResetToChain()" class="rb-adv-btn">Reset to chain</button>
+                    </div>
+                </div>
+                <div id="rb-adv-canvas" class="rb-adv-canvas">
+                    <svg id="rb-adv-cables" class="rb-adv-cables" preserveAspectRatio="none"></svg>
+                    <div id="rb-adv-nodes" class="rb-adv-nodes"></div>
+                </div>
             </div>
         </div>
     </div>

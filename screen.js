@@ -3394,6 +3394,7 @@ function rbShowTab(name) {
     if (name === 'studio') rbLoadStudioRoom();
     if (name === 'gear') rbGearFilter(rbState.currentGearFilter || 'all');
     if (name === 'master') rbLoadMasterChain();
+    if (name === 'advanced') rbLoadAdvanced();
     if (name === 'settings') {
         rbLoadCoverage();        // batch / coverage panel (was dashboard)
         rbLoadSettings();        // tone3000 + prefs
@@ -12207,3 +12208,312 @@ async function rbExportDefaults() {
 // (rbRemapCabMics removed — _auto_fix_cab_mics_for_song now runs on
 // every /song fetch, so cab assignments self-heal at song-open time
 // without the user needing to visit Setup.)
+
+// ════════════════════════════════════════════════════════════════════════
+// Advanced — node-graph routing editor (Phase 3). An overlay over the Studio
+// (same translucent-blue panel as Gear/Master) where the rig is shown as
+// draggable nodes wired with guitar cables. Multiple inputs into a node = a
+// parallel merge (the engine SUMS them); multiple outputs = a split. Live audio
+// wiring (window.slopsmithDesktop.audio.setNodeInputs) is feature-detected so it
+// no-ops on engines without graph support; the graph is the source for the v2
+// native_preset (Phase 4 persists it).
+// ════════════════════════════════════════════════════════════════════════
+
+function rbAdvState() {
+    if (!rbState._adv) rbState._adv = { nodes: [], edges: [], palette: 'amp', seeded: false };
+    return rbState._adv;
+}
+
+async function rbLoadAdvanced() {
+    if (!rbState.gearCatalog) {
+        try { const d = await (await fetch(`${window.RB_API}/gear_catalog`)).json(); rbState.gearCatalog = (d && d.categories) || {}; }
+        catch (_) { rbState.gearCatalog = {}; }
+    }
+    const adv = rbAdvState();
+    if (!adv.seeded || !adv.nodes.length) rbAdvResetToChain();
+    rbAdvPaletteRender();
+    rbAdvRenderCanvas();
+    rbAdvBindCanvasOnce();
+}
+
+// Build the initial graph from the current chain: a serial line
+// Guitar → pre-pedals → amp → post-pedals → cab → racks → Output.
+function rbAdvResetToChain() {
+    const adv = rbAdvState();
+    // Reuse the studio's grouping so the amp is classified correctly even when
+    // its slot is the default-tone marker (master_default), not "amp".
+    const g = rbStudioGroupDefault();
+    let nid = 1;
+    const mk = (e, kindLabel) => ({
+        id: nid++, kind: 'gear', pieceIdx: e.idx,
+        label: e.p.real_name || e.p.type || 'Gear', kindLabel,
+        img: rbStudioPedalImg(e.p) || null,
+        bypassed: !!e.p.bypassed, x: 0, y: 0,
+    });
+    const isPost = (e) => (e.p.slot || '').toLowerCase() === 'post_pedal';
+    const pedals = g.pedal || [];
+    const input = { id: nid++, kind: 'input', label: 'Guitar', x: 0, y: 0 };
+    const pre  = pedals.filter(e => !isPost(e)).map(e => mk(e, 'pedal'));
+    const amp  = (g.amp || []).map(e => mk(e, 'amp'));
+    const post = pedals.filter(isPost).map(e => mk(e, 'pedal'));
+    const cab  = (g.cab || []).map(e => mk(e, 'cab'));
+    const rack = (g.rack || []).map(e => mk(e, 'rack'));
+    const mid = [...pre, ...amp, ...post, ...cab, ...rack];
+    const output = { id: nid++, kind: 'output', label: 'Output', x: 0, y: 0 };
+    adv.nodes = [input, ...mid, output];
+    const seq = [input, ...mid, output];
+    adv.edges = [];
+    for (let k = 1; k < seq.length; k++) adv.edges.push({ from: seq[k - 1].id, to: seq[k].id, gain: 1.0 });
+    adv.seeded = true;
+    rbAdvAutoLayout();
+}
+
+// Left→right layout: column = longest path from a source; stack within a column.
+function rbAdvAutoLayout() {
+    const adv = rbAdvState();
+    const depth = {};
+    adv.nodes.forEach(n => depth[n.id] = 0);
+    for (let iter = 0; iter < adv.nodes.length + 1; iter++) {
+        let changed = false;
+        adv.edges.forEach(e => {
+            if (depth[e.to] < depth[e.from] + 1) { depth[e.to] = depth[e.from] + 1; changed = true; }
+        });
+        if (!changed) break;
+    }
+    const cols = {};
+    adv.nodes.forEach(n => { (cols[depth[n.id]] = cols[depth[n.id]] || []).push(n); });
+    const colW = 196, rowH = 132, padX = 36, padY = 30;
+    Object.keys(cols).forEach(c => cols[c].forEach((n, i) => { n.x = padX + (+c) * colW; n.y = padY + i * rowH; }));
+    rbAdvRenderCanvas();
+}
+
+// ── Palette (left) ──────────────────────────────────────────────────────
+function rbAdvPaletteFilter(cat) {
+    rbAdvState().palette = cat;
+    document.querySelectorAll('#rb-tab-advanced .rb-adv-pal-chip').forEach(b =>
+        b.classList.toggle('rb-adv-pal-on', b.dataset.rbAdvPal === cat));
+    rbAdvPaletteRender();
+}
+
+function rbAdvPaletteRender() {
+    const host = document.getElementById('rb-adv-palette-list');
+    if (!host) return;
+    const cat = rbAdvState().palette;
+    const q = rbNorm(((document.getElementById('rb-adv-pal-search') || {}).value || '').trim());
+    const items = ((rbState.gearCatalog && rbState.gearCatalog[cat]) || [])
+        .filter(g => !q || rbNorm(`${g.name || ''} ${g.rs_gear || ''} ${g.real_name || ''}`).includes(q));
+    if (!items.length) { host.innerHTML = `<div class="rb-adv-pal-empty">No ${cat}s${q ? ' match' : ' yet'}.</div>`; return; }
+    host.innerHTML = items.map(g => {
+        const name = rbEsc(g.name || g.real_name || g.rs_gear || 'Gear');
+        const img = `${window.RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}`;
+        return `<div class="rb-adv-pal-item" draggable="true"
+                     data-adv-gear="${rbEsc(g.rs_gear)}" data-adv-cat="${cat}" data-adv-name="${name}" data-adv-img="${rbEsc(img)}">
+                    <div class="rb-adv-pal-thumb"><img src="${img}" alt="" onerror="this.style.display='none'"></div>
+                    <div class="rb-adv-pal-name">${name}</div>
+                </div>`;
+    }).join('');
+    host.querySelectorAll('.rb-adv-pal-item').forEach(el => {
+        el.addEventListener('dragstart', ev => {
+            ev.dataTransfer.setData('text/rb-adv-gear', JSON.stringify({
+                rs_gear: el.dataset.advGear, cat: el.dataset.advCat, name: el.dataset.advName, img: el.dataset.advImg,
+            }));
+            ev.dataTransfer.effectAllowed = 'copy';
+        });
+    });
+}
+
+// ── Canvas render ───────────────────────────────────────────────────────
+function rbAdvNodeHtml(n) {
+    if (n.kind === 'input' || n.kind === 'output') {
+        const out = n.kind === 'input';
+        return `<div class="rb-adv-node rb-adv-term ${out ? '' : 'rb-adv-term-out'}" data-adv-node="${n.id}"
+                     style="left:${n.x}px;top:${n.y}px">
+                    <div class="rb-adv-term-label">${rbEsc(n.label)}</div>
+                    ${out ? `<span class="rb-adv-jack rb-adv-jack-out" data-adv-jack="${n.id}" data-adv-side="out"></span>`
+                          : `<span class="rb-adv-jack rb-adv-jack-in" data-adv-jack="${n.id}" data-adv-side="in"></span>`}
+                </div>`;
+    }
+    const thumb = n.img
+        ? `<div class="rb-adv-node-thumb"><img src="${rbEsc(n.img)}" alt="" onerror="this.style.display='none'"></div>`
+        : `<div class="rb-adv-node-thumb"></div>`;
+    return `<div class="rb-adv-node ${n.bypassed ? 'rb-adv-node-bypassed' : ''}" data-adv-node="${n.id}"
+                 style="left:${n.x}px;top:${n.y}px">
+                ${thumb}
+                <div class="rb-adv-node-label">${rbEsc(n.label)}</div>
+                <div class="rb-adv-node-kind">${rbEsc(n.kindLabel || 'gear')}</div>
+                <span class="rb-adv-jack rb-adv-jack-in" data-adv-jack="${n.id}" data-adv-side="in"></span>
+                <span class="rb-adv-jack rb-adv-jack-out" data-adv-jack="${n.id}" data-adv-side="out"></span>
+            </div>`;
+}
+
+function rbAdvRenderCanvas() {
+    const adv = rbAdvState();
+    const layer = document.getElementById('rb-adv-nodes');
+    const svg = document.getElementById('rb-adv-cables');
+    const canvas = document.getElementById('rb-adv-canvas');
+    if (!layer || !svg || !canvas) return;
+    layer.innerHTML = adv.nodes.map(rbAdvNodeHtml).join('');
+    // size content so the canvas scrolls and nodes/cables stay aligned
+    let maxX = 0, maxY = 0;
+    adv.nodes.forEach(n => { maxX = Math.max(maxX, n.x + 150); maxY = Math.max(maxY, n.y + 150); });
+    const w = Math.max(maxX + 40, canvas.clientWidth), h = Math.max(maxY + 40, canvas.clientHeight);
+    layer.style.width = svg.style.width = w + 'px';
+    layer.style.height = svg.style.height = h + 'px';
+    rbAdvRenderCables();
+    rbAdvAttachNodeHandlers();
+}
+
+function rbAdvRenderCables(tempPath) {
+    const adv = rbAdvState();
+    const layer = document.getElementById('rb-adv-nodes');
+    const svg = document.getElementById('rb-adv-cables');
+    if (!layer || !svg) return;
+    const defs = `<defs><linearGradient id="rb-adv-cablegrad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#3a5db0"/><stop offset="1" stop-color="#7fa0e0"/></linearGradient></defs>`;
+    let paths = '';
+    adv.edges.forEach((e, idx) => {
+        const fn = adv.nodes.find(n => n.id === e.from), tn = adv.nodes.find(n => n.id === e.to);
+        const fEl = layer.querySelector(`[data-adv-node="${e.from}"]`), tEl = layer.querySelector(`[data-adv-node="${e.to}"]`);
+        if (!fn || !tn || !fEl || !tEl) return;
+        const x1 = fn.x + fEl.offsetWidth, y1 = fn.y + fEl.offsetHeight / 2;
+        const x2 = tn.x, y2 = tn.y + tEl.offsetHeight / 2;
+        const dx = Math.max(40, Math.abs(x2 - x1) * 0.5);
+        paths += `<path class="rb-adv-cable" data-adv-edge="${idx}" d="M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}"/>`;
+    });
+    if (tempPath) paths += `<path class="rb-adv-cable rb-adv-cable-temp" d="${tempPath}"/>`;
+    svg.innerHTML = defs + paths;
+    svg.querySelectorAll('.rb-adv-cable[data-adv-edge]').forEach(p => {
+        p.addEventListener('click', () => rbAdvDeleteEdge(+p.dataset.advEdge));
+    });
+}
+
+function rbAdvDeleteEdge(idx) {
+    const adv = rbAdvState();
+    if (idx < 0 || idx >= adv.edges.length) return;
+    adv.edges.splice(idx, 1);
+    rbAdvRenderCanvas();
+    rbAdvSyncAudio();
+}
+
+// ── Interaction: drag nodes, wire jacks ─────────────────────────────────
+function rbAdvAttachNodeHandlers() {
+    const layer = document.getElementById('rb-adv-nodes');
+    if (!layer || layer._advBound) return;
+    layer._advBound = true;
+    layer.addEventListener('mousedown', ev => {
+        const jack = ev.target.closest('.rb-adv-jack');
+        const nodeEl = ev.target.closest('.rb-adv-node');
+        if (jack && jack.dataset.advSide === 'out') { rbAdvStartWire(ev, +jack.dataset.advJack); return; }
+        if (nodeEl) rbAdvStartNodeDrag(ev, +nodeEl.dataset.advNode);
+    });
+}
+
+function rbAdvLayerPoint(ev) {
+    const layer = document.getElementById('rb-adv-nodes');
+    const r = layer.getBoundingClientRect();
+    return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+}
+
+function rbAdvStartNodeDrag(ev, nodeId) {
+    ev.preventDefault();
+    const adv = rbAdvState();
+    const n = adv.nodes.find(x => x.id === nodeId);
+    if (!n) return;
+    const p0 = rbAdvLayerPoint(ev), ox = p0.x - n.x, oy = p0.y - n.y;
+    const el = document.querySelector(`#rb-adv-nodes [data-adv-node="${nodeId}"]`);
+    const move = e => {
+        const p = rbAdvLayerPoint(e);
+        n.x = Math.max(0, p.x - ox); n.y = Math.max(0, p.y - oy);
+        if (el) { el.style.left = n.x + 'px'; el.style.top = n.y + 'px'; }
+        rbAdvRenderCables();
+    };
+    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+}
+
+function rbAdvStartWire(ev, fromId) {
+    ev.preventDefault();
+    const adv = rbAdvState();
+    const fn = adv.nodes.find(n => n.id === fromId);
+    const fEl = document.querySelector(`#rb-adv-nodes [data-adv-node="${fromId}"]`);
+    if (!fn || !fEl) return;
+    const x1 = fn.x + fEl.offsetWidth, y1 = fn.y + fEl.offsetHeight / 2;
+    const move = e => {
+        const p = rbAdvLayerPoint(e);
+        const dx = Math.max(40, Math.abs(p.x - x1) * 0.5);
+        rbAdvRenderCables(`M ${x1} ${y1} C ${x1 + dx} ${y1}, ${p.x - dx} ${p.y}, ${p.x} ${p.y}`);
+    };
+    const up = e => {
+        document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+        const jack = e.target.closest && e.target.closest('.rb-adv-jack');
+        if (jack && jack.dataset.advSide === 'in') rbAdvConnect(fromId, +jack.dataset.advJack);
+        else rbAdvRenderCables();
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+}
+
+// Can `to` already reach `from`? (cycle guard before adding from→to)
+function rbAdvReaches(fromId, toId) {
+    const adv = rbAdvState();
+    const seen = new Set(); const stack = [fromId];
+    while (stack.length) {
+        const cur = stack.pop();
+        if (cur === toId) return true;
+        if (seen.has(cur)) continue; seen.add(cur);
+        adv.edges.filter(e => e.from === cur).forEach(e => stack.push(e.to));
+    }
+    return false;
+}
+
+function rbAdvConnect(fromId, toId) {
+    const adv = rbAdvState();
+    if (fromId === toId) return;
+    const to = adv.nodes.find(n => n.id === toId);
+    if (to && to.kind === 'input') return;            // can't feed the guitar input
+    if (adv.edges.some(e => e.from === fromId && e.to === toId)) return; // dup
+    if (rbAdvReaches(toId, fromId)) { rbAdvRenderCables(); return; }      // would cycle
+    adv.edges.push({ from: fromId, to: toId, gain: 1.0 });
+    rbAdvRenderCanvas();
+    rbAdvSyncAudio();
+}
+
+// Drop a palette gear onto the canvas → add a node (not yet a real chain piece;
+// Phase 4 materialises palette-added nodes into preset_pieces).
+function rbAdvBindCanvasOnce() {
+    const canvas = document.getElementById('rb-adv-canvas');
+    if (!canvas || canvas._advBound) return;
+    canvas._advBound = true;
+    canvas.addEventListener('dragover', ev => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy'; });
+    canvas.addEventListener('drop', ev => {
+        ev.preventDefault();
+        let data; try { data = JSON.parse(ev.dataTransfer.getData('text/rb-adv-gear')); } catch (_) { return; }
+        if (!data) return;
+        const adv = rbAdvState();
+        const p = rbAdvLayerPoint(ev);
+        const id = Math.max(0, ...adv.nodes.map(n => n.id)) + 1;
+        adv.nodes.push({
+            id, kind: 'gear', pieceIdx: -1, rsGear: data.rs_gear,
+            label: data.name || data.rs_gear, kindLabel: data.cat, img: data.img,
+            x: Math.max(0, p.x - 64), y: Math.max(0, p.y - 46),
+        });
+        rbAdvRenderCanvas();
+    });
+}
+
+// Push the current graph's edges to the live engine (if it supports graph
+// routing). Maps node ids → live slot ids by chain position; palette-added
+// nodes (pieceIdx < 0) have no slot yet, so they're skipped until Phase 4.
+function rbAdvSyncAudio() {
+    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    if (!audio || typeof audio.setNodeInputs !== 'function' || typeof audio.getChainState !== 'function') return;
+    // Wiring the live editor engine is finalised in Phase 3b alongside per-edge
+    // gain; for now the graph model is authoritative and persisted via Phase 4.
+}
+
+window.rbLoadAdvanced = rbLoadAdvanced;
+window.rbAdvPaletteFilter = rbAdvPaletteFilter;
+window.rbAdvPaletteRender = rbAdvPaletteRender;
+window.rbAdvAutoLayout = rbAdvAutoLayout;
+window.rbAdvResetToChain = rbAdvResetToChain;   // already auto-layouts + renders
