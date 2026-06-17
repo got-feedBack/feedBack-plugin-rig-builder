@@ -4184,27 +4184,17 @@ async function rbStudioLoadFocusVst(idx, faceEl, growMs) {
                 if (id != null && typeof v === 'number') piece._vst_params[id] = v;
             }
         } else {
-            // ISOLATED fallback (gear not in the live chain, e.g. palette-added).
-            await rbTeardownVstEditor(api);
-            await api.startAudio().catch(() => {});
-            slotId = await rbSafeLoadStandaloneVst(api, vstPath);
-            if (slotId == null || slotId < 0) return;
-            rbState._vstEditorSlot = slotId;
-            rbState._vstEditorInChain = false;
-            piece._vst_slot_id = slotId;
-            piece._vst_opaque = piece._vst_opaque
-                || rbParseVstStateOpaque(piece._vst_state)
-                || rbParseVstStateOpaque(piece.assigned && piece.assigned.vst_state);
-            const saved = piece._vst_params
-                || (piece.assigned && piece.assigned.vst_state ? rbParseVstStateParams(piece.assigned.vst_state) : null);
-            const params = await rbRestoreSavedParamsToSlot(api, slotId, saved, vstPath);
-            piece._vst_param_meta = params;
-            piece._vst_params = {};
-            for (const p of params) {
-                const id = p.id ?? p.paramId ?? p.index;
-                const v = p.value ?? p.current;
-                if (id != null && typeof v === 'number') piece._vst_params[id] = v;
-            }
+            // NOT in the live chain (just-added gear, or the monitor isn't
+            // loaded). Do NOT load it isolated — rbResetStandaloneVstHost clears
+            // the chain and silences the whole rig (and hammers the crash-prone
+            // VST loader). Show the editor from the gear's saved/spec params
+            // instead; edits persist and are heard after the next full chain
+            // (re)load. No engine touch → never mutes. _vstEditorInChain=true
+            // keeps the close teardown a no-op (no clearChain).
+            rbState._vstEditorSlot = null;
+            rbState._vstEditorInChain = true;
+            piece._vst_slot_id = null;
+            piece._vst_param_meta = piece._vst_param_meta || [];
         }
         const _wait = Math.max(0, (growMs || 0) - (Date.now() - _start));
         setTimeout(() => {
