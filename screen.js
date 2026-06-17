@@ -12421,6 +12421,22 @@ function rbAdvAutoLayout() {
     rbAdvRenderCanvas();
 }
 
+// VST face image for a catalog gear (copyright-free), mirroring rbStudioPedalImg
+// — NEVER the RS gear photo (/gear_photo/...), which must not be shown. Returns a
+// data URL when the VST's canvas face is available, else null (text placeholder).
+function rbAdvGearImg(g) {
+    const vp = g && (g.vst_path || g._vst_path);
+    if (!vp || !window.RBPedalCanvas) return null;
+    const stem = vp.split('/').pop().replace(/\.(vst3|component)$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (stem && window.RBPedalCanvas.has(stem)) {
+        try { return window.RBPedalCanvas.dataURL(stem, {}); } catch (_) {}
+    }
+    return null;
+}
+function rbAdvGearInitials(g) {
+    return rbEsc(((g && (g.real_name || g.name || g.rs_gear)) || 'G').slice(0, 2).toUpperCase());
+}
+
 // ── Palette (left) ──────────────────────────────────────────────────────
 function rbAdvPaletteFilter(cat) {
     rbAdvState().palette = cat;
@@ -12439,17 +12455,20 @@ function rbAdvPaletteRender() {
     if (!items.length) { host.innerHTML = `<div class="rb-adv-pal-empty">No ${cat}s${q ? ' match' : ' yet'}.</div>`; return; }
     host.innerHTML = items.map(g => {
         const name = rbEsc(g.name || g.real_name || g.rs_gear || 'Gear');
-        const img = `${window.RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}`;
+        const img = rbAdvGearImg(g);   // VST face only — never the RS gear photo
+        const thumb = img
+            ? `<img src="${img}" alt="" onerror="this.style.display='none'">`
+            : `<span class="rb-adv-pal-ph">${rbAdvGearInitials(g)}</span>`;
         return `<div class="rb-adv-pal-item" draggable="true"
-                     data-adv-gear="${rbEsc(g.rs_gear)}" data-adv-cat="${cat}" data-adv-name="${name}" data-adv-img="${rbEsc(img)}">
-                    <div class="rb-adv-pal-thumb"><img src="${img}" alt="" onerror="this.style.display='none'"></div>
+                     data-adv-gear="${rbEsc(g.rs_gear)}" data-adv-cat="${cat}" data-adv-name="${name}">
+                    <div class="rb-adv-pal-thumb">${thumb}</div>
                     <div class="rb-adv-pal-name">${name}</div>
                 </div>`;
     }).join('');
     host.querySelectorAll('.rb-adv-pal-item').forEach(el => {
         el.addEventListener('dragstart', ev => {
             ev.dataTransfer.setData('text/rb-adv-gear', JSON.stringify({
-                rs_gear: el.dataset.advGear, cat: el.dataset.advCat, name: el.dataset.advName, img: el.dataset.advImg,
+                rs_gear: el.dataset.advGear, cat: el.dataset.advCat, name: el.dataset.advName,
             }));
             ev.dataTransfer.effectAllowed = 'copy';
         });
@@ -12637,9 +12656,14 @@ function rbAdvBindCanvasOnce() {
         const adv = rbAdvState();
         const p = rbAdvLayerPoint(ev);
         const id = Math.max(0, ...adv.nodes.map(n => n.id)) + 1;
+        // Resolve the gear's VST face from the catalog (copyright-free) — never
+        // the RS gear photo that came off the drag payload.
+        const lookup = ((rbState.gearCatalog && rbState.gearCatalog[data.cat]) || [])
+            .find(x => x.rs_gear === data.rs_gear) || null;
         const node = {
             id, kind: 'gear', pieceIdx: -1, rsGear: data.rs_gear,
-            label: data.name || data.rs_gear, kindLabel: data.cat, img: data.img,
+            label: data.name || data.rs_gear, kindLabel: data.cat,
+            img: rbAdvGearImg(lookup) || null,
             x: Math.max(0, p.x - 64), y: Math.max(0, p.y - 46),
         };
         adv.nodes.push(node);
