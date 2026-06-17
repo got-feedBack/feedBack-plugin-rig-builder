@@ -3723,43 +3723,11 @@ async function rbStudioFocusAmp(idx) {
     // The amp-alternatives rail is always shown in focus (amp sits left for it).
     rbStudioOpenSwap(idx);
 
-    if (!vstPath || !api) return;            // static face stays; nothing to load
-    if (rbState._vstEditorBusy) return;
-    rbState._vstEditorBusy = true;
-    try {
-        await rbTeardownVstEditor(api);
-        await api.startAudio().catch(() => {});
-        const slotId = await rbSafeLoadStandaloneVst(api, vstPath);
-        if (slotId == null || slotId < 0) return;
-        rbState._vstEditorSlot = slotId;
-        piece._vst_slot_id = slotId;
-        piece._vst_opaque = piece._vst_opaque
-            || rbParseVstStateOpaque(piece._vst_state)
-            || rbParseVstStateOpaque(piece.assigned && piece.assigned.vst_state);
-        const saved = piece._vst_params
-            || (piece.assigned && piece.assigned.vst_state ? rbParseVstStateParams(piece.assigned.vst_state) : null);
-        const params = await rbRestoreSavedParamsToSlot(api, slotId, saved, vstPath);
-        piece._vst_param_meta = params;
-        piece._vst_params = {};
-        for (const p of params) {
-            const id = p.id ?? p.paramId ?? p.index;
-            const v = p.value ?? p.current;
-            if (id != null && typeof v === 'number') piece._vst_params[id] = v;
-        }
-        // Let the grow animation finish on the static IMG first, THEN swap in
-        // the interactive canvas at the final size — same trick as the return,
-        // so nothing pops mid-zoom. Guard in case the user already exited.
-        const _wait = Math.max(0, 560 - (Date.now() - _focusStart));
-        setTimeout(() => {
-            if (rbState._studioFocusIdx === idx && room.classList.contains('rb-focus-active')) {
-                rbStudioMakeAmpFaceInteractive(idx);
-            }
-        }, _wait);
-    } catch (_) {
-        /* keep the static face on load failure */
-    } finally {
-        rbState._vstEditorBusy = false;
-    }
+    // Edit the amp IN-CHAIN (shared path with pedals/racks): the whole rig keeps
+    // sounding while you tweak it, instead of isolating the amp. The amp face is
+    // the editor surface; the 560 ms wait lets the grow animation finish before
+    // the static IMG swaps to the live canvas.
+    rbStudioLoadFocusVst(idx, room.querySelector('.rb-amp-face'), 560);
 }
 
 // Swap the focused amp's static face <img> for an interactive canvas (OUR VST
@@ -4151,6 +4119,43 @@ function rbStudioPedalStep(delta) {
 // Load a focused gear's VST into the editor slot + restore its saved params,
 // then swap its static face for the interactive canvas. Shared loader for the
 // pedal focus (the amp has its own inline copy with the grow-timed swap).
+// Map a focused Studio piece (by chain index) to its slot id INSIDE the live
+// monitor chain, via the last-loaded native preset payload + the engine's chain
+// state (mirrors the song editor's rbChainSlotIdForPiece). Returns null when the
+// piece isn't a VST stage in the loaded chain.
+async function rbStudioChainSlotIdForPiece(api, pieceIdx) {
+    try {
+        if (!api || typeof api.getChainState !== 'function') return null;
+        const payload = rbState._studioMonitorPayload;
+        const chain = payload && payload.native_preset && payload.native_preset.chain;
+        if (!Array.isArray(chain)) return null;
+        const arr = rbStudioCurrentChain();
+        const piece = arr[pieceIdx];
+        if (!piece) return null;
+        const effPath = rbEffVstPath(piece);
+        let dupSkip = 0;
+        for (let k = 0; k < pieceIdx; k++) {
+            const q = arr[k];
+            if (q && q.type === piece.type && rbEffVstPath(q) === effPath) dupSkip++;
+        }
+        let seen = 0, stageIdx = -1;
+        for (let i = 0; i < chain.length; i++) {
+            const st = chain[i];
+            if (!st || Number(st.type) !== 0) continue;                        // VST stages only
+            if (typeof st.slot === 'string' && st.slot.startsWith('master_')) continue;
+            if (piece.type != null && st.rs_gear !== piece.type) continue;
+            if (effPath && st.path && st.path !== effPath) continue;
+            if (seen++ < dupSkip) continue;
+            stageIdx = i; break;
+        }
+        if (stageIdx < 0) return null;
+        const loaded = await api.getChainState();
+        if (!Array.isArray(loaded) || stageIdx >= loaded.length) return null;
+        const slot = loaded[stageIdx];
+        return slot && slot.id != null ? slot.id : null;
+    } catch (_) { return null; }
+}
+
 async function rbStudioLoadFocusVst(idx, faceEl, growMs) {
     const room = document.getElementById('rb-studio-room');
     const piece = (rbStudioCurrentChain())[idx];
@@ -4162,31 +4167,49 @@ async function rbStudioLoadFocusVst(idx, faceEl, growMs) {
     rbState._vstEditorBusy = true;
     const _start = Date.now();
     try {
-        await rbTeardownVstEditor(api);
-        await api.startAudio().catch(() => {});
-        const slotId = await rbSafeLoadStandaloneVst(api, vstPath);
-        if (slotId == null || slotId < 0) return;
-        rbState._vstEditorSlot = slotId;
-        piece._vst_slot_id = slotId;
-        piece._vst_opaque = piece._vst_opaque
-            || rbParseVstStateOpaque(piece._vst_state)
-            || rbParseVstStateOpaque(piece.assigned && piece.assigned.vst_state);
-        const saved = piece._vst_params
-            || (piece.assigned && piece.assigned.vst_state ? rbParseVstStateParams(piece.assigned.vst_state) : null);
-        const params = await rbRestoreSavedParamsToSlot(api, slotId, saved, vstPath);
-        piece._vst_param_meta = params;
-        piece._vst_params = {};
-        for (const p of params) {
-            const id = p.id ?? p.paramId ?? p.index;
-            const v = p.value ?? p.current;
-            if (id != null && typeof v === 'number') piece._vst_params[id] = v;
+        // Ensure the full tone is in the monitor, then try to edit IN-CHAIN so
+        // the whole rig keeps sounding (a pedal alone went silent before).
+        if (!rbState._studioMonitorPayload) { try { await rbStudioLoadMonitor(); } catch (_) {} }
+        let slotId = await rbStudioChainSlotIdForPiece(api, idx);
+        if (slotId != null) {
+            // IN-CHAIN: the chain keeps playing; edit this slot's params live.
+            await rbCloseActiveVstEditor();
+            rbState._vstEditorSlot = slotId;
+            rbState._vstEditorInChain = true;
+            piece._vst_slot_id = slotId;
+            try { piece._vst_param_meta = await api.getParameters(slotId); }
+            catch (_) { piece._vst_param_meta = piece._vst_param_meta || []; }
+            piece._vst_params = piece._vst_params || {};
+            for (const p of (piece._vst_param_meta || [])) {
+                const id = p.id ?? p.paramId ?? p.index;
+                const v = p.value ?? p.current;
+                if (id != null && typeof v === 'number') piece._vst_params[id] = v;
+            }
+        } else {
+            // ISOLATED fallback (gear not in the live chain, e.g. palette-added).
+            await rbTeardownVstEditor(api);
+            await api.startAudio().catch(() => {});
+            slotId = await rbSafeLoadStandaloneVst(api, vstPath);
+            if (slotId == null || slotId < 0) return;
+            rbState._vstEditorSlot = slotId;
+            rbState._vstEditorInChain = false;
+            piece._vst_slot_id = slotId;
+            piece._vst_opaque = piece._vst_opaque
+                || rbParseVstStateOpaque(piece._vst_state)
+                || rbParseVstStateOpaque(piece.assigned && piece.assigned.vst_state);
+            const saved = piece._vst_params
+                || (piece.assigned && piece.assigned.vst_state ? rbParseVstStateParams(piece.assigned.vst_state) : null);
+            const params = await rbRestoreSavedParamsToSlot(api, slotId, saved, vstPath);
+            piece._vst_param_meta = params;
+            piece._vst_params = {};
+            for (const p of params) {
+                const id = p.id ?? p.paramId ?? p.index;
+                const v = p.value ?? p.current;
+                if (id != null && typeof v === 'number') piece._vst_params[id] = v;
+            }
         }
         const _wait = Math.max(0, (growMs || 0) - (Date.now() - _start));
         setTimeout(() => {
-            // rbStudioIsFocused covers BOTH amp focus (rb-focus-active) and the
-            // pedal/rack camera focus (rb-pfocus). Using the amp-only class here
-            // was why pedals/racks never swapped their static photo for the live,
-            // editable VST canvas.
             if (rbState._studioFocusIdx === idx && rbStudioIsFocused(room)) {
                 rbStudioMakeFaceInteractive(idx, faceEl);
             }
@@ -4543,6 +4566,7 @@ async function rbStudioLoadMonitor() {
         await rbCloseActiveVstEditor();
         const payload = await (await fetch(url)).json();
         if (!payload || !payload.native_preset) return;
+        rbState._studioMonitorPayload = payload;   // for piece→slot mapping in focus
         delete payload.id;
         await rbLoadNativePresetPayload(api, payload, {});
         if (api.setMonitorMute) await api.setMonitorMute(false).catch(() => {});
