@@ -266,7 +266,7 @@
        depth. On focus it straightens out, steps forward + the side disappears. */
     /* anchored by the BOTTOM so the cab always sits on the same floor line — a
        shorter amp head grows upward instead of leaving the stack floating. */
-    .rb-amp-stack{ position:absolute; left:28%; top:auto; bottom:14%; width:168px; cursor:pointer;
+    .rb-amp-stack{ position:absolute; left:28%; top:auto; bottom:calc(14% - 3px); width:168px; cursor:pointer;
         transform-style:preserve-3d; transform:translateX(-50%) rotateY(32deg) translateZ(-140px);
         transition:left .55s cubic-bezier(.33,0,.2,1), top .55s cubic-bezier(.33,0,.2,1),
             bottom .55s cubic-bezier(.33,0,.2,1), width .55s cubic-bezier(.33,0,.2,1),
@@ -280,6 +280,14 @@
         box-shadow:inset 0 0 55px rgba(0,0,0,.6); border-radius:2px 0 0 2px;
         transition:opacity .35s ease; }
     #rb-studio-room.rb-focus-active .rb-amp-stack::before{ opacity:0; }
+    /* top face = the box's roof; lies back from the top edge (rotateX -90) so the
+       slightly-elevated camera sees the amp's top. Opaque (no transparent stop)
+       or it looks see-through. Hidden when an amp is focused/flat. */
+    .rb-amp-stack::after{ content:''; position:absolute; top:0; left:0; width:100%; height:60px;
+        transform-origin:top center; transform:rotateX(-90deg);
+        background:linear-gradient(180deg,#363b44,#23272e); border-radius:3px 3px 0 0;
+        box-shadow:inset 0 0 30px rgba(0,0,0,.45); transition:opacity .35s ease; }
+    #rb-studio-room.rb-focus-active .rb-amp-stack::after{ opacity:0; }
     /* contact shadow on the floor so the amp reads as grounded, not floating */
     .rb-amp-ground{ position:absolute; left:28%; top:78%; width:178px; height:40px; pointer-events:none;
         transform:translateX(-50%) rotateX(66deg);
@@ -342,17 +350,16 @@
         transform:translateX(-50%) rotateY(0deg) !important; }
     #rb-studio-room.rb-focus-active .rb-amp-stack.rb-amp-focused:hover{ transform:translateX(-50%) rotateY(0deg); filter:none; }
     #rb-studio-room.rb-focus-active .rb-amp-stack:not(.rb-amp-focused){ opacity:0 !important; pointer-events:none; }
-    /* extra (parallel) amps sit deeper in the room — dim + desaturate slightly
-       so they read as further back, and a touch smaller via inline width. */
-    .rb-amp-extra{ filter:brightness(.84) saturate(.92); }
-    .rb-amp-extra:hover{ filter:brightness(.97) saturate(.96); }
+    /* NB: do NOT put `filter` on .rb-amp-extra — a filter on a preserve-3d
+       element FLATTENS its 3D faces, collapsing the side-depth panel to an
+       invisible line (the amp looked like a flat photo). The extra amp is a true
+       MIRROR of the primary, so it needs no dimming anyway. */
     /* the right-side amps face INWARD (negative rotateY), so their solid depth
        panel must be on the RIGHT edge — the default ::before sits on the left
-       (correct for the primary amp) and would hide behind a left-facing amp,
-       making it look like a flat photo. Mirror it for extras. */
-    .rb-amp-extra::before{ left:auto; right:0; width:70px;
+       (correct for the primary amp) and would hide behind a right-facing amp. */
+    .rb-amp-extra::before{ left:auto; right:0; width:64px;
         transform-origin:right center; transform:rotateY(-90deg);
-        background:linear-gradient(90deg,#090a0c,#1d2026); }
+        background:linear-gradient(90deg,#090a0c,#22262e); }
     .rb-amp-face-canvas{ border-radius:6px; }
 
     /* swap rail — right-docked, translucent-blue carousel of alternative amps */
@@ -412,8 +419,8 @@
 
     /* ── Rack tower on a table — set back against the RIGHT WALL, on the wood
        floor, angled almost to the left (faces into the room) ── */
-    .rb-rack-zone{ position:absolute; right:9%; bottom:6%; width:min(280px,26%); cursor:pointer;
-        transform-style:preserve-3d; transform:translateZ(90px) rotateY(-80deg);
+    .rb-rack-zone{ position:absolute; right:11%; bottom:6%; width:min(280px,26%); cursor:pointer;
+        transform-style:preserve-3d; transform:translateZ(150px) rotateY(-88deg);
         transform-origin:bottom right; transition:opacity .4s ease, filter .2s; }
     /* highlight only the placeholder on hover — a filter on the preserve-3d zone
        would flatten it and make the table's 3D faces vanish */

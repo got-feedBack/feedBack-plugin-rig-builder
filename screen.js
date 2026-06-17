@@ -3562,17 +3562,15 @@ function rbRenderStudioRoom() {
     // shrinks them AND they render BEHIND the racks (racks now sit near the
     // camera). rotateY is mirrored for the right-side amps. Tuned vs the primary.
     const amps = g.amp.slice(0, 4);
-    // The 2nd amp mirrors the primary (left:28%→72%, rotateY 32→-40 so it's even
-    // more turned for visible depth) but sits deeper (translateZ:-260) so the rack
-    // + table OCCLUDE it in the room's 3D sort (z-index is ignored under
-    // preserve-3d — only the computed Z decides paint order; -260 is the depth
-    // where the rack wins). Same width:168 (perspective shrinks it). The
-    // right-edge depth panel (.rb-amp-extra::before) gives the turned amp a solid
-    // 3D side, not a flat photo. 3rd/4th amps go deeper centre-back. CDP-tuned.
+    // The 2nd amp is an EXACT MIRROR of the primary (left:28% bottom:14% w:168
+    // rotateY(32) translateZ(-140)) → left:72% rotateY(-32), everything else the
+    // same: same size, same floor line, same depth. Its 3D side face shows via the
+    // right-edge .rb-amp-extra::before (and CRITICALLY no `filter` on the stack,
+    // which would flatten it). 3rd/4th amps go deeper centre-back. CDP-tuned.
     const RB_AMP_EXTRA_SLOTS = {
-        2: [{ left: '72%', bottom: '14%', w: 168, ry: -40, tz: -260 }],
-        3: [{ left: '72%', bottom: '14%', w: 168, ry: -40, tz: -260 }, { left: '50%', bottom: '18%', w: 160, ry: -6, tz: -360 }],
-        4: [{ left: '72%', bottom: '14%', w: 168, ry: -40, tz: -260 }, { left: '42%', bottom: '18%', w: 158, ry: 8, tz: -360 }, { left: '58%', bottom: '18%', w: 158, ry: -12, tz: -360 }],
+        2: [{ left: '72%', bottom: 'calc(14% - 3px)', w: 168, ry: -32, tz: -140 }],
+        3: [{ left: '72%', bottom: 'calc(14% - 3px)', w: 168, ry: -32, tz: -140 }, { left: '50%', bottom: 'calc(17% - 3px)', w: 150, ry: -8, tz: -280 }],
+        4: [{ left: '72%', bottom: 'calc(14% - 3px)', w: 168, ry: -32, tz: -140 }, { left: '40%', bottom: 'calc(17% - 3px)', w: 148, ry: 10, tz: -280 }, { left: '60%', bottom: 'calc(17% - 3px)', w: 148, ry: -12, tz: -280 }],
     };
     const extraSlots = RB_AMP_EXTRA_SLOTS[amps.length] || [];
     const ampStack = (entry, i) => {
@@ -3594,13 +3592,14 @@ function rbRenderStudioRoom() {
                 </div>`;
     };
     const ampHtml = amps.map(ampStack).join('');
-    // Per-extra contact shadow, following each amp's left + depth (translateZ) so
-    // it stays under the (deeper) amp. Scaled to the amp width.
+    // Per-extra contact shadow — mirrors the primary's CSS .rb-amp-ground
+    // (top:78%, no translateZ; the shadow's vertical anchor lands it on the
+    // floor). Scaled to the amp width, positioned at the amp's left.
     const extraGroundHtml = amps.slice(1).map((entry, i) => {
         const s = extraSlots[i];
         if (!s) return '';
         return `<div class="rb-amp-ground rb-amp-ground-extra"
-                     style="left:${s.left};top:78%;width:${Math.round(172 * s.w / 168)}px;transform:translateX(-50%) rotateX(66deg) translateZ(${s.tz}px)"></div>`;
+                     style="left:${s.left};top:78%;width:${Math.round(178 * s.w / 168)}px;transform:translateX(-50%) rotateX(66deg)"></div>`;
     }).join('');
 
     // Rack tower on a table (right side), angled to point left + slightly frontal.
