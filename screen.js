@@ -12229,6 +12229,11 @@ async function rbLoadAdvanced() {
         try { const d = await (await fetch(`${window.RB_API}/gear_catalog`)).json(); rbState.gearCatalog = (d && d.categories) || {}; }
         catch (_) { rbState.gearCatalog = {}; }
     }
+    // Make sure the active tone's chain is loaded — the user may open Advanced
+    // before ever visiting Studio (which is what populates the default tone).
+    try {
+        if (!rbStudioCurrentChain().length && typeof rbLoadDefaultToneEditor === 'function') await rbLoadDefaultToneEditor();
+    } catch (_) {}
     const adv = rbAdvState();
     if (!adv.seeded || !adv.nodes.length) rbAdvResetToChain();
     rbAdvPaletteRender();
@@ -12360,6 +12365,13 @@ function rbAdvRenderCanvas() {
     layer.style.width = svg.style.width = w + 'px';
     layer.style.height = svg.style.height = h + 'px';
     rbAdvRenderCables();
+    // The first render can read node sizes before layout flushes (cables come
+    // out degenerate until the user nudges a node); recompute next frame, and
+    // again as the node thumbnails load (they can shift node height).
+    requestAnimationFrame(() => rbAdvRenderCables());
+    layer.querySelectorAll('.rb-adv-node img').forEach(img => {
+        if (!img.complete) img.addEventListener('load', () => rbAdvRenderCables(), { once: true });
+    });
     rbAdvAttachNodeHandlers();
 }
 
