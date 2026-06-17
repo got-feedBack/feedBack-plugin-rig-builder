@@ -3483,18 +3483,24 @@ function rbStudioCurrentChain() {
 // or the loaded song tone's preset.
 function rbStudioPersist() {
     const v = rbState.studioView || { source: 'default' };
+    let p = null;
     if (v.source === 'song' && rbState.currentSongFile) {
-        try { return rbPersistTone(v.toneIdx, rbState.currentSongFile); } catch (_) { return null; }
-    }
-    if (v.source === 'saved' && v.name) {
+        try { p = rbPersistTone(v.toneIdx, rbState.currentSongFile); } catch (_) { p = null; }
+    } else if (v.source === 'saved' && v.name) {
         try {
-            return fetch(`${window.RB_API}/saved_tone/save`, {
+            p = fetch(`${window.RB_API}/saved_tone/save`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: v.name, pieces: rbStudioChainToPayload(rbStudioCurrentChain()) }),
             });
-        } catch (_) { return null; }
+        } catch (_) { p = null; }
+    } else {
+        p = rbPersistMasterChain('default');
     }
-    return rbPersistMasterChain('default');
+    // Expose the latest save so a monitor reload can wait for the backend to
+    // reflect a structural change (e.g. a just-added pedal) before re-fetching
+    // the tone's native preset.
+    rbState._studioPersistPromise = (p && typeof p.then === 'function') ? p.catch(() => {}) : null;
+    return p;
 }
 
 function rbStudioGroupDefault() {
@@ -4119,40 +4125,32 @@ function rbStudioPedalStep(delta) {
 // Load a focused gear's VST into the editor slot + restore its saved params,
 // then swap its static face for the interactive canvas. Shared loader for the
 // pedal focus (the amp has its own inline copy with the grow-timed swap).
-// Map a focused Studio piece (by chain index) to its slot id INSIDE the live
-// monitor chain, via the last-loaded native preset payload + the engine's chain
-// state (mirrors the song editor's rbChainSlotIdForPiece). Returns null when the
-// piece isn't a VST stage in the loaded chain.
+// Map a focused Studio piece to its slot id in the ALREADY-LOADED engine chain,
+// matching the VST path directly against getChainState() (Nth slot with that
+// path, where N = how many earlier studio pieces share it). No native-preset
+// payload and NO engine reload — so focusing gear that's already playing is a
+// pure read (robust: never clears/mutes the monitor). Returns null only when the
+// gear isn't in the live chain (e.g. just added, or a NAM with no VST path).
 async function rbStudioChainSlotIdForPiece(api, pieceIdx) {
     try {
         if (!api || typeof api.getChainState !== 'function') return null;
-        const payload = rbState._studioMonitorPayload;
-        const chain = payload && payload.native_preset && payload.native_preset.chain;
-        if (!Array.isArray(chain)) return null;
         const arr = rbStudioCurrentChain();
         const piece = arr[pieceIdx];
         if (!piece) return null;
         const effPath = rbEffVstPath(piece);
+        if (!effPath) return null;                          // NAM / no VST → nothing to edit live
         let dupSkip = 0;
-        for (let k = 0; k < pieceIdx; k++) {
-            const q = arr[k];
-            if (q && q.type === piece.type && rbEffVstPath(q) === effPath) dupSkip++;
-        }
-        let seen = 0, stageIdx = -1;
-        for (let i = 0; i < chain.length; i++) {
-            const st = chain[i];
-            if (!st || Number(st.type) !== 0) continue;                        // VST stages only
-            if (typeof st.slot === 'string' && st.slot.startsWith('master_')) continue;
-            if (piece.type != null && st.rs_gear !== piece.type) continue;
-            if (effPath && st.path && st.path !== effPath) continue;
-            if (seen++ < dupSkip) continue;
-            stageIdx = i; break;
-        }
-        if (stageIdx < 0) return null;
+        for (let k = 0; k < pieceIdx; k++) if (rbEffVstPath(arr[k]) === effPath) dupSkip++;
         const loaded = await api.getChainState();
-        if (!Array.isArray(loaded) || stageIdx >= loaded.length) return null;
-        const slot = loaded[stageIdx];
-        return slot && slot.id != null ? slot.id : null;
+        if (!Array.isArray(loaded)) return null;
+        let seen = 0;
+        for (const slot of loaded) {
+            if (!slot || Number(slot.type) !== 0) continue;  // type 0 = VST
+            if (slot.path !== effPath) continue;
+            if (seen++ < dupSkip) continue;
+            return slot.id != null ? slot.id : null;
+        }
+        return null;
     } catch (_) { return null; }
 }
 
@@ -4167,13 +4165,16 @@ async function rbStudioLoadFocusVst(idx, faceEl, growMs) {
     rbState._vstEditorBusy = true;
     const _start = Date.now();
     try {
-        // Ensure the full tone is in the monitor, then try to edit IN-CHAIN so
-        // the whole rig keeps sounding (a pedal alone went silent before).
-        if (!rbState._studioMonitorPayload) { try { await rbStudioLoadMonitor(); } catch (_) {} }
+        // Edit the gear IN-CHAIN: it's almost always already loaded in the live
+        // monitor, so this is a pure param read — NO clear/reload/mute (robust;
+        // focusing existing gear never silences the rig). Only reload when the
+        // gear isn't in the chain yet (just added/swapped), then retry.
         let slotId = await rbStudioChainSlotIdForPiece(api, idx);
+        if (slotId == null) {
+            try { await rbStudioLoadMonitor(); } catch (_) {}
+            slotId = await rbStudioChainSlotIdForPiece(api, idx);
+        }
         if (slotId != null) {
-            // IN-CHAIN: the chain keeps playing; edit this slot's params live.
-            await rbCloseActiveVstEditor();
             rbState._vstEditorSlot = slotId;
             rbState._vstEditorInChain = true;
             piece._vst_slot_id = slotId;
@@ -4560,13 +4561,15 @@ async function rbStudioLoadMonitor() {
         if (t && t.id != null) url = `${window.RB_API}/native_preset_full/${t.id}`;
     }
     // 'song' tones are auditioned through the song preview path; skip here.
-    if (!url || rbState._vstEditorBusy) return;
-    rbState._vstEditorBusy = true;
+    if (!url || rbState._studioMonitorBusy) return;   // own flag — independent of _vstEditorBusy
+    rbState._studioMonitorBusy = true;
     try {
+        // Wait for any in-flight save so the re-fetched native reflects a
+        // just-made structural change (e.g. a newly added pedal).
+        if (rbState._studioPersistPromise) { try { await rbState._studioPersistPromise; } catch (_) {} }
         await rbCloseActiveVstEditor();
         const payload = await (await fetch(url)).json();
         if (!payload || !payload.native_preset) return;
-        rbState._studioMonitorPayload = payload;   // for piece→slot mapping in focus
         delete payload.id;
         await rbLoadNativePresetPayload(api, payload, {});
         if (api.setMonitorMute) await api.setMonitorMute(false).catch(() => {});
@@ -4574,7 +4577,7 @@ async function rbStudioLoadMonitor() {
     } catch (e) {
         console.warn('[rig_builder] studio monitor load failed:', e);
     } finally {
-        rbState._vstEditorBusy = false;
+        rbState._studioMonitorBusy = false;
     }
 }
 window.rbStudioLoadMonitor = rbStudioLoadMonitor;
