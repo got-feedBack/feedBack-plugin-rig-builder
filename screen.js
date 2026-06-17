@@ -4097,8 +4097,11 @@ function rbStudioFitFocusStage(stage, piece, room) {
         if (spec && spec.w && spec.h) aspect = spec.w / spec.h;
     } catch (_) {}
     const rr = room.getBoundingClientRect();
-    const maxW = Math.min(470, rr.width * 0.46);    // clear of the right swap rail
-    const maxH = Math.min(440, rr.height * 0.62);
+    // Racks read bigger than pedals (wide units against a wall) — give them more
+    // room while still staying clear of the right swap rail.
+    const _rack = rbStudioActiveGroup() === 'rack';
+    const maxW = Math.min(_rack ? 600 : 470, rr.width * (_rack ? 0.56 : 0.46));
+    const maxH = Math.min(_rack ? 520 : 440, rr.height * (_rack ? 0.7 : 0.62));
     let dW = maxW, dH = maxW / aspect;
     if (dH > maxH) { dW = maxH * aspect; }          // height-bound → narrow it
     stage.style.width = Math.round(dW) + 'px';
