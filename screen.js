@@ -4515,6 +4515,7 @@ window.rbStudioShowDefault = function rbStudioShowDefault() {
     rbState.studioView = { source: 'default' };
     rbShowTab('studio');
     try { rbRenderStudioRoom(); rbStudioRenderToneChips(); } catch (_) {}
+    rbStudioLoadMonitor();   // reload the live monitor so the switch is heard
 };
 window.rbStudioShowSongTone = function rbStudioShowSongTone(i) {
     rbState.studioView = { source: 'song', toneIdx: i };
@@ -4525,6 +4526,7 @@ window.rbStudioShowSavedTone = function rbStudioShowSavedTone(name) {
     rbState.studioView = { source: 'saved', name };
     rbShowTab('studio');
     try { rbRenderStudioRoom(); rbStudioRenderToneChips(); } catch (_) {}
+    rbStudioLoadMonitor();   // reload the live monitor so the switch is heard
 };
 
 // Load the CURRENTLY-SELECTED studio tone into the live monitor so switching
@@ -4536,28 +4538,32 @@ window.rbStudioShowSavedTone = function rbStudioShowSavedTone(name) {
 async function rbStudioLoadMonitor() {
     const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
     if (!api || typeof rbLoadNativePresetPayload !== 'function') return;
-    if (rbState.listeningTone != null || rbState._auditionId) return;   // a song preview owns the engine
+    if (rbState.listeningTone != null || rbState._auditionId) return;   // a song preview/playback owns the engine
+    if (rbState._studioMonitorBusy) return;                             // own flag — independent of _vstEditorBusy
     const view = rbState.studioView || { source: 'default' };
-    let url = null;
-    if (view.source === 'default') url = `${window.RB_API}/default_tone/native`;
-    else if (view.source === 'saved') {
-        const t = (rbState.savedTones || []).find(x => x.name === view.name);
-        if (t && t.id != null) url = `${window.RB_API}/native_preset_full/${t.id}`;
-    }
-    // 'song' tones are auditioned through the song preview path; skip here.
-    if (!url || rbState._studioMonitorBusy) return;   // own flag — independent of _vstEditorBusy
     rbState._studioMonitorBusy = true;
     try {
-        // Wait for any in-flight save so the re-fetched native reflects a
-        // just-made structural change (e.g. a newly added pedal).
+        // Wait for any in-flight save so a re-fetch reflects a just-made change.
         if (rbState._studioPersistPromise) { try { await rbState._studioPersistPromise; } catch (_) {} }
-        await rbCloseActiveVstEditor();
-        const payload = await (await fetch(url)).json();
-        if (!payload || !payload.native_preset) return;
-        delete payload.id;
-        await rbLoadNativePresetPayload(api, payload, {});
-        if (api.setMonitorMute) await api.setMonitorMute(false).catch(() => {});
-        rbState._defaultToneActive = (view.source === 'default');
+        if (view.source === 'default') {
+            await rbReloadDefaultTone();          // proven idle-monitor path
+            return;
+        }
+        if (view.source === 'saved') {
+            const t = (rbState.savedTones || []).find(x => x.name === view.name);
+            if (!t || t.id == null) return;
+            const r = await fetch(`${window.RB_API}/native_preset_full/${t.id}`);
+            if (!r.ok) return;
+            const payload = await r.json();
+            if (!payload || !payload.native_preset) return;
+            await rbCloseActiveVstEditor();
+            delete payload.id;                    // force the legacy monitor path (executor is silent at idle)
+            await rbLoadNativePresetPayload(api, payload, { mode: 'preview', authorization: 'user-action' });
+            if (api.setMonitorMute) await api.setMonitorMute(false).catch(() => {});
+            if (api.startAudio) await api.startAudio().catch(() => {});
+            rbState._defaultToneActive = true;    // a studio tone IS the active idle monitor (mirrors rbLoadDefaultTone)
+        }
+        // 'song' view → auditioned via the song path; no-op here.
     } catch (e) {
         console.warn('[rig_builder] studio monitor load failed:', e);
     } finally {
