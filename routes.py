@@ -6599,7 +6599,8 @@ def setup(app, context):
         ).fetchall()
         out = []
         for pid, name in rows:
-            out.append({"name": name[len(_SAVED_TONE_PREFIX):],
+            out.append({"id": pid,   # so the Studio can load its native preset for live audition
+                        "name": name[len(_SAVED_TONE_PREFIX):],
                         "pieces": _load_saved_chain(conn, pid) or []})
         return {"tones": out}
 

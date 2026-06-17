@@ -4504,17 +4504,56 @@ window.rbStudioShowDefault = function rbStudioShowDefault() {
     rbState.studioView = { source: 'default' };
     rbShowTab('studio');
     try { rbRenderStudioRoom(); rbStudioRenderToneChips(); } catch (_) {}
+    rbStudioLoadMonitor();
 };
 window.rbStudioShowSongTone = function rbStudioShowSongTone(i) {
     rbState.studioView = { source: 'song', toneIdx: i };
     rbShowTab('studio');
     try { rbRenderStudioRoom(); rbStudioRenderToneChips(); } catch (_) {}
+    rbStudioLoadMonitor();
 };
 window.rbStudioShowSavedTone = function rbStudioShowSavedTone(name) {
     rbState.studioView = { source: 'saved', name };
     rbShowTab('studio');
     try { rbRenderStudioRoom(); rbStudioRenderToneChips(); } catch (_) {}
+    rbStudioLoadMonitor();
 };
+
+// Load the CURRENTLY-SELECTED studio tone into the live monitor so switching
+// tones is actually heard (previously the switch only updated the UI, so the
+// old tone kept playing). Mirrors the default-tone idle loader: fetch the
+// tone's native preset and force the LEGACY loadPreset path (delete payload.id
+// — the v0.3.0 audio-effects executor routes to a song-bound route that's
+// silent with no song active). No-ops during a song preview/audition.
+async function rbStudioLoadMonitor() {
+    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    if (!api || typeof rbLoadNativePresetPayload !== 'function') return;
+    if (rbState.listeningTone != null || rbState._auditionId) return;   // a song preview owns the engine
+    const view = rbState.studioView || { source: 'default' };
+    let url = null;
+    if (view.source === 'default') url = `${window.RB_API}/default_tone/native`;
+    else if (view.source === 'saved') {
+        const t = (rbState.savedTones || []).find(x => x.name === view.name);
+        if (t && t.id != null) url = `${window.RB_API}/native_preset_full/${t.id}`;
+    }
+    // 'song' tones are auditioned through the song preview path; skip here.
+    if (!url || rbState._vstEditorBusy) return;
+    rbState._vstEditorBusy = true;
+    try {
+        await rbCloseActiveVstEditor();
+        const payload = await (await fetch(url)).json();
+        if (!payload || !payload.native_preset) return;
+        delete payload.id;
+        await rbLoadNativePresetPayload(api, payload, {});
+        if (api.setMonitorMute) await api.setMonitorMute(false).catch(() => {});
+        rbState._defaultToneActive = (view.source === 'default');
+    } catch (e) {
+        console.warn('[rig_builder] studio monitor load failed:', e);
+    } finally {
+        rbState._vstEditorBusy = false;
+    }
+}
+window.rbStudioLoadMonitor = rbStudioLoadMonitor;
 
 // Map a Studio chain (pieces) to the save payload the backend expects.
 function rbStudioChainToPayload(chain) {
