@@ -329,10 +329,18 @@
        not the focus — cab switching comes later). */
     /* sits LEFT of centre so the swap rail (always shown in focus) fits on the
        right; head fills the frame, cab runs off the bottom. */
-    #rb-studio-room.rb-focus-active .rb-amp-stack{
+    /* multi-amp: only the FOCUSED stack centres + grows; siblings fade out so
+       the room reads as one amp being edited (default 1-amp rig: this IS the
+       amp, so behaviour is unchanged). */
+    #rb-studio-room.rb-focus-active .rb-amp-stack.rb-amp-focused{
         left:37%; top:20%; bottom:auto; width:min(820px,63%); z-index:6; cursor:default;
         transform:translateX(-50%) rotateY(0deg); }
-    #rb-studio-room.rb-focus-active .rb-amp-stack:hover{ transform:translateX(-50%) rotateY(0deg); filter:none; }
+    #rb-studio-room.rb-focus-active .rb-amp-stack.rb-amp-focused:hover{ transform:translateX(-50%) rotateY(0deg); filter:none; }
+    #rb-studio-room.rb-focus-active .rb-amp-stack:not(.rb-amp-focused){ opacity:0 !important; pointer-events:none; }
+    /* extra (parallel) amps sit deeper in the room — dim + desaturate slightly
+       so they read as further back, and a touch smaller via inline width. */
+    .rb-amp-extra{ filter:brightness(.84) saturate(.92); z-index:0; }
+    .rb-amp-extra:hover{ filter:brightness(.97) saturate(.96); }
     .rb-amp-face-canvas{ border-radius:6px; }
 
     /* swap rail — right-docked, translucent-blue carousel of alternative amps */

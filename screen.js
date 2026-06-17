@@ -3546,24 +3546,42 @@ function rbRenderStudioRoom() {
     }
     const g = rbStudioGroupDefault();
     const amp = g.amp[0];
-    const ampName = amp ? (amp.p.real_name || amp.p.type || 'Amp') : 'No amp';
-    const ampIdx = amp ? amp.idx : -1;
     const cabName = g.cab[0] ? (g.cab[0].p.real_name || 'Cab') : 'Cab';
     const knobs = RB_STUDIO_KNOB_ANGLES
         .map(deg => `<span class="rb-knob" style="--rb-knob-rot:${deg}deg"></span>`).join('');
 
-    const ampImg = amp ? rbStudioPedalImg(amp.p) : null;
-    const ampHead = ampImg
-        ? `<div class="rb-amp-face"><img src="${ampImg}" alt="${rbEsc(ampName)}"></div>`
-        : `<div class="rb-amp-head">
-                <div class="rb-amp-name">${rbEsc(ampName)}</div>
-                <div class="rb-amp-knobs">${knobs}</div>
-           </div>`;
-    const ampHtml = `
-        <div class="rb-amp-stack" onclick="rbStudioClickAmp(${ampIdx})" title="${rbEsc(ampName)} — click to zoom in">
-            ${ampHead}
-            <div class="rb-amp-cab" title="${rbEsc(cabName)}"></div>
-        </div>`;
+    // Multi-amp: the primary amp keeps the front-left spot (CSS default); extra
+    // amps (parallel rigs added in Advanced) are placed deeper in the room so a
+    // 2-amp rig reads as two corners. Layout per total amp count:
+    //   2 amps → 2nd in the opposite (right-back) corner
+    //   3 amps → +3rd centre-back
+    //   4 amps → 3rd & 4th flank centre-back ("two middle")
+    const amps = g.amp.slice(0, 4);
+    const RB_AMP_EXTRA_SLOTS = {
+        2: [{ left: '74%', bottom: '31%', w: 116, ry: -28 }],
+        3: [{ left: '74%', bottom: '31%', w: 116, ry: -28 }, { left: '50%', bottom: '41%', w: 102, ry: 0 }],
+        4: [{ left: '74%', bottom: '31%', w: 116, ry: -28 }, { left: '43%', bottom: '42%', w: 96, ry: 8 }, { left: '57%', bottom: '42%', w: 96, ry: -8 }],
+    };
+    const extraSlots = RB_AMP_EXTRA_SLOTS[amps.length] || [];
+    const ampStack = (entry, i) => {
+        const nm = entry.p.real_name || entry.p.type || 'Amp';
+        const img = rbStudioPedalImg(entry.p);
+        const head = img
+            ? `<div class="rb-amp-face"><img src="${img}" alt="${rbEsc(nm)}"></div>`
+            : `<div class="rb-amp-head"><div class="rb-amp-name">${rbEsc(nm)}</div><div class="rb-amp-knobs">${knobs}</div></div>`;
+        let cls = 'rb-amp-stack', style = '';
+        if (i > 0) {
+            const s = extraSlots[i - 1];
+            cls += ' rb-amp-extra';
+            if (s) style = ` style="left:${s.left};bottom:${s.bottom};width:${s.w}px;transform:translateX(-50%) rotateY(${s.ry}deg) translateZ(-140px)"`;
+        }
+        return `<div class="${cls}" data-amp-idx="${entry.idx}"${style}
+                     onclick="rbStudioClickAmp(${entry.idx})" title="${rbEsc(nm)} — click to zoom in">
+                    ${head}
+                    <div class="rb-amp-cab" title="${rbEsc(cabName)}"></div>
+                </div>`;
+    };
+    const ampHtml = amps.map(ampStack).join('');
 
     // Rack tower on a table (right side), angled to point left + slightly frontal.
     // Units stack one on top of another, capped at RB_MAX_RACKS.
@@ -3723,6 +3741,16 @@ async function rbStudioFocusAmp(idx) {
     // stays crisp AND editable — no transform:scale on the canvas), the 3D room
     // scales back and dims behind it. The amp's own face is the editor.
     room.classList.add('rb-focus-active');
+    // Multi-amp: only the CLICKED stack centres + grows; the others fade out.
+    // Mark which one is focused (data-amp-idx) and grab ITS face for the editor.
+    let _ampFaceEl = null;
+    room.querySelectorAll('.rb-amp-stack').forEach(s => {
+        s.classList.remove('rb-amp-focused');
+        if (parseInt(s.getAttribute('data-amp-idx'), 10) === idx) {
+            s.classList.add('rb-amp-focused');
+            _ampFaceEl = s.querySelector('.rb-amp-face');
+        }
+    });
 
     // Floating control bar (exit / swap / listen), above the dimmed room.
     let bar = document.getElementById('rb-studio-focus-bar');
@@ -3740,7 +3768,7 @@ async function rbStudioFocusAmp(idx) {
     // sounding while you tweak it, instead of isolating the amp. The amp face is
     // the editor surface; the 560 ms wait lets the grow animation finish before
     // the static IMG swaps to the live canvas.
-    rbStudioLoadFocusVst(idx, room.querySelector('.rb-amp-face'), 560);
+    rbStudioLoadFocusVst(idx, _ampFaceEl || room.querySelector('.rb-amp-face'), 560);
 }
 
 // Swap the focused amp's static face <img> for an interactive canvas (OUR VST
@@ -3815,7 +3843,8 @@ async function rbStudioCloseFocus() {
     // the very end, and rebuilding the whole room is what snapped its size.
     const piece = (rbStudioCurrentChain())[idx];
     if (kind === 'amp') {
-        const face = document.querySelector('#rb-studio-room .rb-amp-face');
+        const face = document.querySelector('#rb-studio-room .rb-amp-stack.rb-amp-focused .rb-amp-face')
+                  || document.querySelector('#rb-studio-room .rb-amp-face');
         if (piece && face) {
             const img = rbStudioPedalImg(piece);
             face.innerHTML = img ? `<img src="${img}" alt="${rbEsc(piece.real_name || piece.type || 'Amp')}">` : '';
@@ -12591,8 +12620,11 @@ function rbAdvConnect(fromId, toId) {
     rbAdvSyncAudio();
 }
 
-// Drop a palette gear onto the canvas → add a node (not yet a real chain piece;
-// Phase 4 materialises palette-added nodes into preset_pieces).
+// Drop a palette gear onto the canvas → add a node AND materialise it into the
+// real Studio chain (so it persists, plays, and shows in the room). A dropped
+// AMP becomes a parallel rig: it appears as the 2nd/3rd/4th amp in the room
+// corners. NOTE: on the stock engine the extra amp plays in SERIES; true
+// parallel MIX needs the DAG engine ([[project-node-editor-parallel]], deferred).
 function rbAdvBindCanvasOnce() {
     const canvas = document.getElementById('rb-adv-canvas');
     if (!canvas || canvas._advBound) return;
@@ -12605,13 +12637,53 @@ function rbAdvBindCanvasOnce() {
         const adv = rbAdvState();
         const p = rbAdvLayerPoint(ev);
         const id = Math.max(0, ...adv.nodes.map(n => n.id)) + 1;
-        adv.nodes.push({
+        const node = {
             id, kind: 'gear', pieceIdx: -1, rsGear: data.rs_gear,
             label: data.name || data.rs_gear, kindLabel: data.cat, img: data.img,
             x: Math.max(0, p.x - 64), y: Math.max(0, p.y - 46),
-        });
+        };
+        adv.nodes.push(node);
         rbAdvRenderCanvas();
+        rbAdvMaterializeGear(node).catch(() => {});
     });
+}
+
+// Turn a palette-dropped node into a REAL piece on the current Studio chain so
+// it persists + plays + renders in the room. Mirrors rbMasterAddPiece's piece
+// shape (the proven add path) but writes to whatever chain Studio is showing
+// (default / song / saved) via rbStudioCurrentChain + rbStudioPersist.
+async function rbAdvMaterializeGear(node) {
+    if (!node || node.pieceIdx >= 0) return;
+    const cat = (node.kindLabel || '').toLowerCase();
+    const isAmp = cat === 'amp' || cat === 'amps';
+    const isCab = cat === 'cab' || cat === 'cabs';
+    const isRack = cat === 'rack' || cat === 'racks';
+    const slot = isAmp ? 'amp' : isCab ? 'cabinet' : isRack ? 'rack' : 'post_pedal';
+    const catalogEntry = (_rbGearsCatalog || []).find(g => g.rs_gear === node.rsGear) || {};
+    const piece = {
+        type: node.rsGear,
+        slot,
+        // Use the singular grouping category so rbStudioGroupDefault classifies
+        // it correctly (it lower-cases `category` and matches 'amp'/'cab'/'rack').
+        rs_category: isAmp ? 'amp' : isCab ? 'cab' : isRack ? 'rack' : 'pedal',
+        category: isAmp ? 'amp' : isCab ? 'cab' : isRack ? 'rack' : 'pedal',
+        real_name: catalogEntry.name || node.label || node.rsGear,
+        make: catalogEntry.make || '', model: catalogEntry.model || '',
+        assigned: null, _bypassed: false,
+    };
+    const chain = rbStudioCurrentChain();
+    chain.push(piece);
+    node.pieceIdx = chain.length - 1;     // link the node to its now-real piece
+    rbAdvRenderCanvas();
+    try { await rbStudioPersist(); } catch (_) {}
+    try { if (rbState._studioPersistPromise) await rbState._studioPersistPromise; } catch (_) {}
+    try { rbRenderStudioRoom(); } catch (_) {}
+    // Reload the live monitor so the added gear is actually heard.
+    try {
+        const v = rbState.studioView || { source: 'default' };
+        if (v.source === 'default') { if (rbState._defaultToneActive) await rbReloadDefaultTone(); }
+        else if (typeof rbStudioLoadMonitor === 'function') await rbStudioLoadMonitor();
+    } catch (_) {}
 }
 
 // Push the current graph's edges to the live engine (if it supports graph
