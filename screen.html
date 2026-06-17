@@ -31,6 +31,70 @@
         #rb-root.rb-wide { max-width: 100%; }
     }
 
+    /* ── Immersive shell: Studio is the permanent backdrop; the top bar floats
+       (translucent blue) and the other tabs float over the room as panels ── */
+    #rb-root.rb-immersive{ max-width:none !important; padding-left:0 !important;
+        padding-right:0 !important; padding-bottom:0 !important; position:relative; }
+    #rb-root.rb-immersive > .rb-back{ display:none; }
+    .rb-topbar{ position:relative; z-index:50; display:flex; align-items:center; gap:5px;
+        padding:11px 18px;
+        background:linear-gradient(180deg, rgba(54,82,146,.34), rgba(26,46,90,.15));
+        -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+        border-bottom:1px solid rgba(120,165,225,.18); }
+    .rb-topbar .rb-tab{ border:none; border-radius:9px; padding:7px 14px; font-size:13px; color:#aab7cf;
+        background:transparent; cursor:pointer; transition:background .15s, color .15s; white-space:nowrap; }
+    .rb-topbar .rb-tab:hover{ color:#fff; background:rgba(255,255,255,.07); }
+    .rb-topbar .rb-tab.rb-tab-active{ color:#fff; background:rgba(120,160,220,.24);
+        box-shadow:inset 0 0 0 1px rgba(120,170,240,.32); }
+    .rb-topbar-back{ flex:0 0 auto; width:30px; height:30px; border-radius:8px; margin-right:4px; cursor:pointer;
+        font-size:18px; line-height:1; color:#aab7cf; background:rgba(255,255,255,.05);
+        border:1px solid rgba(255,255,255,.1); }
+    .rb-topbar-back:hover{ color:#fff; background:rgba(255,255,255,.12); }
+    .rb-songbtn{ margin-left:auto; flex:0 0 auto; border:1px solid rgba(120,170,240,.3); border-radius:9px;
+        padding:7px 13px; font-size:13px; color:#dbe4f2; background:rgba(120,160,220,.16); cursor:pointer;
+        white-space:nowrap; transition:background .15s, color .15s; }
+    .rb-songbtn:hover{ color:#fff; background:rgba(120,160,220,.28); }
+    .rb-songbtn.rb-songbtn-on{ color:#fff; background:rgba(120,160,220,.34); box-shadow:inset 0 0 0 1px rgba(140,180,250,.5); }
+    .rb-tone-chips{ display:flex; gap:6px; align-items:center; }
+    #rb-stage-wrap{ position:relative; }
+    #rb-root.rb-immersive #rb-tab-studio{ display:block; }
+    #rb-root.rb-immersive #rb-studio-room{ height:calc(100vh - 158px); border-radius:0; }
+    .rb-overlay{ position:absolute; inset:0; z-index:30; overflow-y:auto;
+        padding:24px clamp(16px,5vw,72px) 60px;
+        background:linear-gradient(180deg, rgba(8,12,22,.72), rgba(6,9,16,.82));
+        -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); }
+    .rb-overlay.hidden{ display:none; }
+
+    /* Songs = a bottom search dock that does NOT cover the studio room */
+    .rb-songdock{ position:absolute; left:0; right:0; bottom:0; z-index:35; pointer-events:none; }
+    .rb-songdock.hidden{ display:none; }
+    .rb-songdock-inner{ pointer-events:auto; margin:0 auto; width:min(660px,94%);
+        display:flex; flex-direction:column; }
+    .rb-songdock-list{ max-height:46vh; overflow-y:auto; display:flex; flex-direction:column; gap:2px; padding:8px;
+        background:linear-gradient(180deg, rgba(12,18,32,.6), rgba(10,14,26,.82));
+        -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+        border:1px solid rgba(120,160,220,.16); border-bottom:none; border-radius:14px 14px 0 0; }
+    .rb-songdock-list:empty{ display:none; }
+    .rb-songdock-search{ display:flex; gap:8px; align-items:center; padding:12px 14px;
+        background:linear-gradient(180deg, rgba(48,74,134,.34), rgba(26,46,90,.42));
+        -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+        border:1px solid rgba(120,165,225,.2); }
+    .rb-songdock-search input{ flex:1; background:rgba(8,14,28,.6); border:1px solid rgba(120,160,220,.22);
+        border-radius:10px; padding:10px 14px; font-size:13px; color:#dbe4f2; outline:none; }
+    .rb-songdock-search input::placeholder{ color:#7e8aa3; }
+    .rb-songdock-search input:focus{ border-color:rgba(120,170,240,.5); }
+    .rb-songdock-search button{ background:rgba(120,160,220,.22); border:1px solid rgba(120,170,240,.34);
+        color:#eaf1fb; padding:10px 16px; border-radius:10px; font-size:13px; cursor:pointer; }
+    .rb-songdock-search button:hover{ background:rgba(120,160,220,.34); }
+
+    /* top-bar tone chips (the loaded song's tones, left→right) */
+    .rb-tone-chip{ border:1px solid rgba(120,170,240,.22); border-radius:9px; padding:6px 12px; font-size:12.5px;
+        color:#bcc8de; background:rgba(120,160,220,.1); cursor:pointer; white-space:nowrap;
+        transition:background .15s, color .15s; }
+    .rb-tone-chip:hover{ color:#fff; background:rgba(120,160,220,.2); }
+    .rb-tone-chip.rb-tone-chip-on{ color:#fff; background:rgba(120,160,220,.34);
+        box-shadow:inset 0 0 0 1px rgba(140,180,250,.5); }
+
     /* ── Studio room (premium dark + perspective) — Phase 1 ───────────── */
     #rb-studio-room{
         --rb-accent:#34d3c0;
@@ -134,7 +198,9 @@
     /* amp + cab tucked into the back-left corner, ANGLED into the room (3D —
        not facing the camera flat), with an extruded side panel for real box
        depth. On focus it straightens out, steps forward + the side disappears. */
-    .rb-amp-stack{ position:absolute; left:28%; top:48%; bottom:auto; width:168px; cursor:pointer;
+    /* anchored by the BOTTOM so the cab always sits on the same floor line — a
+       shorter amp head grows upward instead of leaving the stack floating. */
+    .rb-amp-stack{ position:absolute; left:28%; top:auto; bottom:14%; width:168px; cursor:pointer;
         transform-style:preserve-3d; transform:translateX(-50%) rotateY(32deg) translateZ(-140px);
         transition:left .55s cubic-bezier(.33,0,.2,1), top .55s cubic-bezier(.33,0,.2,1),
             bottom .55s cubic-bezier(.33,0,.2,1), width .55s cubic-bezier(.33,0,.2,1),
@@ -263,7 +329,9 @@
     .rb-rack-zone{ position:absolute; right:11%; bottom:6%; width:min(280px,26%); cursor:pointer;
         transform-style:preserve-3d; transform:translateZ(-35px) rotateY(-80deg);
         transform-origin:bottom right; transition:filter .2s; }
-    .rb-rack-zone.rb-rack-empty:hover{ filter:brightness(1.2); }
+    /* highlight only the placeholder on hover — a filter on the preserve-3d zone
+       would flatten it and make the table's 3D faces vanish */
+    .rb-rack-zone.rb-rack-empty:hover .rb-rack-placeholder{ color:var(--rb-accent); border-color:var(--rb-accent); }
     /* a long WOODEN desk: a top slab (front edge + horizontal top surface) on legs */
     .rb-rack-table{ position:absolute; left:0; right:0; bottom:0; height:92px; transform-style:preserve-3d; }
     /* front edge of the top (the thickness seen straight on) — wood */
@@ -317,6 +385,19 @@
     #rb-studio-room.rb-focus-active .rb-rack-zone,
     #rb-studio-room.rb-focus-active .rb-rack-ground{ opacity:0; pointer-events:none; transition:opacity .4s ease; }
 
+    /* ── Room props (decorative) — hidden while focused ── */
+    #rb-studio-room.rb-focus-active .rb-ceil-cloud{ opacity:0; pointer-events:none; transition:opacity .4s ease; }
+
+    /* acoustic cloud panel hanging from the ceiling (centre) */
+    .rb-ceil-cloud{ position:absolute; top:8%; left:35%; right:35%; height:24px; z-index:1; pointer-events:none;
+        transform:rotateX(34deg); transform-origin:top center; border-radius:5px;
+        background:linear-gradient(180deg,#3c424a,#22262c);
+        box-shadow:0 16px 28px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06); }
+    .rb-ceil-cloud::before, .rb-ceil-cloud::after{ content:""; position:absolute; bottom:100%; width:2px; height:30px;
+        background:linear-gradient(180deg,rgba(180,185,195,.5), rgba(180,185,195,.15)); }
+    .rb-ceil-cloud::before{ left:20%; }
+    .rb-ceil-cloud::after{ right:20%; }
+
     /* pedalboard = a SLIM angled platform on the floor; pedals stand proud of it.
        Width grows with the pedals (each sized by HEIGHT so landscape pedals like
        Q-Trix read big), capped so it never spans the whole floor. */
@@ -349,7 +430,7 @@
        skewed pseudo faces (bottom-front + right side) form a real 3D box, each
        shaded differently and tinted with the pedal's own colour (--rb-edge). */
     .rb-pedal{ flex:0 0 auto; cursor:pointer; position:relative; transform:translateZ(8px) rotateX(2deg);
-        transition:filter .2s; --rb-d:15px; }
+        transition:filter .2s; --rb-d:5px; }
     .rb-pedal:hover{ filter:brightness(1.16); }
     .rb-pedal img{ max-width:94px; max-height:66px; width:auto; height:auto; display:block;
         border-radius:6px 6px 2px 2px; position:relative; z-index:1;
@@ -404,12 +485,20 @@
     .rb-pf-side img{ width:100%; display:block; border-radius:10px;
         box-shadow:0 18px 40px -16px rgba(0,0,0,.8); }
     .rb-pf-side-empty{ visibility:hidden; pointer-events:none; }
+    /* "＋" add tile to the right of the last pedal (replaces the Add button) */
+    .rb-pf-side-add{ flex:0 0 auto; width:min(96px,11%); aspect-ratio:1/1.05; cursor:pointer;
+        display:flex; align-items:center; justify-content:center; font-size:34px; line-height:1;
+        color:#8fa0bd; border:2px dashed rgba(120,160,220,.32); border-radius:12px;
+        background:rgba(120,160,220,.06); transition:color .15s, border-color .15s, background .15s; }
+    .rb-pf-side-add:hover{ color:#fff; border-color:rgba(140,180,250,.6); background:rgba(120,160,220,.16); }
     .rb-pf-bottom{ display:flex; flex-direction:column; align-items:center; gap:13px; }
     .rb-pf-dots{ display:flex; gap:7px; justify-content:center; }
     .rb-pf-dots span{ width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,.22);
         transition:background .15s; }
     .rb-pf-dots span.on{ background:var(--rb-accent); box-shadow:0 0 8px var(--rb-accent); }
-    .rb-pf-actions{ display:flex; gap:10px; }
+    .rb-pf-actions{ display:flex; gap:16px; align-items:center; justify-content:center; }
+    /* centre column: Pre/Post on top, Remove underneath it */
+    .rb-pf-center{ display:flex; flex-direction:column; gap:8px; align-items:center; }
     .rb-pf-actions button{ font-size:12.5px; padding:8px 16px; border-radius:9px; color:#dbe2ee; cursor:pointer;
         background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.14); transition:.15s; }
     .rb-pf-actions button:hover{ background:rgba(255,255,255,.16); color:#fff; }
@@ -417,6 +506,11 @@
     .rb-pf-actions button:disabled:hover{ color:#dbe2ee; background:rgba(255,255,255,.04); }
     .rb-pf-actions .rb-focus-remove{ background:rgba(200,70,70,.16); border-color:rgba(220,95,95,.42); color:#f4d4d4; }
     .rb-pf-actions .rb-focus-remove:hover{ background:rgba(212,72,72,.30); color:#fff; }
+    /* pre/post-amp toggle: green = before the amp, cyan = after it */
+    .rb-pf-actions .rb-pf-slot-pre{ background:rgba(52,180,120,.18); border-color:rgba(74,210,150,.4); color:#bff0d6; }
+    .rb-pf-actions .rb-pf-slot-pre:hover{ background:rgba(52,180,120,.3); color:#fff; }
+    .rb-pf-actions .rb-pf-slot-post{ background:rgba(56,150,210,.18); border-color:rgba(90,180,240,.4); color:#cfe6f8; }
+    .rb-pf-actions .rb-pf-slot-post:hover{ background:rgba(56,150,210,.3); color:#fff; }
 
     /* room header overlay */
     .rb-studio-head{ position:absolute; top:0; left:0; right:0; z-index:3;
@@ -452,7 +546,7 @@
     .rb-focus-knob-label{ font-size:10px; letter-spacing:.03em; color:#9aa3af; text-align:center; max-width:84px;
         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 </style>
-<div id="rb-root" class="max-w-5xl mx-auto px-6 pt-24 pb-16">
+<div id="rb-root" class="rb-immersive max-w-5xl mx-auto px-6 pt-24 pb-16">
     <button onclick="showScreen('home')" class="rb-back text-gray-500 hover:text-white text-sm mb-6 flex items-center gap-1">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg> Back
     </button>
@@ -462,61 +556,49 @@
     <!-- Setup status -->
     <div id="rb-status" class="mb-6" style="display:none"></div>
 
-    <!-- Tab nav — simplified from 7 → 4 tabs (2026-05-27):
-         · Songs  (per-song chain editor — was "By song")
-         · Gear   (catalog + Pending + Files merged into chip-filtered views)
-         · Master (global pre/post FX — unchanged)
-         · Setup  (was Dashboard + Settings — batch ops + tone3000 + prefs) -->
-    <div class="flex gap-2 mb-6 border-b border-gray-800">
-        <button data-rb-tab="studio" onclick="rbShowTab('studio')"
-                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
-            Studio
-        </button>
-        <button data-rb-tab="gear" onclick="rbShowTab('gear')"
-                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
-            Gear
-        </button>
-        <button data-rb-tab="song" onclick="rbShowTab('song')"
-                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
-            Songs
-        </button>
-        <button data-rb-tab="master" onclick="rbShowTab('master')"
-                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
-            Master chain
-        </button>
-        <button data-rb-tab="settings" onclick="rbShowTab('settings')"
-                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
-            Setup
-        </button>
+    <!-- Floating translucent-blue top bar (immersive shell) -->
+    <div class="rb-topbar">
+        <button onclick="showScreen('home')" class="rb-topbar-back" title="Back">‹</button>
+        <button data-rb-tab="studio" onclick="rbShowTab('studio')" class="rb-tab">Studio</button>
+        <button data-rb-tab="gear" onclick="rbShowTab('gear')" class="rb-tab">Gear</button>
+        <button data-rb-tab="master" onclick="rbShowTab('master')" class="rb-tab">Master chain</button>
+        <button data-rb-tab="settings" onclick="rbShowTab('settings')" class="rb-tab">Setup</button>
+        <!-- Song search is an action (opens the bottom dock), not a tab -->
+        <button id="rb-song-btn" class="rb-songbtn" onclick="rbToggleSongSearch()" title="Load a song's tones">🔎 Song</button>
+        <!-- the loaded song's tones (chips) — shown when a song is loaded -->
+        <div id="rb-tone-chips" class="rb-tone-chips" style="display:none"></div>
     </div>
 
+    <!-- Stage: Studio room is the permanent backdrop; other tabs float over it -->
+    <div id="rb-stage-wrap">
     <!-- Studio (main view — the Default tone visualised as a 3D control room) -->
-    <div id="rb-tab-studio" class="rb-tab-panel hidden">
+    <div id="rb-tab-studio" class="rb-tab-panel">
         <div id="rb-studio-room"></div>
     </div>
 
-    <!-- Songs (per-song chain editor) -->
-    <div id="rb-tab-song" class="rb-tab-panel hidden">
-        <div class="flex gap-3 mb-6">
-            <select id="rb-library-provider" onchange="rbSetLibraryProvider(this.value)"
-                    aria-label="Library source"
-                    class="bg-dark-700 border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-300 outline-none hidden"
-                    title="Library source">
-                <option value="local">My Library</option>
-            </select>
-            <input type="text" id="rb-song-search" placeholder="Filename (e.g. 2minutes.sloppak)"
-                   oninput="rbOnSongSearchInput()"
-                   onfocus="rbShowSongList()"
-                   onkeydown="if(event.key==='Enter')rbListSongs()"
-                   class="flex-1 bg-dark-700 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-300 placeholder-gray-600 focus:border-accent/50 outline-none">
-            <button onclick="rbShowSongList(); rbListSongs()" class="bg-dark-600 hover:bg-dark-500 px-5 py-2.5 rounded-xl text-sm text-gray-300 transition">Search</button>
+    <!-- Songs — a bottom search dock that doesn't cover the studio room -->
+    <div id="rb-tab-song" class="rb-tab-panel rb-songdock hidden">
+        <div class="rb-songdock-inner">
+            <div id="rb-song-list" class="rb-songdock-list"></div>
+            <div class="rb-songdock-search">
+                <select id="rb-library-provider" onchange="rbSetLibraryProvider(this.value)"
+                        aria-label="Library source" title="Library source"
+                        class="bg-dark-700 border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-300 outline-none hidden">
+                    <option value="local">My Library</option>
+                </select>
+                <input type="text" id="rb-song-search" placeholder="Search a song…"
+                       oninput="rbOnSongSearchInput()"
+                       onfocus="rbShowSongList()"
+                       onkeydown="if(event.key==='Enter')rbListSongs()">
+                <button onclick="rbShowSongList(); rbListSongs()">Search</button>
+            </div>
         </div>
-        <div id="rb-song-list" class="space-y-1 mb-6"></div>
-        <div id="rb-song-tones" class="space-y-6"></div>
+        <!-- legacy per-song editor (kept for data flow; hidden in the immersive shell) -->
+        <div id="rb-song-tones" style="display:none"></div>
     </div>
 
     <!-- Gear (catalog + Pending + Files merged with chip filter) -->
-    <div id="rb-tab-gear" class="rb-tab-panel hidden">
+    <div id="rb-tab-gear" class="rb-tab-panel rb-overlay hidden">
         <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <div class="inline-flex gap-1 bg-dark-800/50 border border-gray-800/50 rounded-lg p-1">
                 <button onclick="rbGearFilter('all')" data-rb-gear-filter="all"
@@ -622,31 +704,8 @@
     </div>
 
     <!-- Master chain — global pre/post FX wrapper -->
-    <div id="rb-tab-master" class="rb-tab-panel hidden">
-        <p class="text-gray-500 text-sm mb-4">
-            Global FX layered around every tone of every song. <span class="text-emerald-300">Pre</span>
-            runs first (sees the raw DI — typical place for input gate / compressor / tuner).
-            <span class="text-cyan-300">Post</span> runs after the cab IR (typical place for limiter / room
-            reverb / headphone EQ). Each piece supports the same Library / VST / Bypass / reorder
-            controls as a song chain. Signal flow:
-            <code class="bg-dark-800 px-1 rounded text-gray-300">guitar → master_pre → song → master_post → output</code>.
-        </p>
-        <div class="text-xs text-gray-400 bg-dark-800/50 border border-gray-800/50 rounded p-2 mb-4 leading-snug">
-            <strong class="text-gray-300">How to use:</strong>
-            (1) <span class="text-gray-200">＋ Add piece</span> &rarr; pick a gear piece OR a VST plug-in.
-            VST pieces are <strong class="text-purple-300">ready to use immediately</strong> —
-            just hit <span class="text-purple-300">🎛 Edit VST</span> to tweak its parameters.
-            Gear pieces start <em>unassigned</em>: click <span class="text-emerald-300">Assign…</span>
-            then pick a NAM/IR from your library or paste a VST plug-in path.
-            (2) Master pieces are <strong>global</strong> — they don't appear on the Gear tab.
-        </div>
-        <div class="text-xs text-gray-400 bg-dark-800/50 border border-gray-800/50 rounded p-2 mb-4 leading-snug">
-            🎸 <strong class="text-gray-300">AMP must be on for master to apply.</strong> If you flip the
-            <strong class="text-green-300">AMP</strong> button mid-song, Rig Builder now auto-reloads the
-            chain (including master pre/post) ~1 second later — no need to leave and re-enter. Disable with
-            <code class="bg-dark-900 px-1 rounded">window.__rbAmpAutoApply = false</code> if it ever misfires.
-        </div>
-        <div id="rb-master-status" class="text-xs text-gray-500 mb-4">Loading…</div>
+    <div id="rb-tab-master" class="rb-tab-panel rb-overlay hidden">
+        <div id="rb-master-status" class="text-xs text-gray-500 mb-4" style="display:none">Loading…</div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
                 <div class="flex items-baseline justify-between mb-2">
@@ -679,7 +738,7 @@
          wide batch ops + coverage stats; bottom half = tone3000 + VST
          scan + preferences + extract tools + export defaults. Same
          DOM ids used by JS — only the layout was reorganised. -->
-    <div id="rb-tab-settings" class="rb-tab-panel hidden">
+    <div id="rb-tab-settings" class="rb-tab-panel rb-overlay hidden">
 
         <!-- Levels — kept at the very top for quick access. -->
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
@@ -860,4 +919,5 @@
             <div id="rb-export-defaults-status" class="text-xs text-gray-500 mt-2"></div>
         </div>
     </div>
+    </div><!-- /#rb-stage-wrap -->
 </div>
