@@ -2916,7 +2916,9 @@ const RbMegaChain = (function () {
             await _applyActiveTone(tone.tone_key);
             const slots = Array.isArray(tone.slots) ? tone.slots : [];
             console.log(`[rig_builder mega-chain] switch → "${tone.tone_key}" (${slots.length} slots)`);
-        }, 200);
+        }, 350);   // was 200ms (5×/s). Song tone-changes are seconds apart, so 350ms
+                   // is still imperceptible but ~halves the per-frame host allocation
+                   // (getToneChanges) churn during gameplay → less GC-pause stutter.
     }
 
     function _stopPolling() {
