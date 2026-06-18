@@ -295,8 +295,14 @@ private:
     void designKWeighting(double fs)
     {
         // Stage 1 — high-shelf pre-filter.
+        // BASS-FAITHFUL TWEAK (was the standard BS.1770 +4 dB shelf): reduced to
+        // +1.5 dB so the loudness measure depends much less on brightness. With
+        // the full +4 dB, two bass tones through differently-voiced cabs measured
+        // differently (the brighter one read louder → got boosted less → its bass
+        // ended up quieter), so bass tones normalized to INCONSISTENT perceived
+        // loudness. A flatter measure levels them by their (bass-dominated) energy.
         {
-            const double f0 = 1681.974450955533, G = 3.999843853973347, Q = 0.7071752369554196;
+            const double f0 = 1681.974450955533, G = 1.5, Q = 0.7071752369554196;
             const double K = std::tan(juce::MathConstants<double>::pi * f0 / fs);
             const double Vh = std::pow(10.0, G / 20.0), Vb = std::pow(Vh, 0.4996667741545416);
             const double a0 = 1.0 + K / Q + K * K;
@@ -309,8 +315,11 @@ private:
             kPre[0] = b; kPre[1] = b;
         }
         // Stage 2 — RLB high-pass (numerator 1, -2, 1).
+        // Corner lowered 38 → 22 Hz so the measure captures the bass fundamentals
+        // (low E ≈ 41 Hz, low B ≈ 31 Hz) instead of attenuating them — another
+        // source of bass-tone loudness inconsistency. Still cleans sub-22 Hz rumble.
         {
-            const double f0 = 38.13547087602444, Q = 0.5003270373238773;
+            const double f0 = 22.0, Q = 0.5003270373238773;
             const double K = std::tan(juce::MathConstants<double>::pi * f0 / fs);
             const double a0 = 1.0 + K / Q + K * K;
             Biquad b;
