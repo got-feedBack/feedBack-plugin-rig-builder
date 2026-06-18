@@ -3567,10 +3567,15 @@ function rbRenderStudioRoom() {
     // same: same size, same floor line, same depth. Its 3D side face shows via the
     // right-edge .rb-amp-extra::before (and CRITICALLY no `filter` on the stack,
     // which would flatten it). 3rd/4th amps go deeper centre-back. CDP-tuned.
+    // Every amp is the SAME size on the SAME front floor line (bottom:14%, w:168,
+    // translateZ:-140 like the primary) and faces the centre (rotateY toward 50%):
+    //   2 → primary(28°→) + mirror(72%,-32°←)
+    //   3 → + centre amp (50%, straight)
+    //   4 → + two inner amps (43%/57%), straight (facing the centre, NOT rotated)
     const RB_AMP_EXTRA_SLOTS = {
         2: [{ left: '72%', bottom: '14%', w: 168, ry: -32, tz: -140 }],
-        3: [{ left: '72%', bottom: '14%', w: 168, ry: -32, tz: -140 }, { left: '50%', bottom: '17%', w: 150, ry: -8, tz: -280 }],
-        4: [{ left: '72%', bottom: '14%', w: 168, ry: -32, tz: -140 }, { left: '40%', bottom: '17%', w: 148, ry: 10, tz: -280 }, { left: '60%', bottom: '17%', w: 148, ry: -12, tz: -280 }],
+        3: [{ left: '72%', bottom: '14%', w: 168, ry: -32, tz: -140 }, { left: '50%', bottom: '14%', w: 168, ry: 0, tz: -140 }],
+        4: [{ left: '72%', bottom: '14%', w: 168, ry: -32, tz: -140 }, { left: '43%', bottom: '14%', w: 168, ry: 0, tz: -140 }, { left: '57%', bottom: '14%', w: 168, ry: 0, tz: -140 }],
     };
     const extraSlots = RB_AMP_EXTRA_SLOTS[amps.length] || [];
     const ampStack = (entry, i) => {
