@@ -12445,7 +12445,9 @@ function rbAdvRestore() {
                 x: n.x, y: n.y,
             });
         } else {
-            nodes.push({ id: n.id, kind: n.kind, label: n.label || (n.kind === 'input' ? 'Guitar' : 'Output'), x: n.x, y: n.y });
+            // Always use the fresh terminal label (ignore any cached one, e.g. an
+            // old "Guitar") so renames take effect across saved graphs.
+            nodes.push({ id: n.id, kind: n.kind, label: (n.kind === 'input' ? 'Input' : 'Output'), x: n.x, y: n.y });
         }
     }
     const ids = new Set(nodes.map(n => n.id));
@@ -12493,7 +12495,7 @@ function rbAdvResetToChain() {
     });
     const isPost = (e) => (e.p.slot || '').toLowerCase() === 'post_pedal';
     const pedals = g.pedal || [];
-    const input = { id: nid++, kind: 'input', label: 'Guitar', x: 0, y: 0 };
+    const input = { id: nid++, kind: 'input', label: 'Input', x: 0, y: 0 };
     const pre  = pedals.filter(e => !isPost(e)).map(e => mk(e, 'pedal'));
     const amp  = (g.amp || []).map(e => mk(e, 'amp'));
     const post = pedals.filter(isPost).map(e => mk(e, 'pedal'));
@@ -12652,11 +12654,14 @@ function rbAdvRenderCables(tempPath) {
         const x1 = fn.x + ((fEl && fEl.offsetWidth) || dimW(fn)), y1 = fn.y + dimH(fn, fEl) / 2;
         const x2 = tn.x, y2 = tn.y + dimH(tn, tEl) / 2;
         const dx = Math.max(40, Math.abs(x2 - x1) * 0.5);
-        paths += `<path class="rb-adv-cable" data-adv-edge="${idx}" d="M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}"/>`;
+        const d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+        // wide transparent hit path (easy to click to disconnect) + the visible cable
+        paths += `<path class="rb-adv-cable-hit" data-adv-edge="${idx}" d="${d}"/>`;
+        paths += `<path class="rb-adv-cable" d="${d}"/>`;
     });
     if (tempPath) paths += `<path class="rb-adv-cable rb-adv-cable-temp" d="${tempPath}"/>`;
     svg.innerHTML = paths;
-    svg.querySelectorAll('.rb-adv-cable[data-adv-edge]').forEach(p => {
+    svg.querySelectorAll('.rb-adv-cable-hit[data-adv-edge]').forEach(p => {
         p.addEventListener('click', () => rbAdvDeleteEdge(+p.dataset.advEdge));
     });
 }
@@ -12886,6 +12891,14 @@ function rbAdvBindCanvasOnce() {
     const canvas = document.getElementById('rb-adv-canvas');
     if (!canvas || canvas._advBound) return;
     canvas._advBound = true;
+    // Zoom ONLY on a pinch gesture (macOS delivers it as wheel + ctrlKey). A
+    // plain 2-finger swipe (no ctrlKey) is left alone so the canvas pans/scrolls
+    // natively. The +/- buttons remain for explicit zoom.
+    canvas.addEventListener('wheel', ev => {
+        if (!ev.ctrlKey) return;          // 2-finger scroll → native pan
+        ev.preventDefault();
+        rbAdvZoom(ev.deltaY < 0 ? 0.06 : -0.06);
+    }, { passive: false });
     canvas.addEventListener('dragover', ev => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy'; });
     canvas.addEventListener('drop', ev => {
         ev.preventDefault();

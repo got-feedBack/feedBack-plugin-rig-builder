@@ -52,6 +52,13 @@
     .rb-topbar-back{ flex:0 0 auto; width:30px; height:30px; border-radius:8px; margin-right:4px; cursor:pointer;
         font-size:18px; line-height:1; color:#aab7cf; background:rgba(255,255,255,.05);
         border:1px solid rgba(255,255,255,.1); }
+    /* Advanced entry point, floating inside the Studio room (top-right) */
+    .rb-studio-adv-btn{ position:absolute; top:14px; right:16px; z-index:20; cursor:pointer;
+        padding:7px 13px; border-radius:9px; font-size:13px; font-weight:500; color:#cfe0ff;
+        background:rgba(30,46,76,.62); border:1px solid rgba(120,170,240,.34);
+        box-shadow:0 6px 18px rgba(0,0,0,.4); backdrop-filter:blur(6px);
+        transition:background .15s, color .15s, transform .12s; }
+    .rb-studio-adv-btn:hover{ background:rgba(48,72,118,.8); color:#fff; transform:translateY(-1px); }
     .rb-topbar-back:hover{ color:#fff; background:rgba(255,255,255,.12); }
     .rb-songbtn{ margin-left:auto; flex:0 0 auto; border:1px solid rgba(120,170,240,.3); border-radius:9px;
         padding:7px 13px; font-size:13px; color:#dbe4f2; background:rgba(120,160,220,.16); cursor:pointer;
@@ -805,9 +812,13 @@
        via innerHTML doesn't repaint until a reflow, so gradient cables only
        appeared after the user nudged a node. Solid paints on first render. */
     .rb-adv-cable{ fill:none; stroke:#6f93d6; stroke-width:4; stroke-linecap:round;
-        filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); pointer-events:stroke; cursor:pointer; }
+        filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); pointer-events:none; }
     .rb-adv-cable.rb-adv-cable-temp{ stroke:rgba(150,190,255,.7); stroke-dasharray:6 5; }
-    .rb-adv-cable:hover{ stroke:var(--rb-accent); }
+    /* wide invisible click target so a thin cable is easy to grab; a faint red
+       tube on hover signals "click to disconnect". */
+    .rb-adv-cable-hit{ fill:none; stroke:transparent; stroke-width:20; stroke-linecap:round;
+        pointer-events:stroke; cursor:pointer; }
+    .rb-adv-cable-hit:hover{ stroke:rgba(225,95,95,.22); }
 </style>
 <div id="rb-root" class="rb-immersive max-w-5xl mx-auto px-6 pt-24 pb-16">
     <button onclick="showScreen('home')" class="rb-back text-gray-500 hover:text-white text-sm mb-6 flex items-center gap-1">
@@ -825,7 +836,6 @@
         <button data-rb-tab="studio" onclick="rbShowTab('studio')" class="rb-tab">Studio</button>
         <button data-rb-tab="gear" onclick="rbShowTab('gear')" class="rb-tab">Gear</button>
         <button data-rb-tab="master" onclick="rbShowTab('master')" class="rb-tab">Master chain</button>
-        <button data-rb-tab="advanced" onclick="rbShowTab('advanced')" class="rb-tab">Advanced</button>
         <button data-rb-tab="settings" onclick="rbShowTab('settings')" class="rb-tab">Setup</button>
         <!-- Song search is an action (opens the bottom dock), not a tab -->
         <button id="rb-song-btn" class="rb-songbtn" onclick="rbToggleSongSearch()" title="Load a song's tones">🔎 Song</button>
@@ -843,6 +853,10 @@
     <!-- Studio (main view — the Default tone visualised as a 3D control room) -->
     <div id="rb-tab-studio" class="rb-tab-panel">
         <div id="rb-studio-room"></div>
+        <!-- Advanced (node-graph chain editor) lives INSIDE Studio, not in the top tab bar -->
+        <button class="rb-studio-adv-btn" onclick="rbShowTab('advanced')" title="Open the advanced node-graph chain editor">
+            ⚙ Advanced
+        </button>
     </div>
 
     <!-- Songs — a bottom search dock that doesn't cover the studio room -->
@@ -1023,7 +1037,7 @@
             </aside>
             <div class="rb-adv-main">
                 <div class="rb-adv-toolbar">
-                    <span class="rb-adv-hint">Drag gear in · drag a jack ● to another node to wire · branch out for parallel</span>
+                    <span class="rb-adv-hint">Drag gear in · drag a jack ● to wire · click a cable to disconnect · pinch to zoom</span>
                     <div class="rb-adv-actions">
                         <button onclick="rbAdvZoom(-0.15)" class="rb-adv-btn rb-adv-btn-icon" title="Zoom out">−</button>
                         <span id="rb-adv-zoom-label" class="rb-adv-zoom-label">100%</span>
