@@ -12655,26 +12655,21 @@ function rbAdvRenderCables(tempPath) {
         const x2 = tn.x, y2 = tn.y + dimH(tn, tEl) / 2;
         const dx = Math.max(40, Math.abs(x2 - x1) * 0.5);
         const d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
-        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;   // ~cable midpoint for the cut button
-        // Each edge: a wide invisible hit area (for hover) + the visible cable +
-        // a red ✕ "disconnect" button at the midpoint that appears on hover.
+        // Each edge: a wide invisible hit area (easy to grab, turns the cable red
+        // on hover) + the visible cable. DOUBLE-click to disconnect (no ✕ button —
+        // it made accidental deletes too easy).
         paths += `<g class="rb-adv-edge-g" data-adv-edge="${idx}">
             <path class="rb-adv-cable-hit" d="${d}"/>
             <path class="rb-adv-cable" d="${d}"/>
-            <g class="rb-adv-cut" transform="translate(${mx},${my})">
-                <circle class="rb-adv-cut-bg" r="9"/>
-                <text class="rb-adv-cut-x" x="0" y="3.4" text-anchor="middle">✕</text>
-            </g>
         </g>`;
     });
     if (tempPath) paths += `<path class="rb-adv-cable rb-adv-cable-temp" d="${tempPath}"/>`;
     svg.innerHTML = paths;
-    // Disconnect a cable: DOUBLE-click anywhere on it, or single-click its ✕
-    // (single-click on the body does nothing, to avoid accidental disconnects).
+    // Disconnect a cable: DOUBLE-click anywhere on it (a single click does
+    // nothing, so connections aren't deleted by accident).
     svg.querySelectorAll('.rb-adv-edge-g[data-adv-edge]').forEach(g => {
         const idx = +g.dataset.advEdge;
         g.querySelector('.rb-adv-cable-hit').addEventListener('dblclick', () => rbAdvDeleteEdge(idx));
-        g.querySelector('.rb-adv-cut').addEventListener('click', (ev) => { ev.stopPropagation(); rbAdvDeleteEdge(idx); });
     });
 }
 
