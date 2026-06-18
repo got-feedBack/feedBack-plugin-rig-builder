@@ -74,6 +74,27 @@ Editor de grafo (palette de gear a la izquierda + canvas con nodos y cables). An
 
 ---
 
+## ✅ FIX — "arañazos"/dropouts aleatorios = denormales en el audio engine
+**Causa real (NO los amps — ésos son fieles al esquemático, NO se tocan):** el **audio engine** (`slopsmith-desktop/src/audio`) **no tenía protección de denormales** (`ScopedNoDenormals`/FTZ) en ningún lado del RT path. La cadena es full IIR (NAM, VSTs de amp/EQ/comp, colas de IR); su estado decae a ~0 tras cada nota → cae en **denormales** (floats 10-100× más lentos) → **picos de CPU esporádicos → underrun → arañazo**. Aleatorio, sin patrón fijo, **peor con buffer grande** (más samples en estado denormal por callback), independiente de canción/tono. Firma clásica.
+**Fix (commit `8b175c9` en `slopsmith-desktop`, branch `feat/parallel-signal-graph`):** `const juce::ScopedNoDenormals noDenormals;` al tope de `AudioEngine::audioDeviceIOCallbackWithContext` (cubre todo el path) y de `SignalChain::process`. Setea FTZ/DAZ scoped; los denormales son sub −300 dBFS → inaudible. Sin cambio de API/tono, solo CPU. Compila (`npm run build:audio` → `build/Release/slopsmith_audio.node`). **OJO:** la app v0.3.0 corre OTRA versión del engine — aplicar el mismo one-liner a la rama que buildea esa app.
+
+**Lo del plugin JS ya estaba optimizado** (poll mega-chain 200→350ms); en idle 0 long-tasks. El hitch era del engine.
+
+### ⛔ NO tocar: el DSP de los amp VST
+Son fieles a los esquemáticos. Aunque el modelo de válvula (Newton/sample) es caro, **no se optimiza tocando los amps**. (Una vía válida a futuro, SOLO con validación A/B y aprobación: Jacobiano analítico del Koren — numéricamente exacto, ~3× menos transcendentales — pero por ahora se deja como está.)
+
+## (histórico) idea descartada — optimización del DSP de amps
+**Síntoma:** cada cierto rato (~1/min, aleatorio) un stall de **50-79ms** en el main thread → el juego salta frames + el audio rasca una vez. Medido con un `PerformanceObserver({entryTypes:['longtask']})`: ~8 long-tasks de 50-79ms en ~9 min, sin patrón fijo, pase lo que pase (canción o improv). En **idle el plugin está limpio** (0 long-tasks/10s) → **NO es el plugin JS**, es **CPU del DSP de la cadena saturando el sistema** (por eso subir el buffer 320→450 lo empeoró: ráfagas de audio más largas compiten peor por CPU).
+
+**Hog identificado:** el modelo de válvula nodal de los amp VST (`amps/sampleg_sbtcl/SvtPlugin.cpp` `Triode::process`, mismo patrón en FK800/Sharke/etc.). Por **cada sample**: hasta **12 iteraciones Newton**, c/u con un solve MNA 6×6 (`Mna`, que es RT-safe / sin heap — verificado) + **3 llamadas a `Ip()`**, y `Ip()` = `log`+`exp`+`sqrt`+`pow` (≈36 transcendentales + 12 solves/sample × 48k × 2ch). Es CPU pura, muy cara.
+
+**Optimizaciones propuestas (CPU↓, bajo riesgo de tono):**
+1. **Jacobiano analítico** del Koren en el Newton → de 3 `Ip()` a 1 por iteración (~2-3× menos transcendentales; es *más* preciso, no menos). Cuidado: derivar bien dIp/dvgk y dIp/dvpk o el Newton mal-converge.
+2. **`std::pow(e1, 1.4)` → aprox rápida** (pow es el más caro).
+3. **Cap de iteraciones** 12→~8 (el early-break `err<1e-6` ya sale antes en la mayoría).
+4. (opcional) lookup/aprox de `log`/`exp` en `Ip`.
+Combinadas: ~2× la etapa de válvula con tono casi idéntico. **Hacerlo en el template y validar tono A/B.** El plugin JS ya se optimizó lo que correspondía (poll mega-chain 200→350ms).
+
 ## Cómo probar
 1. Reiniciá la app (carga `v2.6.28`).
 2. **Studio**: agregá un 2º amp (drag en Advanced) → debería verse como par espejado, cajas 3D con techo, ambos apoyados.
