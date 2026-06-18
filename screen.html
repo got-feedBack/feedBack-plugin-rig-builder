@@ -748,10 +748,14 @@
        transform:scale'd so scrolling works at any zoom. */
     .rb-adv-zoom{ position:relative; }
     .rb-adv-cables{ position:absolute; top:0; left:0; pointer-events:none; z-index:1; overflow:visible; }
-    .rb-adv-nodes{ position:absolute; top:0; left:0; z-index:2; }
+    /* the nodes layer is ON TOP of the cables (z-index:2); make its EMPTY area
+       click-through (pointer-events:none) so the cables below get hover/click —
+       the node boxes re-enable pointer-events so they stay interactive. */
+    .rb-adv-nodes{ position:absolute; top:0; left:0; z-index:2; pointer-events:none; }
 
     /* a node = a gear box with an input jack (left) + output jack (right) */
     .rb-adv-node{ position:absolute; width:128px; border-radius:12px; cursor:grab; user-select:none;
+        pointer-events:auto;
         background:linear-gradient(180deg, rgba(30,42,66,.96), rgba(18,26,44,.97));
         border:1px solid rgba(120,165,225,.28); box-shadow:0 10px 26px rgba(0,0,0,.5);
         transition:box-shadow .15s, border-color .15s; }
@@ -1044,7 +1048,7 @@
             </aside>
             <div class="rb-adv-main">
                 <div class="rb-adv-toolbar">
-                    <span class="rb-adv-hint">Drag gear in · drag a jack ● to wire · click a cable to disconnect · pinch to zoom</span>
+                    <span class="rb-adv-hint">Drag gear in · drag a jack ● to wire · double-click a cable (or its ✕) to disconnect · pinch to zoom</span>
                     <div class="rb-adv-actions">
                         <button onclick="rbAdvZoom(-0.15)" class="rb-adv-btn rb-adv-btn-icon" title="Zoom out">−</button>
                         <span id="rb-adv-zoom-label" class="rb-adv-zoom-label">100%</span>

@@ -12669,10 +12669,11 @@ function rbAdvRenderCables(tempPath) {
     });
     if (tempPath) paths += `<path class="rb-adv-cable rb-adv-cable-temp" d="${tempPath}"/>`;
     svg.innerHTML = paths;
-    // Click anywhere on the cable (hit path) OR its ✕ to disconnect.
+    // Disconnect a cable: DOUBLE-click anywhere on it, or single-click its ✕
+    // (single-click on the body does nothing, to avoid accidental disconnects).
     svg.querySelectorAll('.rb-adv-edge-g[data-adv-edge]').forEach(g => {
         const idx = +g.dataset.advEdge;
-        g.querySelector('.rb-adv-cable-hit').addEventListener('click', () => rbAdvDeleteEdge(idx));
+        g.querySelector('.rb-adv-cable-hit').addEventListener('dblclick', () => rbAdvDeleteEdge(idx));
         g.querySelector('.rb-adv-cut').addEventListener('click', (ev) => { ev.stopPropagation(); rbAdvDeleteEdge(idx); });
     });
 }
