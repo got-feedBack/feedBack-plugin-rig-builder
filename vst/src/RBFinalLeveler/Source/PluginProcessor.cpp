@@ -85,7 +85,7 @@ public:
         // perceived loudness instead of equal RMS (which sounded uneven). 30 ms
         // reacts quickly to a tone change; the gain follower below smooths any
         // residual per-cycle ripple on low bass notes.
-        const float rmsTauMs = 30.0f;
+        const float rmsTauMs = 15.0f;   // faster loudness detector (was 30) — reacts ~2x quicker to a tone change
         const float rmsCoef = 1.0f - std::exp(-1.0f / std::max(1.0f, (rmsTauMs / 1000.0f) * float(sr)));
 
         const float* chData[2] = { nullptr, nullptr };
@@ -136,8 +136,8 @@ public:
         // below) until the detector is trustworthy, then fade in over ~20 ms at
         // the already-correct level. Net: a brief soft attack on the very first
         // note instead of a blast. (Per fresh plugin instance = per song load.)
-        const int kWarmupHold  = int(0.045 * sr);
-        const int kWarmupFade  = std::max(1, int(0.020 * sr));
+        const int kWarmupHold  = int(0.018 * sr);            // engage sooner after a load (was 45 ms)
+        const int kWarmupFade  = std::max(1, int(0.010 * sr)); // (was 20 ms)
         const int kWarmupTotal = kWarmupHold + kWarmupFade;
         if (hasSignal && warmupSamples < kWarmupTotal)
             warmupSamples += numSamples;
@@ -184,8 +184,10 @@ public:
         // keeps the slow time so musical dynamics aren't flattened (no
         // pumping). urgency: 0 at <=3 dB gap, ramps to 1 at >=12 dB.
         const float gapDb = std::abs(wantedGainDb - currentGainDb);
-        const float urgency = juce::jlimit(0.0f, 1.0f, (gapDb - 3.0f) / 9.0f);
-        const float fastMs = 20.0f;
+        // Reach full-speed sooner (urgency hits 1 by ~6 dB instead of 12) and snap
+        // harder on a change, so a tone switch lands at level almost immediately.
+        const float urgency = juce::jlimit(0.0f, 1.0f, (gapDb - 1.0f) / 5.0f);
+        const float fastMs = 8.0f;
         const float timeMs = baseMs * (1.0f - urgency) + fastMs * urgency;
 
         const float blockSeconds = float(numSamples / sr);

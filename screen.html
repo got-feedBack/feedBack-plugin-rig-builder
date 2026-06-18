@@ -19,7 +19,10 @@
     #rb-root canvas:focus-visible { outline: none !important; box-shadow: none !important; }
     /* pt-24 clears the legacy fixed navbar; in v3 that navbar is hidden, so trim
        the gap ONLY inside #v3-main. The legacy desktop keeps pt-24. */
-    #v3-main #rb-root { padding-top: 1.5rem; }
+    /* v3: the host topbar is hidden in Studio (rbSetImmersiveTopbar), so drop
+       the top padding entirely — the plugin's own floating tab bar sits flush
+       at the very top and the room fills everything below it. */
+    #v3-main #rb-root { padding-top: 0; }
     /* v3: sidebar + Plugins page own navigation, so hide the legacy "< Back". */
     #v3-main #rb-root .rb-back{display:none!important}
     #rb-root.rb-wide { max-width: min(1400px, calc(100vw - 3rem)); }
@@ -30,6 +33,140 @@
         #rb-root .rb-gear-browser { grid-template-columns: 1fr !important; }
         #rb-root.rb-wide { max-width: 100%; }
     }
+
+    /* ── Immersive shell: Studio is the permanent backdrop; the top bar floats
+       (translucent blue) and the other tabs float over the room as panels ── */
+    #rb-root.rb-immersive{ max-width:none !important; padding-left:0 !important;
+        padding-right:0 !important; padding-bottom:0 !important; position:relative; }
+    #rb-root.rb-immersive > .rb-back{ display:none; }
+    .rb-topbar{ position:relative; z-index:50; display:flex; align-items:center; gap:5px;
+        padding:11px 18px;
+        background:linear-gradient(180deg, rgba(54,82,146,.34), rgba(26,46,90,.15));
+        -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+        border-bottom:1px solid rgba(120,165,225,.18); }
+    .rb-topbar .rb-tab{ border:none; border-radius:9px; padding:7px 14px; font-size:13px; color:#aab7cf;
+        background:transparent; cursor:pointer; transition:background .15s, color .15s; white-space:nowrap; }
+    .rb-topbar .rb-tab:hover{ color:#fff; background:rgba(255,255,255,.07); }
+    .rb-topbar .rb-tab.rb-tab-active{ color:#fff; background:rgba(120,160,220,.24);
+        box-shadow:inset 0 0 0 1px rgba(120,170,240,.32); }
+    .rb-topbar-back{ flex:0 0 auto; width:30px; height:30px; border-radius:8px; margin-right:4px; cursor:pointer;
+        font-size:18px; line-height:1; color:#aab7cf; background:rgba(255,255,255,.05);
+        border:1px solid rgba(255,255,255,.1); }
+    /* Advanced entry point, floating inside the Studio room (top-right) */
+    .rb-studio-adv-btn{ position:absolute; top:14px; right:16px; z-index:20; cursor:pointer;
+        padding:7px 13px; border-radius:9px; font-size:13px; font-weight:500; color:#cfe0ff;
+        background:rgba(30,46,76,.62); border:1px solid rgba(120,170,240,.34);
+        box-shadow:0 6px 18px rgba(0,0,0,.4); backdrop-filter:blur(6px);
+        transition:background .15s, color .15s, transform .12s; }
+    .rb-studio-adv-btn:hover{ background:rgba(48,72,118,.8); color:#fff; transform:translateY(-1px); }
+    .rb-topbar-back:hover{ color:#fff; background:rgba(255,255,255,.12); }
+    .rb-songbtn{ margin-left:auto; flex:0 0 auto; border:1px solid rgba(120,170,240,.3); border-radius:9px;
+        padding:7px 13px; font-size:13px; color:#dbe4f2; background:rgba(120,160,220,.16); cursor:pointer;
+        white-space:nowrap; transition:background .15s, color .15s; }
+    .rb-songbtn:hover{ color:#fff; background:rgba(120,160,220,.28); }
+    .rb-songbtn.rb-songbtn-on{ color:#fff; background:rgba(120,160,220,.34); box-shadow:inset 0 0 0 1px rgba(140,180,250,.5); }
+    /* tone selector (single bar): current tone + a searchable dropdown */
+    .rb-toneselect{ position:relative; flex:0 0 auto; }
+    .rb-tone-btn{ border:1px solid rgba(120,170,240,.3); border-radius:9px; padding:7px 13px; font-size:13px;
+        color:#dbe4f2; background:rgba(120,160,220,.16); cursor:pointer; white-space:nowrap; max-width:240px;
+        overflow:hidden; text-overflow:ellipsis; transition:background .15s, color .15s; }
+    .rb-tone-btn:hover{ color:#fff; background:rgba(120,160,220,.28); }
+    .rb-tone-menu{ position:absolute; top:calc(100% + 8px); right:0; width:min(300px,80vw); z-index:60;
+        display:flex; flex-direction:column; max-height:60vh; border-radius:12px; overflow:hidden;
+        background:linear-gradient(180deg, rgba(20,30,52,.96), rgba(12,18,32,.97));
+        -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+        border:1px solid rgba(120,165,225,.22); box-shadow:0 18px 44px rgba(0,0,0,.55); }
+    .rb-tone-menu.hidden{ display:none; }
+    .rb-tone-search{ padding:10px; border-bottom:1px solid rgba(255,255,255,.06); }
+    .rb-tone-search input{ width:100%; background:rgba(8,14,28,.6); border:1px solid rgba(120,160,220,.22);
+        border-radius:9px; padding:8px 11px; font-size:13px; color:#dbe4f2; outline:none; }
+    .rb-tone-search input::placeholder{ color:#7e8aa3; }
+    .rb-tone-list{ overflow-y:auto; padding:6px; display:flex; flex-direction:column; gap:2px; }
+    .rb-tone-grouphdr{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:#7e8aa3;
+        padding:8px 8px 4px; }
+    .rb-tone-row{ display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px; cursor:pointer;
+        color:#cdd6e6; font-size:13px; }
+    .rb-tone-row:hover{ background:rgba(120,160,220,.16); color:#fff; }
+    .rb-tone-row-on{ background:rgba(120,160,220,.24); color:#fff; box-shadow:inset 0 0 0 1px rgba(140,180,250,.4); }
+    .rb-tone-row-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rb-tone-row-del{ flex:0 0 auto; border:none; background:transparent; cursor:pointer; font-size:13px; opacity:.6; }
+    .rb-tone-row-del:hover{ opacity:1; }
+    .rb-tone-foot{ padding:8px; border-top:1px solid rgba(255,255,255,.06); }
+    .rb-tone-save{ width:100%; border:1px solid rgba(74,210,150,.4); border-radius:9px; padding:9px;
+        color:#bff0d6; background:rgba(52,180,120,.16); cursor:pointer; font-size:13px; }
+    .rb-tone-save:hover{ color:#fff; background:rgba(52,180,120,.3); }
+    .rb-tone-saveinput{ display:flex; align-items:center; gap:6px; }
+    .rb-tone-saveinput input{ flex:1; background:rgba(8,14,28,.6); border:1px solid rgba(120,160,220,.3);
+        border-radius:8px; padding:8px 10px; font-size:13px; color:#dbe4f2; outline:none; }
+    .rb-tone-saveok, .rb-tone-savecancel{ border:1px solid rgba(255,255,255,.14); border-radius:8px;
+        padding:8px 11px; font-size:13px; cursor:pointer; background:rgba(255,255,255,.06); color:#dbe2ee; }
+    .rb-tone-saveok{ background:rgba(52,180,120,.22); border-color:rgba(74,210,150,.42); color:#bff0d6; }
+    .rb-tone-saveok:hover{ background:rgba(52,180,120,.34); color:#fff; }
+    .rb-tone-savecancel:hover{ background:rgba(255,255,255,.14); color:#fff; }
+    #rb-stage-wrap{ position:relative; }
+    /* song-tones bar — its own strip over the top of the room, only with a song */
+    .rb-song-tonebar{ position:absolute; top:0; left:0; right:0; z-index:25; display:flex; gap:6px;
+        align-items:center; padding:8px 16px; overflow-x:auto; white-space:nowrap;
+        background:linear-gradient(180deg, rgba(40,62,112,.4), rgba(20,36,72,.18));
+        -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+        border-bottom:1px solid rgba(120,165,225,.14); }
+    .rb-song-tonebar.hidden{ display:none; }
+    .rb-song-tonebar::-webkit-scrollbar{ height:0; }
+    .rb-song-tonebar-name{ font-size:12.5px; color:#d2dcec; font-weight:500; max-width:340px;
+        overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px; flex:0 0 auto; }
+    .rb-song-tonebar-x{ margin-left:auto; flex:0 0 auto; border:1px solid rgba(255,255,255,.14); border-radius:8px;
+        width:28px; height:28px; cursor:pointer; color:#cdd6e6; background:rgba(255,255,255,.05); font-size:13px; }
+    .rb-song-tonebar-x:hover{ color:#fff; background:rgba(255,255,255,.14); }
+    #rb-root.rb-immersive #rb-tab-studio{ display:block; }
+    #rb-root.rb-immersive #rb-studio-room{ height:calc(100vh - 158px); border-radius:0; }
+    /* In the v3 shell the host topbar is hidden while Studio is open (see
+       rbSetImmersiveTopbar in screen.js) and #rb-root's top padding is 0, so the
+       room fills the whole main area: 100vh minus only the plugin's own floating
+       tab bar (~59px). Scoped to #v3-main so the legacy v2 shell (which still
+       shows its own chrome) keeps 158px. */
+    #v3-main #rb-root.rb-immersive #rb-studio-room{ height:calc(100vh - 59px); }
+    .rb-overlay{ position:absolute; inset:0; z-index:30; overflow-y:auto;
+        padding:24px clamp(16px,5vw,72px) 60px;
+        background:linear-gradient(180deg, rgba(8,12,22,.72), rgba(6,9,16,.82));
+        -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); }
+    .rb-overlay.hidden{ display:none; }
+
+    /* Songs = a bottom search dock that does NOT cover the studio room */
+    .rb-songdock{ position:absolute; left:0; right:0; bottom:0; z-index:35; pointer-events:none; }
+    .rb-songdock.hidden{ display:none; }
+    .rb-songdock-inner{ pointer-events:auto; margin:0 auto; width:min(660px,94%);
+        display:flex; flex-direction:column; }
+    .rb-songdock-list{ max-height:46vh; overflow-y:auto; display:flex; flex-direction:column; gap:2px; padding:8px;
+        background:linear-gradient(180deg, rgba(12,18,32,.6), rgba(10,14,26,.82));
+        -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+        border:1px solid rgba(120,160,220,.16); border-bottom:none; border-radius:14px 14px 0 0; }
+    .rb-songdock-list:empty{ display:none; }
+    .rb-songdock-search{ display:flex; gap:8px; align-items:center; padding:12px 14px;
+        background:linear-gradient(180deg, rgba(48,74,134,.34), rgba(26,46,90,.42));
+        -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+        border:1px solid rgba(120,165,225,.2); }
+    .rb-songdock-search input{ flex:1; background:rgba(8,14,28,.6); border:1px solid rgba(120,160,220,.22);
+        border-radius:10px; padding:10px 14px; font-size:13px; color:#dbe4f2; outline:none; }
+    .rb-songdock-search input::placeholder{ color:#7e8aa3; }
+    .rb-songdock-search input:focus{ border-color:rgba(120,170,240,.5); }
+    .rb-songdock-search button{ background:rgba(120,160,220,.22); border:1px solid rgba(120,170,240,.34);
+        color:#eaf1fb; padding:10px 16px; border-radius:10px; font-size:13px; cursor:pointer; }
+    .rb-songdock-search button:hover{ background:rgba(120,160,220,.34); }
+
+    /* top-bar tone chips (the loaded song's tones, left→right) */
+    .rb-tone-chip{ border:1px solid rgba(120,170,240,.22); border-radius:9px; padding:6px 12px; font-size:12.5px;
+        color:#bcc8de; background:rgba(120,160,220,.1); cursor:pointer; white-space:nowrap;
+        transition:background .15s, color .15s; }
+    .rb-tone-chip:hover{ color:#fff; background:rgba(120,160,220,.2); }
+    .rb-tone-chip.rb-tone-chip-on{ color:#fff; background:rgba(120,160,220,.34);
+        box-shadow:inset 0 0 0 1px rgba(140,180,250,.5); }
+    .rb-tone-sep{ width:1px; align-self:stretch; margin:2px 2px; background:rgba(160,180,220,.22); }
+    .rb-tone-save{ border:1px solid rgba(74,210,150,.4); border-radius:9px; padding:6px 12px; font-size:12.5px;
+        color:#bff0d6; background:rgba(52,180,120,.16); cursor:pointer; white-space:nowrap; }
+    .rb-tone-save:hover{ color:#fff; background:rgba(52,180,120,.3); }
+    .rb-tone-del{ border:1px solid rgba(220,95,95,.4); border-radius:9px; padding:6px 10px; font-size:12.5px;
+        color:#f4d4d4; background:rgba(200,70,70,.16); cursor:pointer; }
+    .rb-tone-del:hover{ color:#fff; background:rgba(212,72,72,.3); }
 
     /* ── Studio room (premium dark + perspective) — Phase 1 ───────────── */
     #rb-studio-room{
@@ -134,11 +271,13 @@
     /* amp + cab tucked into the back-left corner, ANGLED into the room (3D —
        not facing the camera flat), with an extruded side panel for real box
        depth. On focus it straightens out, steps forward + the side disappears. */
-    .rb-amp-stack{ position:absolute; left:28%; top:48%; bottom:auto; width:168px; cursor:pointer;
+    /* anchored by the BOTTOM so the cab always sits on the same floor line — a
+       shorter amp head grows upward instead of leaving the stack floating. */
+    .rb-amp-stack{ position:absolute; left:28%; top:auto; bottom:14%; width:168px; cursor:pointer;
         transform-style:preserve-3d; transform:translateX(-50%) rotateY(32deg) translateZ(-140px);
         transition:left .55s cubic-bezier(.33,0,.2,1), top .55s cubic-bezier(.33,0,.2,1),
             bottom .55s cubic-bezier(.33,0,.2,1), width .55s cubic-bezier(.33,0,.2,1),
-            transform .55s cubic-bezier(.33,0,.2,1), filter .2s ease; }
+            transform .55s cubic-bezier(.33,0,.2,1), filter .2s ease, opacity .35s ease; will-change:transform; }
     .rb-amp-stack:hover{ transform:translateX(-50%) rotateY(32deg) translateZ(-140px); }
     .rb-amp-stack:hover .rb-amp-face{ filter:brightness(1.13); }
     /* extruded side panel = box depth for the amp + cab (hidden when flat) */
@@ -148,6 +287,14 @@
         box-shadow:inset 0 0 55px rgba(0,0,0,.6); border-radius:2px 0 0 2px;
         transition:opacity .35s ease; }
     #rb-studio-room.rb-focus-active .rb-amp-stack::before{ opacity:0; }
+    /* top face = the box's roof; lies back from the top edge (rotateX -90) so the
+       slightly-elevated camera sees the amp's top. Opaque (no transparent stop)
+       or it looks see-through. Hidden when an amp is focused/flat. */
+    .rb-amp-stack::after{ content:''; position:absolute; top:2px; left:0; width:100%; height:60px;
+        transform-origin:top center; transform:rotateX(-90deg);
+        background:linear-gradient(180deg,#363b44,#23272e); border-radius:3px 3px 0 0;
+        box-shadow:inset 0 0 30px rgba(0,0,0,.45); transition:opacity .35s ease; }
+    #rb-studio-room.rb-focus-active .rb-amp-stack::after{ opacity:0; }
     /* contact shadow on the floor so the amp reads as grounded, not floating */
     .rb-amp-ground{ position:absolute; left:28%; top:78%; width:178px; height:40px; pointer-events:none;
         transform:translateX(-50%) rotateX(66deg);
@@ -197,10 +344,29 @@
        not the focus — cab switching comes later). */
     /* sits LEFT of centre so the swap rail (always shown in focus) fits on the
        right; head fills the frame, cab runs off the bottom. */
-    #rb-studio-room.rb-focus-active .rb-amp-stack{
-        left:38%; top:24%; bottom:auto; width:min(720px,56%); z-index:6; cursor:default;
-        transform:translateX(-50%) rotateY(0deg); }
-    #rb-studio-room.rb-focus-active .rb-amp-stack:hover{ transform:translateX(-50%) rotateY(0deg); filter:none; }
+    /* multi-amp: only the FOCUSED stack centres + grows; siblings fade out so
+       the room reads as one amp being edited (default 1-amp rig: this IS the
+       amp, so behaviour is unchanged). */
+    /* !important so a FOCUSED extra amp beats its own inline corner-position
+       style (left/bottom/width/transform) — without it the new amp stayed small
+       in the corner on focus and you couldn't edit its knobs. On close the rule
+       stops applying and the inline style returns it to the corner. */
+    #rb-studio-room.rb-focus-active .rb-amp-stack.rb-amp-focused{
+        left:37% !important; top:20% !important; bottom:auto !important;
+        width:min(820px,63%) !important; z-index:6; cursor:default;
+        transform:translateX(-50%) rotateY(0deg) !important; }
+    #rb-studio-room.rb-focus-active .rb-amp-stack.rb-amp-focused:hover{ transform:translateX(-50%) rotateY(0deg); filter:none; }
+    #rb-studio-room.rb-focus-active .rb-amp-stack:not(.rb-amp-focused){ opacity:0 !important; pointer-events:none; }
+    /* NB: do NOT put `filter` on .rb-amp-extra — a filter on a preserve-3d
+       element FLATTENS its 3D faces, collapsing the side-depth panel to an
+       invisible line (the amp looked like a flat photo). The extra amp is a true
+       MIRROR of the primary, so it needs no dimming anyway. */
+    /* the right-side amps face INWARD (negative rotateY), so their solid depth
+       panel must be on the RIGHT edge — the default ::before sits on the left
+       (correct for the primary amp) and would hide behind a right-facing amp. */
+    .rb-amp-extra::before{ left:auto; right:0; width:64px;
+        transform-origin:right center; transform:rotateY(-90deg);
+        background:linear-gradient(90deg,#090a0c,#22262e); }
     .rb-amp-face-canvas{ border-radius:6px; }
 
     /* swap rail — right-docked, translucent-blue carousel of alternative amps */
@@ -261,9 +427,11 @@
     /* ── Rack tower on a table — set back against the RIGHT WALL, on the wood
        floor, angled almost to the left (faces into the room) ── */
     .rb-rack-zone{ position:absolute; right:11%; bottom:6%; width:min(280px,26%); cursor:pointer;
-        transform-style:preserve-3d; transform:translateZ(-35px) rotateY(-80deg);
-        transform-origin:bottom right; transition:filter .2s; }
-    .rb-rack-zone.rb-rack-empty:hover{ filter:brightness(1.2); }
+        transform-style:preserve-3d; transform:translateZ(150px) rotateY(-88deg);
+        transform-origin:bottom right; transition:opacity .4s ease, filter .2s; }
+    /* highlight only the placeholder on hover — a filter on the preserve-3d zone
+       would flatten it and make the table's 3D faces vanish */
+    .rb-rack-zone.rb-rack-empty:hover .rb-rack-placeholder{ color:var(--rb-accent); border-color:var(--rb-accent); }
     /* a long WOODEN desk: a top slab (front edge + horizontal top surface) on legs */
     .rb-rack-table{ position:absolute; left:0; right:0; bottom:0; height:92px; transform-style:preserve-3d; }
     /* front edge of the top (the thickness seen straight on) — wood */
@@ -288,9 +456,11 @@
     .rb-rack-leg-back{ transform:translateZ(-60px); filter:brightness(.6); }
     /* rack tower sits on the FAR end of the desk (near end left open) */
     .rb-rack-stack{ position:absolute; left:4%; width:56%; bottom:90px; display:flex; flex-direction:column-reverse;
-        gap:2px; transform-style:preserve-3d; }
-    /* each rack is its own 3D box: a right SIDE face + a TOP face give it depth */
-    .rb-rack{ width:100%; cursor:pointer; position:relative; border-radius:2px;
+        align-items:center; gap:2px; transform-style:preserve-3d; }
+    /* each rack is its own 3D box: a right SIDE face + a TOP face give it depth.
+       The box hugs its image (capped height) so a tall/portrait rack like the
+       G-550 EQ stays a thin, short unit instead of towering. */
+    .rb-rack{ max-width:100%; cursor:pointer; position:relative; border-radius:2px;
         transform-style:preserve-3d; transition:filter .2s; box-shadow:0 2px 7px rgba(0,0,0,.55); }
     .rb-rack::after{ content:""; position:absolute; top:0; bottom:0; right:0; width:44px;
         transform-origin:right center; transform:rotateY(-90deg);
@@ -302,7 +472,7 @@
     /* hover brightens the FACES only — a filter on the preserve-3d .rb-rack would
        flatten it and make the depth faces vanish */
     .rb-rack:hover > img, .rb-rack:hover::after, .rb-rack:hover::before{ filter:brightness(1.18); }
-    .rb-rack img{ width:100%; display:block; border-radius:2px; }
+    .rb-rack img{ display:block; width:auto; height:auto; max-width:100%; max-height:66px; border-radius:2px; }
     .rb-rack-fallback{ height:42px; display:flex; align-items:center; justify-content:center; text-align:center;
         padding:4px; font-size:11px; color:#9aa3af; border-radius:2px;
         background:linear-gradient(180deg,#1c1f24,#101114); border:1px solid rgba(255,255,255,.06); }
@@ -317,6 +487,19 @@
     #rb-studio-room.rb-focus-active .rb-rack-zone,
     #rb-studio-room.rb-focus-active .rb-rack-ground{ opacity:0; pointer-events:none; transition:opacity .4s ease; }
 
+    /* ── Room props (decorative) — hidden while focused ── */
+    #rb-studio-room.rb-focus-active .rb-ceil-cloud{ opacity:0; pointer-events:none; transition:opacity .4s ease; }
+
+    /* acoustic cloud panel hanging from the ceiling (centre) */
+    .rb-ceil-cloud{ position:absolute; top:8%; left:35%; right:35%; height:24px; z-index:1; pointer-events:none;
+        transform:rotateX(34deg); transform-origin:top center; border-radius:5px;
+        background:linear-gradient(180deg,#3c424a,#22262c);
+        box-shadow:0 16px 28px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06); }
+    .rb-ceil-cloud::before, .rb-ceil-cloud::after{ content:""; position:absolute; bottom:100%; width:2px; height:30px;
+        background:linear-gradient(180deg,rgba(180,185,195,.5), rgba(180,185,195,.15)); }
+    .rb-ceil-cloud::before{ left:20%; }
+    .rb-ceil-cloud::after{ right:20%; }
+
     /* pedalboard = a SLIM angled platform on the floor; pedals stand proud of it.
        Width grows with the pedals (each sized by HEIGHT so landscape pedals like
        Q-Trix read big), capped so it never spans the whole floor. */
@@ -325,7 +508,7 @@
         transform:translateX(-50%) rotateX(40deg);
         transform-origin:bottom center; transform-style:preserve-3d;
         display:flex; gap:18px; align-items:flex-end; justify-content:center;
-        padding:8px 18px 6px; border-radius:9px; transition:filter .2s; }
+        padding:8px 18px 6px; border-radius:9px; transition:opacity .4s ease, filter .2s; }
     .rb-pedalboard-empty:hover{ filter:brightness(1.25); }
     .rb-pedalboard{
         background:
@@ -349,7 +532,7 @@
        skewed pseudo faces (bottom-front + right side) form a real 3D box, each
        shaded differently and tinted with the pedal's own colour (--rb-edge). */
     .rb-pedal{ flex:0 0 auto; cursor:pointer; position:relative; transform:translateZ(8px) rotateX(2deg);
-        transition:filter .2s; --rb-d:15px; }
+        transition:filter .2s; --rb-d:5px; }
     .rb-pedal:hover{ filter:brightness(1.16); }
     .rb-pedal img{ max-width:94px; max-height:66px; width:auto; height:auto; display:block;
         border-radius:6px 6px 2px 2px; position:relative; z-index:1;
@@ -378,6 +561,59 @@
     #rb-studio-room.rb-pfocus .rb-amp-stack,
     #rb-studio-room.rb-pfocus .rb-amp-stack::before,
     #rb-studio-room.rb-pfocus .rb-amp-ground{ opacity:0 !important; pointer-events:none; }
+
+    /* ── Pedal / rack focus — NO amp grow (that's amp-focus / rb-focus-active
+       only). The backdrop is the surface the focused gear actually lives on,
+       blurred: PEDALS sit on the FLOOR → the wood floor + carpet fill the frame;
+       RACKS stand against the RIGHT WALL → that wall fills the frame. The group's
+       own piece of furniture (pedalboard / rack desk) stays as a blurred, EMPTIED
+       prop; the units being swapped are shown big up top (coverflow + right
+       rail). Blur lives on .rb-room-camera so the whole 3D backdrop softens
+       together while the big focused unit (a sibling OUTSIDE the camera) stays
+       sharp. NB: .rb-pedalboard/.rb-rack-zone are preserve-3d → only fully hide
+       (opacity:0) or fully show (opacity:1) them, never partial. ── */
+    #rb-studio-room.rb-pfocus .rb-room-camera{ filter:blur(2px); will-change:filter;
+        transition:filter .45s ease, perspective-origin .5s cubic-bezier(.33,0,.2,1); }
+    #rb-studio-room.rb-pfocus .rb-room-3d{ transform:none; opacity:1; filter:none; }
+    #rb-studio-room.rb-pfocus .rb-ceil3d,
+    #rb-studio-room.rb-pfocus .rb-ceil-cloud{ opacity:0; pointer-events:none; transition:opacity .4s ease; }
+    /* hide ALL stage gear; each group re-shows only its own (emptied) furniture */
+    #rb-studio-room.rb-pfocus .rb-studio-stage > *{ opacity:0 !important; pointer-events:none; }
+
+    /* PEDAL: aim down at the floor — hide every wall, stand the wood floor up so
+       the carpet backs the frame, show the (emptied) enlarged pedalboard. */
+    #rb-studio-room.rb-pfocus.rb-gfocus-pedal .rb-room-camera{ perspective-origin:50% 60%; }
+    #rb-studio-room.rb-pfocus.rb-gfocus-pedal .rb-wall{ opacity:0; transition:opacity .4s ease; }
+    #rb-studio-room.rb-pfocus.rb-gfocus-pedal .rb-floor3d{ transform:rotateX(28deg) scale(1.2);
+        transition:transform .5s cubic-bezier(.33,0,.2,1); }
+    #rb-studio-room.rb-pfocus.rb-gfocus-pedal .rb-pedalboard{ opacity:1 !important;
+        transform:translateX(-50%) rotateX(40deg) scale(1.85);
+        transition:transform .5s cubic-bezier(.33,0,.2,1), opacity .4s ease; }
+    #rb-studio-room.rb-pfocus.rb-gfocus-pedal .rb-pedalboard .rb-pedal,
+    #rb-studio-room.rb-pfocus.rb-gfocus-pedal .rb-pedalboard .rb-pedal-add{ opacity:0 !important; }
+
+    /* RACK: the LATERAL (right) wall — where the racks live — swung flat to face
+       the camera FRONTALLY and stretched to fill the frame. NOT the centre/back
+       wall (no wood panel). Hide the back + left walls + floor + ceiling; the
+       rack desk drops to FRONTAL, low + large, reading as the table the (big,
+       up-top) rack sits on. */
+    #rb-studio-room.rb-pfocus.rb-gfocus-rack .rb-room-camera{ perspective-origin:50% 50%; }
+    #rb-studio-room.rb-pfocus.rb-gfocus-rack .rb-wall-back,
+    #rb-studio-room.rb-pfocus.rb-gfocus-rack .rb-wall-left,
+    #rb-studio-room.rb-pfocus.rb-gfocus-rack .rb-floor3d{ opacity:0; transition:opacity .4s ease; }
+    /* uniform scale (NOT a full-width stretch) so the acoustic panels keep their
+       tall, long proportions instead of squashing wide + compact */
+    #rb-studio-room.rb-pfocus.rb-gfocus-rack .rb-wall-right{
+        transform:rotateY(0deg) scale(1.7); transform-origin:right center;
+        filter:brightness(.92); transition:transform .5s cubic-bezier(.33,0,.2,1); }
+    #rb-studio-room.rb-pfocus.rb-gfocus-rack .rb-rack-zone{ opacity:1 !important;
+        left:50%; right:auto; bottom:-3%; width:min(560px,54%);
+        transform:translateX(-50%) rotateY(0deg) scale(1.6); transform-origin:bottom center;
+        transition:transform .5s cubic-bezier(.33,0,.2,1), opacity .4s ease; }
+    #rb-studio-room.rb-pfocus.rb-gfocus-rack .rb-rack-zone .rb-rack{ opacity:0 !important; }
+
+    #rb-studio-room.rb-focus-active .rb-room-3d{ will-change:transform, opacity, filter; }
+    #rb-studio-room.rb-pfocus .rb-pf-stage{ will-change:transform; }
     /* focus layer sits LEFT of centre (right swap rail has room); column =
        coverflow row on top, dots + Add/Remove buttons underneath. */
     .rb-pedal-focus{ position:absolute; inset:0; z-index:6; display:flex; flex-direction:column;
@@ -404,12 +640,20 @@
     .rb-pf-side img{ width:100%; display:block; border-radius:10px;
         box-shadow:0 18px 40px -16px rgba(0,0,0,.8); }
     .rb-pf-side-empty{ visibility:hidden; pointer-events:none; }
+    /* "＋" add tile to the right of the last pedal (replaces the Add button) */
+    .rb-pf-side-add{ flex:0 0 auto; width:min(96px,11%); aspect-ratio:1/1.05; cursor:pointer;
+        display:flex; align-items:center; justify-content:center; font-size:34px; line-height:1;
+        color:#8fa0bd; border:2px dashed rgba(120,160,220,.32); border-radius:12px;
+        background:rgba(120,160,220,.06); transition:color .15s, border-color .15s, background .15s; }
+    .rb-pf-side-add:hover{ color:#fff; border-color:rgba(140,180,250,.6); background:rgba(120,160,220,.16); }
     .rb-pf-bottom{ display:flex; flex-direction:column; align-items:center; gap:13px; }
     .rb-pf-dots{ display:flex; gap:7px; justify-content:center; }
     .rb-pf-dots span{ width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,.22);
         transition:background .15s; }
     .rb-pf-dots span.on{ background:var(--rb-accent); box-shadow:0 0 8px var(--rb-accent); }
-    .rb-pf-actions{ display:flex; gap:10px; }
+    .rb-pf-actions{ display:flex; gap:16px; align-items:center; justify-content:center; }
+    /* centre column: Pre/Post on top, Remove underneath it */
+    .rb-pf-center{ display:flex; flex-direction:column; gap:8px; align-items:center; }
     .rb-pf-actions button{ font-size:12.5px; padding:8px 16px; border-radius:9px; color:#dbe2ee; cursor:pointer;
         background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.14); transition:.15s; }
     .rb-pf-actions button:hover{ background:rgba(255,255,255,.16); color:#fff; }
@@ -417,6 +661,11 @@
     .rb-pf-actions button:disabled:hover{ color:#dbe2ee; background:rgba(255,255,255,.04); }
     .rb-pf-actions .rb-focus-remove{ background:rgba(200,70,70,.16); border-color:rgba(220,95,95,.42); color:#f4d4d4; }
     .rb-pf-actions .rb-focus-remove:hover{ background:rgba(212,72,72,.30); color:#fff; }
+    /* pre/post-amp toggle: green = before the amp, cyan = after it */
+    .rb-pf-actions .rb-pf-slot-pre{ background:rgba(52,180,120,.18); border-color:rgba(74,210,150,.4); color:#bff0d6; }
+    .rb-pf-actions .rb-pf-slot-pre:hover{ background:rgba(52,180,120,.3); color:#fff; }
+    .rb-pf-actions .rb-pf-slot-post{ background:rgba(56,150,210,.18); border-color:rgba(90,180,240,.4); color:#cfe6f8; }
+    .rb-pf-actions .rb-pf-slot-post:hover{ background:rgba(56,150,210,.3); color:#fff; }
 
     /* room header overlay */
     .rb-studio-head{ position:absolute; top:0; left:0; right:0; z-index:3;
@@ -451,8 +700,132 @@
     .rb-focus-knob{ display:flex; flex-direction:column; align-items:center; gap:6px; width:84px; }
     .rb-focus-knob-label{ font-size:10px; letter-spacing:.03em; color:#9aa3af; text-align:center; max-width:84px;
         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    /* ── Advanced: node-graph routing editor ─────────────────────────────── */
+    #rb-tab-advanced.rb-adv{ padding:0; overflow:hidden; }
+    .rb-adv-wrap{ position:absolute; inset:0; display:flex; }
+    /* left gear palette (like Gear) */
+    .rb-adv-palette{ flex:0 0 232px; display:flex; flex-direction:column; min-height:0;
+        background:linear-gradient(180deg, rgba(40,62,112,.22), rgba(20,36,72,.26));
+        border-right:1px solid rgba(120,165,225,.16); }
+    .rb-adv-pal-head{ flex:0 0 auto; padding:12px 12px 8px; display:flex; flex-direction:column; gap:8px;
+        border-bottom:1px solid rgba(120,165,225,.12); }
+    .rb-adv-pal-filters{ display:flex; gap:4px; flex-wrap:wrap; }
+    .rb-adv-pal-chip{ border:1px solid rgba(120,170,240,.24); border-radius:8px; padding:5px 9px; font-size:12px;
+        color:#bcc8de; background:rgba(120,160,220,.1); cursor:pointer; transition:background .15s, color .15s; }
+    .rb-adv-pal-chip:hover{ color:#fff; background:rgba(120,160,220,.2); }
+    .rb-adv-pal-chip.rb-adv-pal-on{ color:#fff; background:rgba(120,160,220,.34); box-shadow:inset 0 0 0 1px rgba(140,180,250,.5); }
+    .rb-adv-pal-head input{ background:rgba(8,14,28,.55); border:1px solid rgba(120,160,220,.22); border-radius:9px;
+        padding:8px 11px; font-size:12.5px; color:#dbe4f2; outline:none; }
+    .rb-adv-pal-head input::placeholder{ color:#7e8aa3; }
+    .rb-adv-palette-list{ flex:1 1 auto; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:6px; }
+    .rb-adv-pal-item{ display:flex; align-items:center; gap:9px; padding:6px 8px; border-radius:10px; cursor:grab;
+        background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06); transition:background .15s, border-color .15s; }
+    .rb-adv-pal-item:hover{ background:rgba(120,160,220,.14); border-color:rgba(120,170,240,.4); }
+    .rb-adv-pal-item:active{ cursor:grabbing; }
+    .rb-adv-pal-thumb{ flex:0 0 auto; width:52px; height:34px; border-radius:6px; overflow:hidden; background:#0b0d12;
+        display:flex; align-items:center; justify-content:center; }
+    .rb-adv-pal-thumb img{ width:100%; height:100%; object-fit:contain; }
+    .rb-adv-pal-ph{ font-size:11px; font-weight:600; letter-spacing:.06em; color:#6f7a88; }
+    .rb-adv-pal-name{ flex:1 1 auto; min-width:0; font-size:12px; color:#dbe4f2; line-height:1.2;
+        overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rb-adv-pal-empty{ color:#7e8aa3; font-size:12px; padding:14px 8px; text-align:center; }
+
+    /* main canvas area */
+    .rb-adv-main{ flex:1 1 auto; display:flex; flex-direction:column; min-width:0; position:relative; }
+    .rb-adv-toolbar{ flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:10px;
+        padding:10px 16px; border-bottom:1px solid rgba(120,165,225,.12); }
+    .rb-adv-hint{ font-size:12px; color:#8b96ad; }
+    .rb-adv-actions{ display:flex; gap:7px; }
+    .rb-adv-btn{ font-size:12px; padding:6px 12px; border-radius:8px; color:#dbe2ee; cursor:pointer;
+        background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); transition:.15s; }
+    .rb-adv-btn:hover{ background:rgba(120,160,220,.2); color:#fff; }
+    .rb-adv-canvas{ flex:1 1 auto; position:relative; overflow:auto;
+        background:
+            radial-gradient(circle at 18px 18px, rgba(120,160,220,.10) 1.4px, transparent 1.6px) 0 0 / 34px 34px,
+            linear-gradient(180deg, rgba(8,12,22,.30), rgba(6,9,16,.42)); }
+    /* sizer wrapper: holds the scroll size (w*zoom); the two layers inside are
+       transform:scale'd so scrolling works at any zoom. */
+    .rb-adv-zoom{ position:relative; }
+    .rb-adv-cables{ position:absolute; top:0; left:0; pointer-events:none; z-index:1; overflow:visible; }
+    /* the nodes layer is ON TOP of the cables (z-index:2); make its EMPTY area
+       click-through (pointer-events:none) so the cables below get hover/click —
+       the node boxes re-enable pointer-events so they stay interactive. */
+    .rb-adv-nodes{ position:absolute; top:0; left:0; z-index:2; pointer-events:none; }
+
+    /* a node = a gear box with an input jack (left) + output jack (right) */
+    .rb-adv-node{ position:absolute; width:128px; border-radius:12px; cursor:grab; user-select:none;
+        pointer-events:auto;
+        background:linear-gradient(180deg, rgba(30,42,66,.96), rgba(18,26,44,.97));
+        border:1px solid rgba(120,165,225,.28); box-shadow:0 10px 26px rgba(0,0,0,.5);
+        transition:box-shadow .15s, border-color .15s; }
+    .rb-adv-node:hover{ border-color:rgba(140,180,250,.6); box-shadow:0 12px 30px rgba(40,80,160,.4); }
+    .rb-adv-node.rb-adv-sel{ border-color:var(--rb-accent); box-shadow:0 0 0 1px var(--rb-accent), 0 12px 30px rgba(0,0,0,.55); }
+    .rb-adv-node:active{ cursor:grabbing; }
+    /* bypassed gear = passthrough; greyed out (saturation 0) */
+    .rb-adv-node-bypassed{ filter:saturate(0) brightness(.88); opacity:.78; }
+    /* armed for delete while dragged off the canvas */
+    .rb-adv-node-trashing{ opacity:.45; filter:grayscale(.7) brightness(.8);
+        border-color:rgba(220,80,80,.8) !important; box-shadow:0 0 0 2px rgba(220,80,80,.45), 0 12px 30px rgba(0,0,0,.5) !important; }
+    .rb-adv-node-del{ position:absolute; top:-9px; right:-9px; width:20px; height:20px; border-radius:50%;
+        border:1px solid rgba(255,120,120,.5); background:rgba(40,16,16,.95); color:#ff9a9a; font-size:11px;
+        line-height:1; cursor:pointer; opacity:0; transition:opacity .12s ease; z-index:4; }
+    .rb-adv-node:hover .rb-adv-node-del{ opacity:1; }
+    .rb-adv-node-del:hover{ background:rgba(120,30,30,.95); color:#fff; }
+    .rb-adv-node-edit{ position:absolute; top:-9px; left:-9px; width:20px; height:20px; border-radius:50%;
+        border:1px solid rgba(120,170,240,.5); background:rgba(16,24,40,.95); color:#bcd2f5; font-size:10px;
+        line-height:1; cursor:pointer; opacity:0; transition:opacity .12s ease; z-index:4; padding:0; }
+    .rb-adv-node:hover .rb-adv-node-edit{ opacity:1; }
+    .rb-adv-node-edit:hover{ background:rgba(40,80,150,.95); color:#fff; }
+    /* zoom controls */
+    .rb-adv-btn-icon{ min-width:26px; padding:4px 0; font-size:15px; line-height:1; text-align:center; }
+    .rb-adv-zoom-label{ font-size:11px; color:#9fb0c8; min-width:38px; text-align:center; font-variant-numeric:tabular-nums; }
+    /* in-canvas VST editor card */
+    .rb-adv-editor{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:30;
+        width:min(620px,92%); background:rgba(14,18,26,.97); border:1px solid rgba(120,160,220,.35);
+        border-radius:14px; box-shadow:0 24px 70px rgba(0,0,0,.6); overflow:hidden; }
+    .rb-adv-editor-bar{ display:flex; align-items:center; justify-content:space-between; gap:8px;
+        padding:9px 12px; background:rgba(30,46,76,.6); border-bottom:1px solid rgba(120,160,220,.25); }
+    .rb-adv-editor-name{ font-size:12px; letter-spacing:.05em; color:#dbe4f2; font-weight:600; }
+    .rb-adv-editor-close{ width:24px; height:24px; border-radius:6px; border:1px solid rgba(255,255,255,.15);
+        background:rgba(255,255,255,.06); color:#cfd8e6; cursor:pointer; font-size:12px; line-height:1; }
+    .rb-adv-editor-close:hover{ background:rgba(255,255,255,.14); }
+    .rb-adv-editor-face{ padding:14px; }
+    .rb-adv-editor-empty{ padding:22px 16px; text-align:center; color:#8893a5; font-size:12px; }
+    .rb-adv-node-thumb{ height:56px; border-radius:11px 11px 0 0; overflow:hidden; background:#0b0d12;
+        display:flex; align-items:center; justify-content:center; border-bottom:1px solid rgba(255,255,255,.06); }
+    .rb-adv-node-thumb img{ width:100%; height:100%; object-fit:contain; }
+    .rb-adv-node-label{ padding:6px 8px; font-size:11px; color:#dbe4f2; text-align:center; line-height:1.2;
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .rb-adv-node-kind{ font-size:9px; letter-spacing:.08em; text-transform:uppercase; color:#7e8aa3; text-align:center; padding:0 0 6px; }
+    /* terminal nodes (Input / Output) read as small rounded pills */
+    .rb-adv-node.rb-adv-term{ width:96px; background:linear-gradient(180deg, rgba(52,180,120,.18), rgba(30,90,60,.22));
+        border-color:rgba(74,210,150,.4); }
+    .rb-adv-node.rb-adv-term.rb-adv-term-out{ background:linear-gradient(180deg, rgba(120,160,220,.2), rgba(40,70,130,.24));
+        border-color:rgba(120,170,240,.5); }
+    .rb-adv-term-label{ padding:12px 8px; font-size:12px; font-weight:600; color:#e6edf6; text-align:center; }
+    /* cable jacks — guitar 1/4" plug feel: a metal ring with a dark centre */
+    .rb-adv-jack{ position:absolute; top:50%; width:16px; height:16px; border-radius:50%; transform:translateY(-50%);
+        background:radial-gradient(circle at 38% 32%, #c9d3e2, #6c7689 60%, #2a3142);
+        border:1px solid rgba(0,0,0,.5); box-shadow:0 1px 3px rgba(0,0,0,.6); cursor:crosshair; z-index:3; }
+    .rb-adv-jack::after{ content:""; position:absolute; inset:5px; border-radius:50%; background:#11151f; }
+    .rb-adv-jack:hover{ box-shadow:0 0 10px rgba(140,180,250,.8); }
+    .rb-adv-jack-in{ left:-9px; }
+    .rb-adv-jack-out{ right:-9px; }
+    /* a cable path */
+    /* solid stroke (NOT a url(#gradient) ref): an SVG gradient reference rebuilt
+       via innerHTML doesn't repaint until a reflow, so gradient cables only
+       appeared after the user nudged a node. Solid paints on first render. */
+    .rb-adv-cable{ fill:none; stroke:#6f93d6; stroke-width:4; stroke-linecap:round;
+        filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); pointer-events:none; }
+    .rb-adv-cable.rb-adv-cable-temp{ stroke:rgba(150,190,255,.7); stroke-dasharray:6 5; }
+    /* wide invisible click target so a thin cable is easy to grab; a faint red
+       tube on hover signals "click to disconnect". */
+    .rb-adv-cable-hit{ fill:none; stroke:transparent; stroke-width:20; stroke-linecap:round;
+        pointer-events:stroke; cursor:pointer; }
+    /* (no colour change on hover — just the pointer cursor on the hit path) */
 </style>
-<div id="rb-root" class="max-w-5xl mx-auto px-6 pt-24 pb-16">
+<div id="rb-root" class="rb-immersive max-w-5xl mx-auto px-6 pt-24 pb-16">
     <button onclick="showScreen('home')" class="rb-back text-gray-500 hover:text-white text-sm mb-6 flex items-center gap-1">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg> Back
     </button>
@@ -462,61 +835,58 @@
     <!-- Setup status -->
     <div id="rb-status" class="mb-6" style="display:none"></div>
 
-    <!-- Tab nav — simplified from 7 → 4 tabs (2026-05-27):
-         · Songs  (per-song chain editor — was "By song")
-         · Gear   (catalog + Pending + Files merged into chip-filtered views)
-         · Master (global pre/post FX — unchanged)
-         · Setup  (was Dashboard + Settings — batch ops + tone3000 + prefs) -->
-    <div class="flex gap-2 mb-6 border-b border-gray-800">
-        <button data-rb-tab="studio" onclick="rbShowTab('studio')"
-                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
-            Studio
-        </button>
-        <button data-rb-tab="gear" onclick="rbShowTab('gear')"
-                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
-            Gear
-        </button>
-        <button data-rb-tab="song" onclick="rbShowTab('song')"
-                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
-            Songs
-        </button>
-        <button data-rb-tab="master" onclick="rbShowTab('master')"
-                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
-            Master chain
-        </button>
-        <button data-rb-tab="settings" onclick="rbShowTab('settings')"
-                class="rb-tab px-4 py-2 text-sm text-gray-400 border-b-2 border-transparent hover:text-white transition">
-            Setup
-        </button>
-    </div>
-
-    <!-- Studio (main view — the Default tone visualised as a 3D control room) -->
-    <div id="rb-tab-studio" class="rb-tab-panel hidden">
-        <div id="rb-studio-room"></div>
-    </div>
-
-    <!-- Songs (per-song chain editor) -->
-    <div id="rb-tab-song" class="rb-tab-panel hidden">
-        <div class="flex gap-3 mb-6">
-            <select id="rb-library-provider" onchange="rbSetLibraryProvider(this.value)"
-                    aria-label="Library source"
-                    class="bg-dark-700 border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-300 outline-none hidden"
-                    title="Library source">
-                <option value="local">My Library</option>
-            </select>
-            <input type="text" id="rb-song-search" placeholder="Filename (e.g. 2minutes.sloppak)"
-                   oninput="rbOnSongSearchInput()"
-                   onfocus="rbShowSongList()"
-                   onkeydown="if(event.key==='Enter')rbListSongs()"
-                   class="flex-1 bg-dark-700 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-300 placeholder-gray-600 focus:border-accent/50 outline-none">
-            <button onclick="rbShowSongList(); rbListSongs()" class="bg-dark-600 hover:bg-dark-500 px-5 py-2.5 rounded-xl text-sm text-gray-300 transition">Search</button>
+    <!-- Floating translucent-blue top bar (immersive shell) -->
+    <div class="rb-topbar">
+        <button onclick="showScreen('home')" class="rb-topbar-back" title="Back">‹</button>
+        <button data-rb-tab="studio" onclick="rbShowTab('studio')" class="rb-tab">Studio</button>
+        <button data-rb-tab="gear" onclick="rbShowTab('gear')" class="rb-tab">Gear</button>
+        <button data-rb-tab="master" onclick="rbShowTab('master')" class="rb-tab">Master chain</button>
+        <button data-rb-tab="settings" onclick="rbShowTab('settings')" class="rb-tab">Setup</button>
+        <!-- Song search is an action (opens the bottom dock), not a tab -->
+        <button id="rb-song-btn" class="rb-songbtn" onclick="rbToggleSongSearch()" title="Load a song's tones">🔎 Song</button>
+        <!-- Tone selector: current tone + a searchable dropdown to switch / save -->
+        <div class="rb-toneselect">
+            <button id="rb-tone-btn" class="rb-tone-btn" onclick="rbStudioToggleToneMenu()">🎵 <span id="rb-tone-current">Default</span> ▾</button>
+            <div id="rb-tone-menu" class="rb-tone-menu hidden"></div>
         </div>
-        <div id="rb-song-list" class="space-y-1 mb-6"></div>
-        <div id="rb-song-tones" class="space-y-6"></div>
+    </div>
+
+    <!-- Stage: Studio room is the permanent backdrop; other tabs float over it -->
+    <div id="rb-stage-wrap">
+    <!-- The loaded song's tones live in their own bar (shown only with a song) -->
+    <div id="rb-song-tonebar" class="rb-song-tonebar hidden"></div>
+    <!-- Studio (main view — the Default tone visualised as a 3D control room) -->
+    <div id="rb-tab-studio" class="rb-tab-panel">
+        <div id="rb-studio-room"></div>
+        <!-- Advanced (node-graph chain editor) lives INSIDE Studio, not in the top tab bar -->
+        <button class="rb-studio-adv-btn" onclick="rbShowTab('advanced')" title="Open the advanced node-graph chain editor">
+            ⚙ Advanced
+        </button>
+    </div>
+
+    <!-- Songs — a bottom search dock that doesn't cover the studio room -->
+    <div id="rb-tab-song" class="rb-tab-panel rb-songdock hidden">
+        <div class="rb-songdock-inner">
+            <div id="rb-song-list" class="rb-songdock-list"></div>
+            <div class="rb-songdock-search">
+                <select id="rb-library-provider" onchange="rbSetLibraryProvider(this.value)"
+                        aria-label="Library source" title="Library source"
+                        class="bg-dark-700 border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-300 outline-none hidden">
+                    <option value="local">My Library</option>
+                </select>
+                <input type="text" id="rb-song-search" placeholder="Search a song…"
+                       oninput="rbOnSongSearchInput()"
+                       onfocus="rbShowSongList()"
+                       onkeydown="if(event.key==='Enter')rbListSongs()">
+                <button onclick="rbShowSongList(); rbListSongs()">Search</button>
+            </div>
+        </div>
+        <!-- legacy per-song editor (kept for data flow; hidden in the immersive shell) -->
+        <div id="rb-song-tones" style="display:none"></div>
     </div>
 
     <!-- Gear (catalog + Pending + Files merged with chip filter) -->
-    <div id="rb-tab-gear" class="rb-tab-panel hidden">
+    <div id="rb-tab-gear" class="rb-tab-panel rb-overlay hidden">
         <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <div class="inline-flex gap-1 bg-dark-800/50 border border-gray-800/50 rounded-lg p-1">
                 <button onclick="rbGearFilter('all')" data-rb-gear-filter="all"
@@ -622,35 +992,12 @@
     </div>
 
     <!-- Master chain — global pre/post FX wrapper -->
-    <div id="rb-tab-master" class="rb-tab-panel hidden">
-        <p class="text-gray-500 text-sm mb-4">
-            Global FX layered around every tone of every song. <span class="text-emerald-300">Pre</span>
-            runs first (sees the raw DI — typical place for input gate / compressor / tuner).
-            <span class="text-cyan-300">Post</span> runs after the cab IR (typical place for limiter / room
-            reverb / headphone EQ). Each piece supports the same Library / VST / Bypass / reorder
-            controls as a song chain. Signal flow:
-            <code class="bg-dark-800 px-1 rounded text-gray-300">guitar → master_pre → song → master_post → output</code>.
-        </p>
-        <div class="text-xs text-gray-400 bg-dark-800/50 border border-gray-800/50 rounded p-2 mb-4 leading-snug">
-            <strong class="text-gray-300">How to use:</strong>
-            (1) <span class="text-gray-200">＋ Add piece</span> &rarr; pick a gear piece OR a VST plug-in.
-            VST pieces are <strong class="text-purple-300">ready to use immediately</strong> —
-            just hit <span class="text-purple-300">🎛 Edit VST</span> to tweak its parameters.
-            Gear pieces start <em>unassigned</em>: click <span class="text-emerald-300">Assign…</span>
-            then pick a NAM/IR from your library or paste a VST plug-in path.
-            (2) Master pieces are <strong>global</strong> — they don't appear on the Gear tab.
-        </div>
-        <div class="text-xs text-gray-400 bg-dark-800/50 border border-gray-800/50 rounded p-2 mb-4 leading-snug">
-            🎸 <strong class="text-gray-300">AMP must be on for master to apply.</strong> If you flip the
-            <strong class="text-green-300">AMP</strong> button mid-song, Rig Builder now auto-reloads the
-            chain (including master pre/post) ~1 second later — no need to leave and re-enter. Disable with
-            <code class="bg-dark-900 px-1 rounded">window.__rbAmpAutoApply = false</code> if it ever misfires.
-        </div>
-        <div id="rb-master-status" class="text-xs text-gray-500 mb-4">Loading…</div>
+    <div id="rb-tab-master" class="rb-tab-panel rb-overlay hidden">
+        <div id="rb-master-status" class="text-xs text-gray-500 mb-4" style="display:none">Loading…</div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
                 <div class="flex items-baseline justify-between mb-2">
-                    <h3 class="text-emerald-300 font-semibold">Pre (before song)</h3>
+                    <h3 class="text-emerald-300 font-semibold">Pre (before pedals/amp/racks)</h3>
                     <span id="rb-master-pre-count" class="text-xs text-gray-500"></span>
                 </div>
                 <div id="rb-master-pre-chain" class="space-y-3"></div>
@@ -662,7 +1009,7 @@
             </div>
             <div>
                 <div class="flex items-baseline justify-between mb-2">
-                    <h3 class="text-cyan-300 font-semibold">Post (after song)</h3>
+                    <h3 class="text-cyan-300 font-semibold">Post (after pedals/amp/racks)</h3>
                     <span id="rb-master-post-count" class="text-xs text-gray-500"></span>
                 </div>
                 <div id="rb-master-post-chain" class="space-y-3"></div>
@@ -675,11 +1022,50 @@
         </div>
     </div>
 
+    <!-- Advanced — node-graph routing editor (overlay over the Studio, same
+         translucent-blue panel as Gear/Master). Left = gear palette to drag
+         from; right = the node canvas with guitar-cable links; supports parallel
+         branches (the chain output is the sum of all sink nodes). -->
+    <div id="rb-tab-advanced" class="rb-tab-panel rb-overlay rb-adv hidden">
+        <div class="rb-adv-wrap">
+            <aside class="rb-adv-palette">
+                <div class="rb-adv-pal-head">
+                    <div class="rb-adv-pal-filters">
+                        <button class="rb-adv-pal-chip rb-adv-pal-on" data-rb-adv-pal="amp" onclick="rbAdvPaletteFilter('amp')">Amps</button>
+                        <button class="rb-adv-pal-chip" data-rb-adv-pal="cab" onclick="rbAdvPaletteFilter('cab')">Cabs</button>
+                        <button class="rb-adv-pal-chip" data-rb-adv-pal="pedal" onclick="rbAdvPaletteFilter('pedal')">Pedals</button>
+                        <button class="rb-adv-pal-chip" data-rb-adv-pal="rack" onclick="rbAdvPaletteFilter('rack')">Racks</button>
+                    </div>
+                    <input id="rb-adv-pal-search" type="text" placeholder="Search gear…" oninput="rbAdvPaletteRender()">
+                </div>
+                <div id="rb-adv-palette-list" class="rb-adv-palette-list"></div>
+            </aside>
+            <div class="rb-adv-main">
+                <div class="rb-adv-toolbar">
+                    <span class="rb-adv-hint">Drag gear in · drag a jack ● to wire · double-click a cable to disconnect</span>
+                    <div class="rb-adv-actions">
+                        <button onclick="rbAdvZoom(-0.15)" class="rb-adv-btn rb-adv-btn-icon" title="Zoom out">−</button>
+                        <span id="rb-adv-zoom-label" class="rb-adv-zoom-label">100%</span>
+                        <button onclick="rbAdvZoom(0.15)" class="rb-adv-btn rb-adv-btn-icon" title="Zoom in">+</button>
+                        <button onclick="rbAdvAutoLayout()" class="rb-adv-btn">Tidy</button>
+                        <button onclick="rbAdvResetToChain()" class="rb-adv-btn">Reset to chain</button>
+                    </div>
+                </div>
+                <div id="rb-adv-canvas" class="rb-adv-canvas">
+                    <div id="rb-adv-zoom" class="rb-adv-zoom">
+                        <svg id="rb-adv-cables" class="rb-adv-cables" preserveAspectRatio="none"></svg>
+                        <div id="rb-adv-nodes" class="rb-adv-nodes"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Setup (was Dashboard + Settings merged). Top half = library-
          wide batch ops + coverage stats; bottom half = tone3000 + VST
          scan + preferences + extract tools + export defaults. Same
          DOM ids used by JS — only the layout was reorganised. -->
-    <div id="rb-tab-settings" class="rb-tab-panel hidden">
+    <div id="rb-tab-settings" class="rb-tab-panel rb-overlay hidden">
 
         <!-- Levels — kept at the very top for quick access. -->
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
@@ -860,4 +1246,5 @@
             <div id="rb-export-defaults-status" class="text-xs text-gray-500 mt-2"></div>
         </div>
     </div>
+    </div><!-- /#rb-stage-wrap -->
 </div>

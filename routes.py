@@ -2578,6 +2578,8 @@ def _load_master_chain(role: str) -> list[dict]:
 # with the master pre/post + final leveler like any ordinary song tone (its
 # name does NOT start with "__rig_builder_master_", so it isn't excluded).
 _DEFAULT_TONE_PRESET_NAME = "__rig_builder_default_tone__"
+# User-saved Studio tones are presets named with this prefix + the user's name.
+_SAVED_TONE_PREFIX = "__rig_builder_saved_tone__"
 
 
 def _get_default_tone_preset_id() -> int | None:
@@ -6743,6 +6745,68 @@ def setup(app, context):
             log.exception("save_default_tone failed")
             return JSONResponse({"error": f"{type(e).__name__}: {e}"}, 500)
         return {"ok": True, "preset_id": preset_id, "piece_count": len(pieces)}
+
+    @app.get("/api/plugins/rig_builder/saved_tones")
+    def list_saved_tones():
+        """User-saved Studio tones: {tones:[{name, pieces}]}. Each is a preset
+        named __rig_builder_saved_tone__<name> with its enriched chain."""
+        conn = _get_conn()
+        rows = conn.execute(
+            "SELECT id, name FROM presets WHERE name LIKE ? ORDER BY id",
+            (_SAVED_TONE_PREFIX + "%",),
+        ).fetchall()
+        out = []
+        for pid, name in rows:
+            out.append({"id": pid,   # so the Studio can load its native preset for live audition
+                        "name": name[len(_SAVED_TONE_PREFIX):],
+                        "pieces": _load_saved_chain(conn, pid) or []})
+        return {"tones": out}
+
+    @app.post("/api/plugins/rig_builder/saved_tone/save")
+    def save_saved_tone(data: dict = Body(...)):
+        """Save a Studio tone under a user name. Body: `{name, pieces}` (same
+        piece shape as default_tone/save). Re-saving an existing name replaces."""
+        name = (data.get("name") or "").strip()
+        pieces = data.get("pieces") or []
+        if not name:
+            return JSONResponse({"error": "name required"}, 400)
+        if not isinstance(pieces, list):
+            return JSONResponse({"error": "pieces must be a list"}, 400)
+        try:
+            preset_id = _persist_preset_chain(
+                filename="__saved_tone__",
+                tone_key=name,
+                name=_SAVED_TONE_PREFIX + name,
+                pieces=pieces,
+                input_gain=1.0, output_gain=1.0, gate_threshold=-60.0,
+                assigned_mode="manual",
+            )
+        except Exception as e:
+            log.exception("save_saved_tone failed")
+            return JSONResponse({"error": f"{type(e).__name__}: {e}"}, 500)
+        return {"ok": True, "preset_id": preset_id, "name": name}
+
+    @app.post("/api/plugins/rig_builder/saved_tone/delete")
+    def delete_saved_tone(data: dict = Body(...)):
+        name = (data.get("name") or "").strip()
+        if not name:
+            return JSONResponse({"error": "name required"}, 400)
+        conn = _get_conn()
+        try:
+            row = conn.execute("SELECT id FROM presets WHERE name = ?",
+                               (_SAVED_TONE_PREFIX + name,)).fetchone()
+            if row:
+                pid = row[0]
+                # Drop the tone_mapping first — it references presets(id) and can
+                # block the preset delete (FK), causing a 500.
+                conn.execute("DELETE FROM tone_mappings WHERE preset_id = ?", (pid,))
+                conn.execute("DELETE FROM preset_pieces WHERE preset_id = ?", (pid,))
+                conn.execute("DELETE FROM presets WHERE id = ?", (pid,))
+                conn.commit()
+        except Exception as e:
+            log.exception("delete_saved_tone failed")
+            return JSONResponse({"error": f"{type(e).__name__}: {e}"}, 500)
+        return {"ok": True}
 
     @app.get("/api/plugins/rig_builder/default_tone/native")
     def default_tone_native():
