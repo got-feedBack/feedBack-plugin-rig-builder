@@ -7206,8 +7206,30 @@ async function rbReloadDefaultTone() {
     }
     if (!enabled) { rbState._defaultToneActive = false; return false; }
     if (!rbDefaultToneHasContent()) { rbState._defaultToneActive = false; return false; }
-    try { return await rbLoadDefaultTone(); }
+    try {
+        const ok = await rbLoadDefaultTone();
+        // The reload rebuilt the chain pieces from the backend (which doesn't
+        // store pan), so the panning would be lost on app restart. Restore it
+        // from the saved graph (localStorage holds node.pan) + re-apply stereo.
+        try { rbRestorePanFromGraph(); await rbStudioApplyStereoToEngine(); } catch (_) {}
+        return ok;
+    }
     catch (e) { return false; }
+}
+
+// Re-seed chain pieces' _pan from the persisted node graph (the durable pan
+// store), so a backend reload that rebuilt the pieces doesn't wipe the panning.
+function rbRestorePanFromGraph() {
+    let saved;
+    try { saved = JSON.parse(localStorage.getItem(rbAdvStorageKey()) || 'null'); } catch (_) { return; }
+    if (!saved || !Array.isArray(saved.nodes)) return;
+    const chain = rbStudioCurrentChain();
+    for (const n of saved.nodes) {
+        if (n.kind === 'gear' && typeof n.pieceIdx === 'number' && n.pieceIdx >= 0
+            && typeof n.pan === 'number' && chain[n.pieceIdx]) {
+            chain[n.pieceIdx]._pan = n.pan;
+        }
+    }
 }
 
 async function rbPreviewDefaultTone(btn) {
@@ -13327,10 +13349,11 @@ async function rbAdvMaterializeGear(node) {
         if (v.source === 'default') { if (rbState._defaultToneActive) await rbReloadDefaultTone(); }
         else if (typeof rbStudioLoadMonitor === 'function') await rbStudioLoadMonitor();
     } catch (_) {}
-    // A freshly-dropped node has no cables yet → it's graph-inactive and must be
-    // bypassed (otherwise its effect plays even though it isn't wired in). The
-    // default-tone reload path doesn't run rbStudioFinishMonitorLoad, so apply
-    // connectivity explicitly here, after the chain is (re)loaded.
+    // The default-tone reload path doesn't run rbStudioFinishMonitorLoad, so
+    // explicitly RE-APPLY the stereo routing (pan/branch) — otherwise the rebuilt
+    // slots come back at pan 0 and the OTHER gear's pan is lost — and then the
+    // graph connectivity (bypass disconnected gear / silence if Input-Output is cut).
+    try { await rbStudioApplyStereoToEngine(); } catch (_) {}
     try { await rbAdvApplyConnectivity(); } catch (_) {}
 }
 
@@ -13378,13 +13401,37 @@ async function rbStudioApplyStereoToEngine() {
     let ampIdxs = [];
     try { ampIdxs = (rbStudioGroupDefault().amp || []).map(e => e.idx); } catch (_) { ampIdxs = []; }
     const branchOfIdx = new Map();
-    if (ampIdxs.length >= 2) ampIdxs.forEach((idx, k) => branchOfIdx.set(idx, k + 1));
+    if (ampIdxs.length >= 2) {
+        // Each amp gets its own parallel branch, and every gear FROM that amp
+        // onward (its cab/post-pedals) inherits the same branch — otherwise the
+        // engine, which expects each branch contiguous, would skip the trunk-0
+        // gear sitting between two amp slots (e.g. the cab → no attenuation →
+        // everything jumps louder). Gear before the first amp stays trunk (0).
+        const ampSet = new Set(ampIdxs);
+        let cur = 0, n = 0;
+        for (let i = 0; i < chain.length; i++) {
+            if (ampSet.has(i)) { n++; cur = n; }
+            if (cur > 0) branchOfIdx.set(i, cur);
+        }
+    }
     // St-2 read-channel: a branch fed by a stereo-out gear's L/R port reads only
     // that channel of the split (for a true stereo source). This does NOT touch
     // pan — wiring an L/R port sets the gear's pan ONCE on connect (rbAdvConnect),
     // so the manual pan slider stays free afterwards (no continuous override).
     const srcByIdx = new Map();
+    // Pan source of truth = the graph nodes (they survive a monitor reload, where
+    // a rebuilt chain piece can lose its _pan). Restore _pan from the node so a
+    // gear add/reload doesn't wipe the OTHER gear's pan.
+    const panByIdx = new Map();
     const adv = rbState._adv;
+    if (adv && Array.isArray(adv.nodes)) {
+        for (const n of adv.nodes) {
+            if (n.kind === 'gear' && typeof n.pieceIdx === 'number' && n.pieceIdx >= 0 && typeof n.pan === 'number') {
+                panByIdx.set(n.pieceIdx, n.pan);
+                if (chain[n.pieceIdx]) chain[n.pieceIdx]._pan = n.pan;
+            }
+        }
+    }
     if (adv && Array.isArray(adv.nodes) && Array.isArray(adv.edges)) {
         const nodeById = new Map(adv.nodes.map(n => [n.id, n]));
         for (const e of adv.edges) {
@@ -13401,7 +13448,8 @@ async function rbStudioApplyStereoToEngine() {
         let slotId = null;
         try { slotId = await rbStudioChainSlotIdForPiece(audio, i); } catch (_) {}
         if (slotId == null) continue;
-        if (hasPan)       { try { audio.setPan(slotId, typeof chain[i]._pan === 'number' ? chain[i]._pan : 0); } catch (_) {} }
+        const pan = panByIdx.has(i) ? panByIdx.get(i) : (typeof chain[i]._pan === 'number' ? chain[i]._pan : 0);
+        if (hasPan)       { try { audio.setPan(slotId, pan); } catch (_) {} }
         if (hasBranch)    { try { audio.setBranch(slotId, branchOfIdx.get(i) || 0); } catch (_) {} }
         if (hasBranchSrc) { try { audio.setBranchSrc(slotId, srcByIdx.get(i) || 0); } catch (_) {} }
     }
@@ -13423,7 +13471,7 @@ async function rbAdvApplyConnectivity() {
     if (!adv || !Array.isArray(adv.nodes) || !adv.nodes.length) return;
     const input = adv.nodes.find(n => n.kind === 'input');
     const output = adv.nodes.find(n => n.kind === 'output');
-    if (!input || !output) { console.info('[CONN-DBG] no terminals', { nodes: adv.nodes.length }); return; }
+    if (!input || !output) return;
     const fullyConnected = rbAdvReaches(input.id, output.id);
     rbState._advDisconnected = !fullyConnected;
     // No complete Input→Output path → silence the chain at the SOURCE (the engine's
