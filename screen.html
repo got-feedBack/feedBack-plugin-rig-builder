@@ -794,6 +794,10 @@
         background:rgba(255,255,255,.06); color:#cfd8e6; cursor:pointer; font-size:12px; line-height:1; }
     .rb-adv-editor-close:hover{ background:rgba(255,255,255,.14); }
     .rb-adv-editor-face{ padding:14px; }
+    /* The card width is sized per-gear in rbAdvEditNode (height-aware) so the
+       canvas opens at its own proportions, not the amp's full face. Safety cap so
+       it never spills past the card. */
+    .rb-adv-editor-face .rb-amp-face-canvas{ max-width:100%; }
     .rb-adv-editor-empty{ padding:22px 16px; text-align:center; color:#8893a5; font-size:12px; }
     .rb-adv-node-thumb{ height:56px; border-radius:11px 11px 0 0; overflow:hidden; background:#0b0d12;
         display:flex; align-items:center; justify-content:center; border-bottom:1px solid rgba(255,255,255,.06); }
