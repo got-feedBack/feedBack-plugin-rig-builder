@@ -805,6 +805,14 @@
     .rb-adv-node-label{ padding:6px 8px; font-size:11px; color:#dbe4f2; text-align:center; line-height:1.2;
         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .rb-adv-node-kind{ font-size:9px; letter-spacing:.08em; text-transform:uppercase; color:#7e8aa3; text-align:center; padding:0 0 6px; }
+    /* stereo pan slider on a gear node (St-1): L —●— R + a value chip */
+    .rb-adv-node-pan{ display:flex; align-items:center; gap:5px; padding:0 8px 7px; }
+    .rb-adv-pan-slider{ -webkit-appearance:none; appearance:none; flex:1 1 auto; height:3px; border-radius:2px;
+        background:linear-gradient(90deg,#3d6bbf,#2a2f3a 50%,#bf6b3d); cursor:ew-resize; outline:none; }
+    .rb-adv-pan-slider::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:11px; height:11px;
+        border-radius:50%; background:#dbe4f2; border:1px solid rgba(0,0,0,.4); box-shadow:0 1px 3px rgba(0,0,0,.5); }
+    .rb-adv-pan-val{ flex:0 0 auto; min-width:26px; text-align:right; font-size:9px; font-variant-numeric:tabular-nums;
+        color:#9fb0c8; letter-spacing:.02em; }
     /* terminal nodes (Input / Output) read as small rounded pills */
     .rb-adv-node.rb-adv-term{ width:96px; background:linear-gradient(180deg, rgba(52,180,120,.18), rgba(30,90,60,.22));
         border-color:rgba(74,210,150,.4); }
