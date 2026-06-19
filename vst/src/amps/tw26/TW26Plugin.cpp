@@ -12,6 +12,7 @@
 #include "DistrhoPlugin.hpp"
 #include "TW26Params.h"
 #include "TW26Core.h"
+#include "../../_shared/oversampler.hpp"
 
 START_NAMESPACE_DISTRHO
 
@@ -24,6 +25,8 @@ class TW26Plugin : public Plugin
 {
     tw26::TW26Core core;
     float params[kParamCount];
+    rbshared::Oversampler4x os;                 // anti-alias around the nonlinear chain
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
 
     void applyAll()
     {
@@ -41,7 +44,7 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kTW26Def[i];
-        core.setSampleRate((float)getSampleRate());
+        core.setSampleRate(kOS * (float)getSampleRate());
         applyAll();
     }
 
@@ -80,7 +83,8 @@ protected:
 
     void sampleRateChanged(double newSampleRate) override
     {
-        core.setSampleRate((float)newSampleRate);
+        core.setSampleRate(kOS * (float)newSampleRate);
+        os.reset();
         applyAll();
     }
 
@@ -91,7 +95,11 @@ protected:
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            const float y = rbAmpLvl(0.522f * core.process(3.2f * in0[i]));
+            float ub[kOS];
+            os.upsample(3.2f * in0[i], ub);
+            for (int k = 0; k < kOS; ++k)                  // core + output soft-clip at 2x
+                ub[k] = rbAmpLvl(2.631f * core.process(ub[k]));
+            const float y = os.downsample(ub);
             outL[i] = y;
             outR[i] = y;   // dual-mono: one core, same signal both sides = centered/balanced
         }

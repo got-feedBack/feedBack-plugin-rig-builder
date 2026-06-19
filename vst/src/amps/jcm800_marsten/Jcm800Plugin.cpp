@@ -13,6 +13,8 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "Jcm800Params.h"
+#include "../../_shared/tube_stage.hpp"   // real 12AX7 + EL34 circuit models
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -127,11 +129,23 @@ class Jcm800Core
     DcBlock dcBlock;
     float sag = 0.0f;
 
+    // ── REAL tube stages (Koren circuit models) replacing the tanh asymTube ──
+    rbtube::TubeStage v1a, v1b, v2;     // 3x 12AX7 cascade (V1a -> GAIN -> V1b -> V2)
+    rbtube::PowerAmpEL34 power;          // 2x EL34 push-pull (~50W)
+
     void updateFilters()
     {
         const float g = smoothstep(gain);
         const float pushed = smoothstepRange(0.40f, 0.92f, gain);
         const float mPush = smoothstep(volume);
+
+        // ── real 12AX7 cascade + EL34 (cathode-biased, self-bias solved) ──
+        v1a.set(sampleRate, 1, 250.0f, 40.0f, 25.0f, 1500.0f);
+        v1b.set(sampleRate, 1, 250.0f, 40.0f, 25.0f, 1500.0f);
+        v2.set(sampleRate, 1, 250.0f, 40.0f, 55.0f, 1500.0f);
+        // 2x EL34 (~50W), fixed bias (~-40V), NFB approximated by presence; Master drives it
+        power.set(sampleRate, 4.0f + 9.0f * mPush + 6.0f * pushed, -40.0f, 0.30f, 50.0f, 11000.0f);
+        power.out = 0.011f;
 
         inputHp.setHighPass(sampleRate, 30.0f + 18.0f * g, 0.70f);
         pickupLoad.setLowPass(sampleRate, 12500.0f - 1400.0f * pushed + 700.0f * treble, 0.64f);
@@ -151,9 +165,10 @@ class Jcm800Core
         speakerHp.setHighPass(sampleRate, 84.0f, 0.72f);
         speakerThump.setPeaking(sampleRate, 120.0f, 0.84f, 0.8f + 2.0f * bass);
         speakerLowMid.setPeaking(sampleRate, 420.0f + 90.0f * mid, 0.74f, -1.2f + 1.4f * mid);   // the Marshall mid dip
-        speakerBite.setPeaking(sampleRate, 2900.0f + 480.0f * treble, 0.62f, 7.6f + 2.0f * treble - 0.3f * pushed);
-        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, 16.5f + 2.0f * treble + 2.0f * presence - 2.0f * pushed);
-        speakerLp.setLowPass(sampleRate, 18500.0f + 1700.0f * treble - 1500.0f * pushed, 0.66f);
+        speakerBite.setPeaking(sampleRate, 2900.0f + 480.0f * treble, 0.62f, 3.0f + 1.5f * treble - 0.3f * pushed);
+        // a real 4x12 ROLLS OFF the top (it does not boost +16 dB) -> gentle HF cut
+        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, -4.0f + 2.0f * treble + 2.0f * presence);
+        speakerLp.setLowPass(sampleRate, 11000.0f + 1500.0f * treble - 1200.0f * pushed, 0.66f);
     }
 
 public:
@@ -162,7 +177,9 @@ public:
         inputHp.reset(); pickupLoad.reset(); brightCap.reset(); interHp.reset(); cathodeLp.reset();
         toneStack.reset(); stackMakeupLow.reset(); phaseLp.reset(); presenceShelf.reset();
         speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset(); speakerBite.reset(); speakerFizz.reset(); speakerLp.reset();
-        dcBlock.reset(); sag = 0.0f; updateFilters();
+        dcBlock.reset(); sag = 0.0f;
+        v1a.reset(); v1b.reset(); v2.reset(); power.reset();
+        updateFilters();
     }
     void setSampleRate(float sr) { sampleRate = sr > 1000.0f ? sr : 48000.0f; toneStack.setSampleRate(sampleRate); reset(); }
 
@@ -186,13 +203,13 @@ public:
         float x = inputHp.process(in);
         x = pickupLoad.process(x);
         x = brightCap.process(x);
-        // V1a: first gain stage (mild)
-        float y = asymTube(x, 1.10f + 0.7f * g, 0.008f);
-        // GAIN pot -> V1b cascade (the JCM800 drive). LO removes some cascade gain.
-        const float drv = 1.0f;
-        y = asymTube(y * (0.20f + 2.20f * gain), (0.80f + 4.6f * gain + 3.05f * g) * drv, 0.012f + 0.014f * gain);
+        // V1a: first gain stage (REAL 12AX7, ~clean — the 2204 GAIN pot is AFTER V1a)
+        float y = v1a.process(x * 1.0f);
+        // GAIN pot -> V1b cascade (the JCM800 drive) -> V2 (REAL 12AX7). The drive
+        // span is wide so the amp cleans up below ~3 and slams hard at 10.
+        y = v1b.process(y * (0.55f + 10.0f * gain));
         y = interHp.process(y);
-        y = asymTube(y, (0.50f + 4.4f * gain + 3.25f * pushed) * drv, -0.008f - 0.012f * gain);
+        y = v2.process(y * (0.65f + 6.5f * gain));
         y = cathodeLp.process(y);
 
         // Marshall tone stack + cathode follower makeup
@@ -202,16 +219,8 @@ public:
         // MASTER volume into the power amp
         y *= 0.22f + 1.30f * volume;
 
-        // 2x EL34 (~50W) + sag
-        const float env = std::fabs(y);
-        const float attack = 1.0f - std::exp(-1.0f / (0.0060f * sampleRate));
-        const float release = 1.0f - std::exp(-1.0f / (0.140f * sampleRate));
-        sag += (env - sag) * (env > sag ? attack : release);
-        const float sagDrop = 1.0f / (1.0f + sag * (0.30f + 0.62f * mPush + 0.42f * pushed));
-        const float powerDrive = (0.88f + 1.55f * mPush + 1.25f * pushed) * sagDrop;
-        y = asymTube(y, powerDrive, 0.006f + 0.012f * (treble - bass));
-        y = 0.86f * y + 0.14f * softClip(y * (1.5f + 1.1f * pushed));
-        y *= 0.97f - 0.08f * sag;
+        // 2x EL34 (~50W) — REAL pentode table + own sag/OT (Master drove it via power.set)
+        y = power.process(y);
 
         y = phaseLp.process(y);
         y = presenceShelf.process(y);
@@ -229,9 +238,14 @@ public:
             + 0.012f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.012f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.010f * std::fabs((presence - 0.5f) * 14.0f);
-        const float cleanMakeup = 1.0f + 3.0f * std::exp(-gain / 0.33f);
-        const float level = 0.62f * cleanMakeup / ((1.0f + 0.42f * mPush) * toneEnergy);
-        return softClip(y * level) * 0.97f;
+        // The real tubes + EL34 do the distortion; the output tanh is just gentle
+        // output-transformer saturation/safety (NO cleanMakeup — that inverted the
+        // crest curve by slamming clean tones into the clip).
+        const float level = 0.95f / ((1.0f + 0.42f * mPush) * toneEnergy);
+        // loudness flattening vs GAIN (clean post-output makeup; anchored ~0 dB at gain 0.5)
+        float gcDb = 5.368f - 13.638f * gain + 4.005f * gain * gain;
+        if (gcDb > 20.0f) gcDb = 20.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
+        return softClip(y * level) * 0.95f * std::pow(10.0f, 0.05f * gcDb);
     }
 };
 
@@ -239,12 +253,14 @@ class Jcm800Plugin : public Plugin
 {
     Jcm800Core left, right;
     float params[kParamCount];
+    rbshared::Oversampler4x osL, osR;
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
     void applyAll() { for (int i = 0; i < kParamCount; ++i) { left.setParam(i, params[i]); right.setParam(i, params[i]); } }
 public:
     Jcm800Plugin() : Plugin(kParamCount, 0, 0)
     {
         for (int i = 0; i < kParamCount; ++i) params[i] = kJcm800Def[i];
-        left.setSampleRate((float)getSampleRate()); right.setSampleRate((float)getSampleRate()); applyAll();
+        left.setSampleRate(kOS * (float)getSampleRate()); right.setSampleRate(kOS * (float)getSampleRate()); applyAll();
     }
 protected:
     const char* getLabel() const override { return "MarstenJCM800"; }
@@ -264,11 +280,15 @@ protected:
     void setParameterValue(uint32_t index, float value) override
     { if (index >= (uint32_t)kParamCount) return; params[index] = clamp01(value); left.setParam((int)index, params[index]); right.setParam((int)index, params[index]); }
     void sampleRateChanged(double newSampleRate) override
-    { left.setSampleRate((float)newSampleRate); right.setSampleRate((float)newSampleRate); applyAll(); }
+    { left.setSampleRate(kOS * (float)newSampleRate); right.setSampleRate(kOS * (float)newSampleRate); osL.reset(); osR.reset(); applyAll(); }
     void run(const float** inputs, float** outputs, uint32_t frames) override
     {
         const float* inL=inputs[0]; const float* inR=inputs[1]; float* outL=outputs[0]; float* outR=outputs[1];
-        for (uint32_t i=0;i<frames;++i){ outL[i]=rbAmpLvl(0.560f*left.process(inL[i])); outR[i]=rbAmpLvl(0.560f*right.process(inR[i])); }
+        for (uint32_t i=0;i<frames;++i){
+            float ub[kOS];
+            osL.upsample(3.2f*inL[i], ub); for(int k=0;k<kOS;++k) ub[k]=rbAmpLvl(0.47f*left.process(ub[k])); outL[i]=osL.downsample(ub);
+            osR.upsample(3.2f*inR[i], ub); for(int k=0;k<kOS;++k) ub[k]=rbAmpLvl(0.47f*right.process(ub[k])); outR[i]=osR.downsample(ub);
+        }
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Jcm800Plugin)
 };

@@ -12,7 +12,8 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "EN30Params.h"
-#include "EN30Core.h"
+#include "BoxDC30Core.h"   // rebuilt Guitarix-style core (was EN30Core.h)
+#include "../../_shared/oversampler.hpp"
 
 START_NAMESPACE_DISTRHO
 
@@ -24,8 +25,10 @@ static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x
 
 class EN30Plugin : public Plugin
 {
-    en30::EN30Core core;
+    boxdc30::BoxDC30Core core;
     float params[kParamCount];
+    rbshared::Oversampler4x os;                 // 4x anti-alias around the nonlinear chain
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
 
     void applyAll()
     {
@@ -49,7 +52,7 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kEN30Def[i];
-        core.setSampleRate((float)getSampleRate());
+        core.setSampleRate(kOS * (float)getSampleRate());
         applyAll();
     }
 
@@ -82,13 +85,14 @@ protected:
     {
         if (index >= (uint32_t)kParamCount)
             return;
-        params[index] = en30::clamp01(value);
+        params[index] = boxdc30::clamp01(value);
         applyAll();
     }
 
     void sampleRateChanged(double newSampleRate) override
     {
-        core.setSampleRate((float)newSampleRate);
+        core.setSampleRate(kOS * (float)newSampleRate);
+        os.reset();
         applyAll();
     }
 
@@ -99,7 +103,11 @@ protected:
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            const float y = rbAmpLvl(0.505f * core.process(3.2f * in0[i]));
+            float ub[kOS];
+            os.upsample(3.2f * in0[i], ub);
+            for (int k = 0; k < kOS; ++k)                  // core + output soft-clip at 4x
+                ub[k] = rbAmpLvl(0.891f * core.process(ub[k]));
+            const float y = os.downsample(ub);
             outL[i] = y;
             outR[i] = y;   // dual-mono: one core, same signal both sides = centered/balanced
         }

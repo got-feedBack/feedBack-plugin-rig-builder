@@ -17,6 +17,8 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "AOR50Params.h"
+#include "../../_shared/tube_stage.hpp"   // real 12AX7 stages + EL34 PP + Yeh tone stack
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -185,6 +187,33 @@ public:
     }
 };
 
+// Real anti-parallel silicon diode-pair clipper (Shockley). The AOR lead channel
+// clips on a 1N4148 pair around an op-amp (D3/D4 on the schematic) — that diode
+// edge ON TOP of the ECC83 cascade is the "Advanced Overdrive Response". Newton-
+// solve the node KCL (physical, not a tanh fit):
+//     (vin - v)/R = 2*Is*sinh(v/(n*Vt))
+struct DiodeClipper
+{
+    static constexpr float Is  = 2.52e-9f;            // 1N4148 saturation current
+    static constexpr float nVt = 1.752f * 0.02585f;   // emission coeff * thermal voltage (~45 mV)
+    float R = 2200.0f;
+    float v = 0.0f;
+    void reset() { v = 0.0f; }
+    inline float process(float vin)
+    {
+        for (int i = 0; i < 8; ++i)
+        {
+            const float e  = v / nVt;
+            const float sh = std::sinh(e), ch = std::cosh(e);
+            const float f  = (v - vin) / R + 2.0f * Is * sh;
+            const float fp = 1.0f / R + 2.0f * Is * ch / nVt;
+            v -= f / fp;
+            if (v > 1.0f) v = 1.0f; else if (v < -1.0f) v = -1.0f;
+        }
+        return v;
+    }
+};
+
 } // namespace
 
 class AOR50Core
@@ -213,12 +242,27 @@ class AOR50Core
 
     Biquad inputHp, inputLp, brightShelf;
     Biquad ch1Body, aorTight, aorBite;
-    Biquad interHp, interLp;
-    Biquad toneBass, toneMid, toneTreble;
+    Biquad interHp, interLp, toneDeep, toneMidBoost;   // Pull-Deep / Pull-Boost switches
     Biquad phaseHp, phaseLp, presenceShelf;
     Biquad speakerHp, speakerThump, speakerLowMid, speakerBite, speakerFizzNotch, speakerLp;
     DcBlock dcBlock;
+    // ── real circuit (Koren tubes + Shockley diode + Yeh stack) ──
+    rbtube::TubeStage    v1, vCh1, vCrunch, vAorA, vAorB, vCascade;  // 12AX7 stages
+    rbtube::PowerAmpEL34 power;                                      // EL34 power (~50W)
+    rbtube::ToneStackYeh tone;                                       // real JCM800-style TMB
+    DiodeClipper         aorDiode;                                   // AOR lead diode overdrive
+    float inScale = 1.3f, toneMk = 13.0f;
     float sag = 0.0f;
+
+    void setupTubes()
+    {
+        v1.set(sampleRate, 1, 250.0f, 40.0f, 22.0f, 1500.0f);       // V1 input
+        vCh1.set(sampleRate, 1, 250.0f, 40.0f, 30.0f, 1500.0f);     // Channel One recovery
+        vCrunch.set(sampleRate, 1, 250.0f, 40.0f, 35.0f, 1500.0f);
+        vAorA.set(sampleRate, 1, 250.0f, 40.0f, 45.0f, 1500.0f);    // AOR cascade 1
+        vAorB.set(sampleRate, 1, 250.0f, 40.0f, 60.0f, 1500.0f);    // AOR cascade 2
+        vCascade.set(sampleRate, 1, 250.0f, 40.0f, 55.0f, 1500.0f); // extra lead cascade
+    }
 
     void updateFilters()
     {
@@ -252,13 +296,13 @@ class AOR50Core
         interHp.setHighPass(sampleRate, 68.0f + 80.0f * leadA + 30.0f * (1.0f - bass), 0.71f);
         interLp.setLowPass(sampleRate, 9400.0f + 1200.0f * treble - 1700.0f * leadA, 0.64f);
 
-        // British TMB tone stack + Pull-Deep (low boost) + Pull-Boost (mid lift).
-        toneBass.setLowShelf(sampleRate, 110.0f + 40.0f * bass, 0.72f,
-                             eqDb(bass, 7.0f) - 1.4f * leadA + 5.5f * deepA);
-        toneMid.setPeaking(sampleRate, 560.0f + 300.0f * mid, 0.70f,
-                           eqDb(mid, 7.2f) + 1.2f * crunchA + 6.0f * midB);
-        toneTreble.setHighShelf(sampleRate, 1950.0f + 1050.0f * treble, 0.74f,
-                                eqDb(treble, 7.0f) + 1.0f * leadA);
+        // Laney AOR tone stack — CIRCUIT-REAL (Yeh, real R/C from the A50 Series II
+        // schematic: Treble 220k/470pF, Bass 1M/22nF, Mid 22k/22nF, slope 33k = the
+        // JCM800-style British stack). Pull-Deep / Pull-Boost = the extra switches.
+        tone.setComponents(220e3, 1.0e6, 22e3, 33e3, 470e-12, 22e-9, 22e-9);
+        tone.update(sampleRate, treble, mid, bass);
+        toneDeep.setLowShelf(sampleRate, 110.0f, 0.72f, 5.5f * deepA);                         // Pull-Deep
+        toneMidBoost.setPeaking(sampleRate, 560.0f + 300.0f * mid, 0.80f, 6.0f * midB);        // Pull-Boost
 
         phaseHp.setHighPass(sampleRate, 74.0f + 30.0f * leadA, 0.72f);
         phaseLp.setLowPass(sampleRate, 10500.0f + 1400.0f * treble + 700.0f * presence - 2000.0f * leadA, 0.65f);
@@ -270,8 +314,14 @@ class AOR50Core
         speakerLowMid.setPeaking(sampleRate, 420.0f + 150.0f * mid, 0.76f, 0.6f + 2.4f * mid);
         speakerBite.setPeaking(sampleRate, 2750.0f + 600.0f * treble, 0.78f,
                                2.2f + 2.3f * treble + 1.8f * presence + 0.8f * leadA - 0.5f * leadA);
-        speakerFizzNotch.setHighShelf(sampleRate, 4700.0f, 0.70f, 9.5f + 2.0f * treble + 2.0f * presence - 4.5f * leadA);
-        speakerLp.setLowPass(sampleRate, 16000.0f + 2000.0f * treble + 850.0f * presence - 3500.0f * leadA, 0.66f);
+        // a real 4x12 ROLLS OFF the top (no +9 dB fizz shelf -> inflates crest); gentle cut + LP
+        speakerFizzNotch.setHighShelf(sampleRate, 4700.0f, 0.70f, -3.0f + 2.0f * treble + 2.0f * presence - 2.0f * leadA);
+        speakerLp.setLowPass(sampleRate, 11500.0f + 1800.0f * treble + 850.0f * presence - 3000.0f * leadA, 0.66f);
+
+        // EL34 power amp (silicon rectifier = tight, low sag). Low drive floor so the
+        // clean Channel One stays clean; it climbs with the morph + lead.
+        power.set(sampleRate, 0.8f + 8.0f * m + 4.0f * leadA, -40.0f, 0.14f, 55.0f, 11000.0f);
+        power.out = 0.011f;
     }
 
 public:
@@ -279,13 +329,15 @@ public:
     {
         inputHp.reset(); inputLp.reset(); brightShelf.reset();
         ch1Body.reset(); aorTight.reset(); aorBite.reset();
-        interHp.reset(); interLp.reset();
-        toneBass.reset(); toneMid.reset(); toneTreble.reset();
-        phaseHp.reset(); phaseLp.reset(); presenceShelf.reset();
+        interHp.reset(); interLp.reset(); toneDeep.reset(); toneMidBoost.reset();
+        tone.reset(); phaseHp.reset(); phaseLp.reset(); presenceShelf.reset();
         speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset();
         speakerBite.reset(); speakerFizzNotch.reset(); speakerLp.reset();
         dcBlock.reset();
+        v1.reset(); vCh1.reset(); vCrunch.reset(); vAorA.reset(); vAorB.reset(); vCascade.reset();
+        power.reset(); aorDiode.reset();
         sag = 0.0f;
+        setupTubes();
         updateFilters();
     }
 
@@ -336,48 +388,42 @@ public:
         float x = inputHp.process(in);
         x = inputLp.process(x);
         x = brightShelf.process(x);
-        x = softClip(x * (1.05f + 0.16f * m + 0.14f * leadMix));
+        x = v1.process(x * inScale);                    // V1 shared input (real ECC83)
 
-        // Channel One voicing: V1A/V1B, fuller low-mid, moderate gain.
+        // Channel One voicing: fuller low-mid, moderate gain (one real stage).
         float ch1 = ch1Body.process(x);
-        ch1 = 0.55f * ch1 + 0.45f * asymTube(ch1, 0.88f + 1.30f * m, 0.006f);
+        ch1 = vCh1.process(ch1 * (0.6f + 1.4f * m));
 
-        // AOR voicing: tightened lows + bite, cascaded high-gain triodes.
+        // AOR voicing: tightened lows + bite, cascaded ECC83 PLUS the 1N4148 diode
+        // overdrive (the "Advanced Overdrive Response" = a diode clip riding on the
+        // tube cascade — the real D3/D4 around the op-amp).
         float aor = aorTight.process(x);
         aor = aorBite.process(aor);
-        aor = asymTube(aor, 1.70f + 4.60f * m, 0.016f + 0.012f * presence);
-        aor = asymTube(aor, 1.20f + 3.40f * m, -0.012f - 0.008f * m);
-        aor = 0.72f * aor + 0.28f * softClip(aor * (1.9f + 1.8f * m));
+        aor = vAorA.process(aor * (1.5f + 5.0f * m));
+        aor = vAorB.process(aor * (1.1f + 3.0f * m));
+        aor = aorDiode.process(aor * (0.7f + 7.0f * leadA)) * 1.9f;   // AOR diode clip
 
-        // Crunch is the in-between (Channel One pushed / AOR backed off).
+        // Crunch is the in-between (Channel One pushed).
         float crunch = ch1Body.process(x);
-        crunch = asymTube(crunch, 1.25f + 2.85f * m, 0.010f + 0.010f * m);
+        crunch = vCrunch.process(crunch * (0.9f + 3.0f * m));
 
         float y = ch1 * cleanMix + crunch * crunchMix + aor * leadMix;
         y = interHp.process(y);
         y = interLp.process(y);
 
         const float extraCascade = smoothstepRange(0.46f, 0.90f, m);
-        const float cascaded = asymTube(y, 1.02f + 2.05f * m + 2.0f * leadMix, -0.006f - 0.010f * leadMix);
+        const float cascaded = vCascade.process(y * (1.0f + 3.0f * m + 2.0f * leadMix));
         y = y * (1.0f - 0.54f * extraCascade) + cascaded * (0.54f * extraCascade);
 
-        y = toneBass.process(y);
-        y = toneMid.process(y);
-        y = toneTreble.process(y);
+        // real JCM800-style tone stack + insertion-loss makeup + Deep/Mid-Boost switches
+        y = tone.process(y) * toneMk;
+        y = toneDeep.process(y);
+        y = toneMidBoost.process(y);
         y = phaseHp.process(y);
         y = phaseLp.process(y);
 
-        // EL34 power amp + silicon rectifier (tight: only modest sag).
-        const float env = std::fabs(y);
-        const float attack = 1.0f - std::exp(-1.0f / (0.0050f * sampleRate));
-        const float release = 1.0f - std::exp(-1.0f / (0.140f * sampleRate));
-        sag += (env - sag) * (env > sag ? attack : release);
-        const float sagDrop = 1.0f / (1.0f + sag * (0.30f + 0.78f * m + 0.55f * leadMix));
-
-        const float powerDrive = (0.94f + 1.50f * m + 1.95f * leadMix) * sagDrop;
-        y = asymTube(y, powerDrive, 0.005f + 0.012f * (presence - bass));
-        y = 0.84f * y + 0.16f * softClip(y * (1.7f + 1.25f * leadMix));
-        y *= 0.98f - 0.05f * sag;
+        // EL34 power amp — real pentode table + own sag/OT (drive set in updateFilters)
+        y = power.process(y);
 
         y = presenceShelf.process(y);
         y = dcBlock.process(y);
@@ -397,7 +443,7 @@ public:
             + 0.013f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.013f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.011f * std::fabs((presence - 0.5f) * 16.0f);
-        const float cleanMakeup = 1.0f + 7.5f * std::exp(-m / 0.24f);
+        const float cleanMakeup = 1.0f + 2.5f * std::exp(-m / 0.30f);
         const float level = (0.74f + 0.12f * (1.0f - m)) * cleanMakeup /
             ((1.0f + 0.30f * m + 0.60f * leadMix) * toneEnergy);
 
@@ -405,7 +451,10 @@ public:
         // that leave it at the musical default keep the calibrated loudness.
         const float masterGain = 0.55f + 0.90f * activeMaster;
 
-        return softClip(y * level * masterGain) * 0.97f;
+        // loudness flattening vs the Channel One->AOR morph (clean post-output makeup; ~0 dB at 0.5)
+        float gcDb = -0.502f + 8.888f * channel - 12.373f * channel * channel;
+        if (gcDb > 12.0f) gcDb = 12.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
+        return softClip(y * level * masterGain) * 0.97f * std::pow(10.0f, 0.05f * gcDb);
     }
 };
 
@@ -414,6 +463,8 @@ class AOR50Plugin : public Plugin
     AOR50Core left;
     AOR50Core right;
     float params[kParamCount];
+    rbshared::Oversampler4x osL, osR;          // 2x anti-alias around the nonlinear chain
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
 
     void applyAll()
     {
@@ -430,8 +481,8 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kAOR50Def[i];
-        left.setSampleRate((float)getSampleRate());
-        right.setSampleRate((float)getSampleRate());
+        left.setSampleRate(kOS * (float)getSampleRate());
+        right.setSampleRate(kOS * (float)getSampleRate());
         applyAll();
     }
 
@@ -471,8 +522,10 @@ protected:
 
     void sampleRateChanged(double newSampleRate) override
     {
-        left.setSampleRate((float)newSampleRate);
-        right.setSampleRate((float)newSampleRate);
+        left.setSampleRate(kOS * (float)newSampleRate);
+        right.setSampleRate(kOS * (float)newSampleRate);
+        osL.reset();
+        osR.reset();
         applyAll();
     }
 
@@ -484,8 +537,16 @@ protected:
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = rbAmpLvl(0.600f * left.process(3.2f * inL[i]));
-            outR[i] = rbAmpLvl(0.600f * right.process(3.2f * inR[i]));
+            float ubL[kOS], ubR[kOS];
+            osL.upsample(3.2f * inL[i], ubL);
+            osR.upsample(3.2f * inR[i], ubR);
+            for (int k = 0; k < kOS; ++k)
+            {
+                ubL[k] = rbAmpLvl(0.445f * left.process(ubL[k]));
+                ubR[k] = rbAmpLvl(0.445f * right.process(ubR[k]));
+            }
+            outL[i] = osL.downsample(ubL);
+            outR[i] = osR.downsample(ubR);
         }
     }
 

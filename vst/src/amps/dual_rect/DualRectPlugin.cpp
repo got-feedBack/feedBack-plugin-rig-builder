@@ -10,6 +10,7 @@
 #include "DistrhoPlugin.hpp"
 #include "DualRectParams.h"
 #include "DualRectCore.h"
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -25,6 +26,8 @@ class DualRectPlugin : public Plugin
     dualrect::DualRectCore left;
     dualrect::DualRectCore right;
     float params[kParamCount];
+    rbshared::Oversampler4x osL, osR;          // 4x anti-alias around the nonlinear chain
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
 
     void applyAll()
     {
@@ -43,8 +46,8 @@ public:
             params[i] = kDualRectDef[i];
         left.initDefaults();
         right.initDefaults();
-        left.setSampleRate((float)getSampleRate());
-        right.setSampleRate((float)getSampleRate());
+        left.setSampleRate(kOS * (float)getSampleRate());
+        right.setSampleRate(kOS * (float)getSampleRate());
         applyAll();
     }
 
@@ -84,8 +87,10 @@ protected:
 
     void sampleRateChanged(double newSampleRate) override
     {
-        left.setSampleRate((float)newSampleRate);
-        right.setSampleRate((float)newSampleRate);
+        left.setSampleRate(kOS * (float)newSampleRate);
+        right.setSampleRate(kOS * (float)newSampleRate);
+        osL.reset();
+        osR.reset();
         applyAll();
     }
 
@@ -97,8 +102,16 @@ protected:
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = rbAmpLvl(0.470f * left.process(3.2f * inL[i]));
-            outR[i] = rbAmpLvl(0.470f * right.process(3.2f * inR[i]));
+            float ubL[kOS], ubR[kOS];
+            osL.upsample(3.2f * inL[i], ubL);
+            osR.upsample(3.2f * inR[i], ubR);
+            for (int k = 0; k < kOS; ++k)              // core + output soft-clip at 4x
+            {
+                ubL[k] = rbAmpLvl(2.28f * left.process(ubL[k]));
+                ubR[k] = rbAmpLvl(2.28f * right.process(ubR[k]));
+            }
+            outL[i] = osL.downsample(ubL);
+            outR[i] = osR.downsample(ubR);
         }
     }
 

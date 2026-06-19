@@ -18,6 +18,8 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "Dr504Params.h"
+#include "../../_shared/tube_stage.hpp"   // real 12AX7 stages + EL34 PP + Yeh tone stack
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -137,13 +139,24 @@ class Dr504Core
 
     Biquad inputHp, pickupLoad, brightCapShelf, brightBody, normalBody;
     Biquad interstageHp, cathodeLp;
-    HiwattToneStack toneStack;
+    rbtube::ToneStackYeh toneStack;     // real Hiwatt TMB (double — stable at 192k)
     Biquad stackMakeupLow, stackMakeupBody, phaseLp, presenceShelf;
     Biquad speakerHp, speakerThump, speakerLowMid, speakerBite, speakerFizz, speakerLp;
     DcBlock dcBlock;
+    // ── real circuit (Koren tubes) replacing the tanh asymTube ──
+    rbtube::TubeStage    vBright, vNormal, vRecovery;   // 12AX7 stages
+    rbtube::PowerAmpEL34 power;                          // 2x EL34 (~50W)
+    float inScale = 1.15f, toneMk = 13.0f;
     float sag = 0.0f;
 
     static float eqDb(float v, float r) { return (clamp01(v) - 0.5f) * 2.0f * r; }
+
+    void setupTubes()
+    {
+        vBright.set(sampleRate, 1, 250.0f, 40.0f, 30.0f, 1500.0f);
+        vNormal.set(sampleRate, 1, 250.0f, 40.0f, 22.0f, 1500.0f);
+        vRecovery.set(sampleRate, 1, 250.0f, 40.0f, 40.0f, 1500.0f);
+    }
 
     void updateFilters()
     {
@@ -164,7 +177,10 @@ class Dr504Core
 
         interstageHp.setHighPass(sampleRate, 52.0f + 50.0f * pushed, 0.70f);
         cathodeLp.setLowPass(sampleRate, 9500.0f + 1500.0f * treble - 1100.0f * pushed, 0.64f);
-        toneStack.update(treble, mid, bass);
+        // Hiwatt tone stack — CIRCUIT-REAL (Yeh, real R/C from the hwpre1 schematic):
+        // Treble 250k/250pF, Bass 500k/22nF, Mid 100k/22nF (the big Hiwatt mid), slope 56k.
+        toneStack.setComponents(250e3, 500e3, 100e3, 56e3, 250e-12, 22e-9, 22e-9);
+        toneStack.update(sampleRate, treble, mid, bass);
         stackMakeupLow.setLowShelf(sampleRate, 120.0f + 30.0f * bass, 0.72f, eqDb(bass, 4.4f));
         // the famous Hiwatt strong mids (100K mid pot) — a gentle upper-mid push
         stackMakeupBody.setPeaking(sampleRate, 620.0f + 180.0f * mid, 0.62f, -0.6f + 4.6f * mid);
@@ -176,8 +192,15 @@ class Dr504Core
         speakerThump.setPeaking(sampleRate, 120.0f, 0.84f, 1.0f + 2.4f * bass);
         speakerLowMid.setPeaking(sampleRate, 420.0f + 90.0f * mid, 0.74f, 1.0f + 2.2f * mid);
         speakerBite.setPeaking(sampleRate, 2400.0f + 500.0f * treble, 0.78f, 2.0f + 1.8f * treble + 1.0f * pres - 0.5f * pushed);
-        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, 9.5f + 2.0f * treble + 2.0f * pres - 4.5f * pushed);
-        speakerLp.setLowPass(sampleRate, 16000.0f + 1900.0f * treble + 800.0f * pres - 3500.0f * pushed, 0.66f);
+        // a real Hiwatt 4x12 (Fane) ROLLS OFF the top (smooth) — no +9 dB fizz shelf
+        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, -3.5f + 2.0f * treble + 2.0f * pres - 2.0f * pushed);
+        speakerLp.setLowPass(sampleRate, 12000.0f + 1700.0f * treble + 800.0f * pres - 3000.0f * pushed, 0.66f);
+
+        // 2x EL34 (~50W) — slightly less headroom than the DR103 (a touch more sag/
+        // drive) but still the high-headroom Hiwatt; breaks up when the Master is up.
+        const float mPush = smoothstep(master);
+        power.set(sampleRate, 0.7f + 4.0f * mPush + 1.8f * pushed, -42.0f, 0.14f, 50.0f, 12000.0f);
+        power.out = 0.011f;
     }
 
 public:
@@ -188,10 +211,12 @@ public:
         toneStack.reset(); stackMakeupLow.reset(); stackMakeupBody.reset(); phaseLp.reset(); presenceShelf.reset();
         speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset(); speakerBite.reset(); speakerFizz.reset(); speakerLp.reset();
         dcBlock.reset(); sag = 0.0f;
+        toneStack.reset(); vBright.reset(); vNormal.reset(); vRecovery.reset(); power.reset();
+        setupTubes();
         updateFilters();
     }
 
-    void setSampleRate(float sr) { sampleRate = sr > 1000.0f ? sr : 48000.0f; toneStack.setSampleRate(sampleRate); reset(); }
+    void setSampleRate(float sr) { sampleRate = sr > 1000.0f ? sr : 48000.0f; reset(); }
 
     void setParam(int idx, float v)
     {
@@ -215,39 +240,30 @@ public:
 
     float process(float in)
     {
-        const float g = smoothstep(preDrive);
         const float pushed = smoothstepRange(0.28f, 0.88f, preDrive);
         const float mPush = smoothstep(master);
 
-        // Input pre-gain (2026-06): the VST chain's pre-amp input boost does NOT
-        // reach VST amp stages (it only drives the NAM path), so this amp ran on
-        // the raw, quiet guitar and stayed clean even at RS Gain 100. Feed the
-        // preamp a guitar-level push here so the BRILLIANT VOL sweep actually
-        // breaks up — gain ~44 already gets crunch, gain 100 is full distortion.
-        float x = inputHp.process(in * 3.2f);
+        float x = inputHp.process(in * 3.2f);  // VST input boost (engine input-drive does not reach VST amps)
         x = pickupLoad.process(x);
-        x = softClip(x * (1.03f + 0.06f * pushed)) * (0.97f - 0.03f * pushed);
+        x *= inScale;
 
-        // BRILLIANT channel (bright cap) + NORMAL channel — hotter than a stock
-        // Hiwatt so the in-game (quiet-input) tones reach their intended breakup.
+        // BRILLIANT channel (bright cap + body) + NORMAL channel — real ECC83 V1A/V1B.
+        // Gentle drive: the Hiwatt has huge headroom, so it stays clean until cranked.
         float bch = brightCapShelf.process(brightBody.process(x));
-        bch = asymTube(bch, 2.05f + 4.4f * brightVol + 2.3f * g, 0.010f + 0.012f * brightVol);
+        bch = vBright.process(bch * (0.6f + 4.0f * brightVol));
         float nch = normalBody.process(x);
-        nch = asymTube(nch, 1.30f + 3.4f * normalVol + 1.9f * g, 0.009f + 0.010f * normalVol);
+        nch = vNormal.process(nch * (0.5f + 3.0f * normalVol));
 
-        // jumpered mix — soften the channel-volume attenuation so low/mid Gain
-        // still drives the recovery stage (was brightVol*bch = collapsed at 44).
+        // jumpered mix
         float y = brightG * (0.34f + 0.66f * brightVol) * bch
                 + normalG * (0.30f + 0.62f * normalVol) * nch;
-        const float cleanLeak = 0.40f * (1.0f - smoothstepRange(0.30f, 0.85f, preDrive));
-        y = y * (1.0f - cleanLeak) + x * cleanLeak * (brightG * brightVol + normalG * normalVol * 0.5f);
 
         // recovery (ECC83) into the tone stack
         y = interstageHp.process(y);
-        y = asymTube(y, 1.30f + 2.7f * preDrive + 1.8f * pushed, -0.006f - 0.008f * preDrive);
+        y = vRecovery.process(y * (0.7f + 2.0f * preDrive));
         y = cathodeLp.process(y);
 
-        y = toneStack.process(y) * 1.75f;
+        y = toneStack.process(y) * toneMk;
         y = stackMakeupLow.process(y);
         y = stackMakeupBody.process(y);
         y = phaseLp.process(y);
@@ -255,16 +271,8 @@ public:
         // MASTER VOLUME into the power amp
         y *= 0.20f + 1.30f * master;
 
-        // 2x EL34 (~50W) — high headroom, stiff supply (little sag), late breakup.
-        const float env = std::fabs(y);
-        const float attack = 1.0f - std::exp(-1.0f / (0.0050f * sampleRate));
-        const float release = 1.0f - std::exp(-1.0f / (0.120f * sampleRate));
-        sag += (env - sag) * (env > sag ? attack : release);
-        const float sagDrop = 1.0f / (1.0f + sag * (0.22f + 0.55f * mPush));
-        const float powerDrive = (0.78f + 1.7f * mPush + 0.8f * pushed) * sagDrop;
-        y = asymTube(y, powerDrive, 0.005f + 0.010f * (treble - bass) + 0.008f * pres);
-        y = 0.90f * y + 0.10f * softClip(y * (1.4f + 1.0f * mPush));
-        y *= 0.98f - 0.06f * sag;
+        // 2x EL34 (~50W) — REAL pentode table + own sag/OT (drive set in updateFilters).
+        y = power.process(y);
 
         y = presenceShelf.process(y);
         y = dcBlock.process(y);
@@ -284,7 +292,7 @@ public:
             + 0.012f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.012f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.010f * std::fabs((pres - 0.5f) * 16.0f);
-        const float cleanMakeup = 1.0f + 5.5f * std::exp(-preDrive / 0.26f);
+        const float cleanMakeup = 1.0f + 2.0f * std::exp(-preDrive / 0.30f);
         const float level = (0.66f + 0.12f * (1.0f - preDrive)) * cleanMakeup /
             ((1.0f + 0.40f * mPush + 0.20f * pushed) * toneEnergy);
         return softClip(y * level) * 0.97f;
@@ -296,6 +304,8 @@ class Dr504Plugin : public Plugin
     Dr504Core left;
     Dr504Core right;
     float params[kParamCount];
+    rbshared::Oversampler4x osL, osR;
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
 
     void applyAll() { for (int i = 0; i < kParamCount; ++i) { left.setParam(i, params[i]); right.setParam(i, params[i]); } }
 
@@ -303,8 +313,8 @@ public:
     Dr504Plugin() : Plugin(kParamCount, 0, 0)
     {
         for (int i = 0; i < kParamCount; ++i) params[i] = kDr504Def[i];
-        left.setSampleRate((float)getSampleRate());
-        right.setSampleRate((float)getSampleRate());
+        left.setSampleRate(kOS * (float)getSampleRate());
+        right.setSampleRate(kOS * (float)getSampleRate());
         applyAll();
     }
 
@@ -339,8 +349,10 @@ protected:
 
     void sampleRateChanged(double newSampleRate) override
     {
-        left.setSampleRate((float)newSampleRate);
-        right.setSampleRate((float)newSampleRate);
+        left.setSampleRate(kOS * (float)newSampleRate);
+        right.setSampleRate(kOS * (float)newSampleRate);
+        osL.reset();
+        osR.reset();
         applyAll();
     }
 
@@ -352,8 +364,16 @@ protected:
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = rbAmpLvl(0.560f * left.process(inL[i]));
-            outR[i] = rbAmpLvl(0.560f * right.process(inR[i]));
+            float ubL[kOS], ubR[kOS];
+            osL.upsample(inL[i], ubL);
+            osR.upsample(inR[i], ubR);
+            for (int k = 0; k < kOS; ++k)
+            {
+                ubL[k] = rbAmpLvl(0.888f * left.process(ubL[k]));
+                ubR[k] = rbAmpLvl(0.888f * right.process(ubR[k]));
+            }
+            outL[i] = osL.downsample(ubL);
+            outR[i] = osR.downsample(ubR);
         }
     }
 

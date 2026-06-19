@@ -20,6 +20,7 @@
 #include "DistrhoPlugin.hpp"
 #include "TW40Params.h"
 #include "TW40Core.h"
+#include "../../_shared/oversampler.hpp"
 
 START_NAMESPACE_DISTRHO
 
@@ -33,6 +34,8 @@ class TW40Plugin : public Plugin
 {
     tw40::TW40Core core;
     float params[kParamCount];
+    rbshared::Oversampler4x os;                 // anti-alias around the nonlinear chain
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
 
     void applyAll()
     {
@@ -46,7 +49,7 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kTW40Def[i];
-        core.setSampleRate((float)getSampleRate());
+        core.setSampleRate(kOS * (float)getSampleRate());
         applyAll();
     }
 
@@ -85,7 +88,8 @@ protected:
 
     void sampleRateChanged(double newSampleRate) override
     {
-        core.setSampleRate((float)newSampleRate);
+        core.setSampleRate(kOS * (float)newSampleRate);
+        os.reset();
         applyAll();
     }
 
@@ -96,7 +100,10 @@ protected:
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            const float y = rbAmpLvl(0.600f * core.process(3.2f * in0[i]));
+            float ub[kOS];
+            os.upsample(3.2f * in0[i], ub);
+            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.586f * core.process(ub[k]));
+            const float y = os.downsample(ub);
             outL[i] = y;
             outR[i] = y;   // dual-mono: one core, same signal both sides = centered/balanced
         }

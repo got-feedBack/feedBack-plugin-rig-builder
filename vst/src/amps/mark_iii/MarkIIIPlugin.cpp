@@ -18,6 +18,8 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "MarkIIIParams.h"
+#include "../../_shared/tube_stage.hpp"   // real 12AX7 stages + 6L6 PP
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -138,15 +140,27 @@ class MarkIIICore
     float chan = 1.0f, drv = 0.5f, outM = 0.5f;
 
     Biquad inputHp, pickupLoad, brightShelf;
-    MarkToneStack toneStack;
+    rbtube::ToneStackYeh toneStack;     // real Mark TMB (double precision — stable at 192k)
     Biquad stackMakeupLow, interHp, cathodeLp;
     Biquad geq[5];
     Biquad phaseLp, presenceShelf;
     Biquad speakerHp, speakerThump, speakerLowMid, speakerBite, speakerFizz, speakerLp;
     DcBlock dcBlock;
+    // ── real circuit (Koren tube tables) replacing the tanh asymTube ──
+    rbtube::TubeStage   v1, vRhythm, vLeadA, vLeadB;   // 12AX7 stages
+    rbtube::PowerAmp6L6 power;                          // 6L6 Simul-Class power (~75W)
+    float inScale = 1.1f;
     float sag = 0.0f;
 
     static float eqDb(float v, float r) { return (clamp01(v) - 0.5f) * 2.0f * r; }
+
+    void setupTubes()
+    {
+        v1.set(sampleRate, 1, 250.0f, 40.0f, 22.0f, 1500.0f);      // V1 input stage
+        vRhythm.set(sampleRate, 1, 250.0f, 40.0f, 30.0f, 1500.0f); // rhythm recovery
+        vLeadA.set(sampleRate, 1, 250.0f, 40.0f, 35.0f, 1500.0f);  // lead cascade 1
+        vLeadB.set(sampleRate, 1, 250.0f, 40.0f, 55.0f, 1500.0f);  // lead cascade 2
+    }
 
     void updateFilters()
     {
@@ -162,7 +176,10 @@ class MarkIIICore
         // VOLUME pull-BRIGHT: a treble bypass cap across the volume pot.
         brightShelf.setHighShelf(sampleRate, 1700.0f, 0.72f, (bright >= 0.5f) ? 5.5f : 0.0f);
 
-        toneStack.update(treble, mid, bass);
+        // Mark Fender-derived stack, scooped 10K mid: Treble 250k/250pF, Bass 1M/22nF,
+        // Mid 10k/22nF, slope 100k (real R/C — same as the old MarkToneStack, now Yeh/double).
+        toneStack.setComponents(250e3, 1.0e6, 10e3, 100e3, 250e-12, 22e-9, 22e-9);
+        toneStack.update(sampleRate, treble, mid, bass);
         stackMakeupLow.setLowShelf(sampleRate, 120.0f + 30.0f * bass, 0.72f, eqDb(bass, 4.0f) - 1.0f * pushed);
         interHp.setHighPass(sampleRate, 150.0f + 150.0f * pushed, 0.70f);          // tighten between lead cascade stages
         cathodeLp.setLowPass(sampleRate, 9000.0f + 1400.0f * treble - 1500.0f * pushed, 0.64f);
@@ -181,8 +198,15 @@ class MarkIIICore
         speakerThump.setPeaking(sampleRate, 116.0f, 0.84f, 0.7f + 2.2f * bass);
         speakerLowMid.setPeaking(sampleRate, 360.0f + 90.0f * mid, 0.78f, 0.5f + 1.6f * mid - 0.6f * pushed);
         speakerBite.setPeaking(sampleRate, 2600.0f + 480.0f * treble, 0.76f, 2.3f + 2.0f * treble - 0.5f * pushed);
-        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, 9.5f + 2.0f * treble - 4.5f * pushed);
-        speakerLp.setLowPass(sampleRate, 14500.0f + 1900.0f * treble - 3500.0f * pushed, 0.66f);
+        // a real Mesa cab ROLLS OFF the top (no +9 dB fizz shelf -> that inflates crest
+        // without distorting); gentle HF cut + LP.
+        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, -3.0f + 2.0f * treble - 2.0f * pushed);
+        speakerLp.setLowPass(sampleRate, 11500.0f + 1700.0f * treble - 3000.0f * pushed, 0.66f);
+
+        // 6L6 Simul-Class power amp drive (active master + drive) + sag; not the main
+        // distortion (the lead cascade is) -> moderate.
+        power.set(sampleRate, 2.5f + 5.0f * mPush + 4.0f * pushed, -45.0f, 0.26f, 55.0f, 11000.0f);
+        power.out = 0.011f;
     }
 
 public:
@@ -194,10 +218,12 @@ public:
         phaseLp.reset(); presenceShelf.reset();
         speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset(); speakerBite.reset(); speakerFizz.reset(); speakerLp.reset();
         dcBlock.reset(); sag = 0.0f;
+        v1.reset(); vRhythm.reset(); vLeadA.reset(); vLeadB.reset(); power.reset();
+        setupTubes();
         updateFilters();
     }
 
-    void setSampleRate(float sr) { sampleRate = sr > 1000.0f ? sr : 48000.0f; toneStack.setSampleRate(sampleRate); reset(); }
+    void setSampleRate(float sr) { sampleRate = sr > 1000.0f ? sr : 48000.0f; reset(); }
 
     void setParam(int idx, float v)
     {
@@ -228,34 +254,26 @@ public:
 
     float process(float in)
     {
-        const float g = smoothstep(drv);
-        const float pushed = smoothstepRange(0.40f, 0.92f, drv);
         const float mPush = smoothstep(outM);
 
-        // Input pre-gain (2026-06): the VST chain's pre-amp input boost does NOT
-        // reach VST amp stages, so this amp ran on the raw, quiet guitar and the
-        // LEAD channel stayed too clean even at RS Gain 90. Feed the preamp a
-        // guitar-level push so the singing Boogie lead actually saturates.
+        // Input pre-gain: feed the preamp a guitar-level push (the host pre-amp boost
+        // does not reach VST amp stages) so the singing Boogie lead actually saturates.
         float x = inputHp.process(in * 3.2f);
         x = pickupLoad.process(x);
         x = brightShelf.process(x);
-        // V1 first gain stage (mild) -> the scooped tone stack (pre-distortion EQ)
-        x = asymTube(x, 1.05f + 0.6f * g, 0.008f);
+        // V1 first gain stage (real 12AX7, mild) -> the scooped tone stack (pre-dist EQ)
+        x = v1.process(x * inScale);
         float t = toneStack.process(x) * 2.0f;
         t = stackMakeupLow.process(t);
 
-        // RHYTHM voice: Volume sets the gain, one stage.
-        float rh = asymTube(t * (0.6f + 2.2f * volume), 1.1f + 1.5f * volume, 0.010f);
+        // RHYTHM voice: Volume sets the gain, one real 12AX7 stage.
+        float rh = vRhythm.process(t * (0.5f + 2.6f * volume));
         rh *= 0.72f + 1.20f * master;
 
-        // LEAD voice: cascaded gain (V3A/V3B) -> the singing Boogie lead.
-        // ~1.27x hotter cascade drive (2026-06): the Mark III lead channel was
-        // too clean at high LEAD DRIVE; this pushes both gain stages further into
-        // saturation for the singing/compressed Boogie lead. Loudness held flat
-        // by cleanMakeup (verified ~-8.4 dBFS at gain 90, no level blast).
-        float ld = asymTube(t, 1.40f + 5.4f * leadDrive + 2.9f * g, 0.012f + 0.014f * leadDrive);
+        // LEAD voice: cascaded gain (V3A/V3B, real 12AX7) -> the singing Boogie lead.
+        float ld = vLeadA.process(t * (0.40f + 6.5f * leadDrive));
         ld = interHp.process(ld);
-        ld = asymTube(ld, 1.15f + 6.1f * leadDrive + 3.3f * pushed, -0.008f - 0.012f * leadDrive);
+        ld = vLeadB.process(ld * (0.55f + 5.5f * leadDrive));
         ld = cathodeLp.process(ld);
         ld *= 0.45f + 1.0f * leadMaster;
 
@@ -267,16 +285,9 @@ public:
 
         y = phaseLp.process(y);
 
-        // 6L6/EL34 Simul-Class power amp (~75W) + sag, driven by the active master.
-        const float env = std::fabs(y);
-        const float attack = 1.0f - std::exp(-1.0f / (0.0060f * sampleRate));
-        const float release = 1.0f - std::exp(-1.0f / (0.140f * sampleRate));
-        sag += (env - sag) * (env > sag ? attack : release);
-        const float sagDrop = 1.0f / (1.0f + sag * (0.30f + 0.65f * mPush + 0.45f * pushed));
-        const float powerDrive = (0.85f + 1.55f * mPush + 1.30f * pushed) * sagDrop;
-        y = asymTube(y, powerDrive, 0.006f + 0.012f * (treble - bass));
-        y = 0.86f * y + 0.14f * softClip(y * (1.5f + 1.1f * pushed));
-        y *= 0.97f - 0.08f * sag;
+        // 6L6 Simul-Class power amp (~75W) — REAL pentode table + own sag/OT (drive set
+        // in updateFilters from the active master + drive).
+        y = power.process(y);
 
         y = presenceShelf.process(y);
         y = dcBlock.process(y);
@@ -295,9 +306,12 @@ public:
             + 0.011f * std::fabs((bass - 0.5f) * 15.0f)
             + 0.012f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.012f * std::fabs((treble - 0.5f) * 17.0f);
-        const float cleanMakeup = 1.0f + 7.0f * std::exp(-drv / 0.22f);
+        const float cleanMakeup = 1.0f + 2.5f * std::exp(-drv / 0.28f);
         const float level = 0.62f * cleanMakeup / ((1.0f + 0.45f * mPush) * toneEnergy);
-        return softClip(y * level) * 0.97f;
+        // loudness flattening vs LEAD DRIVE (clean post-output makeup; ~0 dB at drive 0.5)
+        float gcDb = 7.778f - 21.378f * leadDrive + 11.748f * leadDrive * leadDrive;
+        if (gcDb > 20.0f) gcDb = 20.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
+        return softClip(y * level) * 0.97f * std::pow(10.0f, 0.05f * gcDb);
     }
 };
 
@@ -306,6 +320,8 @@ class MarkIIIPlugin : public Plugin
     MarkIIICore left;
     MarkIIICore right;
     float params[kParamCount];
+    rbshared::Oversampler4x osL, osR;          // 2x anti-alias around the nonlinear chain
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
 
     void applyAll() { for (int i = 0; i < kParamCount; ++i) { left.setParam(i, params[i]); right.setParam(i, params[i]); } }
 
@@ -313,8 +329,8 @@ public:
     MarkIIIPlugin() : Plugin(kParamCount, 0, 0)
     {
         for (int i = 0; i < kParamCount; ++i) params[i] = kMarkIIIDef[i];
-        left.setSampleRate((float)getSampleRate());
-        right.setSampleRate((float)getSampleRate());
+        left.setSampleRate(kOS * (float)getSampleRate());
+        right.setSampleRate(kOS * (float)getSampleRate());
         applyAll();
     }
 
@@ -349,8 +365,10 @@ protected:
 
     void sampleRateChanged(double newSampleRate) override
     {
-        left.setSampleRate((float)newSampleRate);
-        right.setSampleRate((float)newSampleRate);
+        left.setSampleRate(kOS * (float)newSampleRate);
+        right.setSampleRate(kOS * (float)newSampleRate);
+        osL.reset();
+        osR.reset();
         applyAll();
     }
 
@@ -362,8 +380,16 @@ protected:
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = rbAmpLvl(0.560f * left.process(inL[i]));
-            outR[i] = rbAmpLvl(0.560f * right.process(inR[i]));
+            float ubL[kOS], ubR[kOS];
+            osL.upsample(inL[i], ubL);
+            osR.upsample(inR[i], ubR);
+            for (int k = 0; k < kOS; ++k)
+            {
+                ubL[k] = rbAmpLvl(1.325f * left.process(ubL[k]));
+                ubR[k] = rbAmpLvl(1.325f * right.process(ubR[k]));
+            }
+            outL[i] = osL.downsample(ubL);
+            outR[i] = osR.downsample(ubR);
         }
     }
 

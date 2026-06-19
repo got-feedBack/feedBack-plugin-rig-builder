@@ -90,6 +90,34 @@ public:
     float process(float x) { const float y = x - x1 + 0.995f * y1; x1 = x; y1 = y; return y; }
 };
 
+// Real anti-parallel silicon diode-pair clipper (Shockley model). A series R drives
+// a shunt pair of back-to-back diodes to ground; the node voltage v (= the output)
+// solves the node KCL by Newton (the physical-solve style, NOT a tanh fit):
+//     (vin - v)/R = 2*Is*sinh(v / (n*Vt))            [two diodes, anti-parallel]
+// Below ~0.45 V the diodes are off and v ≈ vin (the JC stays clean); above it they
+// clamp with the exponential knee — a sharper, buzzier, odd-harmonic solid-state edge.
+struct DiodeClipper
+{
+    static constexpr float Is  = 2.52e-9f;            // 1N4148-class saturation current
+    static constexpr float nVt = 1.752f * 0.02585f;   // emission coeff * thermal voltage (~45 mV)
+    float R = 2200.0f;
+    float v = 0.0f;                                   // warm-start from the previous sample
+    void reset() { v = 0.0f; }
+    inline float process(float vin)
+    {
+        for (int i = 0; i < 8; ++i)
+        {
+            const float e  = v / nVt;
+            const float sh = std::sinh(e), ch = std::cosh(e);
+            const float f  = (v - vin) / R + 2.0f * Is * sh;
+            const float fp = 1.0f / R + 2.0f * Is * ch / nVt;
+            v -= f / fp;
+            if (v > 1.0f) v = 1.0f; else if (v < -1.0f) v = -1.0f;   // bound -> sinh can't overflow
+        }
+        return v;
+    }
+};
+
 // --- spring reverb (3 allpass diffusers + 2 damped combs), band-limited ---
 class SpringReverb
 {
@@ -181,6 +209,7 @@ class JC120Core
     DcBlock dcBlock;
     SpringReverb spring;
     Chorus chorus;
+    DiodeClipper diode;             // real Shockley diode-pair distortion clipper
 
     void updateFilters()
     {
@@ -207,7 +236,7 @@ public:
     {
         inputHp.reset(); inputLp.reset(); distPre.reset(); distPost.reset();
         toneBass.reset(); toneMid.reset(); toneTreble.reset(); brightShelf.reset();
-        speakerLp.reset(); speakerThump.reset(); dcBlock.reset();
+        speakerLp.reset(); speakerThump.reset(); dcBlock.reset(); diode.reset();
         spring.clear(); chorus.clear();
         updateFilters();
     }
@@ -254,10 +283,12 @@ public:
         // rising = more drive into a gritty clip, blended back over the clean.
         const float clean = x;
         float d = distPre.process(x);
+        // Drive the signal up to diode-conduction voltage, then through the REAL
+        // Shockley diode-pair clipper (Newton-solved). Below threshold it passes
+        // clean; above, the diodes clamp with their exponential knee = the gritty,
+        // odd-harmonic solid-state JC edge (no tanh fit).
         const float drive = 1.0f + 34.0f * distortion;
-        d = softClip(d * drive);
-        // add a harder diode edge as it's pushed (gritty solid-state clip)
-        d = d * (1.0f - 0.60f * distortion) + std::tanh(d * 3.6f) * (0.60f * distortion);
+        d = diode.process(d * drive) * 1.9f;          // diodes clamp ~±0.5V -> makeup ~unity
         d = distPost.process(d);
         // clean->distorted blend with makeup so the distorted level ~tracks clean
         const float w = distortion;
@@ -289,7 +320,8 @@ public:
         // drive -> multitone RMS stays ~flat (~-14 dBFS) across the Distortion sweep.
         const float autoGain = std::exp(-3.5f * distortion + 1.1f * distortion * distortion);
         const float level = (3.42f * autoGain) / ((0.55f + 0.95f * volume) * toneEnergy);
-        y *= level;
+        // loudness flattening vs Distortion (clean makeup; ~0 dB at distortion 0.5)
+        y *= level * std::pow(10.0f, 0.05f * (-1.979f + 2.727f * distortion + 2.466f * distortion * distortion));
 
         // spring REVERB (parallel send/return)
         if (reverb > 0.0005f)
@@ -376,8 +408,8 @@ protected:
         {
             float oL, oR;
             core.process(3.2f * inL[i], 3.2f * inR[i], oL, oR);
-            outL[i] = rbAmpLvl(0.560f * oL);
-            outR[i] = rbAmpLvl(0.560f * oR);
+            outL[i] = rbAmpLvl(0.456f * oL);
+            outR[i] = rbAmpLvl(0.456f * oR);
         }
     }
 

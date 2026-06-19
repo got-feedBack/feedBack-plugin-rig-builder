@@ -30,6 +30,7 @@
  */
 
 #include "TW40Params.h"
+#include "../../_shared/tube_stage.hpp"   // real 12AY7/12AX7/6L6 circuit models
 #include <cmath>
 
 namespace tw40 {
@@ -325,6 +326,11 @@ class TW40Core
 
     float sag = 0.0f;
 
+    // ── REAL tube stages (Koren circuit models) replacing the tanh asymTube ──
+    rbtube::TubeStageAY7 brightTube, normalTube;  // 12AY7 input stages (per channel)
+    rbtube::TubeStage    recoveryTube;            // 12AX7 recovery into the FMV stack
+    rbtube::PowerAmp6L6  power;                    // 2x 5881/6L6 push-pull (~45W)
+
     static float eqDb(float normalized, float rangeDb)
     {
         return (clamp01(normalized) - 0.5f) * 2.0f * rangeDb;
@@ -341,6 +347,16 @@ class TW40Core
 
         const float g = smoothstep(effDrive);
         const float pushed = smoothstepRange(0.42f, 0.92f, effDrive);
+
+        // ── real 12AY7 / 12AX7 / 6L6 circuit stages (cathode-biased, self-bias solved) ──
+        brightTube.set(sampleRate, 1, 250.0f, 40.0f, 30.0f, 1500.0f);   // 12AY7 bright input
+        normalTube.set(sampleRate, 1, 250.0f, 40.0f, 30.0f, 1500.0f);   // 12AY7 normal input
+        recoveryTube.set(sampleRate, 1, 250.0f, 40.0f, 55.0f, 1500.0f); // 12AX7 recovery
+        // 2x 5881/6L6 push-pull, FIXED bias (cold class-AB ~-45V), GZ34 = moderate sag,
+        // NFB approximated by the presence shelf. Loud/tight with headroom (vs the 5E3).
+        power.set(sampleRate, 4.3f + 9.0f * effDrive + 14.0f * pushed, -45.0f, 0.25f, 45.0f, 11000.0f);
+        power.out = 0.010f;
+
         // The 100pF bright cap bleeds treble most at LOW Bright Volume; plus base
         // brightness from Treble/Presence.
         const float bright = clamp01(0.32f * treble + 0.22f * pres + 0.42f * (1.0f - brightVol));
@@ -403,6 +419,7 @@ public:
         speakerBite.reset(); speakerAir.reset(); speakerLp.reset();
         dcBlock.reset();
         sag = 0.0f;
+        brightTube.reset(); normalTube.reset(); recoveryTube.reset(); power.reset();
         updateFilters();
     }
 
@@ -445,22 +462,19 @@ public:
         x = pickupLoad.process(x);
         x = softClip(x * (1.04f + 0.08f * pushed)) * (0.96f - 0.04f * pushed);
 
-        // BRIGHT channel: bright cap + body, its own 12AY7 triode, then volume.
+        // BRIGHT channel: bright cap + body, its own REAL 12AY7, driven by Bright Vol.
         float bch = brightShelf.process(brightBody.process(x));
-        bch = asymTube(bch, 0.94f + 1.30f * effDrive + 1.05f * g, 0.012f + 0.016f * effDrive);
-        // NORMAL channel: darker body, its own triode, then volume.
+        bch = brightTube.process(bch * (1.8f + 4.6f * brightVol));
+        // NORMAL channel: darker body, its own REAL 12AY7, driven by Normal Vol.
         float nch = normalBody.process(x);
-        nch = asymTube(nch, 0.84f + 1.18f * effDrive + 0.92f * g, 0.010f + 0.014f * effDrive);
+        nch = normalTube.process(nch * (1.6f + 3.9f * normalVol));
 
         // Jumpered mix: each channel scaled by its Volume and gated by the cable.
         float y = brightG * brightVol * bch + normalG * normalVol * 0.92f * nch;
-        // A little clean leak at low drive (the tweed stays articulate when quiet).
-        const float cleanLeak = 0.34f * (1.0f - smoothstepRange(0.28f, 0.78f, effDrive));
-        y = y * (1.0f - cleanLeak) + x * cleanLeak * (brightG * brightVol + normalG * normalVol * 0.5f);
 
-        // 12AX7 recovery / cathode-follower into the FMV tone stack.
+        // 12AX7 recovery into the FMV tone stack (REAL).
         y = interstageHp.process(y);
-        y = asymTube(y, 0.80f + 1.05f * effDrive + 0.95f * pushed, -0.006f - 0.010f * effDrive);
+        y = recoveryTube.process(y * (1.0f + 2.2f * effDrive));
         y = cathodeFollowerLp.process(y);
 
         y = toneStack.process(y) * 1.70f;
@@ -468,18 +482,8 @@ public:
         y = stackMakeupBody.process(y);
         y = phaseLowPass.process(y);
 
-        // 2x 5881 push-pull + GZ34 sag (the GZ34 is fairly stiff -> moderate sag).
-        const float env = std::fabs(y);
-        const float attack = 1.0f - std::exp(-1.0f / (0.0060f * sampleRate));
-        const float release = 1.0f - std::exp(-1.0f / (0.150f * sampleRate));
-        sag += (env - sag) * (env > sag ? attack : release);
-        const float sagDrop = 1.0f / (1.0f + sag * (0.36f + 0.86f * effDrive + 0.50f * pushed));
-
-        const float powerDrive = (0.86f + 1.05f * effDrive + 1.05f * pushed) * sagDrop;
-        y = asymTube(y, powerDrive, 0.006f + 0.014f * (treble - bass) + 0.010f * pres);
-        y = 0.91f * y + 0.09f * softClip(y * (1.65f + 1.35f * pushed));
-        y *= 0.98f - 0.08f * sag;
-
+        // 2x 5881/6L6 push-pull (REAL: pentode table + own sag/OT) + presence (NFB-approx).
+        y = power.process(y);
         y = presenceShelf.process(y);
         y = dcBlock.process(y);
 
@@ -502,7 +506,10 @@ public:
         const float cleanMakeup = 1.0f + 3.0f * std::exp(-effDrive / 0.30f);
         const float level = (0.72f + 0.14f * (1.0f - effDrive)) * cleanMakeup /
             ((1.0f + 0.28f * effDrive + 0.32f * pushed) * toneEnergy);
-        return softClip(y * level) * 0.97f;
+        // loudness flattening vs the Bright Volume/gain (clean post-output makeup; ~0 dB at 0.5)
+        float gcDb = 6.477f - 17.069f * brightVol + 8.125f * brightVol * brightVol;
+        if (gcDb > 20.0f) gcDb = 20.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
+        return softClip(y * level) * 0.97f * std::pow(10.0f, 0.05f * gcDb);
     }
 };
 

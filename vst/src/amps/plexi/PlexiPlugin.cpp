@@ -21,6 +21,8 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "PlexiParams.h"
+#include "../../_shared/tube_stage.hpp"   // real 12AX7 + EL34 circuit models
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -326,6 +328,11 @@ class PlexiCore
 
     float sag = 0.0f;
 
+    // ── REAL tube stages (Koren circuit models) replacing the tanh asymTube ──
+    rbtube::TubeStage brightTube, normalTube;   // 12AX7 input stages (Marshall = all 12AX7)
+    rbtube::TubeStage recoveryTube;             // 12AX7 recovery/grind into the tone stack
+    rbtube::PowerAmpEL34 power;                  // 4x EL34 push-pull (~100W)
+
     static float eqDb(float normalized, float rangeDb)
     {
         return (clamp01(normalized) - 0.5f) * 2.0f * rangeDb;
@@ -341,10 +348,19 @@ class PlexiCore
         effDrive = clamp01(brightG * loud1 + normalG * loud2 * 0.80f);
 
         const float g = smoothstep(effDrive);
-        const float pushed = smoothstepRange(0.40f, 0.92f, effDrive);
+        const float pushed = smoothstepRange(0.25f, 0.68f, effDrive);
         // The 5000pF bright cap bleeds a LOT of treble across Loudness I, most at
         // low settings; plus base sparkle from Treble/Presence (Marshall is bright).
         const float bright = clamp01(0.34f * treble + 0.20f * pres + 0.55f * (1.0f - loud1));
+
+        // ── real 12AX7 / EL34 circuit stages (cathode-biased, self-bias solved) ──
+        brightTube.set(sampleRate, 1, 250.0f, 40.0f, 25.0f, 1500.0f);   // 12AX7 High-Treble
+        normalTube.set(sampleRate, 1, 250.0f, 40.0f, 25.0f, 1500.0f);   // 12AX7 Normal
+        recoveryTube.set(sampleRate, 1, 250.0f, 40.0f, 55.0f, 1500.0f); // 12AX7 recovery/grind
+        // 4x EL34 push-pull, FIXED bias (~-40V), NFB approximated by presence. EL34 break
+        // up earlier + compress more than 6L6 -> the aggressive Marshall midrange grind.
+        power.set(sampleRate, 9.0f + 10.0f * effDrive + 9.0f * pushed, -40.0f, 0.30f, 50.0f, 11000.0f);
+        power.out = 0.010f;
 
         inputHp.setHighPass(sampleRate, 44.0f + 56.0f * g + 30.0f * pushed, 0.70f);
         pickupLoad.setLowPass(sampleRate, 13200.0f - 1700.0f * pushed + 900.0f * treble, 0.64f);
@@ -396,6 +412,7 @@ public:
         speakerBite.reset(); speakerFizzNotch.reset(); speakerLp.reset();
         dcBlock.reset();
         sag = 0.0f;
+        brightTube.reset(); normalTube.reset(); recoveryTube.reset(); power.reset();
         updateFilters();
     }
 
@@ -432,28 +449,25 @@ public:
     float process(float in)
     {
         const float g = smoothstep(effDrive);
-        const float pushed = smoothstepRange(0.40f, 0.92f, effDrive);
+        const float pushed = smoothstepRange(0.25f, 0.68f, effDrive);
 
         float x = inputHp.process(in);
         x = pickupLoad.process(x);
         x = softClip(x * (1.05f + 0.10f * pushed)) * (0.95f - 0.04f * pushed);
 
-        // HIGH TREBLE (bright) channel: 5000pF bright cap + body, its own 12AX7.
+        // HIGH TREBLE (bright) channel: 5000pF bright cap + body, REAL 12AX7.
         float bch = brightCapShelf.process(brightBody.process(x));
-        bch = asymTube(bch, 1.35f + 5.40f * effDrive + 3.6f * g, 0.014f + 0.018f * effDrive);
-        // NORMAL channel: darker, its own triode.
+        bch = brightTube.process(bch * (5.0f + 3.5f * loud1));
+        // NORMAL channel: darker, REAL 12AX7.
         float nch = normalBody.process(x);
-        nch = asymTube(nch, 1.15f + 4.4f * effDrive + 2.8f * g, 0.011f + 0.015f * effDrive);
+        nch = normalTube.process(nch * (4.0f + 3.0f * loud2));
 
         // Jumpered mix: each channel scaled by its Loudness pot, gated by the cable.
         float y = brightG * loud1 * bch + normalG * loud2 * 0.92f * nch;
-        // A little clean leak at low drive (the plexi stays articulate when quiet).
-        const float cleanLeak = 0.30f * (1.0f - smoothstepRange(0.26f, 0.74f, effDrive));
-        y = y * (1.0f - cleanLeak) + x * cleanLeak * (brightG * loud1 + normalG * loud2 * 0.5f);
 
-        // 12AX7 recovery / cathode follower into the tone stack — the grind stage.
+        // 12AX7 recovery / cathode follower into the tone stack — the grind stage (REAL).
         y = interstageHp.process(y);
-        y = asymTube(y, 1.15f + 3.2f * effDrive + 2.2f * pushed, -0.007f - 0.012f * effDrive);
+        y = recoveryTube.process(y * (3.0f + 2.2f * effDrive));
         y = cathodeFollowerLp.process(y);
 
         y = toneStack.process(y) * 1.70f;
@@ -461,20 +475,8 @@ public:
         y = stackMakeupBody.process(y);
         y = phaseLowPass.process(y);
 
-        // 4x EL34 push-pull (~100W) — EL34s break up earlier and compress more
-        // than the Bassman's 6L6/5881, with aggressive midrange grind.
-        const float env = std::fabs(y);
-        const float attack = 1.0f - std::exp(-1.0f / (0.0055f * sampleRate));
-        const float release = 1.0f - std::exp(-1.0f / (0.130f * sampleRate));
-        sag += (env - sag) * (env > sag ? attack : release);
-        const float sagDrop = 1.0f / (1.0f + sag * (0.40f + 0.95f * effDrive + 0.55f * pushed));
-
-        const float powerDrive = (1.55f + 3.40f * effDrive + 2.6f * pushed) * sagDrop;
-        y = asymTube(y, powerDrive, 0.008f + 0.016f * (treble - bass) + 0.012f * pres);
-        const float clipMix = 0.18f + 0.35f * pushed;
-        y = (1.0f - clipMix) * y + clipMix * softClip(y * (1.80f + 1.60f * pushed));
-        y *= 0.97f - 0.09f * sag;
-
+        // 4x EL34 push-pull (~100W) — REAL pentode table + own sag/OT + presence (NFB-approx).
+        y = power.process(y);
         y = presenceShelf.process(y);
         y = dcBlock.process(y);
 
@@ -494,7 +496,7 @@ public:
             + 0.012f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.012f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.010f * std::fabs((pres - 0.5f) * 16.0f);
-        const float cleanMakeup = 1.0f + 12.0f * std::exp(-effDrive / 0.185f);
+        const float cleanMakeup = 1.0f + 1.2f * std::exp(-effDrive / 0.40f);
         const float level = (0.585f + 0.15f * (1.0f - effDrive)) * cleanMakeup /
             ((1.0f + 0.30f * effDrive + 0.16f * pushed) * toneEnergy);
         // Final output clip: drive it harder as the amp is cranked so the cranked
@@ -512,6 +514,8 @@ class PlexiPlugin : public Plugin
     PlexiCore left;
     PlexiCore right;
     float params[kParamCount];
+    rbshared::Oversampler4x osL, osR;            // anti-alias around the nonlinear chain
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
 
     void applyAll()
     {
@@ -528,8 +532,8 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kPlexiDef[i];
-        left.setSampleRate((float)getSampleRate());
-        right.setSampleRate((float)getSampleRate());
+        left.setSampleRate(kOS * (float)getSampleRate());
+        right.setSampleRate(kOS * (float)getSampleRate());
         applyAll();
     }
 
@@ -569,8 +573,9 @@ protected:
 
     void sampleRateChanged(double newSampleRate) override
     {
-        left.setSampleRate((float)newSampleRate);
-        right.setSampleRate((float)newSampleRate);
+        left.setSampleRate(kOS * (float)newSampleRate);
+        right.setSampleRate(kOS * (float)newSampleRate);
+        osL.reset(); osR.reset();
         applyAll();
     }
 
@@ -582,8 +587,13 @@ protected:
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = rbAmpLvl(0.550f * left.process(3.2f * inL[i]));
-            outR[i] = rbAmpLvl(0.550f * right.process(3.2f * inR[i]));
+            float ub[kOS];
+            osL.upsample(3.2f * inL[i], ub);
+            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.158f * left.process(ub[k]));
+            outL[i] = osL.downsample(ub);
+            osR.upsample(3.2f * inR[i], ub);
+            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.158f * right.process(ub[k]));
+            outR[i] = osR.downsample(ub);
         }
     }
 
