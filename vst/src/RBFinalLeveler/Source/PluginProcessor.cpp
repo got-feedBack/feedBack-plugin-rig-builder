@@ -136,8 +136,15 @@ public:
         // below) until the detector is trustworthy, then fade in over ~20 ms at
         // the already-correct level. Net: a brief soft attack on the very first
         // note instead of a blast. (Per fresh plugin instance = per song load.)
-        const int kWarmupHold  = int(0.018 * sr);            // engage sooner after a load (was 45 ms)
-        const int kWarmupFade  = std::max(1, int(0.010 * sr)); // (was 20 ms)
+        // Hold MUTED long enough for the 15 ms loudness detector to actually
+        // settle (~3-4 taus) before the AGC snaps — otherwise it engages on an
+        // unsettled (too-low) reading and BLASTS then drops on song/tone load.
+        // 18 ms (1.2 taus) was too short and reintroduced the blast; 55 ms lands
+        // on an accurate first reading → clean soft attack, the whole load muted.
+        // NB: this is the LOAD warm-up only; the mid-song AGC speed (attack/
+        // release/urgency below) is unchanged — switching tones stays snappy.
+        const int kWarmupHold  = int(0.055 * sr);
+        const int kWarmupFade  = std::max(1, int(0.022 * sr));
         const int kWarmupTotal = kWarmupHold + kWarmupFade;
         if (hasSignal && warmupSamples < kWarmupTotal)
             warmupSamples += numSamples;
@@ -288,8 +295,14 @@ private:
     void designKWeighting(double fs)
     {
         // Stage 1 — high-shelf pre-filter.
+        // BASS-FAITHFUL TWEAK (was the standard BS.1770 +4 dB shelf): reduced to
+        // +1.5 dB so the loudness measure depends much less on brightness. With
+        // the full +4 dB, two bass tones through differently-voiced cabs measured
+        // differently (the brighter one read louder → got boosted less → its bass
+        // ended up quieter), so bass tones normalized to INCONSISTENT perceived
+        // loudness. A flatter measure levels them by their (bass-dominated) energy.
         {
-            const double f0 = 1681.974450955533, G = 3.999843853973347, Q = 0.7071752369554196;
+            const double f0 = 1681.974450955533, G = 1.5, Q = 0.7071752369554196;
             const double K = std::tan(juce::MathConstants<double>::pi * f0 / fs);
             const double Vh = std::pow(10.0, G / 20.0), Vb = std::pow(Vh, 0.4996667741545416);
             const double a0 = 1.0 + K / Q + K * K;
@@ -302,8 +315,11 @@ private:
             kPre[0] = b; kPre[1] = b;
         }
         // Stage 2 — RLB high-pass (numerator 1, -2, 1).
+        // Corner lowered 38 → 22 Hz so the measure captures the bass fundamentals
+        // (low E ≈ 41 Hz, low B ≈ 31 Hz) instead of attenuating them — another
+        // source of bass-tone loudness inconsistency. Still cleans sub-22 Hz rumble.
         {
-            const double f0 = 38.13547087602444, Q = 0.5003270373238773;
+            const double f0 = 22.0, Q = 0.5003270373238773;
             const double K = std::tan(juce::MathConstants<double>::pi * f0 / fs);
             const double a0 = 1.0 + K / Q + K * K;
             Biquad b;

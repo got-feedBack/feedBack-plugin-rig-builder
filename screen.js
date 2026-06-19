@@ -2916,7 +2916,9 @@ const RbMegaChain = (function () {
             await _applyActiveTone(tone.tone_key);
             const slots = Array.isArray(tone.slots) ? tone.slots : [];
             console.log(`[rig_builder mega-chain] switch → "${tone.tone_key}" (${slots.length} slots)`);
-        }, 200);
+        }, 350);   // was 200ms (5×/s). Song tone-changes are seconds apart, so 350ms
+                   // is still imperceptible but ~halves the per-frame host allocation
+                   // (getToneChanges) churn during gameplay → less GC-pause stutter.
     }
 
     function _stopPolling() {
@@ -3830,8 +3832,17 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
     } catch (_) {}
     const draw = () => {
         const model = rbCanvasParamModel(piece);
+        // If there's no live param model (the engine slot didn't resolve, so
+        // _vst_param_meta is empty — common for the amp), the model values come
+        // back empty and the canvas would draw the spec DEFAULTS. Fall back to the
+        // saved thumbnail values (env.logical / name-keyed) — the SAME source the
+        // room thumbnail renders correctly from — so the editor opens at the tone.
+        let drawValues = model.values;
+        if (!drawValues || !Object.keys(drawValues).length) {
+            try { drawValues = rbCanvasThumbValues(piece) || {}; } catch (_) { drawValues = {}; }
+        }
         window.RBPedalCanvas.attach(canvas, stem, {
-            values: model.values,
+            values: drawValues,
             params: model.logicalParams,
             interactive: true,
             onChange: (logicalId, val) => {
@@ -3868,7 +3879,9 @@ async function rbStudioCloseFocus() {
     // the very end, and rebuilding the whole room is what snapped its size.
     const piece = (rbStudioCurrentChain())[idx];
     if (kind === 'amp') {
-        const face = document.querySelector('#rb-studio-room .rb-amp-stack.rb-amp-focused .rb-amp-face')
+        const stack = document.querySelector('#rb-studio-room .rb-amp-stack.rb-amp-focused')
+                   || document.querySelector(`#rb-studio-room .rb-amp-stack[data-amp-idx="${idx}"]`);
+        const face = (stack && stack.querySelector('.rb-amp-face'))
                   || document.querySelector('#rb-studio-room .rb-amp-face');
         if (piece && face) {
             const img = rbStudioPedalImg(piece);
@@ -3902,6 +3915,25 @@ async function rbStudioCloseFocus() {
     // Pedals: the floor board was hidden during focus and its thumbnails are
     // stale, so repaint the room once the return settles so edits show.
     if (kind === 'pedal') setTimeout(() => { try { rbRenderStudioRoom(); } catch (_) {} }, 420);
+    // Amp: we DON'T rebuild the room (keeps the smooth dolly-back), but the face
+    // img was stamped BEFORE the quick-save re-keyed the params, so re-stamp the
+    // amp face from the now-saved values once the return settles — otherwise the
+    // photo stayed on the old/default knobs until you re-entered + exited.
+    if (kind === 'amp') setTimeout(() => {
+        try {
+            const p2 = (rbStudioCurrentChain())[idx];
+            // Target THIS amp's stack by its chain index — querying the bare
+            // `.rb-amp-face` grabbed the FIRST amp, so editing amp 2 stamped its
+            // photo onto amp 1 in a parallel rig.
+            const stack2 = document.querySelector(`#rb-studio-room .rb-amp-stack[data-amp-idx="${idx}"]`);
+            const face2 = (stack2 && stack2.querySelector('.rb-amp-face'))
+                       || document.querySelector('#rb-studio-room .rb-amp-stack.rb-amp-focused .rb-amp-face');
+            if (p2 && face2) {
+                const img2 = rbStudioPedalImg(p2);
+                if (img2) face2.innerHTML = `<img src="${img2}" alt="${rbEsc(p2.real_name || p2.type || 'Amp')}">`;
+            }
+        } catch (_) {}
+    }, 560);
 }
 
 // Persist a focused piece's moved knobs from the values we already track on
@@ -4236,13 +4268,27 @@ async function rbStudioLoadFocusVst(idx, faceEl, growMs) {
             rbState._vstEditorSlot = slotId;
             rbState._vstEditorInChain = true;
             piece._vst_slot_id = slotId;
-            try { piece._vst_param_meta = await api.getParameters(slotId); }
-            catch (_) { piece._vst_param_meta = piece._vst_param_meta || []; }
+            // Fetch the param meta ONLY when missing. Re-fetching on every open
+            // re-derived the real-id keying from a fresh engine read; if that
+            // disagreed with how _vst_params was keyed when edited, the override
+            // missed and the editor drew at defaults on RE-ENTRY (while the exit
+            // thumbnail, built from the session's stable meta, looked correct).
+            if (!((piece._vst_param_meta || []).length)) {
+                try { piece._vst_param_meta = await api.getParameters(slotId); }
+                catch (_) { piece._vst_param_meta = piece._vst_param_meta || []; }
+            }
             piece._vst_params = piece._vst_params || {};
+            // The tone's SAVED knob values are the source of truth — seed from
+            // them first so the editor opens at the tone, not the engine default.
+            rbSeedParamsFromSavedState(piece);
+            // Then fill ONLY still-missing params from the engine read (params the
+            // tone never saved). Conditional: a default engine read-back (the amp
+            // slot reads back at defaults after the editor teardown) must not wipe
+            // saved values — that persisted defaults on the next close.
             for (const p of (piece._vst_param_meta || [])) {
                 const id = p.id ?? p.paramId ?? p.index;
                 const v = p.value ?? p.current;
-                if (id != null && typeof v === 'number') piece._vst_params[id] = v;
+                if (id != null && typeof v === 'number' && piece._vst_params[id] == null) piece._vst_params[id] = v;
             }
         } else {
             // NOT in the live chain (just-added gear, or the monitor isn't
@@ -4486,7 +4532,14 @@ function rbStudioRenderSongBar() {
     const bar = document.getElementById('rb-song-tonebar');
     if (!bar) return;
     const st = rbState.songTones;
-    if (!st || !Array.isArray(st.tones) || !st.tones.length) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
+    // The tonebar sits over the top of the stage; flag the wrap so the floating
+    // Advanced button drops below it (otherwise the bar covers it) — see CSS.
+    const wrap = document.getElementById('rb-stage-wrap');
+    if (!st || !Array.isArray(st.tones) || !st.tones.length) {
+        bar.classList.add('hidden'); bar.innerHTML = '';
+        if (wrap) wrap.classList.remove('rb-songbar-on');
+        return;
+    }
     const v = rbState.studioView || {};
     const meta = rbState.currentSongMeta || {};
     const songLabel = (meta.artist && meta.title) ? `${meta.artist} - ${meta.title}`
@@ -4501,6 +4554,7 @@ function rbStudioRenderSongBar() {
     html += `<button class="rb-song-tonebar-x" onclick="rbStudioCloseSong()" title="Close this song">✕</button>`;
     bar.innerHTML = html;
     bar.classList.remove('hidden');
+    if (wrap) wrap.classList.add('rb-songbar-on');
 }
 window.rbStudioCloseSong = function rbStudioCloseSong() {
     rbState.songTones = null;
@@ -6276,6 +6330,42 @@ function rbStampVstState(piece, opaque) {
     // param model on a fresh load). Only present for in-app canvas edits.
     if (piece._vst_logical && Object.keys(piece._vst_logical).length) env.logical = piece._vst_logical;
     piece._vst_state = JSON.stringify(env);
+}
+
+// Seed a piece's live _vst_params from its SAVED envelope params (real-id keyed,
+// stamped by rbStampVstState). This is the tone's actual knob values and must
+// win over the engine's getParameters read-back — the amp slot reads back at
+// DEFAULTS once the editor (re)maps it, which was wiping the saved values and
+// showing/persisting defaults. Only fills keys we don't already track in-session
+// (never clobbers a live edit). Returns the count seeded.
+function rbSeedParamsFromSavedState(piece) {
+    if (!piece) return 0;
+    let env = null;
+    try { env = JSON.parse(rbEffVstState(piece) || '{}'); } catch (_) { env = null; }
+    if (!env || typeof env !== 'object') return 0;
+    piece._vst_params = piece._vst_params || {};
+    let n = 0;
+    // PRIMARY: logical-idx-keyed values — this is what the room thumbnail renders
+    // from on a fresh load (proven reliable), so it's the source of truth. Map
+    // each logical index to its real param id via the param-meta order.
+    const logical = env.logical;
+    if (logical && typeof logical === 'object' && Array.isArray(piece._vst_param_meta) && piece._vst_param_meta.length) {
+        const filtered = rbFilterVstParams(piece._vst_param_meta);
+        filtered.forEach((p, i) => {
+            const realId = p.id ?? p.paramId ?? p.index ?? i;
+            const v = logical[i];
+            if (piece._vst_params[realId] == null && typeof v === 'number') { piece._vst_params[realId] = v; n++; }
+        });
+    }
+    // FALLBACK: real-id-keyed params envelope (covers gear edited via the native
+    // param list rather than the canvas, where there's no `logical` map).
+    const saved = env.params;
+    if (saved && typeof saved === 'object') {
+        for (const k of Object.keys(saved)) {
+            if (piece._vst_params[k] == null && typeof saved[k] === 'number') { piece._vst_params[k] = saved[k]; n++; }
+        }
+    }
+    return n;
 }
 
 // Pull the opaque blob out of a saved {params, opaque} envelope (or null).
@@ -12503,9 +12593,17 @@ async function rbLoadAdvanced() {
         if (!rbStudioCurrentChain().length && typeof rbLoadDefaultToneEditor === 'function') await rbLoadDefaultToneEditor();
     } catch (_) {}
     const adv = rbAdvState();
+    // The in-memory graph is tied to ONE tone (storage key = song+toneIdx /
+    // saved name / default). If the Studio view switched tones since we last
+    // seeded, the cached nodes belong to the previous tone — drop them so we
+    // re-seed from the now-selected tone (otherwise Advanced kept showing the
+    // first/previous tone instead of the one you picked).
+    const key = rbAdvStorageKey();
+    if (adv.seededKey !== key) { adv.seeded = false; adv.nodes = []; adv.edges = []; }
     // Prefer the saved graph (keeps a parallel rig across restarts); fall back to
     // a fresh serial graph if there's nothing saved or the chain changed.
     if (!adv.seeded || !adv.nodes.length) { if (!rbAdvRestore()) rbAdvResetToChain(); }
+    adv.seededKey = key;
     rbAdvPaletteRender();
     rbAdvRenderCanvas();
     rbAdvBindCanvasOnce();
@@ -12795,13 +12893,56 @@ async function rbAdvEditNode(id) {
         return;
     }
     // Map the piece to its loaded engine slot so knob drags change live audio.
+    // The canvas needs _vst_param_meta to map logical→real param ids (without it,
+    // rbBuildCanvasModel can't apply the _vst_params overrides and onChange would
+    // key by logical id instead of the real id — making edits invisible across the
+    // two editors). So ensure the meta is present, but DON'T clobber the piece's
+    // already-edited _vst_params with engine reads (the amp's live slot can read
+    // back at defaults, which wiped the saved knob values + lagged the image).
     const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
-    try { piece._vst_slot_id = await rbStudioChainSlotIdForPiece(api, n.pieceIdx); } catch (_) { piece._vst_slot_id = null; }
+    try {
+        const slotId = await rbStudioChainSlotIdForPiece(api, n.pieceIdx);
+        piece._vst_slot_id = slotId;
+        // Fetch meta only when missing — the Studio focus editor already populated
+        // it on the shared piece object after any prior edit.
+        if (slotId != null && api && !((piece._vst_param_meta || []).length)) {
+            try { piece._vst_param_meta = await api.getParameters(slotId); }
+            catch (_) { piece._vst_param_meta = piece._vst_param_meta || []; }
+        }
+        piece._vst_param_meta = piece._vst_param_meta || [];
+        piece._vst_params = piece._vst_params || {};
+        // SAVED tone values first (source of truth), then fill still-missing
+        // params from the engine read — same precedence as the Studio focus.
+        rbSeedParamsFromSavedState(piece);
+        for (const p of (piece._vst_param_meta || [])) {
+            const id = p.id ?? p.paramId ?? p.index;
+            const v = p.value ?? p.current;
+            if (id != null && typeof v === 'number' && piece._vst_params[id] == null) piece._vst_params[id] = v;
+        }
+    } catch (_) { piece._vst_slot_id = null; }
     panel.innerHTML = `<div class="rb-adv-editor-bar">
             <span class="rb-adv-editor-name">${rbEsc(piece.real_name || piece.type || 'Gear')}</span>
             <button class="rb-adv-editor-close" onclick="rbAdvCloseEditor()">✕</button>
         </div>
         <div class="rb-adv-editor-face rb-amp-face"></div>`;
+    // Size the card to the gear's natural canvas width — but the canvas height is
+    // derived from its width × aspect (RBPedalCanvas.attach), so a TALL pedal
+    // (e.g. the GE-8 graphic EQ, vertical sliders) blows past the screen when
+    // sized by width alone (that was the "giant"). Cap the width so the resulting
+    // height fits the viewport, then cap to 94vw.
+    let natW = (window.RBPedalCanvas && window.RBPedalCanvas.has(stem)) ? rbCanvasDisplayWidth(stem) : 560;
+    try {
+        const sp = window.RBPedalCanvas && window.RBPedalCanvas.specs && window.RBPedalCanvas.specs[stem];
+        if (sp && sp.w && sp.h) {
+            const aspect = sp.w / sp.h;                 // <1 = taller than wide
+            const maxH = (window.innerHeight || 800) * 0.62;   // leave room for bar + margins
+            if (natW / aspect > maxH) natW = Math.round(maxH * aspect);
+        }
+    } catch (_) {}
+    // Never exceed the original card width — wide gear (amps) must NOT balloon past
+    // it (that made amps open giant); only let narrow/tall gear shrink to fit.
+    natW = Math.min(natW, 592);
+    panel.style.width = `min(${Math.round(natW) + 28}px, 94vw)`;
     host.appendChild(panel);
     rbState._advEditPieceIdx = n.pieceIdx;
     rbStudioMakeFaceInteractive(n.pieceIdx, panel.querySelector('.rb-adv-editor-face'));
