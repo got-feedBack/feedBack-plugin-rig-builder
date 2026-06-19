@@ -74,26 +74,73 @@ Editor de grafo (palette de gear a la izquierda + canvas con nodos y cables). An
 
 ---
 
-## ✅ FIX — "arañazos"/dropouts aleatorios = denormales en el audio engine
-**Causa real (NO los amps — ésos son fieles al esquemático, NO se tocan):** el **audio engine** (`slopsmith-desktop/src/audio`) **no tenía protección de denormales** (`ScopedNoDenormals`/FTZ) en ningún lado del RT path. La cadena es full IIR (NAM, VSTs de amp/EQ/comp, colas de IR); su estado decae a ~0 tras cada nota → cae en **denormales** (floats 10-100× más lentos) → **picos de CPU esporádicos → underrun → arañazo**. Aleatorio, sin patrón fijo, **peor con buffer grande** (más samples en estado denormal por callback), independiente de canción/tono. Firma clásica.
-**Fix (commit `8b175c9` en `slopsmith-desktop`, branch `feat/parallel-signal-graph`):** `const juce::ScopedNoDenormals noDenormals;` al tope de `AudioEngine::audioDeviceIOCallbackWithContext` (cubre todo el path) y de `SignalChain::process`. Setea FTZ/DAZ scoped; los denormales son sub −300 dBFS → inaudible. Sin cambio de API/tono, solo CPU. Compila (`npm run build:audio` → `build/Release/slopsmith_audio.node`). **OJO:** la app v0.3.0 corre OTRA versión del engine — aplicar el mismo one-liner a la rama que buildea esa app.
+# 🎚️ TUTORIAL AUDIO ENGINE — para el compa (cambios en el motor)
 
-**Lo del plugin JS ya estaba optimizado** (poll mega-chain 200→350ms); en idle 0 long-tasks. El hitch era del engine.
+> 3 fixes de audio que ya están **aplicados y probados en mi máquina** pero viven en el repo del **engine** (`slopsmith-desktop`) y en la app deployada — hay que portarlos a la rama oficial del engine que buildea la app. Suena todo parejo y sin arañazos. **Regla de oro: NO se toca el DSP de los amps** — son fieles al esquemático; estos fixes son 100% del motor / loudness, nada de amps.
+>
+> **Repo del engine:** `~/Downloads/slopsmith_release_v0/slopsmith-desktop`, branch `feat/parallel-signal-graph`, remote `github.com/slopsmith/slopsmith-desktop`.
+> **Build:** `npm run build:audio` → `build/Release/slopsmith_audio.node`. Gotcha: line-endings CRLF rompen los scripts → `chmod +x scripts/*.sh` si falla el build.
+> **OJO:** la app v0.3.0 **deployada corre OTRO build** del engine (reporta 0.2.9). Para probar in-vivo yo hago swap del `.node` + `slopsmith-vst-host` ad-hoc-firmados dentro del `.app`; lo correcto es que el compa aplique los diffs a la rama oficial y re-buildee la app.
 
-### ⛔ NO tocar: el DSP de los amp VST
-Son fieles a los esquemáticos. Aunque el modelo de válvula (Newton/sample) es caro, **no se optimiza tocando los amps**. (Una vía válida a futuro, SOLO con validación A/B y aprobación: Jacobiano analítico del Koren — numéricamente exacto, ~3× menos transcendentales — pero por ahora se deja como está.)
+## Fix 1 — Denormales (los "arañazos" / dropouts aleatorios)
+**Causa:** el RT path del engine **no tenía `ScopedNoDenormals`/FTZ en ningún lado**. La cadena es full-IIR (NAM, VSTs de amp/EQ/comp, colas de IR); tras cada nota el estado de los filtros decae hacia ~0 y cae en **denormales** (floats 10-100× más lentos) → **picos de CPU esporádicos → underrun → arañazo + el juego salta frames**. Firma clásica: aleatorio, sin patrón fijo, **peor con buffer grande** (320→450 lo empeoró), independiente de canción/tono, pasa hasta con un solo amp.
 
-## (histórico) idea descartada — optimización del DSP de amps
-**Síntoma:** cada cierto rato (~1/min, aleatorio) un stall de **50-79ms** en el main thread → el juego salta frames + el audio rasca una vez. Medido con un `PerformanceObserver({entryTypes:['longtask']})`: ~8 long-tasks de 50-79ms en ~9 min, sin patrón fijo, pase lo que pase (canción o improv). En **idle el plugin está limpio** (0 long-tasks/10s) → **NO es el plugin JS**, es **CPU del DSP de la cadena saturando el sistema** (por eso subir el buffer 320→450 lo empeoró: ráfagas de audio más largas compiten peor por CPU).
+**Fix — `const juce::ScopedNoDenormals noDenormals;` (FTZ/DAZ scoped) en los 3 puntos del RT path.** Inaudible (los denormales están sub −300 dBFS); solo baja CPU, **0 cambio de tono/API**.
 
-**Hog identificado:** el modelo de válvula nodal de los amp VST (`amps/sampleg_sbtcl/SvtPlugin.cpp` `Triode::process`, mismo patrón en FK800/Sharke/etc.). Por **cada sample**: hasta **12 iteraciones Newton**, c/u con un solve MNA 6×6 (`Mna`, que es RT-safe / sin heap — verificado) + **3 llamadas a `Ip()`**, y `Ip()` = `log`+`exp`+`sqrt`+`pow` (≈36 transcendentales + 12 solves/sample × 48k × 2ch). Es CPU pura, muy cara.
+1. **`src/audio/AudioEngine.cpp`** — al tope de `audioDeviceIOCallbackWithContext` (apenas abre la llave, antes del `callbacksInFlight[0].fetch_add(...)`). Cubre TODO el callback. *(commit `8b175c9`)*
+2. **`src/audio/SignalChain.cpp`** — al tope de `SignalChain::process` (antes del `ScopedTryLock`). Cubre serial y graph mode. *(commit `8b175c9`)*
+3. **`src/vst-host/main.cpp`** — en el worker de audio (~línea 677), envolviendo el `processBlock`. **Éste es el clave para los amps del usuario**: los VST3 corren **fuera de proceso** (sandbox), así que el FTZ del main process NO los alcanza. *(commit `c640c9e`)*
+   ```cpp
+   if (auto* p = st.plugin.get())
+   {
+       const juce::ScopedNoDenormals noDenormals;
+       p->processBlock(buffer, midi);
+   }
+   ```
 
-**Optimizaciones propuestas (CPU↓, bajo riesgo de tono):**
-1. **Jacobiano analítico** del Koren en el Newton → de 3 `Ip()` a 1 por iteración (~2-3× menos transcendentales; es *más* preciso, no menos). Cuidado: derivar bien dIp/dvgk y dIp/dvpk o el Newton mal-converge.
-2. **`std::pow(e1, 1.4)` → aprox rápida** (pow es el más caro).
-3. **Cap de iteraciones** 12→~8 (el early-break `err<1e-6` ya sale antes en la mayoría).
-4. (opcional) lookup/aprox de `log`/`exp` en `Ip`.
-Combinadas: ~2× la etapa de válvula con tono casi idéntico. **Hacerlo en el template y validar tono A/B.** El plugin JS ya se optimizó lo que correspondía (poll mega-chain 200→350ms).
+## Fix 2 — Normalizador de canciones (todas al mismo volumen, sin perder dinámica)
+**Objetivo:** que **toda canción suene al mismo loudness** (≈ −12 LUFS para `.psarc`; −15 dBFS RMS para stems), **pre el fader de Song del mixer** (así bajar ese fader igual baja). Es un **normalizador** (un gain por canción, medido), **NO un compresor** — preserva el rango dinámico. El usuario fue explícito en esto.
+
+**Hay DOS caminos de backing y cada uno necesita su normalizador:**
+
+**(a) `.psarc` / stem-less → nativo `backingTransport`.** Nuevo archivo **`src/audio/BackingLeveler.h`** (AGC K-weighted BS.1770 lento + brickwall limiter −1 dBFS, RT-safe, sin alloc en `process()`). Integración en `AudioEngine.cpp`:
+   - `#include "BackingLeveler.h"` (tras `AudioSanitize.h`).
+   - En `AudioEngine.h`: miembros `BackingLeveler backingLeveler; double backingLevelerSr = 0.0;` (junto a `backingVolume`).
+   - En `renderBackingBlockLocked`, **antes** del `return outSamples;` (y antes de que se aplique `bVol`/`backingVolume`):
+     ```cpp
+     if (outSamples > 0 && sr > 0.0)
+     {
+         if (sr != backingLevelerSr) { backingLeveler.prepare(sr); backingLevelerSr = sr; }
+         backingLeveler.process(backingBuffer, outSamples, -12.0f);
+     }
+     ```
+   *(commit `5e76bdc`. `sr` = `currentSampleRate.load()`.)*
+
+**(b) `.sloppak` (stems) → plugin Web Audio en el RENDERER, NO el transport nativo.** El `BackingLeveler` nativo **no los toca**. Hay que normalizar en el **plugin stems** (`plugins/stems/screen.js` del host — ⚠️ **no está en ningún repo que yo tenga local**, lo edité in-place en la app deployada; el compa tiene que encontrar el source de ese plugin). Cambios:
+   - Nuevo `let normGain = null;` (junto a `masterGain`).
+   - Tras crear `masterGain`: `normGain = ctx.createGain(); normGain.gain.value = 1.0; normGain.connect(masterGain);`
+   - Cada stem rutea a `normGain` en vez de `masterGain` (`gain.connect(normGain)`).
+   - Tras decodificar los buffers: medir **RMS mono-sum con stride** (`STRIDE=32`) a los gains iniciales → `gainDb = clamp(TARGET_DBFS(−15) − rmsDb, −12, 12)` → `normGain.gain.value = 10^(gainDb/20)`; **gated** si `rmsDb > −60` (no levantar silencio).
+   - Teardown: `if (normGain){ normGain.disconnect(); normGain = null; }` antes de limpiar `masterGain`.
+   - Subir version del `plugin.json` para cache-bust (lo dejé en 0.6.1).
+
+   **Cadena:** `stems → normGain → masterGain(fader Song) → destino`. El normalizador queda **pre-fader** ✔.
+   **Caveat conocido:** es RMS, no LUFS full; y mutear stems individuales baja el RMS percibido de esa canción. Para el caso de uso (parear canciones) anduvo perfecto ("quedaron parejas").
+
+## Fix 3 — RB Final Leveler "bass-faithful" (tonos de bajo parejos)
+El leveler **del tono** (no de la canción) usaba K-weighting estándar BS.1770 que **sub-pondera los graves** → los tonos de bajo medían "más bajo" de lo que se sienten y quedaban disparejos. Se aplanó el K-weighting para que el bajo cuente.
+
+- Archivo: **`plugins/rig_builder/vst/src/RBFinalLeveler/Source/PluginProcessor.cpp`**, función `designKWeighting`:
+  - High-shelf: `G = 3.999843853973347 → 1.5` (de +4 dB a +1.5 dB).
+  - RLB high-pass: `f0 = 38.13547087602444 → 22.0` Hz.
+  *(commit `fc4ade3`)*
+- Y warmup del detector para que **NO** haya blast-then-drop al cargar el tono: `kWarmupHold 0.018→0.055s`, `kWarmupFade 0.010→0.022s`. *(commit `512f59d`)*
+- Build: `cmake --build build --config Release` en `vst/src/RBFinalLeveler/`, copiar el artefacto a `vst/racks/RB Final Leveler.vst3/Contents/MacOS/`, `codesign --force --sign -`.
+
+> Nota: el `BackingLeveler.h` (Fix 2a) **mantiene K-weighting estándar a propósito** — es música full-mix, ahí el estándar es correcto. Solo el leveler **de tono** (bajo solo) se aplana.
+
+## ⛔ NO tocar: el DSP de los amp VST
+Son fieles a los esquemáticos. El modelo de válvula (Newton/sample, MNA 6×6, `Ip()` con log/exp/sqrt/pow) es caro, **pero no se optimiza tocando los amps**. Los arañazos eran denormales del motor (Fix 1), no los amps. Una vía a futuro SOLO con validación A/B y aprobación sería Jacobiano analítico del Koren (numéricamente exacto, ~3× menos transcendentales) — por ahora se deja como está. El plugin JS ya se optimizó lo que correspondía (poll mega-chain `setInterval` 200→350 ms, commit `4211a98`); en idle 0 long-tasks.
 
 ## Cómo probar
 1. Reiniciá la app (carga `v2.6.28`).

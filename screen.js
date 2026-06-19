@@ -4488,7 +4488,14 @@ function rbStudioRenderSongBar() {
     const bar = document.getElementById('rb-song-tonebar');
     if (!bar) return;
     const st = rbState.songTones;
-    if (!st || !Array.isArray(st.tones) || !st.tones.length) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
+    // The tonebar sits over the top of the stage; flag the wrap so the floating
+    // Advanced button drops below it (otherwise the bar covers it) — see CSS.
+    const wrap = document.getElementById('rb-stage-wrap');
+    if (!st || !Array.isArray(st.tones) || !st.tones.length) {
+        bar.classList.add('hidden'); bar.innerHTML = '';
+        if (wrap) wrap.classList.remove('rb-songbar-on');
+        return;
+    }
     const v = rbState.studioView || {};
     const meta = rbState.currentSongMeta || {};
     const songLabel = (meta.artist && meta.title) ? `${meta.artist} - ${meta.title}`
@@ -4503,6 +4510,7 @@ function rbStudioRenderSongBar() {
     html += `<button class="rb-song-tonebar-x" onclick="rbStudioCloseSong()" title="Close this song">✕</button>`;
     bar.innerHTML = html;
     bar.classList.remove('hidden');
+    if (wrap) wrap.classList.add('rb-songbar-on');
 }
 window.rbStudioCloseSong = function rbStudioCloseSong() {
     rbState.songTones = null;
@@ -12490,9 +12498,17 @@ async function rbLoadAdvanced() {
         if (!rbStudioCurrentChain().length && typeof rbLoadDefaultToneEditor === 'function') await rbLoadDefaultToneEditor();
     } catch (_) {}
     const adv = rbAdvState();
+    // The in-memory graph is tied to ONE tone (storage key = song+toneIdx /
+    // saved name / default). If the Studio view switched tones since we last
+    // seeded, the cached nodes belong to the previous tone — drop them so we
+    // re-seed from the now-selected tone (otherwise Advanced kept showing the
+    // first/previous tone instead of the one you picked).
+    const key = rbAdvStorageKey();
+    if (adv.seededKey !== key) { adv.seeded = false; adv.nodes = []; adv.edges = []; }
     // Prefer the saved graph (keeps a parallel rig across restarts); fall back to
     // a fresh serial graph if there's nothing saved or the chain changed.
     if (!adv.seeded || !adv.nodes.length) { if (!rbAdvRestore()) rbAdvResetToChain(); }
+    adv.seededKey = key;
     rbAdvPaletteRender();
     rbAdvRenderCanvas();
     rbAdvBindCanvasOnce();

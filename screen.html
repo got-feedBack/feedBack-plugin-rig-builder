@@ -59,6 +59,9 @@
         box-shadow:0 6px 18px rgba(0,0,0,.4); backdrop-filter:blur(6px);
         transition:background .15s, color .15s, transform .12s; }
     .rb-studio-adv-btn:hover{ background:rgba(48,72,118,.8); color:#fff; transform:translateY(-1px); }
+    /* When a song's tonebar is shown it covers the top strip — drop the Advanced
+       button below it so it stays reachable while a song is loaded. */
+    #rb-stage-wrap.rb-songbar-on .rb-studio-adv-btn{ top:58px; }
     .rb-topbar-back:hover{ color:#fff; background:rgba(255,255,255,.12); }
     .rb-songbtn{ margin-left:auto; flex:0 0 auto; border:1px solid rgba(120,170,240,.3); border-radius:9px;
         padding:7px 13px; font-size:13px; color:#dbe4f2; background:rgba(120,160,220,.16); cursor:pointer;
@@ -837,7 +840,7 @@
 
     <!-- Floating translucent-blue top bar (immersive shell) -->
     <div class="rb-topbar">
-        <button onclick="showScreen('home')" class="rb-topbar-back" title="Back">‹</button>
+        <!-- No in-plugin back button: the host's left nav already returns home. -->
         <button data-rb-tab="studio" onclick="rbShowTab('studio')" class="rb-tab">Studio</button>
         <button data-rb-tab="gear" onclick="rbShowTab('gear')" class="rb-tab">Gear</button>
         <button data-rb-tab="master" onclick="rbShowTab('master')" class="rb-tab">Master chain</button>
