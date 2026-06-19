@@ -767,6 +767,8 @@
     .rb-adv-node:active{ cursor:grabbing; }
     /* bypassed gear = passthrough; greyed out (saturation 0) */
     .rb-adv-node-bypassed{ filter:saturate(0) brightness(.88); opacity:.78; }
+    /* graph-inactive: not on a complete Input→Output path → makes no sound */
+    .rb-adv-node-inactive{ opacity:.4; border-style:dashed; }
     /* armed for delete while dragged off the canvas */
     .rb-adv-node-trashing{ opacity:.45; filter:grayscale(.7) brightness(.8);
         border-color:rgba(220,80,80,.8) !important; box-shadow:0 0 0 2px rgba(220,80,80,.45), 0 12px 30px rgba(0,0,0,.5) !important; }

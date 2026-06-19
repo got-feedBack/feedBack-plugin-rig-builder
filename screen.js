@@ -344,7 +344,9 @@ function rbDriveForChainInput(opts) {
 }
 
 function rbApplyChainInputDrive(opts) {
-    const drive = rbDriveForChainInput(opts);
+    // While the node graph is disconnected (Input/Output unwired) the chain is
+    // silenced at the source — keep it silent even if a scheduled re-poll fires.
+    const drive = rbState._advSilenced ? 0 : rbDriveForChainInput(opts);
     // Re-poll guard: the song-playback callers fire this ~600 ms after
     // the bundle's chain load — but `highway.getStringCount()` may not
     // have absorbed the song_info WS message yet (it defaults to 6
@@ -4657,6 +4659,7 @@ async function rbStudioFinishMonitorLoad(api, chain) {
     try { await rbReapplyVstParamsToChain(api, chain); } catch (_) {}
     try { await rbApplyChainInputDrive({ chain }); } catch (_) {}
     try { await rbStudioApplyStereoToEngine(); } catch (_) {}   // re-apply pan/branch after a chain (re)load
+    try { await rbAdvApplyConnectivity(); } catch (_) {}        // bypass graph-disconnected gear
     try { await rbStartFinalChainNormalizer(chain); } catch (_) {}
     if (api.startAudio) await api.startAudio().catch(() => {});
     try { await rbSignalChainLoaded(); } catch (_) {}   // un-mute AFTER the re-apply
@@ -12601,6 +12604,7 @@ async function rbLoadAdvanced() {
     rbAdvRenderCanvas();
     rbAdvBindCanvasOnce();
     rbStudioApplyStereoToEngine().catch(() => {});   // push pan/branch to the live engine
+    rbAdvApplyConnectivity();                         // mute if Input/Output is unwired
 }
 
 // Build the initial graph from the current chain: a serial line
@@ -12743,7 +12747,7 @@ function rbAdvNodeHtml(n) {
     const thumb = n.img
         ? `<div class="rb-adv-node-thumb"><img src="${rbEsc(n.img)}" alt="" onerror="this.style.display='none'"></div>`
         : `<div class="rb-adv-node-thumb"></div>`;
-    return `<div class="rb-adv-node ${n.bypassed ? 'rb-adv-node-bypassed' : ''}" data-adv-node="${n.id}"
+    return `<div class="rb-adv-node ${n.bypassed ? 'rb-adv-node-bypassed' : ''} ${n._inactive ? 'rb-adv-node-inactive' : ''}" data-adv-node="${n.id}"
                  style="left:${n.x}px;top:${n.y}px">
                 <button class="rb-adv-node-del" data-adv-del="${n.id}" title="Remove from chain">✕</button>
                 <button class="rb-adv-node-edit" data-adv-edit="${n.id}" title="Edit knobs">🎛</button>
@@ -12860,6 +12864,12 @@ function rbAdvAttachNodeHandlers() {
     // Ctrl-click on macOS also fires contextmenu — suppress it over a node so the
     // split-output toggle doesn't pop the OS menu.
     layer.addEventListener('contextmenu', ev => { if (ev.target.closest('.rb-adv-node')) ev.preventDefault(); });
+    // Track which gear node the pointer is over, for the C/L/R pan hotkeys.
+    layer.addEventListener('mouseover', ev => {
+        const nodeEl = ev.target.closest('.rb-adv-node');
+        rbState._advHoverNodeId = (nodeEl && nodeEl.dataset.advNode) ? +nodeEl.dataset.advNode : null;
+    });
+    layer.addEventListener('mouseleave', () => { rbState._advHoverNodeId = null; });
     layer.addEventListener('click', ev => {
         const del = ev.target.closest('.rb-adv-node-del');
         if (del) { ev.preventDefault(); ev.stopPropagation(); rbAdvDeleteNode(+del.dataset.advDel); return; }
@@ -13187,6 +13197,9 @@ function rbAdvConnect(fromId, toId, fromPort) {
     if (adv.edges.some(e => e.from === fromId && e.to === toId && (e.fromPort || 'out') === fromPort)) return;
     if (rbAdvReaches(toId, fromId)) { rbAdvRenderCables(); return; }      // would cycle
     adv.edges.push({ from: fromId, to: toId, gain: 1.0, fromPort });
+    // An L/R output port selects WHICH channel of the stereo effect feeds the path
+    // (the signal/content, via branchSrc) — it does NOT move pan. Pan stays an
+    // independent "where it sits" control.
     rbAdvRenderCanvas();
     rbAdvPersist();
     rbAdvApplyTopologyToChain();
@@ -13198,10 +13211,40 @@ function rbAdvConnect(fromId, toId, fromPort) {
 // AMP becomes a parallel rig: it appears as the 2nd/3rd/4th amp in the room
 // corners. NOTE: on the stock engine the extra amp plays in SERIES; true
 // parallel MIX needs the DAG engine ([[project-node-editor-parallel]], deferred).
+// Set a gear node's pan programmatically (from the C/L/R hotkeys): move the
+// slider, update the label, persist + push to the engine via rbAdvOnPanInput.
+function rbAdvKeyPan(id, pan) {
+    const slider = document.querySelector(`.rb-adv-pan-slider[data-adv-pan="${id}"]`);
+    if (slider) slider.value = String(pan);
+    rbAdvOnPanInput(id, pan);
+}
+
 function rbAdvBindCanvasOnce() {
     const canvas = document.getElementById('rb-adv-canvas');
     if (!canvas || canvas._advBound) return;
     canvas._advBound = true;
+    // C / L / R hotkeys: with the pointer over a gear node, snap its pan to
+    // centre / hard-left / hard-right. Bound once on the document.
+    if (!rbState._advKeyBound) {
+        rbState._advKeyBound = true;
+        document.addEventListener('keydown', ev => {
+            const panel = document.getElementById('rb-tab-advanced');
+            if (!panel || panel.classList.contains('hidden')) return;     // only in Advanced
+            if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+            const tag = (ev.target && ev.target.tagName) || '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA') return;            // don't hijack typing
+            const id = rbState._advHoverNodeId;
+            if (id == null) return;
+            const k = (ev.key || '').toLowerCase();
+            const pan = k === 'c' ? 0 : k === 'l' ? -1 : k === 'r' ? 1 : null;
+            if (pan === null) return;
+            const adv = rbAdvState();
+            const node = adv.nodes.find(n => n.id === id && n.kind === 'gear');
+            if (!node) return;
+            ev.preventDefault();
+            rbAdvKeyPan(id, pan);
+        });
+    }
     // Zoom ONLY on a pinch gesture (macOS delivers it as wheel + ctrlKey). A
     // plain 2-finger swipe (no ctrlKey) is left alone so the canvas pans/scrolls
     // natively. The +/- buttons remain for explicit zoom.
@@ -13284,6 +13327,11 @@ async function rbAdvMaterializeGear(node) {
         if (v.source === 'default') { if (rbState._defaultToneActive) await rbReloadDefaultTone(); }
         else if (typeof rbStudioLoadMonitor === 'function') await rbStudioLoadMonitor();
     } catch (_) {}
+    // A freshly-dropped node has no cables yet → it's graph-inactive and must be
+    // bypassed (otherwise its effect plays even though it isn't wired in). The
+    // default-tone reload path doesn't run rbStudioFinishMonitorLoad, so apply
+    // connectivity explicitly here, after the chain is (re)loaded.
+    try { await rbAdvApplyConnectivity(); } catch (_) {}
 }
 
 // Stereo pan label updated live as a slider moves. Targeted single-slot push so
@@ -13331,8 +13379,10 @@ async function rbStudioApplyStereoToEngine() {
     try { ampIdxs = (rbStudioGroupDefault().amp || []).map(e => e.idx); } catch (_) { ampIdxs = []; }
     const branchOfIdx = new Map();
     if (ampIdxs.length >= 2) ampIdxs.forEach((idx, k) => branchOfIdx.set(idx, k + 1));
-    // St-2: a branch fed by a stereo-out gear's L/R port reads only that channel.
-    // Map each fed piece → 1 (L) / 2 (R) from the graph's split-output edges.
+    // St-2 read-channel: a branch fed by a stereo-out gear's L/R port reads only
+    // that channel of the split (for a true stereo source). This does NOT touch
+    // pan — wiring an L/R port sets the gear's pan ONCE on connect (rbAdvConnect),
+    // so the manual pan slider stays free afterwards (no continuous override).
     const srcByIdx = new Map();
     const adv = rbState._adv;
     if (adv && Array.isArray(adv.nodes) && Array.isArray(adv.edges)) {
@@ -13343,7 +13393,7 @@ async function rbStudioApplyStereoToEngine() {
             const from = nodeById.get(e.from);
             const to = nodeById.get(e.to);
             if (!from || !from.stereoOut || !to) continue;
-            if (typeof to.pieceIdx === 'number' && to.pieceIdx >= 0)
+            if (to.kind === 'gear' && typeof to.pieceIdx === 'number' && to.pieceIdx >= 0)
                 srcByIdx.set(to.pieceIdx, port === 'L' ? 1 : 2);
         }
     }
@@ -13357,9 +13407,60 @@ async function rbStudioApplyStereoToEngine() {
     }
 }
 
+// Make the node GRAPH actually gate the audio:
+//   • a gear NOT on a complete Input → … → gear → … → Output path is bypassed
+//     (so a pedal you dropped but never wired, or anything past a pulled cable,
+//      makes no sound), and
+//   • if there's no complete Input → Output path at all, the whole chain is muted
+//     (pulling the Input or Output cable silences it).
+// A normal serial chain reaches Output through every node, so nothing changes
+// there. Engine bypass = the user's own bypass OR graph-inactive; the user's
+// _bypassed flag is left intact so reconnecting restores it.
+async function rbAdvApplyConnectivity() {
+    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    if (!audio) return;
+    const adv = rbState._adv;
+    if (!adv || !Array.isArray(adv.nodes) || !adv.nodes.length) return;
+    const input = adv.nodes.find(n => n.kind === 'input');
+    const output = adv.nodes.find(n => n.kind === 'output');
+    if (!input || !output) { console.info('[CONN-DBG] no terminals', { nodes: adv.nodes.length }); return; }
+    const fullyConnected = rbAdvReaches(input.id, output.id);
+    rbState._advDisconnected = !fullyConnected;
+    // No complete Input→Output path → silence the chain at the SOURCE (the engine's
+    // monitor-mute only silences an EMPTY chain, not a loaded-but-bypassed one).
+    // Setting input drive to 0 kills the guitar signal before the chain; restore
+    // the normal drive when it's whole again.
+    if (!fullyConnected) {
+        rbState._advSilenced = true;
+        try { if (typeof audio.setGain === 'function') audio.setGain('input', 0); } catch (_) {}
+    } else if (rbState._advSilenced) {
+        rbState._advSilenced = false;
+        try { rbApplyChainInputDrive({}); } catch (_) {}
+    }
+    if (typeof audio.setBypass !== 'function') return;
+    const chain = rbStudioCurrentChain();
+    let visualChanged = false;
+    for (const n of adv.nodes) {
+        if (n.kind !== 'gear' || typeof n.pieceIdx !== 'number' || n.pieceIdx < 0) continue;
+        const active = rbAdvReaches(input.id, n.id) && rbAdvReaches(n.id, output.id);
+        const piece = chain[n.pieceIdx];
+        const wantBypass = !active || !!(piece && piece._bypassed);
+        let slotId = null;
+        try { slotId = await rbStudioChainSlotIdForPiece(audio, n.pieceIdx); } catch (_) {}
+        if (slotId != null) { try { audio.setBypass(slotId, wantBypass); } catch (_) {} }
+        // Grey the node when it's graph-inactive (distinct from a user bypass).
+        if (!!n._inactive !== !active) { n._inactive = !active; visualChanged = true; }
+    }
+    if (visualChanged) { try { rbAdvRenderCanvas(); } catch (_) {} }
+}
+
 // Graph-level sync entry point (called after edge/topology changes): re-derives
-// + pushes the whole stereo routing from the chain.
-function rbAdvSyncAudio() { rbStudioApplyStereoToEngine().catch(() => {}); }
+// + pushes the whole stereo routing from the chain, and mutes if Input/Output is
+// disconnected.
+function rbAdvSyncAudio() {
+    rbStudioApplyStereoToEngine().catch(() => {});
+    rbAdvApplyConnectivity();
+}
 
 window.rbLoadAdvanced = rbLoadAdvanced;
 window.rbAdvOnPanInput = rbAdvOnPanInput;
