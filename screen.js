@@ -3879,7 +3879,9 @@ async function rbStudioCloseFocus() {
     // the very end, and rebuilding the whole room is what snapped its size.
     const piece = (rbStudioCurrentChain())[idx];
     if (kind === 'amp') {
-        const face = document.querySelector('#rb-studio-room .rb-amp-stack.rb-amp-focused .rb-amp-face')
+        const stack = document.querySelector('#rb-studio-room .rb-amp-stack.rb-amp-focused')
+                   || document.querySelector(`#rb-studio-room .rb-amp-stack[data-amp-idx="${idx}"]`);
+        const face = (stack && stack.querySelector('.rb-amp-face'))
                   || document.querySelector('#rb-studio-room .rb-amp-face');
         if (piece && face) {
             const img = rbStudioPedalImg(piece);
@@ -3920,8 +3922,12 @@ async function rbStudioCloseFocus() {
     if (kind === 'amp') setTimeout(() => {
         try {
             const p2 = (rbStudioCurrentChain())[idx];
-            const face2 = document.querySelector('#rb-studio-room .rb-amp-stack .rb-amp-face')
-                       || document.querySelector('#rb-studio-room .rb-amp-face');
+            // Target THIS amp's stack by its chain index — querying the bare
+            // `.rb-amp-face` grabbed the FIRST amp, so editing amp 2 stamped its
+            // photo onto amp 1 in a parallel rig.
+            const stack2 = document.querySelector(`#rb-studio-room .rb-amp-stack[data-amp-idx="${idx}"]`);
+            const face2 = (stack2 && stack2.querySelector('.rb-amp-face'))
+                       || document.querySelector('#rb-studio-room .rb-amp-stack.rb-amp-focused .rb-amp-face');
             if (p2 && face2) {
                 const img2 = rbStudioPedalImg(p2);
                 if (img2) face2.innerHTML = `<img src="${img2}" alt="${rbEsc(p2.real_name || p2.type || 'Amp')}">`;
