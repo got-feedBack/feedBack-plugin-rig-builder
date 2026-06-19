@@ -12510,6 +12510,7 @@ function rbAdvPersist() {
             id: n.id, kind: n.kind, pieceIdx: (typeof n.pieceIdx === 'number' ? n.pieceIdx : -1),
             kindLabel: n.kindLabel || null, label: n.label || null, x: n.x, y: n.y,
             pan: (typeof n.pan === 'number' ? n.pan : 0),   // stereo pan (St-1)
+            stereoOut: !!n.stereoOut,                       // split L/R outputs (St-2)
         }));
         localStorage.setItem(rbAdvStorageKey(), JSON.stringify({ nodes, edges: adv.edges }));
     } catch (_) {}
@@ -12539,7 +12540,7 @@ function rbAdvRestore() {
                 id: n.id, kind: 'gear', pieceIdx: n.pieceIdx, kindLabel: n.kindLabel,
                 label: p.real_name || p.type || 'Gear',
                 img: rbStudioPedalImg(p) || null, bypassed: !!p._bypassed,
-                x: n.x, y: n.y, pan,
+                x: n.x, y: n.y, pan, stereoOut: !!n.stereoOut,
             });
         } else {
             // Always use the fresh terminal label (ignore any cached one, e.g. an
@@ -12551,7 +12552,7 @@ function rbAdvRestore() {
     const adv = rbAdvState();
     adv.nodes = nodes;
     adv.edges = (saved.edges || []).filter(e => ids.has(e.from) && ids.has(e.to))
-        .map(e => ({ from: e.from, to: e.to, gain: (typeof e.gain === 'number' ? e.gain : 1.0) }));
+        .map(e => ({ from: e.from, to: e.to, gain: (typeof e.gain === 'number' ? e.gain : 1.0), fromPort: e.fromPort || 'out' }));
     // If a pedal's saved wiring (pre/post the amp) disagrees with its CURRENT
     // chain slot — e.g. the user flipped it pre↔post in the main UI — the cached
     // graph is stale; bail so rbLoadAdvanced reseeds the graph from the chain and
@@ -12750,8 +12751,11 @@ function rbAdvNodeHtml(n) {
                 <div class="rb-adv-node-label">${rbEsc(n.label)}</div>
                 <div class="rb-adv-node-kind">${rbEsc(n.kindLabel || 'gear')}</div>
                 ${rbAdvPanHtml(n)}
-                <span class="rb-adv-jack rb-adv-jack-in" data-adv-jack="${n.id}" data-adv-side="in"></span>
-                <span class="rb-adv-jack rb-adv-jack-out" data-adv-jack="${n.id}" data-adv-side="out"></span>
+                <span class="rb-adv-jack rb-adv-jack-in" data-adv-jack="${n.id}" data-adv-side="in" data-adv-port="in"></span>
+                ${n.stereoOut
+                    ? `<span class="rb-adv-jack rb-adv-jack-out rb-adv-jack-l" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="L" title="Left output"></span>
+                       <span class="rb-adv-jack rb-adv-jack-out rb-adv-jack-r" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="R" title="Right output"></span>`
+                    : `<span class="rb-adv-jack rb-adv-jack-out" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="out"></span>`}
             </div>`;
 }
 
@@ -12795,16 +12799,22 @@ function rbAdvRenderCables(tempPath) {
         const fn = adv.nodes.find(n => n.id === e.from), tn = adv.nodes.find(n => n.id === e.to);
         const fEl = layer.querySelector(`[data-adv-node="${e.from}"]`), tEl = layer.querySelector(`[data-adv-node="${e.to}"]`);
         if (!fn || !tn) return;
-        const x1 = fn.x + ((fEl && fEl.offsetWidth) || dimW(fn)), y1 = fn.y + dimH(fn, fEl) / 2;
+        const fH = dimH(fn, fEl);
+        // Output anchor follows the port: a stereo-out node has L (upper) and R
+        // (lower) jacks; everything else exits at the vertical centre.
+        const port = e.fromPort || 'out';
+        const oy = (fn.stereoOut && port === 'L') ? 0.32 : (fn.stereoOut && port === 'R') ? 0.68 : 0.5;
+        const x1 = fn.x + ((fEl && fEl.offsetWidth) || dimW(fn)), y1 = fn.y + fH * oy;
         const x2 = tn.x, y2 = tn.y + dimH(tn, tEl) / 2;
         const dx = Math.max(40, Math.abs(x2 - x1) * 0.5);
         const d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
         // Each edge: a wide invisible hit area (easy to grab, turns the cable red
         // on hover) + the visible cable. DOUBLE-click to disconnect (no ✕ button —
-        // it made accidental deletes too easy).
+        // it made accidental deletes too easy). L/R cables are tinted.
+        const cls = (fn.stereoOut && port === 'L') ? ' rb-adv-cable-l' : (fn.stereoOut && port === 'R') ? ' rb-adv-cable-r' : '';
         paths += `<g class="rb-adv-edge-g" data-adv-edge="${idx}">
             <path class="rb-adv-cable-hit" d="${d}"/>
-            <path class="rb-adv-cable" d="${d}"/>
+            <path class="rb-adv-cable${cls}" d="${d}"/>
         </g>`;
     });
     if (tempPath) paths += `<path class="rb-adv-cable rb-adv-cable-temp" d="${tempPath}"/>`;
@@ -12836,11 +12846,20 @@ function rbAdvAttachNodeHandlers() {
         const btn = ev.target.closest('.rb-adv-node-del, .rb-adv-node-edit');
         if (btn) { ev.preventDefault(); ev.stopPropagation(); return; }   // buttons are clicks, not drags
         if (ev.target.closest('.rb-adv-node-pan')) { ev.stopPropagation(); return; } // let the pan slider drag
-        const jack = ev.target.closest('.rb-adv-jack');
         const nodeEl = ev.target.closest('.rb-adv-node');
-        if (jack && jack.dataset.advSide === 'out') { rbAdvStartWire(ev, +jack.dataset.advJack); return; }
+        // Ctrl/⌘-click a gear node → toggle its split L/R outputs (two out jacks).
+        if ((ev.ctrlKey || ev.metaKey) && nodeEl && !ev.target.closest('.rb-adv-jack')) {
+            ev.preventDefault(); ev.stopPropagation();
+            rbAdvToggleStereoOut(+nodeEl.dataset.advNode);
+            return;
+        }
+        const jack = ev.target.closest('.rb-adv-jack');
+        if (jack && jack.dataset.advSide === 'out') { rbAdvStartWire(ev, +jack.dataset.advJack, jack.dataset.advPort || 'out'); return; }
         if (nodeEl) rbAdvStartNodeDrag(ev, +nodeEl.dataset.advNode);
     });
+    // Ctrl-click on macOS also fires contextmenu — suppress it over a node so the
+    // split-output toggle doesn't pop the OS menu.
+    layer.addEventListener('contextmenu', ev => { if (ev.target.closest('.rb-adv-node')) ev.preventDefault(); });
     layer.addEventListener('click', ev => {
         const del = ev.target.closest('.rb-adv-node-del');
         if (del) { ev.preventDefault(); ev.stopPropagation(); rbAdvDeleteNode(+del.dataset.advDel); return; }
@@ -12853,6 +12872,29 @@ function rbAdvAttachNodeHandlers() {
         const nodeEl = ev.target.closest('.rb-adv-node');
         if (nodeEl) rbAdvToggleBypass(+nodeEl.dataset.advNode);
     });
+}
+
+// Ctrl/⌘-click a gear node → toggle split L/R outputs. Two out jacks appear (L
+// upper, R lower) so you can wire each side to a different destination (e.g. a
+// stereo delay's L to amp A, R to amp B). Turning it back off collapses this
+// node's L/R cables to a single mono output per target.
+function rbAdvToggleStereoOut(id) {
+    const adv = rbAdvState();
+    const n = adv.nodes.find(x => x.id === id);
+    if (!n || n.kind !== 'gear') return;
+    n.stereoOut = !n.stereoOut;
+    if (!n.stereoOut) {
+        const seen = new Set();
+        adv.edges = adv.edges.filter(e => {
+            if (e.from !== id) return true;
+            e.fromPort = 'out';
+            if (seen.has(e.to)) return false;   // drop the now-duplicate after collapse
+            seen.add(e.to); return true;
+        });
+    }
+    rbAdvRenderCanvas();
+    rbAdvPersist();
+    rbAdvSyncAudio();
 }
 
 // Toggle a gear node's bypass: the piece is skipped (signal passes through like a
@@ -13062,13 +13104,16 @@ function rbAdvStartNodeDrag(ev, nodeId) {
     document.addEventListener('mouseup', up);
 }
 
-function rbAdvStartWire(ev, fromId) {
+function rbAdvStartWire(ev, fromId, fromPort) {
     ev.preventDefault();
+    fromPort = fromPort || 'out';
     const adv = rbAdvState();
     const fn = adv.nodes.find(n => n.id === fromId);
     const fEl = document.querySelector(`#rb-adv-nodes [data-adv-node="${fromId}"]`);
     if (!fn || !fEl) return;
-    const x1 = fn.x + fEl.offsetWidth, y1 = fn.y + fEl.offsetHeight / 2;
+    // Start the rubber-band at the actual port anchor (L upper / R lower / centre).
+    const oy = (fn.stereoOut && fromPort === 'L') ? 0.32 : (fn.stereoOut && fromPort === 'R') ? 0.68 : 0.5;
+    const x1 = fn.x + fEl.offsetWidth, y1 = fn.y + fEl.offsetHeight * oy;
     const move = e => {
         const p = rbAdvLayerPoint(e);
         const dx = Math.max(40, Math.abs(p.x - x1) * 0.5);
@@ -13077,7 +13122,7 @@ function rbAdvStartWire(ev, fromId) {
     const up = e => {
         document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
         const jack = e.target.closest && e.target.closest('.rb-adv-jack');
-        if (jack && jack.dataset.advSide === 'in') rbAdvConnect(fromId, +jack.dataset.advJack);
+        if (jack && jack.dataset.advSide === 'in') rbAdvConnect(fromId, +jack.dataset.advJack, fromPort);
         else rbAdvRenderCables();
     };
     document.addEventListener('mousemove', move);
@@ -13131,14 +13176,17 @@ function rbAdvApplyTopologyToChain() {
     }
 }
 
-function rbAdvConnect(fromId, toId) {
+function rbAdvConnect(fromId, toId, fromPort) {
     const adv = rbAdvState();
     if (fromId === toId) return;
     const to = adv.nodes.find(n => n.id === toId);
     if (to && to.kind === 'input') return;            // can't feed the guitar input
-    if (adv.edges.some(e => e.from === fromId && e.to === toId)) return; // dup
+    fromPort = fromPort || 'out';
+    // Dup = same source PORT → same target (so L and R from one node can each
+    // reach the same node without colliding).
+    if (adv.edges.some(e => e.from === fromId && e.to === toId && (e.fromPort || 'out') === fromPort)) return;
     if (rbAdvReaches(toId, fromId)) { rbAdvRenderCables(); return; }      // would cycle
-    adv.edges.push({ from: fromId, to: toId, gain: 1.0 });
+    adv.edges.push({ from: fromId, to: toId, gain: 1.0, fromPort });
     rbAdvRenderCanvas();
     rbAdvPersist();
     rbAdvApplyTopologyToChain();
@@ -13275,6 +13323,7 @@ async function rbStudioApplyStereoToEngine() {
     if (!audio) return;
     const hasPan = typeof audio.setPan === 'function';
     const hasBranch = typeof audio.setBranch === 'function';
+    const hasBranchSrc = typeof audio.setBranchSrc === 'function';
     if (!hasPan && !hasBranch) return;
     const chain = rbStudioCurrentChain();
     if (!Array.isArray(chain) || !chain.length) return;
@@ -13282,12 +13331,29 @@ async function rbStudioApplyStereoToEngine() {
     try { ampIdxs = (rbStudioGroupDefault().amp || []).map(e => e.idx); } catch (_) { ampIdxs = []; }
     const branchOfIdx = new Map();
     if (ampIdxs.length >= 2) ampIdxs.forEach((idx, k) => branchOfIdx.set(idx, k + 1));
+    // St-2: a branch fed by a stereo-out gear's L/R port reads only that channel.
+    // Map each fed piece → 1 (L) / 2 (R) from the graph's split-output edges.
+    const srcByIdx = new Map();
+    const adv = rbState._adv;
+    if (adv && Array.isArray(adv.nodes) && Array.isArray(adv.edges)) {
+        const nodeById = new Map(adv.nodes.map(n => [n.id, n]));
+        for (const e of adv.edges) {
+            const port = e.fromPort || 'out';
+            if (port !== 'L' && port !== 'R') continue;
+            const from = nodeById.get(e.from);
+            const to = nodeById.get(e.to);
+            if (!from || !from.stereoOut || !to) continue;
+            if (typeof to.pieceIdx === 'number' && to.pieceIdx >= 0)
+                srcByIdx.set(to.pieceIdx, port === 'L' ? 1 : 2);
+        }
+    }
     for (let i = 0; i < chain.length; i++) {
         let slotId = null;
         try { slotId = await rbStudioChainSlotIdForPiece(audio, i); } catch (_) {}
         if (slotId == null) continue;
-        if (hasPan)    { try { audio.setPan(slotId, typeof chain[i]._pan === 'number' ? chain[i]._pan : 0); } catch (_) {} }
-        if (hasBranch) { try { audio.setBranch(slotId, branchOfIdx.get(i) || 0); } catch (_) {} }
+        if (hasPan)       { try { audio.setPan(slotId, typeof chain[i]._pan === 'number' ? chain[i]._pan : 0); } catch (_) {} }
+        if (hasBranch)    { try { audio.setBranch(slotId, branchOfIdx.get(i) || 0); } catch (_) {} }
+        if (hasBranchSrc) { try { audio.setBranchSrc(slotId, srcByIdx.get(i) || 0); } catch (_) {} }
     }
 }
 
@@ -13303,6 +13369,7 @@ window.rbAdvAutoLayout = rbAdvAutoLayout;
 window.rbAdvResetToChain = rbAdvResetToChain;   // already auto-layouts + renders (+ persists)
 window.rbAdvDeleteNode = rbAdvDeleteNode;
 window.rbAdvToggleBypass = rbAdvToggleBypass;
+window.rbAdvToggleStereoOut = rbAdvToggleStereoOut;
 window.rbAdvEditNode = rbAdvEditNode;
 window.rbAdvCloseEditor = rbAdvCloseEditor;
 window.rbAdvZoom = rbAdvZoom;

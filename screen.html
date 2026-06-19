@@ -806,13 +806,12 @@
         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .rb-adv-node-kind{ font-size:9px; letter-spacing:.08em; text-transform:uppercase; color:#7e8aa3; text-align:center; padding:0 0 6px; }
     /* stereo pan slider on a gear node (St-1): L —●— R + a value chip */
-    .rb-adv-node-pan{ display:flex; align-items:center; gap:5px; padding:0 8px 7px; box-sizing:border-box; width:100%; }
-    .rb-adv-pan-slider{ -webkit-appearance:none; appearance:none; flex:1 1 auto; min-width:0; width:100%; height:3px; border-radius:2px;
+    .rb-adv-node-pan{ display:flex; flex-direction:column; align-items:center; gap:2px; padding:0 8px 6px; box-sizing:border-box; width:100%; }
+    .rb-adv-pan-slider{ -webkit-appearance:none; appearance:none; min-width:0; width:100%; height:3px; border-radius:2px;
         background:linear-gradient(90deg,#3d6bbf,#2a2f3a 50%,#bf6b3d); cursor:ew-resize; outline:none; margin:0; }
     .rb-adv-pan-slider::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:11px; height:11px;
         border-radius:50%; background:#dbe4f2; border:1px solid rgba(0,0,0,.4); box-shadow:0 1px 3px rgba(0,0,0,.5); }
-    .rb-adv-pan-val{ flex:0 0 auto; min-width:26px; text-align:right; font-size:9px; font-variant-numeric:tabular-nums;
-        color:#9fb0c8; letter-spacing:.02em; }
+    .rb-adv-pan-val{ text-align:center; font-size:9px; font-variant-numeric:tabular-nums; color:#9fb0c8; letter-spacing:.02em; }
     /* terminal nodes (Input / Output) read as small rounded pills */
     .rb-adv-node.rb-adv-term{ width:96px; background:linear-gradient(180deg, rgba(52,180,120,.18), rgba(30,90,60,.22));
         border-color:rgba(74,210,150,.4); }
@@ -827,6 +826,14 @@
     .rb-adv-jack:hover{ box-shadow:0 0 10px rgba(140,180,250,.8); }
     .rb-adv-jack-in{ left:-9px; }
     .rb-adv-jack-out{ right:-9px; }
+    /* split L/R output jacks (St-2): L sits upper, R lower; tinted to match the
+       L/R cable colours. A small L/R glyph rides above each. */
+    .rb-adv-jack-l{ top:32%; background:radial-gradient(circle at 38% 32%, #bcd2ff, #4f78c8 60%, #22314e); }
+    .rb-adv-jack-r{ top:68%; background:radial-gradient(circle at 38% 32%, #ffd4bc, #c8784f 60%, #4e3122); }
+    .rb-adv-jack-l::before, .rb-adv-jack-r::before{ position:absolute; right:18px; top:50%; transform:translateY(-50%);
+        font-size:8px; font-weight:700; color:#9fb0c8; letter-spacing:.04em; }
+    .rb-adv-jack-l::before{ content:"L"; }
+    .rb-adv-jack-r::before{ content:"R"; }
     /* a cable path */
     /* solid stroke (NOT a url(#gradient) ref): an SVG gradient reference rebuilt
        via innerHTML doesn't repaint until a reflow, so gradient cables only
@@ -834,6 +841,8 @@
     .rb-adv-cable{ fill:none; stroke:#6f93d6; stroke-width:4; stroke-linecap:round;
         filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); pointer-events:none; }
     .rb-adv-cable.rb-adv-cable-temp{ stroke:rgba(150,190,255,.7); stroke-dasharray:6 5; }
+    .rb-adv-cable.rb-adv-cable-l{ stroke:#5b8be0; }   /* split L output cable */
+    .rb-adv-cable.rb-adv-cable-r{ stroke:#e0915b; }   /* split R output cable */
     /* wide invisible click target so a thin cable is easy to grab; a faint red
        tube on hover signals "click to disconnect". */
     .rb-adv-cable-hit{ fill:none; stroke:transparent; stroke-width:20; stroke-linecap:round;
