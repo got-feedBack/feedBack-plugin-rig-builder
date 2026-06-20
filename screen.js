@@ -71,7 +71,12 @@ function rbEnsureScopedCss() {
     if (!document.getElementById('rb-pedal-canvas-js')) {
         const sc = document.createElement('script');
         sc.id = 'rb-pedal-canvas-js';
-        sc.src = '/api/plugins/rig_builder/asset/pedal_canvas.js';
+        // Cache-bust: plugin.json only loads screen.js (which IS ?v=version
+        // busted by the host), but pedal_canvas.js was injected by a bare path,
+        // so Electron's HTTP cache served a STALE copy across restarts — the
+        // pedal faces + canvas knob→param mapping looked frozen no matter what
+        // we changed. A per-load token forces a fresh fetch.
+        sc.src = '/api/plugins/rig_builder/asset/pedal_canvas.js?v=' + Date.now();
         sc.onload = () => {
             try {
                 window.RBPedalCanvas && window.RBPedalCanvas.ready().then(() => {
@@ -862,6 +867,11 @@ async function rbSetChainMakeup(v) {
     window.__rbChainMakeup = val;
     const cmVal = document.getElementById('rb-chain-makeup-val');
     if (cmVal) cmVal.textContent = val.toFixed(2) + '×';
+    // Keep the in-plugin Chain Volume knob visually in sync when the change came
+    // from the in-game mixer "Amp" fader (set() only re-renders, no onChange).
+    if (window.__rbChainMakeupKnob && typeof window.__rbChainMakeupKnob.set === 'function') {
+        try { window.__rbChainMakeupKnob.set(val); } catch (_) {}
+    }
     // When a final leveler is in the chain, Chain Volume must be applied
     // AFTER it (the AGC cancels any pre-leveler gain). Drive the leveler's
     // Output Trim live; only fall back to the route/chain bus when no leveler
@@ -898,6 +908,42 @@ async function rbSetAmpDrive(v) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nam_chain_input_drive: val }),
     }).catch(() => {});
+}
+
+// ── In-game mixer "Amp" fader ──────────────────────────────────────────────
+// Surfaces the user Chain Volume trim (window.__rbChainMakeup, persisted as
+// chain_makeup, default 1×) as a fader in the host's in-game mixer, so the
+// player can raise/lower their own guitar/amp level while playing. It drives
+// rbSetChainMakeup, which applies the trim POST-leveler — so, unlike a raw
+// setGain('chain') fader (audio_engine's "Desktop Chain"), the final leveler
+// RE-APPLIES it every tick instead of cancelling it on the next tone load.
+// Range/units mirror the in-plugin Chain Volume knob (0–5×, 1× = unity).
+function rbRegisterAmpFader() {
+    const api = window.slopsmith && window.slopsmith.audio;
+    if (!api) return;
+    if (typeof api.registerFader !== 'function') {
+        window.addEventListener('slopsmith:audio:ready', rbRegisterAmpFader, { once: true });
+        return;
+    }
+    if (window.__rbAmpFaderRegistered) return;
+    window.__rbAmpFaderRegistered = true;
+    api.registerFader({
+        id: 'rig_builder_amp',
+        label: 'Amp',
+        ownerPluginId: 'rig_builder',
+        kind: 'plugin',
+        unit: '×',
+        min: 0, max: 5, step: 0.05,
+        defaultValue: 1,
+        getValue: () => (typeof window.__rbChainMakeup === 'number') ? window.__rbChainMakeup : 1.0,
+        setValue: (v) => { rbSetChainMakeup(v); },
+    });
+}
+
+if (window.slopsmith && window.slopsmith.audio) {
+    rbRegisterAmpFader();
+} else {
+    window.addEventListener('slopsmith:audio:ready', rbRegisterAmpFader, { once: true });
 }
 
 // Mute everything the engine can mute just long enough that the bundle's

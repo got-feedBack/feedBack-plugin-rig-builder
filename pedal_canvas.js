@@ -3744,6 +3744,95 @@
       jack(.150); jack(.840); textC(d,.150*W,.78*H,F.barlow,8,rgb(224,224,218),'IN');
       ledDot(d,.840*W,.78*H,true,232,60,40); } };
 
+  // ── NYR BS103 — original monophonic bass synth (MB301-faithful dark face) ───
+  // Params: 0 Mix 1 Sub 2 Cutoff 3 Resonance 4 Envelope 5 Shape 6 Voice 7 Mod 8 Level.
+  // Matte-black chassis; MIX + SUB MIX orange knobs, CUTOFF/ENVELOPE/RESONANCE/
+  // MOD blue knobs; VOICE round LED-button (blue when on) + SHAPE round LED-
+  // button whose LED takes the selected waveform's colour (green/amber/red) with
+  // the three reference dots + waveform glyphs above it. Level is a secondary
+  // param (not on the face), like the real unit. No real brand/model names.
+  P.nyrbs103 = { w:300, h:480,
+    // IDs are the REAL VST param indices. The DPF plugin exposes two leading
+    // info params (buffer_size_frames=0, sample_rate_frames=1) and the engine's
+    // param list doesn't carry a recoverable original index, so the canvas id is
+    // forwarded straight to setParameter — mapping each knob to its real slot
+    // (mix=2, sub=3, cutoff=4, resonance=5, envelope=6, shape=7, voice=8, mod=9).
+    knobs:[
+      {id:2,cx:.265,cy:.275,r:.085,cap:[228,120,44]},   // Mix    (orange)
+      {id:4,cx:.520,cy:.275,r:.085,cap:[96,168,196]},   // Cutoff (blue)
+      {id:6,cx:.775,cy:.275,r:.085,cap:[96,168,196]},   // Envelope (blue)
+      {id:3,cx:.265,cy:.455,r:.085,cap:[228,120,44]},   // Sub Mix (orange)
+      {id:5,cx:.520,cy:.455,r:.085,cap:[96,168,196]},   // Resonance (blue)
+      {id:9,cx:.775,cy:.455,r:.085,cap:[96,168,196]}],  // Mod    (blue)
+    sw3:[
+      {id:8,cx:.330,cy:.115,two:true,hidden:true,hw:16,hh:16},   // VOICE (on/off)
+      {id:7,cx:.560,cy:.115,hidden:true,hw:16,hh:16}],           // SHAPE (cycles)
+    tick:rgb(34,35,40), ptr:rgb(244,245,248),
+    draw(d, vals){ vals = vals || {}; const {ctx:c,W,H}=d;
+      const wht=rgb(224,227,232), dim=rgb(122,126,132);
+      const shCol=[[96,200,96],[232,150,46],[228,66,52]];        // tri / saw / sqr
+      box(d, 26,27,31, false);                                   // no corner screws
+      // ── round LED push-button helper ──
+      const rbtn=(cx,cy,R,lit)=>{
+        if(lit){ c.beginPath(); c.arc(cx,cy,R*1.95,0,7); c.fillStyle=rgb(lit[0],lit[1],lit[2],0.22); c.fill(); }
+        c.beginPath(); c.arc(cx,cy,R*1.16,0,7); c.fillStyle=rgb(12,12,14); c.fill();
+        const g=c.createRadialGradient(cx-R*0.3,cy-R*0.4,R*0.1,cx,cy,R*1.05);
+        if(lit){ g.addColorStop(0,rgb(Math.min(255,lit[0]+60),Math.min(255,lit[1]+60),Math.min(255,lit[2]+60)));
+                 g.addColorStop(1,rgb(lit[0]*0.5,lit[1]*0.5,lit[2]*0.5)); }
+        else   { g.addColorStop(0,rgb(56,58,64)); g.addColorStop(1,rgb(22,23,26)); }
+        c.beginPath(); c.arc(cx,cy,R,0,7); c.fillStyle=g; c.fill();
+        c.strokeStyle=rgb(8,8,10); c.lineWidth=1.3; c.stroke();
+        c.beginPath(); c.arc(cx-R*0.28,cy-R*0.3,R*0.22,0,7); c.fillStyle=rgb(255,255,255,lit?0.55:0.16); c.fill();
+      };
+      // ── small waveform glyph (kind 0 tri / 1 saw / 2 square) ──
+      const glyph=(gx,gy,kind,col)=>{ const gw=14,gh=7; c.strokeStyle=col; c.lineWidth=1.6; c.beginPath();
+        if(kind===0){ c.moveTo(gx,gy+gh*0.5); c.lineTo(gx+gw*0.5,gy-gh*0.5); c.lineTo(gx+gw,gy+gh*0.5); }
+        else if(kind===1){ c.moveTo(gx,gy+gh*0.5); c.lineTo(gx+gw,gy-gh*0.5); c.lineTo(gx+gw,gy+gh*0.5); }
+        else { c.moveTo(gx,gy+gh*0.5); c.lineTo(gx,gy-gh*0.5); c.lineTo(gx+gw*0.5,gy-gh*0.5); c.lineTo(gx+gw*0.5,gy+gh*0.5); c.lineTo(gx+gw,gy+gh*0.5); c.lineTo(gx+gw,gy-gh*0.5); }
+        c.stroke(); };
+
+      // ── VOICE button + label ──
+      const voiceOn = (vals[8]||0) > 0.5;
+      textC(d, .330*W, .052*H, F.barlow, 10, dim, 'VOICE');
+      rbtn(.330*W, .115*H, 13, voiceOn ? [70,150,240] : null);
+
+      // ── SHAPE button (LED = selected shape colour) + reference dots/glyphs ──
+      const sv = (vals[7]!=null)? vals[7] : 0.5;
+      const sel = sv < 0.34 ? 0 : (sv < 0.67 ? 1 : 2);
+      rbtn(.560*W, .115*H, 13, shCol[sel]);
+      textC(d, .785*W, .045*H, F.barlow, 10, dim, 'SHAPE');
+      const dotsX=[.690,.775,.860];
+      for(let i=0;i<3;i++){ const on=(i===sel), col=shCol[i];
+        const x=dotsX[i]*W;
+        c.beginPath(); c.arc(x,.078*H,3.2,0,7); c.fillStyle=on?rgb(col[0],col[1],col[2]):rgb(col[0]*0.32,col[1]*0.32,col[2]*0.32); c.fill();
+        if(on){ c.beginPath(); c.arc(x,.078*H,6.5,0,7); c.fillStyle=rgb(col[0],col[1],col[2],0.22); c.fill(); }
+        glyph(x-7,.118*H,i, on?rgb(232,234,238):rgb(78,80,86)); }
+
+      // ── knob labels ──
+      const lab=(cx,cy,t)=>textC(d, cx*W, cy*H, F.barlow, 10.5, wht, t);
+      lab(.265,.368,'MIX');   lab(.520,.368,'CUTOFF');    lab(.775,.368,'ENVELOPE');
+      lab(.265,.548,'SUB MIX'); lab(.520,.548,'RESONANCE'); lab(.775,.548,'MOD');
+
+      // ── OUT / IN jack labels (sideways) ──
+      const vtext=(cx,cy,str,rot)=>{ c.save(); c.translate(cx,cy); c.rotate(rot);
+        setFont(d,F.barlow,9.5); c.fillStyle=dim; c.textAlign='center'; c.textBaseline='middle'; c.fillText(str,0,0); c.restore(); };
+      vtext(.045*W,.595*H,'OUT',-Math.PI/2);
+      vtext(.955*W,.595*H,'IN',Math.PI/2);
+
+      // ── status LED + footswitch ──
+      ledDot(d, .50*W, .640*H, true, 70,150,240);
+      footRound(d, .50*W, .735*H, 20);
+
+      // ── wordmark (heavier display face so it doesn't read as plain) ──
+      textC(d, .50*W, .838*H, F.anton, 30, wht, 'bass synth');
+
+      // ── presets row (decorative) ──
+      for(let i=0;i<4;i++){ c.beginPath(); c.arc((.355+.052*i)*W,.918*H,2.6,0,7); c.fillStyle=rgb(150,152,158); c.fill(); }
+      c.beginPath(); c.arc(.585*W,.918*H,4.2,0,7); c.fillStyle=rgb(150,60,52); c.fill();
+      textC(d, .635*W, .918*H, F.barlow, 10, dim, '▸');
+      textC(d, .470*W, .955*H, F.barlow, 8, dim, 'PRESETS');
+    } };
+
   // ── generic fallback: any VST without a hand-built spec gets a clean knob
   //    grid built from its live parameter metadata (so nothing opens in a
   //    native window). params = [{id|paramId|index, name, value}, …]. ──────────

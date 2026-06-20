@@ -2323,6 +2323,7 @@ def _parse_tone(tone_data: dict) -> dict:
 # misbuckets (codename lacks the type word). Grows category by category.
 _DAW_CATEGORY_OVERRIDE = {
     "Pedal_ShredZone": "distortion",   # Metal Zone (MT-2) — 'shredzone' has no 'dist'
+    "Bass_Pedal_NYRBS103": "pitch",    # bass synth — pitch-tracked osc + sub-octave
 }
 
 
