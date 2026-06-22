@@ -1,7 +1,7 @@
 #ifndef BOX_DC30_CORE_H
 #define BOX_DC30_CORE_H
 //
-// BoxDC30Core - Vox AC30 Top Boost (parody "BOX DC30"), REBUILT Guitarix-style:
+// BoxDC30Core - Vox AC30 Top Boost (parody "BOX AC30"), REBUILT Guitarix-style:
 // the signal flow is a clean feed-forward cascade of Guitarix-style tube stages
 // (anti-alias -> Koren tube table -> per-stage DC-block), so it is stable at any
 // (oversampled) rate -- unlike the old white-box EN30Core which blew up at 192k.
@@ -35,19 +35,63 @@ struct Biquad {
         b0=(1-c)/2;b1=1-c;b2=(1-c)/2; float a0=1+al;a1=-2*c;a2=1-al; norm(a0); }
 };
 
+struct Ac30ReactiveOutput {
+    rbtube::HP1 otHp;
+    rbtube::LP1 otLeakLp, fluxLp, heatLp;
+    Biquad coneRes, lowMidDip, alnicoBite, voiceCoilRise, coneAir;
+
+    void set(float sr, float treble, float cut, float hot) {
+        otHp.set(sr, 38.0f);                                      // finite OT primary inductance
+        otLeakLp.set(sr, 16500.0f);                               // leakage capacitance/iron loss
+        fluxLp.set(sr, 24.0f);                                    // low-frequency core flux memory
+        heatLp.set(sr, 1.8f);                                     // slow voice-coil heating/compression
+        coneRes.peaking(sr, 82.0f, 0.78f, 2.4f + 1.2f * hot);      // 2x12 resonance into the EL84 OT
+        lowMidDip.peaking(sr, 430.0f, 0.70f, -2.2f);              // open-back low-mid scoop
+        alnicoBite.peaking(sr, 2600.0f, 1.05f, 1.4f + 3.3f * treble - 1.0f * cut);
+        voiceCoilRise.highShelf(sr, 3600.0f, -1.2f + 2.6f * treble);
+        coneAir.lowpass(sr, 8200.0f + 2600.0f * treble, 0.72f);
+    }
+
+    inline float process(float x) {
+        float y = otHp.process(x);
+        const float flux = fluxLp.process(y);
+        const float heat = heatLp.process(std::fabs(y));
+        const float core = std::tanh((y - 0.16f * flux) * (1.0f + 0.10f * heat));
+        y = 0.86f * y + 0.14f * core;                             // soft OT core bend, not a hard limiter
+        y *= 1.0f / (1.0f + 0.055f * heat);                        // speaker thermal compression
+        y = otLeakLp.process(y);
+        y = coneRes.process(y);
+        y = lowMidDip.process(y);
+        y = alnicoBite.process(y);
+        y = voiceCoilRise.process(y);
+        return coneAir.process(y);
+    }
+
+    void reset() {
+        otHp.reset(); otLeakLp.reset(); fluxLp.reset(); heatLp.reset();
+        coneRes.reset(); lowMidDip.reset(); alnicoBite.reset();
+        voiceCoilRise.reset(); coneAir.reset();
+    }
+};
+
 struct BoxDC30Core {
     float sr = 48000.0f;
     rbtube::HP1 inputCoupling;
     rbtube::TubeStage v1, v2, v3;       // three real cathode-biased 12AX7 stages
-    rbtube::LP1 couple12, couple23;     // inter-stage coupling rolloff (Guitarix lowpass(6531))
+    rbtube::Miller12AX7 inputMiller, millerV2, millerV3; // 12AX7 Cgp/Cgk Miller loading
+    rbtube::CouplingCapGridLeak coupleToV2, coupleToV3, coupleToPi;
+    rbtube::PhaseInverterLTP12AX7 phaseInverter; // AC30 long-tail-pair 12AX7 splitter
+    rbtube::MultiNodeBPlus supply;         // GZ34 + power/screen/preamp filter nodes
     rbtube::PowerAmpPP power;            // real class-A push-pull EL84 (no NFB, AC30)
     rbtube::ToneStackYeh tonestack;     // real Vox Top Boost R/C tone network (Yeh model)
     Biquad bright, cutLP, spkBody, spkPres, spkRoll;
+    Ac30ReactiveOutput reactiveOut;
     // params (0..1), interface identical to EN30Core
     float pInput=0.5f, pNVol=0.7f, pTBVol=0.7f, pTreble=0.5f, pBass=0.5f, pBright=0.5f,
           pCut=0.5f, pMaster=0.7f, pRevTone=0.5f, pRevLevel=0.0f, pSpeed=0.5f, pDepth=0.0f;
     float inGain=1, masterDrive=1, outLevel=1, lfoPhase=0, lfoInc=0;
     float inScale=4, preGain=1, gainOut=1;     // audio->grid-volts + inter-stage pre-gains
+    float lastPowerLoad=0, lastScreenLoad=0, lastPreampLoad=0;
 
     void setSampleRate(float s){ sr=s; recalc(); reset(); }
     void setInput(float v){ pInput=clamp01(v); recalc(); }
@@ -62,9 +106,11 @@ struct BoxDC30Core {
     void setRevLevel(float v){ pRevLevel=clamp01(v); }
     void setSpeed(float v){ pSpeed=clamp01(v); recalc(); }
     void setDepth(float v){ pDepth=clamp01(v); }
-    void reset(){ inputCoupling.reset(); v1.reset(); v2.reset(); v3.reset(); couple12.reset(); couple23.reset(); power.reset();
+    void reset(){ inputCoupling.reset(); inputMiller.reset(); v1.reset(); v2.reset(); v3.reset(); millerV2.reset(); millerV3.reset();
+        coupleToV2.reset(); coupleToV3.reset(); coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset();
         tonestack.reset(); bright.reset(); cutLP.reset();
-        spkBody.reset(); spkPres.reset(); spkRoll.reset(); lfoPhase=0; }
+        spkBody.reset(); spkPres.reset(); spkRoll.reset(); reactiveOut.reset(); lfoPhase=0;
+        lastPowerLoad=lastScreenLoad=lastPreampLoad=0; }
 
     void recalc(){
         inputCoupling.set(sr, 12.0f);                              // input grid-leak coupling
@@ -78,12 +124,26 @@ struct BoxDC30Core {
         v1.set(sr, 0, 250.0f, 40.0f, 86.0f,  2700.0f);             // V1 (68k grid-leak)
         v2.set(sr, 1, 250.0f, 40.0f, 132.0f, 1500.0f);             // V2 (250k)
         v3.set(sr, 1, 250.0f, 40.0f, 194.0f, 820.0f);              // V3 (250k, hottest)
-        float vol   = std::pow(pTBVol, 1.1f);                      // volume taper: clean at low, cooks only as you turn up
-        inScale     = 2.0f * (0.7f + 0.6f * pNVol);                // audio -> grid volts into V1 (keep V1 cleaner)
+        float vol   = rbtube::PotTaper::audio(pTBVol, 1.18f);      // real-ish audio taper: clean low, cooks high
+        float nvol  = rbtube::PotTaper::audio(pNVol, 1.12f);
+        float master= rbtube::PotTaper::audio(pMaster, 1.25f);
+        float cut   = rbtube::PotTaper::reverseAudio(pCut, 1.35f);
+        inScale     = 2.0f * (0.7f + 0.6f * nvol);                 // audio -> grid volts into V1 (keep V1 cleaner)
         preGain     = 0.35f + 3.5f * vol;                          // inter-stage pre-gain: low floor (clean low vol) + high slope (cooks high)
         gainOut     = 0.60f + 0.55f * vol;                         // post-V3 level into the power amp
-        couple12.set(sr, 9000.0f);                                 // inter-stage Miller rolloff (more top/chime -> Treble has room to work)
-        couple23.set(sr, 9000.0f);
+        // 12AX7 Miller loading. Guitarix uses fixed ~6.5 kHz low-pass sections around
+        // its tubestages; here the cutoff comes from Cgk + Cgp*(1+Av) and the driving
+        // resistance. That keeps the Top Boost chime but makes the HF loss tube/circuit
+        // derived instead of an arbitrary inter-stage EQ.
+        inputMiller.set(sr,  68000.0f, 55.0f, 10.0f);              // input grid stopper + V1 Miller, ~22 kHz
+        millerV2.set(sr,   220000.0f, 52.0f,  8.0f);              // tone/volume source impedance into V2, ~7 kHz
+        millerV3.set(sr,   180000.0f, 58.0f,  5.0f);              // V2/coupling source impedance into V3, ~8 kHz
+        // Coupling caps + grid-leak charging. These are the AC30 blocking-distortion
+        // points: when V2/V3/PI grids conduct, the coupling cap charges and the next
+        // stage recovers through its grid leak instead of staying as an ideal HPF.
+        coupleToV2.set(sr, 1000000.0f, 22.0e-9f, 220000.0f, 0.16f, 0.54f, 1.35f);
+        coupleToV3.set(sr, 1000000.0f, 22.0e-9f, 180000.0f, 0.14f, 0.62f, 1.70f);
+        coupleToPi.set(sr, 1000000.0f, 47.0e-9f, 220000.0f, 0.18f, 0.45f, 1.20f);
         // Vox Top Boost tone stack = the REAL R/C network (Yeh model), not biquads.
         // AC30 has Treble + Bass knobs (no Mid): Treble->t; the circuit's "mid" param is
         // the body/scoop control (the literal bass-pot node is inactive at Vox values),
@@ -91,35 +151,37 @@ struct BoxDC30Core {
         bright.highShelf(sr, 2400.0f, 9.0f * pBright);             // Brilliance/Bright cap (pre tone stack)
         tonestack.setComponents(220e3, 220e3, 220e3, 100e3, 470e-12, 100e-9, 47e-9); // Vox AC15/AC30
         tonestack.update(sr, pTreble, 0.15f + 0.55f * pBass, 0.5f);
-        cutLP.lowpass(sr, 900.0f + 4200.0f * (1.0f - pCut), 0.7f); // Cut: bites the presence region 5.1k(no cut)->0.9k(full)
-        // EL84 class-A push-pull power amp (real pentode, no NFB). Master pushes it into
-        // power-amp breakup; bias fixed at the class-A point, sag/cathode handle compression.
-        power.set(sr, 3.5f + 16.0f * vol + 2.0f * pMaster, -7.5f, 0.40f); // volume cooks the power amp (clean floor, hot top)
-        power.out   = 0.0075f;                                     // scale plate-volt differential to signal
+        cutLP.lowpass(sr, 900.0f + 4200.0f * cut, 0.7f);           // Cut: bites the presence region 5.1k(no cut)->0.9k(full)
+        // GZ34 supply + long-tail-pair PI + EL84 class-A push-pull. The PI now clips
+        // and unbalances before the EL84s; B+ droops through power/screen/preamp nodes.
+        supply.setGZ34Ac30(sr, vol);
+        phaseInverter.setVoxAc30(sr, 1.15f + 2.55f * master + 0.85f * vol, 0.92f, 0.075f);
+        power.set(sr, 3.0f + 13.0f * vol + 2.5f * master, -7.5f, 0.30f); // cathode-bias sag remains local to EL84s
+        power.out   = 0.0085f;                                     // scale plate-volt differential to signal
         masterDrive = 1.0f;
-        outLevel    = 0.5f * (1.0f - 0.45f * pTBVol);              // level comp: keep loudness ~constant across gain
-        // 2x12 AC30 voicing (Celestion-ish) — amp's own speaker color (cab IR adds the cab)
-        // Speaker voicing kept MILD / PRE-CAB on purpose: the amp is voiced before the
-        // cabinet, and the user's cab IR provides the speaker's low bump, low-mid scoop
-        // and HF rolloff. Baking the full speaker curve here would double up with the cab.
-        // (So the bare-amp spectrum is intentionally NOT the Ruby-with-speaker curve.)
-        spkBody.peaking(sr, 110.0f, 0.8f, 2.5f);                   // gentle low body
-        spkPres.highShelf(sr, 2500.0f, -4.0f + 9.0f * pTreble);    // TREBLE knob: ~9dB shelf (the real tonestack treble is only ~2dB in-chain)
-        spkRoll.highShelf(sr, 4000.0f, 5.0f);                      // AC30 top chime (pre-cab)
+        outLevel    = 0.89f * (1.0f - 0.40f * pTBVol);             // level comp: keep loudness ~constant across gain
+        // Reactive OT/speaker load: resonance, inductive rise, OT core bend and speaker
+        // compression. This replaces the old static speaker EQ for the AC30 test build.
+        reactiveOut.set(sr, pTreble, pCut, vol);
         lfoInc = (3.0f + 8.0f * pSpeed) / sr;                      // tremolo 3..11 Hz
     }
 
     inline float process(float x){
+        const rbtube::SupplyScales bplus = supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
         x = inputCoupling.process(x * inGain);
         x = bright.process(x);
-        x = v1.process(x * inScale);                               // audio -> grid volts -> V1
+        x = v1.process(inputMiller.process(x) * inScale * bplus.preamp); // audio -> grid volts -> V1
         x = tonestack.process(x);                                  // real Vox tone stack between V1 and V2
-        x = v2.process(couple12.process(x) * preGain);             // coupling + pre-gain -> V2
-        x = v3.process(couple23.process(x) * preGain);             // coupling + pre-gain -> V3
-        x *= gainOut;
-        x = power.process(x);
+        x = v2.process(coupleToV2.process(millerV2.process(x), preGain * bplus.preamp)); // Miller + blocking cap -> V2 grid
+        x = v3.process(coupleToV3.process(millerV3.process(x), preGain * bplus.preamp)); // Miller + blocking cap -> V3 grid
+        x = coupleToPi.process(x * gainOut, 1.0f);
+        lastPreampLoad = std::fabs(x) * (0.20f + 0.40f * pTBVol);
+        x = phaseInverter.process(x * bplus.screen);
+        lastScreenLoad = std::fabs(x) * (0.35f + 0.60f * pMaster);
+        x = power.process(x * bplus.power * bplus.screen);
+        lastPowerLoad = std::fabs(x) * (0.55f + 0.95f * pMaster);
         x = cutLP.process(x);                                      // Cut AFTER power amp (real AC30: tames the output treble, post-distortion)
-        x = spkRoll.process(spkPres.process(spkBody.process(x)));  // 2x12 voicing
+        x = reactiveOut.process(x);
         if (pDepth > 0.0f){                                        // tremolo (amplitude)
             lfoPhase += lfoInc; if (lfoPhase >= 1.0f) lfoPhase -= 1.0f;
             float lfo = 0.5f * (1.0f + std::sin(2.0f * kPi * lfoPhase));

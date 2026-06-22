@@ -14,8 +14,12 @@
 #include "koren12ay7_ftube.h"   // PURE 12AY7 (low-mu warm preamp triode)
 #include "koren_el84_ftube.h"   // PURE EL84 pentode plate transfer
 #include "koren6v6_ftube.h"     // PURE 6V6 power pentode
-#include "koren6l6_ftube.h"     // PURE 6L6/5881 power pentode
+#include "koren6l6_ftube.h"     // PURE legacy 6L6 power pentode
+#include "koren5881_ftube.h"    // PURE 5881 beam pentode
+#include "koren6l6gc_ftube.h"   // PURE 6L6GC high-power beam pentode
+#include "koren_kt66_ftube.h"   // PURE KT66 beam tetrode
 #include "koren_el34_ftube.h"   // PURE EL34 power pentode
+#include "koren_ef86_ftube.h"   // PURE EF86 small-signal pentode (DC30 channel 2)
 #include <cmath>
 
 namespace rbtube {
@@ -23,14 +27,45 @@ namespace rbtube {
 static constexpr float kPi = 3.14159265358979f;
 static inline float dn(float v) { return std::fabs(v) < 1e-15f ? 0.0f : v; }  // flush denormals (glitch guard)
 
+namespace PotTaper {
+static inline float clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
+static inline float linear(float v) { return clamp01(v); }
+static inline float audio(float v, float curve = 1.7f) { return std::pow(clamp01(v), std::fmax(1.0f, curve)); }
+static inline float reverseAudio(float v, float curve = 1.7f) { return 1.0f - std::pow(1.0f - clamp01(v), std::fmax(1.0f, curve)); }
+static inline float sCurve(float v) { v = clamp01(v); return v * v * (3.0f - 2.0f * v); }
+static inline float switchBlend(float v, float center = 0.5f, float width = 0.08f) {
+    const float lo = center - width * 0.5f, hi = center + width * 0.5f;
+    return sCurve((clamp01(v) - lo) / std::fmax(1.0e-6f, hi - lo));
+}
+} // namespace PotTaper
+
 // Tube "traits": pick which pure-transfer table a stage uses, so one TubeStage/
 // PowerAmpPP template serves every amp. Add an amp's tubes here (generate the table
 // in gx_tube.py first). ftube/ranode are the generated lookups (namespace rbtube).
-struct Tube12AX7 { static inline float ftube(int t,float v){return AX7_ftube(t,v);} static inline float ranode(int t,float v){return AX7_ranode(t,v);} };
-struct Tube12AY7 { static inline float ftube(int t,float v){return AY7_ftube(t,v);} static inline float ranode(int t,float v){return AY7_ranode(t,v);} };
+struct Tube12AX7 {
+    static constexpr float cGridCathodePf = 1.6f;
+    static constexpr float cGridPlatePf = 1.7f;
+    static inline float ftube(int t,float v){return AX7_ftube(t,v);}
+    static inline float ranode(int t,float v){return AX7_ranode(t,v);}
+};
+struct Tube12AY7 {
+    static constexpr float cGridCathodePf = 1.3f;
+    static constexpr float cGridPlatePf = 1.3f;
+    static inline float ftube(int t,float v){return AY7_ftube(t,v);}
+    static inline float ranode(int t,float v){return AY7_ranode(t,v);}
+};
+struct TubeEF86 {
+    static constexpr float cGridCathodePf = 3.8f;   // Cg1(all except anode), EF86.pdf
+    static constexpr float cGridPlatePf = 0.05f;    // Cag1 max, EF86.pdf
+    static inline float ftube(int t,float v){return EF86_ftube(t,v);}
+    static inline float ranode(int t,float v){return EF86_ranode(t,v);}
+};
 struct TubeEL84  { static inline float ftube(int t,float v){return EL84_ftube(t,v);} };
 struct Tube6V6   { static inline float ftube(int t,float v){return V6_ftube(t,v);} };
 struct Tube6L6   { static inline float ftube(int t,float v){return L6_ftube(t,v);} };
+struct Tube5881  { static inline float ftube(int t,float v){return T5881_ftube(t,v);} };
+struct Tube6L6GC { static inline float ftube(int t,float v){return L6GC_ftube(t,v);} };
+struct TubeKT66  { static inline float ftube(int t,float v){return KT66_ftube(t,v);} };
 struct TubeEL34  { static inline float ftube(int t,float v){return EL34P_ftube(t,v);} };
 
 // one-pole low-pass (anti-alias / Miller / cathode-bypass / coupling rolloff)
@@ -48,6 +83,175 @@ struct HP1 {
     inline float process(float x) { float y = a * (y1 + x - x1); x1 = x; y1 = dn(y); return y; }
     void reset() { x1 = y1 = 0.0f; }
 };
+
+// Coupling capacitor + grid-leak path with grid-current charging. When the next
+// grid is driven positive, the cap charges and shifts that grid negative until
+// the grid leak bleeds it back down: blocking distortion / recovery.
+struct CouplingCapGridLeak {
+    HP1 coupling;
+    float charge = 0.0f;
+    float chargeA = 0.0f, leakA = 0.0f;
+    float threshold = 0.12f, strength = 0.60f, maxShift = 2.0f;
+
+    void set(float sr, float gridLeakOhms, float couplingCapF, float gridStopOhms,
+             float thresholdV = 0.12f, float strengthV = 0.60f, float maxShiftV = 2.0f) {
+        const float rLeak = std::fmax(1.0f, gridLeakOhms);
+        const float cap = std::fmax(1.0e-12f, couplingCapF);
+        const float fc = 1.0f / (2.0f * kPi * rLeak * cap);
+        coupling.set(sr, fc);
+
+        const float chargeSec = std::fmax(40.0e-6f, std::fmax(1.0f, gridStopOhms) * cap);
+        const float leakSec = std::fmax(0.010f, rLeak * cap);
+        chargeA = 1.0f - std::exp(-1.0f / (chargeSec * sr));
+        leakA = 1.0f - std::exp(-1.0f / (leakSec * sr));
+        threshold = thresholdV;
+        strength = strengthV;
+        maxShift = maxShiftV;
+    }
+
+    inline float process(float x, float gainToGrid = 1.0f) {
+        const float y = coupling.process(x) * gainToGrid;
+        const float gridV = y - charge;
+        const float over = std::fmax(0.0f, gridV - threshold);
+        if (over > 0.0f) {
+            const float target = std::fmin(maxShift, over * strength);
+            charge += (target - charge) * chargeA;
+        } else {
+            charge -= charge * leakA;
+        }
+        if (charge < 0.0f) charge = 0.0f;
+        if (charge > maxShift) charge = maxShift;
+        return dn(y - charge);
+    }
+
+    void reset() { coupling.reset(); charge = 0.0f; }
+};
+
+// Tube rectifier / reservoir-cap supply sag. This is intentionally a one-node
+// B+ model: rectifier resistance + first filter cap set the attack, downstream
+// load bleed sets the release, and the returned scale modulates the driven amp.
+struct RectifierSag {
+    float sag = 0.0f, atk = 0.0f, rel = 0.0f, depth = 0.22f, minScale = 0.72f;
+
+    void set(float sr, float rectifierOhms, float reservoirUf, float releaseSec,
+             float depthV, float minScaleV = 0.72f) {
+        const float cap = std::fmax(1.0e-6f, reservoirUf * 1.0e-6f);
+        const float attackSec = std::fmax(0.0015f, std::fmax(1.0f, rectifierOhms) * cap);
+        atk = 1.0f - std::exp(-1.0f / (attackSec * sr));
+        rel = 1.0f - std::exp(-1.0f / (std::fmax(0.020f, releaseSec) * sr));
+        depth = depthV;
+        minScale = minScaleV;
+    }
+
+    inline float process(float load) {
+        const float e = std::fmax(0.0f, load);
+        const float target = e / (1.0f + e);
+        sag += (target - sag) * (target > sag ? atk : rel);
+        float scale = 1.0f - depth * sag;
+        if (scale < minScale) scale = minScale;
+        if (scale > 1.0f) scale = 1.0f;
+        return scale;
+    }
+
+    void reset() { sag = 0.0f; }
+};
+
+struct SupplyScales {
+    float power = 1.0f;
+    float screen = 1.0f;
+    float preamp = 1.0f;
+};
+
+struct BPlusNode {
+    float sag = 0.0f, atk = 0.0f, rel = 0.0f, depth = 0.12f, minScale = 0.80f, track = 0.25f;
+
+    void set(float sr, float seriesOhms, float capUf, float releaseSec,
+             float depthV, float minScaleV, float upstreamTrackV) {
+        const float cap = std::fmax(1.0e-6f, capUf * 1.0e-6f);
+        const float attackSec = std::fmax(0.0010f, std::fmax(1.0f, seriesOhms) * cap);
+        atk = 1.0f - std::exp(-1.0f / (attackSec * sr));
+        rel = 1.0f - std::exp(-1.0f / (std::fmax(0.020f, releaseSec) * sr));
+        depth = depthV;
+        minScale = minScaleV;
+        track = upstreamTrackV;
+    }
+
+    inline float process(float load, float upstreamSag = 0.0f) {
+        const float local = std::fmax(0.0f, load);
+        const float target = local / (1.0f + local) + track * std::fmax(0.0f, upstreamSag);
+        sag += (target - sag) * (target > sag ? atk : rel);
+        float scale = 1.0f - depth * sag;
+        if (scale < minScale) scale = minScale;
+        if (scale > 1.0f) scale = 1.0f;
+        return scale;
+    }
+
+    void reset() { sag = 0.0f; }
+};
+
+// Three-node B+ chain: rectifier/reservoir -> screen/PI node -> preamp node.
+// This keeps rectifier and filter-cap behavior tied to component values while
+// letting each amp decide how much the power, PI and preamp loads pull on B+.
+struct MultiNodeBPlus {
+    BPlusNode powerNode, screenNode, preampNode;
+
+    void set(float sr,
+             float rectifierOhms, float reservoirUf,
+             float screenDropOhms, float screenUf,
+             float preampDropOhms, float preampUf,
+             float powerDepth, float screenDepth, float preampDepth,
+             float releaseSec = 0.18f) {
+        powerNode.set(sr, rectifierOhms, reservoirUf, releaseSec, powerDepth, 0.72f, 0.0f);
+        screenNode.set(sr, screenDropOhms, screenUf, releaseSec * 1.20f, screenDepth, 0.76f, 0.45f);
+        preampNode.set(sr, preampDropOhms, preampUf, releaseSec * 1.65f, preampDepth, 0.82f, 0.65f);
+    }
+
+    void setGZ34Ac30(float sr, float hot = 0.5f) {
+        set(sr,
+            115.0f, 32.0f,       // GZ34 + reservoir
+            1200.0f, 16.0f,      // screen/PI filter node
+            10000.0f, 16.0f,     // preamp dropping resistor/filter node
+            0.20f + 0.08f * hot,
+            0.14f + 0.05f * hot,
+            0.070f + 0.025f * hot,
+            0.19f);
+    }
+
+    inline SupplyScales process(float powerLoad, float screenLoad, float preampLoad) {
+        SupplyScales s;
+        s.power = powerNode.process(powerLoad);
+        s.screen = screenNode.process(screenLoad, 1.0f - s.power);
+        s.preamp = preampNode.process(preampLoad, 1.0f - s.screen);
+        return s;
+    }
+
+    void reset() { powerNode.reset(); screenNode.reset(); preampNode.reset(); }
+};
+
+// Input capacitance of a voltage-gain triode stage:
+//   Cin ~= Cgk + Cgp * (1 + |Av|)
+// This is the Miller effect. Guitarix approximates this in many Faust amps with
+// fixed inter-stage low-pass filters around 6.5 kHz; this helper keeps the same
+// audible role but derives the cutoff from tube capacitance + source resistance.
+template<class TUBE>
+struct MillerLowPassT {
+    LP1 lp;
+    float hz = 20000.0f;
+    void set(float sr, float sourceOhms, float voltageGainAbs, float strayPf = 0.0f) {
+        const float gain = std::fmax(0.0f, voltageGainAbs);
+        const float capPf = strayPf + TUBE::cGridCathodePf + TUBE::cGridPlatePf * (1.0f + gain);
+        const float capF = std::fmax(1.0e-12f, capPf * 1.0e-12f);
+        const float r = std::fmax(1.0f, sourceOhms);
+        hz = 1.0f / (2.0f * kPi * r * capF);
+        hz = std::fmax(1200.0f, std::fmin(hz, sr * 0.45f));
+        lp.set(sr, hz);
+    }
+    inline float process(float x) { return lp.process(x); }
+    void reset() { lp.reset(); }
+};
+using Miller12AX7 = MillerLowPassT<Tube12AX7>;
+using Miller12AY7 = MillerLowPassT<Tube12AY7>;
+using MillerEF86  = MillerLowPassT<TubeEF86>;
 
 // Yeh tone-stack (Yeh & Smith, DAFx-06 — academic/public model, NOT GPL source): the
 // 3rd-order analog transfer function of a real 3-band R/C tone network, computed from
@@ -152,16 +356,19 @@ struct TubeStageT {
         }
         return v;
     }
-    void set(float sr, int Ri_tab, float vplusV, float dividerV, float fckHz, float RkV) {
+    void setWithPlate(float sr, int Ri_tab, float vplusV, float dividerV, float fckHz, float RkV, float RpV) {
         antiAlias.set(sr, std::fmin(sr * 0.45f, 20000.0f));
         cathodeLP.set(sr, fckHz);            // cathode bypass cap (Rk||Ck) corner
         dcBlock.set(sr, 7.0f);
-        tab = Ri_tab; vplus = vplusV; divider = dividerV; Rk = RkV; Rp = 100000.0f;
+        tab = Ri_tab; vplus = vplusV; divider = dividerV; Rk = RkV; Rp = RpV;
         Vk0 = solveVk0();
         VkC = Vk0 * (Rp / Rk);
         float RaRest = TUBE::ranode(tab, -Vk0); // dynamic plate resistance at the operating point
         kFb = Rk / (Rp + RaRest);             // cathode current->voltage feedback factor (real)
         vk = 0.0f;
+    }
+    void set(float sr, int Ri_tab, float vplusV, float dividerV, float fckHz, float RkV) {
+        setWithPlate(sr, Ri_tab, vplusV, dividerV, fckHz, RkV, 100000.0f);
     }
     inline float process(float x) {           // x = grid signal in volts
         x = antiAlias.process(x);
@@ -172,8 +379,89 @@ struct TubeStageT {
     }
     void reset() { antiAlias.reset(); cathodeLP.reset(); dcBlock.reset(); vk = 0.0f; }
 };
-using TubeStage    = TubeStageT<Tube12AX7>;   // 12AX7 (back-compat; BOX DC30)
+using TubeStage    = TubeStageT<Tube12AX7>;   // 12AX7 (back-compat; BOX AC30)
 using TubeStageAY7 = TubeStageT<Tube12AY7>;   // 12AY7 (5E3 V1)
+using TubeStageEF86= TubeStageT<TubeEF86>;    // EF86 small-signal pentode (DC30 channel 2)
+
+// Long-tail-pair 12AX7 phase inverter approximation. It keeps the two unequal
+// plate loads and shared-tail compression as an actual nonlinear stage before
+// the push-pull power tubes instead of feeding PowerAmpPP from an ideal splitter.
+struct PhaseInverterLTP12AX7 {
+    TubeStage upper, lower;
+    HP1 inputCoupling;
+    LP1 tailLP;
+    float drive = 1.0f, out = 1.0f, imbalance = 0.07f, tailMix = 0.10f;
+
+    void setComponents(float sr, float driveV, float outV,
+                       float supplyV, float plateAOhms, float plateBOhms,
+                       float cathodeOhms, float tailHz, float imbalanceV) {
+        inputCoupling.set(sr, 2.5f);
+        tailLP.set(sr, tailHz);
+        upper.setWithPlate(sr, 1, supplyV, 52.0f, 5.0f, cathodeOhms, plateAOhms);
+        lower.setWithPlate(sr, 1, supplyV, 52.0f, 5.0f, cathodeOhms, plateBOhms);
+        drive = driveV;
+        out = outV;
+        imbalance = imbalanceV;
+        tailMix = 0.10f + 0.08f * std::fmin(1.0f, std::fmax(0.0f, driveV * 0.25f));
+    }
+
+    void set(float sr, float driveV, float outV = 1.0f, float imbalanceV = 0.07f) {
+        setVoxAc30(sr, driveV, outV, imbalanceV);
+    }
+
+    void setVoxAc30(float sr, float driveV, float outV = 1.0f, float imbalanceV = 0.075f) {
+        setComponents(sr, driveV, outV, 300.0f, 100000.0f, 82000.0f, 1500.0f, 18.0f, imbalanceV);
+    }
+
+    void setMarshall(float sr, float driveV, float outV = 1.0f) {
+        setComponents(sr, driveV, outV, 320.0f, 100000.0f, 82000.0f, 10000.0f, 12.0f, 0.065f);
+    }
+
+    void setFenderAB763(float sr, float driveV, float outV = 1.0f) {
+        setComponents(sr, driveV, outV, 300.0f, 82000.0f, 100000.0f, 470.0f, 9.0f, -0.055f);
+    }
+
+    inline float process(float x) {
+        const float d = inputCoupling.process(x * drive);
+        const float common = tailLP.process(std::fabs(d)) * tailMix;
+        const float ya = upper.process(d * (1.0f + imbalance) - common);
+        const float yb = lower.process(-d * (1.0f - imbalance) - common);
+        return dn((ya - yb) * (0.5f * out));
+    }
+
+    void reset() { upper.reset(); lower.reset(); inputCoupling.reset(); tailLP.reset(); }
+};
+
+// Cathodyne/split-load phase inverter for 5E3/Princeton-style amps. It uses one
+// 12AX7 stage and derives opposite plate/cathode outputs with unequal clipping
+// and coupling; the returned value is the differential drive into PowerAmpPP.
+struct PhaseInverterCathodyne12AX7 {
+    TubeStage triode;
+    HP1 inputCoupling;
+    LP1 cathodeLP;
+    float drive = 1.0f, out = 1.0f, balance = 0.0f, cathodeState = 0.0f;
+
+    void set(float sr, float driveV, float outV = 1.0f, float supplyV = 250.0f,
+             float plateOhms = 56000.0f, float cathodeOhms = 56000.0f,
+             float gridLeakHz = 2.5f, float balanceV = 0.0f) {
+        inputCoupling.set(sr, gridLeakHz);
+        cathodeLP.set(sr, 26000.0f);
+        triode.setWithPlate(sr, 1, supplyV, 62.0f, 6.0f, 1500.0f, plateOhms);
+        drive = driveV;
+        out = outV;
+        balance = balanceV + 0.06f * ((plateOhms - cathodeOhms) / std::fmax(1.0f, plateOhms + cathodeOhms));
+    }
+
+    inline float process(float x) {
+        const float d = inputCoupling.process(x * drive);
+        const float plate = triode.process(d * (1.0f + balance));
+        cathodeState = cathodeLP.process(0.62f * d - 0.10f * plate);
+        const float cathode = std::tanh(cathodeState * (1.0f - balance));
+        return dn((plate - cathode) * out);
+    }
+
+    void reset() { triode.reset(); inputCoupling.reset(); cathodeLP.reset(); cathodeState = 0.0f; }
+};
 
 // Class-A push-pull EL84 power amp (AC30 style), real circuit. Two EL84 in anti-phase
 // summed by the output transformer = the DIFFERENCE of the pure pentode plate transfer
@@ -211,7 +499,10 @@ struct PowerAmpPPT {
 };
 using PowerAmpPP  = PowerAmpPPT<TubeEL84>;    // EL84 push-pull (back-compat; AC30)
 using PowerAmp6V6 = PowerAmpPPT<Tube6V6>;     // 6V6 push-pull (5E3)
-using PowerAmp6L6 = PowerAmpPPT<Tube6L6>;     // 6L6/5881 push-pull (Bassman/JTM45)
+using PowerAmp6L6 = PowerAmpPPT<Tube6L6>;     // legacy 6L6 push-pull
+using PowerAmp5881= PowerAmpPPT<Tube5881>;    // 5881 push-pull (Bassman/Bluesbreaker)
+using PowerAmp6L6GC=PowerAmpPPT<Tube6L6GC>;   // 6L6GC push-pull (Mesa/ENGL/Boogie)
+using PowerAmpKT66= PowerAmpPPT<TubeKT66>;    // KT66 push-pull (BT45 / confirmed KT66 amps)
 using PowerAmpEL34= PowerAmpPPT<TubeEL34>;    // EL34 push-pull (Plexi/Marshall)
 
 } // namespace rbtube
