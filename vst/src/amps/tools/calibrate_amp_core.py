@@ -38,6 +38,33 @@ AMPSPECS = {
 """,
         "gain_setter": "c.setTBVol(gain);",
     },
+    "sampleg_sbtcl": {
+        "include": AMPS / "sampleg_sbtcl" / "SvtCore.h",
+        "type": "svtcl::SvtCore",
+        "input_scale": 1.0,     # SvtCore's inScale already maps audio->grid volts
+        "makeup": 0.45,         # matches kSvtMakeup in SvtPlugin.cpp
+        "defaults": """
+    c.setBass(0.50f);
+    c.setMidrange(0.50f);
+    c.setFreq(0.50f);
+    c.setTreble(0.50f);
+    c.setMaster(0.50f);
+    c.setPad(false);
+    c.setUltraLo(false);
+    c.setUltraHi(false);
+""",
+        "gain_setter": "c.setGain(gain);",
+    },
+    "fk800rb": {
+        "include": AMPS / "fk800rb" / "Fk800Core.h",
+        "type": "fk800gk::Fk800Core",
+        "input_scale": 1.0,
+        "makeup": 0.9183,      # matches kFkMakeup in Fk800Plugin.cpp
+        "defaults": "",
+        # GK 800RB is mono via setParams(); sweep "gain" = the Volume knob,
+        # tone flat, masters ~unity, all voicing/boost switches off.
+        "gain_setter": "c.setParams(gain, 0.5f,0.5f,0.5f,0.5f, 0.5f, 0.5f, 0.7f, 0.7f, false,false,false,false, false,false);",
+    },
 }
 
 
@@ -65,7 +92,7 @@ static void setup(CoreT& c, float gain, float sr) {
 }
 
 static inline float run(CoreT& c, float x) {
-    return rbAmpLvl(0.891f * c.process(3.2f * x));
+    return rbAmpLvl(@MAKEUP@f * c.process(@INPUT_SCALE@f * x));
 }
 
 static std::vector<float> multitone(float sr, float seconds) {
@@ -190,6 +217,8 @@ def build_cpp(spec: dict[str, object]) -> str:
         .replace("@CORE_TYPE@", str(spec["type"]))
         .replace("@DEFAULTS@", str(spec["defaults"]).rstrip())
         .replace("@GAIN_SETTER@", str(spec["gain_setter"]))
+        .replace("@INPUT_SCALE@", str(spec.get("input_scale", 3.2)))
+        .replace("@MAKEUP@", str(spec.get("makeup", 0.891)))
     )
 
 

@@ -20,6 +20,7 @@
 #include "koren_kt66_ftube.h"   // PURE KT66 beam tetrode
 #include "koren_el34_ftube.h"   // PURE EL34 power pentode
 #include "koren_ef86_ftube.h"   // PURE EF86 small-signal pentode (DC30 channel 2)
+#include "koren6550_ftube.h"    // PURE 6550 beam pentode (Ampeg SVT-CL, 6x PP)
 #include <cmath>
 
 namespace rbtube {
@@ -67,6 +68,7 @@ struct Tube5881  { static inline float ftube(int t,float v){return T5881_ftube(t
 struct Tube6L6GC { static inline float ftube(int t,float v){return L6GC_ftube(t,v);} };
 struct TubeKT66  { static inline float ftube(int t,float v){return KT66_ftube(t,v);} };
 struct TubeEL34  { static inline float ftube(int t,float v){return EL34P_ftube(t,v);} };
+struct Tube6550  { static inline float ftube(int t,float v){return T6550_ftube(t,v);} };
 
 // one-pole low-pass (anti-alias / Miller / cathode-bypass / coupling rolloff)
 struct LP1 {
@@ -504,5 +506,6 @@ using PowerAmp5881= PowerAmpPPT<Tube5881>;    // 5881 push-pull (Bassman/Bluesbr
 using PowerAmp6L6GC=PowerAmpPPT<Tube6L6GC>;   // 6L6GC push-pull (Mesa/ENGL/Boogie)
 using PowerAmpKT66= PowerAmpPPT<TubeKT66>;    // KT66 push-pull (BT45 / confirmed KT66 amps)
 using PowerAmpEL34= PowerAmpPPT<TubeEL34>;    // EL34 push-pull (Plexi/Marshall)
+using PowerAmp6550= PowerAmpPPT<Tube6550>;    // 6550 push-pull (Ampeg SVT-CL, 6x)
 
 } // namespace rbtube
