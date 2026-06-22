@@ -164,7 +164,7 @@ struct Fk800Core {
     RC1 xLp, xHp;   float g100 = 1.f, g300 = 1.f;  bool biamp = false;
     // family loudness lift (+7 dB) so the clean GK sits with the SVT/en30 level in
     // the rig; post-clip so it doesn't change the growl onset. Tuned via the harness.
-    float outLevel = 2.24f;
+    float outLevel = 4.0f;
 
     RC1* allRC[15] = { &loCutF,&conHp,&conLp,&hbLp,&hbHp,&bLp,&bHp,&lmHp,&lmLp,&hmHp,&hmLp,&tLp,&tHp,&xLp,&xHp };
 
@@ -201,8 +201,12 @@ struct Fk800Core {
         biamp = biampP;
         const double fc = 100.0 + 940.0 * xover;
         xLp.set(fc, false); xHp.set(fc, true);
-        g300 = master300 / 0.7f;
-        g100 = master100 / 0.7f;
+        // Master volumes (300W low / 100W high). The old `master/0.7` only spanned
+        // 0..1.43× (≈ +3 dB at full) → "the masters barely raise the volume". Give
+        // them real authority: an audio-ish taper up to ~2.4× (≈ +7.6 dB at full),
+        // with the default 0.7 sitting a touch hotter so the amp isn't quiet.
+        g300 = std::pow(master300, 1.8f) * 2.4f;   // 0.5→0.69× · 0.7→1.29× · 1.0→2.4×
+        g100 = std::pow(master100, 1.8f) * 2.4f;
     }
 
     inline float process(float x) {

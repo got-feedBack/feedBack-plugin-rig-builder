@@ -132,6 +132,11 @@ struct SvtCore {
         // the amp-family target (~−13 dB clean rising to ~−9 dB, like the en30 ref):
         // makeup_dB ≈ 17 + 15·Gain. Peaks ride ~0.85→0.99 into the rbAmpLvl ceiling.
         outLevel = std::pow(10.0f, 0.05f * (17.0f + 15.0f * pGain));
+        // Pad-aware makeup: the −15 dB pad cuts pre-NAM drive (cleaner, less
+        // compression), so the gain-staged makeup above over-drives the now-cleaner
+        // signal into the ceiling. Trim it back when padded → the padded input stays
+        // clean and sits a touch below the un-padded level (≈ matches the GK).
+        if (pPad) outLevel *= 0.45f;
     }
 
     inline float process(float x){
