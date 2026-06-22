@@ -1768,5 +1768,15 @@
    "bundled": "vst/amps/Meve1073.vst3",
    "notes": "Bundled Neve 1073 channel amplifier (class-A console preamp/EQ used as a DI; parody brand 'Meve'), the game 'DI_Amp_MixerPre'/'Amp Mixer Pre'. Component-level model from the local 1073 schematics (EH10023 + BA283/BA284 class-A cards + B182/C HPF + B205 hi/lo EQ + B211 presence + LO1166 output trafo): Marinair-ish input iron, progressive class-A 'Neve push', LOW shelf, PRESENCE mid peak, HIGH shelf, 3rd-order HPF. A DI (no cab). RS Gain->Gain; Bass->Low; Mid->Mid; Treble->High (Low/Mid freq + HPF + Output via _static)."
   }
+ ],
+ "Bass_Pedal_NYRBS103": [
+  {
+   "name": "NYRBS103",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "bundled": "vst/pedals/NYRBS103.vst3",
+   "free": true,
+   "notes": "Bundled original monophonic bass synth (MVP): pitch-tracking oscillator + square sub-octave through a resonant 4-pole low-pass with a per-note filter envelope. Maps Mix/Sub/Cutoff/Resonance/Envelope/Shape/Level."
+  }
  ]
 }

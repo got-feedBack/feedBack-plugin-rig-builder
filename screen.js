@@ -71,7 +71,12 @@ function rbEnsureScopedCss() {
     if (!document.getElementById('rb-pedal-canvas-js')) {
         const sc = document.createElement('script');
         sc.id = 'rb-pedal-canvas-js';
-        sc.src = '/api/plugins/rig_builder/asset/pedal_canvas.js';
+        // Cache-bust: plugin.json only loads screen.js (which IS ?v=version
+        // busted by the host), but pedal_canvas.js was injected by a bare path,
+        // so Electron's HTTP cache served a STALE copy across restarts — the
+        // pedal faces + canvas knob→param mapping looked frozen no matter what
+        // we changed. A per-load token forces a fresh fetch.
+        sc.src = '/api/plugins/rig_builder/asset/pedal_canvas.js?v=' + Date.now();
         sc.onload = () => {
             try {
                 window.RBPedalCanvas && window.RBPedalCanvas.ready().then(() => {
@@ -344,7 +349,9 @@ function rbDriveForChainInput(opts) {
 }
 
 function rbApplyChainInputDrive(opts) {
-    const drive = rbDriveForChainInput(opts);
+    // While the node graph is disconnected (Input/Output unwired) the chain is
+    // silenced at the source — keep it silent even if a scheduled re-poll fires.
+    const drive = rbState._advSilenced ? 0 : rbDriveForChainInput(opts);
     // Re-poll guard: the song-playback callers fire this ~600 ms after
     // the bundle's chain load — but `highway.getStringCount()` may not
     // have absorbed the song_info WS message yet (it defaults to 6
@@ -851,21 +858,44 @@ function rbAttachKnob(containerId, opts) {
     return { set(v) { val = clamp(v); render(); }, get() { return val; } };
 }
 
-// User cab/chain volume trim. Persists to /settings and applies LIVE via
-// setGain('chain', base × trim) — the only gain the engine honours.
-// Range 0–5, default 1× (the knob value IS the multiplier).
-async function rbSetChainMakeup(v) {
-    let n = parseFloat(v); if (!Number.isFinite(n)) n = 1.0;
-    const val = Math.max(0, Math.min(5.0, n));
+// ── Level faders: dB in the UI, linear × in the engine ─────────────────────
+// The user controls/sees the two level faders ("Desktop Input" + "AMP") in dB,
+// like the original engine faders. We keep the engine/backend on a linear ×
+// multiplier (nam_chain_input_drive / chain_makeup) and convert at the UI edge.
+// Range is deliberately tight (−24..+12 dB) so small trims are easy — the old
+// −60..+12 range made nudging −3 dB almost impossible.
+const RB_LEVEL_DB_MIN = -24, RB_LEVEL_DB_MAX = 12;
+function rbClampDb(db) {
+    const d = Number(db);
+    return Number.isFinite(d) ? Math.max(RB_LEVEL_DB_MIN, Math.min(RB_LEVEL_DB_MAX, d)) : 0;
+}
+function rbDbToLin(db) { return Math.pow(10, rbClampDb(db) / 20); }
+function rbLinToDb(lin) {
+    const x = Number(lin);
+    return (x > 1.0e-4) ? rbClampDb(20 * Math.log10(x)) : RB_LEVEL_DB_MIN;
+}
+function rbFmtDb(db) { const v = rbClampDb(db); return (v > 0 ? '+' : '') + v.toFixed(1) + ' dB'; }
+
+// "AMP" output trim. Persists to /settings (chain_makeup, a linear ×) and applies
+// LIVE post-leveler (Output Trim) or via setGain('chain', base × trim). The fader
+// VALUE is in dB; we convert to the linear × the engine/backend expect.
+async function rbSetChainMakeup(dbIn) {
+    const d = rbClampDb(dbIn);
+    const val = rbDbToLin(d);   // linear × for the engine + persisted setting
     window.__rbChainMakeup = val;
     const cmVal = document.getElementById('rb-chain-makeup-val');
-    if (cmVal) cmVal.textContent = val.toFixed(2) + '×';
-    // When a final leveler is in the chain, Chain Volume must be applied
-    // AFTER it (the AGC cancels any pre-leveler gain). Drive the leveler's
-    // Output Trim live; only fall back to the route/chain bus when no leveler
-    // owns the output (e.g. mega-chain off / leveler disabled). On 0.3.0 the
-    // bus fallback routes through the audio-effects host first.
-    const db = val > 1.0e-4 ? 20 * Math.log10(val) : -24;
+    if (cmVal) cmVal.textContent = rbFmtDb(d);
+    // Keep the in-plugin AMP knob visually in sync when the change came from the
+    // in-game mixer "AMP" fader (set() only re-renders, no onChange → no loop).
+    if (window.__rbChainMakeupKnob && typeof window.__rbChainMakeupKnob.set === 'function') {
+        try { window.__rbChainMakeupKnob.set(d); } catch (_) {}
+    }
+    // When a final leveler is in the chain, AMP must be applied AFTER it (the AGC
+    // cancels any pre-leveler gain). Drive the leveler's Output Trim live (in dB);
+    // only fall back to the route/chain bus when no leveler owns the output (e.g.
+    // mega-chain off / leveler disabled). On 0.3.0 the bus fallback routes through
+    // the audio-effects host first.
+    const db = d;
     let appliedPostLeveler = false;
     if (typeof RbMegaChain !== 'undefined' && RbMegaChain.isActive && RbMegaChain.isActive()) {
         try { appliedPostLeveler = await RbMegaChain.setOutputTrimDb(db); } catch (_) {}
@@ -881,21 +911,86 @@ async function rbSetChainMakeup(v) {
     }).catch(() => {});
 }
 
-// User "Amp drive" / input-chain trim — the pre-NAM input gain for GUITAR amps
-// (bass auto-uses 1×). Range 0–5, default 1× (no boost). Persists to /settings
-// (nam_chain_input_drive) and re-applies live through rbApplyChainInputDrive
-// (which keeps the bass/guitar branch correct).
-async function rbSetAmpDrive(v) {
-    let n = parseFloat(v); if (!Number.isFinite(n)) n = 1.0;
-    const val = Math.max(0, Math.min(5.0, n));
+// "Desktop Input" — the pre-NAM input gain for GUITAR amps (bass auto-uses 1×).
+// This is the same control that used to be the Setup "Input chain" / "Amp drive"
+// knob; it is now surfaced as the in-game "Desktop Input" fader too, so Setup and
+// the in-game mixer drive ONE value. Range 0–5, default 1× (no boost). Persists to
+// /settings (nam_chain_input_drive) and re-applies live through
+// rbApplyChainInputDrive (which keeps the bass/guitar branch correct).
+async function rbSetDesktopInput(dbIn) {
+    const d = rbClampDb(dbIn);
+    const val = rbDbToLin(d);   // linear × for the engine + persisted setting
     window.__rbChainInputDrive = val;
     const el = document.getElementById('rb-amp-drive-val');
-    if (el) el.textContent = val.toFixed(1) + '×';
+    if (el) el.textContent = rbFmtDb(d);
+    // Keep the Setup knob visually in sync when the change came from the in-game
+    // "Desktop Input" fader (set() only re-renders, no onChange → no loop).
+    if (window.__rbDesktopInputKnob && typeof window.__rbDesktopInputKnob.set === 'function') {
+        try { window.__rbDesktopInputKnob.set(d); } catch (_) {}
+    }
     rbApplyChainInputDrive();   // re-applies respecting bass detection
     fetch(`${window.RB_API}/settings`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nam_chain_input_drive: val }),
     }).catch(() => {});
+}
+
+// ── In-game mixer faders: "Input" + "AMP" ──────────────────────────────────
+// rig_builder owns BOTH the level faders the player sees while playing, so Setup
+// and the in-game mixer drive the SAME two values (no duplicate/conflicting
+// controllers). audio_engine no longer registers its own "Desktop Input"/
+// "Desktop Chain" mix participants (rig_builder re-applied over them on every
+// chain reload anyway — they were dead during gameplay).
+//
+//   • Input → window.__rbChainInputDrive (persisted nam_chain_input_drive).
+//     Pre-NAM input gain; rbApplyChainInputDrive re-applies it on every reload,
+//     so it sticks through tone changes.
+//   • AMP   → window.__rbChainMakeup (persisted chain_makeup). Output trim applied
+//     POST-leveler via rbSetChainMakeup — so, unlike a raw setGain('chain') fader,
+//     the final leveler RE-APPLIES it every tick instead of cancelling it on the
+//     next tone load.
+//
+// Both are shown in dB (−24..+12, 0 dB = unity) but stored/applied as a linear ×.
+// setValue routes through the same rbSet* used by the Setup knobs (which also
+// visually sync the knob), so edits flow both ways and persist to /settings.
+function rbRegisterLevelFaders() {
+    const api = window.slopsmith && window.slopsmith.audio;
+    if (!api) return;
+    if (typeof api.registerFader !== 'function') {
+        window.addEventListener('slopsmith:audio:ready', rbRegisterLevelFaders, { once: true });
+        return;
+    }
+    if (window.__rbLevelFadersRegistered) return;
+    window.__rbLevelFadersRegistered = true;
+    // Order = how the mixer renders them: input first, output second.
+    api.registerFader({
+        id: 'rig_builder_desktop_input',
+        label: 'Input',
+        ownerPluginId: 'rig_builder',
+        kind: 'plugin',
+        unit: 'dB',
+        min: RB_LEVEL_DB_MIN, max: RB_LEVEL_DB_MAX, step: 0.5,
+        defaultValue: 0,
+        getValue: () => rbLinToDb(window.__rbChainInputDrive),
+        setValue: (v) => { rbSetDesktopInput(v); },
+    });
+    api.registerFader({
+        id: 'rig_builder_amp',
+        label: 'AMP',
+        ownerPluginId: 'rig_builder',
+        kind: 'plugin',
+        unit: 'dB',
+        min: RB_LEVEL_DB_MIN, max: RB_LEVEL_DB_MAX, step: 0.5,
+        defaultValue: 0,
+        getValue: () => rbLinToDb(window.__rbChainMakeup),
+        setValue: (v) => { rbSetChainMakeup(v); },
+    });
+}
+
+if (window.slopsmith && window.slopsmith.audio) {
+    rbRegisterLevelFaders();
+} else {
+    window.addEventListener('slopsmith:audio:ready', rbRegisterLevelFaders, { once: true });
 }
 
 // Mute everything the engine can mute just long enough that the bundle's
@@ -4656,6 +4751,8 @@ async function rbStudioFinishMonitorLoad(api, chain) {
     try { await rbReapplyBypassToChain(api, chain); } catch (_) {}
     try { await rbReapplyVstParamsToChain(api, chain); } catch (_) {}
     try { await rbApplyChainInputDrive({ chain }); } catch (_) {}
+    try { await rbStudioApplyStereoToEngine(); } catch (_) {}   // re-apply pan/branch after a chain (re)load
+    try { await rbAdvApplyConnectivity(); } catch (_) {}        // bypass graph-disconnected gear
     try { await rbStartFinalChainNormalizer(chain); } catch (_) {}
     if (api.startAudio) await api.startAudio().catch(() => {});
     try { await rbSignalChainLoaded(); } catch (_) {}   // un-mute AFTER the re-apply
@@ -7213,8 +7310,30 @@ async function rbReloadDefaultTone() {
     }
     if (!enabled) { rbState._defaultToneActive = false; return false; }
     if (!rbDefaultToneHasContent()) { rbState._defaultToneActive = false; return false; }
-    try { return await rbLoadDefaultTone(); }
+    try {
+        const ok = await rbLoadDefaultTone();
+        // The reload rebuilt the chain pieces from the backend (which doesn't
+        // store pan), so the panning would be lost on app restart. Restore it
+        // from the saved graph (localStorage holds node.pan) + re-apply stereo.
+        try { rbRestorePanFromGraph(); await rbStudioApplyStereoToEngine(); } catch (_) {}
+        return ok;
+    }
     catch (e) { return false; }
+}
+
+// Re-seed chain pieces' _pan from the persisted node graph (the durable pan
+// store), so a backend reload that rebuilt the pieces doesn't wipe the panning.
+function rbRestorePanFromGraph() {
+    let saved;
+    try { saved = JSON.parse(localStorage.getItem(rbAdvStorageKey()) || 'null'); } catch (_) { return; }
+    if (!saved || !Array.isArray(saved.nodes)) return;
+    const chain = rbStudioCurrentChain();
+    for (const n of saved.nodes) {
+        if (n.kind === 'gear' && typeof n.pieceIdx === 'number' && n.pieceIdx >= 0
+            && typeof n.pan === 'number' && chain[n.pieceIdx]) {
+            chain[n.pieceIdx]._pan = n.pan;
+        }
+    }
 }
 
 async function rbPreviewDefaultTone(btn) {
@@ -12239,20 +12358,23 @@ async function rbLoadSettings() {
     if (typeof s.nam_chain_input_drive === 'number') {
         window.__rbChainInputDrive = s.nam_chain_input_drive;
     }
-    // Input chain (amp drive) knob — range 0–5, default 1×.
-    const adv = (typeof s.nam_chain_input_drive === 'number') ? s.nam_chain_input_drive : 1.0;
-    if (!window.__rbAmpDriveKnob)
-        window.__rbAmpDriveKnob = rbAttachKnob('rb-amp-drive-knob', { min: 0, max: 5, def: 1, value: adv, onChange: rbSetAmpDrive });
-    else window.__rbAmpDriveKnob.set(adv);
+    // "Input" knob (the in-game "Input" fader's twin) — shown in dB, default 0 dB.
+    // Reflects the latest value, including edits made via the in-game fader during
+    // songs (each edit persisted nam_chain_input_drive as a linear ×).
+    const advDb = rbLinToDb((typeof s.nam_chain_input_drive === 'number') ? s.nam_chain_input_drive : 1.0);
+    if (!window.__rbDesktopInputKnob)
+        window.__rbDesktopInputKnob = rbAttachKnob('rb-amp-drive-knob', { min: RB_LEVEL_DB_MIN, max: RB_LEVEL_DB_MAX, def: 0, value: advDb, onChange: rbSetDesktopInput });
+    else window.__rbDesktopInputKnob.set(advDb);
     const adVal = document.getElementById('rb-amp-drive-val');
-    if (adVal) adVal.textContent = adv.toFixed(1) + '×';
-    // Output chain (chain volume) knob — range 0–5, default 1×.
+    if (adVal) adVal.textContent = rbFmtDb(advDb);
+    // "AMP" output knob — shown in dB, default 0 dB.
     window.__rbChainMakeup = (typeof s.chain_makeup === 'number') ? s.chain_makeup : 1.0;
+    const ampDb = rbLinToDb(window.__rbChainMakeup);
     if (!window.__rbChainMakeupKnob)
-        window.__rbChainMakeupKnob = rbAttachKnob('rb-chain-makeup-knob', { min: 0, max: 5, def: 1, value: window.__rbChainMakeup, onChange: rbSetChainMakeup });
-    else window.__rbChainMakeupKnob.set(window.__rbChainMakeup);
+        window.__rbChainMakeupKnob = rbAttachKnob('rb-chain-makeup-knob', { min: RB_LEVEL_DB_MIN, max: RB_LEVEL_DB_MAX, def: 0, value: ampDb, onChange: rbSetChainMakeup });
+    else window.__rbChainMakeupKnob.set(ampDb);
     const cmVal = document.getElementById('rb-chain-makeup-val');
-    if (cmVal) cmVal.textContent = window.__rbChainMakeup.toFixed(1) + '×';
+    if (cmVal) cmVal.textContent = rbFmtDb(ampDb);
     // OAuth (Connect with tone3000) state.
     const oauthStatus = document.getElementById('rb-oauth-status');
     const oauthBtn = document.getElementById('rb-oauth-btn');
@@ -12523,6 +12645,8 @@ function rbAdvPersist() {
         const nodes = adv.nodes.map(n => ({
             id: n.id, kind: n.kind, pieceIdx: (typeof n.pieceIdx === 'number' ? n.pieceIdx : -1),
             kindLabel: n.kindLabel || null, label: n.label || null, x: n.x, y: n.y,
+            pan: (typeof n.pan === 'number' ? n.pan : 0),   // stereo pan (St-1)
+            stereoOut: !!n.stereoOut,                       // split L/R outputs (St-2)
         }));
         localStorage.setItem(rbAdvStorageKey(), JSON.stringify({ nodes, edges: adv.edges }));
     } catch (_) {}
@@ -12543,11 +12667,16 @@ function rbAdvRestore() {
         if (n.kind === 'gear') {
             const p = chain[n.pieceIdx];
             if (!p) return false;                                  // piece gone → reset
+            // Pan: the piece is the durable source (survives a tone reload); fall
+            // back to the graph-saved value, then 0. Mirror it onto the piece.
+            const pan = (typeof p._pan === 'number') ? p._pan
+                      : (typeof n.pan === 'number') ? n.pan : 0;
+            p._pan = pan;
             nodes.push({
                 id: n.id, kind: 'gear', pieceIdx: n.pieceIdx, kindLabel: n.kindLabel,
                 label: p.real_name || p.type || 'Gear',
                 img: rbStudioPedalImg(p) || null, bypassed: !!p._bypassed,
-                x: n.x, y: n.y,
+                x: n.x, y: n.y, pan, stereoOut: !!n.stereoOut,
             });
         } else {
             // Always use the fresh terminal label (ignore any cached one, e.g. an
@@ -12559,7 +12688,7 @@ function rbAdvRestore() {
     const adv = rbAdvState();
     adv.nodes = nodes;
     adv.edges = (saved.edges || []).filter(e => ids.has(e.from) && ids.has(e.to))
-        .map(e => ({ from: e.from, to: e.to, gain: (typeof e.gain === 'number' ? e.gain : 1.0) }));
+        .map(e => ({ from: e.from, to: e.to, gain: (typeof e.gain === 'number' ? e.gain : 1.0), fromPort: e.fromPort || 'out' }));
     // If a pedal's saved wiring (pre/post the amp) disagrees with its CURRENT
     // chain slot — e.g. the user flipped it pre↔post in the main UI — the cached
     // graph is stale; bail so rbLoadAdvanced reseeds the graph from the chain and
@@ -12607,6 +12736,8 @@ async function rbLoadAdvanced() {
     rbAdvPaletteRender();
     rbAdvRenderCanvas();
     rbAdvBindCanvasOnce();
+    rbStudioApplyStereoToEngine().catch(() => {});   // push pan/branch to the live engine
+    rbAdvApplyConnectivity();                         // mute if Input/Output is unwired
 }
 
 // Build the initial graph from the current chain: a serial line
@@ -12622,6 +12753,7 @@ function rbAdvResetToChain() {
         label: e.p.real_name || e.p.type || 'Gear', kindLabel,
         img: rbStudioPedalImg(e.p) || null,
         bypassed: !!e.p.bypassed, x: 0, y: 0,
+        pan: (typeof e.p._pan === 'number' ? e.p._pan : 0),   // stereo pan (St-1)
     });
     const isPost = (e) => (e.p.slot || '').toLowerCase() === 'post_pedal';
     const pedals = g.pedal || [];
@@ -12716,6 +12848,25 @@ function rbAdvPaletteRender() {
 }
 
 // ── Canvas render ───────────────────────────────────────────────────────
+// Pan label: C (centre), L100..L1, R1..R100.
+function rbAdvPanLabel(pan) {
+    const v = Math.round((typeof pan === 'number' ? pan : 0) * 100);
+    if (v === 0) return 'C';
+    return (v < 0 ? 'L' : 'R') + Math.abs(v);
+}
+// Compact L/R pan slider on a gear node. Centre-detented; stops propagation so
+// dragging the knob doesn't drag the node. Most useful on amps (one left / one
+// right) but works on any gear (pan an effect, etc.).
+function rbAdvPanHtml(n) {
+    const pan = (typeof n.pan === 'number') ? n.pan : 0;
+    return `<div class="rb-adv-node-pan" title="Pan left / right">
+                <input type="range" class="rb-adv-pan-slider" min="-1" max="1" step="0.02"
+                       value="${pan}" data-adv-pan="${n.id}"
+                       oninput="rbAdvOnPanInput(${n.id}, this.value)">
+                <span class="rb-adv-pan-val" data-adv-pan-val="${n.id}">${rbAdvPanLabel(pan)}</span>
+            </div>`;
+}
+
 function rbAdvNodeHtml(n) {
     if (n.kind === 'input' || n.kind === 'output') {
         const out = n.kind === 'input';
@@ -12729,15 +12880,19 @@ function rbAdvNodeHtml(n) {
     const thumb = n.img
         ? `<div class="rb-adv-node-thumb"><img src="${rbEsc(n.img)}" alt="" onerror="this.style.display='none'"></div>`
         : `<div class="rb-adv-node-thumb"></div>`;
-    return `<div class="rb-adv-node ${n.bypassed ? 'rb-adv-node-bypassed' : ''}" data-adv-node="${n.id}"
+    return `<div class="rb-adv-node ${n.bypassed ? 'rb-adv-node-bypassed' : ''} ${n._inactive ? 'rb-adv-node-inactive' : ''}" data-adv-node="${n.id}"
                  style="left:${n.x}px;top:${n.y}px">
                 <button class="rb-adv-node-del" data-adv-del="${n.id}" title="Remove from chain">✕</button>
                 <button class="rb-adv-node-edit" data-adv-edit="${n.id}" title="Edit knobs">🎛</button>
                 ${thumb}
                 <div class="rb-adv-node-label">${rbEsc(n.label)}</div>
                 <div class="rb-adv-node-kind">${rbEsc(n.kindLabel || 'gear')}</div>
-                <span class="rb-adv-jack rb-adv-jack-in" data-adv-jack="${n.id}" data-adv-side="in"></span>
-                <span class="rb-adv-jack rb-adv-jack-out" data-adv-jack="${n.id}" data-adv-side="out"></span>
+                ${rbAdvPanHtml(n)}
+                <span class="rb-adv-jack rb-adv-jack-in" data-adv-jack="${n.id}" data-adv-side="in" data-adv-port="in"></span>
+                ${n.stereoOut
+                    ? `<span class="rb-adv-jack rb-adv-jack-out rb-adv-jack-l" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="L" title="Left output"></span>
+                       <span class="rb-adv-jack rb-adv-jack-out rb-adv-jack-r" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="R" title="Right output"></span>`
+                    : `<span class="rb-adv-jack rb-adv-jack-out" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="out"></span>`}
             </div>`;
 }
 
@@ -12781,16 +12936,22 @@ function rbAdvRenderCables(tempPath) {
         const fn = adv.nodes.find(n => n.id === e.from), tn = adv.nodes.find(n => n.id === e.to);
         const fEl = layer.querySelector(`[data-adv-node="${e.from}"]`), tEl = layer.querySelector(`[data-adv-node="${e.to}"]`);
         if (!fn || !tn) return;
-        const x1 = fn.x + ((fEl && fEl.offsetWidth) || dimW(fn)), y1 = fn.y + dimH(fn, fEl) / 2;
+        const fH = dimH(fn, fEl);
+        // Output anchor follows the port: a stereo-out node has L (upper) and R
+        // (lower) jacks; everything else exits at the vertical centre.
+        const port = e.fromPort || 'out';
+        const oy = (fn.stereoOut && port === 'L') ? 0.32 : (fn.stereoOut && port === 'R') ? 0.68 : 0.5;
+        const x1 = fn.x + ((fEl && fEl.offsetWidth) || dimW(fn)), y1 = fn.y + fH * oy;
         const x2 = tn.x, y2 = tn.y + dimH(tn, tEl) / 2;
         const dx = Math.max(40, Math.abs(x2 - x1) * 0.5);
         const d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
         // Each edge: a wide invisible hit area (easy to grab, turns the cable red
         // on hover) + the visible cable. DOUBLE-click to disconnect (no ✕ button —
-        // it made accidental deletes too easy).
+        // it made accidental deletes too easy). L/R cables are tinted.
+        const cls = (fn.stereoOut && port === 'L') ? ' rb-adv-cable-l' : (fn.stereoOut && port === 'R') ? ' rb-adv-cable-r' : '';
         paths += `<g class="rb-adv-edge-g" data-adv-edge="${idx}">
             <path class="rb-adv-cable-hit" d="${d}"/>
-            <path class="rb-adv-cable" d="${d}"/>
+            <path class="rb-adv-cable${cls}" d="${d}"/>
         </g>`;
     });
     if (tempPath) paths += `<path class="rb-adv-cable rb-adv-cable-temp" d="${tempPath}"/>`;
@@ -12821,11 +12982,27 @@ function rbAdvAttachNodeHandlers() {
     layer.addEventListener('mousedown', ev => {
         const btn = ev.target.closest('.rb-adv-node-del, .rb-adv-node-edit');
         if (btn) { ev.preventDefault(); ev.stopPropagation(); return; }   // buttons are clicks, not drags
-        const jack = ev.target.closest('.rb-adv-jack');
+        if (ev.target.closest('.rb-adv-node-pan')) { ev.stopPropagation(); return; } // let the pan slider drag
         const nodeEl = ev.target.closest('.rb-adv-node');
-        if (jack && jack.dataset.advSide === 'out') { rbAdvStartWire(ev, +jack.dataset.advJack); return; }
+        // Ctrl/⌘-click a gear node → toggle its split L/R outputs (two out jacks).
+        if ((ev.ctrlKey || ev.metaKey) && nodeEl && !ev.target.closest('.rb-adv-jack')) {
+            ev.preventDefault(); ev.stopPropagation();
+            rbAdvToggleStereoOut(+nodeEl.dataset.advNode);
+            return;
+        }
+        const jack = ev.target.closest('.rb-adv-jack');
+        if (jack && jack.dataset.advSide === 'out') { rbAdvStartWire(ev, +jack.dataset.advJack, jack.dataset.advPort || 'out'); return; }
         if (nodeEl) rbAdvStartNodeDrag(ev, +nodeEl.dataset.advNode);
     });
+    // Ctrl-click on macOS also fires contextmenu — suppress it over a node so the
+    // split-output toggle doesn't pop the OS menu.
+    layer.addEventListener('contextmenu', ev => { if (ev.target.closest('.rb-adv-node')) ev.preventDefault(); });
+    // Track which gear node the pointer is over, for the C/L/R pan hotkeys.
+    layer.addEventListener('mouseover', ev => {
+        const nodeEl = ev.target.closest('.rb-adv-node');
+        rbState._advHoverNodeId = (nodeEl && nodeEl.dataset.advNode) ? +nodeEl.dataset.advNode : null;
+    });
+    layer.addEventListener('mouseleave', () => { rbState._advHoverNodeId = null; });
     layer.addEventListener('click', ev => {
         const del = ev.target.closest('.rb-adv-node-del');
         if (del) { ev.preventDefault(); ev.stopPropagation(); rbAdvDeleteNode(+del.dataset.advDel); return; }
@@ -12834,10 +13011,33 @@ function rbAdvAttachNodeHandlers() {
     });
     // Double-click a gear node → bypass it (acts as a passthrough wire; goes grey).
     layer.addEventListener('dblclick', ev => {
-        if (ev.target.closest('.rb-adv-node-del, .rb-adv-node-edit, .rb-adv-jack')) return;
+        if (ev.target.closest('.rb-adv-node-del, .rb-adv-node-edit, .rb-adv-jack, .rb-adv-node-pan')) return;
         const nodeEl = ev.target.closest('.rb-adv-node');
         if (nodeEl) rbAdvToggleBypass(+nodeEl.dataset.advNode);
     });
+}
+
+// Ctrl/⌘-click a gear node → toggle split L/R outputs. Two out jacks appear (L
+// upper, R lower) so you can wire each side to a different destination (e.g. a
+// stereo delay's L to amp A, R to amp B). Turning it back off collapses this
+// node's L/R cables to a single mono output per target.
+function rbAdvToggleStereoOut(id) {
+    const adv = rbAdvState();
+    const n = adv.nodes.find(x => x.id === id);
+    if (!n || n.kind !== 'gear') return;
+    n.stereoOut = !n.stereoOut;
+    if (!n.stereoOut) {
+        const seen = new Set();
+        adv.edges = adv.edges.filter(e => {
+            if (e.from !== id) return true;
+            e.fromPort = 'out';
+            if (seen.has(e.to)) return false;   // drop the now-duplicate after collapse
+            seen.add(e.to); return true;
+        });
+    }
+    rbAdvRenderCanvas();
+    rbAdvPersist();
+    rbAdvSyncAudio();
 }
 
 // Toggle a gear node's bypass: the piece is skipped (signal passes through like a
@@ -13047,13 +13247,16 @@ function rbAdvStartNodeDrag(ev, nodeId) {
     document.addEventListener('mouseup', up);
 }
 
-function rbAdvStartWire(ev, fromId) {
+function rbAdvStartWire(ev, fromId, fromPort) {
     ev.preventDefault();
+    fromPort = fromPort || 'out';
     const adv = rbAdvState();
     const fn = adv.nodes.find(n => n.id === fromId);
     const fEl = document.querySelector(`#rb-adv-nodes [data-adv-node="${fromId}"]`);
     if (!fn || !fEl) return;
-    const x1 = fn.x + fEl.offsetWidth, y1 = fn.y + fEl.offsetHeight / 2;
+    // Start the rubber-band at the actual port anchor (L upper / R lower / centre).
+    const oy = (fn.stereoOut && fromPort === 'L') ? 0.32 : (fn.stereoOut && fromPort === 'R') ? 0.68 : 0.5;
+    const x1 = fn.x + fEl.offsetWidth, y1 = fn.y + fEl.offsetHeight * oy;
     const move = e => {
         const p = rbAdvLayerPoint(e);
         const dx = Math.max(40, Math.abs(p.x - x1) * 0.5);
@@ -13062,7 +13265,7 @@ function rbAdvStartWire(ev, fromId) {
     const up = e => {
         document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
         const jack = e.target.closest && e.target.closest('.rb-adv-jack');
-        if (jack && jack.dataset.advSide === 'in') rbAdvConnect(fromId, +jack.dataset.advJack);
+        if (jack && jack.dataset.advSide === 'in') rbAdvConnect(fromId, +jack.dataset.advJack, fromPort);
         else rbAdvRenderCables();
     };
     document.addEventListener('mousemove', move);
@@ -13116,14 +13319,20 @@ function rbAdvApplyTopologyToChain() {
     }
 }
 
-function rbAdvConnect(fromId, toId) {
+function rbAdvConnect(fromId, toId, fromPort) {
     const adv = rbAdvState();
     if (fromId === toId) return;
     const to = adv.nodes.find(n => n.id === toId);
     if (to && to.kind === 'input') return;            // can't feed the guitar input
-    if (adv.edges.some(e => e.from === fromId && e.to === toId)) return; // dup
+    fromPort = fromPort || 'out';
+    // Dup = same source PORT → same target (so L and R from one node can each
+    // reach the same node without colliding).
+    if (adv.edges.some(e => e.from === fromId && e.to === toId && (e.fromPort || 'out') === fromPort)) return;
     if (rbAdvReaches(toId, fromId)) { rbAdvRenderCables(); return; }      // would cycle
-    adv.edges.push({ from: fromId, to: toId, gain: 1.0 });
+    adv.edges.push({ from: fromId, to: toId, gain: 1.0, fromPort });
+    // An L/R output port selects WHICH channel of the stereo effect feeds the path
+    // (the signal/content, via branchSrc) — it does NOT move pan. Pan stays an
+    // independent "where it sits" control.
     rbAdvRenderCanvas();
     rbAdvPersist();
     rbAdvApplyTopologyToChain();
@@ -13135,10 +13344,40 @@ function rbAdvConnect(fromId, toId) {
 // AMP becomes a parallel rig: it appears as the 2nd/3rd/4th amp in the room
 // corners. NOTE: on the stock engine the extra amp plays in SERIES; true
 // parallel MIX needs the DAG engine ([[project-node-editor-parallel]], deferred).
+// Set a gear node's pan programmatically (from the C/L/R hotkeys): move the
+// slider, update the label, persist + push to the engine via rbAdvOnPanInput.
+function rbAdvKeyPan(id, pan) {
+    const slider = document.querySelector(`.rb-adv-pan-slider[data-adv-pan="${id}"]`);
+    if (slider) slider.value = String(pan);
+    rbAdvOnPanInput(id, pan);
+}
+
 function rbAdvBindCanvasOnce() {
     const canvas = document.getElementById('rb-adv-canvas');
     if (!canvas || canvas._advBound) return;
     canvas._advBound = true;
+    // C / L / R hotkeys: with the pointer over a gear node, snap its pan to
+    // centre / hard-left / hard-right. Bound once on the document.
+    if (!rbState._advKeyBound) {
+        rbState._advKeyBound = true;
+        document.addEventListener('keydown', ev => {
+            const panel = document.getElementById('rb-tab-advanced');
+            if (!panel || panel.classList.contains('hidden')) return;     // only in Advanced
+            if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+            const tag = (ev.target && ev.target.tagName) || '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA') return;            // don't hijack typing
+            const id = rbState._advHoverNodeId;
+            if (id == null) return;
+            const k = (ev.key || '').toLowerCase();
+            const pan = k === 'c' ? 0 : k === 'l' ? -1 : k === 'r' ? 1 : null;
+            if (pan === null) return;
+            const adv = rbAdvState();
+            const node = adv.nodes.find(n => n.id === id && n.kind === 'gear');
+            if (!node) return;
+            ev.preventDefault();
+            rbAdvKeyPan(id, pan);
+        });
+    }
     // Zoom ONLY on a pinch gesture (macOS delivers it as wheel + ctrlKey). A
     // plain 2-finger swipe (no ctrlKey) is left alone so the canvas pans/scrolls
     // natively. The +/- buttons remain for explicit zoom.
@@ -13221,25 +13460,176 @@ async function rbAdvMaterializeGear(node) {
         if (v.source === 'default') { if (rbState._defaultToneActive) await rbReloadDefaultTone(); }
         else if (typeof rbStudioLoadMonitor === 'function') await rbStudioLoadMonitor();
     } catch (_) {}
+    // The default-tone reload path doesn't run rbStudioFinishMonitorLoad, so
+    // explicitly RE-APPLY the stereo routing (pan/branch) — otherwise the rebuilt
+    // slots come back at pan 0 and the OTHER gear's pan is lost — and then the
+    // graph connectivity (bypass disconnected gear / silence if Input-Output is cut).
+    try { await rbStudioApplyStereoToEngine(); } catch (_) {}
+    try { await rbAdvApplyConnectivity(); } catch (_) {}
 }
 
-// Push the current graph's edges to the live engine (if it supports graph
-// routing). Maps node ids → live slot ids by chain position; palette-added
-// nodes (pieceIdx < 0) have no slot yet, so they're skipped until Phase 4.
-function rbAdvSyncAudio() {
+// Stereo pan label updated live as a slider moves. Targeted single-slot push so
+// dragging the knob is cheap (no full chain walk). Persists the value on the
+// durable piece + the graph; the engine call is feature-detected (no-op on an
+// engine without setPan, e.g. the current shipped build).
+async function rbAdvOnPanInput(id, val) {
+    const adv = rbAdvState();
+    const n = adv.nodes.find(x => x.id === id);
+    if (!n) return;
+    const pan = Math.max(-1, Math.min(1, parseFloat(val) || 0));
+    n.pan = pan;
+    const chain = rbStudioCurrentChain();
+    if (typeof n.pieceIdx === 'number' && n.pieceIdx >= 0 && chain[n.pieceIdx])
+        chain[n.pieceIdx]._pan = pan;            // durable: survives a graph reseed
+    const lbl = document.querySelector(`[data-adv-pan-val="${id}"]`);
+    if (lbl) lbl.textContent = rbAdvPanLabel(pan);
+    rbAdvPersist();
     const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
-    if (!audio || typeof audio.setNodeInputs !== 'function' || typeof audio.getChainState !== 'function') return;
-    // Wiring the live editor engine is finalised in Phase 3b alongside per-edge
-    // gain; for now the graph model is authoritative and persisted via Phase 4.
+    if (audio && typeof audio.setPan === 'function'
+        && typeof n.pieceIdx === 'number' && n.pieceIdx >= 0) {
+        try {
+            const slotId = await rbStudioChainSlotIdForPiece(audio, n.pieceIdx);
+            if (slotId != null) audio.setPan(slotId, pan);
+        } catch (_) {}
+    }
+}
+
+// Push the full stereo routing (per-slot pan + parallel branch ids) to the live
+// engine, derived from the CHAIN (the durable source — works even if Advanced was
+// never opened this session). Branch rule: 2+ amps → each amp gets its own branch
+// so they run in parallel and pan independently; 1 amp (or none) → all trunk, so
+// the chain behaves exactly as before. Feature-detected: a no-op on an engine
+// without setPan/setBranch (the currently shipped build), so nothing breaks there.
+async function rbStudioApplyStereoToEngine() {
+    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    if (!audio) return;
+    const hasPan = typeof audio.setPan === 'function';
+    const hasBranch = typeof audio.setBranch === 'function';
+    const hasBranchSrc = typeof audio.setBranchSrc === 'function';
+    if (!hasPan && !hasBranch) return;
+    const chain = rbStudioCurrentChain();
+    if (!Array.isArray(chain) || !chain.length) return;
+    let ampIdxs = [];
+    try { ampIdxs = (rbStudioGroupDefault().amp || []).map(e => e.idx); } catch (_) { ampIdxs = []; }
+    const branchOfIdx = new Map();
+    if (ampIdxs.length >= 2) {
+        // Each amp gets its own parallel branch, and every gear FROM that amp
+        // onward (its cab/post-pedals) inherits the same branch — otherwise the
+        // engine, which expects each branch contiguous, would skip the trunk-0
+        // gear sitting between two amp slots (e.g. the cab → no attenuation →
+        // everything jumps louder). Gear before the first amp stays trunk (0).
+        const ampSet = new Set(ampIdxs);
+        let cur = 0, n = 0;
+        for (let i = 0; i < chain.length; i++) {
+            if (ampSet.has(i)) { n++; cur = n; }
+            if (cur > 0) branchOfIdx.set(i, cur);
+        }
+    }
+    // St-2 read-channel: a branch fed by a stereo-out gear's L/R port reads only
+    // that channel of the split (for a true stereo source). This does NOT touch
+    // pan — wiring an L/R port sets the gear's pan ONCE on connect (rbAdvConnect),
+    // so the manual pan slider stays free afterwards (no continuous override).
+    const srcByIdx = new Map();
+    // Pan source of truth = the graph nodes (they survive a monitor reload, where
+    // a rebuilt chain piece can lose its _pan). Restore _pan from the node so a
+    // gear add/reload doesn't wipe the OTHER gear's pan.
+    const panByIdx = new Map();
+    const adv = rbState._adv;
+    if (adv && Array.isArray(adv.nodes)) {
+        for (const n of adv.nodes) {
+            if (n.kind === 'gear' && typeof n.pieceIdx === 'number' && n.pieceIdx >= 0 && typeof n.pan === 'number') {
+                panByIdx.set(n.pieceIdx, n.pan);
+                if (chain[n.pieceIdx]) chain[n.pieceIdx]._pan = n.pan;
+            }
+        }
+    }
+    if (adv && Array.isArray(adv.nodes) && Array.isArray(adv.edges)) {
+        const nodeById = new Map(adv.nodes.map(n => [n.id, n]));
+        for (const e of adv.edges) {
+            const port = e.fromPort || 'out';
+            if (port !== 'L' && port !== 'R') continue;
+            const from = nodeById.get(e.from);
+            const to = nodeById.get(e.to);
+            if (!from || !from.stereoOut || !to) continue;
+            if (to.kind === 'gear' && typeof to.pieceIdx === 'number' && to.pieceIdx >= 0)
+                srcByIdx.set(to.pieceIdx, port === 'L' ? 1 : 2);
+        }
+    }
+    for (let i = 0; i < chain.length; i++) {
+        let slotId = null;
+        try { slotId = await rbStudioChainSlotIdForPiece(audio, i); } catch (_) {}
+        if (slotId == null) continue;
+        const pan = panByIdx.has(i) ? panByIdx.get(i) : (typeof chain[i]._pan === 'number' ? chain[i]._pan : 0);
+        if (hasPan)       { try { audio.setPan(slotId, pan); } catch (_) {} }
+        if (hasBranch)    { try { audio.setBranch(slotId, branchOfIdx.get(i) || 0); } catch (_) {} }
+        if (hasBranchSrc) { try { audio.setBranchSrc(slotId, srcByIdx.get(i) || 0); } catch (_) {} }
+    }
+}
+
+// Make the node GRAPH actually gate the audio:
+//   • a gear NOT on a complete Input → … → gear → … → Output path is bypassed
+//     (so a pedal you dropped but never wired, or anything past a pulled cable,
+//      makes no sound), and
+//   • if there's no complete Input → Output path at all, the whole chain is muted
+//     (pulling the Input or Output cable silences it).
+// A normal serial chain reaches Output through every node, so nothing changes
+// there. Engine bypass = the user's own bypass OR graph-inactive; the user's
+// _bypassed flag is left intact so reconnecting restores it.
+async function rbAdvApplyConnectivity() {
+    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    if (!audio) return;
+    const adv = rbState._adv;
+    if (!adv || !Array.isArray(adv.nodes) || !adv.nodes.length) return;
+    const input = adv.nodes.find(n => n.kind === 'input');
+    const output = adv.nodes.find(n => n.kind === 'output');
+    if (!input || !output) return;
+    const fullyConnected = rbAdvReaches(input.id, output.id);
+    rbState._advDisconnected = !fullyConnected;
+    // No complete Input→Output path → silence the chain at the SOURCE (the engine's
+    // monitor-mute only silences an EMPTY chain, not a loaded-but-bypassed one).
+    // Setting input drive to 0 kills the guitar signal before the chain; restore
+    // the normal drive when it's whole again.
+    if (!fullyConnected) {
+        rbState._advSilenced = true;
+        try { if (typeof audio.setGain === 'function') audio.setGain('input', 0); } catch (_) {}
+    } else if (rbState._advSilenced) {
+        rbState._advSilenced = false;
+        try { rbApplyChainInputDrive({}); } catch (_) {}
+    }
+    if (typeof audio.setBypass !== 'function') return;
+    const chain = rbStudioCurrentChain();
+    let visualChanged = false;
+    for (const n of adv.nodes) {
+        if (n.kind !== 'gear' || typeof n.pieceIdx !== 'number' || n.pieceIdx < 0) continue;
+        const active = rbAdvReaches(input.id, n.id) && rbAdvReaches(n.id, output.id);
+        const piece = chain[n.pieceIdx];
+        const wantBypass = !active || !!(piece && piece._bypassed);
+        let slotId = null;
+        try { slotId = await rbStudioChainSlotIdForPiece(audio, n.pieceIdx); } catch (_) {}
+        if (slotId != null) { try { audio.setBypass(slotId, wantBypass); } catch (_) {} }
+        // Grey the node when it's graph-inactive (distinct from a user bypass).
+        if (!!n._inactive !== !active) { n._inactive = !active; visualChanged = true; }
+    }
+    if (visualChanged) { try { rbAdvRenderCanvas(); } catch (_) {} }
+}
+
+// Graph-level sync entry point (called after edge/topology changes): re-derives
+// + pushes the whole stereo routing from the chain, and mutes if Input/Output is
+// disconnected.
+function rbAdvSyncAudio() {
+    rbStudioApplyStereoToEngine().catch(() => {});
+    rbAdvApplyConnectivity();
 }
 
 window.rbLoadAdvanced = rbLoadAdvanced;
+window.rbAdvOnPanInput = rbAdvOnPanInput;
 window.rbAdvPaletteFilter = rbAdvPaletteFilter;
 window.rbAdvPaletteRender = rbAdvPaletteRender;
 window.rbAdvAutoLayout = rbAdvAutoLayout;
 window.rbAdvResetToChain = rbAdvResetToChain;   // already auto-layouts + renders (+ persists)
 window.rbAdvDeleteNode = rbAdvDeleteNode;
 window.rbAdvToggleBypass = rbAdvToggleBypass;
+window.rbAdvToggleStereoOut = rbAdvToggleStereoOut;
 window.rbAdvEditNode = rbAdvEditNode;
 window.rbAdvCloseEditor = rbAdvCloseEditor;
 window.rbAdvZoom = rbAdvZoom;

@@ -9324,5 +9324,17 @@
   "sound_bank": "rack_tapeecho",
   "tone3000_gears": "outboard",
   "tone3000_query": "Tape Echo"
+ },
+ "Bass_Pedal_NYRBS103": {
+  "art_asset": "nyr-bs103",
+  "category": "pedal",
+  "make": "Bass",
+  "manifest": "gear_pedal_nyrbs103",
+  "model": "Bass Synth",
+  "name": "NYR BS103",
+  "query_source": "art_asset",
+  "sound_bank": "pedal_nyrbs103",
+  "tone3000_gears": "pedal",
+  "tone3000_query": "bass synth"
  }
 }
