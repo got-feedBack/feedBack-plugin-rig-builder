@@ -1096,16 +1096,20 @@
         <!-- Levels — kept at the very top for quick access. -->
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
             <h3 class="text-white font-semibold mb-3">Levels</h3>
+            <p class="text-gray-500 text-sm mb-3">
+                These are the same two faders you see in the in-game mixer while
+                playing — edits here and in-game stay in sync and are saved.
+            </p>
             <div class="mt-2 flex justify-center gap-24">
                 <div class="flex flex-col items-center select-none">
-                    <div id="rb-amp-drive-knob" title="Input chain — drag up/down · double-click to reset to 1"></div>
-                    <span id="rb-amp-drive-val" class="text-xs text-purple-300 mt-1">1.0×</span>
-                    <span class="text-sm text-gray-300 mt-1">Input chain</span>
+                    <div id="rb-amp-drive-knob" title="Input — input level into the chain · drag up/down · double-click to reset to 0 dB"></div>
+                    <span id="rb-amp-drive-val" class="text-xs text-purple-300 mt-1">0.0 dB</span>
+                    <span class="text-sm text-gray-300 mt-1">Input</span>
                 </div>
                 <div class="flex flex-col items-center select-none">
-                    <div id="rb-chain-makeup-knob" title="Output chain — drag up/down · double-click to reset to 1"></div>
-                    <span id="rb-chain-makeup-val" class="text-xs text-purple-300 mt-1">1.0×</span>
-                    <span class="text-sm text-gray-300 mt-1">Output chain</span>
+                    <div id="rb-chain-makeup-knob" title="AMP — output level · drag up/down · double-click to reset to 0 dB"></div>
+                    <span id="rb-chain-makeup-val" class="text-xs text-purple-300 mt-1">0.0 dB</span>
+                    <span class="text-sm text-gray-300 mt-1">AMP</span>
                 </div>
             </div>
         </div>

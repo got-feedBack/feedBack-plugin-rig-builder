@@ -858,26 +858,44 @@ function rbAttachKnob(containerId, opts) {
     return { set(v) { val = clamp(v); render(); }, get() { return val; } };
 }
 
-// User cab/chain volume trim. Persists to /settings and applies LIVE via
-// setGain('chain', base × trim) — the only gain the engine honours.
-// Range 0–5, default 1× (the knob value IS the multiplier).
-async function rbSetChainMakeup(v) {
-    let n = parseFloat(v); if (!Number.isFinite(n)) n = 1.0;
-    const val = Math.max(0, Math.min(5.0, n));
+// ── Level faders: dB in the UI, linear × in the engine ─────────────────────
+// The user controls/sees the two level faders ("Desktop Input" + "AMP") in dB,
+// like the original engine faders. We keep the engine/backend on a linear ×
+// multiplier (nam_chain_input_drive / chain_makeup) and convert at the UI edge.
+// Range is deliberately tight (−24..+12 dB) so small trims are easy — the old
+// −60..+12 range made nudging −3 dB almost impossible.
+const RB_LEVEL_DB_MIN = -24, RB_LEVEL_DB_MAX = 12;
+function rbClampDb(db) {
+    const d = Number(db);
+    return Number.isFinite(d) ? Math.max(RB_LEVEL_DB_MIN, Math.min(RB_LEVEL_DB_MAX, d)) : 0;
+}
+function rbDbToLin(db) { return Math.pow(10, rbClampDb(db) / 20); }
+function rbLinToDb(lin) {
+    const x = Number(lin);
+    return (x > 1.0e-4) ? rbClampDb(20 * Math.log10(x)) : RB_LEVEL_DB_MIN;
+}
+function rbFmtDb(db) { const v = rbClampDb(db); return (v > 0 ? '+' : '') + v.toFixed(1) + ' dB'; }
+
+// "AMP" output trim. Persists to /settings (chain_makeup, a linear ×) and applies
+// LIVE post-leveler (Output Trim) or via setGain('chain', base × trim). The fader
+// VALUE is in dB; we convert to the linear × the engine/backend expect.
+async function rbSetChainMakeup(dbIn) {
+    const d = rbClampDb(dbIn);
+    const val = rbDbToLin(d);   // linear × for the engine + persisted setting
     window.__rbChainMakeup = val;
     const cmVal = document.getElementById('rb-chain-makeup-val');
-    if (cmVal) cmVal.textContent = val.toFixed(2) + '×';
-    // Keep the in-plugin Chain Volume knob visually in sync when the change came
-    // from the in-game mixer "Amp" fader (set() only re-renders, no onChange).
+    if (cmVal) cmVal.textContent = rbFmtDb(d);
+    // Keep the in-plugin AMP knob visually in sync when the change came from the
+    // in-game mixer "AMP" fader (set() only re-renders, no onChange → no loop).
     if (window.__rbChainMakeupKnob && typeof window.__rbChainMakeupKnob.set === 'function') {
-        try { window.__rbChainMakeupKnob.set(val); } catch (_) {}
+        try { window.__rbChainMakeupKnob.set(d); } catch (_) {}
     }
-    // When a final leveler is in the chain, Chain Volume must be applied
-    // AFTER it (the AGC cancels any pre-leveler gain). Drive the leveler's
-    // Output Trim live; only fall back to the route/chain bus when no leveler
-    // owns the output (e.g. mega-chain off / leveler disabled). On 0.3.0 the
-    // bus fallback routes through the audio-effects host first.
-    const db = val > 1.0e-4 ? 20 * Math.log10(val) : -24;
+    // When a final leveler is in the chain, AMP must be applied AFTER it (the AGC
+    // cancels any pre-leveler gain). Drive the leveler's Output Trim live (in dB);
+    // only fall back to the route/chain bus when no leveler owns the output (e.g.
+    // mega-chain off / leveler disabled). On 0.3.0 the bus fallback routes through
+    // the audio-effects host first.
+    const db = d;
     let appliedPostLeveler = false;
     if (typeof RbMegaChain !== 'undefined' && RbMegaChain.isActive && RbMegaChain.isActive()) {
         try { appliedPostLeveler = await RbMegaChain.setOutputTrimDb(db); } catch (_) {}
@@ -893,16 +911,23 @@ async function rbSetChainMakeup(v) {
     }).catch(() => {});
 }
 
-// User "Amp drive" / input-chain trim — the pre-NAM input gain for GUITAR amps
-// (bass auto-uses 1×). Range 0–5, default 1× (no boost). Persists to /settings
-// (nam_chain_input_drive) and re-applies live through rbApplyChainInputDrive
-// (which keeps the bass/guitar branch correct).
-async function rbSetAmpDrive(v) {
-    let n = parseFloat(v); if (!Number.isFinite(n)) n = 1.0;
-    const val = Math.max(0, Math.min(5.0, n));
+// "Desktop Input" — the pre-NAM input gain for GUITAR amps (bass auto-uses 1×).
+// This is the same control that used to be the Setup "Input chain" / "Amp drive"
+// knob; it is now surfaced as the in-game "Desktop Input" fader too, so Setup and
+// the in-game mixer drive ONE value. Range 0–5, default 1× (no boost). Persists to
+// /settings (nam_chain_input_drive) and re-applies live through
+// rbApplyChainInputDrive (which keeps the bass/guitar branch correct).
+async function rbSetDesktopInput(dbIn) {
+    const d = rbClampDb(dbIn);
+    const val = rbDbToLin(d);   // linear × for the engine + persisted setting
     window.__rbChainInputDrive = val;
     const el = document.getElementById('rb-amp-drive-val');
-    if (el) el.textContent = val.toFixed(1) + '×';
+    if (el) el.textContent = rbFmtDb(d);
+    // Keep the Setup knob visually in sync when the change came from the in-game
+    // "Desktop Input" fader (set() only re-renders, no onChange → no loop).
+    if (window.__rbDesktopInputKnob && typeof window.__rbDesktopInputKnob.set === 'function') {
+        try { window.__rbDesktopInputKnob.set(d); } catch (_) {}
+    }
     rbApplyChainInputDrive();   // re-applies respecting bass detection
     fetch(`${window.RB_API}/settings`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -910,40 +935,62 @@ async function rbSetAmpDrive(v) {
     }).catch(() => {});
 }
 
-// ── In-game mixer "Amp" fader ──────────────────────────────────────────────
-// Surfaces the user Chain Volume trim (window.__rbChainMakeup, persisted as
-// chain_makeup, default 1×) as a fader in the host's in-game mixer, so the
-// player can raise/lower their own guitar/amp level while playing. It drives
-// rbSetChainMakeup, which applies the trim POST-leveler — so, unlike a raw
-// setGain('chain') fader (audio_engine's "Desktop Chain"), the final leveler
-// RE-APPLIES it every tick instead of cancelling it on the next tone load.
-// Range/units mirror the in-plugin Chain Volume knob (0–5×, 1× = unity).
-function rbRegisterAmpFader() {
+// ── In-game mixer faders: "Input" + "AMP" ──────────────────────────────────
+// rig_builder owns BOTH the level faders the player sees while playing, so Setup
+// and the in-game mixer drive the SAME two values (no duplicate/conflicting
+// controllers). audio_engine no longer registers its own "Desktop Input"/
+// "Desktop Chain" mix participants (rig_builder re-applied over them on every
+// chain reload anyway — they were dead during gameplay).
+//
+//   • Input → window.__rbChainInputDrive (persisted nam_chain_input_drive).
+//     Pre-NAM input gain; rbApplyChainInputDrive re-applies it on every reload,
+//     so it sticks through tone changes.
+//   • AMP   → window.__rbChainMakeup (persisted chain_makeup). Output trim applied
+//     POST-leveler via rbSetChainMakeup — so, unlike a raw setGain('chain') fader,
+//     the final leveler RE-APPLIES it every tick instead of cancelling it on the
+//     next tone load.
+//
+// Both are shown in dB (−24..+12, 0 dB = unity) but stored/applied as a linear ×.
+// setValue routes through the same rbSet* used by the Setup knobs (which also
+// visually sync the knob), so edits flow both ways and persist to /settings.
+function rbRegisterLevelFaders() {
     const api = window.slopsmith && window.slopsmith.audio;
     if (!api) return;
     if (typeof api.registerFader !== 'function') {
-        window.addEventListener('slopsmith:audio:ready', rbRegisterAmpFader, { once: true });
+        window.addEventListener('slopsmith:audio:ready', rbRegisterLevelFaders, { once: true });
         return;
     }
-    if (window.__rbAmpFaderRegistered) return;
-    window.__rbAmpFaderRegistered = true;
+    if (window.__rbLevelFadersRegistered) return;
+    window.__rbLevelFadersRegistered = true;
+    // Order = how the mixer renders them: input first, output second.
     api.registerFader({
-        id: 'rig_builder_amp',
-        label: 'Amp',
+        id: 'rig_builder_desktop_input',
+        label: 'Input',
         ownerPluginId: 'rig_builder',
         kind: 'plugin',
-        unit: '×',
-        min: 0, max: 5, step: 0.05,
-        defaultValue: 1,
-        getValue: () => (typeof window.__rbChainMakeup === 'number') ? window.__rbChainMakeup : 1.0,
+        unit: 'dB',
+        min: RB_LEVEL_DB_MIN, max: RB_LEVEL_DB_MAX, step: 0.5,
+        defaultValue: 0,
+        getValue: () => rbLinToDb(window.__rbChainInputDrive),
+        setValue: (v) => { rbSetDesktopInput(v); },
+    });
+    api.registerFader({
+        id: 'rig_builder_amp',
+        label: 'AMP',
+        ownerPluginId: 'rig_builder',
+        kind: 'plugin',
+        unit: 'dB',
+        min: RB_LEVEL_DB_MIN, max: RB_LEVEL_DB_MAX, step: 0.5,
+        defaultValue: 0,
+        getValue: () => rbLinToDb(window.__rbChainMakeup),
         setValue: (v) => { rbSetChainMakeup(v); },
     });
 }
 
 if (window.slopsmith && window.slopsmith.audio) {
-    rbRegisterAmpFader();
+    rbRegisterLevelFaders();
 } else {
-    window.addEventListener('slopsmith:audio:ready', rbRegisterAmpFader, { once: true });
+    window.addEventListener('slopsmith:audio:ready', rbRegisterLevelFaders, { once: true });
 }
 
 // Mute everything the engine can mute just long enough that the bundle's
@@ -12296,20 +12343,23 @@ async function rbLoadSettings() {
     if (typeof s.nam_chain_input_drive === 'number') {
         window.__rbChainInputDrive = s.nam_chain_input_drive;
     }
-    // Input chain (amp drive) knob — range 0–5, default 1×.
-    const adv = (typeof s.nam_chain_input_drive === 'number') ? s.nam_chain_input_drive : 1.0;
-    if (!window.__rbAmpDriveKnob)
-        window.__rbAmpDriveKnob = rbAttachKnob('rb-amp-drive-knob', { min: 0, max: 5, def: 1, value: adv, onChange: rbSetAmpDrive });
-    else window.__rbAmpDriveKnob.set(adv);
+    // "Input" knob (the in-game "Input" fader's twin) — shown in dB, default 0 dB.
+    // Reflects the latest value, including edits made via the in-game fader during
+    // songs (each edit persisted nam_chain_input_drive as a linear ×).
+    const advDb = rbLinToDb((typeof s.nam_chain_input_drive === 'number') ? s.nam_chain_input_drive : 1.0);
+    if (!window.__rbDesktopInputKnob)
+        window.__rbDesktopInputKnob = rbAttachKnob('rb-amp-drive-knob', { min: RB_LEVEL_DB_MIN, max: RB_LEVEL_DB_MAX, def: 0, value: advDb, onChange: rbSetDesktopInput });
+    else window.__rbDesktopInputKnob.set(advDb);
     const adVal = document.getElementById('rb-amp-drive-val');
-    if (adVal) adVal.textContent = adv.toFixed(1) + '×';
-    // Output chain (chain volume) knob — range 0–5, default 1×.
+    if (adVal) adVal.textContent = rbFmtDb(advDb);
+    // "AMP" output knob — shown in dB, default 0 dB.
     window.__rbChainMakeup = (typeof s.chain_makeup === 'number') ? s.chain_makeup : 1.0;
+    const ampDb = rbLinToDb(window.__rbChainMakeup);
     if (!window.__rbChainMakeupKnob)
-        window.__rbChainMakeupKnob = rbAttachKnob('rb-chain-makeup-knob', { min: 0, max: 5, def: 1, value: window.__rbChainMakeup, onChange: rbSetChainMakeup });
-    else window.__rbChainMakeupKnob.set(window.__rbChainMakeup);
+        window.__rbChainMakeupKnob = rbAttachKnob('rb-chain-makeup-knob', { min: RB_LEVEL_DB_MIN, max: RB_LEVEL_DB_MAX, def: 0, value: ampDb, onChange: rbSetChainMakeup });
+    else window.__rbChainMakeupKnob.set(ampDb);
     const cmVal = document.getElementById('rb-chain-makeup-val');
-    if (cmVal) cmVal.textContent = window.__rbChainMakeup.toFixed(1) + '×';
+    if (cmVal) cmVal.textContent = rbFmtDb(ampDb);
     // OAuth (Connect with tone3000) state.
     const oauthStatus = document.getElementById('rb-oauth-status');
     const oauthBtn = document.getElementById('rb-oauth-btn');
