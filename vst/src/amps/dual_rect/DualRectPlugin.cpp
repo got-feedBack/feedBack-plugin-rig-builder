@@ -107,8 +107,8 @@ protected:
             osR.upsample(3.2f * inR[i], ubR);
             for (int k = 0; k < kOS; ++k)              // core + output soft-clip at 4x
             {
-                ubL[k] = rbAmpLvl(2.28f * left.process(ubL[k]));
-                ubR[k] = rbAmpLvl(2.28f * right.process(ubR[k]));
+                ubL[k] = rbAmpLvl(0.686f *left.process(ubL[k]));
+                ubR[k] = rbAmpLvl(0.686f *right.process(ubR[k]));
             }
             outL[i] = osL.downsample(ubL);
             outR[i] = osR.downsample(ubR);

@@ -151,8 +151,8 @@ struct ChieftainCore {
         // ceiling modest (only light crunch at max) -- deliberately NOT a Boogie.
         float vol   = std::pow(pVolume, 1.1f);                    // 250K audio taper
         inScale     = 2.0f * (0.7f + 0.45f * pVolume);            // audio -> grid volts into V1 (keep V1 cleaner)
-        preGain     = 0.35f + 2.6f * vol;                         // VOLUME inter-stage pre-gain (low floor clean, modest top)
-        gainOut     = 0.55f + 0.45f * vol;                        // post-V2 level into the PI / power amp
+        preGain     = 0.70f + 3.6f * vol;                         // VOLUME inter-stage pre-gain (raised floor: usable at moderate Volume, not dead until cranked)
+        gainOut     = 0.70f + 0.60f * vol;                        // post-V2 level into the PI / power amp
         inputMiller.set(sr,  68000.0f, 55.0f, 8.0f);              // input stopper + V1 Miller, ~25 kHz
         millerV2.set(sr,   180000.0f, 52.0f, 8.0f);               // tone/volume source into V2, ~9 kHz
         coupleToV2.set(sr, 1000000.0f, 22.0e-9f, 220000.0f,
@@ -246,9 +246,9 @@ struct ChieftainCore {
         // VOLUME ~fixed and varies distortion, so normalize across the gain sweep
         // -- a stronger makeup at low Volume (clean/quiet) decaying toward unity
         // as the preamp is driven and self-compresses. Master adds a mild swing.
-        float g = smoothstep01(pVolume);
-        float makeup = 1.10f + 2.6f / (1.0f + g * 12.0f);
-        return x * outLevel * makeup;
+        float gcDb = 40.371f - 76.307f * pVolume + 35.810f * pVolume * pVolume; // fit: lift the usable Volume range toward -16 dBFS (clean amp ramps in below ~0.5, peak-matched to the rest)
+        if (gcDb > 20.0f) gcDb = 20.0f; else if (gcDb < -6.0f) gcDb = -6.0f;
+        return x * outLevel * std::pow(10.0f, 0.05f * gcDb);
     }
 
     static inline float smoothstep01(float v){ v=clamp01(v); return v*v*(3.0f-2.0f*v); }

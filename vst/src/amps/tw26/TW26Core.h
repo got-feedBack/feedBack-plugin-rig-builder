@@ -144,8 +144,8 @@ struct TW26Core {
         // hold ~constant RMS across the InstVol sweep — the tweed Volume IS the gain,
         // so without this it swings ~24 dB). Anchored ~0 dB at Vol 0.5; applied after
         // all distortion so it's pure volume (no tone/crest change).
-        float gcDb = 22.574f - 56.269f * pInst + 22.852f * pInst * pInst;
-        if (gcDb > 16.0f) gcDb = 16.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
+        float gcDb = 18.785f - 72.971f * pInst + 42.864f * pInst * pInst; // re-fit: hold ~-16 dBFS flat (old poly was INVERTED: louder at low gain)
+        if (gcDb > 18.0f) gcDb = 18.0f; else if (gcDb < -14.0f) gcDb = -14.0f;
         return x * outLevel * std::pow(10.0f, 0.05f * gcDb);
     }
 };

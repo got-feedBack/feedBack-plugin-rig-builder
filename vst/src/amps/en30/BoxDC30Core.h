@@ -268,7 +268,7 @@ struct BoxDC30Core {
         // circuit. Keep it tied to panel position; tying it to the A500K electrical
         // taper over-boosts mid knob settings and can turn distortion onset into
         // audible spikes.
-        float gcDb = 25.288f - 78.409f * pTBVol + 54.825f * pTBVol * pTBVol;
+        float gcDb = 20.716f - 76.618f * pTBVol + 49.000f * pTBVol * pTBVol; // re-fit: hold ~-16 dBFS flat across TBVol (was hot/+4 dB at top)
         if (gcDb > 20.0f) gcDb = 20.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
         return x * outLevel * std::pow(10.0f, 0.05f * gcDb);
     }

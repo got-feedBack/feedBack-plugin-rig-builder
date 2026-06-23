@@ -102,7 +102,7 @@ protected:
         {
             float ub[kOS];
             os.upsample(3.2f * in0[i], ub);
-            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.586f * core.process(ub[k]));
+            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.867f * core.process(ub[k]));
             const float y = os.downsample(ub);
             outL[i] = y;
             outR[i] = y;   // dual-mono: one core, same signal both sides = centered/balanced
