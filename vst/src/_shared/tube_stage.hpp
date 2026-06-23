@@ -12,15 +12,25 @@
 //
 #include "koren12ax7_ftube.h"   // PURE 12AX7 plate transfer + Ranode (our tables)
 #include "koren12ay7_ftube.h"   // PURE 12AY7 (low-mu warm preamp triode)
+#include "koren12at7_ftube.h"   // PURE 12AT7 / ECC81 (high-gm phase inverter triode)
+#include "koren6eu7_ftube.h"    // PURE 6EU7 low-noise high-mu triode
+#include "koren6sl7_ftube.h"    // PURE 6SL7-GT high-mu octal triode
+#include "koren6sf5_ftube.h"    // PURE 6SF5 high-mu single triode
+#include "koren12au7_ftube.h"   // PURE 12AU7 / ECC82 low-mu triode
+#include "koren7199t_ftube.h"   // PURE 7199 triode section
 #include "koren_el84_ftube.h"   // PURE EL84 pentode plate transfer
+#include "koren6bm8_ftube.h"    // PURE 6BM8/ECL82 power pentode
 #include "koren6v6_ftube.h"     // PURE 6V6 power pentode
 #include "koren6l6_ftube.h"     // PURE legacy 6L6 power pentode
+#include "koren6l6g_ftube.h"    // PURE 6L6G lower-voltage glass 6L6 power pentode
 #include "koren5881_ftube.h"    // PURE 5881 beam pentode
 #include "koren6l6gc_ftube.h"   // PURE 6L6GC high-power beam pentode
 #include "koren_kt66_ftube.h"   // PURE KT66 beam tetrode
 #include "koren_el34_ftube.h"   // PURE EL34 power pentode
 #include "koren_ef86_ftube.h"   // PURE EF86 small-signal pentode (DC30 channel 2)
 #include "koren6550_ftube.h"    // PURE 6550 beam pentode (Ampeg SVT-CL, 6x PP)
+#include "koren5879_ftube.h"    // PURE 5879 sharp-cutoff pentode
+#include "koren7199p_ftube.h"   // PURE 7199 pentode section
 #include <cmath>
 
 namespace rbtube {
@@ -55,15 +65,65 @@ struct Tube12AY7 {
     static inline float ftube(int t,float v){return AY7_ftube(t,v);}
     static inline float ranode(int t,float v){return AY7_ranode(t,v);}
 };
+struct Tube12AT7 {
+    static constexpr float cGridCathodePf = 2.2f;  // input G to (H+K), Tung-Sol 12AT7.pdf
+    static constexpr float cGridPlatePf = 1.5f;    // G to P, Tung-Sol 12AT7.pdf
+    static inline float ftube(int t,float v){return AT7_ftube(t,v);}
+    static inline float ranode(int t,float v){return AT7_ranode(t,v);}
+};
+struct Tube6EU7 {
+    static constexpr float cGridCathodePf = 1.6f;  // input G to (H+K), RCA 6EU7.pdf
+    static constexpr float cGridPlatePf = 1.5f;    // G to P, RCA 6EU7.pdf
+    static inline float ftube(int t,float v){return EU7_ftube(t,v);}
+    static inline float ranode(int t,float v){return EU7_ranode(t,v);}
+};
+struct Tube6SL7 {
+    static constexpr float cGridCathodePf = 3.2f;  // average of both sections, RCA 6SL7GT.pdf
+    static constexpr float cGridPlatePf = 2.8f;    // G to P, RCA 6SL7GT.pdf
+    static inline float ftube(int t,float v){return SL7_ftube(t,v);}
+    static inline float ranode(int t,float v){return SL7_ranode(t,v);}
+};
+struct Tube6SF5 {
+    static constexpr float cGridCathodePf = 2.0f;  // conservative high-mu triode input C
+    static constexpr float cGridPlatePf = 1.6f;    // conservative 12AX7-family Cgp
+    static inline float ftube(int t,float v){return SF5_ftube(t,v);}
+    static inline float ranode(int t,float v){return SF5_ranode(t,v);}
+};
+struct Tube12AU7 {
+    static constexpr float cGridCathodePf = 1.6f;  // G to K, Brimar 12AU7.pdf
+    static constexpr float cGridPlatePf = 1.5f;    // G to A, Brimar 12AU7.pdf
+    static inline float ftube(int t,float v){return AU7_ftube(t,v);}
+    static inline float ranode(int t,float v){return AU7_ranode(t,v);}
+};
+struct Tube7199T {
+    static constexpr float cGridCathodePf = 2.3f;  // triode input G to H+K, Sylvania 7199.pdf
+    static constexpr float cGridPlatePf = 2.0f;    // triode G to P, Sylvania 7199.pdf
+    static inline float ftube(int t,float v){return N99T_ftube(t,v);}
+    static inline float ranode(int t,float v){return N99T_ranode(t,v);}
+};
 struct TubeEF86 {
     static constexpr float cGridCathodePf = 3.8f;   // Cg1(all except anode), EF86.pdf
     static constexpr float cGridPlatePf = 0.05f;    // Cag1 max, EF86.pdf
     static inline float ftube(int t,float v){return EF86_ftube(t,v);}
     static inline float ranode(int t,float v){return EF86_ranode(t,v);}
 };
+struct Tube5879 {
+    static constexpr float cGridCathodePf = 2.7f;   // input capacitance, RCA 5879.pdf
+    static constexpr float cGridPlatePf = 0.11f;    // G1 to plate max, RCA 5879.pdf
+    static inline float ftube(int t,float v){return N5879_ftube(t,v);}
+    static inline float ranode(int t,float v){return N5879_ranode(t,v);}
+};
+struct Tube7199P {
+    static constexpr float cGridCathodePf = 5.0f;   // pentode input capacitance, Sylvania 7199.pdf
+    static constexpr float cGridPlatePf = 0.06f;    // G1 to plate max, Sylvania 7199.pdf
+    static inline float ftube(int t,float v){return N99P_ftube(t,v);}
+    static inline float ranode(int t,float v){return N99P_ranode(t,v);}
+};
 struct TubeEL84  { static inline float ftube(int t,float v){return EL84_ftube(t,v);} };
+struct Tube6BM8  { static inline float ftube(int t,float v){return BM8_ftube(t,v);} };
 struct Tube6V6   { static inline float ftube(int t,float v){return V6_ftube(t,v);} };
 struct Tube6L6   { static inline float ftube(int t,float v){return L6_ftube(t,v);} };
+struct Tube6L6G  { static inline float ftube(int t,float v){return L6G_ftube(t,v);} };
 struct Tube5881  { static inline float ftube(int t,float v){return T5881_ftube(t,v);} };
 struct Tube6L6GC { static inline float ftube(int t,float v){return L6GC_ftube(t,v);} };
 struct TubeKT66  { static inline float ftube(int t,float v){return KT66_ftube(t,v);} };
@@ -253,7 +313,15 @@ struct MillerLowPassT {
 };
 using Miller12AX7 = MillerLowPassT<Tube12AX7>;
 using Miller12AY7 = MillerLowPassT<Tube12AY7>;
+using Miller12AT7 = MillerLowPassT<Tube12AT7>;
+using Miller6EU7  = MillerLowPassT<Tube6EU7>;
+using Miller6SL7  = MillerLowPassT<Tube6SL7>;
+using Miller6SF5  = MillerLowPassT<Tube6SF5>;
+using Miller12AU7 = MillerLowPassT<Tube12AU7>;
+using Miller7199T = MillerLowPassT<Tube7199T>;
 using MillerEF86  = MillerLowPassT<TubeEF86>;
+using Miller5879  = MillerLowPassT<Tube5879>;
+using Miller7199P = MillerLowPassT<Tube7199P>;
 
 // Yeh tone-stack (Yeh & Smith, DAFx-06 — academic/public model, NOT GPL source): the
 // 3rd-order analog transfer function of a real 3-band R/C tone network, computed from
@@ -383,7 +451,15 @@ struct TubeStageT {
 };
 using TubeStage    = TubeStageT<Tube12AX7>;   // 12AX7 (back-compat; BOX AC30)
 using TubeStageAY7 = TubeStageT<Tube12AY7>;   // 12AY7 (5E3 V1)
+using TubeStageAT7 = TubeStageT<Tube12AT7>;   // 12AT7 / ECC81 (Fender PI)
+using TubeStage6EU7= TubeStageT<Tube6EU7>;    // 6EU7 low-noise high-mu triode
+using TubeStage6SL7= TubeStageT<Tube6SL7>;    // 6SL7-GT high-mu octal triode
+using TubeStage6SF5= TubeStageT<Tube6SF5>;    // 6SF5 high-mu single triode
+using TubeStage12AU7=TubeStageT<Tube12AU7>;   // 12AU7 / ECC82 low-mu triode
+using TubeStage7199T=TubeStageT<Tube7199T>;   // 7199 triode section
 using TubeStageEF86= TubeStageT<TubeEF86>;    // EF86 small-signal pentode (DC30 channel 2)
+using TubeStage5879= TubeStageT<Tube5879>;    // 5879 sharp-cutoff pentode
+using TubeStage7199P=TubeStageT<Tube7199P>;   // 7199 pentode section
 
 // Long-tail-pair 12AX7 phase inverter approximation. It keeps the two unequal
 // plate loads and shared-tail compression as an actual nonlinear stage before
@@ -421,6 +497,80 @@ struct PhaseInverterLTP12AX7 {
 
     void setFenderAB763(float sr, float driveV, float outV = 1.0f) {
         setComponents(sr, driveV, outV, 300.0f, 82000.0f, 100000.0f, 470.0f, 9.0f, -0.055f);
+    }
+
+    inline float process(float x) {
+        const float d = inputCoupling.process(x * drive);
+        const float common = tailLP.process(std::fabs(d)) * tailMix;
+        const float ya = upper.process(d * (1.0f + imbalance) - common);
+        const float yb = lower.process(-d * (1.0f - imbalance) - common);
+        return dn((ya - yb) * (0.5f * out));
+    }
+
+    void reset() { upper.reset(); lower.reset(); inputCoupling.reset(); tailLP.reset(); }
+};
+
+// Same LTP topology for Fender amps that use a 12AT7/ECC81 phase inverter.
+// The 12AT7 table is fit to Tung-Sol's 250V/10mA/gm 5500umho operating point,
+// so this is higher-current and stiffer than the 12AX7 LTP above.
+struct PhaseInverterLTP12AT7 {
+    TubeStageAT7 upper, lower;
+    HP1 inputCoupling;
+    LP1 tailLP;
+    float drive = 1.0f, out = 1.0f, imbalance = -0.055f, tailMix = 0.10f;
+
+    void setComponents(float sr, float driveV, float outV,
+                       float supplyV, float plateAOhms, float plateBOhms,
+                       float cathodeOhms, float tailHz, float imbalanceV) {
+        inputCoupling.set(sr, 2.5f);
+        tailLP.set(sr, tailHz);
+        upper.setWithPlate(sr, 1, supplyV, 44.0f, 4.5f, cathodeOhms, plateAOhms);
+        lower.setWithPlate(sr, 1, supplyV, 44.0f, 4.5f, cathodeOhms, plateBOhms);
+        drive = driveV;
+        out = outV;
+        imbalance = imbalanceV;
+        tailMix = 0.11f + 0.07f * std::fmin(1.0f, std::fmax(0.0f, driveV * 0.22f));
+    }
+
+    void setFenderAB763(float sr, float driveV, float outV = 1.0f) {
+        setComponents(sr, driveV, outV, 300.0f, 82000.0f, 100000.0f, 470.0f, 10.0f, -0.055f);
+    }
+
+    inline float process(float x) {
+        const float d = inputCoupling.process(x * drive);
+        const float common = tailLP.process(std::fabs(d)) * tailMix;
+        const float ya = upper.process(d * (1.0f + imbalance) - common);
+        const float yb = lower.process(-d * (1.0f - imbalance) - common);
+        return dn((ya - yb) * (0.5f * out));
+    }
+
+    void reset() { upper.reset(); lower.reset(); inputCoupling.reset(); tailLP.reset(); }
+};
+
+// Lower-mu 12AU7/ECC82 long-tail pair for Gibson-style phase inverters. It clips
+// later at the grid, but the plates swing with a rounder, lower-gain imbalance
+// than the 12AX7/12AT7 LTPs above.
+struct PhaseInverterLTP12AU7 {
+    TubeStage12AU7 upper, lower;
+    HP1 inputCoupling;
+    LP1 tailLP;
+    float drive = 1.0f, out = 1.0f, imbalance = 0.035f, tailMix = 0.08f;
+
+    void setComponents(float sr, float driveV, float outV,
+                       float supplyV, float plateAOhms, float plateBOhms,
+                       float cathodeOhms, float tailHz, float imbalanceV) {
+        inputCoupling.set(sr, 2.0f);
+        tailLP.set(sr, tailHz);
+        upper.setWithPlate(sr, 1, supplyV, 24.0f, 4.0f, cathodeOhms, plateAOhms);
+        lower.setWithPlate(sr, 1, supplyV, 24.0f, 4.0f, cathodeOhms, plateBOhms);
+        drive = driveV;
+        out = outV;
+        imbalance = imbalanceV;
+        tailMix = 0.08f + 0.05f * std::fmin(1.0f, std::fmax(0.0f, driveV * 0.20f));
+    }
+
+    void setGibson(float sr, float driveV, float outV = 1.0f) {
+        setComponents(sr, driveV, outV, 260.0f, 47000.0f, 47000.0f, 2200.0f, 18.0f, 0.030f);
     }
 
     inline float process(float x) {
@@ -500,8 +650,10 @@ struct PowerAmpPPT {
     void reset() { otHP.reset(); otLP.reset(); sag = 0.0f; }
 };
 using PowerAmpPP  = PowerAmpPPT<TubeEL84>;    // EL84 push-pull (back-compat; AC30)
+using PowerAmp6BM8= PowerAmpPPT<Tube6BM8>;    // 6BM8/ECL82 push-pull (Gibson GA-8)
 using PowerAmp6V6 = PowerAmpPPT<Tube6V6>;     // 6V6 push-pull (5E3)
 using PowerAmp6L6 = PowerAmpPPT<Tube6L6>;     // legacy 6L6 push-pull
+using PowerAmp6L6G= PowerAmpPPT<Tube6L6G>;    // 6L6G push-pull (Epiphone Zephyr/Ruby)
 using PowerAmp5881= PowerAmpPPT<Tube5881>;    // 5881 push-pull (Bassman/Bluesbreaker)
 using PowerAmp6L6GC=PowerAmpPPT<Tube6L6GC>;   // 6L6GC push-pull (Mesa/ENGL/Boogie)
 using PowerAmpKT66= PowerAmpPPT<TubeKT66>;    // KT66 push-pull (BT45 / confirmed KT66 amps)

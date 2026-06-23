@@ -5,16 +5,16 @@
  * 12AU7 phase inverter, 4x 6BQ5/EL84 push-pull = stereo power, tremolo oscillator
  * + Frequency/Depth, Stereo/Mono switch). the game exposes Volume/Bass/Treble;
  * this model adds the amp's signature RVT (Reverb + Vibrato/Tremolo):
- *   • 12AX7 preamp -> passive Bass/Treble -> driver
- *   • valve spring REVERB (Schroeder comb+allpass) blended by Reverb
- *   • 4x EL84 push-pull -> tremolo (Speed/Depth) at the output.  Modeled mono.
+ *   • 6EU7 preamp -> passive Bass/Treble -> 6EU7 driver
+ *   • 7199 pentode/triode valve spring REVERB blended by Reverb
+ *   • 12AU7 LTP -> 4x 6BQ5/EL84 push-pull -> tremolo. Modeled mono.
  *
- * Real nodal 12AX7s + RBJ tone + spring reverb + EL84 push-pull + sine-LFO
- * tremolo. Shared MNA/Triode/Biquad/Spring blocks are byte-identical to the
- * Citrus AD200 / Citrus Rumbleverb sources.
+ * Tube tables are generated from the local 6EU7/7199/12AU7 datasheets, with
+ * per-stage Miller loading + RBJ tone + spring reverb + EL84-family power.
  */
 #include "DistrhoPlugin.hpp"
 #include "Ga79Params.h"
+#include "../../_shared/tube_stage.hpp"
 #include <cmath>
 #include <cstring>
 
@@ -167,19 +167,30 @@ struct Tremolo {
 
 class Ga79Channel {
     float fs = 48000.f;
-    Triode v1, v2;
+    rbtube::TubeStage6EU7 v1, v2;
+    rbtube::TubeStage7199P reverbDriver;
+    rbtube::TubeStage7199T reverbReturn;
     Biquad hp, bass, treble, pwrLP;
+    Biquad cabHp, cabLo, cabHi, cabLp;
     Spring spring;
     Tremolo trem;
-    float drive=1, level=1, pwrDrive=1, reverb=0, tRate=4.f, tDepth=0.f;
-
-    // 4x 6BQ5 (EL84) push-pull: sweet, slightly early knee.
-    static inline float pushPull(float x) { return std::tanh(x * 0.8f) / 0.8f; }
+    rbtube::Miller6EU7 inputMiller, driverMiller;
+    rbtube::Miller7199P reverbSendMiller;
+    rbtube::Miller7199T reverbReturnMiller;
+    rbtube::CouplingCapGridLeak coupleToPi;
+    rbtube::PhaseInverterLTP12AU7 phaseInverter;
+    rbtube::MultiNodeBPlus supply;
+    rbtube::PowerAmpPP power;
+    float drive=1, level=1, pwrDrive=1, reverb=0, tRate=4.f, tDepth=0.f, cabSim=1;
 public:
-    void setSampleRate(float s) { fs=(s>0.f)?s:48000.f; v1.setT(s); v2.setT(s); trem.setFs(s); }
-    void reset() { v1.reset(); v2.reset(); hp.reset(); bass.reset(); treble.reset(); pwrLP.reset(); spring.reset(); trem.reset(); }
+    void setSampleRate(float s) { fs=(s>0.f)?s:48000.f; trem.setFs(s); }
+    void reset() { v1.reset(); v2.reset(); reverbDriver.reset(); reverbReturn.reset();
+        hp.reset(); bass.reset(); treble.reset(); pwrLP.reset();
+        cabHp.reset(); cabLo.reset(); cabHi.reset(); cabLp.reset();
+        inputMiller.reset(); driverMiller.reset(); reverbSendMiller.reset(); reverbReturnMiller.reset();
+        coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset(); spring.reset(); trem.reset(); }
 
-    void setParams(float volume, float bassP, float trebleP, float reverbP, float speed, float depth) {
+    void setParams(float volume, float bassP, float trebleP, float reverbP, float speed, float depth, float cabSimP) {
         hp.setHighpassQ(60.f, 0.7f, fs);
         bass.setLowShelf  (120.f, (bassP   - 0.5f) * 15.f, fs);
         treble.setHighShelf(3200.f,(trebleP - 0.5f) * 15.f, fs);
@@ -190,18 +201,57 @@ public:
         tRate    = 2.5f + speed * 7.0f;
         tDepth   = depth * 0.92f;
         pwrLP.setLowpassQ(12500.f, 0.7f, fs);   // miked-cab roll-off, vintage-bright
+        cabSim = cabSimP;
+        v1.setWithPlate(fs, 1, 250.0f, 38.0f, 30.0f, 1500.0f, 100000.0f);
+        v2.setWithPlate(fs, 1, 250.0f, 40.0f, 10.0f, 1500.0f, 100000.0f);
+        reverbDriver.setWithPlate(fs, 1, 250.0f, 30.0f, 12.0f, 1200.0f, 100000.0f);
+        reverbReturn.setWithPlate(fs, 1, 250.0f, 26.0f, 6.0f, 1500.0f, 100000.0f);
+        inputMiller.set(fs, 68000.0f, 48.0f, 6.0f);
+        driverMiller.set(fs, 180000.0f, 44.0f, 6.0f);
+        reverbSendMiller.set(fs, 220000.0f, 30.0f, 6.0f);
+        reverbReturnMiller.set(fs, 470000.0f, 16.0f, 8.0f);
+        coupleToPi.set(fs, 1000000.0f, 22.0e-9f, 47000.0f, 0.10f, 0.58f, 1.8f);
+        phaseInverter.setComponents(fs, 0.62f + 0.95f * volume, 0.72f,
+                                    260.0f, 47000.0f, 47000.0f, 2200.0f, 18.0f, 0.030f);
+        supply.set(fs,
+                   115.0f, 32.0f,
+                   1000.0f, 16.0f,
+                   10000.0f, 16.0f,
+                   0.22f, 0.14f, 0.070f, 0.20f);
+        power.set(fs, 0.82f + 1.25f * volume,
+                  -7.2f, 0.34f, 70.0f, 10800.0f + 1000.0f * trebleP);
+        power.out = 0.019f;
+        cabHp.setHighpassQ(80.f, 0.72f, fs);
+        cabLo.setLowShelf(125.f, 1.3f + 1.8f * bassP, fs);
+        cabHi.setHighShelf(3600.f, -2.4f + 4.0f * trebleP, fs);
+        cabLp.setLowpassQ(10800.f + 1600.f * trebleP, 0.66f, fs);
     }
 
     inline float process(float x) {
         float s = hp.process(x);
-        s = (float)v1.process((double)(2.2f * s));
+        s = v1.process(2.1f * inputMiller.process(s));
         s = bass.process(s); s = treble.process(s);
-        s = (float)v2.process((double)(drive * s));
-        s += spring.process(s) * reverb * 0.6f;             // valve spring blend
-        s = pushPull(s * pwrDrive) * level;                 // 4x EL84 power
+        s = v2.process(driverMiller.process(drive * s));
+        if (reverb > 0.001f) {
+            float wet = reverbDriver.process(reverbSendMiller.process(s) * (0.35f + 1.45f * reverb));
+            wet = spring.process(wet);
+            wet = reverbReturn.process(reverbReturnMiller.process(wet) * 0.9f);
+            s += wet * reverb * 0.36f;                     // 7199 valve spring blend
+        }
+        const float load = std::fabs(s) * (0.68f + 0.82f * level);
+        const rbtube::SupplyScales bplus = supply.process(load, load * 0.55f, load * 0.24f);
+        s *= 0.92f + 0.08f * bplus.preamp;
+        s = coupleToPi.process(s * pwrDrive * bplus.screen, 1.0f);
+        s = phaseInverter.process(s) * bplus.screen;
+        s = power.process(s * bplus.power) * level;         // 4x EL84-family power
         s = pwrLP.process(s);
-        s = trem.process(s, tRate, tDepth);                 // tremolo at output
-        return s;
+        const float ampOnly = s;
+        float cab = cabHp.process(ampOnly);
+        cab = cabLo.process(cab);
+        cab = cabHi.process(cab);
+        cab = cabLp.process(cab);
+        s = ampOnly + cabSim * (cab - ampOnly);
+        return trem.process(s, tRate, tDepth);              // tremolo at output
     }
 };
 
@@ -212,8 +262,8 @@ class Ga79Plugin : public Plugin {
     Ga79Channel L, R;
     float fParams[kParamCount];
     void recalc() {
-        L.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble], fParams[kReverb], fParams[kSpeed], fParams[kDepth]);
-        R.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble], fParams[kReverb], fParams[kSpeed], fParams[kDepth]);
+        L.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble], fParams[kReverb], fParams[kSpeed], fParams[kDepth], fParams[kCabSim]);
+        R.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble], fParams[kReverb], fParams[kSpeed], fParams[kDepth], fParams[kCabSim]);
     }
 public:
     Ga79Plugin() : Plugin(kParamCount, 0, 0) {

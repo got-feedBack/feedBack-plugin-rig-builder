@@ -9,7 +9,7 @@
  *
  * The 1959 is a NON-MASTER-VOLUME amp: the two Loudness pots ARE the gain. Its
  * lineage is the Bassman 5F6-A -> JTM45 -> Super Lead, so it shares the FMV/TMB
- * tone stack but with the Marshall values (33K slope, 500pF treble cap) and a
+ * tone stack but with the 1959SLP values (33K slope, 220pF treble cap) and a
  * hotter, brighter, EL34-grind voice.
  *
  * Signal path: 4 inputs (2 per channel, High/Low) -> V1 gain stages (the HIGH
@@ -17,7 +17,8 @@
  * channel is darker) -> the two Loudness pots mix (the classic "jumpered" plexi
  * tone is both channels up) -> V2 recovery + cathode follower -> Marshall tone
  * stack (Treble/Bass/Middle) -> V3 long-tail PI -> 4x EL34 (~100W) -> output
- * transformer. PRESENCE taps the power-amp negative-feedback loop.
+ * transformer. PRESENCE taps the power-amp negative-feedback loop. Cab Sim is a
+ * temporary fallback 4x12 voice for auditioning the amp without an external cab.
  *
  * Panel (1:1, left->right): PRESENCE, BASS, MIDDLE, TREBLE, LOUDNESS I (High
  * Treble channel), LOUDNESS II (Normal channel) + Power/Standby toggles.
@@ -36,24 +37,25 @@ enum PlexiParamId
     kLoudness1,      // LOUDNESS I  — High Treble/bright ch    [RS Loudness1]
     kLoudness2,      // LOUDNESS II — Normal channel           [RS Loudness2]
     kInput,          // input cable: Bright(0) / Both-jumpered(0.5) / Normal(1)
+    kCabSim,         // fallback 4x12 voice: 0=amp-only, 1=internal cab sim
     kParamCount
 };
 
 static const char* const kPlexiNames[kParamCount] = {
-    "Presence", "Bass", "Middle", "Treble", "Loudness I", "Loudness II", "Input",
+    "Presence", "Bass", "Middle", "Treble", "Loudness I", "Loudness II", "Input", "Cab Sim",
 };
 
 static const char* const kPlexiSymbols[kParamCount] = {
-    "presence", "bass", "middle", "treble", "loudness1", "loudness2", "input",
+    "presence", "bass", "middle", "treble", "loudness1", "loudness2", "input", "cabsim",
 };
 
-static const float kPlexiMin[kParamCount] = { 0,0,0,0,0,0,0 };
-static const float kPlexiMax[kParamCount] = { 1,1,1,1,1,1,1 };
+static const float kPlexiMin[kParamCount] = { 0,0,0,0,0,0,0,0 };
+static const float kPlexiMax[kParamCount] = { 1,1,1,1,1,1,1,1 };
 // Manual-insert defaults: the classic cranked-plexi crunch off Loudness I, tone
 // stack centred-ish, Loudness II down, input JUMPERED (Both) so raising Loudness
 // II by hand immediately blends the Normal channel (the famous fat plexi tone).
 static const float kPlexiDef[kParamCount] = {
-    0.50f, 0.50f, 0.55f, 0.62f, 0.62f, 0.00f, 0.50f,
+    0.50f, 0.50f, 0.55f, 0.62f, 0.62f, 0.00f, 0.50f, 1.00f,
 };
 
 #endif // PLEXI_PARAMS_H

@@ -1,27 +1,36 @@
 /*
- * MARSTEN JTM45 - Marshall JTM45 (~30W, 2x KT66 + GZ34 tube rectifier) for
+ * MARSTEN JTM45 - Marshall JTM45 (~30W, 2x 5881/6L6 + GZ34 tube rectifier) for
  * the game's Amp_MarshallJTM45. Parody brand "Marsten" (same as the Plexi /
  * DSL100); the in-app face must never read "Marshall".
  *
- * Local reference (modelled component-by-component):
- *   amps/Marshall JTM45/Marshall_jtm45_readable.pdf  (JTM45.DGM issue 7)
+ * CIRCUIT-REAL DSP, schematic-first (JTM45.DGM issue 7,
+ *   amps/Marshall JTM45/Marshall_jtm45_readable.pdf).
+ * The nonlinear stages are the real Koren tube models (tube_stage.hpp), NOT
+ * tanh stand-ins; the tone stack is the double-precision Yeh transfer function
+ * (3rd-order FMV, float NaNs at 192k); the power amp is the real 5881/6L6-family
+  * push-pull pentode model; and the whole nonlinear core runs at 4x oversample.
+ * Only the input/speaker voicing biquads remain as EQ (pre-cab color).
  *
- * The JTM45 is the predecessor of the 1959 Plexi and the descendant of the
- * Fender Bassman 5F6-A: SAME jumper-input + dual Loudness (non-master) topology
- * and the Marshall/Bassman FMV tone stack. This model reuses the Plexi DSP
- * shape and changes the POWER amp + tone-stack values to the JTM45 schematic:
- *   - Tone stack: Treble 250K / Bass 1M / Middle 25K, 56K slope resistor,
- *     270pF treble cap, 22nF bass/mid caps (early JTM45 / Bassman values, vs
- *     the Plexi's 33K slope / 500pF treble cap).
- *   - Power amp: 2x KT66 push-pull (~30W) with a GZ34 (5AR4) TUBE rectifier ->
- *     warmer, softer, MUCH more sag, earlier breakup and a darker top than the
- *     100W 4x EL34 Plexi.
- *
- * Signal path: 4 inputs (2 per channel) -> V1 gain stages (HIGH TREBLE/"bright"
- * channel has a 500pF bright cap across its Loudness pot; NORMAL channel is
- * darker) -> the two Loudness pots mix (jumpered = both up) -> V2/V3 recovery +
- * cathode follower -> Marshall tone stack -> long-tail PI -> 2x KT66 (~30W) +
- * GZ34 sag -> output transformer. PRESENCE (5K) taps the power-amp NFB.
+ * REAL STAGES MODELLED (from the schematic, component-by-component):
+ *   - V1a  12AX7 (ECC83) HIGH-TREBLE/"bright" channel input: 100k plate, 820R
+ *          cathode + 250uF bypass (fully bypassed), 1M grid-leak, 68k stoppers.
+ *          The JTM45 swaps the Bassman's 12AY7 inputs for 12AX7 -> the higher-mu
+ *          tube is THE defining Marshall change (more gain, earlier breakup).
+ *   - V1b  12AX7 NORMAL channel input (same network, darker channel body).
+ *   - the two LOUDNESS pots (1M log) mix the channels; the High-Treble channel
+ *          carries a 500pF bright cap across its pot (vs the Plexi's 5000pF, so
+ *          the JTM45 is darker/less sparkly).
+ *   - V2a  12AX7 recovery/mixer (100k plate, 820R cathode) -> the grind stage.
+ *   - V2b  12AX7 cathode follower driving the tone stack (Bassman/Marshall CF).
+ *   - FMV TONE STACK (ToneStackYeh, double): Treble 250k (270pF) / Bass 1M (.02uF)
+ *          / Middle 25k (.02uF) / 56k slope resistor. The early-JTM45/Bassman
+ *          values (vs the Plexi's 33k slope / 500pF) = softer treble, warmer mid.
+ *   - V3   12AX7 long-tailed-pair phase inverter (470R shared cathode + 1M tail).
+ *   - 2x 5881/6L6 push-pull (~30W), fixed bias plus 470R screen resistors -> warmer,
+ *          hotter idle and earlier compressing breakup than the later EL34 Plexi.
+ *          PowerAmp5881 is generated from Tung-Sol 5881 data. GZ34 (5AR4) TUBE
+ *          rectifier -> MUCH more supply sag than the Plexi. NFB tapped from the
+ *          16-ohm OT winding (27k) with the 5k PRESENCE pot in the loop.
  *
  * the game: no gain knob, so RS Gain -> LOUDNESS 1 (clean->crunch->roar).
  * Treble/Bass/Mid -> tone stack, Pres -> Presence. kInput = Bright(0) /
@@ -29,13 +38,15 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "Jtm45Params.h"
+#include "../../_shared/tube_stage.hpp"   // real 12AX7 + 5881/6L6 circuit models
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
 
-// RB loudness/headroom output stage (shared across all amps): kLvl matches the
-// amp to the common multitone loudness; the soft knee is transparent below
-// +/-0.90 and saturates to a +/-0.99 ceiling so EQ boosts never hard-clip.
+// RB loudness/headroom output stage (shared across all amps): the soft knee is
+// transparent below +/-0.90 and saturates to a +/-0.99 ceiling so EQ boosts
+// never hard-clip. See AMP_LOUDNESS.md.
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
 
@@ -68,24 +79,6 @@ static inline float smoothstepRange(float edge0, float edge1, float x)
 static inline float softClip(float x)
 {
     return std::tanh(x);
-}
-
-static inline float asymTube(float x, float drive, float bias)
-{
-    const float pushed = x * drive + bias;
-    const float y = std::tanh(pushed);
-    const float correction = std::tanh(bias);
-    return (y - correction) / (1.0f - 0.32f * std::fabs(correction));
-}
-
-static inline float tonePot(float v)
-{
-    v = clamp01(v);
-    if (v < 0.001f)
-        return 0.001f;
-    if (v > 0.999f)
-        return 0.999f;
-    return v;
 }
 
 class Biquad
@@ -192,95 +185,6 @@ public:
     }
 };
 
-// The JTM45 passive tone stack — the early Marshall/Bassman FMV topology with
-// the JTM45 schematic values: Treble 250K, Bass 1M, Middle 25K, slope R 56K,
-// C 270pF / 22nF / 22nF (off Marshall_jtm45_readable.pdf). Compared with the
-// later Plexi (33K slope, 500pF treble cap) this gives a softer, warmer treble
-// and a touch more midrange — the classic JTM45/Bassman voice.
-class Jtm45ToneStack
-{
-    float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, b3 = 0.0f;
-    float a1 = 0.0f, a2 = 0.0f, a3 = 0.0f;
-    float x1 = 0.0f, x2 = 0.0f, x3 = 0.0f, y1 = 0.0f, y2 = 0.0f, y3 = 0.0f;
-    float sampleRate = 48000.0f;
-
-public:
-    void reset() { x1 = x2 = x3 = y1 = y2 = y3 = 0.0f; }
-    void setSampleRate(float sr) { sampleRate = sr > 1000.0f ? sr : 48000.0f; }
-
-    void update(float treble, float mid, float bass)
-    {
-        const float t = tonePot(treble);
-        const float m = tonePot(mid);
-        const float l = tonePot(bass);
-
-        const float R1 = 250.0e3f;   // Treble pot (250K)
-        const float R2 = 1.0e6f;     // Bass pot (1M)
-        const float R3 = 25.0e3f;    // Middle pot (25K)
-        const float R4 = 56.0e3f;    // slope resistor (JTM45: 56K, vs Plexi 33K)
-        const float C1 = 270.0e-12f; // Treble cap (JTM45: 270pF, vs Plexi 500pF)
-        const float C2 = 22.0e-9f;   // Bass cap (.02uf)
-        const float C3 = 22.0e-9f;   // Middle cap (.02uf)
-
-        const float ab0 = 0.0f;
-        const float ab1 = t*C1*R1 + m*C3*R3 + l*(C1*R2 + C2*R2) + (C1*R3 + C2*R3);
-        const float ab2 = t*(C1*C2*R1*R4 + C1*C3*R1*R4)
-                        - m*m*(C1*C3*R3*R3 + C2*C3*R3*R3)
-                        + m*(C1*C3*R1*R3 + C1*C3*R3*R3 + C2*C3*R3*R3)
-                        + l*(C1*C2*R1*R2 + C1*C2*R2*R4 + C1*C3*R2*R4)
-                        + l*m*(C1*C3*R2*R3 + C2*C3*R2*R3)
-                        + (C1*C2*R1*R3 + C1*C2*R3*R4 + C1*C3*R3*R4);
-        const float ab3 = l*m*(C1*C2*C3*R1*R2*R3 + C1*C2*C3*R2*R3*R4)
-                        - m*m*(C1*C2*C3*R1*R3*R3 + C1*C2*C3*R3*R3*R4)
-                        + m*(C1*C2*C3*R1*R3*R3 + C1*C2*C3*R3*R3*R4)
-                        + t*C1*C2*C3*R1*R3*R4 - t*m*C1*C2*C3*R1*R3*R4
-                        + t*l*C1*C2*C3*R1*R2*R4;
-        const float aa0 = 1.0f;
-        const float aa1 = (C1*R1 + C1*R3 + C2*R3 + C2*R4 + C3*R4)
-                        + m*C3*R3 + l*(C1*R2 + C2*R2);
-        const float aa2 = m*(C1*C3*R1*R3 - C2*C3*R3*R4 + C1*C3*R3*R3 + C2*C3*R3*R3)
-                        - m*m*(C1*C3*R3*R3 + C2*C3*R3*R3)
-                        + l*m*(C1*C3*R2*R3 + C2*C3*R2*R3)
-                        + l*(C1*C2*R2*R4 + C1*C2*R1*R2 + C1*C3*R2*R4 + C2*C3*R2*R4)
-                        + (C1*C2*R1*R4 + C1*C3*R1*R4 + C1*C2*R3*R4
-                           + C1*C2*R1*R3 + C1*C3*R3*R4 + C2*C3*R3*R4);
-        const float aa3 = l*m*(C1*C2*C3*R1*R2*R3 + C1*C2*C3*R2*R3*R4)
-                        - m*m*(C1*C2*C3*R1*R3*R3 + C1*C2*C3*R3*R3*R4)
-                        + m*(C1*C2*C3*R3*R3*R4 + C1*C2*C3*R1*R3*R3
-                             - C1*C2*C3*R1*R3*R4)
-                        + l*(C1*C2*C3*R1*R2*R4) + C1*C2*C3*R1*R3*R4;
-
-        const float c = 2.0f * sampleRate;
-        const float c2 = c * c;
-        const float c3 = c2 * c;
-        const float nb0 = -ab0 - ab1*c - ab2*c2 - ab3*c3;
-        const float nb1 = -3.0f*ab0 - ab1*c + ab2*c2 + 3.0f*ab3*c3;
-        const float nb2 = -3.0f*ab0 + ab1*c + ab2*c2 - 3.0f*ab3*c3;
-        const float nb3 = -ab0 + ab1*c - ab2*c2 + ab3*c3;
-        const float na0 = -aa0 - aa1*c - aa2*c2 - aa3*c3;
-        const float na1 = -3.0f*aa0 - aa1*c + aa2*c2 + 3.0f*aa3*c3;
-        const float na2 = -3.0f*aa0 + aa1*c + aa2*c2 - 3.0f*aa3*c3;
-        const float na3 = -aa0 + aa1*c - aa2*c2 + aa3*c3;
-
-        if (std::fabs(na0) < 1.0e-30f)
-        {
-            b0 = 1.0f; b1 = b2 = b3 = a1 = a2 = a3 = 0.0f;
-            return;
-        }
-        const float invA0 = 1.0f / na0;
-        b0 = nb0 * invA0; b1 = nb1 * invA0; b2 = nb2 * invA0; b3 = nb3 * invA0;
-        a1 = na1 * invA0; a2 = na2 * invA0; a3 = na3 * invA0;
-    }
-
-    float process(float x)
-    {
-        const float y = b0*x + b1*x1 + b2*x2 + b3*x3 - a1*y1 - a2*y2 - a3*y3;
-        x3 = x2; x2 = x1; x1 = x;
-        y3 = y2; y2 = y1; y1 = y;
-        return y;
-    }
-};
-
 class DcBlock
 {
     float x1 = 0.0f;
@@ -309,6 +213,7 @@ class Jtm45Core
     float loud1  = kJtm45Def[kLoudness1];
     float loud2  = kJtm45Def[kLoudness2];
     float input  = kJtm45Def[kInput];
+    float cabSim = kJtm45Def[kCabSim];
 
     // derived: channel gating from the input cable + the loudness-as-gain proxy.
     float brightG = 1.0f, normalG = 1.0f;
@@ -321,7 +226,7 @@ class Jtm45Core
     Biquad normalBody;
     Biquad interstageHp;
     Biquad cathodeFollowerLp;
-    Jtm45ToneStack toneStack;
+    rbtube::ToneStackYeh toneStack;        // FMV stack, REAL (double, no NaN at 192k)
     Biquad stackMakeupLow;
     Biquad stackMakeupBody;
     Biquad phaseLowPass;
@@ -334,7 +239,18 @@ class Jtm45Core
     Biquad speakerLp;
     DcBlock dcBlock;
 
-    float sag = 0.0f;
+    // ── REAL tube stages (Koren circuit models) — the JTM45 runs all 12AX7 (ECC83)
+    //    in the preamp (vs the Bassman's 12AY7 inputs), with a 5881/6L6-family power pair.
+    rbtube::TubeStage   brightTube, normalTube;   // V1a/V1b 12AX7 channel inputs
+    rbtube::TubeStage   recoveryTube;             // V2a 12AX7 recovery/grind into the stack
+    rbtube::Miller12AX7 brightMiller, normalMiller, recoveryMiller;
+    rbtube::CouplingCapGridLeak brightCoupleToRecovery;
+    rbtube::CouplingCapGridLeak normalCoupleToRecovery;
+    rbtube::CouplingCapGridLeak coupleToPi;
+    rbtube::PhaseInverterLTP12AX7 phaseInverter;
+    rbtube::MultiNodeBPlus supply;
+    rbtube::PowerAmp5881 power;                    // 2x 5881/6L6 push-pull (~30W), GZ34 sag
+    float lastPowerLoad = 0.0f, lastScreenLoad = 0.0f, lastPreampLoad = 0.0f;
 
     static float eqDb(float normalized, float rangeDb)
     {
@@ -351,11 +267,44 @@ class Jtm45Core
         effDrive = clamp01(brightG * loud1 + normalG * loud2 * 0.80f);
 
         const float g = smoothstep(effDrive);
-        const float pushed = smoothstepRange(0.40f, 0.92f, effDrive);
+        const float pushed = smoothstepRange(0.34f, 0.86f, effDrive);  // 5881 + GZ34 sag break up earlier than the Plexi
         // The 500pF bright cap bleeds treble across Loudness 1, most at low
         // settings; plus base sparkle from Treble/Presence. The JTM45 is a touch
-        // darker than the Plexi (smaller bright cap, KT66 top), so less bright.
+        // darker than the Plexi (smaller bright cap, 5881/6L6 top), so less bright.
         const float bright = clamp01(0.32f * treble + 0.18f * pres + 0.48f * (1.0f - loud1));
+
+        // ── real 12AX7 / 5881 circuit stages (cathode-biased, self-bias solved) ──
+        // V1a/V1b: 820R cathode + 250uF bypass -> fully bypassed, fck=1/(2pi*820*250u)
+        // ~= 0.78 Hz (effectively DC, full gain). V2a recovery: 820R, treat similarly.
+        brightTube.set(sampleRate, 1, 250.0f, 40.0f, 1.0f, 820.0f);   // V1a 12AX7 High-Treble
+        normalTube.set(sampleRate, 1, 250.0f, 40.0f, 1.0f, 820.0f);   // V1b 12AX7 Normal
+        recoveryTube.set(sampleRate, 1, 250.0f, 40.0f, 30.0f, 820.0f);// V2a 12AX7 recovery/grind
+        brightMiller.set(sampleRate, 68000.0f, 55.0f, 8.0f);
+        normalMiller.set(sampleRate, 68000.0f, 55.0f, 8.0f);
+        recoveryMiller.set(sampleRate, 180000.0f, 52.0f, 8.0f);
+        // V1 coupling caps + Loudness pots/mixing resistors feeding V2a. This is
+        // where a cranked JTM45 starts to "bloom": the caps recover after grid
+        // current instead of acting like a static high-pass.
+        brightCoupleToRecovery.set(sampleRate, 1000000.0f, 22.0e-9f, 270000.0f,
+                                   0.16f, 0.42f, 1.10f);
+        normalCoupleToRecovery.set(sampleRate, 1000000.0f, 22.0e-9f, 270000.0f,
+                                   0.14f, 0.38f, 0.95f);
+        coupleToPi.set(sampleRate, 1000000.0f, 22.0e-9f, 100000.0f, 0.18f, 0.35f, 0.90f);
+        phaseInverter.setMarshall(sampleRate, 0.95f + 1.50f * effDrive + 0.75f * pushed, 0.88f);
+        supply.set(sampleRate,
+                   115.0f, 32.0f,          // GZ34 + reservoir
+                   8200.0f, 32.0f,         // screen/PI node
+                   10000.0f, 16.0f,        // preamp node
+                   0.22f + 0.09f * pushed,
+                   0.16f + 0.06f * pushed,
+                   0.08f + 0.03f * effDrive,
+                   0.20f);
+        // 2x 5881/6L6 push-pull (~30W), JTM45 fixed-bias power with hotter idle
+        // (less-negative bias) + earlier breakup than the later EL34 Plexi.
+        // GZ34 sag is modelled in the B+ nodes above; local power sag stays moderate.
+        // NFB is approximated by the presence shelf.
+        power.set(sampleRate, 6.8f + 8.5f * effDrive + 9.0f * pushed, -45.0f, 0.24f, 48.0f, 11200.0f);
+        power.out = 0.0100f;
 
         inputHp.setHighPass(sampleRate, 42.0f + 52.0f * g + 28.0f * pushed, 0.70f);
         pickupLoad.setLowPass(sampleRate, 12200.0f - 1700.0f * pushed + 850.0f * treble, 0.64f);
@@ -368,7 +317,10 @@ class Jtm45Core
 
         interstageHp.setHighPass(sampleRate, 58.0f + 76.0f * pushed + 38.0f * (1.0f - bass), 0.70f);
         cathodeFollowerLp.setLowPass(sampleRate, 8200.0f + 1500.0f * treble - 1500.0f * pushed, 0.64f);
-        toneStack.update(treble, mid, bass);
+        // FMV stack values straight off the JTM45 schematic: Treble 250k (270pF),
+        // Bass 1M (.02uF=22nF), Middle 25k (.02uF), 56k slope resistor.
+        toneStack.setComponents(250.0e3, 1.0e6, 25.0e3, 56.0e3, 270.0e-12, 22.0e-9, 22.0e-9);
+        toneStack.update(sampleRate, treble, mid, bass);
         stackMakeupLow.setLowShelf(sampleRate, 120.0f + 30.0f * bass, 0.72f,
                                    eqDb(bass, 4.8f) - 1.2f * pushed);
         stackMakeupBody.setPeaking(sampleRate, 500.0f + 180.0f * mid, 0.66f,
@@ -379,8 +331,9 @@ class Jtm45Core
                                    -4.0f + 8.4f * pres + 0.9f * treble);
 
         // Marshall/Bluesbreaker-era cab (greenback/G12-ish but darker than the
-        // 100W Plexi): tight HP, low thump, warm mid bite, fizz notch + earlier
-        // top rolloff (KT66 voice).
+        // 100W Plexi): tight HP, low thump, warm mid bite, gentle top air + earlier
+        // top rolloff (5881/6L6 voice). The cab IR adds the real speaker; this is the
+        // soft pre-cab color only.
         speakerHp.setHighPass(sampleRate, 80.0f, 0.72f);
         speakerThump.setPeaking(sampleRate, 112.0f, 0.84f, 0.9f + 2.4f * bass);
         speakerLowMid.setPeaking(sampleRate, 370.0f + 90.0f * mid, 0.78f,
@@ -388,9 +341,9 @@ class Jtm45Core
         speakerBite.setPeaking(sampleRate, 2550.0f + 480.0f * treble, 0.74f,
                                2.5f + 2.0f * treble + 1.1f * pres - 0.5f * pushed);   // softer than Plexi
         speakerFizzNotch.setHighShelf(sampleRate, 4700.0f, 0.70f,
-                                      9.5f + 2.0f * treble + 2.0f * pres - 4.5f * pushed);
-        speakerLp.setLowPass(sampleRate, 14500.0f + 1800.0f * treble + 850.0f * pres
-                                         - 3500.0f * pushed, 0.66f);   // brighter, miked-cab top
+                                      -2.0f + 1.6f * treble + 1.2f * pres - 3.5f * pushed);
+        speakerLp.setLowPass(sampleRate, 12500.0f + 1500.0f * treble + 700.0f * pres
+                                         - 3000.0f * pushed, 0.66f);
     }
 
 public:
@@ -404,14 +357,17 @@ public:
         speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset();
         speakerBite.reset(); speakerFizzNotch.reset(); speakerLp.reset();
         dcBlock.reset();
-        sag = 0.0f;
+        brightMiller.reset(); normalMiller.reset(); recoveryMiller.reset();
+        brightCoupleToRecovery.reset(); normalCoupleToRecovery.reset(); coupleToPi.reset();
+        brightTube.reset(); normalTube.reset(); recoveryTube.reset();
+        phaseInverter.reset(); supply.reset(); power.reset();
+        lastPowerLoad = lastScreenLoad = lastPreampLoad = 0.0f;
         updateFilters();
     }
 
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
-        toneStack.setSampleRate(sampleRate);
         reset();
     }
 
@@ -427,6 +383,7 @@ public:
             case kLoudness1: loud1 = v; break;
             case kLoudness2: loud2 = v; break;
             case kInput:     input = v; break;
+            case kCabSim:    cabSim = v; break;
             default: break;
         }
         updateFilters();
@@ -440,29 +397,28 @@ public:
 
     float process(float in)
     {
-        const float g = smoothstep(effDrive);
-        const float pushed = smoothstepRange(0.40f, 0.92f, effDrive);
+        const float pushed = smoothstepRange(0.34f, 0.86f, effDrive);
+        const rbtube::SupplyScales bplus = supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
 
         float x = inputHp.process(in);
         x = pickupLoad.process(x);
         x = softClip(x * (1.05f + 0.10f * pushed)) * (0.95f - 0.04f * pushed);
 
-        // HIGH TREBLE (bright) channel: 500pF bright cap + body, its own 12AX7.
+        // HIGH TREBLE (bright) channel: 500pF bright cap + body, REAL 12AX7.
         float bch = brightCapShelf.process(brightBody.process(x));
-        bch = asymTube(bch, 1.05f + 3.10f * effDrive + 3.0f * g, 0.013f + 0.017f * effDrive);
-        // NORMAL channel: darker, its own triode.
+        bch = brightTube.process(brightMiller.process(bch) * (3.4f + 3.4f * loud1) * bplus.preamp);
+        bch = brightCoupleToRecovery.process(bch, 0.70f + 2.8f * loud1);
+        // NORMAL channel: darker body, REAL 12AX7.
         float nch = normalBody.process(x);
-        nch = asymTube(nch, 0.90f + 2.4f * effDrive + 2.2f * g, 0.010f + 0.014f * effDrive);
+        nch = normalTube.process(normalMiller.process(nch) * (2.8f + 3.0f * loud2) * bplus.preamp);
+        nch = normalCoupleToRecovery.process(nch, 0.62f + 2.3f * loud2);
 
         // Jumpered mix: each channel scaled by its Loudness pot, gated by the cable.
         float y = brightG * loud1 * bch + normalG * loud2 * 0.92f * nch;
-        // A little clean leak at low drive (the JTM45 stays articulate when quiet).
-        const float cleanLeak = 0.32f * (1.0f - smoothstepRange(0.26f, 0.74f, effDrive));
-        y = y * (1.0f - cleanLeak) + x * cleanLeak * (brightG * loud1 + normalG * loud2 * 0.5f);
 
-        // 12AX7 recovery / cathode follower into the tone stack — the grind stage.
+        // V2a 12AX7 recovery / V2b cathode follower into the tone stack — REAL.
         y = interstageHp.process(y);
-        y = asymTube(y, 0.90f + 1.9f * effDrive + 2.4f * pushed, -0.006f - 0.011f * effDrive);
+        y = recoveryTube.process(recoveryMiller.process(y) * (2.6f + 2.2f * effDrive) * bplus.preamp);
         y = cathodeFollowerLp.process(y);
 
         y = toneStack.process(y) * 1.70f;
@@ -470,43 +426,41 @@ public:
         y = stackMakeupBody.process(y);
         y = phaseLowPass.process(y);
 
-        // 2x KT66 push-pull (~30W) with a GZ34 (5AR4) TUBE rectifier. Vs the
-        // Plexi's 4x EL34 / solid-state-ish supply: more compression, MUCH more
-        // sag, softer/earlier breakup and a warmer, darker top.
-        const float env = std::fabs(y);
-        const float attack = 1.0f - std::exp(-1.0f / (0.0070f * sampleRate));
-        const float release = 1.0f - std::exp(-1.0f / (0.180f * sampleRate)); // slow GZ34 recovery
-        sag += (env - sag) * (env > sag ? attack : release);
-        const float sagDrop = 1.0f / (1.0f + sag * (0.62f + 1.20f * effDrive + 0.70f * pushed));
+        y = coupleToPi.process(y, 1.0f);
+        lastPreampLoad = std::fabs(y) * (0.20f + 0.45f * effDrive);
+        y = phaseInverter.process(y * bplus.screen);
+        lastScreenLoad = std::fabs(y) * (0.35f + 0.65f * effDrive);
 
-        const float powerDrive = (0.95f + 1.75f * effDrive + 2.7f * pushed) * sagDrop;
-        y = asymTube(y, powerDrive, 0.008f + 0.014f * (treble - bass) + 0.010f * pres);
-        y = 0.84f * y + 0.16f * softClip(y * (1.65f + 1.40f * pushed));
-        y *= 0.97f - 0.12f * sag;  // more sag droop than the Plexi
-
+        // 2x 5881/6L6 push-pull (~30W) — real 5881 table + GZ34 B+ sag + presence
+        // (NFB-approx). Warmer, softer and earlier-compressing than the 100W EL34 Plexi.
+        y = power.process(y * bplus.power * bplus.screen);
+        lastPowerLoad = std::fabs(y) * (0.55f + 0.95f * effDrive);
         y = presenceShelf.process(y);
         y = dcBlock.process(y);
 
-        y = speakerHp.process(y);
-        y = speakerThump.process(y);
-        y = speakerLowMid.process(y);
-        y = speakerBite.process(y);
-        y = speakerFizzNotch.process(y);
-        y = speakerLp.process(y);
+        float cab = speakerHp.process(y);
+        cab = speakerThump.process(cab);
+        cab = speakerLowMid.process(cab);
+        cab = speakerBite.process(cab);
+        cab = speakerFizzNotch.process(cab);
+        cab = speakerLp.process(cab);
+        y += cabSim * (cab - y);
 
         // Loudness normalization: the Loudness-as-gain means a low setting is much
-        // quieter than a cranked one. cleanMakeup lifts the quiet end so the RS
-        // Gain (-> Loudness 1) sweep stays within a couple dB and the shared kLvl
-        // stage stays calibrated (~-14 dBFS reference).
+        // quieter than a cranked one. NO cleanMakeup (it inverts the crest curve
+        // with the real tubes). A gentle final softClip(y*level) = OT saturation.
         const float toneEnergy = 1.0f
             + 0.011f * std::fabs((bass - 0.5f) * 15.0f)
             + 0.012f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.012f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.010f * std::fabs((pres - 0.5f) * 16.0f);
-        const float cleanMakeup = 1.0f + 13.0f * std::exp(-effDrive / 0.190f);
-        const float level = (0.350f + 0.09f * (1.0f - effDrive)) * cleanMakeup /
+        const float level = (0.585f + 0.15f * (1.0f - effDrive)) /
             ((1.0f + 0.30f * effDrive + 0.16f * pushed) * toneEnergy);
-        return softClip(y * level) * 0.97f;
+        // Final OT clip: drive harder as the amp is cranked so a cranked JTM45
+        // genuinely squashes its peaks (crest collapses) like the OT/rectifier do.
+        // Renormalized by tanh(finalDrive) so the loudness makeup stays calibrated.
+        const float finalDrive = 1.0f + 1.2f * pushed * pushed;
+        return softClip(y * level * finalDrive) / std::tanh(finalDrive) * 0.97f;
     }
 };
 
@@ -515,6 +469,8 @@ class Jtm45Plugin : public Plugin
     Jtm45Core left;
     Jtm45Core right;
     float params[kParamCount];
+    rbshared::Oversampler4x osL, osR;            // anti-alias around the nonlinear chain
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
 
     void applyAll()
     {
@@ -531,8 +487,8 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kJtm45Def[i];
-        left.setSampleRate((float)getSampleRate());
-        right.setSampleRate((float)getSampleRate());
+        left.setSampleRate(kOS * (float)getSampleRate());
+        right.setSampleRate(kOS * (float)getSampleRate());
         applyAll();
     }
 
@@ -572,8 +528,9 @@ protected:
 
     void sampleRateChanged(double newSampleRate) override
     {
-        left.setSampleRate((float)newSampleRate);
-        right.setSampleRate((float)newSampleRate);
+        left.setSampleRate(kOS * (float)newSampleRate);
+        right.setSampleRate(kOS * (float)newSampleRate);
+        osL.reset(); osR.reset();
         applyAll();
     }
 
@@ -585,8 +542,13 @@ protected:
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = rbAmpLvl(0.560f * left.process(3.2f * inL[i]));
-            outR[i] = rbAmpLvl(0.560f * right.process(3.2f * inR[i]));
+            float ub[kOS];
+            osL.upsample(3.2f * inL[i], ub);
+            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.158f * left.process(ub[k]));
+            outL[i] = osL.downsample(ub);
+            osR.upsample(3.2f * inR[i], ub);
+            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.158f * right.process(ub[k]));
+            outR[i] = osR.downsample(ub);
         }
     }
 

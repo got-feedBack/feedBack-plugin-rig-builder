@@ -8,12 +8,12 @@
  *   • TREMOLO — the GA-8T's bias-modulation tremolo (Speed = oscillator rate,
  *     Depth = intensity), applied at the output.
  *
- * Real nodal 12AX7s (Koren + Newton/sample) + RBJ tone + an EL84-class push-pull
- * saturator + a sine-LFO tremolo. Shared MNA/Triode/Biquad blocks are byte-
- * identical to the Citrus AD200 source.
+ * Real nodal 12AX7s (Koren + Newton/sample) with per-stage Miller loading + RBJ
+ * tone + a real 6BM8/ECL82 push-pull pentode table + a sine-LFO tremolo.
  */
 #include "DistrhoPlugin.hpp"
 #include "Ga8Params.h"
+#include "../../_shared/tube_stage.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -151,16 +151,23 @@ class Ga8Channel {
     float fs = 48000.f;
     Triode v1, v2;
     Biquad hp, bass, treble, pwrLP;
+    Biquad cabHp, cabLo, cabHi, cabLp;
     Tremolo trem;
-    float drive=1, level=1, pwrDrive=1, tRate=4.f, tDepth=0.f;
-
-    // 2x 6BM8 (ECL82) push-pull (~10 W): early, sweet EL84-class knee.
-    static inline float pushPull(float x) { return std::tanh(x * 1.05f) / 1.05f; }
+    rbtube::Miller12AX7 inputMiller, driverMiller;
+    rbtube::CouplingCapGridLeak coupleToV2;
+    rbtube::CouplingCapGridLeak coupleToPi;
+    rbtube::PhaseInverterCathodyne12AX7 phaseInverter;
+    rbtube::MultiNodeBPlus supply;
+    rbtube::PowerAmp6BM8 power; // real 6BM8/ECL82 pentode section
+    float drive=1, level=1, pwrDrive=1, tRate=4.f, tDepth=0.f, cabSim=1;
 public:
     void setSampleRate(float s) { fs=(s>0.f)?s:48000.f; v1.setT(s); v2.setT(s); trem.setFs(s); }
-    void reset() { v1.reset(); v2.reset(); hp.reset(); bass.reset(); treble.reset(); pwrLP.reset(); trem.reset(); }
+    void reset() { v1.reset(); v2.reset(); hp.reset(); bass.reset(); treble.reset(); pwrLP.reset();
+        cabHp.reset(); cabLo.reset(); cabHi.reset(); cabLp.reset();
+        inputMiller.reset(); driverMiller.reset();
+        coupleToV2.reset(); coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset(); trem.reset(); }
 
-    void setParams(float volume, float bassP, float trebleP, float speed, float depth) {
+    void setParams(float volume, float bassP, float trebleP, float speed, float depth, float cabSimP) {
         hp.setHighpassQ(60.f, 0.7f, fs);
         bass.setLowShelf  (120.f, (bassP   - 0.5f) * 15.f, fs);
         treble.setHighShelf(3200.f,(trebleP - 0.5f) * 15.f, fs);
@@ -170,17 +177,48 @@ public:
         tRate    = 2.5f + speed * 7.0f;            // ~2.5..9.5 Hz
         tDepth   = depth * 0.92f;
         pwrLP.setLowpassQ(12500.f, 0.7f, fs);   // miked-cab roll-off, vintage-bright
+        cabSim = cabSimP;
+        inputMiller.set(fs, 68000.0f, 42.0f, 8.0f);
+        driverMiller.set(fs, 180000.0f, 48.0f, 8.0f);
+        coupleToV2.set(fs, 1000000.0f, 22.0e-9f, 220000.0f,
+                       0.11f, 0.40f, 1.00f);
+        coupleToPi.set(fs, 1000000.0f, 22.0e-9f, 22000.0f, 0.10f, 0.62f, 1.8f);
+        phaseInverter.set(fs, 0.76f + 1.05f * volume, 0.74f,
+                          245.0f, 56000.0f, 56000.0f, 2.7f, 0.02f);
+        supply.set(fs,
+                   210.0f, 16.0f,
+                   1200.0f, 16.0f,
+                   10000.0f, 16.0f,
+                   0.32f, 0.20f, 0.095f, 0.26f);
+        power.set(fs, 0.82f + 1.36f * volume,
+                  -13.8f, 0.50f, 88.0f, 9800.0f + 700.0f * trebleP);
+        power.out = 0.025f;
+        cabHp.setHighpassQ(86.f, 0.72f, fs);
+        cabLo.setLowShelf(130.f, 0.8f + 1.8f * bassP, fs);
+        cabHi.setHighShelf(3650.f, -3.4f + 4.5f * trebleP, fs);
+        cabLp.setLowpassQ(10300.f + 1600.f * trebleP, 0.66f, fs);
     }
 
     inline float process(float x) {
         float s = hp.process(x);
-        s = (float)v1.process((double)(2.2f * s));
+        s = (float)v1.process((double)(2.2f * inputMiller.process(s)));
         s = bass.process(s); s = treble.process(s);
-        s = (float)v2.process((double)(drive * s));
-        s = pushPull(s * pwrDrive) * level;
+        s = coupleToV2.process(s, drive);
+        s = (float)v2.process((double)driverMiller.process(s));
+        const float load = std::fabs(s) * (0.70f + 0.82f * level);
+        const rbtube::SupplyScales bplus = supply.process(load, load * 0.55f, load * 0.25f);
+        s *= 0.92f + 0.08f * bplus.preamp;
+        s = coupleToPi.process(s * pwrDrive * bplus.screen, 1.0f);
+        s = phaseInverter.process(s) * bplus.screen;
+        s = power.process(s * bplus.power) * level;
         s = pwrLP.process(s);
-        s = trem.process(s, tRate, tDepth);
-        return s;
+        const float ampOnly = s;
+        float cab = cabHp.process(ampOnly);
+        cab = cabLo.process(cab);
+        cab = cabHi.process(cab);
+        cab = cabLp.process(cab);
+        s = ampOnly + cabSim * (cab - ampOnly);
+        return trem.process(s, tRate, tDepth);
     }
 };
 
@@ -191,8 +229,8 @@ class Ga8Plugin : public Plugin {
     Ga8Channel L, R;
     float fParams[kParamCount];
     void recalc() {
-        L.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble], fParams[kSpeed], fParams[kDepth]);
-        R.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble], fParams[kSpeed], fParams[kDepth]);
+        L.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble], fParams[kSpeed], fParams[kDepth], fParams[kCabSim]);
+        R.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble], fParams[kSpeed], fParams[kDepth], fParams[kCabSim]);
     }
 public:
     Ga8Plugin() : Plugin(kParamCount, 0, 0) {

@@ -16,7 +16,8 @@
  * Low/High (50W/100W) output switch.
  *
  * the game: the Gain knob drives the channel morph (Classic clean -> Crunch ->
- * Ultra), matching the gain_variants split. See rs_knob_to_vst_param.json.
+ * Ultra), matching the gain_variants split. Cab Sim stays on until the host
+ * supplies a cabinet/IR. See rs_knob_to_vst_param.json.
  */
 #include "DistrhoPlugin.hpp"
 #include "DSL100Params.h"
@@ -60,19 +61,6 @@ static inline float smoothstepRange(float edge0, float edge1, float x)
 static inline float softClip(float x)
 {
     return std::tanh(x);
-}
-
-static inline float asymTube(float x, float drive, float bias)
-{
-    const float pushed = x * drive + bias;
-    const float y = std::tanh(pushed);
-    const float correction = std::tanh(bias);
-    return (y - correction) / (1.0f - 0.30f * std::fabs(correction));
-}
-
-static inline float eqDb(float v, float rangeDb)
-{
-    return (clamp01(v) - 0.5f) * 2.0f * rangeDb;
 }
 
 class Biquad
@@ -270,6 +258,7 @@ class DSL100Core
     float master2      = kDSL100Def[kMaster2];
     float masterSelect = kDSL100Def[kMasterSelect];
     float output       = kDSL100Def[kOutput];
+    float cabSim       = kDSL100Def[kCabSim];
 
     // derived (recomputed in updateFilters)
     float m = 0.7f;        // channel/drive morph: 0 = Classic clean .. 1 = Ultra max
@@ -290,10 +279,17 @@ class DSL100Core
     DigiReverb reverb;
     // ── real circuit (Koren tube tables) replacing the tanh asymTube ──
     rbtube::TubeStage    v1, vClean, vCrunch, vUltraA, vUltraB, vCascade;  // 12AX7 stages
+    rbtube::Miller12AX7  v1Miller, cleanMiller, crunchMiller, ultraAMiller, ultraBMiller, cascadeMiller;
+    rbtube::CouplingCapGridLeak coupleToPi;                                // master -> LTP grid
+    rbtube::PhaseInverterLTP12AX7 phaseInverter;                           // ECC83 long-tail pair
+    rbtube::MultiNodeBPlus supply;                                          // diode rectifier + B+ nodes
     rbtube::PowerAmpEL34 power;                                            // 4x EL34 push-pull (~100W)
     rbtube::ToneStackYeh tone;                                            // real Marshall JCM2000 TMB
     float inScale = 1.2f, toneMk = 13.0f;
     float sag = 0.0f;
+    float lastPowerLoad = 0.0f;
+    float lastScreenLoad = 0.0f;
+    float lastPreampLoad = 0.0f;
 
     void setupTubes()
     {
@@ -305,6 +301,12 @@ class DSL100Core
         vUltraA.set(sampleRate, 1, 250.0f, 40.0f, 45.0f, 1500.0f);
         vUltraB.set(sampleRate, 1, 250.0f, 40.0f, 60.0f, 1500.0f);
         vCascade.set(sampleRate, 1, 250.0f, 40.0f, 55.0f, 1500.0f);
+        v1Miller.set(sampleRate,       68000.0f, 55.0f, 8.0f);
+        cleanMiller.set(sampleRate,   180000.0f, 52.0f, 8.0f);
+        crunchMiller.set(sampleRate,  180000.0f, 52.0f, 8.0f);
+        ultraAMiller.set(sampleRate,  150000.0f, 55.0f, 8.0f);
+        ultraBMiller.set(sampleRate,  150000.0f, 55.0f, 8.0f);
+        cascadeMiller.set(sampleRate, 180000.0f, 52.0f, 8.0f);
     }
 
     void updateFilters()
@@ -329,7 +331,7 @@ class DSL100Core
         inputHp.setHighPass(sampleRate, 54.0f + 58.0f * ultraA + 28.0f * (1.0f - bass), 0.70f);
         inputLp.setLowPass(sampleRate, 14800.0f - 3100.0f * ultraA + 1100.0f * treble, 0.64f);
         brightShelf.setHighShelf(sampleRate, 1050.0f + 1150.0f * treble, 0.70f,
-                                 -1.8f + 5.0f * treble + 1.6f * presence + 1.0f * crunchA);
+                                 -0.6f + 5.4f * treble + 1.8f * presence + 1.0f * crunchA);
         cleanBody.setPeaking(sampleRate, 410.0f + 130.0f * mid, 0.76f,
                              -0.8f + 2.6f * mid + 1.4f * bass);
         crunchBody.setPeaking(sampleRate, 760.0f + 220.0f * mid, 0.82f,
@@ -339,7 +341,7 @@ class DSL100Core
         ultraBite.setPeaking(sampleRate, 1850.0f + 620.0f * treble, 0.82f,
                              0.4f + 3.4f * treble + 2.2f * ultraA + 1.0f * presence);
         interHp.setHighPass(sampleRate, 70.0f + 86.0f * ultraA + 34.0f * (1.0f - bass), 0.71f);
-        interLp.setLowPass(sampleRate, 9600.0f + 1200.0f * treble - 1800.0f * ultraA, 0.64f);
+        interLp.setLowPass(sampleRate, 11000.0f + 1200.0f * treble - 1300.0f * ultraA, 0.64f);
 
         // Marshall JCM2000 (DSL) tone stack — CIRCUIT-REAL (Yeh model, real R/C from
         // the JCM2000 stack): Treble 250k/500pF · Bass 1M/22nF · Mid 25k/22nF · slope 56k.
@@ -349,12 +351,26 @@ class DSL100Core
         toneShiftMid.setPeaking(sampleRate, 650.0f + 180.0f * treble, 1.10f, -8.5f * ts);
         toneShiftBite.setPeaking(sampleRate, 2550.0f + 530.0f * treble, 0.82f,
                                  2.4f * ts + 0.6f * ultraA);
-        // 4x EL34 power amp drive (morph + ultra) + sag; Low/High output sets sag depth.
+        // DSL100 is diode-rectified and fairly stiff. Low output intentionally
+        // lets the supply move more; High/100W stays tighter and punchier.
         const float lowPow = 1.0f - clamp01(output);
+        coupleToPi.set(sampleRate, 1000000.0f, 22.0e-9f, 220000.0f,
+                       0.14f, 0.55f, 1.20f);
+        phaseInverter.setMarshall(sampleRate, 1.00f + 1.65f * m + 0.95f * ultraA, 0.90f);
+        supply.set(sampleRate,
+                   18.0f, 100.0f,
+                   1000.0f, 50.0f,
+                   10000.0f, 22.0f,
+                   0.06f + 0.08f * lowPow + 0.02f * ultraA,
+                   0.05f + 0.07f * lowPow + 0.02f * ultraA,
+                   0.03f + 0.03f * ultraA,
+                   0.14f);
+        // 4x EL34 power amp drive (morph + Ultra). The DSL lead channel needs
+        // a hotter PI/power feed than the earlier placeholder, or OD1 reads too polite.
         // Low floor so a clean/low-morph signal leaves the power tubes clean; it climbs
         // steeply with the morph + Ultra (the cranked lead voice slams the EL34s).
-        power.set(sampleRate, 0.35f + 9.0f * m + 4.5f * ultraA, -40.0f,
-                  0.16f + 0.32f * lowPow, 55.0f, 11000.0f);
+        power.set(sampleRate, 0.75f + 12.8f * m + 6.8f * ultraA, -40.0f,
+                  0.10f + 0.22f * lowPow, 55.0f, 11200.0f);
         power.out = 0.011f;
 
         // Power-amp NFB: Presence (high) + Resonance (low) + speaker.
@@ -377,8 +393,8 @@ class DSL100Core
         // a real 4x12 ROLLS OFF the top (no +9 dB fizz shelf — that inflates crest
         // without distorting); gentle HF cut + LP.
         speakerFizzNotch.setHighShelf(sampleRate, 4700.0f, 0.70f,
-                                      -3.5f + 2.0f * treble + 2.0f * presence - 2.0f * ultraA);
-        speakerLp.setLowPass(sampleRate, 11500.0f + 1800.0f * treble + 850.0f * presence - 3000.0f * ultraA, 0.66f);
+                                      -1.8f + 2.0f * treble + 2.0f * presence - 1.4f * ultraA);
+        speakerLp.setLowPass(sampleRate, 13000.0f + 1800.0f * treble + 850.0f * presence - 2300.0f * ultraA, 0.66f);
     }
 
 public:
@@ -392,8 +408,11 @@ public:
         speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset(); speakerBite.reset();
         speakerFizzNotch.reset(); speakerLp.reset(); dcBlock.reset();
         reverb.clear();
+        v1Miller.reset(); cleanMiller.reset(); crunchMiller.reset();
+        ultraAMiller.reset(); ultraBMiller.reset(); cascadeMiller.reset();
         v1.reset(); vClean.reset(); vCrunch.reset(); vUltraA.reset(); vUltraB.reset(); vCascade.reset();
-        power.reset(); tone.reset();
+        coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset(); tone.reset();
+        lastPowerLoad = lastScreenLoad = lastPreampLoad = 0.0f;
         sag = 0.0f;
         setupTubes();
         updateFilters();
@@ -430,6 +449,7 @@ public:
             case kMaster2:      master2 = v; break;
             case kMasterSelect: masterSelect = v; break;
             case kOutput:       output = v; break;
+            case kCabSim:       cabSim = v; break;
             default: break;
         }
         updateFilters();
@@ -443,6 +463,8 @@ public:
 
     float process(float in)
     {
+        const rbtube::SupplyScales bplus =
+            supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
         const float cleanW = 1.0f - smoothstepRange(0.22f, 0.50f, m);
         const float ultraW = smoothstepRange(0.58f, 0.96f, m);
         float crunchW = 1.0f - cleanW - ultraW;
@@ -456,20 +478,20 @@ public:
         float x = inputHp.process(in);
         x = inputLp.process(x);
         x = brightShelf.process(x);
-        x = v1.process(x * inScale);                    // V1 shared input stage (real 12AX7)
+        x = v1.process(v1Miller.process(x) * inScale * bplus.preamp);   // V1 shared input stage (real 12AX7 + Miller)
 
         // Three voicings off the shared input, blended by the morph (the RS Gain
         // knob sweeps Classic clean -> Crunch -> Ultra). Each is a real 12AX7 cascade.
         float clean = cleanBody.process(x);
-        clean = vClean.process(clean * (0.7f + 0.8f * m));
+        clean = vClean.process(cleanMiller.process(clean) * (0.7f + 0.8f * m) * bplus.preamp);
 
         float crunch = crunchBody.process(x);
-        crunch = vCrunch.process(crunch * (1.3f + 4.0f * m));
+        crunch = vCrunch.process(crunchMiller.process(crunch) * (1.8f + 6.1f * m) * bplus.preamp);
 
         float ultra = ultraTight.process(x);
         ultra = ultraBite.process(ultra);
-        ultra = vUltraA.process(ultra * (2.0f + 5.5f * m));
-        ultra = vUltraB.process(ultra * (1.3f + 3.5f * m));
+        ultra = vUltraA.process(ultraAMiller.process(ultra) * (3.1f + 9.6f * m) * bplus.preamp);
+        ultra = vUltraB.process(ultraBMiller.process(ultra) * (1.9f + 6.2f * m) * bplus.preamp);
 
         float y = clean * cleanMix + crunch * crunchMix + ultra * ultraMix;
         y = interHp.process(y);
@@ -477,7 +499,8 @@ public:
 
         // extra cascade stage for the hottest Ultra region
         const float extraCascade = smoothstepRange(0.48f, 0.90f, m);
-        const float cascaded = vCascade.process(y * (1.0f + 3.0f * m + 2.0f * ultraMix));
+        const float cascaded = vCascade.process(cascadeMiller.process(y) *
+                                                (1.5f + 5.2f * m + 3.4f * ultraMix) * bplus.preamp);
         y = y * (1.0f - 0.55f * extraCascade) + cascaded * (0.55f * extraCascade);
 
         // real Marshall JCM2000 tone stack (Yeh) + insertion-loss makeup + Tone Shift
@@ -490,23 +513,29 @@ public:
         // Channel volume sets how hard the preamp drives the power amp.
         const float chDrive = 0.66f + 0.78f * chVol;
         y *= chDrive;
+        y = coupleToPi.process(y, 1.0f + 0.18f * ultraA);
+        lastPreampLoad = 0.12f * std::fabs(y) + 0.05f * m;
+        y = phaseInverter.process(y * bplus.preamp);
+        lastPowerLoad = 0.90f * std::fabs(y) + 0.24f * ultraA;
+        lastScreenLoad = 0.55f * std::fabs(y) + 0.12f * m;
 
-        // 4x EL34 power amp — REAL pentode table + own sag/OT (drive + sag depth set in
-        // updateFilters from morph/Ultra and the Low/High output switch). NFB is the
+        // 4x EL34 power amp — REAL pentode table + OT. The diode supply/filter
+        // response is injected via the B+ scales above. NFB is approximated by
         // Presence/Resonance shelves below.
-        y = power.process(y);
+        y = power.process(y * bplus.power * bplus.screen);
 
         y = presenceShelf.process(y);
         y = resonanceShelf.process(y);
         y = resonancePeak.process(y);
         y = dcBlock.process(y);
 
-        y = speakerHp.process(y);
-        y = speakerThump.process(y);
-        y = speakerLowMid.process(y);
-        y = speakerBite.process(y);
-        y = speakerFizzNotch.process(y);
-        y = speakerLp.process(y);
+        float cab = speakerHp.process(y);
+        cab = speakerThump.process(cab);
+        cab = speakerLowMid.process(cab);
+        cab = speakerBite.process(cab);
+        cab = speakerFizzNotch.process(cab);
+        cab = speakerLp.process(cab);
+        y += cabSim * (cab - y);
 
         // Per-channel digital reverb (parallel). Active send crossfades with
         // the channel; modest depth so it stays a tail, not a wash.

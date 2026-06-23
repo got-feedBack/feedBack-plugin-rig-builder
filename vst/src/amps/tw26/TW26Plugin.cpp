@@ -36,6 +36,7 @@ class TW26Plugin : public Plugin
         core.setBright(params[kBright]);
         core.setBass(params[kBass]);
         core.setPresence(params[kPresence]);
+        core.setCabSim(params[kCabSim]);
     }
 
 public:

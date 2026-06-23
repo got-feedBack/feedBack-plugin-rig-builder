@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/AidenGT300.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			NpOkCHracJ88yE4ebLDw9gzww9dVY340Ta/kJEIDfIQ=
+			</data>
+		</dict>
+		<key>x86_64-win/AidenGT300.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			cW3XlbrYsoxExkBL3Hg3GQADTk3sM+32fGw+vO1x/dw=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

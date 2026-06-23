@@ -64,14 +64,6 @@ static inline float softClip(float x)
     return std::tanh(x);
 }
 
-static inline float asymTube(float x, float drive, float bias)
-{
-    const float pushed = x * drive + bias;
-    const float y = std::tanh(pushed);
-    const float correction = std::tanh(bias);
-    return (y - correction) / (1.0f - 0.32f * std::fabs(correction));
-}
-
 static inline float tonePot(float v)
 {
     v = clamp01(v);
@@ -299,6 +291,7 @@ class TW40Core
     float bass     = kTW40Def[kBass];
     float mid      = kTW40Def[kMiddle];
     float pres     = kTW40Def[kPresence];
+    float cabSim   = kTW40Def[kCabSim];
 
     // derived
     float brightG = 1.0f, normalG = 1.0f;   // channel gating from the input cable
@@ -311,7 +304,7 @@ class TW40Core
     Biquad brightBody;
     Biquad interstageHp;
     Biquad cathodeFollowerLp;
-    BassmanToneStack toneStack;
+    rbtube::ToneStackYeh toneStack;
     Biquad stackMakeupLow;
     Biquad stackMakeupBody;
     Biquad phaseLowPass;
@@ -329,7 +322,13 @@ class TW40Core
     // ── REAL tube stages (Koren circuit models) replacing the tanh asymTube ──
     rbtube::TubeStageAY7 brightTube, normalTube;  // 12AY7 input stages (per channel)
     rbtube::TubeStage    recoveryTube;            // 12AX7 recovery into the FMV stack
-    rbtube::PowerAmp6L6  power;                    // 2x 5881/6L6 push-pull (~45W)
+    rbtube::Miller12AY7  brightMiller, normalMiller; // input stopper + 12AY7 Miller loading
+    rbtube::Miller12AX7  recoveryMiller;          // mixed channel source -> 12AX7 Miller loading
+    rbtube::CouplingCapGridLeak coupleToRecovery, coupleToPi;
+    rbtube::PhaseInverterLTP12AX7 phaseInverter;   // V3 12AX7 long-tail pair
+    rbtube::MultiNodeBPlus supply;                  // GZ34 + choke/screen/preamp nodes
+    rbtube::PowerAmp5881 power;                     // 2x 5881 push-pull (~45W Bassman)
+    float lastPowerLoad = 0.0f, lastScreenLoad = 0.0f, lastPreampLoad = 0.0f;
 
     static float eqDb(float normalized, float rangeDb)
     {
@@ -348,13 +347,24 @@ class TW40Core
         const float g = smoothstep(effDrive);
         const float pushed = smoothstepRange(0.42f, 0.92f, effDrive);
 
-        // ── real 12AY7 / 12AX7 / 6L6 circuit stages (cathode-biased, self-bias solved) ──
+        // ── real 12AY7 / 12AX7 / 5881 circuit stages (cathode-biased, self-bias solved) ──
         brightTube.set(sampleRate, 1, 250.0f, 40.0f, 30.0f, 1500.0f);   // 12AY7 bright input
         normalTube.set(sampleRate, 1, 250.0f, 40.0f, 30.0f, 1500.0f);   // 12AY7 normal input
         recoveryTube.set(sampleRate, 1, 250.0f, 40.0f, 55.0f, 1500.0f); // 12AX7 recovery
-        // 2x 5881/6L6 push-pull, FIXED bias (cold class-AB ~-45V), GZ34 = moderate sag,
+        brightMiller.set(sampleRate, 68000.0f, 24.0f, 8.0f);            // 5F6-A input stopper + 12AY7 Miller
+        normalMiller.set(sampleRate, 68000.0f, 24.0f, 8.0f);
+        recoveryMiller.set(sampleRate, 180000.0f, 52.0f, 8.0f);         // mixed volume source + 12AX7 Miller
+        coupleToRecovery.set(sampleRate, 1000000.0f, 22.0e-9f, 68000.0f, 0.12f, 0.45f, 1.15f);
+        coupleToPi.set(sampleRate, 1000000.0f, 100.0e-9f, 220000.0f, 0.13f, 0.44f, 1.20f);
+        phaseInverter.setMarshall(sampleRate, 0.95f + 2.85f * effDrive + 1.15f * pushed, 0.88f);
+        // 5F6-A GZ34 supply: rectifier reservoir -> choke/screen node -> preamp
+        // dropping resistor. Bassman is stiffer than 5E3 but still breathes when loud.
+        supply.set(sampleRate, 115.0f, 20.0f, 800.0f, 20.0f, 10000.0f, 20.0f,
+                   0.18f + 0.05f * pushed, 0.11f + 0.04f * pushed,
+                   0.055f + 0.020f * pushed, 0.18f);
+        // 2x 5881 push-pull, FIXED bias (cold class-AB ~-45V), GZ34 = moderate sag,
         // NFB approximated by the presence shelf. Loud/tight with headroom (vs the 5E3).
-        power.set(sampleRate, 4.3f + 9.0f * effDrive + 14.0f * pushed, -45.0f, 0.25f, 45.0f, 11000.0f);
+        power.set(sampleRate, 2.2f + 6.8f * effDrive + 8.5f * pushed, -45.0f, 0.18f, 45.0f, 11000.0f);
         power.out = 0.010f;
 
         // The 100pF bright cap bleeds treble most at LOW Bright Volume; plus base
@@ -372,7 +382,8 @@ class TW40Core
 
         interstageHp.setHighPass(sampleRate, 58.0f + 74.0f * pushed + 42.0f * (1.0f - bass), 0.70f);
         cathodeFollowerLp.setLowPass(sampleRate, 8800.0f + 1700.0f * treble - 1600.0f * pushed, 0.64f);
-        toneStack.update(treble, mid, bass);
+        toneStack.setComponents(250e3, 1.0e6, 25e3, 56e3, 250e-12, 20e-9, 20e-9);
+        toneStack.update(sampleRate, treble, mid, bass);
         stackMakeupLow.setLowShelf(sampleRate, 120.0f + 30.0f * bass, 0.72f,
                                    eqDb(bass, 4.8f) - 1.4f * pushed);
         stackMakeupBody.setPeaking(sampleRate, 470.0f + 170.0f * mid, 0.66f,
@@ -388,7 +399,7 @@ class TW40Core
         // --- Speaker / 4x10 cab voicing (the DOMINANT brightness lever) ---
         // The defaults were far too dark (LP ~6.2k + a fizz notch). A miked open-back
         // tweed 4x10 is bright: upper-mid bite + air, with the top rolling back only
-        // when the amp is cranked hard. See _TUNING_PLAYBOOK (BOX DC30 / Deluxe).
+        // when the amp is cranked hard. See _TUNING_PLAYBOOK (BOX AC30 / Deluxe).
         speakerHp.setHighPass(sampleRate, 74.0f, 0.72f);
         speakerThump.setPeaking(sampleRate, 122.0f, 0.84f, 0.9f + 2.4f * bass);
         speakerLowMid.setPeaking(sampleRate, 330.0f + 90.0f * mid, 0.78f,
@@ -419,6 +430,9 @@ public:
         speakerBite.reset(); speakerAir.reset(); speakerLp.reset();
         dcBlock.reset();
         sag = 0.0f;
+        lastPowerLoad = lastScreenLoad = lastPreampLoad = 0.0f;
+        brightMiller.reset(); normalMiller.reset(); recoveryMiller.reset();
+        coupleToRecovery.reset(); coupleToPi.reset(); phaseInverter.reset(); supply.reset();
         brightTube.reset(); normalTube.reset(); recoveryTube.reset(); power.reset();
         updateFilters();
     }
@@ -426,7 +440,6 @@ public:
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
-        toneStack.setSampleRate(sampleRate);
         reset();
     }
 
@@ -442,6 +455,7 @@ public:
             case kBass:      bass = v; break;
             case kMiddle:    mid = v; break;
             case kPresence:  pres = v; break;
+            case kCabSim:    cabSim = v; break;
             default: break;
         }
         updateFilters();
@@ -455,8 +469,8 @@ public:
 
     float process(float in)
     {
-        const float g = smoothstep(effDrive);
         const float pushed = smoothstepRange(0.42f, 0.92f, effDrive);
+        const rbtube::SupplyScales bplus = supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
 
         float x = inputHp.process(in);
         x = pickupLoad.process(x);
@@ -464,35 +478,43 @@ public:
 
         // BRIGHT channel: bright cap + body, its own REAL 12AY7, driven by Bright Vol.
         float bch = brightShelf.process(brightBody.process(x));
-        bch = brightTube.process(bch * (1.8f + 4.6f * brightVol));
+        bch = brightTube.process(brightMiller.process(bch) * (1.8f + 11.0f * brightVol) * bplus.preamp);
         // NORMAL channel: darker body, its own REAL 12AY7, driven by Normal Vol.
         float nch = normalBody.process(x);
-        nch = normalTube.process(nch * (1.6f + 3.9f * normalVol));
+        nch = normalTube.process(normalMiller.process(nch) * (1.6f + 9.0f * normalVol) * bplus.preamp);
 
         // Jumpered mix: each channel scaled by its Volume and gated by the cable.
         float y = brightG * brightVol * bch + normalG * normalVol * 0.92f * nch;
 
         // 12AX7 recovery into the FMV tone stack (REAL).
         y = interstageHp.process(y);
-        y = recoveryTube.process(y * (1.0f + 2.2f * effDrive));
+        y = coupleToRecovery.process(y, 1.0f + 3.9f * effDrive);
+        y = recoveryTube.process(recoveryMiller.process(y) * bplus.preamp);
         y = cathodeFollowerLp.process(y);
 
         y = toneStack.process(y) * 1.70f;
         y = stackMakeupLow.process(y);
         y = stackMakeupBody.process(y);
         y = phaseLowPass.process(y);
+        y = coupleToPi.process(y, 1.0f + 1.25f * effDrive);
+        lastPreampLoad = std::fabs(y) * (0.18f + 0.55f * effDrive);
+        y = phaseInverter.process(y * bplus.screen);
+        lastScreenLoad = std::fabs(y) * (0.30f + 0.55f * effDrive);
 
         // 2x 5881/6L6 push-pull (REAL: pentode table + own sag/OT) + presence (NFB-approx).
-        y = power.process(y);
+        y = power.process(y * bplus.power * bplus.screen);
+        lastPowerLoad = std::fabs(y) * (0.45f + 0.75f * effDrive);
         y = presenceShelf.process(y);
         y = dcBlock.process(y);
 
-        y = speakerHp.process(y);
-        y = speakerThump.process(y);
-        y = speakerLowMid.process(y);
-        y = speakerBite.process(y);
-        y = speakerAir.process(y);
-        y = speakerLp.process(y);
+        const float ampOnly = y;
+        float cab = speakerHp.process(ampOnly);
+        cab = speakerThump.process(cab);
+        cab = speakerLowMid.process(cab);
+        cab = speakerBite.process(cab);
+        cab = speakerAir.process(cab);
+        cab = speakerLp.process(cab);
+        y = ampOnly + cabSim * (cab - ampOnly);
 
         // Loudness normalization: the volumes-as-gain means a low-volume setting
         // is much quieter than a cranked one. cleanMakeup lifts the quiet end so

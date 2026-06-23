@@ -25,21 +25,22 @@ enum EmsParamId
     kPresence,      // PRESENCE — power-amp NFB                       [RS Pres]
     kVolume,        // VOLUME — master volume
     kHiLo,          // gain mode: HI(0) full JCM800 / LO(1) JTM50-ish
+    kCabSim,        // fallback 4x12 speaker voice; host bypasses when using an external cab/IR
     kParamCount
 };
 
 static const char* const kEmsNames[kParamCount] = {
-    "Gain", "Bass", "Middle", "Treble", "Presence", "Volume", "Hi Lo",
+    "Gain", "Bass", "Middle", "Treble", "Presence", "Volume", "Hi Lo", "Cab Sim",
 };
 static const char* const kEmsSymbols[kParamCount] = {
-    "gain", "bass", "middle", "treble", "presence", "volume", "hilo",
+    "gain", "bass", "middle", "treble", "presence", "volume", "hilo", "cabsim",
 };
-static const float kEmsMin[kParamCount] = { 0,0,0,0,0,0,0 };
-static const float kEmsMax[kParamCount] = { 1,1,1,1,1,1,1 };
+static const float kEmsMin[kParamCount] = { 0,0,0,0,0,0,0,0 };
+static const float kEmsMax[kParamCount] = { 1,1,1,1,1,1,1,1 };
 // Manual-insert defaults: a JCM800 crunch — Gain past noon, tone centred,
 // Presence + Master at musical defaults, HI gain mode.
 static const float kEmsDef[kParamCount] = {
-    0.60f, 0.50f, 0.50f, 0.55f, 0.50f, 0.60f, 0.0f,
+    0.60f, 0.50f, 0.50f, 0.55f, 0.50f, 0.60f, 0.0f, 1.0f,
 };
 
 #endif // EMS_PARAMS_H

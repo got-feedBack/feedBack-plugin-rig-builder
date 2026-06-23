@@ -11,20 +11,21 @@
 //    of scope; RS exposes only Volume/Bass/Treble.)
 enum RubyParamId {
     kVolume = 0, kBass, kTreble,   // knobs
+    kCabSim,                       // fallback vintage speaker voice
     kParamCount
 };
 
 static const char* const kRubyNames[kParamCount] = {
-    "Volume", "Bass", "Treble"
+    "Volume", "Bass", "Treble", "Cab Sim"
 };
 static const char* const kRubySymbols[kParamCount] = {
-    "volume", "bass", "treble"
+    "volume", "bass", "treble", "cabsim"
 };
-static const float kRubyMin[kParamCount] = { 0,0,0 };
-static const float kRubyMax[kParamCount] = { 1,1,1 };
+static const float kRubyMin[kParamCount] = { 0,0,0,0 };
+static const float kRubyMax[kParamCount] = { 1,1,1,1 };
 // Volume 0.6; Bass 0.5; Treble 0.5 (flat tone).
 static const float kRubyDef[kParamCount] = {
-    0.60f, 0.50f, 0.50f
+    0.60f, 0.50f, 0.50f, 1.00f
 };
 
 #endif // RUBY_PARAMS_H

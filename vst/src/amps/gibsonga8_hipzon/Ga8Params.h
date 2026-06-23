@@ -10,14 +10,15 @@
 //   (RS exposes Volume(Loudness)/Bass/Treble; Speed/Depth are the amp's tremolo.)
 enum Ga8ParamId {
     kVolume = 0, kBass, kTreble, kSpeed, kDepth,
+    kCabSim,
     kParamCount
 };
 
-static const char* const kGa8Names[kParamCount]   = { "Volume", "Bass", "Treble", "Speed", "Depth" };
-static const char* const kGa8Symbols[kParamCount] = { "volume", "bass", "treble", "speed", "depth" };
-static const float kGa8Min[kParamCount] = { 0,0,0,0,0 };
-static const float kGa8Max[kParamCount] = { 1,1,1,1,1 };
+static const char* const kGa8Names[kParamCount]   = { "Volume", "Bass", "Treble", "Speed", "Depth", "Cab Sim" };
+static const char* const kGa8Symbols[kParamCount] = { "volume", "bass", "treble", "speed", "depth", "cabsim" };
+static const float kGa8Min[kParamCount] = { 0,0,0,0,0,0 };
+static const float kGa8Max[kParamCount] = { 1,1,1,1,1,1 };
 // Volume 0.6; tone flat; Speed 0.4; Depth 0 (tremolo off by default).
-static const float kGa8Def[kParamCount] = { 0.60f, 0.50f, 0.50f, 0.40f, 0.00f };
+static const float kGa8Def[kParamCount] = { 0.60f, 0.50f, 0.50f, 0.40f, 0.00f, 1.00f };
 
 #endif // GA8_PARAMS_H

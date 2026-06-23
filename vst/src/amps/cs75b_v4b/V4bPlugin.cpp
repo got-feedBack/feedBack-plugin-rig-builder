@@ -36,7 +36,7 @@ static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
 
 // Loudness standardization (shared amp convention): a per-amp output `makeup`
-// tuned so the multitone (110 Hz–1.8 kHz) RMS matches the Box DC30 reference
+// tuned so the multitone (110 Hz–1.8 kHz) RMS matches the Box AC30 reference
 // (~0.40 RMS), then softClip()*0.98f as the final ceiling (same as EN30Core.h).
 static inline float softClip(float x) { return std::tanh(x); }
 

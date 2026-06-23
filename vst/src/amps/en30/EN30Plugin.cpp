@@ -1,5 +1,5 @@
 /*
- * BOX DC30 - AC30 Top Boost-style amp for the game's Amp_EN30.
+ * BOX AC30 - AC30 Top Boost-style amp for the game's Amp_EN30.
  *
  * DPF wrapper (VST3 + AU). All the DSP lives in EN30Core.h (plain C++,
  * offline-testable); see that header for the circuit topology and schematic refs.
@@ -44,6 +44,7 @@ class EN30Plugin : public Plugin
         core.setMaster(params[kMaster]);
         core.setInput(params[kInput]);
         core.setBright(params[kBright]);
+        core.setCabSim(params[kCabSim]);
     }
 
 public:
@@ -57,8 +58,8 @@ public:
     }
 
 protected:
-    const char* getLabel() const override { return "BOX DC30"; }
-    const char* getDescription() const override { return "BOX DC30 / AC30 Top Boost style amp"; }
+    const char* getLabel() const override { return "BOX AC30"; }
+    const char* getDescription() const override { return "BOX AC30 / AC30 Top Boost style amp"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
     uint32_t getVersion() const override { return d_version(1, 0, 0); }

@@ -19,6 +19,7 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "RumbleverbParams.h"
+#include "../../_shared/tube_stage.hpp"
 #include <cmath>
 #include <cstring>
 
@@ -172,18 +173,23 @@ class RumbleverbChannel {
     float fs = 48000.f;
     Triode vIn, vDirty, vClean;
     Biquad hp, dBass, dMid, dTreble, cBass, cTreble, pwrLP;
+    Biquad cabHp, cabThump, cabLowMid, cabBite, cabFizz, cabLp;
     Spring spring;
-    float gain=1, dvol=1, cvol=1, reverb=0, output=1, pwrDrive=1;
+    rbtube::CouplingCapGridLeak coupleToDirty;
+    rbtube::CouplingCapGridLeak coupleToClean;
+    rbtube::CouplingCapGridLeak coupleToPi;
+    rbtube::PhaseInverterLTP12AX7 phaseInverter;
+    rbtube::MultiNodeBPlus supply;
+    rbtube::PowerAmpEL34 power;
+    float gain=1, dvol=1, cvol=1, reverb=0, output=1, pwrDrive=1, cabSim=1;
     bool dirty=true;
-
-    // 2x EL34 push-pull (~50 W): a mid knee — more headroom than EL84, less than KT88.
-    static inline float pushPull(float x) {
-        return std::tanh(x * 0.78f) / 0.78f;
-    }
 public:
     void setSampleRate(float s) { fs=(s>0.f)?s:48000.f; vIn.setT(s); vDirty.setT(s); vClean.setT(s); }
     void reset() { vIn.reset(); vDirty.reset(); vClean.reset();
-        hp.reset(); dBass.reset(); dMid.reset(); dTreble.reset(); cBass.reset(); cTreble.reset(); pwrLP.reset(); spring.reset(); }
+        hp.reset(); dBass.reset(); dMid.reset(); dTreble.reset(); cBass.reset(); cTreble.reset(); pwrLP.reset();
+        cabHp.reset(); cabThump.reset(); cabLowMid.reset(); cabBite.reset(); cabFizz.reset(); cabLp.reset();
+        coupleToDirty.reset(); coupleToClean.reset();
+        coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset(); spring.reset(); }
 
     void setParams(const float* p) {
         dirty = p[kChannel] > 0.5f;
@@ -204,7 +210,29 @@ public:
         reverb   = p[kReverb];
         output   = p[kOutput] / 0.7f;
         pwrDrive = 0.5f + output * 0.85f;
+        cabSim   = p[kCabSim];
         pwrLP.setLowpassQ(14000.f - 3000.f * output, 0.7f, fs);  // EL34 + OT band-limit (opened, miked-cab top)
+        coupleToDirty.set(fs, 1000000.0f, 22.0e-9f, 180000.0f,
+                          0.12f, 0.52f, 1.45f);
+        coupleToClean.set(fs, 1000000.0f, 22.0e-9f, 220000.0f,
+                          0.10f, 0.30f, 0.75f);
+        coupleToPi.set(fs, 1000000.0f, 47.0e-9f, 47000.0f, 0.10f, 0.60f, 1.9f);
+        phaseInverter.setMarshall(fs, 0.74f + 1.05f * output + (dirty ? 0.35f : 0.10f), 0.82f);
+        supply.set(fs,
+                   85.0f, 100.0f,
+                   560.0f, 50.0f,
+                   10000.0f, 22.0f,
+                   0.14f, 0.10f, 0.050f, 0.17f);
+        power.set(fs, 0.90f + 1.55f * output + (dirty ? 0.52f : 0.18f),
+                  -35.0f, 0.12f, 58.0f, 11800.0f);
+        power.out = 0.0105f;
+
+        cabHp.setHighpassQ(78.f, 0.72f, fs);
+        cabThump.setPeak(118.f, 1.1f + 2.1f * p[kBass], 0.86f, fs);
+        cabLowMid.setPeak(430.f + 100.f * p[kMiddle], 1.8f, 0.72f, fs);
+        cabBite.setPeak(2450.f + 480.f * p[kTreble], 2.0f + 1.5f * p[kTreble], 0.78f, fs);
+        cabFizz.setHighShelf(4700.f, -1.0f + 2.2f * p[kTreble], fs);
+        cabLp.setLowpassQ(12800.f + 1200.f * p[kTreble] - 1600.f * output, 0.66f, fs);
     }
 
     inline float process(float x) {
@@ -212,18 +240,32 @@ public:
         s = (float)vIn.process((double)(2.5f * s));                  // shared input triode
         float ch;
         if (dirty) {
-            float d = (float)vDirty.process((double)(gain * s));     // cascaded gain stage
+            float d = coupleToDirty.process(s, gain);
+            d = (float)vDirty.process((double)d);                    // cascaded gain stage
             d = dBass.process(d); d = dMid.process(d); d = dTreble.process(d);
             ch = d * dvol;
         } else {
-            float cln = (float)vClean.process((double)(1.2f * s));   // gentle clean stage
+            float cln = coupleToClean.process(s, 1.2f);
+            cln = (float)vClean.process((double)cln);                // gentle clean stage
             cln = cBass.process(cln); cln = cTreble.process(cln);
             ch = cln * cvol;
         }
         ch += spring.process(ch) * reverb * 0.6f;                    // valve spring blend
-        ch = pushPull(ch * pwrDrive) * output;                       // 2x EL34 power
+        const float load = std::fabs(ch) * (0.75f + 0.85f * output);
+        const rbtube::SupplyScales bplus = supply.process(load, load * 0.52f, load * 0.20f);
+        ch *= 0.92f + 0.08f * bplus.preamp;
+        ch = coupleToPi.process(ch * pwrDrive * bplus.screen, 1.0f + 0.10f * output);
+        ch = phaseInverter.process(ch) * bplus.screen;
+        ch = power.process(ch * bplus.power) * output;               // 2x EL34 power
         ch = pwrLP.process(ch);
-        return ch;
+        const float ampOnly = ch;
+        float cab = cabHp.process(ampOnly);
+        cab = cabThump.process(cab);
+        cab = cabLowMid.process(cab);
+        cab = cabBite.process(cab);
+        cab = cabFizz.process(cab);
+        cab = cabLp.process(cab);
+        return ampOnly + cabSim * (cab - ampOnly);
     }
 };
 
@@ -251,7 +293,7 @@ protected:
     void initParameter(uint32_t i, Parameter& p) override {
         if (i >= (uint32_t)kParamCount) return;
         p.hints = kParameterIsAutomatable;
-        if (i >= (uint32_t)kChannel) p.hints |= kParameterIsBoolean;
+        if (i == (uint32_t)kChannel) p.hints |= kParameterIsBoolean;
         p.name = kRumbleverbNames[i]; p.symbol = kRumbleverbSymbols[i];
         p.ranges.min = kRumbleverbMin[i]; p.ranges.max = kRumbleverbMax[i]; p.ranges.def = kRumbleverbDef[i];
     }

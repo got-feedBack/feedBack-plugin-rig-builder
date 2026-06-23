@@ -41,6 +41,7 @@ class TW22Plugin : public Plugin
         left.setBurnVol(params[kBurnVol]);       right.setBurnVol(params[kBurnVol]);
         left.setReverb(params[kReverb]);         right.setReverb(params[kReverb]);
         left.setPresence(params[kPresence]);     right.setPresence(params[kPresence]);
+        left.setCabSim(params[kCabSim]);         right.setCabSim(params[kCabSim]);
     }
 
 public:

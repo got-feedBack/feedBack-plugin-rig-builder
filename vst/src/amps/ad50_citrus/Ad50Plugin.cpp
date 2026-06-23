@@ -23,6 +23,7 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "Ad50Params.h"
+#include "../../_shared/tube_stage.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -38,14 +39,6 @@ static inline float clampFreq(float hz, float sr) { return std::fmax(20.0f, std:
 static inline float smoothstep(float v) { v = clamp01(v); return v * v * (3.0f - 2.0f * v); }
 static inline float smoothstepRange(float e0, float e1, float x) { return smoothstep((x - e0) / (e1 - e0)); }
 static inline float softClip(float x) { return std::tanh(x); }
-static inline float asymTube(float x, float drive, float bias)
-{
-    const float pushed = x * drive + bias;
-    const float y = std::tanh(pushed);
-    const float correction = std::tanh(bias);
-    return (y - correction) / (1.0f - 0.32f * std::fabs(correction));
-}
-static inline float tonePot(float v) { v = clamp01(v); return v < 0.001f ? 0.001f : (v > 0.999f ? 0.999f : v); }
 
 class Biquad
 {
@@ -90,6 +83,7 @@ class Ad50Core
     float master   = kAd50Def[kMaster];
     float sustain  = kAd50Def[kSustain];
     float classa   = kAd50Def[kClassA];
+    float cabSim   = kAd50Def[kCabSim];
 
     Biquad inputHp, pickupLoad, preBody, stage1Hp, interHp, gainStageHp, cathodeLp;
     // 2-band shelving EQ (Bass low-shelf + Treble high-shelf), NO middle.
@@ -97,6 +91,15 @@ class Ad50Core
     Biquad speakerHp, speakerThump, speakerLowMid, speakerBite, speakerFizz, speakerLp;
     DcBlock dcBlock;
     float sag = 0.0f;
+    rbtube::TubeStage v1a, v1b, v2a, v2b;
+    rbtube::Miller12AX7 v1aMiller, v1bMiller, v2aMiller, v2bMiller;
+    rbtube::CouplingCapGridLeak coupleV1aToV1b;
+    rbtube::CouplingCapGridLeak coupleV1bToV2a;
+    rbtube::CouplingCapGridLeak coupleV2aToV2b;
+    rbtube::CouplingCapGridLeak coupleToPi;
+    rbtube::PhaseInverterLTP12AX7 phaseInverter;
+    rbtube::MultiNodeBPlus supply;
+    rbtube::PowerAmpEL34 power;
 
     static float eqDb(float v, float r) { return (clamp01(v) - 0.5f) * 2.0f * r; }
 
@@ -106,6 +109,7 @@ class Ad50Core
         const float pushed = smoothstepRange(0.40f, 0.92f, gain);
         const float mPush = smoothstep(master);
         const float sus = (sustain >= 0.5f) ? 1.0f : 0.0f;   // EQ-bypass gain/sustain boost
+        const float clA = (classa >= 0.5f) ? 1.0f : 0.0f;    // Class A -> softer supply/headroom
 
         inputHp.setHighPass(sampleRate, 46.0f + 36.0f * g, 0.70f);
         pickupLoad.setLowPass(sampleRate, 12000.0f - 1400.0f * pushed + 800.0f * treble, 0.64f);
@@ -139,8 +143,43 @@ class Ad50Core
         speakerThump.setPeaking(sampleRate, 124.0f, 0.84f, 1.4f + 2.1f * bass);
         speakerLowMid.setPeaking(sampleRate, 460.0f, 0.72f, 1.8f);
         speakerBite.setPeaking(sampleRate, 2400.0f + 480.0f * treble, 0.78f, 2.0f + 1.8f * treble - 0.5f * pushed);
-        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, 9.5f + 2.0f * treble + 2.0f * presence - 4.5f * pushed);
-        speakerLp.setLowPass(sampleRate, 15000.0f + 1700.0f * treble - 3500.0f * pushed, 0.66f);
+        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, -1.8f + 1.6f * treble + 1.2f * presence - 2.8f * pushed);
+        speakerLp.setLowPass(sampleRate, 12600.0f + 1500.0f * treble - 3000.0f * pushed, 0.66f);
+
+        v1a.set(sampleRate, 1, 250.0f, 40.0f, 10.0f, 1500.0f);
+        v1b.set(sampleRate, 1, 250.0f, 40.0f, 18.0f, 1500.0f);
+        v2a.set(sampleRate, 1, 250.0f, 40.0f, 36.0f, 1800.0f);
+        v2b.set(sampleRate, 1, 250.0f, 40.0f, 55.0f, 1500.0f);
+        v1aMiller.set(sampleRate,  68000.0f, 55.0f, 8.0f);
+        v1bMiller.set(sampleRate, 180000.0f, 52.0f, 8.0f);
+        v2aMiller.set(sampleRate, 180000.0f, 52.0f, 8.0f);
+        v2bMiller.set(sampleRate, 180000.0f, 52.0f, 8.0f);
+        coupleV1aToV1b.set(sampleRate, 1000000.0f, 22.0e-9f, 220000.0f,
+                           0.12f, 0.46f, 1.25f);
+        coupleV1bToV2a.set(sampleRate, 470000.0f, 22.0e-9f, 180000.0f,
+                           0.13f, 0.52f, 1.45f);
+        coupleV2aToV2b.set(sampleRate, 470000.0f, 22.0e-9f, 150000.0f,
+                           0.13f, 0.50f, 1.35f);
+        coupleToPi.set(sampleRate, 1000000.0f, 47.0e-9f, 47000.0f,
+                       0.10f, 0.55f + 0.12f * clA, 1.7f + 0.5f * pushed);
+        phaseInverter.setMarshall(sampleRate,
+                                  0.74f + 1.28f * mPush + 0.46f * pushed + 0.24f * clA,
+                                  0.82f + 0.10f * presence);
+        supply.set(sampleRate,
+                   clA > 0.5f ? 115.0f : 70.0f, clA > 0.5f ? 47.0f : 100.0f,
+                   560.0f, 50.0f,
+                   10000.0f, 22.0f,
+                   0.13f + 0.09f * clA,
+                   0.09f + 0.06f * clA,
+                   0.045f + 0.020f * clA,
+                   0.16f + 0.04f * clA);
+        power.set(sampleRate,
+                  0.86f + 1.70f * mPush + 0.82f * pushed + 0.42f * clA,
+                  clA > 0.5f ? -31.5f : -35.0f,
+                  0.10f + 0.09f * clA,
+                  62.0f,
+                  11800.0f + 900.0f * presence);
+        power.out = 0.0108f;
     }
 
 public:
@@ -150,6 +189,10 @@ public:
         bassShelf.reset(); trebleShelf.reset(); midThick.reset(); phaseLp.reset(); presenceShelf.reset();
         speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset(); speakerBite.reset(); speakerFizz.reset(); speakerLp.reset();
         dcBlock.reset(); sag = 0.0f;
+        v1a.reset(); v1b.reset(); v2a.reset(); v2b.reset();
+        v1aMiller.reset(); v1bMiller.reset(); v2aMiller.reset(); v2bMiller.reset();
+        coupleV1aToV1b.reset(); coupleV1bToV2a.reset(); coupleV2aToV2b.reset();
+        coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset();
         updateFilters();
     }
 
@@ -167,6 +210,7 @@ public:
             case kMaster:   master = v; break;
             case kSustain:  sustain = v; break;
             case kClassA:   classa = v; break;
+            case kCabSim:   cabSim = v; break;
             default: break;
         }
         updateFilters();
@@ -190,16 +234,23 @@ public:
         // (one extra hot stage). The SUSTAIN footswitch adds extra preamp drive.
         // V1-A: first stage, full cathode bypass -> fat/full gain.
         float y = preBody.process(x);
-        y = asymTube(y, 1.10f + 2.4f * gain + 1.4f * g + 0.7f * sus, 0.011f + 0.012f * gain);
+        y = v1a.process(v1aMiller.process(y) *
+                         (1.5f + 5.0f * gain + 1.8f * g + 0.9f * sus));
         y = stage1Hp.process(y);
+        y = coupleV1aToV1b.process(y, 0.78f + 4.8f * gain + 1.3f * sus);
         // V1-B: the GAIN pot drives this stage; partial cathode bypass -> Orange honk.
-        y = asymTube(y, 0.95f + 2.6f * gain + 1.9f * pushed + 0.8f * sus, -0.006f - 0.010f * gain);
+        y = v1b.process(v1bMiller.process(y) *
+                         (1.2f + 4.2f * gain + 2.4f * pushed + 1.0f * sus));
         y = interHp.process(y);
+        y = coupleV1bToV2a.process(y, 0.75f + 4.2f * gain + 1.6f * pushed + 0.8f * sus);
         // V2-A: the EXTRA hot gain stage (more gain than the AD30 / OR series).
-        y = asymTube(y, 1.05f + 2.2f * gain + 1.6f * pushed + 0.7f * sus, 0.005f + 0.008f * gain);
+        y = v2a.process(v2aMiller.process(y) *
+                         (1.1f + 3.6f * gain + 2.0f * pushed + 0.8f * sus));
         y = gainStageHp.process(y);
+        y = coupleV2aToV2b.process(y, 0.70f + 3.2f * gain + 1.4f * pushed);
         // V2-B: final preamp gain into the EQ.
-        y = asymTube(y, 0.92f + 1.8f * gain + 1.5f * pushed, 0.005f + 0.008f * gain);
+        y = v2b.process(v2bMiller.process(y) *
+                         (0.95f + 2.6f * gain + 1.7f * pushed));
         y = cathodeLp.process(y);
 
         // 2-BAND shelving EQ (Bass + Treble, NO middle); SUSTAIN bypasses it.
@@ -214,24 +265,28 @@ public:
         // 2x EL34 (~50W Class AB / ~30W Class A). Class A -> less headroom, earlier
         // breakup, more sag/compression. A bit of sag and a tight low end.
         const float env = std::fabs(y);
-        const float attack = 1.0f - std::exp(-1.0f / (0.0060f * sampleRate));
-        const float release = 1.0f - std::exp(-1.0f / (0.140f * sampleRate));
+        const float attack = 1.0f - std::exp(-1.0f / (0.0075f * sampleRate));
+        const float release = 1.0f - std::exp(-1.0f / (0.155f * sampleRate));
         sag += (env - sag) * (env > sag ? attack : release);
-        const float sagDrop = 1.0f / (1.0f + sag * (0.40f + 0.65f * mPush + 0.45f * clA));
-        const float powerDrive = (0.98f + 1.75f * mPush + 1.05f * pushed + 0.65f * clA) * sagDrop;
-        y = asymTube(y, powerDrive, 0.006f + 0.010f * (treble - bass));
-        y = 0.82f * y + 0.18f * softClip(y * (1.6f + 1.2f * pushed + 0.55f * clA));
-        y *= 0.97f - (0.09f + 0.05f * clA) * sag;
+        const float bLoad = env * (0.85f + 0.80f * mPush + 0.45f * clA);
+        const rbtube::SupplyScales bplus = supply.process(bLoad, bLoad * 0.56f, env * 0.24f);
+        y *= 0.92f + 0.08f * bplus.preamp;
+        y = coupleToPi.process(y * (0.92f + 0.14f * clA), 1.0f + 0.18f * pushed);
+        y = phaseInverter.process(y) * bplus.screen;
+        y = power.process(y * bplus.power);
+        y *= 1.0f / (1.0f + sag * (0.07f + 0.08f * clA));
 
         y = presenceShelf.process(y);
         y = dcBlock.process(y);
 
-        y = speakerHp.process(y);
-        y = speakerThump.process(y);
-        y = speakerLowMid.process(y);
-        y = speakerBite.process(y);
-        y = speakerFizz.process(y);
-        y = speakerLp.process(y);
+        const float ampOnly = y;
+        float cab = speakerHp.process(ampOnly);
+        cab = speakerThump.process(cab);
+        cab = speakerLowMid.process(cab);
+        cab = speakerBite.process(cab);
+        cab = speakerFizz.process(cab);
+        cab = speakerLp.process(cab);
+        y = ampOnly + cabSim * (cab - ampOnly);
 
         // Loudness normalization: cleanMakeup keeps RS Gain (-> GAIN) ~flat; MASTER
         // gives a mild swing. ~-14 dBFS reference.

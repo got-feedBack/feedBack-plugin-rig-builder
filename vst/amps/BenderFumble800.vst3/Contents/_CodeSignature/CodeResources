@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/BenderFumble800.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			eD24JHlD1rRsGOpDEDOLYAR07MOFxjY30iFN0ZyoHG4=
+			</data>
+		</dict>
+		<key>x86_64-win/BenderFumble800.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			DilSJegGSqRe+O2gu+2HNqO4ttWcmsdGJDivcCg6ruA=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

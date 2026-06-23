@@ -37,6 +37,22 @@ AMPSPECS = {
     c.setDepth(0.00f);
 """,
         "gain_setter": "c.setTBVol(gain);",
+        "run_scale": "0.891f",
+    },
+    "plexi": {
+        "include": AMPS / "plexi" / "PlexiCore.h",
+        "type": "plexi::PlexiCore",
+        "defaults": """
+    c.setParam(kPresence, 0.50f);
+    c.setParam(kBass, 0.50f);
+    c.setParam(kMiddle, 0.55f);
+    c.setParam(kTreble, 0.62f);
+    c.setParam(kLoudness2, 0.00f);
+    c.setParam(kInput, 0.50f);
+    c.setParam(kCabSim, 1.00f);
+""",
+        "gain_setter": "c.setParam(kLoudness1, gain);",
+        "run_scale": "0.280f",
     },
     "sampleg_sbtcl": {
         "include": AMPS / "sampleg_sbtcl" / "SvtCore.h",
@@ -92,7 +108,7 @@ static void setup(CoreT& c, float gain, float sr) {
 }
 
 static inline float run(CoreT& c, float x) {
-    return rbAmpLvl(@MAKEUP@f * c.process(@INPUT_SCALE@f * x));
+    return rbAmpLvl(@RUN_SCALE@ * c.process(@INPUT_SCALE@ * x));
 }
 
 static std::vector<float> multitone(float sr, float seconds) {
@@ -211,14 +227,18 @@ int main() {
 
 
 def build_cpp(spec: dict[str, object]) -> str:
+    def float_lit(value: object) -> str:
+        text = str(value)
+        return text if text.endswith("f") else f"{text}f"
+
     return (
         CPP_TEMPLATE
         .replace("@INCLUDE@", str(spec["include"]))
         .replace("@CORE_TYPE@", str(spec["type"]))
         .replace("@DEFAULTS@", str(spec["defaults"]).rstrip())
         .replace("@GAIN_SETTER@", str(spec["gain_setter"]))
-        .replace("@INPUT_SCALE@", str(spec.get("input_scale", 3.2)))
-        .replace("@MAKEUP@", str(spec.get("makeup", 0.891)))
+        .replace("@INPUT_SCALE@", float_lit(spec.get("input_scale", 3.2)))
+        .replace("@RUN_SCALE@", float_lit(spec.get("run_scale", spec.get("makeup", 0.891))))
     )
 
 

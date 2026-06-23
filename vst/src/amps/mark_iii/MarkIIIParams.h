@@ -37,30 +37,31 @@ enum MarkIIIParamId
     kLead,          // channel: Rhythm(0) / Lead(1)
     kBright,        // VOLUME pull-BRIGHT
     kEqIn,          // graphic EQ in(1) / out(0)
+    kCabSim,        // fallback Mesa speaker voice; host bypasses when using an external cab/IR
     kParamCount
 };
 
 static const char* const kMarkIIINames[kParamCount] = {
     "Volume", "Treble", "Bass", "Middle", "Master", "Lead Drive", "Lead Master",
     "EQ 80", "EQ 240", "EQ 750", "EQ 2200", "EQ 6600",
-    "Lead", "Bright", "EQ In",
+    "Lead", "Bright", "EQ In", "Cab Sim",
 };
 
 static const char* const kMarkIIISymbols[kParamCount] = {
     "volume", "treble", "bass", "middle", "master", "leaddrive", "leadmaster",
     "eq80", "eq240", "eq750", "eq2200", "eq6600",
-    "lead", "bright", "eqin",
+    "lead", "bright", "eqin", "cabsim",
 };
 
-static const float kMarkIIIMin[kParamCount] = { 0,0,0,0,0,0,0, 0,0,0,0,0, 0,0,0 };
-static const float kMarkIIIMax[kParamCount] = { 1,1,1,1,1,1,1, 1,1,1,1,1, 1,1,1 };
+static const float kMarkIIIMin[kParamCount] = { 0,0,0,0,0,0,0, 0,0,0,0,0, 0,0,0,0 };
+static const float kMarkIIIMax[kParamCount] = { 1,1,1,1,1,1,1, 1,1,1,1,1, 1,1,1,1 };
 // Manual-insert defaults: LEAD channel, a singing lead off Lead Drive, the
 // classic Boogie scooped tone stack + a mild GEQ "V" smile (lows/highs up, 750
 // down), EQ engaged. Pull VOLUME for Bright / switch to Rhythm by hand.
 static const float kMarkIIIDef[kParamCount] = {
     0.50f, 0.60f, 0.45f, 0.40f, 0.45f, 0.55f, 0.50f,
     0.60f, 0.50f, 0.38f, 0.50f, 0.58f,
-    1.0f, 0.0f, 1.0f,
+    1.0f, 0.0f, 1.0f, 1.0f,
 };
 
 #endif // MARK_III_PARAMS_H

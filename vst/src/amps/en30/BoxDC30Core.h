@@ -6,7 +6,7 @@
 // (anti-alias -> Koren tube table -> per-stage DC-block), so it is stable at any
 // (oversampled) rate -- unlike the old white-box EN30Core which blew up at 192k.
 // Component-level voicing (AC30 Top Boost stack, Cut, bright, EL84 push-pull power
-// + sag, 2x12 voicing) sits BETWEEN the tube stages as ordinary stable biquads.
+// + sag, output transformer) sits BETWEEN the tube stages as ordinary stable blocks.
 // Tubes use OUR Koren tables (public model). Drop-in param interface == EN30Core.
 //
 #include "../../_shared/tube_stage.hpp"
@@ -16,6 +16,44 @@ namespace boxdc30 {
 
 static constexpr float kPi = 3.14159265358979f;
 static inline float clamp01(float v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+
+namespace ac30pot {
+static constexpr float kAudio15Exp = 2.73696559f; // A taper, approx 15% electrical at half rotation
+static constexpr float kVr1NormalVol = 500000.0f; // AC30C2 VR1 A500K
+static constexpr float kVr2TbVol     = 500000.0f; // AC30C2 VR2 A500K
+static constexpr float kVr3Treble    = 1000000.0f; // AC30C2 VR3 A1M
+static constexpr float kVr4Bass      = 1000000.0f; // AC30C2 VR4 A1M
+static constexpr float kVr9Cut       = 220000.0f; // AC30C2 VR9 B220K
+static constexpr float kVr10Master   = 500000.0f; // AC30C2 VR10 A500K
+static constexpr float kToneCutCap   = 4.7e-9f;   // AC30C2 C80 4n7
+
+static inline float audioA(float v) {
+    return std::pow(clamp01(v), kAudio15Exp);
+}
+
+static inline float linearB(float v) {
+    return clamp01(v);
+}
+
+static inline float wiperSourceOhms(float potOhms, float electricalPos) {
+    const float e = 0.001f + 0.998f * clamp01(electricalPos);
+    const float upper = potOhms * (1.0f - e);
+    const float lower = potOhms * e;
+    return (upper * lower) / std::fmax(1.0f, upper + lower);
+}
+
+static inline float toneCutBleed(float knob) {
+    // VR9 is linear B220K in the AC30C2. Treat clockwise rotation as lowering the
+    // effective series resistance into C80, so more knob means more treble bleed.
+    const float kMinSeries = 4700.0f;
+    const float r = kMinSeries + kVr9Cut * (1.0f - linearB(knob));
+    const float xC4k = 1.0f / (2.0f * kPi * 4000.0f * kToneCutCap);
+    const float g = 1.0f / (r + xC4k);
+    const float gMin = 1.0f / (kMinSeries + kVr9Cut + xC4k);
+    const float gMax = 1.0f / (kMinSeries + xC4k);
+    return clamp01((g - gMin) / (gMax - gMin));
+}
+} // namespace ac30pot
 
 // RBJ biquad (peaking / shelves / low-pass)
 struct Biquad {
@@ -35,42 +73,62 @@ struct Biquad {
         b0=(1-c)/2;b1=1-c;b2=(1-c)/2; float a0=1+al;a1=-2*c;a2=1-al; norm(a0); }
 };
 
-struct Ac30ReactiveOutput {
+struct Ac30OutputTransformer {
     rbtube::HP1 otHp;
-    rbtube::LP1 otLeakLp, fluxLp, heatLp;
-    Biquad coneRes, lowMidDip, alnicoBite, voiceCoilRise, coneAir;
+    rbtube::LP1 otLeakLp, fluxLp;
+    float coreDrive = 1.0f;
+    float coreMix = 0.12f;
 
-    void set(float sr, float treble, float cut, float hot) {
+    void set(float sr, float hot) {
         otHp.set(sr, 38.0f);                                      // finite OT primary inductance
-        otLeakLp.set(sr, 16500.0f);                               // leakage capacitance/iron loss
+        otLeakLp.set(sr, 22000.0f);                               // OT leakage/iron loss only, no speaker rolloff
         fluxLp.set(sr, 24.0f);                                    // low-frequency core flux memory
-        heatLp.set(sr, 1.8f);                                     // slow voice-coil heating/compression
-        coneRes.peaking(sr, 82.0f, 0.78f, 2.4f + 1.2f * hot);      // 2x12 resonance into the EL84 OT
-        lowMidDip.peaking(sr, 430.0f, 0.70f, -2.2f);              // open-back low-mid scoop
-        alnicoBite.peaking(sr, 2600.0f, 1.05f, 1.4f + 3.3f * treble - 1.0f * cut);
-        voiceCoilRise.highShelf(sr, 3600.0f, -1.2f + 2.6f * treble);
-        coneAir.lowpass(sr, 8200.0f + 2600.0f * treble, 0.72f);
+        coreDrive = 1.0f + 0.10f * hot;
+        coreMix = 0.10f + 0.05f * hot;
     }
 
     inline float process(float x) {
         float y = otHp.process(x);
         const float flux = fluxLp.process(y);
-        const float heat = heatLp.process(std::fabs(y));
-        const float core = std::tanh((y - 0.16f * flux) * (1.0f + 0.10f * heat));
-        y = 0.86f * y + 0.14f * core;                             // soft OT core bend, not a hard limiter
-        y *= 1.0f / (1.0f + 0.055f * heat);                        // speaker thermal compression
-        y = otLeakLp.process(y);
-        y = coneRes.process(y);
-        y = lowMidDip.process(y);
-        y = alnicoBite.process(y);
-        y = voiceCoilRise.process(y);
-        return coneAir.process(y);
+        const float core = std::tanh((y - 0.16f * flux) * coreDrive);
+        y = (1.0f - coreMix) * y + coreMix * core;                 // soft OT core bend, not a hard limiter
+        return otLeakLp.process(y);
     }
 
     void reset() {
-        otHp.reset(); otLeakLp.reset(); fluxLp.reset(); heatLp.reset();
-        coneRes.reset(); lowMidDip.reset(); alnicoBite.reset();
-        voiceCoilRise.reset(); coneAir.reset();
+        otHp.reset(); otLeakLp.reset(); fluxLp.reset();
+    }
+};
+
+struct Ac30FallbackSpeaker {
+    rbtube::HP1 hp;
+    Biquad coneRes, lowMidDip, alnicoChime, fizzShelf, upperDamp, coneLp;
+
+    void set(float sr, float treble, float cut, float hot) {
+        // Fallback cab voice kept in sync with our synthetic Box_2x12_Alnico IR
+        // family. It is not fitted to, copied from, or dependent on any captured IR.
+        hp.set(sr, 72.0f);
+        coneRes.peaking(sr, 76.0f, 0.82f, 1.4f + 0.5f * hot);       // Blue Fs is 75 Hz
+        lowMidDip.peaking(sr, 420.0f, 0.78f, -2.6f);               // open-back AC30 low-mid hollow
+        alnicoChime.peaking(sr, 2900.0f, 0.82f, 6.2f + 2.5f * treble - 0.6f * cut);
+        fizzShelf.highShelf(sr, 5200.0f, -2.2f + 2.4f * treble - 0.5f * hot);
+        upperDamp.peaking(sr, 6900.0f, 0.88f, -1.0f - 0.5f * hot);
+        coneLp.lowpass(sr, 11600.0f + 2400.0f * treble - 700.0f * hot, 0.66f);
+    }
+
+    inline float process(float x) {
+        float y = hp.process(x);
+        y = coneRes.process(y);
+        y = lowMidDip.process(y);
+        y = alnicoChime.process(y);
+        y = fizzShelf.process(y);
+        y = upperDamp.process(y);
+        return coneLp.process(y);
+    }
+
+    void reset() {
+        hp.reset(); coneRes.reset(); lowMidDip.reset();
+        alnicoChime.reset(); fizzShelf.reset(); upperDamp.reset(); coneLp.reset();
     }
 };
 
@@ -84,13 +142,16 @@ struct BoxDC30Core {
     rbtube::MultiNodeBPlus supply;         // GZ34 + power/screen/preamp filter nodes
     rbtube::PowerAmpPP power;            // real class-A push-pull EL84 (no NFB, AC30)
     rbtube::ToneStackYeh tonestack;     // real Vox Top Boost R/C tone network (Yeh model)
-    Biquad bright, cutLP, spkBody, spkPres, spkRoll;
-    Ac30ReactiveOutput reactiveOut;
+    Biquad bright, cutLP;
+    Ac30OutputTransformer outputTransformer;
+    Ac30FallbackSpeaker fallbackSpeaker;
     // params (0..1), interface identical to EN30Core
     float pInput=0.5f, pNVol=0.7f, pTBVol=0.7f, pTreble=0.5f, pBass=0.5f, pBright=0.5f,
-          pCut=0.5f, pMaster=0.7f, pRevTone=0.5f, pRevLevel=0.0f, pSpeed=0.5f, pDepth=0.0f;
+          pCut=0.5f, pMaster=0.7f, pRevTone=0.5f, pRevLevel=0.0f, pSpeed=0.5f, pDepth=0.0f,
+          pCabSim=1.0f;
     float inGain=1, masterDrive=1, outLevel=1, lfoPhase=0, lfoInc=0;
     float inScale=4, preGain=1, gainOut=1;     // audio->grid-volts + inter-stage pre-gains
+    float masterElectrical=0.0f;               // VR10 A500K electrical wiper position after A taper
     float lastPowerLoad=0, lastScreenLoad=0, lastPreampLoad=0;
 
     void setSampleRate(float s){ sr=s; recalc(); reset(); }
@@ -106,10 +167,11 @@ struct BoxDC30Core {
     void setRevLevel(float v){ pRevLevel=clamp01(v); }
     void setSpeed(float v){ pSpeed=clamp01(v); recalc(); }
     void setDepth(float v){ pDepth=clamp01(v); }
+    void setCabSim(float v){ pCabSim=clamp01(v); recalc(); }
     void reset(){ inputCoupling.reset(); inputMiller.reset(); v1.reset(); v2.reset(); v3.reset(); millerV2.reset(); millerV3.reset();
         coupleToV2.reset(); coupleToV3.reset(); coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset();
         tonestack.reset(); bright.reset(); cutLP.reset();
-        spkBody.reset(); spkPres.reset(); spkRoll.reset(); reactiveOut.reset(); lfoPhase=0;
+        outputTransformer.reset(); fallbackSpeaker.reset(); lfoPhase=0;
         lastPowerLoad=lastScreenLoad=lastPreampLoad=0; }
 
     void recalc(){
@@ -117,52 +179,65 @@ struct BoxDC30Core {
         // THREE real cathode-biased 12AX7 stages, AC30 Top Boost values (same Ri/Rk/
         // fck Guitarix uses for the 12ax7): V1 grid-leak 68k Rk2.7k, V2/V3 250k with
         // Rk 1.5k/820. Each self-biases (Vk0 solved) and saturates on its own load
-        // line; the cathode loop makes it breathe. The Top Boost VOLUME is the linear
-        // inter-stage pre-gain (Guitarix `*(preamp)`), so raising it drives the
-        // cascade clean->crunch->plateau with NO ad-hoc curve.
+        // line; the cathode loop makes it breathe. The front-panel pots now use the
+        // actual AC30C2 schematic values/tapers instead of calibrated linear-ish
+        // knob curves.
         inGain      = 0.40f + 1.6f * pInput;                       // input drive
         v1.set(sr, 0, 250.0f, 40.0f, 86.0f,  2700.0f);             // V1 (68k grid-leak)
         v2.set(sr, 1, 250.0f, 40.0f, 132.0f, 1500.0f);             // V2 (250k)
         v3.set(sr, 1, 250.0f, 40.0f, 194.0f, 820.0f);              // V3 (250k, hottest)
-        float vol   = rbtube::PotTaper::audio(pTBVol, 1.18f);      // real-ish audio taper: clean low, cooks high
-        float nvol  = rbtube::PotTaper::audio(pNVol, 1.12f);
-        float master= rbtube::PotTaper::audio(pMaster, 1.25f);
-        float cut   = rbtube::PotTaper::reverseAudio(pCut, 1.35f);
+        const float vol    = ac30pot::audioA(pTBVol);              // VR2 A500K Top Boost Volume
+        const float nvol   = ac30pot::audioA(pNVol);               // VR1 A500K Normal Volume
+        const float master = ac30pot::audioA(pMaster);             // VR10 A500K Master Volume
+        const float treble = ac30pot::audioA(pTreble);             // VR3 A1M Treble
+        const float bass   = ac30pot::audioA(pBass);               // VR4 A1M Bass
+        const float cut    = ac30pot::toneCutBleed(pCut);          // VR9 B220K + C80 4n7 Tone Cut
+        const float tbSourceOhms = 47000.0f + ac30pot::wiperSourceOhms(ac30pot::kVr2TbVol, vol);
+        const float masterSourceOhms = 10000.0f + ac30pot::wiperSourceOhms(ac30pot::kVr10Master, master);
+        const float driveVol = 0.65f * std::sqrt(vol) + 0.35f * vol;
+        masterElectrical = master;
         inScale     = 2.0f * (0.7f + 0.6f * nvol);                 // audio -> grid volts into V1 (keep V1 cleaner)
-        preGain     = 0.35f + 3.5f * vol;                          // inter-stage pre-gain: low floor (clean low vol) + high slope (cooks high)
-        gainOut     = 0.60f + 0.55f * vol;                         // post-V3 level into the power amp
+        // The A500K pot gives the real voltage divider and source impedance, but the
+        // downstream 12AX7/PI model still needs enough volts to match a cranked AC30.
+        // driveVol is only that calibration term: it keeps low settings clean while
+        // moving breakup from 3 o'clock down to the real AC30 noon/1-o'clock region.
+        preGain     = 0.35f + 7.8f * driveVol;
+        gainOut     = 0.60f + 0.70f * driveVol;                    // post-V3 level into the PI/power amp
         // 12AX7 Miller loading. Guitarix uses fixed ~6.5 kHz low-pass sections around
         // its tubestages; here the cutoff comes from Cgk + Cgp*(1+Av) and the driving
         // resistance. That keeps the Top Boost chime but makes the HF loss tube/circuit
         // derived instead of an arbitrary inter-stage EQ.
         inputMiller.set(sr,  68000.0f, 55.0f, 10.0f);              // input grid stopper + V1 Miller, ~22 kHz
-        millerV2.set(sr,   220000.0f, 52.0f,  8.0f);              // tone/volume source impedance into V2, ~7 kHz
-        millerV3.set(sr,   180000.0f, 58.0f,  5.0f);              // V2/coupling source impedance into V3, ~8 kHz
+        millerV2.set(sr, tbSourceOhms, 52.0f, 8.0f);              // VR2 A500K wiper source impedance into V2
+        millerV3.set(sr, 180000.0f, 58.0f, 5.0f);                 // V2/coupling source impedance into V3
         // Coupling caps + grid-leak charging. These are the AC30 blocking-distortion
         // points: when V2/V3/PI grids conduct, the coupling cap charges and the next
         // stage recovers through its grid leak instead of staying as an ideal HPF.
         coupleToV2.set(sr, 1000000.0f, 22.0e-9f, 220000.0f, 0.16f, 0.54f, 1.35f);
         coupleToV3.set(sr, 1000000.0f, 22.0e-9f, 180000.0f, 0.14f, 0.62f, 1.70f);
-        coupleToPi.set(sr, 1000000.0f, 47.0e-9f, 220000.0f, 0.18f, 0.45f, 1.20f);
-        // Vox Top Boost tone stack = the REAL R/C network (Yeh model), not biquads.
-        // AC30 has Treble + Bass knobs (no Mid): Treble->t; the circuit's "mid" param is
-        // the body/scoop control (the literal bass-pot node is inactive at Vox values),
-        // so Bass knob -> m. l fixed. Bright cap + Cut stay separate (they are, in the amp).
-        bright.highShelf(sr, 2400.0f, 9.0f * pBright);             // Brilliance/Bright cap (pre tone stack)
-        tonestack.setComponents(220e3, 220e3, 220e3, 100e3, 470e-12, 100e-9, 47e-9); // Vox AC15/AC30
-        tonestack.update(sr, pTreble, 0.15f + 0.55f * pBass, 0.5f);
-        cutLP.lowpass(sr, 900.0f + 4200.0f * cut, 0.7f);           // Cut: bites the presence region 5.1k(no cut)->0.9k(full)
+        coupleToPi.set(sr, 1000000.0f, 47.0e-9f, masterSourceOhms, 0.18f, 0.45f, 1.20f);
+        // Vox AC30C2 Top Boost tone stack, from Vox_ac30c2.pdf:
+        // VR3 A1M, VR4 A1M, R47 10K fixed mid/ground resistor, R19 100K slope,
+        // C23 56pF, C28/C38 22nF. Bright cap and Cut are separate real networks.
+        const float brightCapHz = 1.0f / (2.0f * kPi * std::fmax(22000.0f, tbSourceOhms) * 120.0e-12f);
+        bright.highShelf(sr, std::fmax(2600.0f, std::fmin(11000.0f, brightCapHz)),
+                         8.0f * pBright * (1.0f - 0.65f * vol));  // TB bright cap, strongest at lower VR2 settings
+        tonestack.setComponents(ac30pot::kVr3Treble, ac30pot::kVr4Bass, 10.0e3, 100.0e3,
+                                56.0e-12, 22.0e-9, 22.0e-9);
+        tonestack.update(sr, treble, 1.0f, bass);
+        cutLP.lowpass(sr, 7600.0f - 6700.0f * std::sqrt(cut), 0.7f); // Tone Cut: 7.6k(no cut)->0.9k(full)
         // GZ34 supply + long-tail-pair PI + EL84 class-A push-pull. The PI now clips
         // and unbalances before the EL84s; B+ droops through power/screen/preamp nodes.
-        supply.setGZ34Ac30(sr, vol);
-        phaseInverter.setVoxAc30(sr, 1.15f + 2.55f * master + 0.85f * vol, 0.92f, 0.075f);
-        power.set(sr, 3.0f + 13.0f * vol + 2.5f * master, -7.5f, 0.30f); // cathode-bias sag remains local to EL84s
+        supply.setGZ34Ac30(sr, driveVol);
+        phaseInverter.setVoxAc30(sr, 1.15f + 2.55f * master + 0.85f * driveVol, 0.92f, 0.075f);
+        power.set(sr, 3.0f + 15.5f * driveVol + 2.5f * master, -7.5f, 0.30f); // cathode-bias sag remains local to EL84s
         power.out   = 0.0085f;                                     // scale plate-volt differential to signal
         masterDrive = 1.0f;
-        outLevel    = 0.89f * (1.0f - 0.40f * pTBVol);             // level comp: keep loudness ~constant across gain
-        // Reactive OT/speaker load: resonance, inductive rise, OT core bend and speaker
-        // compression. This replaces the old static speaker EQ for the AC30 test build.
-        reactiveOut.set(sr, pTreble, pCut, vol);
+        outLevel    = 0.89f * (1.0f - 0.40f * pTBVol);             // plugin loudness comp follows panel knob, not electrical taper
+        // Output transformer is always part of the amp. The speaker block is a
+        // bypassable fallback for auditioning the VST without an external cabinet/IR.
+        outputTransformer.set(sr, driveVol);
+        fallbackSpeaker.set(sr, treble, cut, driveVol);
         lfoInc = (3.0f + 8.0f * pSpeed) / sr;                      // tremolo 3..11 Hz
     }
 
@@ -177,18 +252,22 @@ struct BoxDC30Core {
         x = coupleToPi.process(x * gainOut, 1.0f);
         lastPreampLoad = std::fabs(x) * (0.20f + 0.40f * pTBVol);
         x = phaseInverter.process(x * bplus.screen);
-        lastScreenLoad = std::fabs(x) * (0.35f + 0.60f * pMaster);
+        lastScreenLoad = std::fabs(x) * (0.35f + 0.60f * masterElectrical);
         x = power.process(x * bplus.power * bplus.screen);
-        lastPowerLoad = std::fabs(x) * (0.55f + 0.95f * pMaster);
+        lastPowerLoad = std::fabs(x) * (0.55f + 0.95f * masterElectrical);
         x = cutLP.process(x);                                      // Cut AFTER power amp (real AC30: tames the output treble, post-distortion)
-        x = reactiveOut.process(x);
+        x = outputTransformer.process(x);
+        const float cab = fallbackSpeaker.process(x);
+        x += pCabSim * (cab - x);
         if (pDepth > 0.0f){                                        // tremolo (amplitude)
             lfoPhase += lfoInc; if (lfoPhase >= 1.0f) lfoPhase -= 1.0f;
             float lfo = 0.5f * (1.0f + std::sin(2.0f * kPi * lfoPhase));
             x *= 1.0f - 0.9f * pDepth * lfo;
         }
-        // loudness flattening vs the Top Boost Volume/gain (clean post-output makeup;
-        // anchored ~0 dB at Vol 0.5 — the AC30 vol IS the gain, ~16 dB swing without this).
+        // Loudness flattening is plugin-level normalization, not part of the AC30
+        // circuit. Keep it tied to panel position; tying it to the A500K electrical
+        // taper over-boosts mid knob settings and can turn distortion onset into
+        // audible spikes.
         float gcDb = 25.288f - 78.409f * pTBVol + 54.825f * pTBVol * pTBVol;
         if (gcDb > 20.0f) gcDb = 20.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
         return x * outLevel * std::pow(10.0f, 0.05f * gcDb);

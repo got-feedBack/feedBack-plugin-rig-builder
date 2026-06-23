@@ -2,7 +2,7 @@
 #define EN30_CORE_H
 
 /*
- * EN30Core - BOX DC30 / Vox AC30C2 (Custom series) component model.
+ * EN30Core - BOX AC30 / Vox AC30C2 (Custom series) component model.
  *
  * This is not a full SPICE/MNA netlist solver. It is a white-box audio model
  * where each audible block is driven by the component values in the local

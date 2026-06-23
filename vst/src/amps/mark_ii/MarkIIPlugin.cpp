@@ -36,13 +36,6 @@ static inline float clampFreq(float hz, float sr) { return std::fmax(20.0f, std:
 static inline float smoothstep(float v) { v = clamp01(v); return v * v * (3.0f - 2.0f * v); }
 static inline float smoothstepRange(float e0, float e1, float x) { return smoothstep((x - e0) / (e1 - e0)); }
 static inline float softClip(float x) { return std::tanh(x); }
-static inline float asymTube(float x, float drive, float bias)
-{
-    const float pushed = x * drive + bias;
-    const float y = std::tanh(pushed);
-    const float correction = std::tanh(bias);
-    return (y - correction) / (1.0f - 0.32f * std::fabs(correction));
-}
 static inline float tonePot(float v) { v = clamp01(v); return v < 0.001f ? 0.001f : (v > 0.999f ? 0.999f : v); }
 
 class Biquad
@@ -158,6 +151,7 @@ class MarkIICore
     float gainBoost = kMarkIIDef[kGainBoost];
     float brightLead = kMarkIIDef[kBrightLead];
     float half = kMarkIIDef[kHalfPower];
+    float cabSim = kMarkIIDef[kCabSim];
 
     // derived
     float chan = 1.0f, leadDrv = 0.6f, drv = 0.5f, outM = 0.5f;
@@ -171,9 +165,14 @@ class MarkIICore
     SpringReverb spring;
     // ── real circuit (Koren tube tables) replacing the tanh asymTube ──
     rbtube::TubeStage   v1, vRhythm, vLeadA, vLeadB;   // 12AX7 stages
-    rbtube::PowerAmp6L6 power;                          // 4x 6L6GC power (~100W / 60W half)
+    rbtube::Miller12AX7 v1Miller, rhythmMiller, leadAMiller, leadBMiller;
+    rbtube::CouplingCapGridLeak coupleToPi;             // master -> PI grid blocking
+    rbtube::PhaseInverterLTP12AX7 phaseInverter;
+    rbtube::MultiNodeBPlus supply;                       // stiff 6L6 B+ nodes
+    rbtube::PowerAmp6L6GC power;                        // 4x 6L6GC power (~100W / 60W half)
     float inScale = 1.1f;
     float sag = 0.0f;
+    float lastPowerLoad = 0.0f, lastScreenLoad = 0.0f, lastPreampLoad = 0.0f;
 
     void setupTubes()
     {
@@ -181,6 +180,10 @@ class MarkIICore
         vRhythm.set(sampleRate, 1, 250.0f, 40.0f, 30.0f, 1500.0f);
         vLeadA.set(sampleRate, 1, 250.0f, 40.0f, 35.0f, 1500.0f);
         vLeadB.set(sampleRate, 1, 250.0f, 40.0f, 55.0f, 1500.0f);
+        v1Miller.set(sampleRate, 68000.0f, 55.0f, 8.0f);
+        rhythmMiller.set(sampleRate, 180000.0f, 52.0f, 8.0f);
+        leadAMiller.set(sampleRate, 220000.0f, 52.0f, 8.0f);
+        leadBMiller.set(sampleRate, 180000.0f, 52.0f, 8.0f);
     }
 
     void updateFilters()
@@ -227,12 +230,22 @@ class MarkIICore
         speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, -3.0f + 2.0f * treble - 2.0f * pushed);
         speakerLp.setLowPass(sampleRate, 11500.0f + 1700.0f * treble - 3000.0f * pushed, 0.66f);
 
-        // 4x 6L6GC power amp drive + sag (Half power = 60W sags/breaks earlier). Not the
-        // main distortion (the lead cascade is) -> moderate.
         const float mPush = smoothstep(outM);
         const float halfP = (half >= 0.5f) ? 1.0f : 0.0f;
+        coupleToPi.set(sampleRate, 1000000.0f, 47.0e-9f, 100000.0f, 0.12f, 0.42f, 1.05f);
+        phaseInverter.setFenderAB763(sampleRate, 0.78f + 1.35f * mPush + 0.55f * pushed + 0.25f * halfP, 0.86f);
+        supply.set(sampleRate,
+                   18.0f, 100.0f,
+                   1000.0f, 50.0f,
+                   10000.0f, 32.0f,
+                   0.055f + 0.030f * pushed + 0.055f * halfP,
+                   0.045f + 0.025f * pushed + 0.040f * halfP,
+                   0.030f + 0.014f * drv,
+                   0.16f);
+        // 4x 6L6GC power amp drive (Half power = 60W breaks earlier). B+ nodes
+        // above carry the dynamic sag; the power amp keeps residual OT compression.
         power.set(sampleRate, 2.5f + 5.0f * mPush + 4.0f * pushed + 0.6f * halfP, -45.0f,
-                  0.24f + 0.12f * halfP, 55.0f, 11000.0f);
+                  0.07f + 0.05f * halfP, 55.0f, 11000.0f);
         power.out = 0.011f;
     }
 
@@ -244,7 +257,10 @@ public:
         phaseLp.reset(); presenceShelf.reset();
         speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset(); speakerBite.reset(); speakerFizz.reset(); speakerLp.reset();
         dcBlock.reset(); spring.reset(); sag = 0.0f;
-        v1.reset(); vRhythm.reset(); vLeadA.reset(); vLeadB.reset(); power.reset();
+        v1Miller.reset(); rhythmMiller.reset(); leadAMiller.reset(); leadBMiller.reset();
+        v1.reset(); vRhythm.reset(); vLeadA.reset(); vLeadB.reset();
+        coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset();
+        lastPowerLoad = lastScreenLoad = lastPreampLoad = 0.0f;
         setupTubes();
         updateFilters();
     }
@@ -270,6 +286,7 @@ public:
             case kGainBoost:  gainBoost = v; break;
             case kBrightLead: brightLead = v; break;
             case kHalfPower:  half = v; break;
+            case kCabSim:     cabSim = v; break;
             default: break;
         }
         updateFilters();
@@ -280,26 +297,28 @@ public:
     float process(float in)
     {
         const float mPush = smoothstep(outM);
+        const rbtube::SupplyScales bplus =
+            supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
 
-        float x = inputHp.process(in);
+        float x = inputHp.process(in * 2.6f);  // input pre-gain so the lead saturates (Mark III had this; Mark II was missing it)
         x = pickupLoad.process(x);
         x = brightShelf.process(x);
         // V1 first gain stage (real 12AX7, mild) -> the scooped tone stack (pre-dist EQ)
-        x = v1.process(x * inScale);
+        x = v1.process(v1Miller.process(x) * inScale * bplus.preamp);
         float t = toneStack.process(x) * 2.0f;
         t = shiftPeak.process(t);
         t = shiftShelf.process(t);
         t = stackMakeupLow.process(t);
 
         // RHYTHM voice: Volume sets the gain, one real 12AX7 stage.
-        float rh = vRhythm.process(t * (0.5f + 2.6f * volume));
+        float rh = vRhythm.process(rhythmMiller.process(t) * (0.5f + 2.6f * volume) * bplus.preamp);
         rh *= 0.72f + 1.20f * master;
 
         // LEAD voice: cascaded gain (V2/V3, real 12AX7) -> the singing Boogie lead.
         // The Mark II is the original, slightly less searing than the III/IV.
-        float ld = vLeadA.process(t * (0.35f + 5.5f * leadDrv));
+        float ld = vLeadA.process(leadAMiller.process(t) * (0.35f + 8.5f * leadDrv) * bplus.preamp);
         ld = interHp.process(ld);
-        ld = vLeadB.process(ld * (0.50f + 5.0f * leadDrv));
+        ld = vLeadB.process(leadBMiller.process(ld) * (0.50f + 7.5f * leadDrv) * bplus.preamp);
         ld = cathodeLp.process(ld);
         ld = leadBright.process(ld);
         ld *= 0.45f + 1.0f * leadMaster;
@@ -311,20 +330,25 @@ public:
         if (reverb > 0.001f) { const float wet = spring.process(y); y += (0.9f * reverb) * wet; }
 
         y = phaseLp.process(y);
+        y = coupleToPi.process(y, 1.0f + 0.10f * drv);
+        lastPreampLoad = 0.10f * std::fabs(y) + 0.045f * drv;
+        y = phaseInverter.process(y * bplus.preamp);
+        lastPowerLoad = 0.82f * std::fabs(y) + 0.18f * drv + 0.12f * mPush;
+        lastScreenLoad = 0.52f * std::fabs(y) + 0.10f * drv;
 
-        // 4x 6L6GC power amp (~100W / 60W half) — REAL pentode table + own sag/OT
-        // (drive + sag set in updateFilters from the active master + Half power).
-        y = power.process(y);
+        // 4x 6L6GC power amp (~100W / 60W half) — real pentode table + LTP/B+ dynamics.
+        y = power.process(y * bplus.power * bplus.screen);
 
         y = presenceShelf.process(y);
         y = dcBlock.process(y);
 
-        y = speakerHp.process(y);
-        y = speakerThump.process(y);
-        y = speakerLowMid.process(y);
-        y = speakerBite.process(y);
-        y = speakerFizz.process(y);
-        y = speakerLp.process(y);
+        float cab = speakerHp.process(y);
+        cab = speakerThump.process(cab);
+        cab = speakerLowMid.process(cab);
+        cab = speakerBite.process(cab);
+        cab = speakerFizz.process(cab);
+        cab = speakerLp.process(cab);
+        y += cabSim * (cab - y);
 
         // Loudness normalization: DRIVE adds clipping (not level), so cleanMakeup
         // carries the drive compensation and the base is flat across DRIVE; the

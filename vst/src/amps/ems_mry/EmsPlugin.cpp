@@ -13,6 +13,8 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "EmsParams.h"
+#include "../../_shared/tube_stage.hpp"   // real 12AX7 stages + EL34 PP + Yeh tone stack
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -28,13 +30,6 @@ static inline float clampFreq(float hz, float sr) { return std::fmax(20.0f, std:
 static inline float smoothstep(float v) { v = clamp01(v); return v * v * (3.0f - 2.0f * v); }
 static inline float smoothstepRange(float e0, float e1, float x) { return smoothstep((x - e0) / (e1 - e0)); }
 static inline float softClip(float x) { return std::tanh(x); }
-static inline float asymTube(float x, float drive, float bias)
-{
-    const float pushed = x * drive + bias;
-    const float y = std::tanh(pushed);
-    const float correction = std::tanh(bias);
-    return (y - correction) / (1.0f - 0.32f * std::fabs(correction));
-}
 static inline float tonePot(float v) { v = clamp01(v); return v < 0.001f ? 0.001f : (v > 0.999f ? 0.999f : v); }
 
 class Biquad
@@ -120,13 +115,35 @@ class EmsCore
     float presence = kEmsDef[kPresence];
     float volume = kEmsDef[kVolume];
     float hilo = kEmsDef[kHiLo];
+    float cabSim = kEmsDef[kCabSim];
 
     Biquad inputHp, pickupLoad, brightCap, interHp, cathodeLp;
-    MarshallToneStack toneStack;
     Biquad stackMakeupLow, phaseLp, presenceShelf;
     Biquad speakerHp, speakerThump, speakerLowMid, speakerBite, speakerFizz, speakerLp;
     DcBlock dcBlock;
     float sag = 0.0f;
+    // ── real circuit (Koren tube tables) replacing the tanh asymTube ──
+    rbtube::TubeStage    v1a, v1b, v2;     // 3x 12AX7 cascade (JCM800 2204: V1a -> GAIN -> V1b -> V2)
+    rbtube::Miller12AX7  v1aMiller, v1bMiller, v2Miller;
+    rbtube::CouplingCapGridLeak coupleGainToV1b, coupleV1bToV2, coupleToPi;
+    rbtube::PhaseInverterLTP12AX7 phaseInverter;
+    rbtube::MultiNodeBPlus supply;          // diode rectifier + B+ filter nodes
+    rbtube::PowerAmpEL34 power;            // 2x EL34 (~50W)
+    rbtube::ToneStackYeh tone;             // real Marshall TMB (double)
+    float inScale = 1.0f, toneMk = 13.0f;
+    float lastPowerLoad = 0.0f, lastScreenLoad = 0.0f, lastPreampLoad = 0.0f;
+
+    void setupTubes()
+    {
+        v1a.set(sampleRate, 1, 250.0f, 40.0f, 25.0f, 1500.0f);
+        v1b.set(sampleRate, 1, 250.0f, 40.0f, 25.0f, 1500.0f);
+        v2.set(sampleRate, 1, 250.0f, 40.0f, 55.0f, 1500.0f);   // JCM800 2204 fck values
+        v1aMiller.set(sampleRate,  68000.0f, 55.0f, 8.0f);
+        v1bMiller.set(sampleRate, 220000.0f, 52.0f, 8.0f);
+        v2Miller.set(sampleRate,  180000.0f, 52.0f, 8.0f);
+        coupleGainToV1b.set(sampleRate, 1000000.0f, 22.0e-9f, 220000.0f, 0.13f, 0.52f, 1.55f);
+        coupleV1bToV2.set(sampleRate,   470000.0f, 22.0e-9f, 180000.0f, 0.13f, 0.54f, 1.65f);
+    }
 
     void updateFilters()
     {
@@ -143,7 +160,21 @@ class EmsCore
         interHp.setHighPass(sampleRate, 120.0f + 150.0f * pushed + 120.0f * lo, 0.70f);
         cathodeLp.setLowPass(sampleRate, 9500.0f + 1200.0f * treble - 1400.0f * pushed, 0.64f);
 
-        toneStack.update(treble, mid, bass);
+        tone.setComponents(220e3, 1.0e6, 25e3, 33e3, 470e-12, 22e-9, 22e-9);  // JCM800 2204 Marshall TMB
+        tone.update(sampleRate, treble, mid, bass);
+        coupleToPi.set(sampleRate, 1000000.0f, 22.0e-9f, 100000.0f, 0.14f, 0.45f, 1.05f);
+        phaseInverter.setMarshall(sampleRate, 0.95f + 1.55f * mPush + 0.75f * pushed, 0.88f);
+        supply.set(sampleRate,
+                   20.0f, 100.0f,
+                   1000.0f, 50.0f,
+                   10000.0f, 22.0f,
+                   0.07f + 0.025f * pushed,
+                   0.055f + 0.020f * pushed,
+                   0.035f + 0.018f * gain,
+                   0.14f);
+        // 2x EL34 power amp drive (Master + Gain). B+ nodes provide the dynamic sag.
+        power.set(sampleRate, 4.4f + 9.8f * mPush + 6.4f * pushed, -40.0f, 0.08f, 55.0f, 11200.0f);
+        power.out = 0.013f;
         stackMakeupLow.setLowShelf(sampleRate, 120.0f, 0.72f, 1.0f - 1.0f * pushed - 1.2f * lo);
         phaseLp.setLowPass(sampleRate, 10500.0f + 1400.0f * treble - 2000.0f * pushed, 0.64f);
         // PRESENCE = power-amp NFB high-shelf
@@ -165,11 +196,17 @@ public:
     void reset()
     {
         inputHp.reset(); pickupLoad.reset(); brightCap.reset(); interHp.reset(); cathodeLp.reset();
-        toneStack.reset(); stackMakeupLow.reset(); phaseLp.reset(); presenceShelf.reset();
+        tone.reset(); stackMakeupLow.reset(); phaseLp.reset(); presenceShelf.reset();
         speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset(); speakerBite.reset(); speakerFizz.reset(); speakerLp.reset();
-        dcBlock.reset(); sag = 0.0f; updateFilters();
+        v1aMiller.reset(); v1bMiller.reset(); v2Miller.reset();
+        coupleGainToV1b.reset(); coupleV1bToV2.reset();
+        v1a.reset(); v1b.reset(); v2.reset();
+        coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset();
+        dcBlock.reset(); sag = 0.0f;
+        lastPowerLoad = lastScreenLoad = lastPreampLoad = 0.0f;
+        setupTubes(); updateFilters();
     }
-    void setSampleRate(float sr) { sampleRate = sr > 1000.0f ? sr : 48000.0f; toneStack.setSampleRate(sampleRate); reset(); }
+    void setSampleRate(float sr) { sampleRate = sr > 1000.0f ? sr : 48000.0f; reset(); }
 
     void setParam(int idx, float v)
     {
@@ -177,7 +214,7 @@ public:
         switch (idx) {
             case kGain: gain=v; break; case kBass: bass=v; break; case kMiddle: mid=v; break;
             case kTreble: treble=v; break; case kPresence: presence=v; break; case kVolume: volume=v; break;
-            case kHiLo: hilo=v; break; default: break;
+            case kHiLo: hilo=v; break; case kCabSim: cabSim=v; break; default: break;
         }
         updateFilters();
     }
@@ -186,60 +223,62 @@ public:
     float process(float in)
     {
         const float lo = (hilo >= 0.5f) ? 1.0f : 0.0f;
-        const float g = smoothstep(gain);
-        const float pushed = smoothstepRange(0.40f, 0.92f, gain);
         const float mPush = smoothstep(volume);
         const float gainTrim = lo ? 0.55f : 1.0f;               // LO input divider -> JTM50 gain
+        const float pushed = smoothstepRange(0.40f, 0.92f, gain);
+        const rbtube::SupplyScales bplus =
+            supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
 
         float x = inputHp.process(in);
         x = pickupLoad.process(x);
         x = brightCap.process(x);
         x *= gainTrim;
-        // V1a: first gain stage (mild)
-        float y = asymTube(x, 1.10f + 0.7f * g, 0.008f);
+        // V1a: first gain stage (real 12AX7)
+        float y = v1a.process(v1aMiller.process(x) * inScale * bplus.preamp);
         // GAIN pot -> V1b cascade (the JCM800 drive). LO removes some cascade gain.
         const float drv = (1.0f - 0.30f * lo);
-        y = asymTube(y * (0.40f + 2.0f * gain), (1.25f + 4.6f * gain + 2.6f * g) * drv, 0.012f + 0.014f * gain);
+        y = coupleGainToV1b.process(y, (0.55f + 16.0f * gain) * drv);
+        y = v1b.process(v1bMiller.process(y) * bplus.preamp);
         y = interHp.process(y);
-        y = asymTube(y, (0.95f + 4.4f * gain + 2.8f * pushed) * drv, -0.008f - 0.012f * gain);
+        y = coupleV1bToV2.process(y, (0.65f + 10.0f * gain) * drv);
+        y = v2.process(v2Miller.process(y) * bplus.preamp);
         y = cathodeLp.process(y);
 
-        // Marshall tone stack + cathode follower makeup
-        y = toneStack.process(y) * 2.0f;
+        // Marshall tone stack (real Yeh) + cathode follower makeup
+        y = tone.process(y) * toneMk;
         y = stackMakeupLow.process(y);
 
         // MASTER volume into the power amp
         y *= 0.22f + 1.30f * volume;
 
-        // 2x EL34 (~50W) + sag
-        const float env = std::fabs(y);
-        const float attack = 1.0f - std::exp(-1.0f / (0.0060f * sampleRate));
-        const float release = 1.0f - std::exp(-1.0f / (0.140f * sampleRate));
-        sag += (env - sag) * (env > sag ? attack : release);
-        const float sagDrop = 1.0f / (1.0f + sag * (0.30f + 0.62f * mPush + 0.42f * pushed));
-        const float powerDrive = (0.88f + 1.55f * mPush + 1.25f * pushed) * sagDrop;
-        y = asymTube(y, powerDrive, 0.006f + 0.012f * (treble - bass));
-        y = 0.86f * y + 0.14f * softClip(y * (1.5f + 1.1f * pushed));
-        y *= 0.97f - 0.08f * sag;
+        y = coupleToPi.process(y, 1.0f + 0.14f * pushed);
+        lastPreampLoad = 0.12f * std::fabs(y) + 0.05f * gain;
+        y = phaseInverter.process(y * bplus.preamp);
+        lastPowerLoad = 0.82f * std::fabs(y) + 0.20f * pushed;
+        lastScreenLoad = 0.50f * std::fabs(y) + 0.10f * gain;
+
+        // 2x EL34 (~50W) power amp — real pentode table + LTP/B+ dynamics.
+        y = power.process(y * bplus.power * bplus.screen);
 
         y = phaseLp.process(y);
         y = presenceShelf.process(y);
         y = dcBlock.process(y);
 
-        y = speakerHp.process(y);
-        y = speakerThump.process(y);
-        y = speakerLowMid.process(y);
-        y = speakerBite.process(y);
-        y = speakerFizz.process(y);
-        y = speakerLp.process(y);
+        float cab = speakerHp.process(y);
+        cab = speakerThump.process(cab);
+        cab = speakerLowMid.process(cab);
+        cab = speakerBite.process(cab);
+        cab = speakerFizz.process(cab);
+        cab = speakerLp.process(cab);
+        y += cabSim * (cab - y);
 
         const float toneEnergy = 1.0f
             + 0.011f * std::fabs((bass - 0.5f) * 15.0f)
             + 0.012f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.012f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.010f * std::fabs((presence - 0.5f) * 14.0f);
-        const float cleanMakeup = 1.0f + 3.0f * std::exp(-gain / 0.33f);
-        const float level = (0.62f + 0.10f * lo) * cleanMakeup / ((1.0f + 0.42f * mPush) * toneEnergy);
+        // NO cleanMakeup — with real tubes it inverts the crest curve (proven on jcm800).
+        const float level = (0.88f + 0.10f * lo) / ((1.0f + 0.42f * mPush) * toneEnergy);
         return softClip(y * level) * 0.97f;
     }
 };
@@ -248,12 +287,14 @@ class EmsPlugin : public Plugin
 {
     EmsCore left, right;
     float params[kParamCount];
+    rbshared::Oversampler4x osL, osR;          // 2x anti-alias around the nonlinear chain
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
     void applyAll() { for (int i = 0; i < kParamCount; ++i) { left.setParam(i, params[i]); right.setParam(i, params[i]); } }
 public:
     EmsPlugin() : Plugin(kParamCount, 0, 0)
     {
         for (int i = 0; i < kParamCount; ++i) params[i] = kEmsDef[i];
-        left.setSampleRate((float)getSampleRate()); right.setSampleRate((float)getSampleRate()); applyAll();
+        left.setSampleRate(kOS * (float)getSampleRate()); right.setSampleRate(kOS * (float)getSampleRate()); applyAll();
     }
 protected:
     const char* getLabel() const override { return "MrYEMS"; }
@@ -273,11 +314,16 @@ protected:
     void setParameterValue(uint32_t index, float value) override
     { if (index >= (uint32_t)kParamCount) return; params[index] = clamp01(value); left.setParam((int)index, params[index]); right.setParam((int)index, params[index]); }
     void sampleRateChanged(double newSampleRate) override
-    { left.setSampleRate((float)newSampleRate); right.setSampleRate((float)newSampleRate); applyAll(); }
+    { left.setSampleRate(kOS * (float)newSampleRate); right.setSampleRate(kOS * (float)newSampleRate); osL.reset(); osR.reset(); applyAll(); }
     void run(const float** inputs, float** outputs, uint32_t frames) override
     {
         const float* inL=inputs[0]; const float* inR=inputs[1]; float* outL=outputs[0]; float* outR=outputs[1];
-        for (uint32_t i=0;i<frames;++i){ outL[i]=rbAmpLvl(0.560f*left.process(3.2f * inL[i])); outR[i]=rbAmpLvl(0.560f*right.process(3.2f * inR[i])); }
+        for (uint32_t i=0;i<frames;++i){
+            float ubL[kOS], ubR[kOS];
+            osL.upsample(3.2f * inL[i], ubL); osR.upsample(3.2f * inR[i], ubR);
+            for (int k=0;k<kOS;++k){ ubL[k]=rbAmpLvl(0.560f*left.process(ubL[k])); ubR[k]=rbAmpLvl(0.560f*right.process(ubR[k])); }
+            outL[i]=osL.downsample(ubL); outR[i]=osR.downsample(ubR);
+        }
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EmsPlugin)
 };

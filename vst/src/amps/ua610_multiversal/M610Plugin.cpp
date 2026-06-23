@@ -20,6 +20,7 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "M610Params.h"
+#include "../../_shared/tube_stage.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -39,17 +40,6 @@ static inline float smoothstep(float v) { v = clamp01(v); return v * v * (3.0f -
 static inline float smoothstepRange(float e0, float e1, float x) { return smoothstep((x - e0) / (e1 - e0)); }
 static inline float softClip(float x) { return std::tanh(x); }
 static inline float eqDb(float v, float rangeDb) { return (clamp01(v) - 0.5f) * 2.0f * rangeDb; }
-
-// Biased triode soft curve (asymmetric: softer toward cutoff, harder when the
-// grid swings positive) - the same white-box tube approximation used across
-// the other RB tube amps.
-static inline float asymTube(float x, float bias)
-{
-    const float g = x + bias;
-    const float w = 1.55f * g + 0.34f * g * std::fabs(g);
-    const float idle = 1.55f * bias + 0.34f * bias * std::fabs(bias);
-    return std::tanh(w) - std::tanh(idle);
-}
 
 class Biquad
 {
@@ -102,6 +92,11 @@ class M610Core
     Biquad outTrafoHp;     // T2 PA-5946 low-end limit (7 mA -> inductance drop)
     Biquad outTrafoLp;     // output iron top
     DcBlock dcBlock;
+    rbtube::TubeStage    v1;   // V1 12AX7 — REAL Koren plate-transfer stage
+    rbtube::TubeStageAY7 v2;   // V2 12AY7 — REAL Koren (lower-mu, cleaner)
+    rbtube::Miller12AX7  v1Miller;
+    rbtube::Miller12AY7  v2Miller;
+    rbtube::CouplingCapGridLeak coupleV1ToV2; // passive EQ/coupling -> 12AY7 grid
 
     void updateFilters()
     {
@@ -121,6 +116,16 @@ class M610Core
         // of the module lives here (inductance drops with current).
         outTrafoHp.setHighPass(sampleRate, 38.0f, 0.74f);
         outTrafoLp.setLowPass(sampleRate, 17500.0f, 0.70f);
+
+        // V1 12AX7 + V2 12AY7 — REAL Koren plate-transfer stages (cathode-biased,
+        // self-bias solved), same framework as the amps. High-headroom config so
+        // the 610 stays a clean DI at normal Gain; tube grit only when cranked/Hi.
+        v1.set(sampleRate, 1, 250.0f, 40.0f, 25.0f, 1500.0f);   // 12AX7
+        v2.set(sampleRate, 0, 250.0f, 40.0f, 20.0f, 1500.0f);   // 12AY7
+        v1Miller.set(sampleRate, 50000.0f, 55.0f, 8.0f);         // transformer/pad source + 12AX7 Miller
+        v2Miller.set(sampleRate, 180000.0f, 24.0f, 8.0f);        // passive EQ source + 12AY7 Miller
+        coupleV1ToV2.set(sampleRate, 470000.0f, 100.0e-9f, 180000.0f,
+                         0.16f, 0.22f, 0.55f);
     }
 
 public:
@@ -130,6 +135,9 @@ public:
         lfShelf.reset(); hfShelf.reset();
         outTrafoHp.reset(); outTrafoLp.reset();
         dcBlock.reset();
+        v1Miller.reset(); v2Miller.reset();
+        coupleV1ToV2.reset();
+        v1.reset(); v2.reset();
         updateFilters();
     }
 
@@ -171,10 +179,8 @@ public:
         //     colour/grit only emerges as Gain is cranked (or Hi Gain engaged).
         //     We blend a near-linear clean path with a gentle asymmetric tube
         //     curve, the blend amount tracking how hard the stage is driven. ---
-        const float drive = (0.85f + 0.95f * g + 1.50f * hot) * (hi ? 1.45f : 1.0f);
-        const float pre = x * drive;
-        const float colour = clamp01(0.05f + 0.72f * hot + (hi ? 0.18f : 0.0f));
-        float y = (1.0f - colour) * pre + colour * (asymTube(pre * 0.85f, -0.05f) * 1.12f);
+        const float drive = (2.5f + 4.0f * g + 7.0f * hot) * (hi ? 1.6f : 1.0f);
+        float y = v1.process(v1Miller.process(x) * drive);   // REAL 12AX7 (clean at normal Gain, grit when cranked)
 
         // --- passive stepped shelf EQ (between V1 and V2) ---
         y = lfShelf.process(y);
@@ -182,7 +188,8 @@ public:
 
         // --- V2 12AY7: lower-mu, high-headroom — clean makeup glue (transparent;
         //     the output stage + level bound it, no per-stage tube saturation). ---
-        y *= 1.55f;
+        y = coupleV1ToV2.process(y, 0.75f + 0.35f * g + 0.55f * hot);
+        y = v2.process(v2Miller.process(y) * 1.3f);   // REAL 12AY7 (lower-mu clean makeup)
 
         // --- T2 output transformer (the DI line out; no speaker) ---
         y = dcBlock.process(y);

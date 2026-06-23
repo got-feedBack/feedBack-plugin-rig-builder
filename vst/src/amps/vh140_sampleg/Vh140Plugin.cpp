@@ -37,14 +37,31 @@ static inline float smoothstep(float v) { v = clamp01(v); return v * v * (3.0f -
 static inline float smoothstepRange(float e0, float e1, float x) { return smoothstep((x - e0) / (e1 - e0)); }
 static inline float softClip(float x) { return std::tanh(x); }
 static inline float eqDb(float v, float r) { return (clamp01(v) - 0.5f) * 2.0f * r; }
-// Hard 1N914 diode clip (symmetric ~±0.62, soft knee) — the VH-140C edge.
-static inline float diodeClip(float x)
+// Real anti-parallel 1N914 silicon diode-pair clipper (Shockley, Newton-solved)
+// — the physical exponential knee (gritty, odd-harmonic) instead of a tanh fit.
+// Same model as the JC-90 / amp clippers; warm-started per sample. This IS the
+// VH-140C's hard, tight solid-state distortion (Channel B).
+struct DiodeClipper
 {
-    const float d = 0.62f;
-    if (x >  d) return  d + std::tanh((x - d) * 0.7f) * 0.10f;
-    if (x < -d) return -d + std::tanh((x + d) * 0.7f) * 0.10f;
-    return x;
-}
+    static constexpr float Is  = 2.52e-9f;            // 1N914-class saturation current
+    static constexpr float nVt = 1.752f * 0.02585f;   // emission coeff * thermal voltage (~45 mV)
+    float R = 2200.0f;
+    float v = 0.0f;                                   // warm-start from the previous sample
+    void reset() { v = 0.0f; }
+    inline float process(float vin)
+    {
+        for (int i = 0; i < 8; ++i)
+        {
+            const float e  = v / nVt;
+            const float sh = std::sinh(e), ch = std::cosh(e);
+            const float f  = (v - vin) / R + 2.0f * Is * sh;
+            const float fp = 1.0f / R + 2.0f * Is * ch / nVt;
+            v -= f / fp;
+            if (v > 1.0f) v = 1.0f; else if (v < -1.0f) v = -1.0f;   // bound -> sinh can't overflow
+        }
+        return v;
+    }
+};
 
 class Biquad
 {
@@ -126,6 +143,7 @@ class Vh140Core
     float aGain = kVh140Def[kAGain], aLow = kVh140Def[kALow], aMid = kVh140Def[kAUltraMid], aHigh = kVh140Def[kAHigh], aLevel = kVh140Def[kALevel];
     float reverbB = kVh140Def[kReverbB], reverbA = kVh140Def[kReverbA];
     float rate = kVh140Def[kRate], depthB = kVh140Def[kDepthB], depthA = kVh140Def[kDepthA];
+    float cabSim = kVh140Def[kCabSim];
 
     float chan = 1.0f, drv = 0.5f;   // derived: channel + active-channel drive
 
@@ -136,6 +154,7 @@ class Vh140Core
     SpringReverb spring;
     Chorus chorus;
     DcBlock dcBlock;
+    DiodeClipper diodeB;   // real 1N914 diode-pair clip (Channel B lead)
 
     void updateFilters()
     {
@@ -169,7 +188,7 @@ public:
         aLowSh.reset(); aMidPk.reset(); aHighSh.reset();
         bTight.reset(); bClipLp.reset(); bLowSh.reset(); bMidPk.reset(); bHighSh.reset();
         speakerHp.reset(); speakerLp.reset();
-        spring.clear(); chorus.clear(); dcBlock.reset();
+        spring.clear(); chorus.clear(); dcBlock.reset(); diodeB.reset();
         updateFilters();
     }
 
@@ -192,6 +211,7 @@ public:
             case kAHigh: aHigh = v; break;  case kALevel: aLevel = v; break;
             case kReverbB: reverbB = v; break;  case kReverbA: reverbA = v; break;
             case kRate: rate = v; chorus.setRate(v); break;  case kDepthB: depthB = v; break;  case kDepthA: depthA = v; break;
+            case kCabSim: cabSim = v; break;
             default: break;
         }
         updateFilters();
@@ -212,8 +232,8 @@ public:
 
         // CHANNEL B (lead): big op-amp gain into the hard 1N914 diode clip.
         float b = bTight.process(x);
-        b = softClip(b * (2.0f + 18.0f * bGain));           // op-amp gain stage
-        b = diodeClip(b * (1.0f + 6.0f * bGain));            // slammed into the diodes
+        b = softClip(b * (2.0f + 18.0f * bGain));               // op-amp gain stage
+        b = diodeB.process(b * (1.0f + 6.0f * bGain)) * 1.4f;   // slammed into the REAL 1N914 diodes
         b = bClipLp.process(b);
         b = bLowSh.process(b); b = bMidPk.process(b); b = bHighSh.process(b);
         b *= 0.40f + 1.0f * bLevel;
@@ -226,9 +246,11 @@ public:
         if (rev > 0.001f) y += spring.process(y) * rev * 0.55f;
         y = dcBlock.process(y);
 
-        // solid-state cab voicing
-        y = speakerHp.process(y);
-        y = speakerLp.process(y);
+        // solid-state fallback cab voicing (bypassable for external cab/IR)
+        const float ampOnly = y;
+        float cab = speakerHp.process(ampOnly);
+        cab = speakerLp.process(cab);
+        y = ampOnly + cabSim * (cab - ampOnly);
 
         // loudness normalization (the diode clip limits B; cleanMakeup lifts the
         // low-gain end so RS Gain -> B Gain stays ~flat; level keeps ~-14 dBFS).

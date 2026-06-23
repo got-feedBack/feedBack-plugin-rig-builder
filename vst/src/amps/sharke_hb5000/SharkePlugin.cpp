@@ -263,7 +263,7 @@ public:
 };
 
 // Loudness standard: output makeup tuned so the multitone (110 Hz–1.8 kHz) RMS
-// matches the Box DC30 reference (~0.40), then a tanh soft-clip * 0.98 ceiling
+// matches the Box AC30 reference (~0.40), then a tanh soft-clip * 0.98 ceiling
 // (shared amp convention, see EN30Core.h).
 static inline float hbSoftClip(float x) { return std::tanh(x); }
 static constexpr float kHb5kMakeup = 5.80f;   // tuned to ~0.40 RMS multitone

@@ -138,6 +138,22 @@ def at(v):
 print('EL84 Vp@cutoff(Vg=-20)=%.0f  @bias(Vg=-8)=%.0f  @Vg=0=%.0f  @Vg=+4=%.0f'%(at(-20),at(-8),at(0),at(4)))
 print('OK EL84 pentode table written')
 
+# ---- 6BM8 / ECL82 power pentode (Gibson GA-8 family) ----
+# RCA 6BM8/ECL82.pdf local datasheet:
+#   Class A pentode unit: Va=200V, Vg2=200V, Vg1=-16V, Ia=35mA,
+#   gm=6400umhos, rp~=20k, load=5.6k, Pout=3.5W, THD=10%.
+# This table models the POWER PENTODE section only (not the built-in triode).
+# The constants keep the EL84-style Koren curvature but scale KG1 so the RCA
+# operating point lands at ~35mA. GA-8 uses two of these in push-pull, not EL84s.
+ViBM8, tabsBM8 = build_pentode('6BM8', 9.5, 1.24, 647.4, 111.1, 17.9,
+                               300.0, 2800.0, 220e3, -36.0, 6.0)
+emit('/Users/nacho/Files/slopsmith/rig_builder/vst/src/_shared/koren6bm8_ftube.h',
+     'BM8', -36.0, 6.0, len(ViBM8), tabsBM8, None)
+VpBM8=tabsBM8[0][2]
+def atBM8(v): i=int((v-(-36.0))/(6.0-(-36.0))*(len(ViBM8)-1)); return VpBM8[i]
+print('6BM8 pentode cutoff(-28)=%.0f  RCA bias(-16)=%.0f  Vg0=%.0f  +4=%.0f'%(atBM8(-28),atBM8(-16),atBM8(0),atBM8(4)))
+print('OK 6BM8 pentode table written')
+
 # ---- 12AY7 preamp triode (5E3 V1: low-mu ~44, warm, early soft breakup) ----
 Vi7, tabs7, ranode7 = build_triode('12AY7', 44.16, 1.11, 1192.4, 409.96, 300.0,
                                    250.0, 100e3, [68e3, 250e3], -5.0, 5.0)
@@ -155,6 +171,71 @@ def at6(v): i=int((v-(-32.0))/(6.0-(-32.0))*(len(Vi6)-1)); return Vp6[i]
 print('6V6 cutoff(-22)=%.0f  bias(-12)=%.0f  Vg0=%.0f  +4=%.0f'%(at6(-22),at6(-12),at6(0),at6(4)))
 print('OK 12AY7 + 6V6 tables written')
 
+# ---- 12AT7 / ECC81 phase-inverter triode (Super-Sonic 22 PI) ----
+# Tung-Sol 12AT7.pdf local datasheet: mu 60, at Va=250V with Rk=200R:
+# Ia=10mA, gm=5500umhos, rp=10.9k. Constants below are fit to that operating
+# point with the same public Koren triode equation used by the other preamp
+# tables, so a 12AT7 LTP clips/loads differently from a 12AX7.
+ViAT, tabsAT, ranodeAT = build_triode('12AT7', 60.0, 1.20, 507.8, 600.0, 300.0,
+                                      250.0, 100e3, [68e3, 250e3], -5.0, 5.0)
+emit('/Users/nacho/Files/slopsmith/rig_builder/vst/src/_shared/koren12at7_ftube.h',
+     'AT7', -5.0, 5.0, len(ViAT), tabsAT, ranodeAT)
+for (Ri,_,Vp) in tabsAT:
+    print('12AT7 Ri=%dk: rest=%.0f  +3=%.0f  -3=%.0f'%(Ri/1e3,Vp[len(Vp)//2],Vp[int(0.8*(len(Vp)-1))],Vp[int(0.2*(len(Vp)-1))]))
+print('OK 12AT7 table written')
+
+# ---- 6EU7 low-noise high-mu twin triode (Gibson GA-79 preamps) ----
+# RCA 6EU7.pdf: Va=250V, Vg=-2V, mu=100, rp=62.5k, gm=1600umhos, Ia=1.2mA.
+# Electrically close to 12AX7, but with its own Miller capacitances.
+ViEU7, tabsEU7, ranodeEU7 = build_triode('6EU7', 100.0, 1.4, 1060.0, 600.0, 300.0,
+                                         250.0, 100e3, [68e3, 250e3], -5.0, 5.0)
+emit('/Users/nacho/Files/slopsmith/rig_builder/vst/src/_shared/koren6eu7_ftube.h',
+     'EU7', -5.0, 5.0, len(ViEU7), tabsEU7, ranodeEU7)
+for (Ri,_,Vp) in tabsEU7:
+    print('6EU7 Ri=%dk: rest=%.0f  +3=%.0f  -3=%.0f'%(Ri/1e3,Vp[len(Vp)//2],Vp[int(0.8*(len(Vp)-1))],Vp[int(0.2*(len(Vp)-1))]))
+print('OK 6EU7 table written')
+
+# ---- 6SL7-GT high-mu twin triode (Epiphone Zephyr vintage driver/PI family) ----
+# RCA 6SL7GT.pdf: Va=250V, Vg=-2V, mu=70, rp=44k, gm=1600umhos, Ia=2.3mA.
+ViSL7, tabsSL7, ranodeSL7 = build_triode('6SL7GT', 70.0, 1.35, 1620.2, 600.0, 300.0,
+                                         250.0, 100e3, [68e3, 250e3], -6.0, 6.0)
+emit('/Users/nacho/Files/slopsmith/rig_builder/vst/src/_shared/koren6sl7_ftube.h',
+     'SL7', -6.0, 6.0, len(ViSL7), tabsSL7, ranodeSL7)
+for (Ri,_,Vp) in tabsSL7:
+    print('6SL7 Ri=%dk: rest=%.0f  +3=%.0f  -3=%.0f'%(Ri/1e3,Vp[len(Vp)//2],Vp[int((3-(-6))/(12)*(len(Vp)-1))],Vp[int((-3-(-6))/(12)*(len(Vp)-1))]))
+print('OK 6SL7 table written')
+
+# ---- 6SF5 / 6SF5GT high-mu single triode (Epiphone Zephyr trem/recovery family) ----
+# Tung-Sol 6SF5.pdf: Va=250V, Vg=-2V, mu=100, rp=66k, gm=1500umhos, Ia=0.9mA.
+ViSF5, tabsSF5, ranodeSF5 = build_triode('6SF5', 100.0, 1.35, 1148.7, 600.0, 300.0,
+                                         250.0, 100e3, [68e3, 250e3], -6.0, 6.0)
+emit('/Users/nacho/Files/slopsmith/rig_builder/vst/src/_shared/koren6sf5_ftube.h',
+     'SF5', -6.0, 6.0, len(ViSF5), tabsSF5, ranodeSF5)
+for (Ri,_,Vp) in tabsSF5:
+    print('6SF5 Ri=%dk: rest=%.0f  +3=%.0f  -3=%.0f'%(Ri/1e3,Vp[len(Vp)//2],Vp[int((3-(-6))/(12)*(len(Vp)-1))],Vp[int((-3-(-6))/(12)*(len(Vp)-1))]))
+print('OK 6SF5 table written')
+
+# ---- 12AU7 / ECC82 low-mu twin triode (GA-79 12AU7 phase inverter) ----
+# Brimar 12AU7.pdf: Va=250V, Vg=-8.5V, mu=17, rp=7.7k, gm=2.2mA/V, Ia=10.5mA.
+ViAU7, tabsAU7, ranodeAU7 = build_triode('12AU7', 17.0, 1.20, 1709.7, 600.0, 300.0,
+                                         250.0, 100e3, [68e3, 250e3], -18.0, 8.0)
+emit('/Users/nacho/Files/slopsmith/rig_builder/vst/src/_shared/koren12au7_ftube.h',
+     'AU7', -18.0, 8.0, len(ViAU7), tabsAU7, ranodeAU7)
+for (Ri,_,Vp) in tabsAU7:
+    print('12AU7 Ri=%dk: rest=%.0f  +3=%.0f  -8.5=%.0f'%(Ri/1e3,Vp[len(Vp)//2],Vp[int((3-(-18))/(26)*(len(Vp)-1))],Vp[int((-8.5-(-18))/(26)*(len(Vp)-1))]))
+print('OK 12AU7 table written')
+
+# ---- 7199 triode section (GA-79 PI/reverb recovery family) ----
+# Sylvania 7199.pdf: triode section Va=215V, Vg=-8.5V, mu=17, rp=8.1k,
+# gm=2100umhos, Ia=9.0mA.
+Vi7199T, tabs7199T, ranode7199T = build_triode('7199T', 17.0, 1.20, 1234.6, 600.0, 300.0,
+                                               250.0, 100e3, [68e3, 250e3], -18.0, 8.0)
+emit('/Users/nacho/Files/slopsmith/rig_builder/vst/src/_shared/koren7199t_ftube.h',
+     'N99T', -18.0, 8.0, len(Vi7199T), tabs7199T, ranode7199T)
+for (Ri,_,Vp) in tabs7199T:
+    print('7199T Ri=%dk: rest=%.0f  +3=%.0f  -8.5=%.0f'%(Ri/1e3,Vp[len(Vp)//2],Vp[int((3-(-18))/(26)*(len(Vp)-1))],Vp[int((-8.5-(-18))/(26)*(len(Vp)-1))]))
+print('OK 7199 triode table written')
+
 # ---- EF86 small-signal pentode (Matchless DC30 channel 2) ----
 # EF86.pdf local datasheet, Jan 1970: AF pentode, Va 250V, Vg2 140V,
 # Vg1 -2.2V, Ia 3.0mA, gm 2.2mA/V, mu_g2g1 38, Ri 2.5M.
@@ -170,6 +251,32 @@ def atEF(v): i=int((v-(-5.0))/(5.0-(-5.0))*(len(ViEF)-1)); return VpEF[i]
 print('EF86 DC30 330k plate: Vg-3=%.0f bias(-2.2)=%.0f Vg-1=%.0f Vg0=%.0f Vg+1=%.0f'%(atEF(-3),atEF(-2.2),atEF(-1),atEF(0),atEF(1)))
 print('OK EF86 table written')
 
+# ---- 5879 small-signal sharp-cutoff pentode (Epiphone Zephyr input) ----
+# RCA 5879.pdf: pentode connection Va=250V, Vg2=100V, Vg1=-3V,
+# Ia=1.8mA, gm=1000umhos, rp~=2Mohm. Use a 220k load-line table for the
+# vintage input pentode's high-impedance plate circuit.
+Vi5879, tabs5879, ranode5879 = build_pentode_stage('5879', 34.9, 1.35, 11933.7, 4267.0, 222.06, 4.7,
+                                                   250.0, 220e3, [68e3, 250e3], -8.0, 5.0)
+emit('/Users/nacho/Files/slopsmith/rig_builder/vst/src/_shared/koren5879_ftube.h',
+     'N5879', -8.0, 5.0, len(Vi5879), tabs5879, ranode5879)
+Vp5879=tabs5879[0][2]
+def at5879(v): i=int((v-(-8.0))/(5.0-(-8.0))*(len(Vi5879)-1)); return Vp5879[i]
+print('5879 220k plate: Vg-5=%.0f bias(-3)=%.0f Vg-1=%.0f Vg0=%.0f'%(at5879(-5),at5879(-3),at5879(-1),at5879(0)))
+print('OK 5879 table written')
+
+# ---- 7199 pentode section (GA-79 spring reverb driver) ----
+# Sylvania 7199.pdf: pentode section can run hot at Va=220V, Vg2=130V,
+# Rk=62R, Ia=12.5mA, gm=7000umhos. Model the reverb driver around that
+# high-current point; screen voltage is folded into the fitted transfer.
+Vi7199P, tabs7199P, ranode7199P = build_pentode_stage('7199P', 30.0, 1.35, 2996.8, 4267.0, 222.06, 4.7,
+                                                     250.0, 100e3, [68e3, 250e3], -8.0, 5.0)
+emit('/Users/nacho/Files/slopsmith/rig_builder/vst/src/_shared/koren7199p_ftube.h',
+     'N99P', -8.0, 5.0, len(Vi7199P), tabs7199P, ranode7199P)
+Vp7199P=tabs7199P[0][2]
+def at7199P(v): i=int((v-(-8.0))/(5.0-(-8.0))*(len(Vi7199P)-1)); return Vp7199P[i]
+print('7199P 100k plate: Vg-4=%.0f Vg-2=%.0f hot(-1)=%.0f Vg0=%.0f'%(at7199P(-4),at7199P(-2),at7199P(-1),at7199P(0)))
+print('OK 7199 pentode table written')
+
 # ---- 6L6 legacy generic power pentode (kept for existing amp compatibility) ----
 Vi5, tabs5 = build_pentode('6L6', 8.7, 1.35, 1460.0, 48.0, 12.0, 430.0, 2000.0, 220e3, -80.0, 6.0)
 emit('/Users/nacho/Files/slopsmith/rig_builder/vst/src/_shared/koren6l6_ftube.h',
@@ -178,6 +285,20 @@ Vp5=tabs5[0][2]
 def at5(v): i=int((v-(-80.0))/(6.0-(-80.0))*(len(Vi5)-1)); return Vp5[i]
 print('6L6 cutoff(-60)=%.0f bias(-45)=%.0f Vg-20=%.0f Vg0=%.0f Vg+4=%.0f'%(at5(-60),at5(-45),at5(-20),at5(0),at5(4)))
 print('OK 6L6 table written')
+
+# ---- 6L6G coke-bottle beam pentode (Epiphone Zephyr/Ruby, lower-voltage 6L6) ----
+# Sylvania 6L6G.pdf: "Electrically, the 6L6G and 6L6 are identical." Ratings are
+# the older glass envelope: Va max 360V, Vg2 max 270V, Pa 19W. Typical PP AB1:
+# Va=360V, Vg2=270V, bias=-22.5V, Raa=6.6k, Pout=26.5W. Use the same public
+# 6L6 curvature constants, but a 360V / 6.6k-a-a load line (Rp ~= Raa/4).
+Vi6G, tabs6G = build_pentode('6L6G', 8.7, 1.35, 1460.0, 48.0, 12.0,
+                             360.0, 1650.0, 220e3, -70.0, 6.0)
+emit('/Users/nacho/Files/slopsmith/rig_builder/vst/src/_shared/koren6l6g_ftube.h',
+     'L6G', -70.0, 6.0, len(Vi6G), tabs6G, None)
+Vp6G=tabs6G[0][2]
+def at6G(v): i=int((v-(-70.0))/(6.0-(-70.0))*(len(Vi6G)-1)); return Vp6G[i]
+print('6L6G cutoff(-55)=%.0f bias(-30)=%.0f bias(-22.5)=%.0f Vg0=%.0f Vg+4=%.0f'%(at6G(-55),at6G(-30),at6G(-22.5),at6G(0),at6G(4)))
+print('OK 6L6G table written')
 
 # ---- 5881 power beam pentode (Bassman/Bluesbreaker family, fixed bias) ----
 # Tung-Sol 5881 datasheet: 400V max plate, 23W plate dissipation; AB1 data at

@@ -1,9 +1,9 @@
 {
  "_meta": {
   "description": "Seed catalog: the game gear type → recommended VST3/AU plugins. Free plugins only. Used by /vst/suggest endpoint and the per-piece VST panel hint.",
-  "version": 6,
-  "updated": "2026-06-14",
-  "notes": "v6: bundled clones only. Every gear resolves to its Rig Builder bundled VST (or NAM if none). No external/third-party plugins."
+  "version": 7,
+  "updated": "2026-06-23",
+  "notes": "v7: bundled clones only; adds Electar Model M and Electric Hawaiian aliases to EpicallCentura. Every gear resolves to its Rig Builder bundled VST (or NAM if none). No external/third-party plugins."
  },
  "Pedal_AcousticEmulator": [
   {
@@ -1106,7 +1106,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/DualRect.vst3",
-   "notes": "Bundled Mesa-Boogie Dual Rectifier Red-channel style amp based on the local Cali_100 schematic, using the game's Gain, Bass, Mid, Treble, and Pres knobs."
+   "notes": "Bundled Mesa-Boogie Dual Rectifier style amp (parody brand 'Silla'), full 3-channel panel modelled from the local Cali_100 schematic. The game's tones use Red/Modern/Bold: cascaded 12AX7 Recto preamp -> Recto tone stack -> 12AX7 LTP PI -> silicon/tube-selectable B+ nodes -> 4x6L6 power amp, with host-controlled fallback Cab Sim. Uses the game's Gain, Bass, Mid, Treble, and Pres knobs."
   }
  ],
  "Amp_CA38": [
@@ -1117,7 +1117,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MarkII.vst3",
-   "notes": "Bundled Mesa/Boogie Mark IIB style amp (parody brand 'Silla'), full head panel (Volume 1[pull Bright], Treble[pull Shift], Bass, Middle, Master 1[pull Gain Boost], Lead Drive[pull Lead], Lead Master[pull Bright], Reverb, 100/60 RMS power) modelled component-by-component from the local Mark II schematic (boogie_mkii.pdf) + the panel photos. The CA_38 folder/schematic/photos are the Mark IIB (the gear-map name wrongly said 'Mark IV'). NO graphic EQ (unlike the III/IV). Two voices off the scooped Boogie tone stack (Rhythm Volume->Master, Lead Drive cascade->Lead Master), 4x6L6 ~100W. the game's Gain drives the Lead Drive; Bass/Mid/Treble->tone stack (Channel pinned Lead, reverb/pulls off via _static)."
+   "notes": "Bundled Mesa/Boogie Mark IIB style amp (parody brand 'Silla'), full head panel (Volume 1[pull Bright], Treble[pull Shift], Bass, Middle, Master 1[pull Gain Boost], Lead Drive[pull Lead], Lead Master[pull Bright], Reverb, 100/60 RMS power) modelled component-by-component from the local Mark II schematic (boogie_mkii.pdf) + the panel photos. The CA_38 folder/schematic/photos are the Mark IIB. Scooped Boogie tone stack before the gain -> Rhythm/Lead 12AX7 paths -> Fender-style LTP PI -> stiff 6L6 B+ nodes -> 4x6L6 ~100W, with host-controlled fallback Cab Sim. the game's Gain drives Lead Drive; Bass/Mid/Treble->tone stack (Channel pinned Lead, reverb/pulls off via _static)."
   }
  ],
  "Amp_CA85": [
@@ -1128,7 +1128,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MarkIII.vst3",
-   "notes": "Bundled Mesa/Boogie Mark III style amp (parody brand 'Silla'), full head panel (Volume[pull Bright], Treble, Bass, Middle, Master, Lead Drive, Lead Master, 5-band graphic EQ, Lead/EQ switches) modelled component-by-component from the local Mark III schematic. Two voices (Rhythm + cascaded Lead) off the scooped Boogie tone stack; 6L6/EL34 Simul-Class power. the game's Gain drives the Lead Drive (lead distortion); Bass/Mid/Treble->tone stack (Channel pinned Lead + the GEQ 'V' via _static)."
+   "notes": "Bundled Mesa/Boogie Mark III style amp (parody brand 'Silla'), full head panel (Volume[pull Bright], Treble, Bass, Middle, Master, Lead Drive, Lead Master, 5-band graphic EQ, Lead/EQ switches) modelled component-by-component from the local Mark III schematic. Scooped Boogie tone stack -> Rhythm/Lead 12AX7 paths -> 5-band GEQ -> Fender-style LTP PI -> Simul-Class B+ nodes -> 6L6 power, with host-controlled fallback Cab Sim. the game's Gain drives Lead Drive; Bass/Mid/Treble->tone stack (Channel pinned Lead + the GEQ 'V' via _static)."
   }
  ],
  "Amp_CS90": [
@@ -1139,17 +1139,17 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/JC90.vst3",
-   "notes": "Bundled Roland JC-90 'Jazz Chorus' style SOLID-STATE amp (parody brand 'Ronald'), full front panel (Distortion, Volume, Hi-Treble/Treble/Middle/Bass, Reverb, Rate/Depth/Chorus stereo BBD chorus) modelled component-by-component from the local JC-90 schematic. the game's Gain knob drives the Distortion (clean at 0); Bass/Mid/Treble->tone stack, Pres->Hi-Treble. Reverb/Chorus off for songs."
+   "notes": "Bundled Roland JC-90 'Jazz Chorus' style SOLID-STATE amp (parody brand 'Ronald'), full front panel (Distortion, Volume, Hi-Treble/Treble/Middle/Bass, Reverb, Rate/Depth/Chorus stereo BBD chorus) modelled component-by-component from the local JC-90 schematic. the game's Gain knob drives the Distortion (clean at 0); Bass/Mid/Treble->tone stack, Pres->Hi-Treble. Reverb/Chorus off for songs. Includes bypassable fallback Cab Sim."
   }
  ],
  "Amp_EN30": [
   {
-   "name": "EN30",
+   "name": "BOX AC30",
    "manufacturer": "RigBuilder",
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/amps/BOX DC30.vst3",
+   "bundled": "vst/amps/BOX AC30.vst3",
    "notes": "Bundled Vox AC30 Top Boost / EL84 style amp based on the local EN30 schematics, using the game's Gain, Bass, Mid, Treble, Pres, and Bright knobs."
   }
  ],
@@ -1161,7 +1161,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/AOR50.vst3",
-   "notes": "Bundled Laney AOR 50 'Pro Tube Lead' (A50 Series II) style amp (parody brand 'Raney'), full 2-channel front panel (Channel One + AOR lead, each Preamp/Master with Pull-Bright, shared Bass/Pull-Deep, Middle/Pull-Boost, Treble, Presence) modelled component-by-component from the local AOR50 schematic. the game's Gain knob drives the channel morph (Channel One clean -> AOR lead); Bass/Mid/Treble->tone stack, Pres->Presence."
+   "notes": "Bundled Laney AOR 50 'Pro Tube Lead' (A50 Series II) style amp (parody brand 'Raney'), full 2-channel front panel (Channel One + AOR lead, each Preamp/Master with Pull-Bright, shared Bass/Pull-Deep, Middle/Pull-Boost, Treble, Presence) modelled component-by-component from the local AOR50 schematic. ECC83 cascade + real AOR diode clipper -> Marshall-style tone stack -> ECC83 LTP PI -> diode B+ nodes -> 2xEL34 power amp, with host-controlled fallback Cab Sim. the game's Gain knob drives the channel morph (Channel One clean -> AOR lead); Bass/Mid/Treble->tone stack, Pres->Presence."
   }
  ],
  "Amp_MarshallDSL100H": [
@@ -1172,7 +1172,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/DSL100.vst3",
-   "notes": "Bundled Marshall JCM2000 DSL100 style amp (parody brand 'Marsten'), full 2-channel front panel (Classic Clean/Crunch + Ultra OD1/OD2, Tone Shift, Resonance, Presence, dual Master, per-channel reverb, Low/High output) modelled component-by-component from the local DSL100 schematics. the game's Gain knob drives the channel morph (clean->crunch->ultra); Bass/Mid/Treble->tone stack, Pres->Presence, Res->Resonance."
+   "notes": "Bundled Marshall JCM2000 DSL100 style amp (parody brand 'Marsten'), full 2-channel front panel (Classic Clean/Crunch + Ultra OD1/OD2, Tone Shift, Resonance, Presence, dual Master, per-channel reverb, Low/High output) modelled component-by-component from the local DSL100 schematics, with ECC83 LTP PI, diode-rectified B+ nodes and 4xEL34 power amp. the game's Gain knob drives the channel morph (clean->crunch->ultra); Bass/Mid/Treble->tone stack, Pres->Presence, Res->Resonance (Cab Sim via _static)."
   }
  ],
  "Amp_MarshallPlexi": [
@@ -1183,7 +1183,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/Plexi.vst3",
-   "notes": "Bundled Marshall 1959 Super Lead 100W (Plexi/JMP) style amp (parody brand 'Marsten'), full 1959 front panel (Presence, Bass, Middle, Treble, Loudness I + Loudness II, 4 inputs) modelled component-by-component from the local 1959SLP schematic. NON-master amp: the Loudness pots ARE the gain, so the game's Gain knob drives Loudness I (clean->crunch->roar); Bass/Mid/Treble->Marshall tone stack (33K slope, 500pF treble cap), Pres->Presence. 4x EL34 power-amp grind."
+   "notes": "Bundled Marshall 1959 Super Lead 100W (Plexi/JMP) style amp (parody brand 'Marsten'), full 1959 front panel (Presence, Bass, Middle, Treble, Loudness I + Loudness II, 4 inputs) modelled component-by-component from the local 1959SLP schematic. NON-master amp: the Loudness pots ARE the gain, so the game's Gain knob drives Loudness I (clean->crunch->roar); Bass/Mid/Treble->Marshall tone stack (33K slope, 220pF treble cap), Pres->Presence. 4x EL34 power-amp grind plus host-controlled fallback Cab Sim."
   }
  ],
  "Amp_BT45": [
@@ -1194,7 +1194,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/Superdrive45.vst3",
-   "notes": "Bundled Budda Superdrive 45 Series II style amp (parody brand 'Ganddi'), full front panel (Master[pull Channel], Bass, Mid[pull Modern], Treble, Drive, Rhythm[pull Brite], Input/Footswitch) modelled component-by-component from the local Superdrive45 manual + schematic. Two channels (Rhythm clean + Hi-gain lead off the cascaded Drive); 3x12AX7 + 2xKT66. the game's Gain knob drives the Drive (hi-gain distortion); Bass/Mid/Treble->Budda tone stack (Channel pinned Hi-gain + Modern ON via _static)."
+   "notes": "Bundled Budda Superdrive 45 Series II style amp (parody brand 'Ganddi'), full front panel (Master[pull Channel], Bass, Mid[pull Modern], Treble, Drive, Rhythm[pull Brite], Input/Footswitch) modelled component-by-component from the local Superdrive45 manual + schematic. Two channels (Rhythm clean + Hi-gain lead off the cascaded Drive); 12AX7 cascade -> Budda tone stack -> 12AX7 LTP PI -> 5AR4/GZ34-style B+ nodes -> 2xKT66 power amp, with host-controlled fallback Cab Sim. the game's Gain knob drives the Drive (hi-gain distortion); Bass/Mid/Treble->Budda tone stack (Channel pinned Hi-gain + Modern ON via _static)."
   }
  ],
  "Amp_HG500": [
@@ -1205,7 +1205,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/LovoltDR504.vst3",
-   "notes": "Bundled Hiwatt DR504 'Custom Hiwatt 50' style amp (parody brand 'Lovolt'), full front panel (Normal Vol, Brilliant Vol, Bass, Treble, Middle, Presence, Master Vol, 4 jumperable inputs) modelled component-by-component from the local DR504 schematic. A high-headroom clean-and-loud EL34 amp (3xECC83 + ECC81 PI + 2xEL34 ~50W) with two jumperable channels + a shared tone stack (strong Hiwatt mids, 100K mid pot) + Master Volume. the game's Gain knob drives the Brilliant Vol (the breakup driver); Bass/Mid/Treble->tone stack, Pres->Presence (input pinned BOTH/jumpered via _static)."
+   "notes": "Bundled Hiwatt DR504 'Custom Hiwatt 50' style amp (parody brand 'Lovolt'), full front panel (Normal Vol, Brilliant Vol, Bass, Treble, Middle, Presence, Master Vol, 4 jumperable inputs) modelled component-by-component from the local DR504 schematic. A high-headroom clean-and-loud EL34 amp (3xECC83 + ECC81-style low-gain LTP PI + stiff diode B+ nodes + 2xEL34 ~50W) with two jumperable channels + a shared tone stack (strong Hiwatt mids, 100K mid pot) + Master Volume. the game's Gain knob drives the Brilliant Vol (the breakup driver); Bass/Mid/Treble->tone stack, Pres->Presence (input pinned BOTH/jumpered + Cab Sim via _static)."
   }
  ],
  "Amp_HG100": [
@@ -1216,7 +1216,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/LovoltDR103.vst3",
-   "notes": "Bundled Hiwatt DR103 'Custom Hiwatt 100' style amp (parody brand 'Lovolt'), the 100W sibling of the DR504. Same panel (Normal Vol, Brilliant Vol, Bass, Treble, Middle, Presence, Master Vol, 4 jumperable inputs) + same preamp/tone stack, but a 4xEL34 (~100W) power amp: even more clean headroom, less sag, bigger/tighter lows (the big clean-and-loud DR103, incl. the bridged jumpered voice). the game's Gain drives the Brilliant Vol; Bass/Mid/Treble->tone stack, Pres->Presence (input pinned BOTH via _static)."
+   "notes": "Bundled Hiwatt DR103 'Custom Hiwatt 100' style amp (parody brand 'Lovolt'), the 100W sibling of the DR504. Same panel (Normal Vol, Brilliant Vol, Bass, Treble, Middle, Presence, Master Vol, 4 jumperable inputs) + same preamp/tone stack, but with ECC81-style low-gain LTP PI, very stiff diode B+ nodes and 4xEL34 (~100W): even more clean headroom, less sag, bigger/tighter lows (the big clean-and-loud DR103, incl. the bridged jumpered voice). the game's Gain drives the Brilliant Vol; Bass/Mid/Treble->tone stack, Pres->Presence (input pinned BOTH + Cab Sim via _static)."
   }
  ],
  "Amp_HG180": [
@@ -1227,7 +1227,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MarstenVS100.vst3",
-   "notes": "Bundled Marshall Valvestate VS100RH style HYBRID head (parody brand 'Marsten'), full front panel (Clean Volume/Bass/Middle/Treble, Overdrive 1 Gain/Volume, Overdrive 2 Gain/Contour/Volume/Bass/Middle/Treble, FX Mix, Clean Reverb, OD Reverb, 3-mode channel) modelled component-by-component from the local v100-6x schematics. Solid-state op-amp preamp + a 12AX7 warmth stage into a solid-state power amp: CLEAN, OD1 crunch, and the OD2 diode-clip high-gain lead. the game's Gain drives OD2 Gain (the lead voice); Bass/Mid/Treble->OD2 stack (Channel pinned OD2 + reverb/FX off via _static)."
+   "notes": "Bundled Marshall Valvestate VS100RH style HYBRID head (parody brand 'Marsten'), full front panel (Clean Volume/Bass/Middle/Treble, Overdrive 1 Gain/Volume, Overdrive 2 Gain/Contour/Volume/Bass/Middle/Treble, FX Mix, Clean Reverb, OD Reverb, 3-mode channel) modelled component-by-component from the local v100-6x schematics. Solid-state op-amp preamp + real diode OD2 clipper + starved 12AX7 warmth stage into a solid-state power amp: CLEAN, OD1 crunch, and the OD2 diode-clip high-gain lead. the game's Gain drives OD2 Gain (the lead voice); Bass/Mid/Treble->OD2 stack (Channel pinned OD2 + reverb/FX off + Cab Sim via _static)."
   }
  ],
  "Amp_BT30": [
@@ -1238,7 +1238,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/UnparallelDC30.vst3",
-   "notes": "Bundled Matchless DC30 style boutique head (parody brand 'Unparallel'), full front panel (Channel 1 Brilliant: Volume/Bass/Treble; Channel 2 EF86: Volume/Tone; shared Cut/Master) modelled component-by-component from the local DC30 schematic. A hand-wired AC30-class amp: 4xEL84 CLASS-A power, no global negative feedback (very chimey, jangly, blooms at volume). the game's Gain drives the Channel 1 Volume (the EL84 breakup); Bass/Treble->Ch1 top-boost stack (Channel pinned Ch1 Brilliant, Ch2/Tone/Cut/Master via _static)."
+   "notes": "Bundled Matchless DC30 style boutique head (parody brand 'Unparallel'), full front panel (Channel 1 Brilliant: Volume/Bass/Treble; Channel 2 EF86: Volume/Tone; shared Cut/Master) modelled component-by-component from the local DC30 schematic. Top Boost/EF86 channels -> 12AX7 LTP PI with Cut -> GZ34-style B+ nodes -> 4xEL84 class-A power, no global NFB, with host-controlled fallback Cab Sim. the game's Gain drives Channel 1 Volume; Bass/Treble->Ch1 top-boost stack."
   }
  ],
  "Amp_BT15": [
@@ -1249,7 +1249,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/UnparallelChieftain.vst3",
-   "notes": "Bundled Matchless Chieftain (Reverb) style boutique head (parody brand 'Unparallel'), full front panel (Volume, Bass, Middle, Treble, Brilliance, Master, Reverb) modelled component-by-component from the local Chieftain schematic. A single-channel clean/crunch amp with big headroom: 2xEL34 cathode-biased class AB (~40W), Marshall-style TMB stack with a warm 5.1nF treble cap, presence (Brilliance) on the PI, spring reverb. the game's Gain drives the Volume; Bass/Mid/Treble->tone stack (Brilliance/Master/Reverb via _static)."
+   "notes": "Bundled Matchless Chieftain (Reverb) style boutique head (parody brand 'Unparallel'), full front panel (Volume, Bass, Middle, Treble, Brilliance, Master, Reverb) modelled component-by-component from the local Chieftain schematic. 12AX7 preamp -> Matchless TMB -> LTP PI/Brilliance -> GZ34-style B+ nodes -> 2xEL34 cathode-biased class AB (~40W), with spring reverb and host-controlled fallback Cab Sim. the game's Gain drives Volume; Bass/Mid/Treble->tone stack."
   }
  ],
  "Amp_GB38": [
@@ -1260,7 +1260,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MrYMaz38.vst3",
-   "notes": "Bundled Dr. Z Maz 38 (Senior NR) style head (parody brand 'Mr. Y'). Amp_GB38 is the Maz 38; no Maz 38 schematic was found, but the Maz line shares one preamp + tone stack (traced from the Maz 18 Jr schematic) and only the power amp differs. Panel (Volume, Treble, Middle, Bass, Cut, Master) -> Vox-meets-Fender TMB tone stack -> 4x EL84 (~38W) + solid-state rectifier: big headroom, tighter/firmer lows, breaks up later, far less sag than the 2xEL84/GZ34 Maz 18. the game's Gain drives the Volume (preamp/drive); Bass/Mid/Treble->tone stack (Cut + Master via _static)."
+   "notes": "Bundled Dr. Z Maz 38 (Senior NR) style head (parody brand 'Mr. Y'). Amp_GB38 is the Maz 38; no Maz 38 schematic was found, but the Maz line shares one preamp + tone stack traced from the Maz 18 Jr schematic and the 38 has a larger/tighter EL84 power section. 12AX7 preamp -> Vox-meets-Fender TMB -> LTP PI/Cut -> stiff B+ nodes -> EL84 power, with host-controlled fallback Cab Sim. the game's Gain drives Volume; Bass/Mid/Treble->tone stack."
   }
  ],
  "Amp_GB50": [
@@ -1271,7 +1271,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MrYEMS.vst3",
-   "notes": "Bundled Dr. Z EMS style head (parody brand 'Mr. Y'), a Marshall JCM800/JTM50-style master-volume amp: full panel (Presence, Bass, Middle, Treble, Volume[master], Gain[preamp] + HI/LO gain switch) modelled from the EMS reference (a JCM800 2204 + HI/LO). Cascaded 12AX7 preamp -> Marshall TMB tone stack -> master -> 2xEL34 (~50W) + presence NFB; HI = full JCM800 gain, LO = JTM50 levels. the game's Gain drives the GAIN (preamp drive); Bass/Mid/Treble->tone stack, Pres->Presence (Master + HI via _static)."
+   "notes": "Bundled Dr. Z EMS style head (parody brand 'Mr. Y'), a Marshall JCM800/JTM50-style master-volume amp: full panel (Presence, Bass, Middle, Treble, Volume[master], Gain[preamp] + HI/LO gain switch) modelled from the EMS reference (a JCM800 2204 + HI/LO). Cascaded 12AX7 preamp -> Marshall TMB tone stack -> master -> ECC83 LTP PI -> diode B+ nodes -> 2xEL34 (~50W) + presence NFB, with host-controlled fallback Cab Sim; HI = full JCM800 gain, LO = JTM50 levels. the game's Gain drives the GAIN (preamp drive); Bass/Mid/Treble->tone stack, Pres->Presence (Master + HI via _static)."
   }
  ],
  "Amp_TW22": [
@@ -1282,7 +1282,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/BENDER SUPERNOVA 22.vst3",
-   "notes": "Bundled Fender Super-Sonic 22 / 6V6 style amp based on the local TW22 schematic, using the game's Gain, Bass, Mid, and Treble knobs."
+   "notes": "Bundled Fender Super-Sonic 22 / 6V6 style amp based on the local TW22 schematic, using the game's Gain, Bass, Mid, and Treble knobs. Includes bypassable fallback Cab Sim for auditioning without an external cabinet/IR."
   }
  ],
  "Amp_TW26": [
@@ -1293,7 +1293,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/BENDER DELUXE.vst3",
-   "notes": "Bundled Fender 57 Deluxe / 5E3 tweed style amp based on the local TW26 schematic, using the game's Gain, Bass, Mid, Treble, and Pres knobs."
+   "notes": "Bundled Fender 57 Deluxe / 5E3 tweed style amp based on the local TW26 schematic, using the game's Gain, Bass, Mid, Treble, and Pres knobs. Includes bypassable fallback Cab Sim for auditioning without an external cabinet/IR."
   }
  ],
  "Amp_TW40": [
@@ -1304,7 +1304,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/TW40.vst3",
-   "notes": "Bundled Fender Bassman 5F6-A tweed style amp (parody brand 'Bender'), full front panel (2 jumperable channels Bright/Normal with their own Volume, real FMV tone stack Treble/Bass/Middle, Presence, clickable input cable) modelled component-by-component from the local 5F6-A schematic. The 5F6-A has no gain knob, so the game's Gain drives the Bright Volume; Bass/Mid/Treble->tone stack, Pres->Presence."
+   "notes": "Bundled Fender Bassman 5F6-A tweed style amp (parody brand 'Bender'), full front panel (2 jumperable channels Bright/Normal with their own Volume, real FMV tone stack Treble/Bass/Middle, Presence, clickable input cable) modelled component-by-component from the local 5F6-A schematic. The 5F6-A has no gain knob, so the game's Gain drives the Bright Volume; Bass/Mid/Treble->tone stack, Pres->Presence. Includes bypassable fallback Cab Sim for auditioning without an external cabinet/IR."
   }
  ],
  "Bass_Amp_BT880B": [
@@ -1337,7 +1337,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/SamplegVH140C.vst3",
-   "notes": "Bundled Ampeg VH-140C style amp (parody brand 'Sampleg'), full front panel (Chorus Rate/Depth A/B, Reverb A/B, Channel B Level/High/Mid/Low/Gain, Channel A Level/High/Ultra-Mid/Low/Gain, channel select) modelled component-by-component from the local VH-140C service schematic. A SOLID-STATE 2x70W head (op-amps + 1N914 diode clipping, TDA power): Channel A clean + Channel B the famous tight diode-clipped lead/metal distortion. the game's Gain drives Channel B Gain; Bass/Mid/Treble->Channel B Low/Mid/High (Channel pinned B + reverb/chorus OFF via _static)."
+   "notes": "Bundled Ampeg VH-140C style amp (parody brand 'Sampleg'), full front panel (Chorus Rate/Depth A/B, Reverb A/B, Channel B Level/High/Mid/Low/Gain, Channel A Level/High/Ultra-Mid/Low/Gain, channel select) modelled component-by-component from the local VH-140C service schematic. A SOLID-STATE 2x70W head (op-amps + 1N914 diode clipping, TDA power): Channel A clean + Channel B the famous tight diode-clipped lead/metal distortion, with bypassable fallback Cab Sim. the game's Gain drives Channel B Gain; Bass/Mid/Treble->Channel B Low/Mid/High (Channel pinned B + reverb/chorus OFF via _static)."
   }
  ],
  "Amp_OrangeOR100": [
@@ -1348,7 +1348,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/CitrusOR100.vst3",
-   "notes": "Bundled Orange OR100 (vintage 'Graphic' head) style amp (parody brand 'Citrus'), full panel (Gain[HF Drive], Bass, Middle[FAC], Treble, Depth, Volume + FULL/HALF) modelled component-by-component from the complete local OR100 hand-drawn schematic. Single-channel British EL34 (~100W) with a thick, midrange-forward 'Orange' voice (the doom/stoner chunk) and the Depth low-end voicing. the game's Gain drives the Gain; Bass/Mid/Treble->tone stack (Volume + Depth pinned via _static)."
+   "notes": "Bundled Orange OR100 (vintage 'Graphic' head) style amp (parody brand 'Citrus'), full panel (Gain[HF Drive], Bass, Middle[FAC], Treble, Depth, Volume + FULL/HALF) modelled component-by-component from the complete local OR100 hand-drawn schematic. Single-channel British EL34 (~100W): ECC83 preamp -> Orange passive tone/Depth -> low-drive LTP PI -> stiff diode B+ nodes -> 4xEL34 power amp, with host-controlled fallback Cab Sim. the game's Gain drives the Gain; Bass/Mid/Treble->tone stack (Volume + Depth pinned via _static)."
   }
  ],
  "Amp_OrangeOR50H": [
@@ -1359,7 +1359,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/CitrusOR50.vst3",
-   "notes": "Bundled Orange OR50H style amp (parody brand 'Citrus'), the 50W sibling of the OR100. No separate OR50 schematic was available, so it is reconstructed from the complete OR100 schematic with a 2xEL34 (~50W) power amp: same panel (Gain, Bass, Middle, Treble, Depth, Volume + FULL/HALF) + preamp/tone stack, but less headroom, earlier breakup, a bit more sag and tighter lows. the game's Gain drives the Gain; Bass/Mid/Treble->tone stack (Volume + Depth pinned via _static)."
+   "notes": "Bundled Orange OR50H style amp (parody brand 'Citrus'), the 50W sibling of the OR100. Reconstructed from the local OR-family schematics with a 2xEL34 (~50W) power amp: same panel (Gain, Bass, Middle, Treble, Depth, Volume + FULL/HALF) + preamp/tone stack, but less headroom, earlier breakup, GZ34-style B+ sag and tighter lows. ECC83 preamp -> Orange tone/Depth -> low-drive LTP PI -> 2xEL34, with host-controlled fallback Cab Sim. the game's Gain drives the Gain; Bass/Mid/Treble->tone stack (Volume + Depth pinned via _static)."
   }
  ],
  "Bass_Amp_BT975B": [
@@ -1557,7 +1557,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/CitrusBigTremor.vst3",
-   "notes": "Bundled Orange Tiny Terror style single-channel guitar head (the game 'OrangeTinyTerror'): component-level model from the Tiny Terror schematic. Two 12AX7 gain stages, single passive Tone, Volume, 2x EL84 cathode-biased push-pull (~15 W; 7 W Half mode). RS Gain->Gain; RS Tone->Tone."
+   "notes": "Bundled Orange Tiny Terror style single-channel guitar head (the game 'OrangeTinyTerror'): component-level model from the Tiny Terror schematic. Two 12AX7 gain stages, single passive Tone, Volume, real 12AX7 LTP PI, B+ sag nodes, 2x EL84 cathode-biased push-pull (~15 W; 7 W Half mode) and bypassable fallback cab sim. RS Gain->Gain; RS Tone->Tone."
   }
  ],
  "Amp_OrangeRockerverb": [
@@ -1568,7 +1568,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/CitrusRumbleverb50.vst3",
-   "notes": "Bundled Orange Rockerverb 50 MkII style 2-channel guitar head (the game 'OrangeRockerverb'): component-level model from the Rockerverb 50 schematic. Clean (Vol/Bass/Treble) + Dirty (Gain/Bass/Middle/Treble/Vol) channels, valve spring Reverb, Output master, 2x EL34 push-pull. RS Gain/Bass/Mid/Treble drive the Dirty channel (default channel)."
+   "notes": "Bundled Orange Rockerverb 50 MkII style 2-channel guitar head (the game 'OrangeRockerverb'): component-level model from the Rockerverb 50 schematic. Clean (Vol/Bass/Treble) + Dirty (Gain/Bass/Middle/Treble/Vol) channels, valve spring Reverb, Output master, real 12AX7 LTP PI, B+ sag nodes, 2x EL34 push-pull and bypassable fallback cab sim. RS Gain/Bass/Mid/Treble drive the Dirty channel (default channel)."
   }
  ],
  "Amp_EpiphoneElectarCentury": [
@@ -1579,7 +1579,29 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/EpicallCentura.vst3",
-   "notes": "Bundled Epiphone Electar Century (75th reissue) style 15W guitar head (the game 'EpiphoneElectarCentury'): component-level model from the Century 75th-reissue schematic. Two 12AX7 stages, passive Tone, input Voice (Dark/Normal/Bright), pull-Boost, 2x 6V6 push-pull. RS Volume(Gain)->Volume."
+   "notes": "Bundled Epiphone Electar Century (75th reissue) style 15W guitar head (the game 'EpiphoneElectarCentury'): component-level model from the Century 75th-reissue schematic. Two 12AX7 stages, passive Tone, input Voice (Dark/Normal/Bright), pull-Boost, cathodyne PI, B+ sag nodes, 2x 6V6 push-pull and bypassable fallback cab sim. RS Volume(Gain)->Volume."
+  }
+ ],
+ "Amp_EpiphoneElectarM": [
+  {
+   "name": "EpicallCentura",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/EpicallCentura.vst3",
+   "notes": "Bundled alias for the game 'EpiphoneElectarM'. Local curation maps this gear to the same Epiphone Valve Jr / Electar Century family capture as Amp_EpiphoneElectarCentury, so it uses EpicallCentura with the same component-level DSP and knob mapping."
+  }
+ ],
+ "Amp_EpiphoneElectricHawaiian": [
+  {
+   "name": "EpicallCentura",
+   "manufacturer": "RigBuilder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/EpicallCentura.vst3",
+   "notes": "Bundled alias for the game 'EpiphoneElectricHawaiian'. Local curation maps this gear to the same Epiphone Valve Jr / Electar Century family capture as Amp_EpiphoneElectarCentury, so it uses EpicallCentura with the same component-level DSP and knob mapping."
   }
  ],
  "Amp_EpiphoneZephyr": [
@@ -1590,7 +1612,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/EpicallRuby.vst3",
-   "notes": "Bundled Epiphone Electar Zephyr Amp20 (~1949) style vintage guitar amp (the game 'EpiphoneZephyr'): component-level model from the 1949 Zephyr schematic. 12AX7 preamp, passive Bass/Treble, 2x 6L6G push-pull (~20W). RS Volume(Gain)/Bass/Treble."
+   "notes": "Bundled Epiphone Electar Zephyr Amp20 (~1949) style vintage guitar amp (the game 'EpiphoneZephyr'): component-level model from the 1949 Zephyr schematic. 12AX7 preamp, passive Bass/Treble, LTP PI approximation, 5U4-style B+ sag nodes, 2x 6L6G/6L6 push-pull (~20W) and bypassable fallback cab sim. RS Volume(Gain)/Bass/Treble."
   }
  ],
  "Amp_GibsonGA8": [
@@ -1601,7 +1623,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/HipzonGA8.vst3",
-   "notes": "Bundled Gibson GA-8 Discoverer (GA-8T) style guitar amp (the game 'GibsonGA8'): component-level from the GA-8T schematic. 12AX7 preamp, passive Bass/Treble, 2x 6BM8 push-pull (~10W), on-board tremolo (Speed/Depth). RS Volume(Loudness)/Bass/Treble."
+   "notes": "Bundled Gibson GA-8 Discoverer (GA-8T) style guitar amp (the game 'GibsonGA8'): component-level from the GA-8T schematic. 12AX7 preamp, passive Bass/Treble, cathodyne PI, 5Y3-style B+ sag nodes, EL84-family fallback model for 2x 6BM8 push-pull (~10W), on-board tremolo (Speed/Depth), and bypassable cab sim. RS Volume(Loudness)/Bass/Treble."
   }
  ],
  "Amp_GibsonGA79": [
@@ -1612,7 +1634,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/HipzonGA79RVT.vst3",
-   "notes": "Bundled Gibson GA-79 RVT Multi Stereo style guitar amp (the game 'GibsonGA79'): component-level from the GA-79 RVT schematic. 12AX7 preamp, passive Bass/Treble, valve spring Reverb, 4x 6BQ5 (EL84) push-pull, tremolo (Speed/Depth); modeled mono. RS Volume/Bass/Treble."
+   "notes": "Bundled Gibson GA-79 RVT Multi Stereo style guitar amp (the game 'GibsonGA79'): component-level from the GA-79 RVT schematic. 12AX7 preamp, passive Bass/Treble, valve spring Reverb, low-gain LTP PI approximation, B+ sag nodes, 4x 6BQ5 (EL84-family) push-pull, tremolo (Speed/Depth), and bypassable cab sim; modeled mono. RS Volume/Bass/Treble."
   }
  ],
  "Amp_GibsonGA88": [
@@ -1623,7 +1645,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/HipzonGA88.vst3",
-   "notes": "Bundled Gibson GA-88S stereo style guitar amp (the game 'GibsonGA88'): component-level from the GA-88S schematic. 12AX7 preamp, passive Bass/Treble, 4x 6BQ5 (EL84) push-pull (~30W, clean PA headroom); modeled mono. RS Volume/Bass/Treble."
+   "notes": "Bundled Gibson GA-88S stereo style guitar amp (the game 'GibsonGA88'): component-level from the GA-88S schematic. 12AX7 preamp, passive Bass/Treble, low-gain LTP PI approximation, GZ34-style B+ nodes, 4x 6BQ5 (EL84-family) push-pull (~30W, clean PA headroom), and bypassable cab sim; modeled mono. RS Volume/Bass/Treble."
   }
  ],
  "Amp_MarshallJCM800": [
@@ -1634,7 +1656,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MarstenJCM800.vst3",
-   "notes": "Bundled Marshall JCM800 2204 (50W master-volume) style head (parody brand 'Marsten'), full front panel (Presence, Bass, Middle, Treble, Master Vol, Preamp Vol + High/Low inputs) modelled component-by-component from the official Marshall 2204 STD schematic (2204prem/2204pwrm). Cascaded 12AX7 preamp (Preamp Vol = the drive) -> Marshall TMB tone stack (Treble 220k, Bass 1M, Middle 22k, slope 33k, 470pF/22n) -> master -> 2xEL34 (~50W) + Presence NFB. the game's Gain drives the Preamp Vol; Bass/Mid/Treble->tone stack, Pres->Presence (Master via _static)."
+   "notes": "Bundled Marshall JCM800 2204 (50W master-volume) style head (parody brand 'Marsten'), full front panel (Presence, Bass, Middle, Treble, Master Vol, Preamp Vol + High/Low inputs) modelled component-by-component from the official Marshall 2204 STD schematic (2204prem/2204pwrm). Cascaded 12AX7 preamp (Preamp Vol = the drive) -> Marshall TMB tone stack (Treble 220k, Bass 1M, Middle 22k, slope 33k, 470pF/22n) -> master -> 12AX7 long-tail PI -> 2xEL34 (~50W) + Presence NFB. the game's Gain drives the Preamp Vol; Bass/Mid/Treble->tone stack, Pres->Presence (Master + Cab Sim via _static)."
   }
  ],
  "Amp_MarshallJTM45": [
@@ -1645,7 +1667,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MarstenJTM45.vst3",
-   "notes": "Bundled Marshall JTM45 style head (parody 'Marsten'), the Plexi predecessor: Presence/Bass/Middle/Treble + Loudness 1 (High Treble) + Loudness 2 (Normal) + jumperable inputs, modelled from the Marshall 2204... no, the JTM45 schematic. 2xKT66 (~30W) + GZ34 tube rectifier -> warm, sag, early breakup. NON-master: RS Gain -> Loudness 1; Bass/Mid/Treble->stack, Pres->Presence (Loudness 2 + Input jumper via _static)."
+   "notes": "Bundled Marshall JTM45 style head (parody 'Marsten'), the Plexi predecessor: Presence/Bass/Middle/Treble + Loudness 1 (High Treble) + Loudness 2 (Normal) + jumperable inputs, modelled from the local JTM45 schematic. 2x5881/6L6 (~30W) + GZ34 tube rectifier -> warm, sag, early breakup. NON-master: RS Gain -> Loudness 1; Bass/Mid/Treble->stack, Pres->Presence (Loudness 2 + Input + Cab Sim via _static)."
   }
  ],
  "Amp_Marshall1962Bluesbreaker": [
@@ -1656,7 +1678,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MarstenBluesbreaker.vst3",
-   "notes": "Bundled Marshall 1962 Bluesbreaker style combo (parody 'Marsten'): a JTM45 voice (Presence/Bass/Middle/Treble + Loudness 1/2 + jumper inputs, 2xKT66 ~30W + GZ34) PLUS a power-amp Tremolo (Speed/Intensity). RS Gain -> Loudness 1; Bass/Mid/Treble->stack, Pres->Presence (Loudness 2 + Input + tremolo off via _static)."
+   "notes": "Bundled Marshall 1962 Bluesbreaker style combo (parody 'Marsten'): a JTM45 voice (Presence/Bass/Middle/Treble + Loudness 1/2 + jumper inputs, 2x5881/6L6 ~30W + GZ34) PLUS a power-amp Tremolo (Speed/Intensity). RS Gain -> Loudness 1; Bass/Mid/Treble->stack, Pres->Presence (Loudness 2 + Input + tremolo off + Cab Sim via _static)."
   }
  ],
  "Amp_MarshallDSL15H": [
@@ -1667,7 +1689,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MarstenDSL15.vst3",
-   "notes": "Bundled Marshall DSL15H style head (parody 'Marsten'): 2 channels (Classic Gain clean/crunch + Ultra Gain OD), shared EQ (Presence/Bass/Middle/Treble) + Deep + Tone Shift, ~15W. RS Gain -> Ultra Gain (channel pinned Ultra); Bass/Mid/Treble->EQ, Pres->Presence (volumes + Deep/Tone Shift via _static)."
+   "notes": "Bundled Marshall DSL15H style head (parody 'Marsten'): 2 channels (Classic Gain clean/crunch + Ultra Gain OD), shared EQ (Presence/Bass/Middle/Treble) + Deep + Tone Shift, ~15W. Component-level ECC83 cascade into LTP PI, diode B+ nodes and 2x6V6 power amp. RS Gain -> Ultra Gain (channel pinned Ultra); Bass/Mid/Treble->EQ, Pres->Presence (volumes + Deep/Tone Shift + Cab Sim via _static)."
   }
  ],
  "Amp_MarshallJVM410H": [
@@ -1678,7 +1700,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/MarstenJVM410.vst3",
-   "notes": "Bundled Marshall JVM410H style head (parody 'Marsten'): a 4-channel (Clean/Crunch/OD1/OD2, each green/orange/red) 100W cascading Marshall + Presence/Resonance/Master/Reverb. Modelled as the selected channel+mode (one sound per song). RS Gain -> Gain (Channel pinned OD1, Mode orange via _static); Bass/Mid/Treble->stack, Pres->Presence."
+   "notes": "Bundled Marshall JVM410H style head (parody 'Marsten'): a 4-channel (Clean/Crunch/OD1/OD2, each green/orange/red) 100W cascading Marshall + Presence/Resonance/Master/Reverb. Modelled as the selected channel+mode (one sound per song), with ECC83 LTP PI, stiff diode B+ nodes and 4xEL34 power amp. RS Gain -> Gain (Channel pinned OD1, Mode orange via _static); Bass/Mid/Treble->stack, Pres->Presence (Cab Sim via _static)."
   }
  ],
  "Amp_EN50": [
@@ -1689,7 +1711,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/EngelFireball.vst3",
-   "notes": "Bundled ENGL Fireball 100 style head (parody 'Engel'): 2-channel high-gain metal (Clean Gain + Lead Gain, shared Bass/Middle/Treble, Lead Volume, Master, Presence + Bright/Bottom/Mid-Boost switches), ~100W EL34, from the Fireball schematic. RS Gain -> Lead Gain (channel pinned Lead); Bass/Mid/Treble->stack, Pres->Presence."
+   "notes": "Bundled ENGL Fireball 100 style head (parody 'Engel'): 2-channel high-gain metal (Clean Gain + Lead Gain, shared Bass/Middle/Treble, Lead Volume, Master, Presence + Bright/Bottom/Mid-Boost switches), ~100W 6L6GC, from the Fireball schematic. Adds real ECC83 LTP PI, stiff silicon B+ nodes and bypassable fallback cab sim. RS Gain -> Lead Gain (channel pinned Lead); Bass/Mid/Treble->stack, Pres->Presence."
   }
  ],
  "Amp_CS100": [
@@ -1700,7 +1722,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/PolystoneMiniBrute.vst3",
-   "notes": "Bundled Polytone Mini-Brute style solid-state jazz combo (parody 'Polystone'): a warm, clean jazz-box voice (Volume, Bass, Treble + Brite switch, no middle). Op-amp clean preamp + Baxandall tone, stays clean. RS Gain -> Volume; Bass/Treble->tone (no Mid on this amp)."
+   "notes": "Bundled Polytone Mini-Brute style solid-state jazz combo (parody 'Polystone'): a warm, clean jazz-box voice (Volume, Bass, Treble + Brite switch, no middle). Op-amp clean preamp + Baxandall tone, stays clean, with bypassable fallback Cab Sim. RS Gain -> Volume; Bass/Treble->tone (no Mid on this amp)."
   }
  ],
  "Amp_CS120": [
@@ -1711,7 +1733,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/RonaldJC120.vst3",
-   "notes": "Bundled Roland JC-120 Jazz Chorus style amp (parody 'Ronald'), the 2x12 stereo sibling of the Ronald JC-90: solid-state clean voice + Distortion (clean at 0) + stereo BBD Chorus + spring Reverb. RS Gain -> Distortion (clean at 0); Bass/Mid/Treble->stack (Volume/Reverb/Chorus via _static)."
+   "notes": "Bundled Roland JC-120 Jazz Chorus style amp (parody 'Ronald'), the 2x12 stereo sibling of the Ronald JC-90: solid-state clean voice + Distortion (clean at 0) + stereo BBD Chorus + spring Reverb, with bypassable fallback Cab Sim. RS Gain -> Distortion (clean at 0); Bass/Mid/Treble->stack (Volume/Reverb/Chorus via _static)."
   }
  ],
  "Amp_OrangeAD50": [
@@ -1722,7 +1744,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/CitrusAD50.vst3",
-   "notes": "Bundled Orange AD50 Custom Shop style single-channel head (parody brand 'Citrus'), the game 'OrangeAD50'. No AD50 schematic exists; reconstructed in the OR/OR120 lineage (the user confirmed the online AD30 schematic is a different 2-channel EL84 circuit and does not apply). Extra-hot 12AX7 gain stage, 2-band shelving EQ (Bass/Treble), power-amp NFB Presence, Master, Sustain (EQ-bypass boost) + Class A (30W, earlier breakup) / AB (50W). RS Gain->Gain; Bass/Treble->EQ; Pres->Presence (Master + Sustain + Class A via _static)."
+   "notes": "Bundled Orange AD50 Custom Shop style single-channel head (parody brand 'Citrus'), the game 'OrangeAD50'. No AD50 schematic exists; reconstructed in the OR/OR120 lineage (the user confirmed the online AD30 schematic is a different 2-channel EL84 circuit and does not apply). Extra-hot 12AX7 gain stage, 2-band shelving EQ (Bass/Treble), real 12AX7 LTP PI, B+ sag nodes, EL34 power amp, power-amp NFB Presence, Master, Sustain (EQ-bypass boost) + Class A (30W, earlier breakup) / AB (50W), and bypassable fallback cab sim. RS Gain->Gain; Bass/Treble->EQ; Pres->Presence (Master + Sustain + Class A + Cab Sim via _static)."
   }
  ],
  "Amp_OrangeJimmyBean": [
@@ -1733,7 +1755,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/CitrusJimmyBean.vst3",
-   "notes": "Bundled Orange Jimmy Bean (JB150, 1975) style ~150W SOLID-STATE twin-channel combo (parody brand 'Citrus'), the game 'OrangeJimmyBean'. No schematic exists; reconstructed from web research (denim/leather op-amp era twin-channel with built-in tremolo + sustain). Op-amp clean stage, Baxandall Bass/Treble, Bright shelf, Channel voicing, Sustain (compressor/soft-clip), tremolo (Speed 2-8Hz / Depth, 0=off). RS Gain->Sustain; Bass/Treble->EQ (Volume + Speed/Depth/Channel/Bright via _static)."
+   "notes": "Bundled Orange Jimmy Bean (JB150, 1975) style ~150W SOLID-STATE twin-channel combo (parody brand 'Citrus'), the game 'OrangeJimmyBean'. No schematic exists; reconstructed from web research (denim/leather op-amp era twin-channel with built-in tremolo + sustain). Op-amp clean stage, Baxandall Bass/Treble, Bright shelf, Channel voicing, Sustain (compressor/soft-clip), tremolo (Speed 2-8Hz / Depth, 0=off), and bypassable fallback Cab Sim. RS Gain->Sustain; Bass/Treble->EQ (Volume + Speed/Depth/Channel/Bright via _static)."
   }
  ],
  "DI_Amp_TubePre": [

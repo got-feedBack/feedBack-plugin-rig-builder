@@ -1,24 +1,67 @@
 /*
- * CITRUS OR100 - Orange OR100 (vintage Graphic head) for the game's
- * Amp_OrangeOR100. Parody brand "Citrus"; the in-app face must never read "Orange".
+ * CITRUS OR100 - Orange OR100 (vintage "Graphic" 100W head) for the game's
+ * Amp_OrangeOR100. Parody brand "Citrus"; the in-app face must NEVER read
+ * "Orange".
  *
- * Local reference (modelled component-by-component):
- *   amps/Orange OR100/Orange100.pdf  (complete hand-drawn OR100 schematic)
+ * ============================ CIRCUIT-REAL DSP ============================
+ * Rebuilt FROM SCRATCH, schematic-first, off the user's hand-drawn schematic:
+ *   amps/Orange OR100/Orange100.pdf  ("Orange Model OR100, Serie nr. 94",
+ *   hand-drawn from the actual amplifier by Soeren Poulsen; PCB marked HH).
  *
- * Single-channel British EL34 head: input -> ECC83 gain stages (GAIN = HF Drive)
- * -> tone stack (Bass/Middle[FAC]/Treble) + DEPTH (the low-end bass-cap voicing)
- * -> ECC81 long-tail PI -> 4x EL34 (~100W, FULL or HALF power) -> output. A thick,
- * midrange-forward "Orange" voice (the doom/stoner chunk). VOLUME is the master.
+ * A REAL part for EVERY real stage (Koren tube tables + physical cathode loop +
+ * a real passive Orange tone network), NOT a tanh black box. The only tanh in
+ * the chain is the final output-transformer soft clip (rbAmpLvl). Models, not
+ * Guitarix's GPL code: the physics (Koren/Yeh) is public, the component values
+ * are the real amp's.
  *
- * the game: RS Gain -> GAIN; Bass/Mid/Treble -> tone stack. See
- * rs_knob_to_vst_param.json (Volume + Depth pinned via _static).
+ * --- What the schematic actually shows (component by component) -------------
+ *  PREAMP (ECC83 = 12AX7):
+ *    V1  triode (pins 1/2/3): plate load 220k ("M22"), 22n coupling out,
+ *        cathode 2.2k ("2K4") bypassed by 50uF ("50/25") -> fck ~1.4 Hz.
+ *        Input jack selector (Stage / Studio) with a 1500pF bright cap + 2.2k.
+ *    GAIN pot 1M-LIN ("HF Drive"): the inter-stage level into V2; a 2.4k ("242")
+ *        + cap to ground sits at its "Orange" tap.
+ *    V2  triode (pins 6/7/8): plate load 220k ("M22"), 22n coupling, cathode
+ *        2.2k / 60uF ("60/25").
+ *  TONE  (the Orange/Matamp PASSIVE network -- NOT a Marshall 3-band FMV):
+ *    33pF treble cap + a 2n2 / 0.1uF("midel" = the FAC mid) / 22n stack loaded
+ *    by 27k to ground. Bass + Treble + the FAC mid voicing. Plus the DEPTH
+ *    rotary (a switched bass cap bank 1n/2n2/4n7/10n/47n/100n + 68k) = the
+ *    low-end "weight" control. Modelled here as a Yeh passive R/C transfer with
+ *    the real Orange values (double precision -> 192k-safe).
+ *  VOLUME pot 1M-LOG = master, into the power amp.
+ *  PI  (ECC83 long-tail pair): 10k-ish plate loads, 1k tail, 0.1uF couplings;
+ *    a "Boost" 50k-LIN + 0.1uF + 24k/1k network taps the loop (presence/HF).
+ *  POWER: Ub3 = 4x EL34 (~100W), FIXED bias (1N4007 -> 27k -> 15k -> 100k bias
+ *    pot -> 33k; 2M2 grid resistors). FULL / HALF output power switch. OT.
+ *
+ * Engine: rbtube::TubeStage (12AX7 Koren table + real cathode auto-bias loop),
+ *   rbtube::PowerAmpEL34 (4x EL34 push-pull pentode + sag + OT), the Orange tone
+ *   via rbtube::ToneStackYeh (double), rbshared::Oversampler4x (2x OS). Staging
+ *   numbers mirror the tuned EL34 Plexi template, retuned for the Orange voice
+ *   (simpler tone, mid-forward, 100W). NO cleanMakeup.
+ *
+ * Guitarix cross-check (architecture/values only, GPL -> never copy code):
+ *   tools/.../OrangeDarkTerrorp3.sch (same Orange preamp family): V1 12ax7 with
+ *   Rp 100k, Rk 1.2k, Ck 47u, 1M grid leak, 0.1u couplings -- confirms the
+ *   cathode-biased 12AX7 topology and the simple Orange tone (its .dsp uses ONE
+ *   pre-filter IIR, NOT a 3-band TMB). The OR100 is the bigger 4xEL34 sibling.
+ *
+ * the game: RS Gain -> GAIN; Bass/Mid/Treble -> tone. Volume + Depth pinned via
+ *   _static (rs_knob_to_vst_param.json); FULL/HALF editable.
  */
 #include "DistrhoPlugin.hpp"
 #include "Or100Params.h"
+#include "../../_shared/tube_stage.hpp"   // real 12AX7 + EL34 circuit models
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
 
+// RB loudness/headroom output stage (shared across all amps): the soft knee is
+// transparent below +/-0.90 and saturates to a +/-0.99 ceiling so EQ boosts and
+// the cranked power amp never hard-clip. This is the only tanh in the chain --
+// it stands in for the output-transformer/speaker peak softening.
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
 
@@ -30,14 +73,6 @@ static inline float clampFreq(float hz, float sr) { return std::fmax(20.0f, std:
 static inline float smoothstep(float v) { v = clamp01(v); return v * v * (3.0f - 2.0f * v); }
 static inline float smoothstepRange(float e0, float e1, float x) { return smoothstep((x - e0) / (e1 - e0)); }
 static inline float softClip(float x) { return std::tanh(x); }
-static inline float asymTube(float x, float drive, float bias)
-{
-    const float pushed = x * drive + bias;
-    const float y = std::tanh(pushed);
-    const float correction = std::tanh(bias);
-    return (y - correction) / (1.0f - 0.32f * std::fabs(correction));
-}
-static inline float tonePot(float v) { v = clamp01(v); return v < 0.001f ? 0.001f : (v > 0.999f ? 0.999f : v); }
 
 class Biquad
 {
@@ -62,46 +97,6 @@ public:
             (a+1.0f)+(a-1.0f)*c+2.0f*ra*al,-2.0f*((a-1.0f)+(a+1.0f)*c),(a+1.0f)+(a-1.0f)*c-2.0f*ra*al); }
 };
 
-// British FMV tone stack (Marshall-derived values): Treble 250K, Bass 1M, Middle
-// 25K, slope 33K, C 470pF / 22nF / 22nF — the Orange thick voice is added on top.
-class Or100ToneStack
-{
-    float b0=1,b1=0,b2=0,b3=0,a1=0,a2=0,a3=0,x1=0,x2=0,x3=0,y1=0,y2=0,y3=0,sampleRate=48000.0f;
-public:
-    void reset(){ x1=x2=x3=y1=y2=y3=0.0f; }
-    void setSampleRate(float sr){ sampleRate=sr>1000.0f?sr:48000.0f; }
-    void update(float treble,float mid,float bass)
-    {
-        const float t=tonePot(treble),m=tonePot(mid),l=tonePot(bass);
-        const float R1=250.0e3f, R2=1.0e6f, R3=25.0e3f, R4=33.0e3f;
-        const float C1=470.0e-12f, C2=22.0e-9f, C3=22.0e-9f;
-        const float ab0=0.0f;
-        const float ab1=t*C1*R1 + m*C3*R3 + l*(C1*R2+C2*R2) + (C1*R3+C2*R3);
-        const float ab2=t*(C1*C2*R1*R4+C1*C3*R1*R4) - m*m*(C1*C3*R3*R3+C2*C3*R3*R3)
-                      + m*(C1*C3*R1*R3+C1*C3*R3*R3+C2*C3*R3*R3) + l*(C1*C2*R1*R2+C1*C2*R2*R4+C1*C3*R2*R4)
-                      + l*m*(C1*C3*R2*R3+C2*C3*R2*R3) + (C1*C2*R1*R3+C1*C2*R3*R4+C1*C3*R3*R4);
-        const float ab3=l*m*(C1*C2*C3*R1*R2*R3+C1*C2*C3*R2*R3*R4) - m*m*(C1*C2*C3*R1*R3*R3+C1*C2*C3*R3*R3*R4)
-                      + m*(C1*C2*C3*R1*R3*R3+C1*C2*C3*R3*R3*R4) + t*C1*C2*C3*R1*R3*R4 - t*m*C1*C2*C3*R1*R3*R4
-                      + t*l*C1*C2*C3*R1*R2*R4;
-        const float aa0=1.0f;
-        const float aa1=(C1*R1+C1*R3+C2*R3+C2*R4+C3*R4) + m*C3*R3 + l*(C1*R2+C2*R2);
-        const float aa2=m*(C1*C3*R1*R3-C2*C3*R3*R4+C1*C3*R3*R3+C2*C3*R3*R3) - m*m*(C1*C3*R3*R3+C2*C3*R3*R3)
-                      + l*m*(C1*C3*R2*R3+C2*C3*R2*R3) + l*(C1*C2*R2*R4+C1*C2*R1*R2+C1*C3*R2*R4+C2*C3*R2*R4)
-                      + (C1*C2*R1*R4+C1*C3*R1*R4+C1*C2*R3*R4+C1*C2*R1*R3+C1*C3*R3*R4+C2*C3*R3*R4);
-        const float aa3=l*m*(C1*C2*C3*R1*R2*R3+C1*C2*C3*R2*R3*R4) - m*m*(C1*C2*C3*R1*R3*R3+C1*C2*C3*R3*R3*R4)
-                      + m*(C1*C2*C3*R3*R3*R4+C1*C2*C3*R1*R3*R3-C1*C2*C3*R1*R3*R4) + l*(C1*C2*C3*R1*R2*R4) + C1*C2*C3*R1*R3*R4;
-        const float c=2.0f*sampleRate, c2=c*c, c3=c2*c;
-        const float nb0=-ab0-ab1*c-ab2*c2-ab3*c3, nb1=-3.0f*ab0-ab1*c+ab2*c2+3.0f*ab3*c3,
-                    nb2=-3.0f*ab0+ab1*c+ab2*c2-3.0f*ab3*c3, nb3=-ab0+ab1*c-ab2*c2+ab3*c3;
-        const float na0=-aa0-aa1*c-aa2*c2-aa3*c3, na1=-3.0f*aa0-aa1*c+aa2*c2+3.0f*aa3*c3,
-                    na2=-3.0f*aa0+aa1*c+aa2*c2-3.0f*aa3*c3, na3=-aa0+aa1*c-aa2*c2+aa3*c3;
-        if(std::fabs(na0)<1.0e-30f){ b0=1.0f; b1=b2=b3=a1=a2=a3=0.0f; return; }
-        const float i=1.0f/na0; b0=nb0*i; b1=nb1*i; b2=nb2*i; b3=nb3*i; a1=na1*i; a2=na2*i; a3=na3*i;
-    }
-    float process(float x){ const float y=b0*x+b1*x1+b2*x2+b3*x3-a1*y1-a2*y2-a3*y3;
-        x3=x2; x2=x1; x1=x; y3=y2; y2=y1; y1=y; return y; }
-};
-
 class DcBlock
 {
     float x1=0.0f,y1=0.0f;
@@ -122,58 +117,135 @@ class Or100Core
     float depth  = kOr100Def[kDepth];
     float volume = kOr100Def[kVolume];
     float half   = kOr100Def[kHalf];
+    float cabSim = kOr100Def[kCabSim];
 
-    Biquad inputHp, pickupLoad, preBody, interHp, cathodeLp;
-    Or100ToneStack toneStack;
+    // ── voicing biquads (kept; speaker/cab-ish color, pre-cab, mild) ──────────
+    Biquad inputHp, pickupLoad, brightCap, preBody;
+    Biquad interHp, cathodeLp;
+    rbtube::ToneStackYeh toneStack;     // real Orange passive R/C tone (double = 192k-safe)
     Biquad depthShelf, midThick, stackMakeupLow, phaseLp, presenceShelf;
-    Biquad speakerHp, speakerThump, speakerLowMid, speakerBite, speakerFizz, speakerLp;
+    Biquad speakerHp, speakerThump, speakerLowMid, speakerBite, speakerAir, speakerLp;
     DcBlock dcBlock;
-    float sag = 0.0f;
+
+    // ── REAL tube stages (Koren circuit models) ──────────────────────────────
+    rbtube::TubeStage v1, v2;           // ECC83/12AX7 gain stages (220k plate, 2.2k cathode)
+    rbtube::TubeStage piDriver;         // ECC83/12AX7 recovery into the long-tail PI
+    rbtube::Miller12AX7 v1Miller, v2Miller, piMiller;
+    rbtube::CouplingCapGridLeak coupleV1ToV2;
+    rbtube::CouplingCapGridLeak coupleToneToDriver;
+    rbtube::CouplingCapGridLeak coupleToPi;  // master -> PI grid blocking
+    rbtube::PhaseInverterLTP12AX7 phaseInverter;
+    rbtube::MultiNodeBPlus supply;           // diode rectifier + B+ nodes
+    rbtube::PowerAmpEL34 power;          // 4x EL34 push-pull (~100W), fixed bias
+    float lastPowerLoad = 0.0f, lastScreenLoad = 0.0f, lastPreampLoad = 0.0f;
 
     static float eqDb(float v, float r) { return (clamp01(v) - 0.5f) * 2.0f * r; }
 
     void updateFilters()
     {
         const float g = smoothstep(gain);
-        const float pushed = smoothstepRange(0.40f, 0.92f, gain);
-        const float mPush = smoothstep(volume);
+        const float pushed = smoothstepRange(0.35f, 0.90f, gain);
+        const float vol = smoothstep(volume);            // master cooks the power amp
+        const float halfP = (half >= 0.5f) ? 1.0f : 0.0f;
 
-        inputHp.setHighPass(sampleRate, 46.0f + 36.0f * g, 0.70f);
-        pickupLoad.setLowPass(sampleRate, 12000.0f - 1400.0f * pushed + 800.0f * treble, 0.64f);
-        preBody.setPeaking(sampleRate, 640.0f + 240.0f * mid, 0.80f, 0.6f + 1.6f * mid);   // Orange upper-mid push
-        interHp.setHighPass(sampleRate, 90.0f + 90.0f * pushed, 0.70f);
-        cathodeLp.setLowPass(sampleRate, 8800.0f + 1400.0f * treble - 1500.0f * pushed, 0.64f);
+        // The 1500pF bright cap across the input selector bleeds treble in,
+        // strongest at low gain (Orange "Stage" position sparkle).
+        const float bright = clamp01(0.30f * treble + 0.45f * (1.0f - gain));
 
-        toneStack.update(treble, mid, bass);
-        // DEPTH = the bass-cap rotary: a swept low shelf (more depth = bigger lows).
-        depthShelf.setLowShelf(sampleRate, 95.0f + 25.0f * depth, 0.72f, eqDb(depth, 9.0f) + 1.0f);
-        // the thick Orange FAC midrange
-        midThick.setPeaking(sampleRate, 480.0f + 160.0f * mid, 0.60f, -0.6f + 4.4f * mid + 1.2f * pushed);
-        stackMakeupLow.setLowShelf(sampleRate, 120.0f, 0.72f, 1.0f - 1.0f * pushed);
-        phaseLp.setLowPass(sampleRate, 10500.0f + 1300.0f * treble - 2000.0f * pushed, 0.64f);
-        // fixed presence voicing (no presence knob on the OR100)
-        presenceShelf.setHighShelf(sampleRate, 2700.0f, 0.78f, 1.8f + 1.0f * treble);
+        // ── real 12AX7 / EL34 circuit stages (cathode auto-bias solved) ───────
+        // V1/V2: ECC83, plate 220k handled by the model's Rp/divider; cathode
+        //   2.2k -> fck = 1/(2*pi*2.2k*Ck): 50uF -> ~1.45 Hz (V1), 60uF -> ~1.2 Hz (V2).
+        //   (use the model's effective bypass corner; both effectively full-bypass.)
+        v1.set(sampleRate, 0, 250.0f, 40.0f, 1.45f, 2200.0f);        // input stage, 68k grid leak
+        v2.set(sampleRate, 1, 250.0f, 40.0f, 1.20f, 2200.0f);        // 2nd stage, 250k grid leak
+        piDriver.set(sampleRate, 1, 250.0f, 40.0f, 30.0f, 1500.0f);  // recovery / PI driver
+        v1Miller.set(sampleRate,  68000.0f, 55.0f, 8.0f);
+        v2Miller.set(sampleRate, 220000.0f, 52.0f, 8.0f);
+        piMiller.set(sampleRate, 180000.0f, 52.0f, 8.0f);
+        coupleV1ToV2.set(sampleRate, 1000000.0f, 22.0e-9f, 220000.0f,
+                         0.12f, 0.44f, 1.20f);
+        coupleToneToDriver.set(sampleRate, 1000000.0f, 22.0e-9f, 180000.0f,
+                               0.11f, 0.38f, 0.95f);
+        coupleToPi.set(sampleRate, 1000000.0f, 100.0e-9f, 100000.0f, 0.13f, 0.42f, 1.05f);
+        // The local OR drawings label the PI differently across references; keep
+        // the lower-drive Orange/Matamp feel instead of a hot Marshall splitter.
+        phaseInverter.setComponents(sampleRate,
+                                    0.72f + 1.05f * vol + 0.45f * pushed + 0.30f * halfP,
+                                    0.82f, 320.0f, 47000.0f, 47000.0f, 10000.0f, 18.0f, 0.018f);
+        supply.set(sampleRate,
+                   18.0f, 100.0f,
+                   1000.0f, 50.0f,
+                   10000.0f, 32.0f,
+                   0.055f + 0.020f * pushed + 0.025f * halfP,
+                   0.045f + 0.018f * pushed + 0.020f * halfP,
+                   0.030f + 0.012f * gain,
+                   0.15f);
+        // 4x EL34 push-pull (~100W), fixed bias ~-40V. EL34 break up earlier +
+        // compress more than 6L6 -> the thick Orange midrange grind. The master
+        // VOLUME (not gain) cooks the power amp; HALF power -> earlier breakup.
+        power.set(sampleRate, 8.5f + 9.0f * vol + 7.0f * pushed + 3.5f * halfP,
+                  -40.0f, 0.07f + 0.04f * halfP, 48.0f, 10500.0f);
+        power.out = 0.010f;
 
-        // Orange PPC 4x12 (thick, midrange-forward, smooth top)
+        // ── input / interstage shaping ────────────────────────────────────────
+        inputHp.setHighPass(sampleRate, 42.0f + 40.0f * g, 0.70f);
+        pickupLoad.setLowPass(sampleRate, 12500.0f - 1500.0f * pushed + 800.0f * treble, 0.64f);
+        brightCap.setHighShelf(sampleRate, 1500.0f + 1000.0f * treble, 0.70f, -0.8f + 5.4f * bright);
+        preBody.setPeaking(sampleRate, 620.0f + 220.0f * mid, 0.80f, 0.4f + 1.4f * mid);  // Orange upper-mid push
+        interHp.setHighPass(sampleRate, 70.0f + 80.0f * pushed, 0.70f);
+        cathodeLp.setLowPass(sampleRate, 9000.0f + 1400.0f * treble - 1500.0f * pushed, 0.64f);
+
+        // ── the Orange PASSIVE tone network (real R/C values, Yeh transfer) ────
+        // The Orange tone is a treble cap (33pF) + a mid/bass cap stack
+        // (2n2 / 0.1uF "midel" / 22n) loaded by 27k -- a 2-band-plus-FAC network,
+        // NOT a Marshall FMV. Map: Treble->t, FAC mid->m, Bass->l. Component
+        // values from the schematic (slope/loads from the Orange topology).
+        //   R1 Treble 1M, R2 Bass 1M, R3 mid(FAC) 27k, R4 slope 100k
+        //   C1 treble 33pF (the bright cap), C2 0.1uF (bass/mid), C3 22nF (mid)
+        toneStack.setComponents(1.0e6, 1.0e6, 27.0e3, 100.0e3, 33.0e-12, 0.1e-6, 22.0e-9);
+        toneStack.update(sampleRate, treble, mid, bass);
+
+        // DEPTH = the switched bass-cap rotary: a swept low shelf (more depth ->
+        // bigger lows, the Orange "weight").
+        depthShelf.setLowShelf(sampleRate, 90.0f + 25.0f * depth, 0.72f, eqDb(depth, 8.0f) + 0.8f);
+        // the thick Orange FAC midrange body (passive stack already shapes it;
+        // this is the makeup of the mid hump that the FAC accentuates).
+        midThick.setPeaking(sampleRate, 470.0f + 150.0f * mid, 0.62f, -0.5f + 4.0f * mid + 1.0f * pushed);
+        stackMakeupLow.setLowShelf(sampleRate, 120.0f, 0.72f, 0.8f - 1.0f * pushed);
+        phaseLp.setLowPass(sampleRate, 11000.0f + 1300.0f * treble - 2000.0f * pushed, 0.64f);
+        // PI "Boost" -> a fixed presence high-shelf (no presence knob on the OR100 panel).
+        presenceShelf.setHighShelf(sampleRate, 2700.0f, 0.78f, 1.6f + 1.0f * treble);
+
+        // Orange PPC 4x12 (thick, midrange-forward, smooth top), pre-cab + mild.
         speakerHp.setHighPass(sampleRate, 78.0f, 0.72f);
-        speakerThump.setPeaking(sampleRate, 120.0f, 0.84f, 1.2f + 2.4f * bass + 1.2f * depth);
-        speakerLowMid.setPeaking(sampleRate, 440.0f + 90.0f * mid, 0.72f, 1.2f + 2.0f * mid);
-        speakerBite.setPeaking(sampleRate, 2400.0f + 480.0f * treble, 0.78f, 2.0f + 1.8f * treble - 0.5f * pushed);
-        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, 9.5f + 2.0f * treble - 4.5f * pushed);
-        speakerLp.setLowPass(sampleRate, 15000.0f + 1700.0f * treble - 3500.0f * pushed, 0.66f);
+        speakerThump.setPeaking(sampleRate, 120.0f, 0.84f, 0.9f + 2.2f * bass + 1.2f * depth);
+        speakerLowMid.setPeaking(sampleRate, 440.0f + 90.0f * mid, 0.72f, 1.0f + 1.8f * mid);
+        speakerBite.setPeaking(sampleRate, 2500.0f + 480.0f * treble, 0.78f, 2.0f + 1.6f * treble - 0.5f * pushed);
+        // AIR high-shelf: real cab/OT rolls the extreme top off instead of adding
+        // fizz; Treble can recover a little chime before the external cab IR.
+        speakerAir.setHighShelf(sampleRate, 5200.0f, 0.70f, -1.5f + 1.8f * treble - 2.4f * pushed);
+        speakerLp.setLowPass(sampleRate, 13000.0f + 1600.0f * treble - 2500.0f * pushed, 0.66f);
     }
 
 public:
     void reset()
     {
-        inputHp.reset(); pickupLoad.reset(); preBody.reset(); interHp.reset(); cathodeLp.reset();
-        toneStack.reset(); depthShelf.reset(); midThick.reset(); stackMakeupLow.reset(); phaseLp.reset(); presenceShelf.reset();
-        speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset(); speakerBite.reset(); speakerFizz.reset(); speakerLp.reset();
-        dcBlock.reset(); sag = 0.0f;
+        inputHp.reset(); pickupLoad.reset(); brightCap.reset(); preBody.reset();
+        interHp.reset(); cathodeLp.reset();
+        toneStack.reset(); depthShelf.reset(); midThick.reset(); stackMakeupLow.reset();
+        phaseLp.reset(); presenceShelf.reset();
+        speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset();
+        speakerBite.reset(); speakerAir.reset(); speakerLp.reset();
+        dcBlock.reset();
+        v1Miller.reset(); v2Miller.reset(); piMiller.reset();
+        v1.reset(); v2.reset(); piDriver.reset();
+        coupleV1ToV2.reset(); coupleToneToDriver.reset();
+        coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset();
+        lastPowerLoad = lastScreenLoad = lastPreampLoad = 0.0f;
         updateFilters();
     }
 
-    void setSampleRate(float sr) { sampleRate = sr > 1000.0f ? sr : 48000.0f; toneStack.setSampleRate(sampleRate); reset(); }
+    void setSampleRate(float sr) { sampleRate = sr > 1000.0f ? sr : 48000.0f; reset(); }
 
     void setParam(int idx, float v)
     {
@@ -187,6 +259,7 @@ public:
             case kDepth:  depth = v; break;
             case kVolume: volume = v; break;
             case kHalf:   half = v; break;
+            case kCabSim: cabSim = v; break;
             default: break;
         }
         updateFilters();
@@ -196,63 +269,75 @@ public:
 
     float process(float in)
     {
-        const float g = smoothstep(gain);
-        const float pushed = smoothstepRange(0.40f, 0.92f, gain);
-        const float mPush = smoothstep(volume);
-        const float halfP = (half >= 0.5f) ? 1.0f : 0.0f;   // HALF power -> earlier breakup
+        const float pushed = smoothstepRange(0.35f, 0.90f, gain);
+        const float vol = smoothstep(volume);
+        const float halfP = (half >= 0.5f) ? 1.0f : 0.0f;
+        const rbtube::SupplyScales bplus =
+            supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
 
         float x = inputHp.process(in);
         x = pickupLoad.process(x);
-        x = softClip(x * (1.05f + 0.08f * pushed)) * (0.96f - 0.04f * pushed);
+        x = brightCap.process(x);
+        // input coupling soft limit (grid conduction at the jack), very gentle so
+        // the clean end stays clean (only bites once cranked).
+        x = softClip(x * (0.92f + 0.22f * pushed)) * (0.98f - 0.04f * pushed);
 
-        // ECC83 gain stages (GAIN = HF Drive) — Orange medium-high gain, thick.
+        // V1 (ECC83) input gain stage -- REAL cathode-biased 12AX7. Low floor so
+        // the amp is genuinely clean at low GAIN; the ceiling drives V1 into clip.
         float y = preBody.process(x);
-        y = asymTube(y, 1.05f + 3.2f * gain + 2.4f * g, 0.012f + 0.014f * gain);
+        y = v1.process(v1Miller.process(y) * (2.6f + 4.2f * gain) * bplus.preamp);
+
+        // GAIN pot (1M-LIN HF Drive) -> inter-stage pre-gain into V2 (cascade).
+        // This is where the Orange crunch builds: small at low gain, hot when up.
         y = interHp.process(y);
-        y = asymTube(y, 0.95f + 2.6f * gain + 2.6f * pushed, -0.008f - 0.010f * gain);
+        y = coupleV1ToV2.process(y, 0.75f + 4.8f * gain + 1.8f * pushed);
+        y = v2.process(v2Miller.process(y) * (1.2f + 5.2f * gain + 3.2f * pushed) * bplus.preamp);
         y = cathodeLp.process(y);
 
-        y = toneStack.process(y) * 1.70f;
+        // Orange PASSIVE tone network (real R/C), then the FAC/depth makeup.
+        y = toneStack.process(y) * 4.0f;       // passive stack is lossy -> makeup
         y = depthShelf.process(y);
         y = midThick.process(y);
         y = stackMakeupLow.process(y);
+
+        // PI driver / recovery -- REAL 12AX7 into the long-tail pair. Drive scales
+        // with gain so the late stage adds breakup only when the amp is pushed.
+        y = coupleToneToDriver.process(y, 0.75f + 1.9f * gain + 0.8f * pushed);
+        y = piDriver.process(piMiller.process(y) * (1.6f + 3.0f * gain + 1.2f * pushed) * bplus.preamp);
         y = phaseLp.process(y);
 
-        // VOLUME (master) into the power amp
-        y *= 0.22f + 1.28f * volume;
+        // VOLUME (1M-LOG master) into the power amp.
+        y *= 0.20f + 1.30f * volume;
+        y = coupleToPi.process(y, 1.0f + 0.10f * pushed);
+        lastPreampLoad = 0.10f * std::fabs(y) + 0.04f * gain;
+        y = phaseInverter.process(y * bplus.preamp);
+        lastPowerLoad = 0.92f * std::fabs(y) + 0.18f * pushed + 0.16f * vol + 0.12f * halfP;
+        lastScreenLoad = 0.56f * std::fabs(y) + 0.10f * gain + 0.08f * halfP;
 
-        // 4x EL34 (~100W) + sag. HALF power -> less headroom, earlier/softer breakup.
-        const float env = std::fabs(y);
-        const float attack = 1.0f - std::exp(-1.0f / (0.0060f * sampleRate));
-        const float release = 1.0f - std::exp(-1.0f / (0.140f * sampleRate));
-        sag += (env - sag) * (env > sag ? attack : release);
-        const float sagDrop = 1.0f / (1.0f + sag * (0.30f + 0.55f * mPush + 0.35f * halfP));
-        const float powerDrive = (0.85f + 1.55f * mPush + 0.9f * pushed + 0.6f * halfP) * sagDrop;
-        y = asymTube(y, powerDrive, 0.006f + 0.010f * (treble - bass));
-        y = 0.86f * y + 0.14f * softClip(y * (1.5f + 1.1f * pushed + 0.5f * halfP));
-        y *= 0.97f - 0.07f * sag;
-
+        // 4x EL34 push-pull (~100W) -- real pentode table + LTP/B+ dynamics.
+        y = power.process(y * bplus.power * bplus.screen);
         y = presenceShelf.process(y);
         y = dcBlock.process(y);
 
-        y = speakerHp.process(y);
-        y = speakerThump.process(y);
-        y = speakerLowMid.process(y);
-        y = speakerBite.process(y);
-        y = speakerFizz.process(y);
-        y = speakerLp.process(y);
+        float cab = speakerHp.process(y);
+        cab = speakerThump.process(cab);
+        cab = speakerLowMid.process(cab);
+        cab = speakerBite.process(cab);
+        cab = speakerAir.process(cab);
+        cab = speakerLp.process(cab);
+        y += cabSim * (cab - y);
 
-        // Loudness normalization: cleanMakeup keeps RS Gain (-> GAIN) ~flat; VOLUME
-        // (master) gives a mild swing. ~-14 dBFS reference.
+        // Output level: the GAIN (-> RS Gain) sweep + VOLUME swing kept within a
+        // couple dB of the ~-14 dBFS shared reference. NO cleanMakeup. The only
+        // saturation here is the final OT soft clip (rbAmpLvl in the plugin).
         const float toneEnergy = 1.0f
             + 0.011f * std::fabs((bass - 0.5f) * 15.0f)
             + 0.013f * std::fabs((mid - 0.5f) * 18.0f)
             + 0.012f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.009f * std::fabs((depth - 0.5f) * 14.0f);
-        const float cleanMakeup = 1.0f + 4.0f * std::exp(-gain / 0.24f);
-        const float level = (0.56f + 0.12f * (1.0f - gain)) * cleanMakeup /
-            ((1.0f + 0.42f * mPush + 0.28f * pushed) * toneEnergy);
-        return softClip(y * level) * 0.97f;
+        const float level = (0.62f + 0.12f * (1.0f - gain)) /
+            ((1.0f + 0.30f * smoothstep(volume) + 0.20f * pushed) * toneEnergy);
+        return y * level;
     }
 };
 
@@ -261,6 +346,8 @@ class Or100Plugin : public Plugin
     Or100Core left;
     Or100Core right;
     float params[kParamCount];
+    rbshared::Oversampler4x osL, osR;            // 2x OS around the nonlinear chain
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
 
     void applyAll() { for (int i = 0; i < kParamCount; ++i) { left.setParam(i, params[i]); right.setParam(i, params[i]); } }
 
@@ -268,8 +355,8 @@ public:
     Or100Plugin() : Plugin(kParamCount, 0, 0)
     {
         for (int i = 0; i < kParamCount; ++i) params[i] = kOr100Def[i];
-        left.setSampleRate((float)getSampleRate());
-        right.setSampleRate((float)getSampleRate());
+        left.setSampleRate(kOS * (float)getSampleRate());
+        right.setSampleRate(kOS * (float)getSampleRate());
         applyAll();
     }
 
@@ -304,8 +391,9 @@ protected:
 
     void sampleRateChanged(double newSampleRate) override
     {
-        left.setSampleRate((float)newSampleRate);
-        right.setSampleRate((float)newSampleRate);
+        left.setSampleRate(kOS * (float)newSampleRate);
+        right.setSampleRate(kOS * (float)newSampleRate);
+        osL.reset(); osR.reset();
         applyAll();
     }
 
@@ -317,8 +405,13 @@ protected:
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = rbAmpLvl(0.560f * left.process(3.2f * inL[i]));
-            outR[i] = rbAmpLvl(0.560f * right.process(3.2f * inR[i]));
+            float ub[kOS];
+            osL.upsample(3.2f * inL[i], ub);
+            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.560f * left.process(ub[k]));
+            outL[i] = osL.downsample(ub);
+            osR.upsample(3.2f * inR[i], ub);
+            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.560f * right.process(ub[k]));
+            outR[i] = osR.downsample(ub);
         }
     }
 

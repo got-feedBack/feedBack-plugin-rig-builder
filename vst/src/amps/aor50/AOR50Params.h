@@ -32,23 +32,24 @@ enum AOR50ParamId
     kDeep,           // Bass Pull-Deep (low-end boost)
     kMidBoost,       // Middle Pull-Boost (mid lift)
     kPresence,       // Presence (power-amp NFB)                       [RS Pres]
+    kCabSim,         // fallback 4x12 speaker voice; host bypasses when using an external cab/IR
     kParamCount
 };
 
 static const char* const kAOR50Names[kParamCount] = {
     "Channel", "AOR Preamp", "AOR Master", "AOR Bright",
     "Ch1 Preamp", "Ch1 Master", "Ch1 Bright",
-    "Bass", "Middle", "Treble", "Deep", "Mid Boost", "Presence",
+    "Bass", "Middle", "Treble", "Deep", "Mid Boost", "Presence", "Cab Sim",
 };
 
 static const char* const kAOR50Symbols[kParamCount] = {
     "channel", "aorpreamp", "aormaster", "aorbright",
     "ch1preamp", "ch1master", "ch1bright",
-    "bass", "middle", "treble", "deep", "midboost", "presence",
+    "bass", "middle", "treble", "deep", "midboost", "presence", "cabsim",
 };
 
-static const float kAOR50Min[kParamCount] = { 0,0,0,0, 0,0,0, 0,0,0,0,0,0 };
-static const float kAOR50Max[kParamCount] = { 1,1,1,1, 1,1,1, 1,1,1,1,1,1 };
+static const float kAOR50Min[kParamCount] = { 0,0,0,0, 0,0,0, 0,0,0,0,0,0,0 };
+static const float kAOR50Max[kParamCount] = { 1,1,1,1, 1,1,1, 1,1,1,1,1,1,1 };
 // Manual-insert defaults: AOR (lead) channel — the signature voice — at a
 // moderate lead gain; Channel One set clean; tone stack centred-ish; pull
 // switches off; presence mid.
@@ -57,6 +58,7 @@ static const float kAOR50Def[kParamCount] = {
     0.50f, 0.50f, 0.00f,          // Ch1 Preamp/Master, Ch1 Bright off
     0.55f, 0.50f, 0.60f, 0.00f, 0.00f,   // Bass, Middle, Treble, Deep off, Mid Boost off
     0.50f,                        // Presence
+    1.00f,                        // Cab Sim fallback on until the host routes an external cab/IR
 };
 
 #endif // AOR50_PARAMS_H

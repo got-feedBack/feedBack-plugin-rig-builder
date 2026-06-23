@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/Meve1073.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			ikpsUX2S2HkkvydesxwTp80iQFJmoW6sSoi/CRaRSNU=
+			</data>
+		</dict>
+		<key>x86_64-win/Meve1073.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			sqYGhYG6G15pjsGSksVjI2LOwtzSQj3Dc/4jUnkQ+zg=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

@@ -18,20 +18,6 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/Plexi.so</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			M5fEK8kDsIY645usSlXvM+3YT+eN+b2t2LP40wJNY7Y=
-			</data>
-		</dict>
-		<key>x86_64-win/Plexi.vst3</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			iG9/iir5NotyzrPpNujMwblFp7w2CsAn2vHuG0qMHpA=
-			</data>
-		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

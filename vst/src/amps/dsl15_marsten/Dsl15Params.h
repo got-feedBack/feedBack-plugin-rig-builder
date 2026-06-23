@@ -21,7 +21,8 @@
  * the game mapping (rs_knob_to_vst_param.json): RS Gain -> ULTRA GAIN with the
  * Channel pinned to Ultra (the DSL15 lead voice). Bass/Mid/Treble -> tone stack,
  * Pres -> Presence. The per-channel Gain/Vol + Deep/Tone Shift sit at musical
- * defaults (_static) and stay editable by hand.
+ * defaults (_static) and stay editable by hand. CAB SIM is a temporary bundled
+ * cab voicing; the host can set it to 0 when an external cab/IR is present.
  */
 enum Dsl15ParamId
 {
@@ -36,25 +37,26 @@ enum Dsl15ParamId
     kTreble,         // tone stack TREBLE                   [RS Treble]
     kDeep,           // DEEP low-end resonance switch  Off(0)/On(1)
     kToneShift,      // TONE SHIFT mid-scoop switch     Off(0)/On(1)
+    kCabSim,         // temporary internal cab filter        [host]
     kParamCount
 };
 
 static const char* const kDsl15Names[kParamCount] = {
     "Channel", "Classic Gain", "Classic Volume",
     "Ultra Gain", "Ultra Volume", "Presence",
-    "Bass", "Middle", "Treble", "Deep", "Tone Shift",
+    "Bass", "Middle", "Treble", "Deep", "Tone Shift", "Cab Sim",
 };
 
 static const char* const kDsl15Symbols[kParamCount] = {
     "channel", "classicgain", "classicvolume",
     "ultragain", "ultravolume", "presence",
-    "bass", "middle", "treble", "deep", "toneshift",
+    "bass", "middle", "treble", "deep", "toneshift", "cab_sim",
 };
 
 static const float kDsl15Min[kParamCount] = {
-    0,0,0, 0,0,0, 0,0,0, 0,0 };
+    0,0,0, 0,0,0, 0,0,0, 0,0,0 };
 static const float kDsl15Max[kParamCount] = {
-    1,1,1, 1,1,1, 1,1,1, 1,1 };
+    1,1,1, 1,1,1, 1,1,1, 1,1,1 };
 // Manual-insert defaults: Ultra channel (the DSL15 lead voice), moderate gain;
 // Classic set to a usable edge-of-crunch; tone stack centred-ish; Deep/Tone
 // Shift off.
@@ -65,6 +67,7 @@ static const float kDsl15Def[kParamCount] = {
     0.50f,            // Presence
     0.50f, 0.50f, 0.60f, // Bass, Middle, Treble
     0.00f, 0.00f,     // Deep off, Tone Shift off
+    1.00f,            // Cab Sim on until host external cab/IR bypass
 };
 
 #endif // DSL15_PARAMS_H

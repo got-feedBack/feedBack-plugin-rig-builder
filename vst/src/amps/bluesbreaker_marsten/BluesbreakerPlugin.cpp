@@ -3,32 +3,58 @@
  * Amp_Marshall1962Bluesbreaker. Parody brand "Marsten" (same as the Plexi /
  * DSL100 / JCM800); the in-app face must never read "Marshall".
  *
- * Local reference (modelled component-by-component):
+ * CIRCUIT-REAL DSP (schematic-first), built component-by-component off:
  *   amps/Marshall Bluesbreaker/Marshall_bluesbreaker_reissue_45w_1962.pdf
- *   (1962 Reissue "Valve Tremolo Combo" preamp + power + tremolo schematics)
+ *   ("1962 STD Reissue Valve Tremolo Combo", PCB JMP44A).
  *
- * The 1962 is a JTM45 with a power-amp TREMOLO. Two Loudness (Volume I/II) pots
- * ARE the gain (non-master). Bassman 5F6-A -> JTM45 -> 1962 lineage: the
- * Marshall TMB tone stack with the JTM45 values (Treble 220K / Bass 1M /
- * Middle 22K, 56K slope, 220pF treble cap) into a warm, sag-y 2x 5881/KT66
- * (~30W combo) power amp with a GZ34 rectifier. PRESENCE taps the power-amp
- * NFB. The TREMOLO (V6 phase-shift LFO + J174 FET) amplitude-modulates the
- * output: SPEED = rate (~2..8 Hz), INTENSITY = depth (0 = OFF).
+ * The 1962 is the JTM45 circuit in a 2x12 combo + a power-amp TREMOLO. Lineage:
+ * Bassman 5F6-A -> JTM45 -> 1962, so the gain-staging MIRRORS the tw40 (Bender
+ * Bassman) build verbatim, adapted only for the real 1962 differences found on
+ * the schematic.
+ *
+ * REAL stages modelled (Notes box: V1-3,6 = ECC83; V4,V5 = 5881/6L6 family; V7 = GZ34):
+ *   V1a (ECC83)  Ch II input gain stage  (R12 68k grid stop, 1M+68k leak,
+ *                plate R31 150k, shared cathode R10 820R // C3 330uF = fully
+ *                bypassed -> max gain). -> rbtube::TubeStage (12AX7).
+ *   V1b (ECC83)  Ch I  input gain stage  (R14/R13 68k, same shared cathode).
+ *                -> rbtube::TubeStage (12AX7).
+ *     Volume I = VR2 A1M (Ch I), Volume II = VR1 A1M (Ch II), 220p bright caps
+ *     C5/C6 + 100p across the pots (the bright-cap shelves).
+ *   V2a (ECC83)  recovery / mixer stage  (plate R32 100k, mix R15 1k / R19 100k).
+ *   V2b (ECC83)  cathode follower into the tone stack.
+ *                Both folded into one rbtube::TubeStage recovery stage.
+ *   TONE STACK   Marshall FMV/TMB, JTM45 values: Treble VR3 220k (C7 220p),
+ *                Bass VR5 1M (C8 22n / C9 22n), Mid VR4 22k, slope R20 56k.
+ *                -> rbtube::ToneStackYeh (double; 3rd-order float NaNs at 192k).
+ *   V3 (ECC83)   long-tail-pair phase inverter (R23 470R tail, R22/R24 1M,
+ *                plates R33 82k / R34 100k, C14 47p).
+ *   V4 + V5      2x 5881 push-pull, class AB, ~30W combo. GZ34 rectifier
+ *                (warm, sag-y). Global NFB R25 27k from the 16ohm tap. Screen
+ *                470R 5W. -> rbtube::PowerAmp5881 (sag + OT band-pass).
+ *   PRESENCE     VR6 4k7 taps the NFB loop -> presence high-shelf (NFB-approx).
+ *   TREMOLO      V6 (ECC83) phase-shift LFO + J174 FET amplitude-modulates the
+ *                power-amp output. SPEED = VR8 1M (rate), INTENSITY = VR7 220k
+ *                (depth, 0 = OFF). Deterministic per-sample phase accumulator.
  *
  * the game: no gain knob, so RS Gain -> LOUDNESS 1 (clean->crunch->roar);
  * Treble/Bass/Mid -> tone stack, Pres -> Presence. Tremolo off by default
- * (Intensity 0). See rs_knob_to_vst_param.json (Loudness 2 pinned to a musical
- * jumpered blend via _static; Speed/Intensity editable by hand).
+ * (Intensity 0). Cab Sim stays on until the host supplies a cabinet/IR.
+ * See rs_knob_to_vst_param.json.
+ *
+ * Runs ONE mono core at 2x oversampling (rbshared::Oversampler4x, OS=2) with a
+ * dual-mono output (the amp IS a mono device) - matches tw40/en30/tw26.
  */
 #include "DistrhoPlugin.hpp"
 #include "BluesbreakerParams.h"
+#include "../../_shared/tube_stage.hpp"   // real 12AX7 / 6L6 circuit models + Yeh tone stack
+#include "../../_shared/oversampler.hpp"  // 2x anti-alias around the nonlinear chain
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
 
-// RB loudness/headroom output stage (shared across all amps): kLvl matches the
-// amp to the common multitone loudness; the soft knee is transparent below
-// +/-0.90 and saturates to a +/-0.99 ceiling so EQ boosts never hard-clip.
+// RB loudness/headroom output stage (shared across all amps): the soft knee is
+// transparent below +/-0.90 and saturates to a +/-0.99 ceiling so EQ boosts
+// never hard-clip. See AMP_LOUDNESS.md.
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
 
@@ -61,24 +87,6 @@ static inline float smoothstepRange(float edge0, float edge1, float x)
 static inline float softClip(float x)
 {
     return std::tanh(x);
-}
-
-static inline float asymTube(float x, float drive, float bias)
-{
-    const float pushed = x * drive + bias;
-    const float y = std::tanh(pushed);
-    const float correction = std::tanh(bias);
-    return (y - correction) / (1.0f - 0.32f * std::fabs(correction));
-}
-
-static inline float tonePot(float v)
-{
-    v = clamp01(v);
-    if (v < 0.001f)
-        return 0.001f;
-    if (v > 0.999f)
-        return 0.999f;
-    return v;
 }
 
 class Biquad
@@ -185,95 +193,6 @@ public:
     }
 };
 
-// The Marshall passive tone stack with the JTM45 / 1962 component values off
-// the schematic: Treble 220K (VR3), Bass 1M (VR5), Middle 22K (VR4), slope R
-// 56K (R20), C 220pF (C7) / 22nF (C8) / 22nF (C9). (Same FMV topology as the
-// Bassman/Plexi, but the JTM45 values: 220pF treble cap + 56K slope = a warmer,
-// less aggressive top than the 1959SLP's 500pF/33K.)
-class BluesbreakerToneStack
-{
-    float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, b3 = 0.0f;
-    float a1 = 0.0f, a2 = 0.0f, a3 = 0.0f;
-    float x1 = 0.0f, x2 = 0.0f, x3 = 0.0f, y1 = 0.0f, y2 = 0.0f, y3 = 0.0f;
-    float sampleRate = 48000.0f;
-
-public:
-    void reset() { x1 = x2 = x3 = y1 = y2 = y3 = 0.0f; }
-    void setSampleRate(float sr) { sampleRate = sr > 1000.0f ? sr : 48000.0f; }
-
-    void update(float treble, float mid, float bass)
-    {
-        const float t = tonePot(treble);
-        const float m = tonePot(mid);
-        const float l = tonePot(bass);
-
-        const float R1 = 220.0e3f;   // Treble pot  (VR3 B220k)
-        const float R2 = 1.0e6f;     // Bass pot    (VR5 A1M)
-        const float R3 = 22.0e3f;    // Middle pot  (VR4 B22k)
-        const float R4 = 56.0e3f;    // slope resistor (R20 56k)
-        const float C1 = 220.0e-12f; // Treble cap  (C7 220pF)
-        const float C2 = 22.0e-9f;   // Bass cap    (C8 22n)
-        const float C3 = 22.0e-9f;   // Middle cap  (C9 22n)
-
-        const float ab0 = 0.0f;
-        const float ab1 = t*C1*R1 + m*C3*R3 + l*(C1*R2 + C2*R2) + (C1*R3 + C2*R3);
-        const float ab2 = t*(C1*C2*R1*R4 + C1*C3*R1*R4)
-                        - m*m*(C1*C3*R3*R3 + C2*C3*R3*R3)
-                        + m*(C1*C3*R1*R3 + C1*C3*R3*R3 + C2*C3*R3*R3)
-                        + l*(C1*C2*R1*R2 + C1*C2*R2*R4 + C1*C3*R2*R4)
-                        + l*m*(C1*C3*R2*R3 + C2*C3*R2*R3)
-                        + (C1*C2*R1*R3 + C1*C2*R3*R4 + C1*C3*R3*R4);
-        const float ab3 = l*m*(C1*C2*C3*R1*R2*R3 + C1*C2*C3*R2*R3*R4)
-                        - m*m*(C1*C2*C3*R1*R3*R3 + C1*C2*C3*R3*R3*R4)
-                        + m*(C1*C2*C3*R1*R3*R3 + C1*C2*C3*R3*R3*R4)
-                        + t*C1*C2*C3*R1*R3*R4 - t*m*C1*C2*C3*R1*R3*R4
-                        + t*l*C1*C2*C3*R1*R2*R4;
-        const float aa0 = 1.0f;
-        const float aa1 = (C1*R1 + C1*R3 + C2*R3 + C2*R4 + C3*R4)
-                        + m*C3*R3 + l*(C1*R2 + C2*R2);
-        const float aa2 = m*(C1*C3*R1*R3 - C2*C3*R3*R4 + C1*C3*R3*R3 + C2*C3*R3*R3)
-                        - m*m*(C1*C3*R3*R3 + C2*C3*R3*R3)
-                        + l*m*(C1*C3*R2*R3 + C2*C3*R2*R3)
-                        + l*(C1*C2*R2*R4 + C1*C2*R1*R2 + C1*C3*R2*R4 + C2*C3*R2*R4)
-                        + (C1*C2*R1*R4 + C1*C3*R1*R4 + C1*C2*R3*R4
-                           + C1*C2*R1*R3 + C1*C3*R3*R4 + C2*C3*R3*R4);
-        const float aa3 = l*m*(C1*C2*C3*R1*R2*R3 + C1*C2*C3*R2*R3*R4)
-                        - m*m*(C1*C2*C3*R1*R3*R3 + C1*C2*C3*R3*R3*R4)
-                        + m*(C1*C2*C3*R3*R3*R4 + C1*C2*C3*R1*R3*R3
-                             - C1*C2*C3*R1*R3*R4)
-                        + l*(C1*C2*C3*R1*R2*R4) + C1*C2*C3*R1*R3*R4;
-
-        const float c = 2.0f * sampleRate;
-        const float c2 = c * c;
-        const float c3 = c2 * c;
-        const float nb0 = -ab0 - ab1*c - ab2*c2 - ab3*c3;
-        const float nb1 = -3.0f*ab0 - ab1*c + ab2*c2 + 3.0f*ab3*c3;
-        const float nb2 = -3.0f*ab0 + ab1*c + ab2*c2 - 3.0f*ab3*c3;
-        const float nb3 = -ab0 + ab1*c - ab2*c2 + ab3*c3;
-        const float na0 = -aa0 - aa1*c - aa2*c2 - aa3*c3;
-        const float na1 = -3.0f*aa0 - aa1*c + aa2*c2 + 3.0f*aa3*c3;
-        const float na2 = -3.0f*aa0 + aa1*c + aa2*c2 - 3.0f*aa3*c3;
-        const float na3 = -aa0 + aa1*c - aa2*c2 + aa3*c3;
-
-        if (std::fabs(na0) < 1.0e-30f)
-        {
-            b0 = 1.0f; b1 = b2 = b3 = a1 = a2 = a3 = 0.0f;
-            return;
-        }
-        const float invA0 = 1.0f / na0;
-        b0 = nb0 * invA0; b1 = nb1 * invA0; b2 = nb2 * invA0; b3 = nb3 * invA0;
-        a1 = na1 * invA0; a2 = na2 * invA0; a3 = na3 * invA0;
-    }
-
-    float process(float x)
-    {
-        const float y = b0*x + b1*x1 + b2*x2 + b3*x3 - a1*y1 - a2*y2 - a3*y3;
-        x3 = x2; x2 = x1; x1 = x;
-        y3 = y2; y2 = y1; y1 = y;
-        return y;
-    }
-};
-
 class DcBlock
 {
     float x1 = 0.0f;
@@ -304,6 +223,7 @@ class BluesbreakerCore
     float loud1     = kBluesbreakerDef[kLoudness1];
     float loud2     = kBluesbreakerDef[kLoudness2];
     float input     = kBluesbreakerDef[kInput];
+    float cabSim    = kBluesbreakerDef[kCabSim];
 
     // derived: channel gating from the input cable + the loudness-as-gain proxy.
     float brightG = 1.0f, normalG = 1.0f;
@@ -319,7 +239,7 @@ class BluesbreakerCore
     Biquad normalBody;
     Biquad interstageHp;
     Biquad cathodeFollowerLp;
-    BluesbreakerToneStack toneStack;
+    rbtube::ToneStackYeh toneStack;          // Marshall FMV/TMB, JTM45 values (REAL, double)
     Biquad stackMakeupLow;
     Biquad stackMakeupBody;
     Biquad phaseLowPass;
@@ -332,7 +252,19 @@ class BluesbreakerCore
     Biquad speakerLp;
     DcBlock dcBlock;
 
-    float sag = 0.0f;
+    // ── REAL tube stages (Koren circuit models) replacing the tanh asymTube ──
+    rbtube::TubeStage   brightTube, normalTube;  // V1a/V1b ECC83 input stages (per channel)
+    rbtube::TubeStage   recoveryTube;            // V2a/V2b ECC83 recovery/CF into the stack
+    rbtube::Miller12AX7 brightMiller, normalMiller, recoveryMiller;
+    rbtube::CouplingCapGridLeak brightCoupleToRecovery; // V1b -> Volume I -> mixer/V2a
+    rbtube::CouplingCapGridLeak normalCoupleToRecovery; // V1a -> Volume II -> mixer/V2a
+    rbtube::CouplingCapGridLeak coupleToPi;       // V2 -> V3 coupling + grid blocking
+    rbtube::PhaseInverterLTP12AX7 phaseInverter;  // V3 ECC83 long-tail pair
+    rbtube::MultiNodeBPlus supply;                // GZ34 + B+ filter-node sag
+    rbtube::PowerAmp5881 power;                   // V4/V5 2x 5881 push-pull (~30W combo)
+    float lastPowerLoad = 0.0f;
+    float lastScreenLoad = 0.0f;
+    float lastPreampLoad = 0.0f;
 
     static float eqDb(float normalized, float rangeDb)
     {
@@ -351,6 +283,43 @@ class BluesbreakerCore
 
         const float g = smoothstep(effDrive);
         const float pushed = smoothstepRange(0.40f, 0.92f, effDrive);
+
+        // ── real ECC83 (12AX7) / 5881 circuit stages (cathode-biased, self-bias solved) ──
+        // V1 shares one cathode R10 820R // C3 330uF -> fully bypassed (fck ~0.6 Hz)
+        // = the high-gain Marshall input. V2 recovery on its own bypassed cathode.
+        brightTube.set(sampleRate, 1, 250.0f, 40.0f, 3.0f, 820.0f);    // V1b Ch I input (ECC83)
+        normalTube.set(sampleRate, 1, 250.0f, 40.0f, 3.0f, 820.0f);    // V1a Ch II input (ECC83)
+        recoveryTube.set(sampleRate, 1, 250.0f, 40.0f, 55.0f, 1500.0f);// V2 recovery / CF (ECC83)
+        brightMiller.set(sampleRate, 68000.0f, 55.0f, 8.0f);
+        normalMiller.set(sampleRate, 68000.0f, 55.0f, 8.0f);
+        recoveryMiller.set(sampleRate, 180000.0f, 52.0f, 8.0f);
+        // V1 coupling caps, the A1M Loudness pots and the 270k-ish mixer impedance
+        // into V2a. Keeping separate states preserves the jumpered-channel feel.
+        brightCoupleToRecovery.set(sampleRate, 1000000.0f, 22.0e-9f, 270000.0f,
+                                   0.16f, 0.42f, 1.08f);
+        normalCoupleToRecovery.set(sampleRate, 1000000.0f, 22.0e-9f, 270000.0f,
+                                   0.14f, 0.38f, 0.94f);
+        // V2 -> V3 coupling cap into the LTP input grid. The grid-leak recovery is
+        // what gives the 1962 its softer "bloom" when Loudness is high.
+        coupleToPi.set(sampleRate, 1000000.0f, 22.0e-9f, 100000.0f,
+                       0.18f, 0.35f, 0.90f);
+        phaseInverter.setMarshall(sampleRate, 0.95f + 1.45f * effDrive + 0.70f * pushed, 0.88f);
+        // GZ34 + Marshall 45W/JTM45-family filter chain: moderate reservoir,
+        // screen/PI node and slower preamp node. This replaces a single sag scalar
+        // with node-dependent compression.
+        supply.set(sampleRate,
+                   115.0f, 32.0f,
+                   8200.0f, 32.0f,
+                   10000.0f, 16.0f,
+                   0.21f + 0.08f * pushed,
+                   0.15f + 0.06f * pushed,
+                   0.08f + 0.03f * effDrive,
+                   0.20f);
+        // 2x 5881 push-pull, FIXED bias (cold class-AB ~-45V). Global NFB is
+        // approximated by the presence shelf after the power/OT model.
+        power.set(sampleRate, 5.2f + 8.0f * effDrive + 10.0f * pushed, -45.0f, 0.24f, 50.0f, 11000.0f);
+        power.out = 0.010f;
+
         // 220p bright caps (C5/C6) bleed treble across Volume I/II, most at low
         // settings; plus base sparkle from Treble/Presence (Marshall is bright,
         // but the JTM45 is warmer than the plexi -> a touch less bright).
@@ -367,7 +336,13 @@ class BluesbreakerCore
 
         interstageHp.setHighPass(sampleRate, 58.0f + 76.0f * pushed + 38.0f * (1.0f - bass), 0.70f);
         cathodeFollowerLp.setLowPass(sampleRate, 8800.0f + 1600.0f * treble - 1400.0f * pushed, 0.64f);
-        toneStack.update(treble, mid, bass);
+        // Marshall FMV/TMB tone stack, JTM45 / 1962 component values off the
+        // schematic: Treble VR3 220k (C7 220p), Bass VR5 1M (C8 22n), Mid VR4 22k
+        // (C9 22n), slope R20 56k. (220pF treble cap + 56k slope = warmer, less
+        // aggressive top than the 1959SLP plexi's 500pF/33k.)
+        toneStack.setComponents(220.0e3, 1.0e6, 22.0e3, 56.0e3,
+                                220.0e-12, 22.0e-9, 22.0e-9);
+        toneStack.update(sampleRate, treble, mid, bass);
         stackMakeupLow.setLowShelf(sampleRate, 120.0f + 30.0f * bass, 0.72f,
                                    eqDb(bass, 4.6f) - 1.2f * pushed);
         stackMakeupBody.setPeaking(sampleRate, 520.0f + 180.0f * mid, 0.66f,
@@ -386,10 +361,13 @@ class BluesbreakerCore
                                  0.8f + 1.9f * mid - 0.7f * pushed);
         speakerBite.setPeaking(sampleRate, 2650.0f + 480.0f * treble, 0.74f,
                                2.5f + 2.0f * treble + 1.0f * pres - 0.5f * pushed);   // the Marshall crunch bite
+        // Cab top: a real combo 2x12 ATTENUATES the extreme top (negative shelf +
+        // LP), it does NOT add fizz. (Keeps the crest honest -- a positive fizz
+        // shelf inflates crest without distorting.)
         speakerFizzNotch.setHighShelf(sampleRate, 4700.0f, 0.70f,
-                                      9.5f + 2.0f * treble + 2.0f * pres - 4.5f * pushed);
-        speakerLp.setLowPass(sampleRate, 14500.0f + 1900.0f * treble + 850.0f * pres
-                                         - 3500.0f * pushed, 0.66f);
+                                      -2.0f + 1.5f * treble + 1.0f * pres - 3.5f * pushed);
+        speakerLp.setLowPass(sampleRate, 12500.0f + 1500.0f * treble + 700.0f * pres
+                                         - 3000.0f * pushed, 0.66f);
     }
 
 public:
@@ -403,15 +381,18 @@ public:
         speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset();
         speakerBite.reset(); speakerFizzNotch.reset(); speakerLp.reset();
         dcBlock.reset();
-        sag = 0.0f;
         tremPhase = 0.0f;
+        brightMiller.reset(); normalMiller.reset(); recoveryMiller.reset();
+        brightTube.reset(); normalTube.reset(); recoveryTube.reset();
+        brightCoupleToRecovery.reset(); normalCoupleToRecovery.reset();
+        coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset();
+        lastPowerLoad = lastScreenLoad = lastPreampLoad = 0.0f;
         updateFilters();
     }
 
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
-        toneStack.setSampleRate(sampleRate);
         reset();
     }
 
@@ -429,6 +410,7 @@ public:
             case kLoudness1: loud1 = v; break;
             case kLoudness2: loud2 = v; break;
             case kInput:     input = v; break;
+            case kCabSim:    cabSim = v; break;
             default: break;
         }
         updateFilters();
@@ -442,60 +424,58 @@ public:
 
     float process(float in)
     {
-        const float g = smoothstep(effDrive);
         const float pushed = smoothstepRange(0.40f, 0.92f, effDrive);
+        const rbtube::SupplyScales bplus =
+            supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
 
         float x = inputHp.process(in);
         x = pickupLoad.process(x);
         x = softClip(x * (1.05f + 0.10f * pushed)) * (0.95f - 0.04f * pushed);
 
-        // Ch I (bright/lead) channel: 220p bright cap + body, its own ECC83
-        // triode. The JTM45 breaks up a touch earlier and warmer than the plexi.
+        // Ch I (bright/lead): 220p bright cap + body, its own REAL ECC83 (V1b),
+        // driven by Volume I. The JTM45 breaks up a touch earlier/warmer than plexi.
         float bch = brightCapShelf.process(brightBody.process(x));
-        bch = asymTube(bch, 1.05f + 3.10f * effDrive + 2.9f * g, 0.013f + 0.017f * effDrive);
-        // Ch II (normal) channel: darker, its own triode.
+        bch = brightTube.process(brightMiller.process(bch) *
+                                 (1.8f + 11.0f * loud1) * bplus.preamp);
+        bch = brightCoupleToRecovery.process(bch, 0.72f + 3.0f * loud1);
+        // Ch II (normal): darker body, its own REAL ECC83 (V1a), driven by Volume II.
         float nch = normalBody.process(x);
-        nch = asymTube(nch, 0.92f + 2.4f * effDrive + 2.2f * g, 0.010f + 0.014f * effDrive);
+        nch = normalTube.process(normalMiller.process(nch) *
+                                 (1.6f + 9.0f * loud2) * bplus.preamp);
+        nch = normalCoupleToRecovery.process(nch, 0.64f + 2.5f * loud2);
 
         // Jumpered mix: each channel scaled by its Loudness pot, gated by cable.
         float y = brightG * loud1 * bch + normalG * loud2 * 0.92f * nch;
-        // A little clean leak at low drive (the 1962 stays articulate when quiet).
-        const float cleanLeak = 0.32f * (1.0f - smoothstepRange(0.26f, 0.74f, effDrive));
-        y = y * (1.0f - cleanLeak) + x * cleanLeak * (brightG * loud1 + normalG * loud2 * 0.5f);
 
-        // ECC83 recovery / cathode follower into the tone stack — the grind stage.
+        // V2 ECC83 recovery / cathode follower into the tone stack (REAL).
         y = interstageHp.process(y);
-        y = asymTube(y, 0.92f + 1.9f * effDrive + 2.4f * pushed, -0.006f - 0.011f * effDrive);
+        y = recoveryTube.process(recoveryMiller.process(y) *
+                                 (1.0f + 5.5f * effDrive) * bplus.preamp);
         y = cathodeFollowerLp.process(y);
 
         y = toneStack.process(y) * 1.70f;
         y = stackMakeupLow.process(y);
         y = stackMakeupBody.process(y);
         y = phaseLowPass.process(y);
+        y = coupleToPi.process(y, 1.0f + 0.25f * pushed);
+        lastPreampLoad = 0.15f * std::fabs(y) + 0.04f * effDrive;
+        y = phaseInverter.process(y * bplus.preamp);
+        lastPowerLoad = 0.85f * std::fabs(y) + 0.20f * pushed;
+        lastScreenLoad = 0.50f * std::fabs(y) + 0.10f * effDrive;
 
-        // 2x 5881/KT66 push-pull (~30W combo) with a GZ34 rectifier — KT66s are
-        // warm and round; the tube-rectifier sag is more pronounced (and breaks
-        // up earlier) than the 100W EL34 plexi: a softer, bluesier compression.
-        const float env = std::fabs(y);
-        const float attack = 1.0f - std::exp(-1.0f / (0.0060f * sampleRate));
-        const float release = 1.0f - std::exp(-1.0f / (0.150f * sampleRate));   // GZ34: slower recovery
-        sag += (env - sag) * (env > sag ? attack : release);
-        const float sagDrop = 1.0f / (1.0f + sag * (0.50f + 1.05f * effDrive + 0.60f * pushed));
-
-        const float powerDrive = (1.00f + 1.75f * effDrive + 2.7f * pushed) * sagDrop;
-        y = asymTube(y, powerDrive, 0.008f + 0.015f * (treble - bass) + 0.011f * pres);
-        y = 0.83f * y + 0.17f * softClip(y * (1.70f + 1.40f * pushed));
-        y *= 0.97f - 0.10f * sag;   // a touch more sag droop than the plexi
-
+        // V4/V5 2x 5881 push-pull (~30W combo), REAL: pentode table + OT.
+        // The GZ34/filter-node response is injected via the B+ scales above.
+        y = power.process(y * bplus.power * bplus.screen);
         y = presenceShelf.process(y);
         y = dcBlock.process(y);
 
-        y = speakerHp.process(y);
-        y = speakerThump.process(y);
-        y = speakerLowMid.process(y);
-        y = speakerBite.process(y);
-        y = speakerFizzNotch.process(y);
-        y = speakerLp.process(y);
+        float cab = speakerHp.process(y);
+        cab = speakerThump.process(cab);
+        cab = speakerLowMid.process(cab);
+        cab = speakerBite.process(cab);
+        cab = speakerFizzNotch.process(cab);
+        cab = speakerLp.process(cab);
+        y += cabSim * (cab - y);
 
         // POWER-AMP TREMOLO: the V6 phase-shift LFO + J174 FET amplitude-
         // modulates the output. SPEED -> rate (~2.0..7.5 Hz), INTENSITY ->
@@ -506,43 +486,40 @@ public:
             const float rateHz = 2.0f + 5.5f * clamp01(speed);
             tremPhase += 2.0f * kPi * rateHz / sampleRate;
             if (tremPhase >= 2.0f * kPi) tremPhase -= 2.0f * kPi;
-            // depth: 0 -> unity, 1 -> dips to ~0.25 (vintage tube trem isn't
-            // a full chop). lfo in [0,1], 1 at the peak.
+            // depth: 0 -> unity, 1 -> dips to ~0.25 (vintage tube trem isn't a
+            // full chop). lfo in [0,1], 1 at the peak.
             const float lfo = 0.5f * (1.0f + std::sin(tremPhase));
             const float depth = 0.75f * smoothstep(intensity);
             const float trem = 1.0f - depth * (1.0f - lfo);
             y *= trem;
         }
 
-        // Loudness normalization: the Loudness-as-gain means a low setting is much
-        // quieter than a cranked one. cleanMakeup lifts the quiet end so the RS
-        // Gain (-> Loudness 1) sweep stays within a couple dB and the shared kLvl
-        // stage stays calibrated (~-14 dBFS reference). (Tremolo off here.)
+        // Loudness normalization (NO cleanMakeup -- it inverts the crest curve by
+        // pushing the clean tone into the output softClip). A gentle level law +
+        // the shared final softClip (OT clip) keeps the RS Gain (-> Loudness 1)
+        // sweep musical without faking distortion.
         const float toneEnergy = 1.0f
             + 0.011f * std::fabs((bass - 0.5f) * 15.0f)
             + 0.012f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.012f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.010f * std::fabs((pres - 0.5f) * 16.0f);
-        const float cleanMakeup = 1.0f + 13.0f * std::exp(-effDrive / 0.205f);
-        const float level = (0.560f + 0.15f * (1.0f - effDrive)) * cleanMakeup /
-            ((1.0f + 0.30f * effDrive + 0.16f * pushed) * toneEnergy);
+        const float level = (0.72f + 0.14f * (1.0f - effDrive)) /
+            ((1.0f + 0.28f * effDrive + 0.32f * pushed) * toneEnergy);
         return softClip(y * level) * 0.97f;
     }
 };
 
 class BluesbreakerPlugin : public Plugin
 {
-    BluesbreakerCore left;
-    BluesbreakerCore right;
+    BluesbreakerCore core;
     float params[kParamCount];
+    rbshared::Oversampler4x os;                 // anti-alias around the nonlinear chain
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
 
     void applyAll()
     {
         for (int i = 0; i < kParamCount; ++i)
-        {
-            left.setParam(i, params[i]);
-            right.setParam(i, params[i]);
-        }
+            core.setParam(i, params[i]);
     }
 
 public:
@@ -551,8 +528,7 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kBluesbreakerDef[i];
-        left.setSampleRate((float)getSampleRate());
-        right.setSampleRate((float)getSampleRate());
+        core.setSampleRate(kOS * (float)getSampleRate());
         applyAll();
     }
 
@@ -586,27 +562,29 @@ protected:
         if (index >= (uint32_t)kParamCount)
             return;
         params[index] = clamp01(value);
-        left.setParam((int)index, params[index]);
-        right.setParam((int)index, params[index]);
+        core.setParam((int)index, params[index]);
     }
 
     void sampleRateChanged(double newSampleRate) override
     {
-        left.setSampleRate((float)newSampleRate);
-        right.setSampleRate((float)newSampleRate);
+        core.setSampleRate(kOS * (float)newSampleRate);
+        os.reset();
         applyAll();
     }
 
     void run(const float** inputs, float** outputs, uint32_t frames) override
     {
-        const float* inL = inputs[0];
-        const float* inR = inputs[1];
+        const float* in0 = inputs[0];
         float* outL = outputs[0];
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = rbAmpLvl(0.560f * left.process(3.2f * inL[i]));
-            outR[i] = rbAmpLvl(0.560f * right.process(3.2f * inR[i]));
+            float ub[kOS];
+            os.upsample(3.2f * in0[i], ub);
+            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.560f * core.process(ub[k]));
+            const float y = os.downsample(ub);
+            outL[i] = y;
+            outR[i] = y;   // dual-mono: one core, same signal both sides = centered/balanced
         }
     }
 

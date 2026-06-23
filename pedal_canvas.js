@@ -974,8 +974,9 @@
   // Big Buzz — Big Muff π-style: brushed-silver box, black logo panel with the
   // red wordmark + π symbol, quimical-harmony parody. RS knob names: Gain0 Tone1.
   P.bigbuzz = { w:320,h:430, knobs:[
-      {id:0,cx:.30,cy:.155,r:.082,style:'davies'},
-      {id:1,cx:.70,cy:.155,r:.082,style:'davies'}],
+      {id:0,cx:.22,cy:.160,r:.070,style:'davies'},
+      {id:1,cx:.50,cy:.160,r:.070,style:'davies'},
+      {id:2,cx:.78,cy:.160,r:.070,style:'davies'}],
     tick:rgb(150,152,158), ptr:rgb(244,244,240),
     draw(d){ const {ctx:c,W,H,s}=d; const m=7*s, ink=rgb(40,40,44), red=rgb(196,40,42);
       c.fillStyle=rgb(10,10,12); c.fillRect(0,0,W,H);
@@ -987,9 +988,10 @@
       c.restore();
       rr(c,m,m,W-2*m,H-2*m,12*s); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=2*s; c.stroke();
       // knob labels (RS names) + red LED
-      textSpaced(d,.30*W,.255*H,F.barlow,10,ink,'GAIN',0.6);
-      textSpaced(d,.70*W,.255*H,F.barlow,10,ink,'TONE',0.6);
-      ledDot(d,W*.50,H*.135,true,224,52,46);
+      textSpaced(d,.22*W,.262*H,F.barlow,8.5,ink,'SUSTAIN',0.3);
+      textSpaced(d,.50*W,.262*H,F.barlow,8.5,ink,'TONE',0.3);
+      textSpaced(d,.78*W,.262*H,F.barlow,8.5,ink,'VOLUME',0.3);
+      ledDot(d,W*.86,H*.075,true,224,52,46);
       // black logo panel
       rr(c,W*.085,H*.315,W*.83,H*.42,10*s); c.fillStyle=rgb(18,18,20); c.fill();
       rr(c,W*.085,H*.315,W*.83,H*.42,10*s); c.strokeStyle=rgb(44,44,48); c.lineWidth=1.4*s; c.stroke();
@@ -1311,8 +1313,8 @@
       rr(c,m,m,W-2*m,H-2*m,12*s); c.fillStyle=bg; c.fill();
       rr(c,m,m,W-2*m,H-2*m,12*s); c.strokeStyle='rgba(0,0,0,0.45)'; c.lineWidth=2*s; c.stroke();
       // knob labels (RS names)
-      textSpaced(d,.28*W,.205*H,F.barlow,9,cream,'GAIN',0.4);
-      textSpaced(d,.72*W,.205*H,F.barlow,9,cream,'TONE',0.4);
+      textSpaced(d,.28*W,.205*H,F.barlow,9,cream,'FUZZ',0.4);
+      textSpaced(d,.72*W,.205*H,F.barlow,9,cream,'VOLUME',0.4);
       // 'Master' script + 'Buzz-Tone' shadowed wordmark (parody of Maestro Fuzz-Tone)
       textC(d,.50*W,.315*H,F.ink,40,cream,'Master');
       c.save(); c.translate(.50*W,.420*H); c.transform(1,0,-0.08,1,0,0);
@@ -2569,8 +2571,9 @@
   // mode toggles, gold serif logo, red LED in a chrome bezel, footswitch.
   // Recreated brand-free. Params: Gain0 Tone1.
   P.germaniumdrive = { w:300, h:500, knobs:[
-      {id:0,cx:.32,cy:.250,r:.105,style:'pointer',cap:[230,202,74]},
-      {id:1,cx:.70,cy:.250,r:.105,style:'pointer',cap:[230,202,74]}],
+      {id:0,cx:.22,cy:.250,r:.085,style:'pointer',cap:[230,202,74]},
+      {id:1,cx:.50,cy:.250,r:.085,style:'pointer',cap:[230,202,74]},
+      {id:2,cx:.78,cy:.250,r:.085,style:'pointer',cap:[230,202,74]}],
     tick:rgb(234,238,244), ptr:rgb(36,38,44),
     draw(d){ const {ctx:c,W,H,s}=d; box(d,40,54,132); const gold=rgb(216,178,68), wt=rgb(236,238,244);
       // two gold pinstripe frames (controls section + footswitch section)
@@ -2580,12 +2583,12 @@
       // top I/O legends
       textSpaced(d,.135*W,.062*H,F.barlow,9,gold,'OUT',0.5);
       textSpaced(d,.865*W,.062*H,F.barlow,9,gold,'IN',0.5);
-      // scale numbers ('goes to 11' nod on the left knob)
-      textC(d,.455*W,.150*H,F.barlow,8.5,wt,'11');
-      textC(d,.79*W,.150*H,F.barlow,8.5,wt,'5');
+      // 'goes to 11' nod above the Gain knob
+      textC(d,.30*W,.168*H,F.barlow,8,wt,'11');
       // gold italic knob labels
-      textC(d,.32*W,.392*H,F.crete,17,gold,'Gain');
-      textC(d,.70*W,.392*H,F.crete,17,gold,'Tone');
+      textC(d,.22*W,.392*H,F.crete,15,gold,'Gain');
+      textC(d,.50*W,.392*H,F.crete,15,gold,'Level');
+      textC(d,.78*W,.392*H,F.crete,15,gold,'Voltage');
       // two decorative 3-way mode toggles
       const tog=(tx,ty)=>{ const w0=11*s,h0=25*s;
         rr(c,tx-w0/2,ty-h0/2,w0,h0,4*s); c.fillStyle=rgb(18,20,28); c.fill();
@@ -4286,19 +4289,19 @@
       rr(c,.86*W,sy2-.04*H,.075*W,.08*H,3); c.strokeStyle=rgb(70,72,72); c.lineWidth=1; c.stroke();
       textC(d,.8975*W,sy2+.004*H,F.barlow,7,dim,'ECHO CANCEL'); } };
 
-  // ── BOX DC30 — Vox AC30 Top Boost (head) parody. Black tolex + gold piping,
+  // ── BOX AC30 — Vox AC30 Top Boost (head) parody. Black tolex + gold piping,
   // 3 louver vents, diamond handle, MAROON control panel. The 6 the game
   // knobs (Gain/Treble/Bass/Mid/Pres/Bright) wear the real panel names
   // (Volume/Treble/Bass/Mid/Tone Cut/Bright). INPUTS jacks + STANDBY/POWER
-  // toggles + 'A BOX PRODUCT'. Brand VOX->BOX, AC30->DC30.
-  // ── BOX DC30 (Vox AC30C2, Custom series) — full front panel, 1:1 with the
+  // toggles + 'A BOX PRODUCT'. Brand VOX->BOX, model kept as AC30.
+  // ── BOX AC30 (Vox AC30C2, Custom series) — full front panel, 1:1 with the
   //    real amp (modelled from Vox_ac30c2.pdf). 10 knobs; the AC30 has NO Bright
   //    / Mid / EQ control (Standby + Power are real but non-audio). the game is
   //    bridged via rs_knob_to_vst_param.json (Gain→TB Vol, Treble→Treble,
   //    Bass→Bass, Pres→Tone Cut inverted; RS Mid/Bright have no AC30 control).
   //    ids: 0 NormalVol 1 TBVol 2 Treble 3 Bass 4 RevTone 5 RevLevel
   //    6 Speed 7 Depth 8 ToneCut 9 Master.
-  P.boxdc30 = { w:1400, h:560, ptr:rgb(240,237,230),
+  P.boxac30 = { w:1400, h:560, ptr:rgb(240,237,230),
     knobs:[
       {id:0,cx:.140,cy:.738,r:.019,style:'vox'},   // NORMAL VOLUME
       {id:1,cx:.210,cy:.738,r:.019,style:'vox'},   // TOP BOOST VOLUME (RS Gain)
@@ -4857,9 +4860,10 @@
 
   // ── MARSTEN PLEXI (Marshall 1959 Super Lead 100W) — black tolex head, gold
   //    control panel, "Marsten" gold script. Non-master amp: the Loudness pots
-  //    ARE the gain. 6 knobs: 0 Presence 1 Bass 2 Middle 3 Treble 4 Loudness I
-  //    5 Loudness II. Pilot jewel + Power/Standby are decorative. RS: Gain->
-  //    Loudness I, Bass/Mid/Treble->stack, Pres->Presence.
+  //    ARE the gain. 6 visible knobs: 0 Presence 1 Bass 2 Middle 3 Treble
+  //    4 Loudness I 5 Loudness II. Cab Sim is a host/static param, not drawn.
+  //    Pilot jewel + Power/Standby are decorative. RS: Gain->Loudness I,
+  //    Bass/Mid/Treble->stack, Pres->Presence.
   P.plexi = { w:1560, h:600, ptr:rgb(244,242,236),
     knobs:[
       {id:0,cx:.310,cy:.770,r:.020,style:'pointer',cap:[24,22,22]},  // PRESENCE

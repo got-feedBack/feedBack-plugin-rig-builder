@@ -29,23 +29,24 @@ enum TW26ParamId
     kBright,      // Instrument bright input (1 bright/2 normal)  [RS Bright]
     kBass,        // hidden low shelf (no 5E3 bass pot)   [RS Bass]
     kPresence,    // hidden power-amp top lift (no 5E3 pot) [RS Pres]
+    kCabSim,      // fallback 1x12 tweed speaker voice
     kParamCount
 };
 
 static const char* const kTW26Names[kParamCount] = {
-    "Tone", "Inst Vol", "Mic Vol", "Bright", "Bass", "Presence",
+    "Tone", "Inst Vol", "Mic Vol", "Bright", "Bass", "Presence", "Cab Sim",
 };
 
 static const char* const kTW26Symbols[kParamCount] = {
-    "tone", "instvol", "micvol", "bright", "bass", "presence",
+    "tone", "instvol", "micvol", "bright", "bass", "presence", "cabsim",
 };
 
-static const float kTW26Min[kParamCount] = { 0,0,0,0,0,0 };
-static const float kTW26Max[kParamCount] = { 1,1,1,1,1,1 };
+static const float kTW26Min[kParamCount] = { 0,0,0,0,0,0,0 };
+static const float kTW26Max[kParamCount] = { 1,1,1,1,1,1,1 };
 // Manual-insert defaults: a usable tweed tone — Tone ~6, Instrument volume just
 // into breakup, Mic volume off (no jumper), bright input, neutral Bass/Presence.
 static const float kTW26Def[kParamCount] = {
-    0.60f, 0.45f, 0.00f, 1.00f, 0.50f, 0.50f,
+    0.60f, 0.45f, 0.00f, 1.00f, 0.50f, 0.50f, 1.00f,
 };
 
 #endif // TW26_PARAMS_H

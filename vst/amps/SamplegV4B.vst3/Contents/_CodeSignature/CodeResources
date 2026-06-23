@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/SamplegV4B.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			YOe4ASOEClv99Guy25kO26cXj1URZbC+TKgcqCgiOEU=
+			</data>
+		</dict>
+		<key>x86_64-win/SamplegV4B.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			3Bmsn9LOaEZbxVURGIktPYR9vDF93kqTLETohnq/lsU=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

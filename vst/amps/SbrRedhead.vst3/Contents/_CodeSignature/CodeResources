@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/SbrRedhead.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			F1Zd+RqoY6QlBOLy1MRr5T9+Qup8k+btLQ4QDzUnl4s=
+			</data>
+		</dict>
+		<key>x86_64-win/SbrRedhead.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			UOATniTyjK4KsJPkAO7h2Aw/H7CWX5suUE9ajxr8Z8k=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

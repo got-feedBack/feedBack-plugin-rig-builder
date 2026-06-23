@@ -1,12 +1,12 @@
 /*
- * MR. Y JCM800 - Dr. Z JCM800 (a Marshall JCM800/JTM50-style master-volume head) for
- * the game's Amp_GB50. Parody brand "Marsten"; the in-app face must never read
- * "Dr. Z". Reference: the JCM800 is a JCM800 2204 circuit + a HI/LO gain switch.
+ * MARSTEN JCM800 - Marshall JCM800 2204 master-volume head for the game's
+ * Amp_MarshallJCM800. Parody brand "Marsten"; the in-app face must never read
+ * "Marshall". Reference: official 2204 preamp/power schematics.
  *
  * Cascaded 12AX7 preamp (GAIN pot between the two stages, the JCM800 drive) ->
- * Marshall TMB tone stack -> cathode follower -> MASTER volume -> 2x EL34 (~50W)
- * with a presence NFB. HI = full JCM800 cascade; LO drops gain to JTM50 levels
- * (input divider + lifted 2nd-stage cathode bypass = less low-mid gain).
+ * Marshall TMB tone stack -> cathode follower -> MASTER volume -> 12AX7 long-tail
+ * PI -> 2x EL34 (~50W) with presence NFB, stiff diode supply, reactive OT and a
+ * bypassable fallback 4x12 Cab Sim.
  *
  * RS: Gain -> GAIN, Bass/Mid/Treble -> tone stack, Pres -> Presence. Master +
  * HI/LO pinned via _static.
@@ -30,13 +30,6 @@ static inline float clampFreq(float hz, float sr) { return std::fmax(20.0f, std:
 static inline float smoothstep(float v) { v = clamp01(v); return v * v * (3.0f - 2.0f * v); }
 static inline float smoothstepRange(float e0, float e1, float x) { return smoothstep((x - e0) / (e1 - e0)); }
 static inline float softClip(float x) { return std::tanh(x); }
-static inline float asymTube(float x, float drive, float bias)
-{
-    const float pushed = x * drive + bias;
-    const float y = std::tanh(pushed);
-    const float correction = std::tanh(bias);
-    return (y - correction) / (1.0f - 0.32f * std::fabs(correction));
-}
 static inline float tonePot(float v) { v = clamp01(v); return v < 0.001f ? 0.001f : (v > 0.999f ? 0.999f : v); }
 
 class Biquad
@@ -121,17 +114,22 @@ class Jcm800Core
     float treble = kJcm800Def[kTreble];
     float presence = kJcm800Def[kPresence];
     float volume = kJcm800Def[kVolume];
+    float cabSim = kJcm800Def[kCabSim];
 
     Biquad inputHp, pickupLoad, brightCap, interHp, cathodeLp;
     MarshallToneStack toneStack;
     Biquad stackMakeupLow, phaseLp, presenceShelf;
     Biquad speakerHp, speakerThump, speakerLowMid, speakerBite, speakerFizz, speakerLp;
     DcBlock dcBlock;
-    float sag = 0.0f;
 
     // ── REAL tube stages (Koren circuit models) replacing the tanh asymTube ──
     rbtube::TubeStage v1a, v1b, v2;     // 3x 12AX7 cascade (V1a -> GAIN -> V1b -> V2)
+    rbtube::Miller12AX7 v1aMiller, v1bMiller, v2Miller;
+    rbtube::CouplingCapGridLeak coupleGainToV1b, coupleV1bToV2, coupleToPi;
+    rbtube::PhaseInverterLTP12AX7 phaseInverter;
+    rbtube::MultiNodeBPlus supply;
     rbtube::PowerAmpEL34 power;          // 2x EL34 push-pull (~50W)
+    float lastPowerLoad = 0.0f, lastScreenLoad = 0.0f, lastPreampLoad = 0.0f;
 
     void updateFilters()
     {
@@ -143,8 +141,27 @@ class Jcm800Core
         v1a.set(sampleRate, 1, 250.0f, 40.0f, 25.0f, 1500.0f);
         v1b.set(sampleRate, 1, 250.0f, 40.0f, 25.0f, 1500.0f);
         v2.set(sampleRate, 1, 250.0f, 40.0f, 55.0f, 1500.0f);
-        // 2x EL34 (~50W), fixed bias (~-40V), NFB approximated by presence; Master drives it
-        power.set(sampleRate, 4.0f + 9.0f * mPush + 6.0f * pushed, -40.0f, 0.30f, 50.0f, 11000.0f);
+        v1aMiller.set(sampleRate,  68000.0f, 55.0f, 8.0f);
+        v1bMiller.set(sampleRate, 220000.0f, 52.0f, 8.0f);
+        v2Miller.set(sampleRate,  180000.0f, 52.0f, 8.0f);
+        // 2204 cascade coupling: V1a -> gain pot -> V1b, then V1b -> V2.
+        // These caps/grid leaks now charge under positive-grid drive instead of
+        // behaving as ideal high-pass filters, so hard palm-mutes recover like a
+        // real master-volume Marshall.
+        coupleGainToV1b.set(sampleRate, 1000000.0f, 22.0e-9f, 220000.0f, 0.13f, 0.52f, 1.55f);
+        coupleV1bToV2.set(sampleRate,   470000.0f, 22.0e-9f, 180000.0f, 0.13f, 0.54f, 1.65f);
+        coupleToPi.set(sampleRate, 1000000.0f, 22.0e-9f, 100000.0f, 0.20f, 0.30f, 0.75f);
+        phaseInverter.setMarshall(sampleRate, 1.05f + 1.70f * mPush + 0.55f * pushed, 0.88f);
+        supply.set(sampleRate,
+                   45.0f, 100.0f,          // diode rectifier + 50u+50u reservoir
+                   10000.0f, 50.0f,        // screen/PI node
+                   10000.0f, 50.0f,        // preamp dropping node
+                   0.08f + 0.03f * mPush,
+                   0.06f + 0.03f * mPush,
+                   0.04f + 0.02f * pushed,
+                   0.16f);
+        // 2x EL34 (~50W), fixed bias; master/PI drive the output pair.
+        power.set(sampleRate, 6.0f + 10.0f * mPush + 6.5f * pushed, -38.0f, 0.18f, 50.0f, 12500.0f);
         power.out = 0.011f;
 
         inputHp.setHighPass(sampleRate, 30.0f + 18.0f * g, 0.70f);
@@ -177,8 +194,11 @@ public:
         inputHp.reset(); pickupLoad.reset(); brightCap.reset(); interHp.reset(); cathodeLp.reset();
         toneStack.reset(); stackMakeupLow.reset(); phaseLp.reset(); presenceShelf.reset();
         speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset(); speakerBite.reset(); speakerFizz.reset(); speakerLp.reset();
-        dcBlock.reset(); sag = 0.0f;
-        v1a.reset(); v1b.reset(); v2.reset(); power.reset();
+        dcBlock.reset();
+        v1aMiller.reset(); v1bMiller.reset(); v2Miller.reset();
+        coupleGainToV1b.reset(); coupleV1bToV2.reset(); coupleToPi.reset();
+        v1a.reset(); v1b.reset(); v2.reset(); phaseInverter.reset(); supply.reset(); power.reset();
+        lastPowerLoad = lastScreenLoad = lastPreampLoad = 0.0f;
         updateFilters();
     }
     void setSampleRate(float sr) { sampleRate = sr > 1000.0f ? sr : 48000.0f; toneStack.setSampleRate(sampleRate); reset(); }
@@ -188,7 +208,8 @@ public:
         v = clamp01(v);
         switch (idx) {
             case kGain: gain=v; break; case kBass: bass=v; break; case kMiddle: mid=v; break;
-            case kTreble: treble=v; break; case kPresence: presence=v; break; case kVolume: volume=v; break; default: break;
+            case kTreble: treble=v; break; case kPresence: presence=v; break; case kVolume: volume=v; break;
+            case kCabSim: cabSim=v; break; default: break;
         }
         updateFilters();
     }
@@ -196,42 +217,50 @@ public:
 
     float process(float in)
     {
-        const float g = smoothstep(gain);
-        const float pushed = smoothstepRange(0.40f, 0.92f, gain);
         const float mPush = smoothstep(volume);
+        const rbtube::SupplyScales bplus = supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
 
         float x = inputHp.process(in);
         x = pickupLoad.process(x);
         x = brightCap.process(x);
         // V1a: first gain stage (REAL 12AX7, ~clean — the 2204 GAIN pot is AFTER V1a)
-        float y = v1a.process(x * 1.0f);
+        float y = v1a.process(v1aMiller.process(x) * bplus.preamp);
         // GAIN pot -> V1b cascade (the JCM800 drive) -> V2 (REAL 12AX7). The drive
         // span is wide so the amp cleans up below ~3 and slams hard at 10.
-        y = v1b.process(y * (0.55f + 10.0f * gain));
+        y = coupleGainToV1b.process(y, 0.55f + 16.0f * gain);
+        y = v1b.process(v1bMiller.process(y) * bplus.preamp);
         y = interHp.process(y);
-        y = v2.process(y * (0.65f + 6.5f * gain));
+        y = coupleV1bToV2.process(y, 0.65f + 10.0f * gain);
+        y = v2.process(v2Miller.process(y) * bplus.preamp);
         y = cathodeLp.process(y);
 
         // Marshall tone stack + cathode follower makeup
         y = toneStack.process(y) * 2.0f;
         y = stackMakeupLow.process(y);
 
-        // MASTER volume into the power amp
+        // MASTER volume into the LTP/power amp
         y *= 0.22f + 1.30f * volume;
-
-        // 2x EL34 (~50W) — REAL pentode table + own sag/OT (Master drove it via power.set)
-        y = power.process(y);
-
         y = phaseLp.process(y);
+
+        y = coupleToPi.process(y, 1.0f);
+        lastPreampLoad = std::fabs(y) * (0.20f + 0.55f * gain);
+        y = phaseInverter.process(y * bplus.screen);
+        lastScreenLoad = std::fabs(y) * (0.35f + 0.60f * mPush);
+
+        // 2x EL34 (~50W) — real pentode table + supply/screen interaction.
+        y = power.process(y * bplus.power * bplus.screen);
+        lastPowerLoad = std::fabs(y) * (0.55f + 0.80f * mPush);
+
         y = presenceShelf.process(y);
         y = dcBlock.process(y);
 
-        y = speakerHp.process(y);
-        y = speakerThump.process(y);
-        y = speakerLowMid.process(y);
-        y = speakerBite.process(y);
-        y = speakerFizz.process(y);
-        y = speakerLp.process(y);
+        float cab = speakerHp.process(y);
+        cab = speakerThump.process(cab);
+        cab = speakerLowMid.process(cab);
+        cab = speakerBite.process(cab);
+        cab = speakerFizz.process(cab);
+        cab = speakerLp.process(cab);
+        y += cabSim * (cab - y);
 
         const float toneEnergy = 1.0f
             + 0.011f * std::fabs((bass - 0.5f) * 15.0f)

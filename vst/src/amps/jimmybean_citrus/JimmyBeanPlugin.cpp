@@ -106,6 +106,7 @@ class JimmyBeanCore
     float depth   = kJimmyBeanDef[kDepth];
     float channel = kJimmyBeanDef[kChannel];
     float bright  = kJimmyBeanDef[kBright];
+    float cabSim  = kJimmyBeanDef[kCabSim];
 
     Biquad inputHp, inputLp;                  // op-amp preamp band-limit
     BaxandallTone tone;                        // BASS/TREBLE tone amp (no MID)
@@ -176,6 +177,7 @@ public:
             case kDepth:   depth = v;   break;
             case kChannel: channel = v; break;
             case kBright:  bright = v;  break;
+            case kCabSim:  cabSim = v;  break;
             default: break;
         }
         updateFilters();
@@ -225,11 +227,13 @@ public:
 
         y = dcBlock.process(y);
 
-        // small solid-state cab
-        y = speakerHp.process(y);
-        y = speakerThump.process(y);
-        y = speakerBody.process(y);
-        y = speakerLp.process(y);
+        // small solid-state fallback cab (bypassable for external cab/IR)
+        const float ampOnly = y;
+        float cab = speakerHp.process(ampOnly);
+        cab = speakerThump.process(cab);
+        cab = speakerBody.process(cab);
+        cab = speakerLp.process(cab);
+        y = ampOnly + cabSim * (cab - ampOnly);
 
         // VOLUME: master output level (solid-state, mostly clean).
         const float vGain = 0.40f + 1.60f * volume;

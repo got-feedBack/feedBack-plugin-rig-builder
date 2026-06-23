@@ -39,13 +39,6 @@ static inline float clampFreq(float hz, float sr) { return std::fmax(20.0f, std:
 static inline float smoothstep(float v) { v = clamp01(v); return v * v * (3.0f - 2.0f * v); }
 static inline float smoothstepRange(float e0, float e1, float x) { return smoothstep((x - e0) / (e1 - e0)); }
 static inline float softClip(float x) { return std::tanh(x); }
-static inline float asymTube(float x, float drive, float bias)
-{
-    const float pushed = x * drive + bias;
-    const float y = std::tanh(pushed);
-    const float correction = std::tanh(bias);
-    return (y - correction) / (1.0f - 0.32f * std::fabs(correction));
-}
 static inline float tonePot(float v) { v = clamp01(v); return v < 0.001f ? 0.001f : (v > 0.999f ? 0.999f : v); }
 
 class Biquad
@@ -132,6 +125,7 @@ class Dr504Core
     float pres   = kDr504Def[kPresence];
     float master = kDr504Def[kMaster];
     float input  = kDr504Def[kInput];
+    float cabSim = kDr504Def[kCabSim];
 
     // derived
     float brightG = 1.0f, normalG = 1.0f;
@@ -145,9 +139,16 @@ class Dr504Core
     DcBlock dcBlock;
     // ── real circuit (Koren tubes) replacing the tanh asymTube ──
     rbtube::TubeStage    vBright, vNormal, vRecovery;   // 12AX7 stages
+    rbtube::Miller12AX7  brightMiller, normalMiller, recoveryMiller;
+    rbtube::CouplingCapGridLeak coupleToPi;              // master -> PI grid
+    rbtube::PhaseInverterLTP12AT7 phaseInverter;         // real ECC81/12AT7 long-tail pair
+    rbtube::MultiNodeBPlus supply;                       // diode rectifier + stiff Hiwatt B+ nodes
     rbtube::PowerAmpEL34 power;                          // 2x EL34 (~50W)
     float inScale = 1.15f, toneMk = 13.0f;
     float sag = 0.0f;
+    float lastPowerLoad = 0.0f;
+    float lastScreenLoad = 0.0f;
+    float lastPreampLoad = 0.0f;
 
     static float eqDb(float v, float r) { return (clamp01(v) - 0.5f) * 2.0f * r; }
 
@@ -156,6 +157,9 @@ class Dr504Core
         vBright.set(sampleRate, 1, 250.0f, 40.0f, 30.0f, 1500.0f);
         vNormal.set(sampleRate, 1, 250.0f, 40.0f, 22.0f, 1500.0f);
         vRecovery.set(sampleRate, 1, 250.0f, 40.0f, 40.0f, 1500.0f);
+        brightMiller.set(sampleRate, 68000.0f, 55.0f, 8.0f);
+        normalMiller.set(sampleRate, 68000.0f, 55.0f, 8.0f);
+        recoveryMiller.set(sampleRate, 180000.0f, 52.0f, 8.0f);
     }
 
     void updateFilters()
@@ -199,7 +203,20 @@ class Dr504Core
         // 2x EL34 (~50W) — slightly less headroom than the DR103 (a touch more sag/
         // drive) but still the high-headroom Hiwatt; breaks up when the Master is up.
         const float mPush = smoothstep(master);
-        power.set(sampleRate, 0.7f + 4.0f * mPush + 1.8f * pushed, -42.0f, 0.14f, 50.0f, 12000.0f);
+        coupleToPi.set(sampleRate, 1000000.0f, 22.0e-9f, 100000.0f,
+                       0.16f, 0.28f, 0.75f);
+        // Hiwatt uses an ECC81/12AT7 LTP with 47k-ish plate loads and minimal imbalance.
+        phaseInverter.setComponents(sampleRate, 0.62f + 1.05f * mPush + 0.35f * pushed, 0.78f,
+                                    310.0f, 47000.0f, 47000.0f, 10000.0f, 18.0f, 0.020f);
+        supply.set(sampleRate,
+                   22.0f, 100.0f,
+                   1000.0f, 50.0f,
+                   10000.0f, 32.0f,
+                   0.07f + 0.03f * pushed,
+                   0.055f + 0.025f * pushed,
+                   0.035f + 0.015f * preDrive,
+                   0.14f);
+        power.set(sampleRate, 1.1f + 5.5f * mPush + 3.2f * pushed, -42.0f, 0.07f, 50.0f, 12000.0f);
         power.out = 0.011f;
     }
 
@@ -211,7 +228,10 @@ public:
         toneStack.reset(); stackMakeupLow.reset(); stackMakeupBody.reset(); phaseLp.reset(); presenceShelf.reset();
         speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset(); speakerBite.reset(); speakerFizz.reset(); speakerLp.reset();
         dcBlock.reset(); sag = 0.0f;
-        toneStack.reset(); vBright.reset(); vNormal.reset(); vRecovery.reset(); power.reset();
+        brightMiller.reset(); normalMiller.reset(); recoveryMiller.reset();
+        toneStack.reset(); vBright.reset(); vNormal.reset(); vRecovery.reset();
+        coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset();
+        lastPowerLoad = lastScreenLoad = lastPreampLoad = 0.0f;
         setupTubes();
         updateFilters();
     }
@@ -231,6 +251,7 @@ public:
             case kPresence:  pres = v; break;
             case kMaster:    master = v; break;
             case kInput:     input = v; break;
+            case kCabSim:    cabSim = v; break;
             default: break;
         }
         updateFilters();
@@ -240,19 +261,23 @@ public:
 
     float process(float in)
     {
+        const rbtube::SupplyScales bplus =
+            supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
         const float pushed = smoothstepRange(0.28f, 0.88f, preDrive);
         const float mPush = smoothstep(master);
 
-        float x = inputHp.process(in * 3.2f);  // VST input boost (engine input-drive does not reach VST amps)
+        float x = inputHp.process(in * 4.5f);  // VST input boost (engine input-drive does not reach VST amps)
         x = pickupLoad.process(x);
         x *= inScale;
 
         // BRILLIANT channel (bright cap + body) + NORMAL channel — real ECC83 V1A/V1B.
         // Gentle drive: the Hiwatt has huge headroom, so it stays clean until cranked.
         float bch = brightCapShelf.process(brightBody.process(x));
-        bch = vBright.process(bch * (0.6f + 4.0f * brightVol));
+        bch = vBright.process(brightMiller.process(bch) *
+                              (0.6f + 14.0f * brightVol) * bplus.preamp);
         float nch = normalBody.process(x);
-        nch = vNormal.process(nch * (0.5f + 3.0f * normalVol));
+        nch = vNormal.process(normalMiller.process(nch) *
+                              (0.5f + 9.0f * normalVol) * bplus.preamp);
 
         // jumpered mix
         float y = brightG * (0.34f + 0.66f * brightVol) * bch
@@ -260,7 +285,8 @@ public:
 
         // recovery (ECC83) into the tone stack
         y = interstageHp.process(y);
-        y = vRecovery.process(y * (0.7f + 2.0f * preDrive));
+        y = vRecovery.process(recoveryMiller.process(y) *
+                              (0.7f + 7.0f * preDrive) * bplus.preamp);
         y = cathodeLp.process(y);
 
         y = toneStack.process(y) * toneMk;
@@ -270,19 +296,26 @@ public:
 
         // MASTER VOLUME into the power amp
         y *= 0.20f + 1.30f * master;
+        y = coupleToPi.process(y, 1.0f + 0.10f * pushed);
+        lastPreampLoad = 0.08f * std::fabs(y) + 0.03f * preDrive;
+        y = phaseInverter.process(y * bplus.screen);
+        lastPowerLoad = 0.65f * std::fabs(y) + 0.12f * pushed;
+        lastScreenLoad = 0.42f * std::fabs(y) + 0.06f * preDrive;
 
-        // 2x EL34 (~50W) — REAL pentode table + own sag/OT (drive set in updateFilters).
-        y = power.process(y);
+        // 2x EL34 (~50W) — REAL pentode table + OT. The stiff Hiwatt supply is
+        // injected through the B+ scales above.
+        y = power.process(y * bplus.power * bplus.screen);
 
         y = presenceShelf.process(y);
         y = dcBlock.process(y);
 
-        y = speakerHp.process(y);
-        y = speakerThump.process(y);
-        y = speakerLowMid.process(y);
-        y = speakerBite.process(y);
-        y = speakerFizz.process(y);
-        y = speakerLp.process(y);
+        float cab = speakerHp.process(y);
+        cab = speakerThump.process(cab);
+        cab = speakerLowMid.process(cab);
+        cab = speakerBite.process(cab);
+        cab = speakerFizz.process(cab);
+        cab = speakerLp.process(cab);
+        y += cabSim * (cab - y);
 
         // Loudness normalization: the channel volumes are the gain (no gain knob),
         // so cleanMakeup keeps the RS Gain (-> Brilliant Vol) sweep ~flat; MASTER

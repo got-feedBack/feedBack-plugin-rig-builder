@@ -204,6 +204,7 @@ class JC90Core
     float rate       = kJC90Def[kRate];
     float depth      = kJC90Def[kDepth];
     float chorusMode = kJC90Def[kChorusMode];
+    float cabSim     = kJC90Def[kCabSim];
 
     Biquad inputHp, inputLp, distPre, distPost;
     Biquad toneBass, toneMid, toneTreble, hiTrebleShelf;
@@ -265,6 +266,7 @@ public:
             case kRate:       rate = v; chorus.setRate(rate); break;
             case kDepth:      depth = v; break;
             case kChorusMode: chorusMode = v; break;
+            case kCabSim:     cabSim = v; break;
             default: break;
         }
         updateFilters();
@@ -306,9 +308,11 @@ public:
         const float vol = 0.30f + 1.10f * volume;
         y *= vol;
 
-        // solid-state combo speaker
-        y = speakerThump.process(y);
-        y = speakerLp.process(y);
+        // solid-state combo fallback speaker (bypassable for external cab/IR)
+        const float ampOnly = y;
+        float cab = speakerThump.process(ampOnly);
+        cab = speakerLp.process(cab);
+        y = ampOnly + cabSim * (cab - ampOnly);
 
         // loudness normalization: keep multitone RMS ~constant vs Distortion +
         // Volume so the shared kLvl stage stays calibrated.

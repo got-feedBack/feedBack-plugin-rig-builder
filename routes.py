@@ -555,7 +555,8 @@ _RENAMED_VST_BUNDLES = {
     "Enbiggenator.vst3":         "MIME.vst3",
     "BassEnbig.vst3":            "ENBIGGEN.vst3",
     "EdenWTDI.vst3":             "WT-DX.vst3",
-    "EN30.vst3":                 "BOX DC30.vst3",
+    "BOX DC30.vst3":             "BOX AC30.vst3",
+    "EN30.vst3":                 "BOX AC30.vst3",
     "TW22.vst3":                 "BENDER SUPERNOVA 22.vst3",
     "TW26.vst3":                 "BENDER DELUXE.vst3",
 }
@@ -5986,6 +5987,98 @@ def _auto_download_for_song(filename: str, path: Path) -> dict:
         return {"ok": True, **counts}
 
 
+# Songs whose seed we've already reconciled this session — bounds
+# `_resync_stale_song_seed` to AT MOST one re-seed attempt per song per
+# run, so a song whose new gear genuinely can't be mapped can never spin
+# in a re-seed loop (check → still "stale" → check → …).
+_resynced_songs: set[str] = set()
+
+
+def _resync_stale_song_seed(song_key: str, path: Path) -> list[str]:
+    """Re-seed tones whose SOURCE gear changed under a stable filename.
+
+    A cloud library rewrites `sloppak_cache/<song>` in place (switching to a
+    different library, re-downloading a corrected chart) while the DLC entry
+    stays a 0-byte stub. The materialization watcher keys on DLC *size*, so it
+    never sees that change and never re-fires; and even if it did,
+    `_auto_download_for_song` skips any tone that already has a mapping. Net
+    effect: the seeded `tone_mappings`/`presets` keep describing the OLD gear,
+    so the song plays a wrong tone (e.g. an acoustic tone whose amp silently
+    became a tweed combo after a library swap).
+
+    Detect per-tone staleness by comparing the AMP gear key — every guitar/bass
+    tone has exactly one, it always resolves to a VST/NAM (so this can't false-
+    positive on an unmappable pedal and loop), and a user VST swap keeps the
+    rs_gear_type while only changing which plugin plays it, so this never fires
+    on a customised tone. When the amp key differs, the seed predates the
+    current sloppak: drop those tones' presets and let `_auto_download_for_song`
+    rebuild them from the live GearList (untouched tones keep their mapping and
+    are skipped, so user edits elsewhere in the song are preserved).
+
+    Returns the tone_keys that were re-seeded (empty when nothing was stale).
+    """
+    if song_key in _resynced_songs:
+        return []
+    if path.suffix.lower() != ".sloppak":
+        _resynced_songs.add(song_key)
+        return []
+    try:
+        raw_tones = _read_tones_from_sloppak(song_key, _get_dlc_dir())
+    except Exception:
+        return []   # transient cache miss — retry on the next open
+    if not raw_tones:
+        return []
+
+    def _amp_key(parsed: dict) -> str | None:
+        for piece in parsed.get("chain") or []:
+            if piece.get("slot") == "amp" and piece.get("type"):
+                return piece["type"]
+        return None
+
+    current_amp: dict[str, str | None] = {}
+    for raw in raw_tones:
+        parsed = _parse_tone(raw)
+        tk = parsed.get("key") or parsed.get("name")
+        if tk:
+            current_amp[tk] = _amp_key(parsed)
+
+    conn = _get_conn()
+    _filt, _args = _tone_mapping_filename_filter(song_key, path)
+    seeded_amp: dict[str, str] = {}
+    preset_by_tone: dict[str, int] = {}
+    for tk, pid, gear in conn.execute(
+        f"SELECT tm.tone_key, tm.preset_id, pp.rs_gear_type "
+        f"FROM tone_mappings tm JOIN preset_pieces pp ON pp.preset_id = tm.preset_id "
+        f"WHERE {_filt} AND pp.slot = 'amp'",
+        _args,
+    ).fetchall():
+        seeded_amp[tk] = gear
+        preset_by_tone[tk] = pid
+
+    # Mark handled now: even if the read/parse above was fine but nothing is
+    # stale, we don't want to re-read the sloppak on every open of this song.
+    _resynced_songs.add(song_key)
+
+    stale = [tk for tk, amp in current_amp.items()
+             if tk in seeded_amp and amp and amp != seeded_amp[tk]]
+    if not stale:
+        return []
+
+    for tk in stale:
+        pid = preset_by_tone[tk]
+        conn.execute("DELETE FROM tone_mappings WHERE preset_id = ?", (pid,))
+        conn.execute("DELETE FROM presets WHERE id = ?", (pid,))   # cascades pieces
+    conn.commit()
+    log.info("rig_builder: re-seeding %d stale tone(s) for %s (amp key changed): %s",
+             len(stale), song_key, stale)
+    try:
+        _auto_download_for_song(song_key, path)
+    except Exception:
+        log.warning("rig_builder: re-seed after stale-amp detection failed for %s",
+                    song_key, exc_info=True)
+    return stale
+
+
 # ── Background materialization watcher ───────────────────────────────
 
 # Polls the DLC dir; when a song flips from a 0-byte cloud stub to real
@@ -7565,6 +7658,23 @@ def setup(app, context):
                 "ORDER BY tm.id ASC",
                 _filename_args,
             ).fetchall()
+
+        # Heal a stale seed before building the chain. A cloud library can
+        # rewrite this song's sloppak (and thus its GearList) in place — a
+        # library swap, a corrected chart — without changing the DLC stub the
+        # watcher keys on, so the seed silently keeps describing the OLD gear
+        # and the song plays a wrong tone. Re-seed any tone whose amp key
+        # drifted so `_lookup` below reads the freshly-rebuilt mapping. Bounded
+        # to one attempt per song per session; never touches tones whose gear
+        # didn't change. Best-effort — a failure here just builds from whatever
+        # is currently seeded (the prior behaviour).
+        try:
+            _song_path = _resolve_song_file(decoded)
+            if _song_path is not None:
+                _resync_stale_song_seed(decoded, _song_path)
+        except Exception:
+            log.warning("rig_builder: stale-seed resync check failed for %r",
+                        decoded, exc_info=True)
 
         mappings = _lookup(decoded)
         if not mappings:

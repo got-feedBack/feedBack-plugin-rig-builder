@@ -36,30 +36,31 @@ enum Vh140ParamId
     kRate,           // CHORUS rate (shared)
     kDepthB,         // CHORUS depth — Channel B
     kDepthA,         // CHORUS depth — Channel A
+    kCabSim,         // fallback solid-state speaker voice
     kParamCount
 };
 
 static const char* const kVh140Names[kParamCount] = {
     "Channel", "B Gain", "B Low", "B Mid", "B High", "B Level",
     "A Gain", "A Low", "A Ultra Mid", "A High", "A Level",
-    "Reverb B", "Reverb A", "Chorus Rate", "Depth B", "Depth A",
+    "Reverb B", "Reverb A", "Chorus Rate", "Depth B", "Depth A", "Cab Sim",
 };
 
 static const char* const kVh140Symbols[kParamCount] = {
     "channel", "bgain", "blow", "bmid", "bhigh", "blevel",
     "again", "alow", "aultramid", "ahigh", "alevel",
-    "reverbb", "reverba", "chorusrate", "depthb", "deptha",
+    "reverbb", "reverba", "chorusrate", "depthb", "deptha", "cabsim",
 };
 
-static const float kVh140Min[kParamCount] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
-static const float kVh140Max[kParamCount] = { 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1 };
+static const float kVh140Min[kParamCount] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+static const float kVh140Max[kParamCount] = { 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1 };
 // Manual-insert defaults: CHANNEL B (the lead voice), a tight high-gain crunch,
 // EQ centred-ish, Level past noon. Reverb + Chorus OFF (turn up by hand). Channel
 // A sits at a clean default for when you switch to it.
 static const float kVh140Def[kParamCount] = {
     1.0f, 0.60f, 0.50f, 0.45f, 0.60f, 0.55f,
     0.40f, 0.50f, 0.50f, 0.55f, 0.50f,
-    0.00f, 0.00f, 0.40f, 0.00f, 0.00f,
+    0.00f, 0.00f, 0.40f, 0.00f, 0.00f, 1.00f,
 };
 
 #endif // VH140_PARAMS_H

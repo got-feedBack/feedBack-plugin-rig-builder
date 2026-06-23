@@ -18,6 +18,7 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "Vs100Params.h"
+#include "../../_shared/tube_stage.hpp"   // real 12AX7 (the Valvestate warmth stage)
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -34,8 +35,30 @@ static inline float smoothstep(float v) { v = clamp01(v); return v * v * (3.0f -
 static inline float smoothstepRange(float e0, float e1, float x) { return smoothstep((x - e0) / (e1 - e0)); }
 static inline float softClip(float x) { return std::tanh(x); }
 static inline float eqDb(float v, float r) { return (clamp01(v) - 0.5f) * 2.0f * r; }
-static inline float diodeClip(float x){ const float d=0.66f;
-    if(x> d) return  d+std::tanh((x-d)*0.7f)*0.12f; if(x<-d) return -d+std::tanh((x+d)*0.7f)*0.12f; return x; }
+// Real anti-parallel silicon diode-pair clipper (Shockley, Newton-solved) — the
+// physical exponential knee instead of a tanh fit. This IS the Valvestate OD2
+// diode-clip lead. Same model as the JC-90 / VH-140C / amp clippers.
+struct DiodeClipper
+{
+    static constexpr float Is  = 2.52e-9f;
+    static constexpr float nVt = 1.752f * 0.02585f;
+    float R = 2200.0f;
+    float v = 0.0f;
+    void reset() { v = 0.0f; }
+    inline float process(float vin)
+    {
+        for (int i = 0; i < 8; ++i)
+        {
+            const float e  = v / nVt;
+            const float sh = std::sinh(e), ch = std::cosh(e);
+            const float f  = (v - vin) / R + 2.0f * Is * sh;
+            const float fp = 1.0f / R + 2.0f * Is * ch / nVt;
+            v -= f / fp;
+            if (v > 1.0f) v = 1.0f; else if (v < -1.0f) v = -1.0f;
+        }
+        return v;
+    }
+};
 
 class Biquad
 {
@@ -100,6 +123,7 @@ class Vs100Core
     float od2Gain = kVs100Def[kOd2Gain], od2Contour = kVs100Def[kOd2Contour], od2Vol = kVs100Def[kOd2Volume];
     float od2Bass = kVs100Def[kOd2Bass], od2Mid = kVs100Def[kOd2Mid], od2Treble = kVs100Def[kOd2Treble];
     float fxMix = kVs100Def[kFxMix], cleanRev = kVs100Def[kCleanRev], odRev = kVs100Def[kOdRev];
+    float cabSim = kVs100Def[kCabSim];
 
     // derived channel weights + active drive
     float cW=0.f, o1W=0.f, o2W=1.f, drv=0.6f;
@@ -110,6 +134,10 @@ class Vs100Core
     Biquad speakerHp, speakerBite, speakerLp;
     SpringReverb spring;
     DcBlock dcBlock;
+    DiodeClipper diodeOD2;   // real diode-pair clip (OD2 Valvestate lead)
+    rbtube::TubeStage vWarmth;   // real 12AX7 Valvestate warmth (starved ECC83, pre-power)
+    rbtube::Miller12AX7 warmthMiller;
+    rbtube::CouplingCapGridLeak coupleToWarmth; // op-amp preamp -> starved ECC83 grid
 
     void updateFilters()
     {
@@ -145,7 +173,12 @@ public:
         clLowSh.reset(); clMidPk.reset(); clHighSh.reset();
         od2Tight.reset(); od2ClipLp.reset(); od2Contr.reset(); od2LowSh.reset(); od2MidPk.reset(); od2HighSh.reset();
         speakerHp.reset(); speakerBite.reset(); speakerLp.reset();
-        spring.clear(); dcBlock.reset();
+        spring.clear(); dcBlock.reset(); diodeOD2.reset();
+        vWarmth.set(sampleRate, 1, 180.0f, 40.0f, 30.0f, 1500.0f);   // starved ECC83 (low B+ = the Valvestate warmth)
+        warmthMiller.set(sampleRate, 100000.0f, 35.0f, 8.0f);
+        coupleToWarmth.set(sampleRate, 1000000.0f, 22.0e-9f, 100000.0f,
+                           0.11f, 0.32f, 0.75f);
+        warmthMiller.reset(); coupleToWarmth.reset(); vWarmth.reset();
         updateFilters();
     }
 
@@ -162,6 +195,7 @@ public:
             case kOd2Gain: od2Gain = v; break; case kOd2Contour: od2Contour = v; break; case kOd2Volume: od2Vol = v; break;
             case kOd2Bass: od2Bass = v; break; case kOd2Mid: od2Mid = v; break; case kOd2Treble: od2Treble = v; break;
             case kFxMix: fxMix = v; break; case kCleanRev: cleanRev = v; break; case kOdRev: odRev = v; break;
+            case kCabSim: cabSim = v; break;
             default: break;
         }
         updateFilters();
@@ -171,7 +205,6 @@ public:
 
     float process(float in)
     {
-        const float pushed = smoothstepRange(0.40f, 0.95f, drv);
         float x = inputLp.process(inputHp.process(in));
 
         // CLEAN: a little op-amp limit, the clean EQ, level
@@ -187,7 +220,7 @@ public:
         // OD2: the Valvestate lead — big op-amp gain into the diode clip, Contour, own EQ
         float o2 = od2Tight.process(x);
         o2 = softClip(o2 * (2.0f + 16.0f * od2Gain));
-        o2 = diodeClip(o2 * (1.0f + 5.0f * od2Gain));
+        o2 = diodeOD2.process(o2 * (1.0f + 5.0f * od2Gain)) * 1.4f;   // real diode clip
         o2 = od2ClipLp.process(o2);
         o2 = od2Contr.process(o2);
         o2 = od2LowSh.process(od2MidPk.process(od2HighSh.process(o2)));
@@ -200,12 +233,15 @@ public:
         if (rev > 0.001f) y += spring.process(y) * rev * 0.55f;
         y = dcBlock.process(y);
 
-        // 12AX7 "Valvestate" warmth + solid-state power (high headroom, gentle)
-        y = 0.90f * y + 0.10f * softClip(y * 1.5f);
+        // 12AX7 "Valvestate" warmth — REAL starved ECC83 (even-harmonic warmth +
+        // soft compression) blended subtle, into the solid-state power (high headroom).
+        const float warmIn = coupleToWarmth.process(y, 0.85f + 1.2f * drv);
+        y = 0.82f * y + 0.18f * vWarmth.process(warmthMiller.process(warmIn) * 1.3f);
 
-        y = speakerHp.process(y);
-        y = speakerBite.process(y);
-        y = speakerLp.process(y);
+        float cab = speakerHp.process(y);
+        cab = speakerBite.process(cab);
+        cab = speakerLp.process(cab);
+        y += cabSim * (cab - y);
 
         // Loudness normalization: the active channel's gain is the drive proxy;
         // cleanMakeup keeps the RS Gain (-> OD2 Gain) sweep ~flat; the active

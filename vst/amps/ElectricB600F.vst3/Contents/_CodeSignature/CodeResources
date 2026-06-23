@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/ElectricB600F.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			ZyvDUzviANMdvGpqwZUT5JNV5HGE2tTfh27nOmlUywo=
+			</data>
+		</dict>
+		<key>x86_64-win/ElectricB600F.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			8sFddzpsov3gnHff1Mitx8CEhZ6lmADl7qVxrNBRfBY=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

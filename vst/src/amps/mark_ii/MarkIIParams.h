@@ -39,28 +39,29 @@ enum MarkIIParamId
     kGainBoost,     // MASTER 1 pull-GAIN BOOST (extra lead preamp gain)
     kBrightLead,    // LEAD MASTER pull-BRIGHT
     kHalfPower,     // output power: 100 RMS(0) / 60 RMS(1)
+    kCabSim,        // fallback Mesa speaker voice; host bypasses when using an external cab/IR
     kParamCount
 };
 
 static const char* const kMarkIINames[kParamCount] = {
     "Volume 1", "Treble", "Bass", "Middle", "Master 1", "Lead Drive", "Lead Master",
-    "Reverb", "Lead", "Bright 1", "Shift", "Gain Boost", "Bright Lead", "Half Power",
+    "Reverb", "Lead", "Bright 1", "Shift", "Gain Boost", "Bright Lead", "Half Power", "Cab Sim",
 };
 
 static const char* const kMarkIISymbols[kParamCount] = {
     "volume1", "treble", "bass", "middle", "master1", "leaddrive", "leadmaster",
-    "reverb", "lead", "bright1", "shift", "gainboost", "brightlead", "halfpower",
+    "reverb", "lead", "bright1", "shift", "gainboost", "brightlead", "halfpower", "cabsim",
 };
 
-static const float kMarkIIMin[kParamCount] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
-static const float kMarkIIMax[kParamCount] = { 1,1,1,1,1,1,1,1,1,1,1,1,1,1 };
+static const float kMarkIIMin[kParamCount] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+static const float kMarkIIMax[kParamCount] = { 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1 };
 // Manual-insert defaults: LEAD channel, a singing lead off Lead Drive, the
 // classic Boogie scooped tone stack (Middle low), masters at musical defaults,
 // reverb off, pulls out, FULL (100W) power. Switch to Rhythm / pull Shift /
 // Gain Boost / Bright on the face by hand.
 static const float kMarkIIDef[kParamCount] = {
     0.50f, 0.60f, 0.50f, 0.40f, 0.50f, 0.60f, 0.50f,
-    0.00f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+    0.00f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
 };
 
 #endif // MARK_II_PARAMS_H

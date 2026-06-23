@@ -59,19 +59,6 @@ static inline float softClip(float x)
     return std::tanh(x);
 }
 
-static inline float asymTube(float x, float drive, float bias)
-{
-    const float pushed = x * drive + bias;
-    const float y = std::tanh(pushed);
-    const float correction = std::tanh(bias);
-    return (y - correction) / (1.0f - 0.30f * std::fabs(correction));
-}
-
-static inline float eqDb(float v, float rangeDb)
-{
-    return (clamp01(v) - 0.5f) * 2.0f * rangeDb;
-}
-
 class Biquad
 {
     float b0 = 1.0f;
@@ -232,6 +219,7 @@ class AOR50Core
     float deep      = kAOR50Def[kDeep];
     float midBoost  = kAOR50Def[kMidBoost];
     float presence  = kAOR50Def[kPresence];
+    float cabSim    = kAOR50Def[kCabSim];
 
     // derived
     float chS = 1.0f;        // 0 = Channel One .. 1 = AOR
@@ -248,11 +236,16 @@ class AOR50Core
     DcBlock dcBlock;
     // ── real circuit (Koren tubes + Shockley diode + Yeh stack) ──
     rbtube::TubeStage    v1, vCh1, vCrunch, vAorA, vAorB, vCascade;  // 12AX7 stages
+    rbtube::Miller12AX7  v1Miller, ch1Miller, crunchMiller, aorAMiller, aorBMiller, cascadeMiller;
+    rbtube::CouplingCapGridLeak coupleToPi;                            // master -> LTP grid blocking
+    rbtube::PhaseInverterLTP12AX7 phaseInverter;                       // ECC83 long-tail pair
+    rbtube::MultiNodeBPlus supply;                                      // diode rectifier + B+ filter nodes
     rbtube::PowerAmpEL34 power;                                      // EL34 power (~50W)
     rbtube::ToneStackYeh tone;                                       // real JCM800-style TMB
     DiodeClipper         aorDiode;                                   // AOR lead diode overdrive
     float inScale = 1.3f, toneMk = 13.0f;
     float sag = 0.0f;
+    float lastPowerLoad = 0.0f, lastScreenLoad = 0.0f, lastPreampLoad = 0.0f;
 
     void setupTubes()
     {
@@ -262,6 +255,12 @@ class AOR50Core
         vAorA.set(sampleRate, 1, 250.0f, 40.0f, 45.0f, 1500.0f);    // AOR cascade 1
         vAorB.set(sampleRate, 1, 250.0f, 40.0f, 60.0f, 1500.0f);    // AOR cascade 2
         vCascade.set(sampleRate, 1, 250.0f, 40.0f, 55.0f, 1500.0f); // extra lead cascade
+        v1Miller.set(sampleRate,       68000.0f, 55.0f, 8.0f);
+        ch1Miller.set(sampleRate,     180000.0f, 52.0f, 8.0f);
+        crunchMiller.set(sampleRate,  180000.0f, 52.0f, 8.0f);
+        aorAMiller.set(sampleRate,    180000.0f, 55.0f, 8.0f);
+        aorBMiller.set(sampleRate,    150000.0f, 55.0f, 8.0f);
+        cascadeMiller.set(sampleRate, 180000.0f, 52.0f, 8.0f);
     }
 
     void updateFilters()
@@ -318,9 +317,19 @@ class AOR50Core
         speakerFizzNotch.setHighShelf(sampleRate, 4700.0f, 0.70f, -3.0f + 2.0f * treble + 2.0f * presence - 2.0f * leadA);
         speakerLp.setLowPass(sampleRate, 11500.0f + 1800.0f * treble + 850.0f * presence - 3000.0f * leadA, 0.66f);
 
-        // EL34 power amp (silicon rectifier = tight, low sag). Low drive floor so the
-        // clean Channel One stays clean; it climbs with the morph + lead.
-        power.set(sampleRate, 0.8f + 8.0f * m + 4.0f * leadA, -40.0f, 0.14f, 55.0f, 11000.0f);
+        coupleToPi.set(sampleRate, 1000000.0f, 22.0e-9f, 220000.0f, 0.14f, 0.50f, 1.10f);
+        phaseInverter.setMarshall(sampleRate, 0.95f + 1.45f * m + 0.75f * leadA, 0.88f);
+        supply.set(sampleRate,
+                   20.0f, 100.0f,
+                   1000.0f, 50.0f,
+                   10000.0f, 22.0f,
+                   0.07f + 0.03f * leadA,
+                   0.055f + 0.025f * leadA,
+                   0.035f + 0.020f * m,
+                   0.14f);
+        // EL34 power amp (silicon rectifier = tight). Low drive floor so the
+        // clean Channel One stays clean; B+ nodes above provide the dynamic sag.
+        power.set(sampleRate, 0.95f + 8.8f * m + 4.8f * leadA, -40.0f, 0.08f, 55.0f, 11200.0f);
         power.out = 0.011f;
     }
 
@@ -334,9 +343,13 @@ public:
         speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset();
         speakerBite.reset(); speakerFizzNotch.reset(); speakerLp.reset();
         dcBlock.reset();
+        v1Miller.reset(); ch1Miller.reset(); crunchMiller.reset();
+        aorAMiller.reset(); aorBMiller.reset(); cascadeMiller.reset();
         v1.reset(); vCh1.reset(); vCrunch.reset(); vAorA.reset(); vAorB.reset(); vCascade.reset();
+        coupleToPi.reset(); phaseInverter.reset(); supply.reset();
         power.reset(); aorDiode.reset();
         sag = 0.0f;
+        lastPowerLoad = lastScreenLoad = lastPreampLoad = 0.0f;
         setupTubes();
         updateFilters();
     }
@@ -365,6 +378,7 @@ public:
             case kDeep:      deep = v; break;
             case kMidBoost:  midBoost = v; break;
             case kPresence:  presence = v; break;
+            case kCabSim:    cabSim = v; break;
             default: break;
         }
         updateFilters();
@@ -384,35 +398,38 @@ public:
         if (crunchW < 0.0f) crunchW = 0.0f;
         const float sum = cleanW + crunchW + leadW + 1.0e-6f;
         const float cleanMix = cleanW / sum, crunchMix = crunchW / sum, leadMix = leadW / sum;
+        const rbtube::SupplyScales bplus =
+            supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
 
         float x = inputHp.process(in);
         x = inputLp.process(x);
         x = brightShelf.process(x);
-        x = v1.process(x * inScale);                    // V1 shared input (real ECC83)
+        x = v1.process(v1Miller.process(x) * inScale * bplus.preamp);  // V1 shared input (real ECC83 + Miller)
 
         // Channel One voicing: fuller low-mid, moderate gain (one real stage).
         float ch1 = ch1Body.process(x);
-        ch1 = vCh1.process(ch1 * (0.6f + 1.4f * m));
+        ch1 = vCh1.process(ch1Miller.process(ch1) * (0.6f + 1.4f * m) * bplus.preamp);
 
         // AOR voicing: tightened lows + bite, cascaded ECC83 PLUS the 1N4148 diode
         // overdrive (the "Advanced Overdrive Response" = a diode clip riding on the
         // tube cascade — the real D3/D4 around the op-amp).
         float aor = aorTight.process(x);
         aor = aorBite.process(aor);
-        aor = vAorA.process(aor * (1.5f + 5.0f * m));
-        aor = vAorB.process(aor * (1.1f + 3.0f * m));
+        aor = vAorA.process(aorAMiller.process(aor) * (1.5f + 5.0f * m) * bplus.preamp);
+        aor = vAorB.process(aorBMiller.process(aor) * (1.1f + 3.0f * m) * bplus.preamp);
         aor = aorDiode.process(aor * (0.7f + 7.0f * leadA)) * 1.9f;   // AOR diode clip
 
         // Crunch is the in-between (Channel One pushed).
         float crunch = ch1Body.process(x);
-        crunch = vCrunch.process(crunch * (0.9f + 3.0f * m));
+        crunch = vCrunch.process(crunchMiller.process(crunch) * (0.9f + 3.0f * m) * bplus.preamp);
 
         float y = ch1 * cleanMix + crunch * crunchMix + aor * leadMix;
         y = interHp.process(y);
         y = interLp.process(y);
 
         const float extraCascade = smoothstepRange(0.46f, 0.90f, m);
-        const float cascaded = vCascade.process(y * (1.0f + 3.0f * m + 2.0f * leadMix));
+        const float cascaded = vCascade.process(cascadeMiller.process(y) *
+                                                (1.0f + 3.0f * m + 2.0f * leadMix) * bplus.preamp);
         y = y * (1.0f - 0.54f * extraCascade) + cascaded * (0.54f * extraCascade);
 
         // real JCM800-style tone stack + insertion-loss makeup + Deep/Mid-Boost switches
@@ -422,18 +439,25 @@ public:
         y = phaseHp.process(y);
         y = phaseLp.process(y);
 
-        // EL34 power amp — real pentode table + own sag/OT (drive set in updateFilters)
-        y = power.process(y);
+        y = coupleToPi.process(y, 1.0f + 0.16f * leadA);
+        lastPreampLoad = 0.12f * std::fabs(y) + 0.05f * m;
+        y = phaseInverter.process(y * bplus.preamp);
+        lastPowerLoad = 0.82f * std::fabs(y) + 0.22f * leadA;
+        lastScreenLoad = 0.50f * std::fabs(y) + 0.10f * m;
+
+        // EL34 power amp — real pentode table + LTP/B+ dynamics (drive set in updateFilters).
+        y = power.process(y * bplus.power * bplus.screen);
 
         y = presenceShelf.process(y);
         y = dcBlock.process(y);
 
-        y = speakerHp.process(y);
-        y = speakerThump.process(y);
-        y = speakerLowMid.process(y);
-        y = speakerBite.process(y);
-        y = speakerFizzNotch.process(y);
-        y = speakerLp.process(y);
+        float cab = speakerHp.process(y);
+        cab = speakerThump.process(cab);
+        cab = speakerLowMid.process(cab);
+        cab = speakerBite.process(cab);
+        cab = speakerFizzNotch.process(cab);
+        cab = speakerLp.process(cab);
+        y += cabSim * (cab - y);
 
         // Loudness normalization across the Gain (channel) sweep: the clean
         // Channel One barely saturates, so cleanMakeup lifts it to keep the RS

@@ -21,6 +21,8 @@
  * BRILLIANT VOL (the bright channel volume = the breakup driver); Bass/Mid/Treble
  * -> tone stack, Pres -> Presence. Input pinned to BOTH (jumpered) with Normal
  * Vol + Master at musical defaults via _static; all editable by hand.
+ * CAB SIM is a temporary bundled Fane-style 4x12 voicing; the host can set it
+ * to 0 when an external cab/IR is present.
  */
 enum Dr504ParamId
 {
@@ -32,26 +34,27 @@ enum Dr504ParamId
     kPresence,       // PRESENCE (100K, power-amp NFB)               [RS Pres]
     kMaster,         // MASTER VOLUME (250K)
     kInput,          // input cable: Normal(0) / Both-jumpered(0.5) / Brilliant(1)
+    kCabSim,         // temporary internal Fane 4x12 cab filter       [host]
     kParamCount
 };
 
 static const char* const kDr504Names[kParamCount] = {
     "Normal Vol", "Brilliant Vol", "Bass", "Treble", "Middle", "Presence",
-    "Master Vol", "Input",
+    "Master Vol", "Input", "Cab Sim",
 };
 
 static const char* const kDr504Symbols[kParamCount] = {
     "normalvol", "brilliantvol", "bass", "treble", "middle", "presence",
-    "mastervol", "input",
+    "mastervol", "input", "cab_sim",
 };
 
-static const float kDr504Min[kParamCount] = { 0,0,0,0,0,0,0,0 };
-static const float kDr504Max[kParamCount] = { 1,1,1,1,1,1,1,1 };
+static const float kDr504Min[kParamCount] = { 0,0,0,0,0,0,0,0,0 };
+static const float kDr504Max[kParamCount] = { 1,1,1,1,1,1,1,1,1 };
 // Manual-insert defaults: jumpered (Both), the brilliant channel up, the strong
 // Hiwatt mids, Master past noon for that clean-loud punch. Tweak the volumes /
 // switch the input cable by hand.
 static const float kDr504Def[kParamCount] = {
-    0.50f, 0.55f, 0.50f, 0.60f, 0.60f, 0.50f, 0.55f, 0.50f,
+    0.50f, 0.55f, 0.50f, 0.60f, 0.60f, 0.50f, 0.55f, 0.50f, 1.00f,
 };
 
 #endif // DR504_PARAMS_H

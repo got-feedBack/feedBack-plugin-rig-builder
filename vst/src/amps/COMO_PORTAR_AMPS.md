@@ -75,8 +75,13 @@ No reinventes nada de esto. `#include "../../_shared/tube_stage.hpp"` y usá:
   `set(sr, Ri_tab, vplus, divider, fck, Rk)` — Ri_tab=1 (grid-leak 250k) casi siempre,
   vplus≈250, divider≈40, fck = corner del cap de bypass de cátodo (Hz; más alto = menos
   graves/más ganancia tardía), Rk≈1500.
+- **`rbtube::MillerLowPassT<TUBE>`** — carga Miller por tubo: `Cin = Cgk + Cgp*(1+|Av|)`
+  y `fc = 1/(2*pi*Rsource*Cin)`. Usar `Miller12AX7`/`Miller12AY7` entre etapas cuando el
+  esquemático permita estimar la resistencia de fuente; esto reemplaza los low-pass fijos
+  estilo Guitarix (`~6531 Hz`) por un techo de agudos derivado del circuito.
 - **`rbtube::PowerAmpPPT<TUBE>`** — power push-pull real con sag + bias drift + OT.
-  Alias: `PowerAmpPP` (EL84), `PowerAmp6V6`, `PowerAmp6L6`, `PowerAmpEL34`.
+  Alias: `PowerAmpPP` (EL84), `PowerAmp6V6`, `PowerAmp6L6` legacy, `PowerAmp6L6G`,
+  `PowerAmp5881`, `PowerAmp6L6GC`, `PowerAmpKT66`, `PowerAmpEL34`.
   `set(sr, drive, biasV, sagDepth, otHP, otLP)` + `.out` (escala salida) + `.biasShift`.
   **sagDepth bajo (~0.1) = fuente rígida/limpia; alto (~0.5) = saggy (rectificador de tubo).**
 - **`rbtube::ToneStackYeh`** — tonestack TMB de 3 bandas (modelo Yeh, **doble precisión**).
@@ -88,9 +93,11 @@ No reinventes nada de esto. `#include "../../_shared/tube_stage.hpp"` y usá:
   No está en el shared todavía; está inline en `jc90/`, `jc120_ronald/`, `aor50/`. Copiá
   esa struct (par de diodos anti-paralelo a masa, resuelta por Newton).
 
-Tubos con tabla ya generada: **12AX7, 12AY7, EL84, 6V6, 6L6/5881, EL34**. Si necesitás uno
-nuevo (ej. 6550, KT88): agregá sus constantes Koren en `tools/gx_tube.py`, corré el script
-para emitir el `.h`, y agregá el trait+alias en `tube_stage.hpp`.
+Tubos con tabla ya generada: **12AX7, 12AY7, 12AT7, 6EU7, 6SL7, 6SF5, 12AU7, 7199,
+EF86, 5879, EL84, 6BM8/ECL82, 6V6, 6L6 legacy, 6L6G, 5881, 6L6GC, KT66, EL34**.
+Los PDFs base viven en `tubes/` en la raiz del proyecto. Si necesitás uno nuevo
+(ej. 6550, KT88): agregá sus constantes Koren en `tools/gx_tube.py`, corré el script para
+emitir el `.h`, y agregá el trait+alias en `tube_stage.hpp`.
 
 ---
 
@@ -133,9 +140,9 @@ para emitir el `.h`, y agregá el trait+alias en `tube_stage.hpp`.
 
 ### Paso 5 — Instalar (⚠️ ojo con el nombre de deploy)
 El `.vst3` que carga la app NO es necesariamente el nombre del bin. El nombre real está en
-**`data/rs_gear_to_vst.json`** (campo `bundled`, ej. `vst/amps/BOX DC30.vst3`) — suele ser
+**`data/rs_gear_to_vst.json`** (campo `bundled`, ej. `vst/amps/BOX AC30.vst3`) — suele ser
 el **nombre de PARODÍA**, distinto del `NAME` del Makefile / `getLabel`. Ejemplos:
-`en30`→bin `EN30.vst3` pero deploy `BOX DC30.vst3`; `tw26`→`BENDER DELUXE.vst3`; los ports
+`en30`→bin `EN30.vst3` pero deploy `BOX AC30.vst3`; `tw26`→`BENDER DELUXE.vst3`; los ports
 recientes (jcm800→`MarstenJCM800.vst3`) sí coinciden. **Siempre copiá al path de
 `rs_gear_to_vst.json`**, no al `bin/*.vst3` ciegamente.
 ```
@@ -260,14 +267,32 @@ Decile algo así (y dale esta guía + `REAL_TUBE_AMP_GUIDE.md` como contexto):
 
 ## 9. Estado actual (junio 2026)
 
-**13 amps en circuito-real** (~83% de los tonos de amp de guitarra de la librería):
-BOX DC30 (Vox AC30) ✅, Bender Deluxe (5E3) ✅, Super-Sonic 22, Bassman, Plexi, JCM800,
-Dual Rectifier, DSL100, Mark III, Mark II, Laney AOR50 (híbrido), Hiwatt DR103 + DR504.
+**Cola activa de Nacho = amps de guitarra + DI limpios.** Los `Bass_Amp_*` quedan fuera de
+esta cola y los hara el hermano. Caso especial: `Amp_AT20` vive como `Amp_`, pero el mapeo
+local lo identifica como **Ampeg SVT-CL** y reutiliza `SamplegSBTCL` con `Bass_Amp_BT975B`;
+por lo tanto se considera bajo salvo excepcion explicita.
+
+**Base circuito-real ya documentada:**
+BOX AC30 (Vox AC30) ✅, Bender Deluxe (5E3) ✅, Super-Sonic 22 (12AT7 PI) ✅, Bassman ✅, Plexi, JCM800, EMS/MrY,
+Dual Rectifier, DSL100, Mark III, Mark II, Laney AOR50 (híbrido), Hiwatt DR103 + DR504,
+Budda/Ganddi SuperDrive 45 (`Amp_BT45`, con `PowerAmpKT66` generado desde `tubes/KT66.pdf`),
+JTM45/Bluesbreaker, DSL15/JVM410, OR50/OR100, Chieftain/DC30/Maz38,
+JC90/JC120/VH140/VS100, UA610/Meve1073, Polystone MiniBrute, JimmyBean, AD50,
+Tiny Terror/Rockerverb, GA88/GA8, Epiphone Century/Zephyr, Gibson GA79.
 La mayoría **pendientes de prueba en vivo**.
 
-**Faltan (~47, todavía tanh)** — priorizar por uso (de `cloud_loader/index.db`). Próximos:
-ENGL Powerball (`en50`, 146 tonos), y el resto de la cola. El DSL15 (`dsl15_marsten`) puede
-reusar el DSL100 cambiando EL34→EL84.
+**Correccion 2026-06-22:** `engel_fireball` / `Amp_EN50` ya tiene codigo circuito-real
+(`tube_stage.hpp`, `ToneStackYeh`, `PowerAmp6L6GC`, oversampling 2×) contra el esquematico local;
+el roadmap viejo que lo marcaba como proximo estaba atrasado. Correccion adicional 2026-06-22:
+la cola restante de guitarra/DI fue auditada/compilada y los puntos que aun saltaban entre etapas
+ahora tienen `CouplingCapGridLeak` donde corresponde. Los solid-state puros se mantienen sin tubos.
+
+**Pendientes de guitarra/DI, excluyendo bajo, por uso actual de `nam_tone.db`:**
+cola inmediata limpia; quedan pruebas en vivo, calibracion crest/RMS y renders de referencia para
+ajustes finos. No hay port de guitarra/DI usado por `nam_tone.db` sin VST local al 2026-06-23.
+Correccion 2026-06-23: Zephyr/Ruby ya tiene tablas 5879, 6SL7, 6SF5 y 6L6G; GA79 ya
+tiene 6EU7, 7199 pentodo/triodo y 12AU7. GA79 usa EL84 para 6BQ5 porque es la misma
+familia.
 
 **Para sacar el ranking de uso** (priorizar qué portar):
 ```python

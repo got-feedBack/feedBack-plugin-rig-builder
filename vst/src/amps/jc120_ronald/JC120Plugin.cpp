@@ -202,6 +202,7 @@ class JC120Core
     float speed      = kJC120Def[kSpeed];
     float depth      = kJC120Def[kDepth];
     float chorusMode = kJC120Def[kChorus];
+    float cabSim     = kJC120Def[kCabSim];
 
     Biquad inputHp, inputLp, distPre, distPost;
     Biquad toneBass, toneMid, toneTreble, brightShelf;
@@ -264,6 +265,7 @@ public:
             case kSpeed:      speed = v; chorus.setRate(speed); break;
             case kDepth:      depth = v; break;
             case kChorus:     chorusMode = v; break;
+            case kCabSim:     cabSim = v; break;
             default: break;
         }
         updateFilters();
@@ -305,9 +307,11 @@ public:
         const float vol = 0.30f + 1.10f * volume;
         y *= vol;
 
-        // solid-state combo speaker
-        y = speakerThump.process(y);
-        y = speakerLp.process(y);
+        // solid-state combo fallback speaker (bypassable for external cab/IR)
+        const float ampOnly = y;
+        float cab = speakerThump.process(ampOnly);
+        cab = speakerLp.process(cab);
+        y = ampOnly + cabSim * (cab - ampOnly);
 
         // loudness normalization: keep multitone RMS ~constant vs Distortion +
         // Volume so the shared kLvl stage stays calibrated.

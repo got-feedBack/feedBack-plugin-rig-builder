@@ -29,23 +29,24 @@ enum JimmyBeanParamId
     kDepth,      // DEPTH   (tremolo amount; 0 = OFF)
     kChannel,    // CHANNEL (0/1 = the two channels)
     kBright,     // BRIGHT  (treble high-shelf switch)
+    kCabSim,     // fallback solid-state speaker voice
     kParamCount
 };
 
 static const char* const kJimmyBeanNames[kParamCount] = {
-    "Volume", "Bass", "Treble", "Sustain", "Speed", "Depth", "Channel", "Bright",
+    "Volume", "Bass", "Treble", "Sustain", "Speed", "Depth", "Channel", "Bright", "Cab Sim",
 };
 
 static const char* const kJimmyBeanSymbols[kParamCount] = {
-    "volume", "bass", "treble", "sustain", "speed", "depth", "channel", "bright",
+    "volume", "bass", "treble", "sustain", "speed", "depth", "channel", "bright", "cabsim",
 };
 
-static const float kJimmyBeanMin[kParamCount] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-static const float kJimmyBeanMax[kParamCount] = { 1, 1, 1, 1, 1, 1, 1, 1 };
+static const float kJimmyBeanMin[kParamCount] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+static const float kJimmyBeanMax[kParamCount] = { 1, 1, 1, 1, 1, 1, 1, 1, 1 };
 // Defaults: a clean/loud solid-state voice. Volume 0.55, tone flat-ish, Sustain
 // off (clean), tremolo set but Depth 0 (OFF), Channel 1 (Ch1), Bright off.
 static const float kJimmyBeanDef[kParamCount] = {
-    0.55f, 0.50f, 0.55f, 0.00f, 0.40f, 0.00f, 0.00f, 0.00f,
+    0.55f, 0.50f, 0.55f, 0.00f, 0.40f, 0.00f, 0.00f, 0.00f, 1.00f,
 };
 
 #endif // JIMMYBEAN_PARAMS_H

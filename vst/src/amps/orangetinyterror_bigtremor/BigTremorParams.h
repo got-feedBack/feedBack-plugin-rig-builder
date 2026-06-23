@@ -10,20 +10,21 @@
 enum BigTremorParamId {
     kVolume = 0, kTone, kGain,   // knobs (panel order: Volume · Tone · Gain)
     kHalf,                        // switch (7 W half-power)
+    kCabSim,                      // fallback 1x12/2x12 speaker voice
     kParamCount
 };
 
 static const char* const kBigTremorNames[kParamCount] = {
-    "Volume", "Tone", "Gain", "Half Power"
+    "Volume", "Tone", "Gain", "Half Power", "Cab Sim"
 };
 static const char* const kBigTremorSymbols[kParamCount] = {
-    "volume", "tone", "gain", "half"
+    "volume", "tone", "gain", "half", "cabsim"
 };
-static const float kBigTremorMin[kParamCount] = { 0,0,0, 0 };
-static const float kBigTremorMax[kParamCount] = { 1,1,1, 1 };
+static const float kBigTremorMin[kParamCount] = { 0,0,0, 0,0 };
+static const float kBigTremorMax[kParamCount] = { 1,1,1, 1,1 };
 // Volume 0.6; Tone 0.6 (slightly bright); Gain 0.5 (edge of breakup); 15 W (Half off).
 static const float kBigTremorDef[kParamCount] = {
-    0.60f, 0.60f, 0.50f, 0.00f
+    0.60f, 0.60f, 0.50f, 0.00f, 1.00f
 };
 
 #endif // BIGTREMOR_PARAMS_H

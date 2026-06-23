@@ -24,21 +24,22 @@ enum Maz38ParamId
     kBass,          // BASS    tone stack                               [RS Bass]
     kCut,           // CUT — post treble cut (higher = darker)
     kMaster,        // MASTER volume
+    kCabSim,        // fallback speaker voice; host bypasses when using an external cab/IR
     kParamCount
 };
 
 static const char* const kMaz38Names[kParamCount] = {
-    "Volume", "Treble", "Middle", "Bass", "Cut", "Master",
+    "Volume", "Treble", "Middle", "Bass", "Cut", "Master", "Cab Sim",
 };
 static const char* const kMaz38Symbols[kParamCount] = {
-    "volume", "treble", "middle", "bass", "cut", "master",
+    "volume", "treble", "middle", "bass", "cut", "master", "cabsim",
 };
-static const float kMaz38Min[kParamCount] = { 0,0,0,0,0,0 };
-static const float kMaz38Max[kParamCount] = { 1,1,1,1,1,1 };
+static const float kMaz38Min[kParamCount] = { 0,0,0,0,0,0,0 };
+static const float kMaz38Max[kParamCount] = { 1,1,1,1,1,1,1 };
 // Manual-insert defaults: a chimey clean/edge-of-breakup — Volume past noon, tone
 // centred, Cut just below noon, Master up (the 38 has headroom to spare).
 static const float kMaz38Def[kParamCount] = {
-    0.60f, 0.55f, 0.50f, 0.50f, 0.40f, 0.70f,
+    0.60f, 0.55f, 0.50f, 0.50f, 0.40f, 0.70f, 1.0f,
 };
 
 #endif // MAZ38_PARAMS_H

@@ -19,6 +19,7 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "BigTremorParams.h"
+#include "../../_shared/tube_stage.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -61,6 +62,14 @@ public:
         b2 =  A * ((A + 1) + (A - 1) * cw - tsAa) / a0;
         a1 =  2 * ((A - 1) - (A + 1) * cw)        / a0;
         a2 =      ((A + 1) - (A - 1) * cw - tsAa) / a0;
+    }
+    void setPeak(float fc, float dB, float Q, float fs) {
+        const float A = std::pow(10.f, dB / 40.f);
+        const float w0 = 6.2831853f * fc / fs, cw = std::cos(w0), sw = std::sin(w0);
+        const float alpha = sw / (2.f * Q);
+        const float a0 = 1 + alpha / A;
+        b0 = (1 + alpha * A) / a0; b1 = (-2 * cw) / a0; b2 = (1 - alpha * A) / a0;
+        a1 = (-2 * cw) / a0; a2 = (1 - alpha / A) / a0;
     }
     void setLowpassQ(float fc, float Q, float fs) {
         const float w0 = 6.2831853f * fc / fs, cw = std::cos(w0), sw = std::sin(w0);
@@ -147,19 +156,20 @@ class BigTremorChannel {
     float fs = 48000.f;
     Triode v1a, v1b;
     Biquad hp, toneLo, toneHi, pwrLP;
-    float gain=1, volume=1, pwrDrive=1, pwrKnee=1;
-
-    // 2x EL84 cathode-biased push-pull (~15 W Class A): EL84s have an EARLIER,
-    // softer knee than KT88/6L6 — they sing into crunch sooner. pwrKnee tightens
-    // for the 7 W half-power mode (less headroom).
-    inline float pushPull(float x) const {
-        return std::tanh(x * pwrKnee) / pwrKnee;
-    }
+    Biquad cabHp, cabThump, cabLowMid, cabBite, cabFizz, cabLp;
+    rbtube::CouplingCapGridLeak coupleV1aToV1b;
+    rbtube::CouplingCapGridLeak coupleToPi;
+    rbtube::PhaseInverterLTP12AX7 phaseInverter;
+    rbtube::MultiNodeBPlus supply;
+    rbtube::PowerAmpPP power;
+    float gain=1, volume=1, pwrDrive=1, cabSim=1;
 public:
     void setSampleRate(float s) { fs=(s>0.f)?s:48000.f; v1a.setT(s); v1b.setT(s); }
-    void reset() { v1a.reset(); v1b.reset(); hp.reset(); toneLo.reset(); toneHi.reset(); pwrLP.reset(); }
+    void reset() { v1a.reset(); v1b.reset(); hp.reset(); toneLo.reset(); toneHi.reset(); pwrLP.reset();
+        cabHp.reset(); cabThump.reset(); cabLowMid.reset(); cabBite.reset(); cabFizz.reset(); cabLp.reset();
+        coupleV1aToV1b.reset(); coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset(); }
 
-    void setParams(float volumeP, float tone, float gainP, bool half) {
+    void setParams(float volumeP, float tone, float gainP, bool half, float cabSimP) {
         hp.setHighpassQ(70.f, 0.7f, fs);                  // input/coupling HPF (tight low end)
         gain = 0.6f + gainP * gainP * 7.0f;               // GAIN pot drives V1b (squared taper)
 
@@ -171,18 +181,55 @@ public:
 
         volume   = volumeP / 0.6f;                        // master (def 0.6 -> unity)
         pwrDrive = 0.5f + volume * 0.9f;
-        pwrKnee  = half ? 1.6f : 1.1f;                    // 7 W = earlier breakup
+        cabSim   = cabSimP;
         pwrLP.setLowpassQ(14000.f - 3000.f * volume, 0.7f, fs);  // EL84 + OT band-limit (opened, miked-cab top)
+        coupleV1aToV1b.set(fs, 500000.0f, 22.0e-9f, 100000.0f,
+                           0.11f, 0.44f, 1.10f);
+        coupleToPi.set(fs, 1000000.0f, 22.0e-9f, 47000.0f, 0.10f, half ? 0.72f : 0.56f, half ? 2.2f : 1.6f);
+        phaseInverter.setVoxAc30(fs, 0.72f + 1.15f * volume + 0.36f * gainP, 0.76f, 0.08f);
+        supply.set(fs,
+                   half ? 145.0f : 95.0f, half ? 33.0f : 47.0f,
+                   1000.0f, 22.0f,
+                   10000.0f, 22.0f,
+                   half ? 0.28f : 0.18f,
+                   half ? 0.18f : 0.12f,
+                   half ? 0.080f : 0.052f,
+                   half ? 0.20f : 0.16f);
+        power.set(fs, 0.92f + 1.42f * volume + 0.55f * gainP + (half ? 0.42f : 0.0f),
+                  half ? -6.6f : -7.3f,
+                  half ? 0.48f : 0.34f,
+                  72.0f,
+                  11800.0f + 1100.0f * tone);
+        power.out = 0.020f;
+        cabHp.setHighpassQ(82.f, 0.72f, fs);
+        cabThump.setPeak(132.f, 1.1f + 0.8f * volume, 0.84f, fs);
+        cabLowMid.setPeak(520.f, 1.6f, 0.74f, fs);
+        cabBite.setPeak(2500.f + 520.f * tone, 1.6f + 1.8f * tone, 0.78f, fs);
+        cabFizz.setHighShelf(4850.f, -1.8f + 2.4f * tone - 1.0f * gainP, fs);
+        cabLp.setLowpassQ(12400.f + 1400.f * tone - 1500.f * volume, 0.66f, fs);
     }
 
     inline float process(float x) {
         float s = hp.process(x);
         s = (float)v1a.process((double)(3.0f * s));       // V1a input stage (fixed drive)
-        s = (float)v1b.process((double)(gain * s));       // V1b driven by the Gain pot
+        s = coupleV1aToV1b.process(s, gain);
+        s = (float)v1b.process((double)s);                // V1b driven by the Gain pot/acople anterior
         s = toneLo.process(s); s = toneHi.process(s);     // passive tone tilt
-        s = pushPull(s * pwrDrive) * volume;              // 2x EL84 power
+        const float load = std::fabs(s) * (0.70f + 0.85f * volume);
+        const rbtube::SupplyScales bplus = supply.process(load, load * 0.55f, load * 0.24f);
+        s *= 0.92f + 0.08f * bplus.preamp;
+        s = coupleToPi.process(s * pwrDrive * bplus.screen, 1.0f);
+        s = phaseInverter.process(s) * bplus.screen;
+        s = power.process(s * bplus.power) * volume;       // 2x EL84 power
         s = pwrLP.process(s);
-        return s;
+        const float ampOnly = s;
+        float cab = cabHp.process(ampOnly);
+        cab = cabThump.process(cab);
+        cab = cabLowMid.process(cab);
+        cab = cabBite.process(cab);
+        cab = cabFizz.process(cab);
+        cab = cabLp.process(cab);
+        return ampOnly + cabSim * (cab - ampOnly);
     }
 };
 
@@ -194,8 +241,8 @@ class BigTremorPlugin : public Plugin {
     float fParams[kParamCount];
     void recalc() {
         const bool half = fParams[kHalf] > 0.5f;
-        L.setParams(fParams[kVolume], fParams[kTone], fParams[kGain], half);
-        R.setParams(fParams[kVolume], fParams[kTone], fParams[kGain], half);
+        L.setParams(fParams[kVolume], fParams[kTone], fParams[kGain], half, fParams[kCabSim]);
+        R.setParams(fParams[kVolume], fParams[kTone], fParams[kGain], half, fParams[kCabSim]);
     }
 public:
     BigTremorPlugin() : Plugin(kParamCount, 0, 0) {
@@ -214,7 +261,7 @@ protected:
     void initParameter(uint32_t i, Parameter& p) override {
         if (i >= (uint32_t)kParamCount) return;
         p.hints = kParameterIsAutomatable;
-        if (i >= (uint32_t)kHalf) p.hints |= kParameterIsBoolean;
+        if (i == (uint32_t)kHalf) p.hints |= kParameterIsBoolean;
         p.name = kBigTremorNames[i]; p.symbol = kBigTremorSymbols[i];
         p.ranges.min = kBigTremorMin[i]; p.ranges.max = kBigTremorMax[i]; p.ranges.def = kBigTremorDef[i];
     }

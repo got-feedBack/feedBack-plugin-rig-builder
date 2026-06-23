@@ -1,6 +1,6 @@
 /* Plexi fallback DPF UI — shared pedal_ui template. The real in-app face is
  * drawn by pedal_canvas.js (P.plexi, "Marsten" brand, gold-panel Plexi head).
- * Knob count + labels come from the plugin params (6: the full 1959 panel). */
+ * Knob count + labels come from the plugin params (full 1959 panel + Cab Sim). */
 #include "PlexiParams.h"
 #define PEDAL_TITLE  "MARSTEN PLEXI"
 #define PEDAL_NAMES  kPlexiNames
@@ -13,9 +13,9 @@
 #define PEDAL_ARCB 22
 #define PEDAL_W 560
 #define PEDAL_H 300
-// 7 controls (Presence, Bass, Middle, Treble, Loudness I, Loudness II, Input)
+// 8 controls (Presence, Bass, Middle, Treble, Loudness I, Loudness II, Input, Cab Sim)
 #define PEDAL_KNOBS { \
-  {0.10f,0.30f,0.052f}, {0.24f,0.30f,0.052f}, {0.38f,0.30f,0.052f}, \
-  {0.52f,0.30f,0.052f}, {0.66f,0.30f,0.052f}, {0.80f,0.30f,0.052f}, \
-  {0.93f,0.30f,0.052f} }
+  {0.08f,0.30f,0.046f}, {0.20f,0.30f,0.046f}, {0.32f,0.30f,0.046f}, \
+  {0.44f,0.30f,0.046f}, {0.56f,0.30f,0.046f}, {0.68f,0.30f,0.046f}, \
+  {0.80f,0.30f,0.046f}, {0.92f,0.30f,0.046f} }
 #include "../../_shared/pedal_ui.hpp"
