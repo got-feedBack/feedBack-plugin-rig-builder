@@ -2280,6 +2280,11 @@ const RbMegaChain = (function () {
     let _activeFilename = null;
     let _lastError = null;
     let _mega = null;          // last fetched /mega_chain response
+    let _loadedViaAudioEffects = false;  // did the chain load via the audio-effects
+                               // provider (true) or fall back to legacy loadPreset
+                               // (false)? Tone-switch bypass must use the legacy
+                               // setBypass path when false — the provider's
+                               // activateSegment is a no-op on a legacy chain.
     let _buildGen = 0;         // bumped each buildForSong() — lets the 404 retry
                                // loop bail if a newer song load superseded it
     let _seedTried = null;     // filename we already kicked an on-demand seed for
@@ -2495,7 +2500,15 @@ const RbMegaChain = (function () {
         (_mega.master_post_slots || []).forEach(applyEntry);
         if (tone && Array.isArray(tone.slots)) tone.slots.forEach(applyEntry);
 
-        const activatedByHost = await rbActivateSegmentWithHost(segmentId, tone && tone.tone_key || activeToneKey || '');
+        // Only trust the audio-effects PROVIDER's segment activation when the chain
+        // was ACTUALLY loaded through that provider. When we fell back to legacy
+        // loadPreset (executor unavailable), the chain lives in the legacy engine and
+        // the provider's activateSegment is a no-op that STILL reports 'handled' →
+        // tones never get bypassed → the wrong tone plays (a guitar tone over the
+        // bass arrangement) or nothing at all. Force the manual setBypass then.
+        const activatedByHost = _loadedViaAudioEffects
+            ? await rbActivateSegmentWithHost(segmentId, tone && tone.tone_key || activeToneKey || '')
+            : false;
         if (!activatedByHost) {
             const changes = [];
             const mapLen = _indexToSlotId.length;
@@ -2652,6 +2665,7 @@ const RbMegaChain = (function () {
                 executorOptions: rbAudioEffectsLoadOptionsForChain(mega.native_preset.chain, { startAudio: true }),
             });
             loadedViaAudioEffects = !!loaded.viaAudioEffects;
+            _loadedViaAudioEffects = loadedViaAudioEffects;   // module flag for _applyActiveTone
             const res = loaded.result;
             void rbSyncAudioEffectsCapability('mega-chain-loaded', { chain: mega.native_preset.chain, mode: 'mega-chain', bridge: !loaded.viaAudioEffects });
             // Compute dedupe savings: total active_slot entries across
