@@ -584,6 +584,38 @@ struct PhaseInverterLTP12AU7 {
     void reset() { upper.reset(); lower.reset(); inputCoupling.reset(); tailLP.reset(); }
 };
 
+// Long-tail-pair 12AU7 phase inverter (Ampeg V-4B V4). Same topology as the 12AX7
+// LTP but LOW-MU 12AU7 triodes → less gain, far more headroom, and the V-4B's
+// stiffer/cleaner splitter that only hardens when really pushed. Feeds PowerAmpPP.
+// (Distinct from the Gibson PhaseInverterLTP12AU7 above: 330V B+, 100k plates.)
+struct PhaseInverterV4B {
+    TubeStageT<Tube12AU7> upper, lower;
+    HP1 inputCoupling;
+    LP1 tailLP;
+    float drive = 1.0f, out = 1.0f, imbalance = 0.05f, tailMix = 0.10f;
+
+    void set(float sr, float driveV, float outV = 1.0f, float imbalanceV = 0.05f) {
+        inputCoupling.set(sr, 2.5f);
+        tailLP.set(sr, 16.0f);
+        // V-4B PI ≈ 330 V B+, ~100k plate loads, shared-tail self-bias (Rk small here,
+        // the shared-tail compression is the `common` term). divider 14 ≈ 12AU7 PI gain.
+        upper.setWithPlate(sr, 0, 330.0f, 14.0f, 5.0f, 1500.0f, 100000.0f);
+        lower.setWithPlate(sr, 0, 330.0f, 14.0f, 5.0f, 1500.0f, 100000.0f);
+        drive = driveV; out = outV; imbalance = imbalanceV;
+        tailMix = 0.10f + 0.08f * std::fmin(1.0f, std::fmax(0.0f, driveV * 0.25f));
+    }
+
+    inline float process(float x) {
+        const float d = inputCoupling.process(x * drive);
+        const float common = tailLP.process(std::fabs(d)) * tailMix;
+        const float ya = upper.process(d * (1.0f + imbalance) - common);
+        const float yb = lower.process(-d * (1.0f - imbalance) - common);
+        return dn((ya - yb) * (0.5f * out));
+    }
+
+    void reset() { upper.reset(); lower.reset(); inputCoupling.reset(); tailLP.reset(); }
+};
+
 // Cathodyne/split-load phase inverter for 5E3/Princeton-style amps. It uses one
 // 12AX7 stage and derives opposite plate/cathode outputs with unequal clipping
 // and coupling; the returned value is the differential drive into PowerAmpPP.

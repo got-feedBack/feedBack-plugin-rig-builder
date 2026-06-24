@@ -19,6 +19,7 @@
 
 START_NAMESPACE_DISTRHO
 
+
 // RB loudness/headroom output stage (shared across all amps): transparent below
 // ±0.90, saturates to a ±0.99 ceiling so EQ boosts never hard-clip. See AMP_LOUDNESS.md.
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);

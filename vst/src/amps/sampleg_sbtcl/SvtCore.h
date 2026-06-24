@@ -101,7 +101,9 @@ struct SvtCore {
         const float pad   = pPad ? 0.178f : 1.0f;
         const float gAud  = rbtube::PotTaper::audio(pGain, 1.20f);   // audio taper: clean low, cooks high
         inGain  = pad;
-        inScale = 0.9f + 4.6f * gAud;                 // audio → grid volts into V1 (the growl scales with Gain)
+        inScale = 0.9f + 3.4f * gAud;                 // audio → grid volts into V1 (the growl scales with Gain).
+                                                      // 4.6→3.4 (2026-06-23): a HOT real bass DI over-drove V1
+                                                      // into too much growl at default; trimmed for a cleaner DI.
         preGain = 0.85f + 0.55f * gAud;               // V1 → V2 inter-stage
         // post-V2 into the power amp: the real driver/PI swings the 6550 grids by
         // ±tens of volts around the −48 V bias, so this is a large voltage gain.

@@ -34,10 +34,11 @@ static const char* const kHartkeSymbols[kParamCount] = {
 };
 static const float kHartkeMin[kParamCount] = { 0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0, 0,0 };
 static const float kHartkeMax[kParamCount] = { 1,1,1,1,1,1, 1,1,1,1,1,1,1,1,1,1, 1,1 };
-// Tube/Solid 0.5; Comp 0 (off); Low Pass 1.0 (fully open); High Pass 0.0 (fully
-// open); Volume 0.7; EQ bands 0.5 (flat); Active off; EQ In on.
+// Tube/Solid 0.5; Comp 0 (off); Low Pass / High Pass 0.5 (CENTERED = open/off —
+// LP cuts highs turning down, HP cuts lows turning up); Volume 0.7; EQ bands 0.5
+// (flat); Active off; EQ In on.
 static const float kHartkeDef[kParamCount] = {
-    0.50f, 0.50f, 0.00f, 1.00f, 0.00f, 0.70f,
+    0.50f, 0.50f, 0.00f, 0.50f, 0.50f, 0.70f,
     0.50f, 0.50f, 0.50f, 0.50f, 0.50f, 0.50f, 0.50f, 0.50f, 0.50f, 0.50f,
     0.00f, 1.00f
 };

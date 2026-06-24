@@ -92,13 +92,14 @@ struct RC1 {
     void set(double fc, bool isHp) { hp = isHp; Rr = 10000.0; C = 1.0 / (6.2831853 * fc * Rr); }
     void reset() { vp = 0.0; ip = 0.0; }
     inline double proc(double in) {
-        const double Geq = 2.0*C/T, Ieq = Geq*vp + ip;
-        Mna m; m.init(2, 1); m.Vsrc(1, in, 0);
-        if (!hp) { m.R(1, 2, Rr); m.stampG(2, 0, Geq); m.Isrc(0, 2, Ieq); }
-        else     { m.stampG(1, 2, Geq); m.Isrc(2, 1, Ieq); m.R(2, 0, Rr); }
-        if (!m.solve()) return 0.0;
-        const double vo = m.x[1];
-        const double vc = hp ? (m.x[0] - m.x[1]) : m.x[1];
+        // Direct trapezoidal one-pole — the CLOSED-FORM of the old 2-node MNA solve
+        // (bilinear companion Geq=2C/T), bit-for-bit equivalent but ~10× cheaper:
+        // no per-sample Gaussian elimination. With 15 of these per oversampled
+        // sample, this is the bulk of FK's CPU; the cut makes it load/run snappy.
+        const double Geq = 2.0*C/T, Ieq = Geq*vp + ip, Gr = 1.0/Rr;
+        double vo, vc;
+        if (!hp) { vo = (in*Gr + Ieq) / (Gr + Geq); vc = vo; }          // lowpass
+        else     { vo = (Geq*in - Ieq) / (Geq + Gr); vc = in - vo; }    // highpass
         const double i = Geq*(vc - vp) - ip; ip = i; vp = vc;
         return vo;
     }
@@ -148,6 +149,39 @@ struct FkBoost {
     }
 };
 
+// ── GK 800RB POWER AMP — solid-state output stage clipping at the rails ────────
+// Two independent amps (60044 sheet): 300W low band (±85 V rails, 4Ω, MJ15022/
+// MJ15023 triples) and 100W high band (±60 V rails, 8Ω, MJE15030/MJE15031). A
+// real BJT output stage clips nearly HARD at (rail − Vce(sat) − Re·I), flat-
+// topping the wave — quite unlike a tube. We model that with a 4th-order soft-
+// knee saturator (sharper knee than tanh) plus a gentle supply SAG: the heavy
+// 300W rail droops under sustained low-frequency current draw (the manual's
+// "push the volume/boost, drop the masters → fatter, can distort"), which softens
+// attack the way the real head does when leaned on. The 100W rail barely sags.
+struct FkPowerAmp {
+    double env = 0.0, aAtk = 0.0, aRel = 0.0;
+    double ceil = 1.0, sagDepth = 0.0;
+    void setFs(float fs) {
+        const double T = 1.0 / ((fs > 0.f) ? fs : 48000.0);
+        aAtk = 1.0 - std::exp(-T / 0.010);   // 10 ms current build-up
+        aRel = 1.0 - std::exp(-T / 0.220);   // 220 ms rail recovery
+    }
+    void config(double ceiling, double sag) { ceil = ceiling; sagDepth = sag; }
+    void reset() { env = 0.0; }
+    inline double process(double x) {
+        const double a = std::fabs(x);
+        env += (a > env ? aAtk : aRel) * (a - env);
+        // rail droops with sustained draw (sag); the high band barely moves
+        const double rail = ceil * (1.0 - sagDepth * (env / (env + ceil)));
+        const double u  = x / rail;
+        const double u2 = u * u;
+        // 4th-order soft clip: y = u / (1+u⁴)^¼ → flat-tops like a SS amp, but
+        // smooth/stable. sqrt∘sqrt is the cheap RT-safe form of (·)^¼.
+        const double y = u / std::sqrt(std::sqrt(1.0 + u2 * u2));
+        return rail * y;
+    }
+};
+
 // ── GK 800RB mono core (preamp → voicing → 4-band EQ → boost → crossover) ─────
 struct Fk800Core {
     float fs = 96000.f;
@@ -162,6 +196,7 @@ struct Fk800Core {
     RC1 tLp, tHp;   float trebG = 1.f;
     FkBoost boostStage;  float boostInj = 0.04f, boostMakeup = 1.f;  bool boostOn = false;
     RC1 xLp, xHp;   float g100 = 1.f, g300 = 1.f;  bool biamp = false;
+    FkPowerAmp pa300, pa100;   // 300W low band / 100W high band output stages
     // family loudness lift (+7 dB) so the clean GK sits with the SVT/en30 level in
     // the rig; post-clip so it doesn't change the growl onset. Tuned via the harness.
     float outLevel = 4.0f;
@@ -175,12 +210,31 @@ struct Fk800Core {
         conHp.set(250.0, true);  conLp.set(1000.0, false);
         hbLp.set(2200.0, false); hbHp.set(2200.0, true);
         bLp.set(60.0, false);    bHp.set(60.0, true);
-        lmHp.set(125.0, true);   lmLp.set(500.0, false);
-        hmHp.set(575.0, true);   hmLp.set(2300.0, false);
+        // 4-band EQ centres from the ACTUAL RC components on the production
+        // "NEW 800RB PREAMP" board (sheet 406-0045-D), verified component-by-
+        // component. These differ from the Operators Manual's NOMINAL figures
+        // (LO-MID "250 Hz" / HI-MID "1 kHz") — the real circuit centres are:
+        //   LO-MID = R48 47K + C46 0.01µF  → 1/(2π·47k·10nF)  ≈ 339 Hz
+        //   HI-MID = R41 47K + C37 2.2nF   → 1/(2π·47k·2.2nF) ≈ 1539 Hz
+        // (Bass 60 Hz / Treble 4 kHz shelves DO match the manual.) Each mid is a
+        // peaking band: the 25K pot blends ± a bandpass tap into the main path
+        // (d += (G-1)·bandpass); the hp/lp pair brackets the centre at a moderate
+        // Q (×2 / ÷2 ⇒ ratio 4 ⇒ Q≈0.67), geometric-mean = centre.
+        lmHp.set(170.0, true);   lmLp.set(680.0, false);    // LO-MID  ≈ 339 Hz
+        hmHp.set(770.0, true);   hmLp.set(3080.0, false);   // HI-MID  ≈ 1539 Hz
         tLp.set(4000.0, false);  tHp.set(4000.0, true);
         xLp.set(500.0, false);   xHp.set(500.0, true);
+        pa300.setFs(fs); pa100.setFs(fs);
+        // Clip ceilings (core units, post-master). The 300W amp has more headroom
+        // (±85 V vs ±60 V → ~1.4×) and sags more (heavy low-band current draw);
+        // the 100W high band clips a touch earlier and barely sags. Set so the
+        // default panel (Vol 0.7 / masters 0.8) stays clean and grind appears only
+        // when the masters/volume are pushed — A-step harness retunes outLevel.
+        pa300.config(1.25, 0.16);   // 300W low band: more headroom, more sag
+        pa100.config(0.90, 0.04);   // 100W high band: earlier clip, minimal sag
     }
-    void reset() { pre.reset(); boostStage.reset(); for (RC1* p : allRC) p->reset(); }
+    void reset() { pre.reset(); boostStage.reset(); pa300.reset(); pa100.reset();
+                   for (RC1* p : allRC) p->reset(); }
 
     void setParams(float volume, float treble, float hiMid, float loMid, float bass,
                    float boostLevel, float xover, float master100, float master300,
@@ -191,10 +245,12 @@ struct Fk800Core {
         preDrive  = padScale * (0.05f + 0.15f*v + 0.85f*v*v*v*v);
         preMakeup = 6.0f / 214.0f;
         loCutOn = loCutOnP; contourOn = contourOnP; hiBoostOn = hiBoostOnP;
-        bassG  = std::pow(10.f, (bass   - 0.5f) * 24.f / 20.f);
-        loMidG = std::pow(10.f, (loMid  - 0.5f) * 24.f / 20.f);
-        hiMidG = std::pow(10.f, (hiMid  - 0.5f) * 24.f / 20.f);
-        trebG  = std::pow(10.f, (treble - 0.5f) * 24.f / 20.f);
+        // ±15 dB per band (GK 800RB published spec; 500K/47K pot ratio supports it).
+        // At centre (0.5) every band is exactly unity → the default tone is unchanged.
+        bassG  = std::pow(10.f, (bass   - 0.5f) * 30.f / 20.f);
+        loMidG = std::pow(10.f, (loMid  - 0.5f) * 30.f / 20.f);
+        hiMidG = std::pow(10.f, (hiMid  - 0.5f) * 30.f / 20.f);
+        trebG  = std::pow(10.f, (treble - 0.5f) * 30.f / 20.f);
         boostOn  = boostOnP;
         boostInj = 0.04f;
         boostMakeup = std::pow(10.f, (boostLevel * 15.f) / 20.f);
@@ -205,8 +261,39 @@ struct Fk800Core {
         // 0..1.43× (≈ +3 dB at full) → "the masters barely raise the volume". Give
         // them real authority: an audio-ish taper up to ~2.4× (≈ +7.6 dB at full),
         // with the default 0.7 sitting a touch hotter so the amp isn't quiet.
-        g300 = std::pow(master300, 1.8f) * 2.4f;   // 0.5→0.69× · 0.7→1.29× · 1.0→2.4×
+        // Real master taper: 0 → fully silent (like the real GK), audio taper up to
+        // 2.4× at max. The masters are kept supplied on load by the `_static` block
+        // in rs_knob_to_vst_param.json (BT880B) so a fresh load never sits at 0 by
+        // accident — only a deliberate knob-to-min mutes the amp, as it should.
+        g300 = std::pow(master300, 1.8f) * 2.4f;   // 0→silent · 0.8→1.36× · 1.0→2.4×
         g100 = std::pow(master100, 1.8f) * 2.4f;
+
+        // FLATTENING MAKEUP (mirrors the SVT recipe). The raw GK level ramps ~25 dB
+        // across the Volume knob (preDrive scales steeply v→v⁴), so a FIXED outLevel
+        // left FK far quieter than the SVT at low/mid Volume and louder at max — not
+        // a usable, loudness-matched amp. This Volume-dependent makeup holds the
+        // OUTPUT RMS ~flat (≈ −11 dB, the SVT/family level) so the Volume knob reads
+        // as growl-AMOUNT (like the SVT Gain), not raw loudness. Tuned against
+        // calibrate_amp_core.py so the FK sweep tracks the SVT-CL sweep within ~1 dB.
+        // FLATTENING makeup + level calibration. The raw level ramps ~25 dB across
+        // Volume (preDrive v→v⁴); the −25.1·v term holds output ~flat so Volume reads
+        // as growl-AMOUNT. The 34.4 base was raised +4 dB from the old 30.4 after
+        // measuring FK vs the SamplegSBTCL on the real bass DIs (ui_public_inputs):
+        // FK sat ~4 dB under the SBT on sustained/quiet content. NOTE: FK and SBT
+        // have different DYNAMICS (the SBT's 6550 power amp compresses hard; FK is
+        // solid-state and doesn't), so they can't be matched at every input by a
+        // fixed gain — FK tracks playing dynamics more. Matching the SBT's CONSTANT
+        // loudness would need an output compressor on FK (deferred).
+        // BASE REVERTED 49.4 → 30.4 (2026-06-23): the +15 dB (and the +4) were tuned
+        // against QUIET reference recordings / the collision-era stranded-mute (FK fell
+        // below the −45 normalizer gate). With the DGL collision fixed AND a HOT real
+        // bass (the player's live DI, far hotter than the quiet WAVs), ×295 output
+        // makeup slammed rbAmpLvl → "muy distorsionado". 30.4 is the clean, family-
+        // matched base; the working final-normalizer lifts the (now lower) output, and
+        // a real bass clears the gate easily without crushing the output stage.
+        float mkDb = 11.0f - 14.0f * v;
+        if (pad) mkDb += 10.0f;     // the −10 dB input pad drops drive → restore level
+        outLevel = std::pow(10.0f, 0.05f * mkDb);
     }
 
     inline float process(float x) {
@@ -219,9 +306,21 @@ struct Fk800Core {
         { const double bp = hmLp.proc(hmHp.proc(d)); d += (hiMidG - 1.0) * bp; }
         d = tLp.proc(d) + trebG * tHp.proc(d);
         if (boostOn) d = boostStage.process(d, boostInj) * boostMakeup;
+        // Crossover → master → POWER AMP. Each amp clips at its own rail (real
+        // topology: the master pot feeds the power-amp input, which flat-tops at
+        // the supply). Pushing master/volume drives it into clip; outLevel after
+        // is the non-physical family loudness-match (retuned by the A-step harness).
         const double low = xLp.proc(d), high = xHp.proc(d);
-        if (biamp) return (float)((low * g300 + high * g100) * outLevel);
-        return (float)(d * (0.5 * g300 + 0.5 * g100) * outLevel);
+        if (biamp) {
+            const double a300 = pa300.process(low  * g300);   // low band → 300W/4Ω
+            const double a100 = pa100.process(high * g100);   // high band → 100W/8Ω
+            return (float)((a300 + a100) * outLevel);
+        }
+        // Full-range: both amps see the whole band, each scaled by its own master
+        // and clipping independently; halved to one mixed output (one rig channel).
+        const double a300 = pa300.process(d * g300);
+        const double a100 = pa100.process(d * g100);
+        return (float)(0.5 * (a300 + a100) * outLevel);
     }
 };
 

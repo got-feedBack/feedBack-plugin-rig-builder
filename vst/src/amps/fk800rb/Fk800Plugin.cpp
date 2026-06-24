@@ -19,6 +19,10 @@
 
 START_NAMESPACE_DISTRHO
 
+
+
+
+
 // RB loudness/headroom output stage (shared across all amps): transparent below
 // ±0.90, saturates to a ±0.99 ceiling so EQ boosts never hard-clip. See AMP_LOUDNESS.md.
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
@@ -64,7 +68,7 @@ protected:
     }
     float getParameterValue(uint32_t i) const override { return (i < (uint32_t)kParamCount) ? fParams[i] : 0.f; }
     void  setParameterValue(uint32_t i, float v) override { if (i < (uint32_t)kParamCount) { fParams[i] = v; recalc(); } }
-    void  sampleRateChanged(double r) override { core.setSampleRate(kOS * (float)r); os.reset(); core.reset(); recalc(); }
+    void  sampleRateChanged(double r) override { core.setSampleRate(kOS * (float)r); os.reset(); core.reset(); recalc();  }
 
     void run(const float** in, float** out, uint32_t frames) override {
         const float* i0 = in[0];
