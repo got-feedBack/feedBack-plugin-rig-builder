@@ -29,6 +29,7 @@
 #include "koren_el34_ftube.h"   // PURE EL34 power pentode
 #include "koren_ef86_ftube.h"   // PURE EF86 small-signal pentode (DC30 channel 2)
 #include "koren6550_ftube.h"    // PURE 6550 beam pentode (Ampeg SVT-CL, 6x PP)
+#include "koren_kt88_ftube.h"   // PURE KT88 beam tetrode (Trace V-Type V8, 8x PP)
 #include "koren5879_ftube.h"    // PURE 5879 sharp-cutoff pentode
 #include "koren7199p_ftube.h"   // PURE 7199 pentode section
 #include <cmath>
@@ -129,6 +130,7 @@ struct Tube6L6GC { static inline float ftube(int t,float v){return L6GC_ftube(t,
 struct TubeKT66  { static inline float ftube(int t,float v){return KT66_ftube(t,v);} };
 struct TubeEL34  { static inline float ftube(int t,float v){return EL34P_ftube(t,v);} };
 struct Tube6550  { static inline float ftube(int t,float v){return T6550_ftube(t,v);} };
+struct TubeKT88  { static inline float ftube(int t,float v){return TKT88_ftube(t,v);} };
 
 // one-pole low-pass (anti-alias / Miller / cathode-bypass / coupling rolloff)
 struct LP1 {
@@ -691,5 +693,6 @@ using PowerAmp6L6GC=PowerAmpPPT<Tube6L6GC>;   // 6L6GC push-pull (Mesa/ENGL/Boog
 using PowerAmpKT66= PowerAmpPPT<TubeKT66>;    // KT66 push-pull (BT45 / confirmed KT66 amps)
 using PowerAmpEL34= PowerAmpPPT<TubeEL34>;    // EL34 push-pull (Plexi/Marshall)
 using PowerAmp6550= PowerAmpPPT<Tube6550>;    // 6550 push-pull (Ampeg SVT-CL, 6x)
+using PowerAmpKT88= PowerAmpPPT<TubeKT88>;    // KT88 push-pull (Trace V-Type V8, 8x)
 
 } // namespace rbtube

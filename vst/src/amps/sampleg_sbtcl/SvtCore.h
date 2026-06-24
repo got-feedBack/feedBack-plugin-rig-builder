@@ -101,7 +101,7 @@ struct SvtCore {
         const float pad   = pPad ? 0.178f : 1.0f;
         const float gAud  = rbtube::PotTaper::audio(pGain, 1.20f);   // audio taper: clean low, cooks high
         inGain  = pad;
-        inScale = 0.9f + 3.4f * gAud;                 // audio → grid volts into V1 (the growl scales with Gain).
+        inScale = 0.8f + 2.4f * gAud;                 // audio → grid volts into V1 (cleaner on a hot real bass; growl scales with Gain).
                                                       // 4.6→3.4 (2026-06-23): a HOT real bass DI over-drove V1
                                                       // into too much growl at default; trimmed for a cleaner DI.
         preGain = 0.85f + 0.55f * gAud;               // V1 → V2 inter-stage
@@ -131,9 +131,10 @@ struct SvtCore {
 
         // Loudness makeup — gain-dependent flattening, designed from the harness
         // level-vs-gain sweep (natural RMS fell ≈ −30 dB→−41 dB across Gain). Maps to
-        // the amp-family target (~−13 dB clean rising to ~−9 dB, like the en30 ref):
-        // makeup_dB ≈ 17 + 15·Gain. Peaks ride ~0.85→0.99 into the rbAmpLvl ceiling.
-        outLevel = std::pow(10.0f, 0.05f * (17.0f + 15.0f * pGain));
+        // family target ~−14 LUFS (the rig trim finishes the leveling). Re-tuned 2026-06-24
+        // DOWN ~7 dB: the old 17+15·Gain pinned the rbAmpLvl ceiling (peak 0.99 = "hot"
+        // & "loud", needed the −15 pad to tame). 10+12·Gain keeps it CLEAN at default.
+        outLevel = std::pow(10.0f, 0.05f * (10.0f + 12.0f * pGain));
         // Pad-aware makeup: the −15 dB pad cuts pre-NAM drive (cleaner, less
         // compression), so the gain-staged makeup above over-drives the now-cleaner
         // signal into the ceiling. Trim it back when padded → the padded input stays

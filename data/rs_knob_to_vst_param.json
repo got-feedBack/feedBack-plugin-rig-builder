@@ -6413,24 +6413,24 @@
  "Bass_Amp_CS300B": {
   "benderfumble800": {
    "Gain": {
-    "param": "Gain",
+    "param": "B Volume",
     "scale": 0.01,
-    "_hint": "RS Gain 0-100 -> Rumble 800 preamp Gain 0..1."
+    "_hint": "RS Gain 0-100 -> Rumble Bass channel-B Volume (preamp drive) 0..1."
    },
    "Bass": {
-    "param": "Bass",
+    "param": "B Bass",
     "scale": 0.1,
-    "_hint": "RS Bass 0-10 (5=flat) -> 4-band EQ ~70 Hz low shelf 0..1 (0.5 flat)."
+    "_hint": "RS Bass 0-10 (5=flat) -> channel-B Fender TMB Bass 0..1 (0.5 flat)."
    },
    "Mid": {
-    "param": "Low Mid",
+    "param": "B Middle",
     "scale": 0.1,
-    "_hint": "RS Mid 0-10 (5=flat) -> 4-band EQ Low Mid ~250 Hz 0..1 (0.5 flat)."
+    "_hint": "RS Mid 0-10 (5=flat) -> channel-B Fender TMB Middle 0..1 (0.5 flat)."
    },
    "Treble": {
-    "param": "Treble",
+    "param": "B Treble",
     "scale": 0.1,
-    "_hint": "RS Treble 0-10 (5=flat) -> 4-band EQ ~5 kHz high shelf 0..1 (0.5 flat)."
+    "_hint": "RS Treble 0-10 (5=flat) -> channel-B Fender TMB Treble 0..1 (0.5 flat)."
    }
   }
  },

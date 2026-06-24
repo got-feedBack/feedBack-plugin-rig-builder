@@ -3193,39 +3193,67 @@
       // power LED
       c.beginPath();c.arc(.965*W,.135*H,5,0,7);c.fillStyle=rgb(220,40,30);c.fill(); } };
 
-  // Bender Fumble 800 — Fender Rumble 800 modern Class-D head (parody). Black
-  // face, cream knobs: Gain, Bright/Contour/Vintage buttons, Overdrive Drive+
-  // Level, 4-band EQ (Bass/Low Mid/High Mid/Treble), Master. ids 0..10.
-  P.benderfumble800 = { w:920, h:200,
+  // Bender Fumble Bass — Fender Rumble Bass (1995) all-tube dual-channel head
+  // (parody). Blonde tweed tolex, oxblood grille, dark control panel: channel A
+  // (Volume/Treble/Bass/Middle + Mid switch), A/B input jacks + Select/Channel,
+  // channel B (Volume/Treble/Bass/Middle + Mid switch), Mix. ids 0..10:
+  //  0 A Volume 1 A Treble 2 A Bass 3 A Middle 4 A Mid | 5 B Volume 6 B Treble
+  //  7 B Bass 8 B Middle 9 B Mid | 10 Mix.
+  P.benderfumble800 = { w:920, h:330,
     knobs:[
-      {id:0,cx:.115,cy:.48,r:.038,style:'cream'},
-      {id:1,cx:.300,cy:.48,r:.038,style:'cream'},
-      {id:2,cx:.390,cy:.48,r:.038,style:'cream'},
-      {id:3,cx:.475,cy:.48,r:.038,style:'cream'},
-      {id:4,cx:.560,cy:.48,r:.038,style:'cream'},
-      {id:5,cx:.645,cy:.48,r:.038,style:'cream'},
-      {id:6,cx:.730,cy:.48,r:.038,style:'cream'},
-      {id:7,cx:.845,cy:.48,r:.038,style:'cream'}],
-    switches:[{id:8,cx:.190,cy:.28,hs:.010,dark:true},{id:9,cx:.190,cy:.50,hs:.010,dark:true},{id:10,cx:.190,cy:.72,hs:.010,dark:true}],
-    names:['Gain','Drive','Level','Bass','Low Mid','High Mid','Treble','Master','Bright','Contour','Vintage'],
-    tick:rgb(120,116,104), ptr:rgb(40,38,34),
-    draw(d,vals){ const {ctx:c,W,H}=d; const ink=rgb(232,233,236), dim=rgb(150,152,156);
-      c.fillStyle=rgb(180,182,186); c.fillRect(0,0,W,H);
-      rr(c,4,4,W-8,H-8,5); c.fillStyle=rgb(20,20,22); c.fill(); rr(c,4,4,W-8,H-8,5); c.strokeStyle=rgb(60,60,64); c.lineWidth=1.2; c.stroke();
+      {id:0,cx:.070,cy:.185,r:.026,style:'cream'},   // A Volume
+      {id:1,cx:.130,cy:.185,r:.026,style:'cream'},   // A Treble
+      {id:2,cx:.190,cy:.185,r:.026,style:'cream'},   // A Bass
+      {id:3,cx:.250,cy:.185,r:.026,style:'cream'},   // A Middle
+      {id:5,cx:.620,cy:.185,r:.026,style:'cream'},   // B Volume
+      {id:6,cx:.680,cy:.185,r:.026,style:'cream'},   // B Treble
+      {id:7,cx:.740,cy:.185,r:.026,style:'cream'},   // B Bass
+      {id:8,cx:.800,cy:.185,r:.026,style:'cream'},   // B Middle
+      {id:10,cx:.875,cy:.185,r:.026,style:'cream'}], // Mix
+    switches:[{id:4,cx:.305,cy:.185,hs:.012,dark:true},{id:9,cx:.560,cy:.185,hs:.012,dark:true}],
+    names:['A Volume','A Treble','A Bass','A Middle','A Mid Cut','B Volume','B Treble','B Bass','B Middle','B Mid Cut','Mix'],
+    tick:rgb(120,112,96), ptr:rgb(236,230,212),
+    draw(d,vals){ const {ctx:c,W,H,s}=d; const ink=rgb(228,222,206), dim=rgb(150,144,130);
       const lab=(cx,y,sz,t,col,al)=>textC(d,cx*W,y*H,F.barlow,sz,col||ink,t,al);
-      c.beginPath();c.arc(.045*W,.48*H,9,0,7);c.fillStyle=rgb(40,40,44);c.fill();c.strokeStyle=rgb(150,152,156);c.lineWidth=1.5;c.stroke();
-      c.beginPath();c.arc(.045*W,.48*H,3.5,0,7);c.fillStyle=rgb(16,16,18);c.fill();
-      lab(.045,.30,9,'INPUT');
-      [[.115,'GAIN'],[.300,'DRIVE'],[.390,'LEVEL'],[.475,'BASS'],[.560,'LOW MID'],[.645,'HIGH MID'],[.730,'TREBLE'],[.845,'MASTER']].forEach(k=>lab(k[0],.20,9,k[1]));
-      [[.28,'BRIGHT'],[.50,'CONTOUR'],[.72,'VINTAGE']].forEach(b=>lab(.208,b[0],8.5,b[1],ink,'left'));
-      c.beginPath();c.arc(.345*W,.255*H,4,0,7);c.fillStyle=rgb(80,28,26);c.fill();
-      c.strokeStyle=dim; c.lineWidth=1.2;
-      c.beginPath(); c.moveTo(.268*W,.74*H); c.lineTo(.268*W,.78*H); c.lineTo(.422*W,.78*H); c.lineTo(.422*W,.74*H); c.stroke();
-      lab(.345,.84,8.5,'OVERDRIVE',rgb(210,212,216));
-      c.beginPath(); c.moveTo(.445*W,.74*H); c.lineTo(.445*W,.78*H); c.lineTo(.760*W,.78*H); c.lineTo(.760*W,.74*H); c.stroke();
-      lab(.6025,.84,8.5,'EQUALIZATION',rgb(210,212,216));
-      c.beginPath();c.arc(.945*W,.30*H,5,0,7);c.fillStyle=rgb(230,40,30);c.fill();
-      textC(d,(W-16),(H-18),F.crete,19,rgb(236,237,240),'Fumble 800','right'); } };
+      // blonde tweed tolex
+      c.fillStyle=rgb(196,176,130); c.fillRect(0,0,W,H);
+      c.fillStyle=rgb(176,156,112); c.globalAlpha=.25; for(let y=0;y<H;y+=6) c.fillRect(0,y,W,2); c.globalAlpha=1;
+      // oxblood grille cloth (lower body)
+      const gy=H*0.36, gh=H-gy-10; rr(c,10,gy,W-20,gh,6); c.fillStyle=rgb(74,30,34); c.fill();
+      c.fillStyle=rgb(40,16,20); c.globalAlpha=.35; for(let x=12;x<W-12;x+=5) c.fillRect(x,gy,1.4,gh); c.globalAlpha=1;
+      rr(c,10,gy,W-20,gh,6); c.strokeStyle=rgb(150,134,98); c.lineWidth=2; c.stroke();
+      // dark control panel across the top
+      const ph=H*0.30; rr(c,10,8,W-20,ph,5);
+      const pg=c.createLinearGradient(0,8,0,8+ph); pg.addColorStop(0,rgb(64,54,46)); pg.addColorStop(1,rgb(36,30,26));
+      c.fillStyle=pg; c.fill(); rr(c,10,8,W-20,ph,5); c.strokeStyle=rgb(96,84,68); c.lineWidth=1.4; c.stroke();
+      // channel labels + knob labels
+      lab(.160,.045,10,'CHANNEL A',rgb(206,200,184)); lab(.710,.045,10,'CHANNEL B',rgb(206,200,184));
+      [[.070,'VOLUME'],[.130,'TREBLE'],[.190,'BASS'],[.250,'MIDDLE'],
+       [.620,'VOLUME'],[.680,'TREBLE'],[.740,'BASS'],[.800,'MIDDLE'],[.875,'MIX']].forEach(k=>lab(k[0],.30,10,k[1]));
+      lab(.305,.30,9,'MID'); lab(.560,.30,9,'MID');
+      // decorative SELECT / CHANNEL switches (routing, drawn for the 1:1 look)
+      [[.350,'SELECT'],[.515,'CHAN']].forEach(sw=>{ const x=sw[0]*W,y=.185*H;
+        rr(c,x-6,y-9,12,18,2); c.fillStyle=rgb(24,20,18); c.fill();
+        rr(c,x-4.5,y-3.5,9,7,1.5); c.fillStyle=rgb(150,144,132); c.fill(); lab(sw[0],.30,8,sw[1]); });
+      // input jacks (nudged slightly left)
+      [[.400,'A IN'],[.440,'A/B'],[.480,'B IN']].forEach(j=>{ const x=j[0]*W,y=.185*H;
+        c.beginPath();c.arc(x,y,7,0,7);c.fillStyle=rgb(28,24,22);c.fill();c.strokeStyle=rgb(150,144,130);c.lineWidth=1.4;c.stroke();
+        c.beginPath();c.arc(x,y,2.6,0,7);c.fillStyle=rgb(14,12,10);c.fill(); lab(j[0],.30,8,j[1]); });
+      // power / channel LED
+      c.beginPath();c.arc(.585*W,.10*H,4,0,7);c.fillStyle=rgb(232,46,32);c.fill();c.strokeStyle=rgb(96,28,24);c.lineWidth=1;c.stroke();
+      // ── big chrome "Bender" script (diagonal), lower-left on the grille — same style as Bender Deluxe ──
+      c.save(); c.translate(10+(W-20)*0.175, gy+gh*0.40); c.rotate(-0.16); c.transform(1,0,-0.18,1,0,0); c.textAlign='center'; c.textBaseline='middle';
+      setFont(d,F.ink,60);
+      c.fillStyle='rgba(0,0,0,0.30)'; c.fillText('Bender',2.5*s,3*s);
+      c.lineWidth=2.8*s; c.strokeStyle=rgb(40,42,46); c.strokeText('Bender',0,0);
+      const blg=c.createLinearGradient(0,-24*s,0,24*s); blg.addColorStop(0,rgb(252,253,255)); blg.addColorStop(0.45,rgb(214,218,224)); blg.addColorStop(0.55,rgb(176,180,186)); blg.addColorStop(1,rgb(150,154,160));
+      c.fillStyle=blg; c.fillText('Bender',0,0);
+      c.restore();
+      // ── "Fumble Bass" diagonal script to the RIGHT of the Mix knob (on the panel) ──
+      c.save(); c.translate(.940*W, .175*H); c.rotate(-0.16); c.transform(1,0,-0.16,1,0,0); c.textAlign='center'; c.textBaseline='middle';
+      setFont(d,F.ink,18); c.fillStyle=rgb(238,232,214); c.fillText('Fumble',0,-8*s);
+      setFont(d,F.ink,14); c.fillText('Bass',7*s,8*s);
+      c.restore(); } };
 
   // Aiden GT-300/550/880 — Eden WT Valve-Tech hybrid preamp (parody). Gold/tan
   // panel: Gain (blue) + Enhance (white) + Bass (red) + 3-band semi-parametric
@@ -3297,27 +3325,87 @@
       [[.420,'FREQ'],[.500,'FREQ'],[.580,'FREQ'],[.700,'X-OVER'],[.760,'ON']].forEach(k=>lab(k[0],.44,9,k[1]));
       [[.095,'GAIN'],[.170,'ENHANCE'],[.280,'BASS'],[.420,'LOW'],[.500,'MID'],[.580,'HIGH'],[.675,'TREBLE'],[.775,'MASTER'],[.860,'BALANCE']].forEach(k=>lab(k[0],.82,9,k[1])); } };
 
-  // Lovolt 100 — Custom Hiwatt 100 (DR103, parody). Black face, Normal/Bright
-  // vols + Bass/Treble/Middle + Presence + Master. ids 0..6.
-  P.lovolt100 = { w:900, h:230,
+  // Lovolt 100 (BASS slot) — copies the nicer Lovolt DR103 face (Custom Hiwatt 100):
+  // black tolex head, white piping, LOVOLT badge, control panel with Normal/Brilliant
+  // input jacks (jumpered cable shown — the bass build runs both channels) + 7 knobs
+  // (0 NormalVol 1 BrightVol 2 Bass 3 Treble 4 Middle 5 Presence 6 Master). No input
+  // jumper switch / cab-sim here (the bass plugin has only ids 0..6).
+  P.lovolt100 = { w:1560, h:600, ptr:rgb(238,239,242),
     knobs:[
-      {id:0,cx:.215,cy:.52,r:.030,style:'pointer',cap:[22,22,24]},
-      {id:1,cx:.323,cy:.52,r:.030,style:'pointer',cap:[22,22,24]},
-      {id:2,cx:.430,cy:.52,r:.030,style:'pointer',cap:[22,22,24]},
-      {id:3,cx:.538,cy:.52,r:.030,style:'pointer',cap:[22,22,24]},
-      {id:4,cx:.645,cy:.52,r:.030,style:'pointer',cap:[22,22,24]},
-      {id:5,cx:.753,cy:.52,r:.030,style:'pointer',cap:[22,22,24]},
-      {id:6,cx:.860,cy:.52,r:.030,style:'pointer',cap:[22,22,24]}],
-    names:['Normal Vol','Bright Vol','Bass','Treble','Middle','Presence','Master Vol'],
-    tick:rgb(150,152,158), ptr:rgb(244,245,248),
-    draw(d,vals){ const {ctx:c,W,H}=d; const ink=rgb(214,216,220);
-      box(d, 26,26,28, false);
-      const lx=.020*W,ly=.10*H,lw=.135*W,lh=.24*H;
-      rr(c,lx,ly,lw,lh,3); c.strokeStyle=rgb(210,212,216); c.lineWidth=1.6; c.stroke();
-      textC(d,lx+lw*0.5,ly+lh*0.5,F.bebas,14,rgb(220,222,226),'LOVOLT');
-      textC(d,.45*W,.10*H,F.bebas,13,rgb(210,212,216),'CUSTOM LOVOLT 100');
-      [[.215,'NORMAL'],[.323,'BRIGHT'],[.430,'BASS'],[.538,'TREBLE'],[.645,'MIDDLE'],[.753,'PRESENCE'],[.860,'MASTER']].forEach(k=>textC(d,k[0]*W,.74*H,F.barlow,8.5,ink,k[1]));
-      ledDot(d,.945*W,.50*H,true,220,40,36); } };
+      {id:0,cx:.150,cy:.745,r:.021,style:'pointer',cap:[22,22,24]},  // NORMAL VOL
+      {id:1,cx:.242,cy:.745,r:.021,style:'pointer',cap:[22,22,24]},  // BRILLIANT VOL
+      {id:2,cx:.333,cy:.745,r:.021,style:'pointer',cap:[22,22,24]},  // BASS
+      {id:3,cx:.425,cy:.745,r:.021,style:'pointer',cap:[22,22,24]},  // TREBLE
+      {id:4,cx:.517,cy:.745,r:.021,style:'pointer',cap:[22,22,24]},  // MIDDLE
+      {id:5,cx:.608,cy:.745,r:.021,style:'pointer',cap:[22,22,24]},  // PRESENCE
+      {id:6,cx:.700,cy:.745,r:.021,style:'pointer',cap:[22,22,24]} ],// MASTER VOL
+    draw(d,vals){ const {ctx:c,W,H,s}=d;
+      const ink=rgb(232,233,236), inkF='rgba(232,233,236,0.6)', chr=rgb(196,200,206);
+      // ── black tolex head ──
+      const bgr=c.createLinearGradient(0,0,0,H); bgr.addColorStop(0,rgb(24,23,25)); bgr.addColorStop(0.5,rgb(16,15,17)); bgr.addColorStop(1,rgb(9,8,10));
+      c.fillStyle=bgr; c.fillRect(0,0,W,H);
+      c.save(); c.beginPath(); c.rect(0,0,W,H); c.clip(); c.lineWidth=1; c.strokeStyle='rgba(255,255,255,0.016)';
+      for(let x=-H;x<W;x+=6*s){ c.beginPath(); c.moveTo(x,0); c.lineTo(x+H,H); c.stroke(); } c.restore();
+      const bolt=(x,y,r)=>{ r=r||3*s; const g=c.createRadialGradient(x-r*0.3,y-r*0.3,r*0.15,x,y,r);
+        g.addColorStop(0,rgb(228,230,234)); g.addColorStop(1,rgb(108,112,118));
+        c.beginPath(); c.arc(x,y,r,0,7); c.fillStyle=g; c.fill(); c.strokeStyle=rgb(48,50,54); c.lineWidth=0.7*s; c.stroke(); };
+      const hx0=.44*W,hx1=.56*W,hcy=H*.045,hh=H*.03;
+      rr(c,hx0,hcy-hh,hx1-hx0,2*hh,hh); c.fillStyle=rgb(26,26,28); c.fill(); c.strokeStyle=rgb(8,8,10); c.lineWidth=1.2*s; c.stroke();
+      [hx0,hx1].forEach(bx=>bolt(bx,hcy,3*s));
+      // ── white piping (Hiwatt look) ──
+      c.strokeStyle=rgb(236,236,238); c.lineWidth=2.2*s;
+      rr(c,W*.03,H*.11,W*.94,H*.44,8*s); c.stroke();
+      c.beginPath(); c.moveTo(W*.03,H*.20); c.lineTo(W*.97,H*.20); c.stroke();
+      c.beginPath(); c.moveTo(W*.03,H*.46); c.lineTo(W*.97,H*.46); c.stroke();
+      // ── "LOVOLT" badge plate ──
+      const bw=W*.30, bh=H*.13, bx=W*.5-bw/2, by=H*.27;
+      rr(c,bx,by,bw,bh,5*s); c.fillStyle=rgb(12,12,13); c.fill();
+      rr(c,bx+3*s,by+3*s,bw-6*s,bh-6*s,4*s); c.strokeStyle=rgb(236,236,238); c.lineWidth=2*s; c.stroke();
+      bolt(bx+13*s,by+bh*.5,2.6*s); bolt(bx+bw-13*s,by+bh*.5,2.6*s);
+      textSpaced(d,W*.5,by+bh*.54,F.anton,40,rgb(238,239,242),'LOVOLT',0.10);
+      // ── corner caps ──
+      const corner=(cxx,cyy,dx,dy)=>{ const k=H*.075; c.beginPath();
+        c.moveTo(cxx,cyy+dy*k); c.lineTo(cxx,cyy); c.lineTo(cxx+dx*k,cyy);
+        c.quadraticCurveTo(cxx+dx*k*0.35,cyy+dy*k*0.35,cxx,cyy+dy*k); c.closePath();
+        const gg=c.createLinearGradient(cxx,cyy,cxx+dx*k,cyy+dy*k); gg.addColorStop(0,rgb(226,228,232)); gg.addColorStop(1,rgb(96,100,106));
+        c.fillStyle=gg; c.fill(); bolt(cxx+dx*k*0.42,cyy+dy*k*0.42,2.4*s); };
+      corner(0,0,1,1); corner(W,0,-1,1); corner(0,H,1,-1); corner(W,H,-1,-1);
+      // ── black control panel (bottom strip) ──
+      const py=H*.62, ph=H*.30, px=W*.04, pw=W*.92, lblY=py+ph*.80, cy=py+ph*.45;
+      const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,rgb(26,26,28)); pg.addColorStop(1,rgb(13,13,15));
+      rr(c,px,py,pw,ph,5*s); c.fillStyle=pg; c.fill(); rr(c,px,py,pw,ph,5*s); c.strokeStyle=rgb(70,72,76); c.lineWidth=1.2*s; c.stroke();
+      // ── INPUTS: Normal (Hi/Lo) + Brilliant (Hi/Lo) + jumper cable (both channels) ──
+      const jack=(jx,jy)=>{ c.beginPath(); c.arc(jx,jy,7*s,0,7); c.fillStyle=rgb(16,14,16); c.fill();
+        c.strokeStyle=chr; c.lineWidth=1.8*s; c.stroke(); c.beginPath(); c.arc(jx,jy,2.4*s,0,7); c.fillStyle=rgb(54,52,56); c.fill(); };
+      const nx=.060*W, bx2=.110*W, jHi=cy-12*s, jLo=cy+14*s;
+      jack(nx,jHi); jack(nx,jLo); jack(bx2,jHi); jack(bx2,jLo);
+      textSpaced(d,nx,py+ph*.12,F.barlow,7,ink,'NORMAL',0.02); textSpaced(d,bx2,py+ph*.12,F.barlow,7,ink,'BRIGHT',0.02);
+      const plug=(jx,jy)=>{ rr(c,jx-4.2*s,jy-5*s,8.4*s,6*s,2*s); c.fillStyle=rgb(36,34,32); c.fill();
+        const cg=c.createLinearGradient(jx-4.2*s,jy,jx+4.2*s,jy); cg.addColorStop(0,rgb(188,192,198)); cg.addColorStop(0.5,rgb(120,124,130)); cg.addColorStop(1,rgb(188,192,198));
+        rr(c,jx-4.2*s,jy+1*s,8.4*s,3.4*s,1.4*s); c.fillStyle=cg; c.fill();
+        c.beginPath(); c.moveTo(jx,jy+6*s); c.bezierCurveTo(jx-6*s,jy+30*s, jx-20*s,jy+36*s, jx-26*s,py+ph-4*s);
+        c.lineWidth=4.5*s; c.lineCap='round'; c.strokeStyle=rgb(18,18,20); c.stroke(); c.lineCap='butt'; };
+      const jumper=(x1,y1,x2,y2)=>{ const my=Math.max(y1,y2)+12*s;
+        c.beginPath(); c.arc(x1,y1,3*s,0,7); c.fillStyle=rgb(36,34,32); c.fill();
+        c.beginPath(); c.arc(x2,y2,3*s,0,7); c.fillStyle=rgb(36,34,32); c.fill();
+        c.beginPath(); c.moveTo(x1,y1); c.quadraticCurveTo((x1+x2)/2,my,x2,y2);
+        c.lineWidth=3.4*s; c.lineCap='round'; c.strokeStyle=rgb(18,18,20); c.stroke(); c.lineCap='butt'; };
+      jumper(nx,jLo,bx2,jHi); plug(nx,jHi);   // bass: both channels jumpered
+      textSpaced(d,.085*W,py+ph*.95,F.barlow,6,rgb(150,150,156),'JUMPERED',0.04);
+      // ── knob labels ──
+      const lbl=(cx2,t,sz)=>textSpaced(d,cx2*W,lblY,F.barlow,sz||8,ink,t,0.02);
+      lbl(.150,'NORMAL VOL',9.5); lbl(.242,'BRIGHT VOL',9.5); lbl(.333,'BASS',11); lbl(.425,'TREBLE',10.5);
+      lbl(.517,'MIDDLE',10.5); lbl(.608,'PRESENCE',10); lbl(.700,'MASTER VOL',9.5);
+      textSpaced(d,.390*W,py+ph*.13,F.bebas,15,inkF,'CUSTOM LOVOLT 100 BASS',0.08);
+      textSpaced(d,.390*W,py+ph*.95,F.barlow,7,inkF,'MADE IN THE CUSTOM WORKSHOPS',0.04);
+      // ── right: red jewel + STANDBY / MAINS toggles ──
+      const jcx=.760*W;
+      c.beginPath(); c.arc(jcx,cy,8*s,0,7); c.fillStyle=rgb(40,8,6); c.fill();
+      const jg=c.createRadialGradient(jcx-2*s,cy-2*s,1*s,jcx,cy,8*s); jg.addColorStop(0,rgb(255,120,90)); jg.addColorStop(0.5,rgb(220,40,30)); jg.addColorStop(1,rgb(108,12,10));
+      c.beginPath(); c.arc(jcx,cy,6*s,0,7); c.fillStyle=jg; c.fill();
+      batToggle(d,.812*W,cy,8*s,true); batToggle(d,.885*W,cy,8*s,true);
+      textSpaced(d,.812*W,py+ph*.16,F.barlow,9,ink,'STANDBY',0.02); textSpaced(d,.885*W,py+ph*.16,F.barlow,9,ink,'MAINS',0.03);
+      textSpaced(d,.848*W,py+ph*.88,F.barlow,6.5,inkF,'ON',0.04); } };
 
   // Silla Boogie 400 — Mesa/Boogie Bass 400+ (parody). Black face, Mesa 6-band
   // graphic EQ (faders) + Middle/Bass/Treble/Master/Vol2/Vol1 + pull switches.

@@ -18,6 +18,8 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "SillaParams.h"
+#include "../../_shared/tube_stage.hpp"      // real 6L6GC power table + 12AX7 LTP PI
+#include "../../_shared/oversampler.hpp"     // 2× OS around the tube nonlinearity
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -175,15 +177,14 @@ class SillaChannel {
     Biquad bqBass, bqMid, bqTreble;           // passive tone stack
     Biquad pwrLP;                             // 6L6 + OT band-limit
     MFB eq[kNumEq]; float eqG[kNumEq]; bool eqIn=true;
-    float g1=1, g2=1, master=1, pwrDrive=1; bool br1=false, br2=false;
-    static inline float pushPull(float x) {   // 12x 6L6 — very late knee, huge headroom
-        return std::tanh(x * 0.60f) * 1.6667f;
-    }
+    rbtube::PhaseInverterLTP12AX7 pi;         // 12AX7 long-tail-pair phase inverter
+    rbtube::PowerAmp6L6GC power;              // 12x 6L6GC push-pull (REAL Koren table)
+    float g1=1, g2=1, master=1, pwrDrive=1, piDrive=6.f; bool br1=false, br2=false;
 public:
     void setSampleRate(float s){ fs=(s>0)?s:48000.f; v1.setT(s);
         for (int i=0;i<kNumEq;++i){ eq[i].setT(s); eq[i].set(kEqFreqs[i], 1.2, 1e-8); eqG[i]=1.f; } }
     void reset(){ v1.reset(); bright.reset(); bqBass.reset(); bqMid.reset(); bqTreble.reset(); pwrLP.reset();
-        for (int i=0;i<kNumEq;++i) eq[i].reset(); }
+        pi.reset(); power.reset(); for (int i=0;i<kNumEq;++i) eq[i].reset(); }
 
     void setParams(const float* p) {
         g1 = p[kVol1] * 2.2f; g2 = p[kVol2] * 2.2f;
@@ -202,8 +203,14 @@ public:
             eqG[i] = eqIn ? std::pow(10.f, (p[kFirstEq+i]-0.5f)*24.f/20.f) : 1.f;  // +/-12 dB
 
         master = p[kMaster] / 0.7f;
-        pwrDrive = 0.5f + master * 0.8f;
         pwrLP.setLowpassQ(9000.f, 0.7f, fs);
+        // 12AX7 LTP phase inverter + 12x 6L6GC push-pull (REAL Koren table). Mesa Bass
+        // 400+ = enormous CLEAN headroom: stiff supply (LOW sag), low OT HP (bass).
+        const float m = (master > 1.f) ? 1.f : master;
+        pi.setFenderAB763(fs, 1.0f, 1.0f);
+        power.set(fs, 0.5f + 2.6f * m, -45.0f, 0.07f, 28.0f, 9000.0f);
+        power.out = 0.011f; power.biasShift = 2.0f;
+        piDrive = 5.0f;
     }
 
     inline float process(float x) {
@@ -216,32 +223,35 @@ public:
         // 3. Mesa 6-band graphic EQ (nodal MFB, summed onto the dry signal)
         if (eqIn) { const double dry=s; double sum=dry;
             for (int i=0;i<kNumEq;++i) sum -= (eqG[i]-1.0) * eq[i].proc(dry); s = (float)sum; }
-        // 4. Master → 12x 6L6 push-pull + OT band-limit
-        s = pushPull(s * pwrDrive) * master;
+        // 4. Master → 12AX7 LTP PI → 12x 6L6GC push-pull (real table) → OT band-limit
+        s = pi.process(s * piDrive);
+        s = power.process(s);
         s = pwrLP.process(s);
         return s;
     }
 };
 
-static constexpr float kSillaMakeup = 6.50f;   // tuned offline (~-15 dBFS @ noon)
+static constexpr float kSillaMakeup = 8.90f;   // re-tuned for the real 6L6GC power (~-14 dBFS @ noon)
 static constexpr float kSillaLvl    = 0.2973f;
 
 class SillaPlugin : public Plugin {
     SillaChannel L, R;
     float fParams[kParamCount];
+    rbshared::Oversampler4x osL, osR;            // 2× anti-alias around the tube chain
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
     void recalc(){ L.setParams(fParams); R.setParams(fParams); }
 public:
     SillaPlugin() : Plugin(kParamCount, 0, 0) {
         for (int i=0;i<kParamCount;++i) fParams[i]=kSillaDef[i];
         const float sr=(float)getSampleRate();
-        L.setSampleRate(sr); R.setSampleRate(sr); L.reset(); R.reset(); recalc();
+        L.setSampleRate(kOS*sr); R.setSampleRate(kOS*sr); L.reset(); R.reset(); recalc();
     }
 protected:
     const char* getLabel()       const override { return "SillaBoogieBass400"; }
     const char* getDescription() const override { return "Mesa Boogie Bass 400+ all-tube head — component-level model"; }
     const char* getMaker()       const override { return "RigBuilder"; }
     const char* getLicense()     const override { return "ISC"; }
-    uint32_t    getVersion()     const override { return d_version(1, 0, 0); }
+    uint32_t    getVersion()     const override { return d_version(2, 0, 0); }
     int64_t     getUniqueId()    const override { return d_cconst('R', 'B', 'S', 'B'); }
 
     void initParameter(uint32_t i, Parameter& p) override {
@@ -253,11 +263,19 @@ protected:
     }
     float getParameterValue(uint32_t i) const override { return (i < (uint32_t)kParamCount) ? fParams[i] : 0.f; }
     void  setParameterValue(uint32_t i, float v) override { if (i < (uint32_t)kParamCount) { fParams[i]=v; recalc(); } }
-    void  sampleRateChanged(double r) override { L.setSampleRate((float)r); R.setSampleRate((float)r); L.reset(); R.reset(); recalc(); }
+    void  sampleRateChanged(double r) override { L.setSampleRate(kOS*(float)r); R.setSampleRate(kOS*(float)r); osL.reset(); osR.reset(); L.reset(); R.reset(); recalc(); }
 
     void run(const float** in, float** out, uint32_t frames) override {
         const float* iL=in[0]; const float* iR=in[1]; float* oL=out[0]; float* oR=out[1];
-        for (uint32_t i=0;i<frames;++i){ oL[i]=rbAmpLvl(kSillaLvl*softClip(kSillaMakeup*L.process(iL[i]))*0.98f); oR[i]=rbAmpLvl(kSillaLvl*softClip(kSillaMakeup*R.process(iR[i]))*0.98f); }
+        for (uint32_t i=0;i<frames;++i){
+            float ubL[kOS], ubR[kOS];
+            osL.upsample(iL[i], ubL); osR.upsample(iR[i], ubR);
+            for (int k=0;k<kOS;++k){
+                ubL[k]=rbAmpLvl(kSillaLvl*softClip(kSillaMakeup*L.process(ubL[k]))*0.98f);
+                ubR[k]=rbAmpLvl(kSillaLvl*softClip(kSillaMakeup*R.process(ubR[k]))*0.98f);
+            }
+            oL[i]=osL.downsample(ubL); oR[i]=osR.downsample(ubR);
+        }
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SillaPlugin)
 };

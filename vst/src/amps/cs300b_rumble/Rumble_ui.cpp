@@ -1,8 +1,9 @@
-/* Bender Fumble 800 UI — Fender Rumble 800 style black Class-D head face: input
- * jack, Gain, the Bright/Contour/Vintage voicing buttons (round LEDs), the
- * Overdrive Drive+Level pair (with a clip LED), the 4-band EQ (Bass/Low Mid/
- * High Mid/Treble), Master, a power LED and a "Fumble 800" script. Cream knobs
- * vertical-drag; buttons toggle on click. */
+/* Bender Fumble Bass UI — Fender Rumble Bass (1995) head face, 1:1 look (clone
+ * branding): blonde tweed tolex border, oxblood grille cloth, a dark control panel
+ * across the top with the two-channel knob row — A VOLUME/TREBLE/BASS/MIDDLE + MID,
+ * SELECT, the A/A-B/B input jacks, CHANNEL + MID + power LED, then B VOLUME/TREBLE/
+ * BASS/MIDDLE and MIX — a "Bender" script bottom-left and a "Fumble Bass" badge
+ * bottom-right. Cream knobs vertical-drag; MID switches toggle on click. */
 #include "DistrhoUI.hpp"
 #include "RumbleParams.h"
 #include <cmath>
@@ -10,22 +11,24 @@
 START_NAMESPACE_DISTRHO
 
 struct Spot { int id; float cx, cy, r; const char* name; };
+static const float KY = 0.215f;     // knob-row centre (in the top control panel)
+static const float KR = 0.028f;
 static const Spot kKnobs[] = {
-    { kGain,    0.115f, 0.48f, 0.038f, "GAIN" },
-    { kDrive,   0.305f, 0.48f, 0.038f, "DRIVE" },
-    { kLevel,   0.380f, 0.48f, 0.038f, "LEVEL" },
-    { kBass,    0.475f, 0.48f, 0.038f, "BASS" },
-    { kLowMid,  0.560f, 0.48f, 0.038f, "LOW MID" },
-    { kHighMid, 0.645f, 0.48f, 0.038f, "HIGH MID" },
-    { kTreble,  0.730f, 0.48f, 0.038f, "TREBLE" },
-    { kMaster,  0.845f, 0.48f, 0.038f, "MASTER" },
+    { kAVol,    0.070f, KY, KR, "VOLUME" },
+    { kATreble, 0.130f, KY, KR, "TREBLE" },
+    { kABass,   0.190f, KY, KR, "BASS"   },
+    { kAMiddle, 0.250f, KY, KR, "MIDDLE" },
+    { kBVol,    0.620f, KY, KR, "VOLUME" },
+    { kBTreble, 0.680f, KY, KR, "TREBLE" },
+    { kBBass,   0.740f, KY, KR, "BASS"   },
+    { kBMiddle, 0.800f, KY, KR, "MIDDLE" },
+    { kMix,     0.900f, KY, KR, "MIX"    },
 };
 static const int kNumKnobs = (int)(sizeof(kKnobs)/sizeof(kKnobs[0]));
 struct Btn { int id; float cx, cy; const char* lbl; };
 static const Btn kBtns[] = {
-    { kBright,  0.190f, 0.28f, "BRIGHT" },
-    { kContour, 0.190f, 0.50f, "CONTOUR" },
-    { kVintage, 0.190f, 0.72f, "VINTAGE" },
+    { kAMidCut, 0.305f, KY, "MID" },
+    { kBMidCut, 0.560f, KY, "MID" },
 };
 static const int kNumBtn = (int)(sizeof(kBtns)/sizeof(kBtns[0]));
 
@@ -34,67 +37,95 @@ class RumbleUI : public UI {
     int fDrag; double fLastY; float fDragVal;
     float W() const { return getWidth(); }
     float H() const { return getHeight(); }
-    float scale() const { return getWidth()/920.0f; }
+    float scale() const { return getWidth()/1000.0f; }
     static float angleFor(float n){ return (135.0f+n*270.0f)*3.14159265f/180.0f; }
 
     void drawKnob(const Spot& k){
         const float cx=W()*k.cx, cy=H()*k.cy, R=W()*k.r, f=scale(), n=fValues[k.id];
-        beginPath(); circle(cx,cy,R+2.0f*f); fillColor(Color(18,18,20)); fill();
-        Paint g=radialGradient(cx-R*0.3f,cy-R*0.35f,R*0.2f,R*1.2f,Color(232,228,214),Color(198,192,174));
+        // cream skirted knob with a dark pointer cap
+        beginPath(); circle(cx,cy,R+2.2f*f); fillColor(Color(20,16,14)); fill();
+        Paint g=radialGradient(cx-R*0.3f,cy-R*0.35f,R*0.2f,R*1.2f,Color(238,231,210),Color(200,190,165));
         beginPath(); circle(cx,cy,R); fillPaint(g); fill();
-        beginPath(); circle(cx,cy,R); strokeColor(Color(120,116,104)); strokeWidth(1.2f*f); stroke();
+        beginPath(); circle(cx,cy,R); strokeColor(Color(120,112,96)); strokeWidth(1.1f*f); stroke();
+        beginPath(); circle(cx,cy,R*0.42f); fillColor(Color(38,32,28)); fill();   // dark centre cap
         const float a=angleFor(n);
-        beginPath(); moveTo(cx+R*0.10f*std::cos(a),cy+R*0.10f*std::sin(a)); lineTo(cx+(R-3*f)*std::cos(a),cy+(R-3*f)*std::sin(a));
-        strokeColor(Color(40,38,34)); strokeWidth(2.4f*f); stroke();
-        textAlign(ALIGN_CENTER|ALIGN_TOP); fontSize(9.5f*f); fillColor(Color(232,233,236));
-        text(cx,cy-R-13*f,k.name,NULL);
+        beginPath(); moveTo(cx+R*0.30f*std::cos(a),cy+R*0.30f*std::sin(a)); lineTo(cx+(R-2.5f*f)*std::cos(a),cy+(R-2.5f*f)*std::sin(a));
+        strokeColor(Color(236,230,212)); strokeWidth(2.0f*f); stroke();
+        textAlign(ALIGN_CENTER|ALIGN_TOP); fontSize(8.5f*f); fillColor(Color(228,222,206));
+        text(cx,cy+R+4*f,k.name,NULL);
     }
-    void drawBtn(const Btn& b){
+    void drawSwitch(const Btn& b){
         const float cx=W()*b.cx, cy=H()*b.cy, f=scale(); const bool on=fValues[b.id]>0.5f;
-        if(on){ beginPath(); circle(cx,cy,7*f); fillColor(Color(240,180,40,90)); fill(); }
-        beginPath(); circle(cx,cy,4.2f*f); fillColor(on?Color(240,170,30):Color(70,66,58)); fill();
-        beginPath(); circle(cx,cy,4.2f*f); strokeColor(Color(30,28,26)); strokeWidth(1.0f*f); stroke();
-        textAlign(ALIGN_LEFT|ALIGN_MIDDLE); fontSize(8.5f*f); fillColor(Color(228,229,232)); text(cx+9*f,cy,b.lbl,NULL);
+        // small toggle: bezel + cap, lights amber when CUT engaged
+        beginPath(); roundedRect(cx-6*f,cy-9*f,12*f,18*f,2*f); fillColor(Color(24,20,18)); fill();
+        beginPath(); roundedRect(cx-4.5f*f,on?cy-7.5f*f:cy+0.5f*f,9*f,7*f,1.5f*f);
+        fillColor(on?Color(228,176,70):Color(150,144,132)); fill();
+        textAlign(ALIGN_CENTER|ALIGN_TOP); fontSize(7.5f*f); fillColor(Color(220,214,198));
+        text(cx,cy+11*f,b.lbl,NULL);
+    }
+    void drawJack(float cx,float cy,float f,const char* lbl){
+        beginPath(); circle(cx,cy,7*f); fillColor(Color(28,24,22)); fill();
+        beginPath(); circle(cx,cy,7*f); strokeColor(Color(150,144,130)); strokeWidth(1.4f*f); stroke();
+        beginPath(); circle(cx,cy,2.6f*f); fillColor(Color(14,12,10)); fill();
+        textAlign(ALIGN_CENTER|ALIGN_TOP); fontSize(6.8f*f); fillColor(Color(214,208,192));
+        text(cx,cy+9*f,lbl,NULL);
     }
     int knobAt(double px,double py) const { for(int i=0;i<kNumKnobs;++i){ float dx=px-W()*kKnobs[i].cx,dy=py-H()*kKnobs[i].cy,R=W()*kKnobs[i].r+6; if(dx*dx+dy*dy<=R*R) return i; } return -1; }
-    int btnAt(double px,double py) const { for(int i=0;i<kNumBtn;++i){ float dx=px-W()*kBtns[i].cx,dy=py-H()*kBtns[i].cy; if(dx*dx+dy*dy<=144) return i; } return -1; }
+    int btnAt(double px,double py) const { for(int i=0;i<kNumBtn;++i){ float dx=px-W()*kBtns[i].cx,dy=py-H()*kBtns[i].cy; if(std::fabs(dx)<=12&&std::fabs(dy)<=14) return i; } return -1; }
 public:
     RumbleUI() : UI(DISTRHO_UI_DEFAULT_WIDTH,DISTRHO_UI_DEFAULT_HEIGHT), fDrag(-1), fLastY(0), fDragVal(0.5f) {
         loadSharedResources();
         for(int i=0;i<kParamCount;++i) fValues[i]=kRumbleDef[i];
-        setGeometryConstraints(920*3/5,200*3/5,true,false);
+        setGeometryConstraints(1000*3/5,440*3/5,true,false);
     }
 protected:
     void parameterChanged(uint32_t i,float v) override { if(i<(uint32_t)kParamCount){ fValues[i]=v; repaint(); } }
     void onNanoDisplay() override {
         const float w=W(),h=H(),f=scale();
-        beginPath(); rect(0,0,w,h); fillColor(Color(180,182,186)); fill();   // chrome edge
-        const float bx=4*f,by=4*f,bw=w-8*f,bh=h-8*f;
-        beginPath(); roundedRect(bx,by,bw,bh,5*f); fillColor(Color(20,20,22)); fill();   // black panel
-        beginPath(); roundedRect(bx,by,bw,bh,5*f); strokeColor(Color(60,60,64)); strokeWidth(1.2f*f); stroke();
+        // blonde tweed tolex border
+        beginPath(); rect(0,0,w,h); fillColor(Color(196,176,130)); fill();
+        for(int i=0;i<(int)(h/ (6*f)); ++i){ beginPath(); rect(0,i*6*f,w,2.0f*f); fillColor(Color(176,156,112,60)); fill(); }
+        // oxblood grille cloth (lower body)
+        const float gx=10*f, gy=h*0.34f, gw=w-20*f, gh=h-gy-10*f;
+        beginPath(); roundedRect(gx,gy,gw,gh,6*f); fillColor(Color(74,30,34)); fill();
+        for(int i=0;i<(int)(gw/(5*f)); ++i){ beginPath(); rect(gx+i*5*f,gy,1.4f*f,gh); fillColor(Color(40,16,20,90)); fill(); }
+        beginPath(); roundedRect(gx,gy,gw,gh,6*f); strokeColor(Color(150,134,98)); strokeWidth(2.0f*f); stroke();
+        // dark control panel across the top
+        const float px=10*f, py=8*f, pw=w-20*f, ph=h*0.30f;
+        beginPath(); roundedRect(px,py,pw,ph,5*f); fillColor(Color(46,38,32)); fill();
+        Paint pg=linearGradient(px,py,px,py+ph,Color(64,54,46),Color(36,30,26));
+        beginPath(); roundedRect(px,py,pw,ph,5*f); fillPaint(pg); fill();
+        beginPath(); roundedRect(px,py,pw,ph,5*f); strokeColor(Color(96,84,68)); strokeWidth(1.4f*f); stroke();
         fontFace(NANOVG_DEJAVU_SANS_TTF);
-        // input jack
-        beginPath(); circle(w*0.045f,h*0.48f,9*f); fillColor(Color(40,40,44)); fill();
-        beginPath(); circle(w*0.045f,h*0.48f,9*f); strokeColor(Color(150,152,156)); strokeWidth(1.5f*f); stroke();
-        beginPath(); circle(w*0.045f,h*0.48f,3.5f*f); fillColor(Color(16,16,18)); fill();
-        textAlign(ALIGN_CENTER|ALIGN_TOP); fontSize(9.5f*f); fillColor(Color(232,233,236)); text(w*0.045f,h*0.48f-22*f,"INPUT",NULL);
+        // channel labels
+        textAlign(ALIGN_CENTER|ALIGN_TOP); fontSize(8.0f*f); fillColor(Color(206,200,184));
+        text(w*0.160f, py+4*f, "CHANNEL A", NULL);
+        text(w*0.710f, py+4*f, "CHANNEL B", NULL);
+        // knobs + switches
         for(int i=0;i<kNumKnobs;++i) drawKnob(kKnobs[i]);
-        for(int i=0;i<kNumBtn;++i) drawBtn(kBtns[i]);
-        // clip LED above the overdrive pair
-        const bool clip=fValues[kDrive]>0.6f; beginPath(); circle(w*0.3425f,h*0.255f,4*f); fillColor(clip?Color(230,40,30):Color(80,28,26)); fill();
-        // OVERDRIVE bracket (under Drive+Level)
-        const float oy=h*0.74f; strokeColor(Color(150,152,156)); strokeWidth(1.2f*f);
-        beginPath(); moveTo(w*0.275f,oy); lineTo(w*0.275f,oy+4*f); lineTo(w*0.410f,oy+4*f); lineTo(w*0.410f,oy); stroke();
-        textAlign(ALIGN_CENTER|ALIGN_TOP); fontSize(8.5f*f); fillColor(Color(210,212,216)); text(w*0.3425f,oy+6*f,"OVERDRIVE",NULL);
-        // EQUALIZATION bracket (under Bass..Treble)
-        beginPath(); moveTo(w*0.445f,oy); lineTo(w*0.445f,oy+4*f); lineTo(w*0.760f,oy+4*f); lineTo(w*0.760f,oy); stroke();
-        text(w*0.6025f,oy+6*f,"EQUALIZATION",NULL);
-        // power LED (right)
-        beginPath(); circle(w*0.945f,h*0.30f,5*f); fillColor(Color(230,40,30)); fill();
-        beginPath(); circle(w*0.945f,h*0.30f,5*f); strokeColor(Color(90,28,26)); strokeWidth(1.0f*f); stroke();
-        // script logo
-        textAlign(ALIGN_RIGHT|ALIGN_BOTTOM); fontSize(19*f); fillColor(Color(236,237,240));
-        text(bx+bw-16*f,by+bh-8*f,"Fumble 800",NULL);
+        for(int i=0;i<kNumBtn;++i) drawSwitch(kBtns[i]);
+        // SELECT + CHANNEL legend switches (decorative routing, drawn for the 1:1 look)
+        drawSwitch_static(w*0.350f, h*KY, f, "SELECT");
+        drawSwitch_static(w*0.515f, h*KY, f, "CHAN");
+        // input jacks
+        drawJack(w*0.410f, h*KY, f, "A IN");
+        drawJack(w*0.450f, h*KY, f, "A/B");
+        drawJack(w*0.490f, h*KY, f, "B IN");
+        // power / channel LED
+        beginPath(); circle(w*0.585f, h*(KY-0.085f), 4.0f*f); fillColor(Color(232,46,32)); fill();
+        beginPath(); circle(w*0.585f, h*(KY-0.085f), 4.0f*f); strokeColor(Color(96,28,24)); strokeWidth(1.0f*f); stroke();
+        // "Bender" script (bottom-left, on the grille) — clone of the Fender script
+        textAlign(ALIGN_LEFT|ALIGN_BOTTOM); fontSize(30*f); fillColor(Color(238,232,214));
+        text(gx+18*f, h-18*f, "Bender", NULL);
+        // "Fumble Bass" badge (bottom-right)
+        textAlign(ALIGN_RIGHT|ALIGN_BOTTOM); fontSize(15*f); fillColor(Color(228,220,200));
+        text(gx+gw-16*f, h-22*f, "Fumble", NULL);
+        fontSize(13*f); text(gx+gw-16*f, h-8*f, "Bass", NULL);
+    }
+    void drawSwitch_static(float cx,float cy,float f,const char* lbl){
+        beginPath(); roundedRect(cx-6*f,cy-9*f,12*f,18*f,2*f); fillColor(Color(24,20,18)); fill();
+        beginPath(); roundedRect(cx-4.5f*f,cy-3.5f*f,9*f,7*f,1.5f*f); fillColor(Color(150,144,132)); fill();
+        textAlign(ALIGN_CENTER|ALIGN_TOP); fontSize(7.0f*f); fillColor(Color(214,208,192)); text(cx,cy+11*f,lbl,NULL);
     }
     bool onMouse(const MouseEvent& ev) override {
         if(ev.button!=1) return false;

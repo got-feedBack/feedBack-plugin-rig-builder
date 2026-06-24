@@ -25,6 +25,7 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "TMaxParams.h"
+#include "../../_shared/oversampler.hpp"   // 2× OS around the real-tube + SS clip
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -269,19 +270,21 @@ static constexpr float kTMaxMakeup = 4.98f;   // tuned offline to ~-15 dBFS mult
 class TMaxPlugin : public Plugin {
     TMaxChannel L, R;
     float fParams[kParamCount];
+    rbshared::Oversampler4x osL, osR;            // 2× anti-alias around the nonlinear chain
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
     void recalc(){ L.setParams(fParams); R.setParams(fParams); }
 public:
     TMaxPlugin() : Plugin(kParamCount, 0, 0) {
         for (int i=0;i<kParamCount;++i) fParams[i]=kTMaxDef[i];
         const float sr=(float)getSampleRate();
-        L.setSampleRate(sr); R.setSampleRate(sr); L.reset(); R.reset(); recalc();
+        L.setSampleRate(kOS*sr); R.setSampleRate(kOS*sr); L.reset(); R.reset(); recalc();
     }
 protected:
     const char* getLabel()       const override { return "PeeBeeTMinus"; }
     const char* getDescription() const override { return "Peavey T-Max two-channel bass head — component-level model"; }
     const char* getMaker()       const override { return "RigBuilder"; }
     const char* getLicense()     const override { return "ISC"; }
-    uint32_t    getVersion()     const override { return d_version(1, 0, 0); }
+    uint32_t    getVersion()     const override { return d_version(2, 0, 0); }
     int64_t     getUniqueId()    const override { return d_cconst('R', 'B', 'T', 'M'); }
 
     void initParameter(uint32_t i, Parameter& p) override {
@@ -293,11 +296,19 @@ protected:
     }
     float getParameterValue(uint32_t i) const override { return (i < (uint32_t)kParamCount) ? fParams[i] : 0.f; }
     void  setParameterValue(uint32_t i, float v) override { if (i < (uint32_t)kParamCount) { fParams[i]=v; recalc(); } }
-    void  sampleRateChanged(double r) override { L.setSampleRate((float)r); R.setSampleRate((float)r); L.reset(); R.reset(); recalc(); }
+    void  sampleRateChanged(double r) override { L.setSampleRate(kOS*(float)r); R.setSampleRate(kOS*(float)r); osL.reset(); osR.reset(); L.reset(); R.reset(); recalc(); }
 
     void run(const float** in, float** out, uint32_t frames) override {
         const float* iL=in[0]; const float* iR=in[1]; float* oL=out[0]; float* oR=out[1];
-        for (uint32_t i=0;i<frames;++i){ oL[i]=rbAmpLvl(0.3007f*softClip(kTMaxMakeup*L.process(iL[i]))*0.98f); oR[i]=rbAmpLvl(0.3007f*softClip(kTMaxMakeup*R.process(iR[i]))*0.98f); }
+        for (uint32_t i=0;i<frames;++i){
+            float ubL[kOS], ubR[kOS];
+            osL.upsample(iL[i], ubL); osR.upsample(iR[i], ubR);
+            for (int k=0;k<kOS;++k){
+                ubL[k]=rbAmpLvl(0.3007f*softClip(kTMaxMakeup*L.process(ubL[k]))*0.98f);
+                ubR[k]=rbAmpLvl(0.3007f*softClip(kTMaxMakeup*R.process(ubR[k]))*0.98f);
+            }
+            oL[i]=osL.downsample(ubL); oR[i]=osR.downsample(ubR);
+        }
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TMaxPlugin)
 };

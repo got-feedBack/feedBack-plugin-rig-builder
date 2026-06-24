@@ -4548,6 +4548,19 @@ function rbStudioUpdateSwapCarousel() {
     });
 }
 
+// After a gear swap/add, the live song chain (mega-chain) was built from the OLD
+// rig, so the new gear doesn't sound until the user re-selects the tone. Rebuild it
+// once the persist has reached the backend (so buildForSong re-fetches the new rig).
+async function rbStudioReloadLiveChainAfterSwap() {
+    try {
+        const mc = (typeof RbMegaChain !== 'undefined') ? RbMegaChain : null;
+        if (!mc || typeof mc.isActive !== 'function' || !mc.isActive()) return;
+        try { await rbState._studioPersistPromise; } catch (_) {}
+        const fn = (typeof mc.state === 'function' && mc.state().filename) || rbState.currentSongFile;
+        if (fn) await mc.buildForSong(fn);   // rebuild with the swapped gear → sounds immediately
+    } catch (_) {}
+}
+
 function rbStudioSwapToGear(rsGear) {
     const kind = rbState._swapKind || 'amp';
     const g = ((rbState.gearCatalog && rbState.gearCatalog[kind]) || []).find(x => x.rs_gear === rsGear);
@@ -4568,6 +4581,7 @@ function rbStudioSwapToGear(rsGear) {
         rbStudioCurrentChain().push(newPiece);
         rbState._studioPedalAddMode = false;
         try { rbStudioPersist(); } catch (_) {}
+        rbStudioReloadLiveChainAfterSwap();   // new pedal sounds without re-selecting the tone
         // Don't re-render the room here — it would wipe the focus layer + rail
         // (room children). The order already reflects the new piece; the floor
         // board repaints on close (rbStudioCloseFocus).
@@ -4589,6 +4603,7 @@ function rbStudioSwapToGear(rsGear) {
     piece._vst_state = null; piece._vst_params = null; piece._vst_logical = null;
     piece._vst_param_meta = null; piece._vst_slot_id = null; piece._vst_opaque = null;
     try { rbStudioPersist(); } catch (_) {}
+    rbStudioReloadLiveChainAfterSwap();   // rebuild the live song chain so the swap sounds without re-selecting the tone
     if (kind === 'amp') {
         // Show the new amp face immediately, then reload focus (loads its VST +
         // knobs and re-renders the rail with the new amp centred).
