@@ -1,5 +1,5 @@
-/* LineDrive stompbox UI — shared pedal_ui template. Colour sampled from the
- * the game art (Pedal_LineDrive); knob count + labels from the plugin params. */
+/* LineDrive stompbox UI - shared pedal_ui template. Colour sampled from the
+ * game art (Pedal_LineDrive); controls match the OS-2 panel. */
 #include "LineDriveParams.h"
 #define PEDAL_TITLE  "LINE DRIVE"
 #define PEDAL_NAMES  kLineDriveNames
@@ -12,5 +12,5 @@
 #define PEDAL_ARCB 46
 #define PEDAL_W 360
 #define PEDAL_H 440
-#define PEDAL_KNOBS { {0.32f,0.20f,0.110f}, {0.68f,0.20f,0.110f} }
+#define PEDAL_KNOBS { {0.22f,0.20f,0.095f}, {0.42f,0.20f,0.095f}, {0.62f,0.20f,0.095f}, {0.82f,0.20f,0.095f} }
 #include "../_shared/pedal_ui.hpp"

@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/AcousticSimulator.so</key>
+		<key>x86_64-linux/Acoustic Emulator.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			EA9qo5gKnNASco3ZNv6zMpBtCT2fulIKXR7/Rko35Jg=
 			</data>
 		</dict>
-		<key>x86_64-win/AcousticSimulator.vst3</key>
+		<key>x86_64-win/Acoustic Emulator.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			IqN8pXZ2j+L8UHqIR/Rm+sE6CQEsdTreP2xgrU6raNk=
+			MmV0CVcNWkZJfgoV8MIgzcmf62GerG91bwOGrUxWwRA=
 			</data>
 		</dict>
 	</dict>

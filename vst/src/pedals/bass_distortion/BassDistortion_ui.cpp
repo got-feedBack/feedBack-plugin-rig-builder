@@ -18,9 +18,9 @@ public:
         tickClr    = Color(232, 233, 236);   // white tick fan
         pointerClr = Color(240, 241, 244);
         // three black knobs in a top row
-        addKnob(kGain,   0.215f, 0.305f, 0.105f, 26, 26, 28);
-        addKnob(kTone,   0.500f, 0.305f, 0.105f, 26, 26, 28);
-        addKnob(kFilter, 0.785f, 0.305f, 0.105f, 26, 26, 28);
+        addKnob(kDistortion, 0.215f, 0.305f, 0.105f, 26, 26, 28);
+        addKnob(kFilter,     0.500f, 0.305f, 0.105f, 26, 26, 28);
+        addKnob(kVolume,     0.785f, 0.305f, 0.105f, 26, 26, 28);
     }
 protected:
     void drawFace() override {
@@ -28,9 +28,9 @@ protected:
         const float f = sc();
         const Color white(WR, WG, WB);
         // boxed knob labels above each knob
-        boxedLabel(0.215f, 0.135f, 0.115f, 0.028f, "GAIN",   12.5f, white, white, fBarlow);
-        boxedLabel(0.500f, 0.135f, 0.110f, 0.028f, "TONE",   12.5f, white, white, fBarlow);
-        boxedLabel(0.785f, 0.135f, 0.125f, 0.028f, "FILTER", 12.5f, white, white, fBarlow);
+        boxedLabel(0.215f, 0.135f, 0.150f, 0.028f, "DISTORTION", 12.5f, white, white, fBarlow);
+        boxedLabel(0.500f, 0.135f, 0.125f, 0.028f, "FILTER",     12.5f, white, white, fBarlow);
+        boxedLabel(0.785f, 0.135f, 0.125f, 0.028f, "VOLUME",     12.5f, white, white, fBarlow);
         // big boxed wordmark (generic — no brand) in a heavy display font
         boxedLabel(0.5f, 0.55f, 0.34f, 0.075f, "DISTORTION", 44, white, white, fAnton);
         // LED + chrome footswitch

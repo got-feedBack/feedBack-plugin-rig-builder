@@ -1,114 +1,227 @@
 /*
- * BassOverdrive — Darkglass Microtubes B3K model for Bass_Pedal_BassOverdrive.
+ * BassOverdrive - Darkglass Microtubes B3K style model for Bass_Pedal_BassOverdrive.
  *
- * B3K = a CLEAN path blended with a DISTORTION path (the "always tight low end"
- * trick of modern bass ODs). The distortion is CMOS-inverter clipping with
- * asymmetric diodes (1N4148 + 1N5817 Schottky → even-harmonic grit). Modeled:
- *   clean path: full dry (keeps the lows)
- *   dist path : Grunt high-pass (how much low end enters the clipper) → Drive
- *               gain → asymmetric CMOS soft clip → Attack high-shelf (treble of
- *               the distortion) → level
- *   Blend mixes clean + dist.
- * the game knobs: Blend, Gain (=Drive), Filter (=Grunt), Tone (=Attack).
+ * Schematic blocks modeled here: J201 input buffer color, TL072 gain/filter
+ * stages, CD4049UBE CMOS inverter clipping, 1N4148 shunt clipping/protection,
+ * and the real Blend/Drive/Level plus Attack/Grunt switch controls.
  */
 #include "DistrhoPlugin.hpp"
 #include "BassOverdriveParams.h"
-#include "../_shared/automakeup.hpp"
+#include "../_shared/opamp.hpp"
+#include "../_shared/semiconductors.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
 
-static inline float onePoleCoef(float fc, float fs) {
+static inline float clamp01(float v)
+{
+    return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
+}
+
+static inline float quantize3(float v)
+{
+    return v < 0.25f ? 0.0f : (v < 0.75f ? 0.5f : 1.0f);
+}
+
+static inline float onePoleCoef(float fc, float fs)
+{
     const float c = 1.0f - std::exp(-6.2831853f * fc / fs);
     return c < 0.0f ? 0.0f : (c > 1.0f ? 1.0f : c);
 }
 
-class B3K {
-    float fs = 48000.f;
-    float zGrunt = 0.f, zPost = 0.f, zShelf = 0.f, zOutDC = 0.f;
-    float cGrunt, cPost, cShelf, cOutDC;
-    // derived params
-    float drive = 30.f, blend = 0.6f, shelfGain = 1.0f;
+static inline float audioTaper(float v)
+{
+    return std::pow(clamp01(v), 2.05f);
+}
 
-    // asymmetric CMOS soft clip: bias adds even harmonics; tanh saturates to the
-    // rails (CMOS clips fairly hard at high drive).
-    static inline float cmos(float x) { return std::tanh(1.1f * x + 0.18f); }
+static inline float j201Buffer(float x)
+{
+    return 0.965f * x + 0.035f * std::tanh(2.4f * x);
+}
+
+class B3K
+{
+    float fs = 48000.0f;
+    float zGrunt = 0.0f;
+    float zClean = 0.0f;
+    float zPost = 0.0f;
+    float zShelf = 0.0f;
+    float zOutDc = 0.0f;
+    float railMemory = 0.0f;
+    float cGrunt = 0.0f;
+    float cClean = 0.0f;
+    float cPost = 0.0f;
+    float cShelf = 0.0f;
+    float cOutDc = 0.0f;
+    float blend = 0.58f;
+    float driveGain = 35.0f;
+    float levelGain = 0.85f;
+    float gruntMode = 0.5f;
+    float attackMode = 0.5f;
+    float gruntBoost = 1.0f;
+    float shelfGain = 1.0f;
+    rbshared::OpAmpStage preamp;
+    rbshared::OpAmpStage recovery;
+    rbcomponents::AntiParallelDiodePair siliconClamp;
+
+    float cmosInverter(float x, float bias, float rail) const
+    {
+        const float v = (x + bias) / (rail > 0.1f ? rail : 0.1f);
+        return -rail * std::tanh(1.55f * v);
+    }
+
+    float cmosCascade(float x)
+    {
+        const rbcomponents::DiodeSpec supply = rbcomponents::diode1N5817();
+        railMemory += 0.0009f * (std::fabs(x) - railMemory);
+        const float rail = 1.02f - 0.12f * rbcomponents::rbClamp(railMemory / supply.maxAbsV, 0.0f, 1.0f);
+
+        float s = cmosInverter(x, 0.040f, rail);
+        s = cmosInverter(s * 1.35f, -0.026f, rail);
+        s = cmosInverter(s * 1.20f, 0.018f, rail);
+        return siliconClamp.process(s * 1.18f);
+    }
+
 public:
-    void setSampleRate(float s) { fs = (s > 0.f) ? s : 48000.f; recalcFixed(); }
-    void recalcFixed() {
-        cPost  = onePoleCoef(5500.f, fs);   // tame fizz after clipping
-        cShelf = onePoleCoef(1500.f, fs);   // Attack high-shelf split point
-        cOutDC = onePoleCoef(18.f,   fs);   // DC blocker (the clip bias)
+    B3K()
+    {
+        preamp.setSpec(rbshared::tl072Spec());
+        recovery.setSpec(rbshared::tl072Spec());
+        siliconClamp.setSpec(rbcomponents::diode1N4148());
+        siliconClamp.setSourceR(1800.0f);
     }
-    void setParams(float blendP, float gain, float filterP, float toneP) {
-        blend = blendP;
-        drive = std::pow(10.0f, 0.4f + gain * 1.8f);             // ~2.5 .. 158
-        // Grunt: more Filter → lower HP corner → more low end into the clipper.
-        const float gruntHz = 40.0f + (1.0f - filterP) * 300.0f; // 340 (tight) .. 40 (grunty)
+
+    void setSampleRate(float s)
+    {
+        fs = s > 1000.0f ? s : 48000.0f;
+        preamp.setSampleRate(fs);
+        recovery.setSampleRate(fs);
+        recalcFixed();
+    }
+
+    void recalcFixed()
+    {
+        cClean = onePoleCoef(9500.0f, fs);
+        cOutDc = onePoleCoef(14.0f, fs);
+    }
+
+    void setParams(float blendP, float drive, float level, float attack, float grunt)
+    {
+        blend = clamp01(blendP);
+        driveGain = 4.5f + 118.0f * audioTaper(drive);
+        levelGain = 2.05f * audioTaper(level);
+        attackMode = quantize3(attack);
+        gruntMode = quantize3(grunt);
+
+        const float gruntHz = (gruntMode < 0.25f) ? 260.0f : (gruntMode < 0.75f ? 125.0f : 48.0f);
+        gruntBoost = (gruntMode < 0.25f) ? 0.78f : (gruntMode < 0.75f ? 1.0f : 1.32f);
         cGrunt = onePoleCoef(gruntHz, fs);
-        // Attack: more Tone → brighter distortion (high-shelf boost).
-        shelfGain = std::pow(10.0f, ((toneP - 0.4f) * 14.0f) / 20.0f); // ~ -5.6 .. +8.4 dB
+
+        const float postHz = (attackMode < 0.25f) ? 3200.0f : (attackMode < 0.75f ? 5200.0f : 8200.0f);
+        shelfGain = (attackMode < 0.25f) ? 0.58f : (attackMode < 0.75f ? 1.0f : 1.72f);
+        cPost = onePoleCoef(postHz, fs);
+        cShelf = onePoleCoef(1500.0f, fs);
     }
-    inline float process(float x) {
-        const float clean = x;
-        // dist path — Grunt high-pass into the clipper
-        zGrunt += cGrunt * (x - zGrunt);
-        const float hp = x - zGrunt;
-        float d = cmos(drive * hp);
-        // tame post-clip fizz
-        zPost += cPost * (d - zPost); d = zPost;
-        // Attack: high-shelf (low part flat, high part scaled by shelfGain)
+
+    float process(float x)
+    {
+        const float buffered = j201Buffer(x);
+        zClean += cClean * (buffered - zClean);
+        const float clean = zClean;
+
+        zGrunt += cGrunt * (buffered - zGrunt);
+        float d = (buffered - zGrunt) * gruntBoost;
+        d = preamp.process(d * driveGain, 8.0f + driveGain * 0.18f);
+        d = cmosCascade(d);
+
+        zPost += cPost * (d - zPost);
+        d = zPost;
         zShelf += cShelf * (d - zShelf);
-        const float low = zShelf, high = d - zShelf;
-        d = low + high * shelfGain;
-        // DC blocker (removes the clip bias)
-        zOutDC += cOutDC * (d - zOutDC);
-        d = d - zOutDC;
-        // blend clean + dist (×0.8 dist to keep peaks sane), then a final
-        // output trim so the pedal sits at bypass level (was ~3.7× too loud)
-        return (clean * (1.0f - blend) + d * blend * 0.8f) * 0.40f;
+        d = zShelf + (d - zShelf) * shelfGain;
+        d = recovery.process(d, 2.0f);
+
+        float out = clean * (1.0f - blend) + d * blend * 0.95f;
+        zOutDc += cOutDc * (out - zOutDc);
+        return (out - zOutDc) * levelGain;
     }
 };
 
-class BassOverdrivePlugin : public Plugin {
+class BassOverdrivePlugin : public Plugin
+{
     B3K L, R;
-    RBAutoMakeup makeupL, makeupR;
     float fParams[kParamCount];
-    void recalc() {
-        L.setParams(fParams[kBlend], fParams[kGain], fParams[kFilter], fParams[kTone]);
-        R.setParams(fParams[kBlend], fParams[kGain], fParams[kFilter], fParams[kTone]);
+
+    void recalc()
+    {
+        L.setParams(fParams[kBlend], fParams[kDrive], fParams[kLevel], fParams[kAttack], fParams[kGrunt]);
+        R.setParams(fParams[kBlend], fParams[kDrive], fParams[kLevel], fParams[kAttack], fParams[kGrunt]);
     }
+
 public:
-    BassOverdrivePlugin() : Plugin(kParamCount, 0, 0) {
-        for (int i = 0; i < kParamCount; ++i) fParams[i] = kBassOverdriveDef[i];
+    BassOverdrivePlugin()
+        : Plugin(kParamCount, 0, 0)
+    {
+        for (int i = 0; i < kParamCount; ++i)
+            fParams[i] = kBassOverdriveDef[i];
         const float sr = (float)getSampleRate();
-        L.setSampleRate(sr); R.setSampleRate(sr);
-        makeupL.setSampleRate(sr); makeupR.setSampleRate(sr); recalc();
+        L.setSampleRate(sr);
+        R.setSampleRate(sr);
+        recalc();
     }
+
 protected:
-    const char* getLabel()       const override { return "BassOverdrive"; }
+    const char* getLabel() const override { return "BassOverdrive"; }
     const char* getDescription() const override { return "Darkglass B3K CMOS bass overdrive"; }
-    const char* getMaker()       const override { return "RigBuilder"; }
-    const char* getLicense()     const override { return "ISC"; }
-    uint32_t    getVersion()     const override { return d_version(1, 0, 0); }
-    int64_t     getUniqueId()    const override { return d_cconst('R', 'B', 'O', 'd'); }
+    const char* getMaker() const override { return "RigBuilder"; }
+    const char* getLicense() const override { return "ISC"; }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    int64_t getUniqueId() const override { return d_cconst('R', 'B', 'O', 'd'); }
 
-    void initParameter(uint32_t i, Parameter& p) override {
-        if (i >= (uint32_t)kParamCount) return;
+    void initParameter(uint32_t i, Parameter& p) override
+    {
+        if (i >= (uint32_t)kParamCount)
+            return;
         p.hints = kParameterIsAutomatable;
-        p.name = kBassOverdriveNames[i]; p.symbol = kBassOverdriveSymbols[i];
-        p.ranges.min = kBassOverdriveMin[i]; p.ranges.max = kBassOverdriveMax[i]; p.ranges.def = kBassOverdriveDef[i];
+        p.name = kBassOverdriveNames[i];
+        p.symbol = kBassOverdriveSymbols[i];
+        p.ranges.min = kBassOverdriveMin[i];
+        p.ranges.max = kBassOverdriveMax[i];
+        p.ranges.def = kBassOverdriveDef[i];
     }
-    float getParameterValue(uint32_t i) const override { return (i < (uint32_t)kParamCount) ? fParams[i] : 0.f; }
-    void  setParameterValue(uint32_t i, float v) override { if (i < (uint32_t)kParamCount) { fParams[i] = v; recalc(); makeupL.snap(); makeupR.snap(); } }
-    void  sampleRateChanged(double r) override { L.setSampleRate((float)r); R.setSampleRate((float)r); makeupL.setSampleRate((float)r); makeupR.setSampleRate((float)r); recalc(); }
 
-    void run(const float** in, float** out, uint32_t frames) override {
-        const float* iL = in[0]; const float* iR = in[1];
-        float* oL = out[0]; float* oR = out[1];
-        // Auto makeup-gain: match output loudness to the dry input (clip not level).
-        for (uint32_t i = 0; i < frames; ++i) { oL[i] = makeupL.process(iL[i], L.process(iL[i])); oR[i] = makeupR.process(iR[i], R.process(iR[i])); }
+    float getParameterValue(uint32_t i) const override
+    {
+        return (i < (uint32_t)kParamCount) ? fParams[i] : 0.0f;
     }
+
+    void setParameterValue(uint32_t i, float v) override
+    {
+        if (i >= (uint32_t)kParamCount)
+            return;
+        fParams[i] = (i == (uint32_t)kAttack || i == (uint32_t)kGrunt) ? quantize3(v) : clamp01(v);
+        recalc();
+    }
+
+    void sampleRateChanged(double r) override
+    {
+        L.setSampleRate((float)r);
+        R.setSampleRate((float)r);
+        recalc();
+    }
+
+    void run(const float** in, float** out, uint32_t frames) override
+    {
+        const float* iL = in[0];
+        const float* iR = in[1];
+        float* oL = out[0];
+        float* oR = out[1];
+        for (uint32_t i = 0; i < frames; ++i)
+        {
+            oL[i] = L.process(iL[i]);
+            oR[i] = R.process(iR[i]);
+        }
+    }
+
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassOverdrivePlugin)
 };
 

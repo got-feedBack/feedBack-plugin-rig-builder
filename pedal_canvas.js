@@ -916,51 +916,53 @@
       {id:2,cx:.785,cy:.305,r:.105,style:'pointer',cap:[26,26,28]}],
     tick:rgb(232,233,236), ptr:rgb(240,241,244),
     draw(d){ box(d,18,18,20,false); const w=rgb(238,239,242);
-      boxedLabel(d,.215,.135,.115,.028,F.barlow,12.5,w,w,'GAIN');
-      boxedLabel(d,.500,.135,.110,.028,F.barlow,12.5,w,w,'TONE');
-      boxedLabel(d,.785,.135,.125,.028,F.barlow,12.5,w,w,'FILTER');
+      boxedLabel(d,.215,.135,.150,.028,F.barlow,12.5,w,w,'DISTORTION');
+      boxedLabel(d,.500,.135,.125,.028,F.barlow,12.5,w,w,'FILTER');
+      boxedLabel(d,.785,.135,.125,.028,F.barlow,12.5,w,w,'VOLUME');
       boxedLabel(d,.5,.55,.255,.092,F.anton,56,w,w,'MOUSE');
       ledDot(d,d.W*.5,d.H*.71,true,210,70,58); footRound(d,d.W*.5,d.H*.83,24*d.s); } };
 
-  // Bass Overdrive — Darkglass Microtubes B3K look, RS params (4 knobs):
-  // Blend0 Drive1 Grunt2 Attack3. (Real B3K has Grunt/Attack as switches, but RS
-  // exposes them as continuous knobs, so we keep knobs.)
+  // Bass Overdrive — Darkglass Microtubes B3K look, real controls:
+  // Blend0 Drive1 Level2, Attack3 and Grunt4 as 3-way switches.
   P.blackbrass = { w:300,h:490,
     knobs:[
-      {id:0,cx:.30,cy:.285,r:.10,style:'boss'},   // BLEND
-      {id:1,cx:.70,cy:.285,r:.10,style:'boss'},   // DRIVE
-      {id:2,cx:.30,cy:.555,r:.10,style:'boss'},   // GRUNT
-      {id:3,cx:.70,cy:.555,r:.10,style:'boss'}],  // ATTACK
+      {id:0,cx:.24,cy:.285,r:.085,style:'boss'},   // BLEND
+      {id:1,cx:.50,cy:.285,r:.085,style:'boss'},   // DRIVE
+      {id:2,cx:.76,cy:.285,r:.085,style:'boss'}],  // LEVEL
+    sw3:[
+      {id:3,cx:.35,cy:.575,hw:15,hh:24},            // ATTACK
+      {id:4,cx:.65,cy:.575,hw:15,hh:24}],           // GRUNT
     ptr:rgb(238,239,242),
     draw(d){ box(d,18,18,20,false); const w=rgb(235,236,239), dim=rgb(150,151,154);
       textSpaced(d,.5*d.W,.10*d.H,F.bebas,24,w,'BLACKBRASS',2);           // parody brand
-      textSpaced(d,.30*d.W,.40*d.H,F.barlow,11,w,'BLEND',1.4);
-      textSpaced(d,.70*d.W,.40*d.H,F.barlow,11,w,'DRIVE',1.4);
-      textSpaced(d,.30*d.W,.67*d.H,F.barlow,11,w,'GRUNT',1.4);
-      textSpaced(d,.70*d.W,.67*d.H,F.barlow,11,w,'ATTACK',1.4);
+      textSpaced(d,.24*d.W,.40*d.H,F.barlow,10,w,'BLEND',1.2);
+      textSpaced(d,.50*d.W,.40*d.H,F.barlow,10,w,'DRIVE',1.2);
+      textSpaced(d,.76*d.W,.40*d.H,F.barlow,10,w,'LEVEL',1.2);
+      textSpaced(d,.35*d.W,.69*d.H,F.barlow,10,w,'ATTACK',1.2);
+      textSpaced(d,.65*d.W,.69*d.H,F.barlow,10,w,'GRUNT',1.2);
       textSpaced(d,.5*d.W,.76*d.H,F.barlow,13,w,'MINITUBES B3X',2);       // parody model
       textSpaced(d,.5*d.W,.80*d.H,F.barlow,8,dim,'CMOS BASS OVERDRIVE',1.4);
       ledDot(d,d.W*.5,d.H*.86,true,196,72,60); footRound(d,d.W*.5,d.H*.93,18*d.s); } };
 
   P.bassbigbuzz = { w:320,h:400, knobs:[
-      {id:0,cx:.26,cy:.225,r:.085,style:'davies'},{id:1,cx:.50,cy:.225,r:.085,style:'davies'},
-      {id:2,cx:.74,cy:.225,r:.085,style:'davies'}],
+      {id:2,cx:.26,cy:.225,r:.085,style:'davies'},
+      {id:1,cx:.50,cy:.225,r:.085,style:'davies'},
+      {id:0,cx:.74,cy:.225,r:.085,style:'davies'}],
+    sw3:[{id:3,cx:.40,cy:.420,hw:15,hh:24}],
     ptr:rgb(236,238,238),
     draw(d){ const {ctx:c,W,H,s}=d; box(d,190,192,196);
       const fg=c.createLinearGradient(0,H*.085,0,H*.915); fg.addColorStop(0,rgb(106,188,64)); fg.addColorStop(1,rgb(74,152,34));
       rr(c,W*.105,H*.085,W*.79,H*.83,10*s); c.fillStyle=fg; c.fill();
       rr(c,W*.105,H*.085,W*.79,H*.83,10*s); c.strokeStyle='rgba(0,0,0,0.27)'; c.lineWidth=1.5*s; c.stroke();
-      // mode toggle (static)
-      const tx=W*.40, ty=H*.42; rr(c,tx-9*s,ty-6*s,18*s,12*s,3*s); c.fillStyle=rgb(24,24,26); c.fill();
-      rr(c,tx-4*s,ty-7*s,8*s,9*s,2*s); c.fillStyle=rgb(220,222,226); c.fill();
+      const tx=W*.40, ty=H*.42;
       setFont(d,F.barlow,7.5); c.fillStyle=rgb(22,32,16); c.textBaseline='middle';
       c.textAlign='right'; c.fillText('NORM',tx-12*s,ty);
       c.textAlign='left'; c.fillText('BASS BOOST',tx+12*s,ty-5*s); c.fillText('DRY',tx+12*s,ty+5*s);
-      // knob labels (Gain / Tone / Filter) — dark green, like the C++ UI
+      // knob labels (real Bass Big Muff controls) — dark green, like the C++ UI
       const gl=rgb(22,32,16);
-      textC(d,.26*W,.355*H,F.barlow,11,gl,'GAIN');
+      textC(d,.26*W,.355*H,F.barlow,11,gl,'VOLUME');
       textC(d,.50*W,.355*H,F.barlow,11,gl,'TONE');
-      textC(d,.74*W,.355*H,F.barlow,11,gl,'FILTER');
+      textC(d,.74*W,.355*H,F.barlow,11,gl,'SUSTAIN');
       // 'bass' (script) sits over the 'BIG' word (left), like the real pedal
       outlineText(d,.5*W,.635*H,F.anton,48,rgb(242,242,244),rgb(12,14,16),'BIG BUZZ',5);
       textC(d,.30*W,.525*H,F.crete,34,rgb(16,20,14),'bass');
@@ -969,10 +971,8 @@
       textC(d,.5*W,.875*H,F.crete,15,rgb(16,20,14),'quimical-harmony');   // brand (Big Muff = E-H at the bottom)
     } };
 
-  // Big Buzz — silver/red vintage fuzz face inspired by a triangle-era fuzz box.
-  // Param order: Gain0 Tone1.
-  // Big Buzz — Big Muff π-style: brushed-silver box, black logo panel with the
-  // red wordmark + π symbol, quimical-harmony parody. RS knob names: Gain0 Tone1.
+  // Big Buzz - Big Muff pi-style: brushed-silver box, black logo panel with the
+  // red wordmark + pi symbol. Real controls: Sustain0 Tone1 Volume2.
   P.bigbuzz = { w:320,h:430, knobs:[
       {id:0,cx:.22,cy:.160,r:.070,style:'davies'},
       {id:1,cx:.50,cy:.160,r:.070,style:'davies'},
@@ -987,7 +987,7 @@
       for(let y=m;y<H-m;y+=3*s){ c.beginPath(); c.moveTo(m,y); c.lineTo(W-m,y); c.stroke(); }
       c.restore();
       rr(c,m,m,W-2*m,H-2*m,12*s); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=2*s; c.stroke();
-      // knob labels (RS names) + red LED
+      // knob labels + red LED
       textSpaced(d,.22*W,.262*H,F.barlow,8.5,ink,'SUSTAIN',0.3);
       textSpaced(d,.50*W,.262*H,F.barlow,8.5,ink,'TONE',0.3);
       textSpaced(d,.78*W,.262*H,F.barlow,8.5,ink,'VOLUME',0.3);
@@ -1007,11 +1007,12 @@
       textC(d,.30*W,.935*H,F.crete,14,ink,'quimical-harmony');
       textSpaced(d,.66*W,.935*H,F.barlow,8,ink,'USA',0.5); } };
 
-  // Super-Buzz — copper/blue octave-fuzz face inspired by the local schematic.
-  // Param order: Gain0 Tone1.
+  // Super-Buzz - Univox Super-Fuzz style octave fuzz.
+  // Real controls: Expander0 ToneSW1 Balance2.
   P.superbuzz = { w:320,h:430, knobs:[
-      {id:0,cx:.285,cy:.245,r:.096,style:'pointer',cap:[22,24,30]},
-      {id:1,cx:.715,cy:.245,r:.096,style:'pointer',cap:[22,24,30]}],
+      {id:0,cx:.22,cy:.245,r:.088,style:'pointer',cap:[22,24,30]},
+      {id:1,cx:.50,cy:.245,r:.074,style:'pointer',cap:[22,24,30]},
+      {id:2,cx:.78,cy:.245,r:.088,style:'pointer',cap:[22,24,30]}],
     tick:rgb(36,48,84), ptr:rgb(238,240,244),
     draw(d){ const {ctx:c,W,H,s}=d;
       c.fillStyle=rgb(10,10,12); c.fillRect(0,0,W,H);
@@ -1024,8 +1025,9 @@
       for(let i=0;i<34;i++){ const x=bodyX+12*s+((i*47)%Math.floor(bodyW-24*s)); const y=bodyY+14*s+((i*83)%Math.floor(bodyH-28*s));
         c.fillRect(x,y,1.2*s,1.2*s); }
       screw(d,W*.50,H*.095); screw(d,W*.50,H*.180);
-      textSpaced(d,.285*W,.375*H,F.barlow,10.5,rgb(25,36,74),'GAIN',0.8);
-      textSpaced(d,.715*W,.375*H,F.barlow,10.5,rgb(25,36,74),'TONE',0.8);
+      textSpaced(d,.22*W,.375*H,F.barlow,9.8,rgb(25,36,74),'EXPANDER',0.5);
+      textSpaced(d,.50*W,.375*H,F.barlow,9.2,rgb(25,36,74),'TONE SW',0.4);
+      textSpaced(d,.78*W,.375*H,F.barlow,9.8,rgb(25,36,74),'BALANCE',0.5);
       c.save();
       c.translate(W*.5,H*.625); c.transform(1,0,-0.16,1,0,0);
       setFont(d,F.anton,48); c.textAlign='center'; c.textBaseline='middle'; c.lineWidth=5.0*s;
@@ -1035,23 +1037,20 @@
       textSpaced(d,.50*W,.805*H,F.barlow,8.5,rgb(228,216,174),'OCTAVE  FUZZ',2.0);
       ledDot(d,W*.50,H*.845,true,224,62,52); footRound(d,W*.50,H*.910,20*s); } };
 
-  // BZ-1 — Chief compact silicon fuzz face.
-  // Param order: Gain0 Tone1.
-  // BZ-1 — Chief (Boss-compact) silicon fuzz: same body/treadle/CHIEF-badge
-  // styling as the brother's chiefSpec pedals. 2 RS knobs: Gain0 Tone1.
+  // BZ-1 - Chief compact FZ-3-style silicon fuzz.
+  // Real controls: Fuzz0 Tone1 Volume2.
   P.bz1 = chiefSpec(300,480,[188,191,196],
-    [{id:0,cx:.33,lbl:'GAIN'},{id:1,cx:.67,lbl:'TONE'}],
+    [{id:0,cx:.25,lbl:'FUZZ'},{id:1,cx:.50,lbl:'TONE'},{id:2,cx:.75,lbl:'VOLUME'}],
     'Fuzz',null,'BZ-1');
 
   // Chorus — Boss CE-2-style: Chief (Boss-compact) body, CE-2 cyan blue.
-  // RS knob names. 3 RS knobs: Rate0 Depth1 Mix2.
+  // Real CE-2 controls: Rate0 Depth1. Fixed dry/wet mixer inside the DSP.
   P.ch2 = chiefSpec(300,480,[66,178,210],
-    [{id:0,cx:.25,lbl:'RATE'},{id:1,cx:.50,lbl:'DEPTH'},{id:2,cx:.75,lbl:'MIX'}],
+    [{id:0,cx:.34,lbl:'RATE'},{id:1,cx:.66,lbl:'DEPTH'}],
     'Chorus',null,'CH-2');
 
   // Digital Chorus — Boss CE-5-style: Chief body in the CE-5 pale powder-blue,
-  // 5 small knobs (RS exposes more than the CE-5's 4). RS knob names.
-  // Rate0 Depth1 LoFilter2 HiFilter3 Mix4.
+  // Real controls: E.Level0 Rate1 Depth2 LoFilter3 HiFilter4.
   P.ch5 = { w:300,h:480, knobs:[
       {id:0,cx:.130,cy:.235,r:.052,style:'boss'},
       {id:1,cx:.315,cy:.235,r:.052,style:'boss'},
@@ -1060,11 +1059,11 @@
       {id:4,cx:.870,cy:.235,r:.052,style:'boss'}],
     ptr:rgb(238,240,242),
     draw(d){ chiefBody(d,150,196,222); const w=rgb(238,240,242);
-      textSpaced(d,.130*d.W,.135*d.H,F.barlow,6.5,w,'RATE',0.1);
-      textSpaced(d,.315*d.W,.135*d.H,F.barlow,6.5,w,'DEPTH',0.1);
-      textSpaced(d,.500*d.W,.135*d.H,F.barlow,5.5,w,'LO FILTER',0.1);
-      textSpaced(d,.685*d.W,.135*d.H,F.barlow,5.5,w,'HI FILTER',0.1);
-      textSpaced(d,.870*d.W,.135*d.H,F.barlow,6.5,w,'MIX',0.1);
+      textSpaced(d,.130*d.W,.135*d.H,F.barlow,5.4,w,'E.LEVEL',0.1);
+      textSpaced(d,.315*d.W,.135*d.H,F.barlow,6.5,w,'RATE',0.1);
+      textSpaced(d,.500*d.W,.135*d.H,F.barlow,6.5,w,'DEPTH',0.1);
+      textSpaced(d,.685*d.W,.135*d.H,F.barlow,5.5,w,'LO FILTER',0.1);
+      textSpaced(d,.870*d.W,.135*d.H,F.barlow,5.5,w,'HI FILTER',0.1);
       chiefName(d,'Chorus','Ensemble','CH-5'); } };
 
   // Classic Flanger — Boss BF-2-style: Chief body in the BF-2 purple.
@@ -1122,42 +1121,45 @@
     [{id:0,cx:.33,lbl:'LIMIT'},{id:1,cx:.67,lbl:'RATE'}],
     'Limiter',null,'LM-2');
 
-  // Line Drive — Boss OS-2-style: custom Chief body in OS-2 yellow (the long
-  // 'OverDrive/Distortion' name needs its own wordmark sizing). RS knob names.
-  // 2 RS knobs: Gain0 Tone1.
+  // Line Drive - Boss OS-2-style. Real controls: Drive0 Tone1 Color2 Level3.
   P.os2 = { w:300,h:480, knobs:[
-      {id:0,cx:.33,cy:.235,r:.072,style:'boss'},
-      {id:1,cx:.67,cy:.235,r:.072,style:'boss'}],
+      {id:3,cx:.28,cy:.205,r:.062,style:'boss'},
+      {id:1,cx:.72,cy:.205,r:.062,style:'boss'},
+      {id:0,cx:.28,cy:.335,r:.062,style:'boss'},
+      {id:2,cx:.72,cy:.335,r:.062,style:'boss'}],
     ptr:rgb(238,240,242),
     draw(d){ chiefBody(d,245,205,30); const wc=rgb(238,240,242), dk=rgb(26,22,10);
-      textSpaced(d,.33*d.W,.135*d.H,F.barlow,9,wc,'GAIN',0.2);
-      textSpaced(d,.67*d.W,.135*d.H,F.barlow,9,wc,'TONE',0.2);
+      textSpaced(d,.28*d.W,.125*d.H,F.barlow,8,wc,'LEVEL',0.2);
+      textSpaced(d,.72*d.W,.125*d.H,F.barlow,8,wc,'TONE',0.2);
+      textSpaced(d,.28*d.W,.255*d.H,F.barlow,8,wc,'DRIVE',0.2);
+      textSpaced(d,.72*d.W,.255*d.H,F.barlow,8,wc,'COLOR',0.2);
       textC(d,.45*d.W,.535*d.H,F.crete,34,dk,'OverDrive');
       textC(d,.44*d.W,.610*d.H,F.crete,28,dk,'Distortion');
       textC(d,.74*d.W,.645*d.H,F.barlow,22,dk,'OS-2'); } };
 
-  // Super Drive — Boss SD-1-style: Chief body in the SD-1 amber/golden yellow.
-  // RS knob names. 2 RS knobs: Gain0 Tone1.
+  // Super Drive - Boss SD-1-style. Real controls: Drive0 Tone1 Level2.
   P.sd1 = chiefSpec(300,480,[242,180,44],
-    [{id:0,cx:.33,lbl:'GAIN'},{id:1,cx:.67,lbl:'TONE'}],
+    [{id:0,cx:.24,lbl:'DRIVE'},{id:1,cx:.50,lbl:'TONE'},{id:2,cx:.76,lbl:'LEVEL'}],
     'Super','OverDrive','SD-1');
 
-  // Standard Distortion — Boss DS-1-style: Chief body in the DS-1 vivid orange.
-  // RS knob names. 2 RS knobs: Gain0 Tone1.
+  // Standard Distortion - Boss DS-1-style. Real controls: Dist0 Tone1 Level2.
   P.ds1 = chiefSpec(300,480,[240,120,34],
-    [{id:0,cx:.33,lbl:'GAIN'},{id:1,cx:.67,lbl:'TONE'}],
+    [{id:0,cx:.24,lbl:'DIST'},{id:1,cx:.50,lbl:'TONE'},{id:2,cx:.76,lbl:'LEVEL'}],
     'Distortion',null,'DS-1');
 
-  // Metal Distortion — Boss HM-2 Heavy Metal-style: custom Chief in dark charcoal
-  // with ORANGE knobs + orange name/labels (the HM-2 signature). RS knob names.
-  // 2 RS knobs: Gain0 Tone1.
+  // Metal Distortion - Boss HM-2 Heavy Metal-style. Real controls:
+  // Dist0 ColorLow1 ColorHigh2 Level3.
   P.hm2 = { w:300,h:480, knobs:[
-      {id:0,cx:.33,cy:.235,r:.072,style:'pointer',cap:[236,142,42]},
-      {id:1,cx:.67,cy:.235,r:.072,style:'pointer',cap:[236,142,42]}],
+      {id:3,cx:.205,cy:.235,r:.060,style:'pointer',cap:[236,142,42]},
+      {id:1,cx:.405,cy:.235,r:.060,style:'pointer',cap:[236,142,42]},
+      {id:2,cx:.605,cy:.235,r:.060,style:'pointer',cap:[236,142,42]},
+      {id:0,cx:.805,cy:.235,r:.060,style:'pointer',cap:[236,142,42]}],
     tick:rgb(120,100,60), ptr:rgb(38,28,12),
     draw(d){ chiefBody(d,52,54,60); const or=rgb(238,146,46);
-      textSpaced(d,.33*d.W,.135*d.H,F.barlow,9,or,'GAIN',0.2);
-      textSpaced(d,.67*d.W,.135*d.H,F.barlow,9,or,'TONE',0.2);
+      textSpaced(d,.205*d.W,.135*d.H,F.barlow,7,or,'LEVEL',0.2);
+      textSpaced(d,.405*d.W,.135*d.H,F.barlow,7,or,'COLOR L',0.2);
+      textSpaced(d,.605*d.W,.135*d.H,F.barlow,7,or,'COLOR H',0.2);
+      textSpaced(d,.805*d.W,.135*d.H,F.barlow,7,or,'DIST',0.2);
       chiefName(d,'Heavy','Metal','HM-2',0,0,or); } };
 
   // Octavius — Boss OC-5 Octave-style: Chief body in the OC-5 dark chocolate brown.
@@ -1166,20 +1168,23 @@
     [{id:0,cx:.33,lbl:'TONE'},{id:1,cx:.67,lbl:'MIX'}],
     'Octave',null,'OC-5');
 
-  // Shred Zone — Boss MT-2 Metal Zone-style: custom Chief in MT-2 gunmetal with
-  // ORANGE name + labels (black knobs, like the real MT-2). RS knob names.
-  // 4 RS knobs: Gain0 Bass1 Mid2 Treble3.
+  // Shred Zone - Boss MT-2 Metal Zone-style. Real controls:
+  // Dist0 Low1 High2 Middle3 MiddleFreq4 Level5.
   P.mt2 = { w:300,h:480, knobs:[
-      {id:0,cx:.205,cy:.235,r:.072,style:'boss'},
-      {id:1,cx:.40,cy:.235,r:.072,style:'boss'},
-      {id:2,cx:.595,cy:.235,r:.072,style:'boss'},
-      {id:3,cx:.79,cy:.235,r:.072,style:'boss'}],
+      {id:5,cx:.205,cy:.215,r:.058,style:'boss'},
+      {id:1,cx:.40,cy:.215,r:.058,style:'boss'},
+      {id:2,cx:.595,cy:.215,r:.058,style:'boss'},
+      {id:0,cx:.79,cy:.215,r:.058,style:'boss'},
+      {id:3,cx:.40,cy:.345,r:.058,style:'boss'},
+      {id:4,cx:.595,cy:.345,r:.058,style:'boss'}],
     ptr:rgb(238,240,242),
     draw(d){ chiefBody(d,60,62,68); const or=rgb(240,132,42);
-      textSpaced(d,.205*d.W,.135*d.H,F.barlow,8.5,or,'GAIN',0.2);
-      textSpaced(d,.40*d.W,.135*d.H,F.barlow,8.5,or,'BASS',0.2);
-      textSpaced(d,.595*d.W,.135*d.H,F.barlow,8.5,or,'MID',0.2);
-      textSpaced(d,.79*d.W,.135*d.H,F.barlow,8,or,'TREBLE',0.2);
+      textSpaced(d,.205*d.W,.135*d.H,F.barlow,7.5,or,'LEVEL',0.2);
+      textSpaced(d,.40*d.W,.135*d.H,F.barlow,7.5,or,'LOW',0.2);
+      textSpaced(d,.595*d.W,.135*d.H,F.barlow,7.5,or,'HIGH',0.2);
+      textSpaced(d,.79*d.W,.135*d.H,F.barlow,7.5,or,'DIST',0.2);
+      textSpaced(d,.40*d.W,.275*d.H,F.barlow,7.5,or,'MIDDLE',0.2);
+      textSpaced(d,.595*d.W,.275*d.H,F.barlow,6.5,or,'MID FREQ',0.2);
       chiefName(d,'Metal','Zone','MT-2',0,0,or); } };
 
   // Amp EQ — Boss FBM-1 Fender '59 Bassman-style: custom Chief in tweed gold with
@@ -1264,14 +1269,17 @@
       ledDot(d,W*.50,H*.705,true,90,220,255);
       footRound(d,W*.50,H*.84,20*s); } };
 
-  // Vintage Chorus — MXR Stereo Chorus-style: yellow landscape box, three black
+  // Vintage Chorus — MXR Stereo Chorus-style: yellow landscape box, five black
   // knobs in outlined cells, the parody 'NYR' logo box + 'stereo chorus' tag,
-  // round footswitch, side jack legends. RS knob names. Rate0 Depth1 Mix2.
+  // round footswitch, side jack legends. Real controls:
+  // Bass0 Treble1 Intensity2 Width3 Speed4.
   // (Pedal_VintageChorus → AnalogChorus.vst3.)
   P['134stereochorus'] = { w:460,h:330, knobs:[
-      {id:0,cx:.205,cy:.275,r:.080,style:'davies'},
-      {id:1,cx:.500,cy:.275,r:.080,style:'davies'},
-      {id:2,cx:.795,cy:.275,r:.080,style:'davies'}],
+      {id:0,cx:.125,cy:.275,r:.055,style:'davies'},
+      {id:1,cx:.312,cy:.275,r:.055,style:'davies'},
+      {id:2,cx:.500,cy:.275,r:.060,style:'davies'},
+      {id:3,cx:.688,cy:.275,r:.055,style:'davies'},
+      {id:4,cx:.875,cy:.275,r:.055,style:'davies'}],
     tick:rgb(40,38,30), ptr:rgb(244,244,240),
     draw(d){ const {ctx:c,W,H,s}=d; const ink=rgb(28,26,20), m=7*s;
       // yellow enclosure (no face screws — MXR-style folded box)
@@ -1281,13 +1289,15 @@
       rr(c,m,m,W-2*m,H-2*m,12*s); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=2*s; c.stroke();
       // black pinstripe border
       c.strokeStyle=ink; c.lineWidth=2*s; rr(c,W*.035,H*.06,W*.93,H*.88,10*s); c.stroke();
-      // three outlined knob cells
+      // five outlined knob cells
       const cellY=H*.10, cellH=H*.50;
-      [[.05,.30],[.35,.30],[.65,.30]].forEach(p=>{ rr(c,W*p[0],cellY,W*p[1],cellH,8*s); c.strokeStyle=ink; c.lineWidth=1.6*s; c.stroke(); });
-      // knob labels (RS names)
-      textSpaced(d,.205*W,.540*H,F.barlow,12,ink,'RATE',0.5);
-      textSpaced(d,.500*W,.540*H,F.barlow,12,ink,'DEPTH',0.5);
-      textSpaced(d,.795*W,.540*H,F.barlow,12,ink,'MIX',0.5);
+      [[.045,.16],[.232,.16],[.420,.16],[.608,.16],[.795,.16]].forEach(p=>{ rr(c,W*p[0],cellY,W*p[1],cellH,8*s); c.strokeStyle=ink; c.lineWidth=1.6*s; c.stroke(); });
+      // knob labels
+      textSpaced(d,.125*W,.540*H,F.barlow,8.5,ink,'BASS',0.35);
+      textSpaced(d,.312*W,.540*H,F.barlow,8.5,ink,'TREBLE',0.25);
+      textSpaced(d,.500*W,.540*H,F.barlow,7.7,ink,'INTENSITY',0.12);
+      textSpaced(d,.688*W,.540*H,F.barlow,8.5,ink,'WIDTH',0.25);
+      textSpaced(d,.875*W,.540*H,F.barlow,8.5,ink,'SPEED',0.25);
       // NYR logo box (bottom-left)
       rr(c,W*.06,H*.735,W*.215,H*.155,8*s); c.strokeStyle=ink; c.lineWidth=2.6*s; c.stroke();
       textC(d,W*.1675,H*.815,F.anton,30,ink,'NYR');
@@ -1302,7 +1312,7 @@
 
   // Buzz-Tone — Maestro Fuzz-Tone FZ-1A-style: brown box, two gold knobs poking
   // from the top, white script + shadowed wordmark, big chrome footswitch button,
-  // maker text. Parody (Master Buzz-Tone / Hudson). RS knob names. Gain0 Tone1.
+  // maker text. Parody (Master Buzz-Tone / Hudson). Real controls: Fuzz0 Volume1.
   P.buzztone = { w:300,h:480, knobs:[
       {id:0,cx:.28,cy:.095,r:.082,style:'pointer',cap:[206,168,92]},
       {id:1,cx:.72,cy:.095,r:.082,style:'pointer',cap:[206,168,92]}],
@@ -1397,13 +1407,13 @@
       footRound(d,W*.50,H*.800,20*s); } };
 
   // Send in the Clones — EHX Clone Theory-style: brushed-silver box, black control
-  // panel with three knobs, bubble graphics, outline wordmark + green tag, script
-  // brand. Parody (quimical-harmony / Attack of the Clones). RS knob names.
-  // Clones0 Depth1 Mix2.
+  // panel with three knobs plus the flange switch, bubble graphics, outline
+  // wordmark + green tag, script brand. Real controls: Rate0 Depth1 ChVib2 Flange3.
   P.attackoftheclones = { w:300,h:420, knobs:[
-      {id:0,cx:.20,cy:.155,r:.060,style:'boss'},
-      {id:1,cx:.50,cy:.155,r:.060,style:'boss'},
-      {id:2,cx:.80,cy:.155,r:.060,style:'boss'}],
+      {id:0,cx:.170,cy:.155,r:.055,style:'boss'},
+      {id:1,cx:.390,cy:.155,r:.055,style:'boss'},
+      {id:2,cx:.610,cy:.155,r:.055,style:'boss'},
+      {id:3,cx:.830,cy:.155,r:.055,style:'bat'}],
     ptr:rgb(238,240,242),
     draw(d){ const {ctx:c,W,H,s}=d; const m=8*s, wt=rgb(236,238,242), grn=rgb(122,212,184);
       c.fillStyle=rgb(8,8,9); c.fillRect(0,0,W,H);
@@ -1418,10 +1428,11 @@
       // 9V symbol
       c.strokeStyle=wt; c.lineWidth=1.2*s; c.beginPath(); c.arc(W*.475,H*.072,4*s,0,7); c.stroke();
       textSpaced(d,.545*W,.072*H,F.barlow,7,wt,'9V',0.2);
-      // knob labels (RS names)
-      textSpaced(d,.20*W,.245*H,F.barlow,8.5,wt,'CLONES',0.2);
-      textSpaced(d,.50*W,.245*H,F.barlow,8.5,wt,'DEPTH',0.2);
-      textSpaced(d,.80*W,.245*H,F.barlow,8.5,wt,'MIX',0.3);
+      // control labels
+      textSpaced(d,.170*W,.245*H,F.barlow,8.0,wt,'RATE',0.2);
+      textSpaced(d,.390*W,.245*H,F.barlow,8.0,wt,'DEPTH',0.2);
+      textSpaced(d,.610*W,.245*H,F.barlow,7.0,wt,'CH/VIB',0.15);
+      textSpaced(d,.830*W,.245*H,F.barlow,6.5,wt,'FLANGE',0.1);
       ledDot(d,W*.50,H*.305,true,224,56,46);
       // bubble accents (Clone Theory signature)
       [[.66,.40,5],[.72,.445,3],[.30,.52,4],[.355,.47,3],[.70,.55,4],[.28,.585,3]].forEach(b=>{ c.beginPath(); c.arc(b[0]*W,b[1]*H,b[2]*s,0,7); c.strokeStyle=grn; c.lineWidth=1.2*s; c.stroke(); });
@@ -1708,7 +1719,7 @@
       chiefName(d,n1,n2,code,0,0,ink); } }; }
 
   P.cb3 = chiefSpec(300,480,[40,158,150],
-    [{id:0,cx:.205,lbl:'RATE'},{id:1,cx:.40,lbl:'DEPTH'},{id:2,cx:.595,lbl:'LO FILTER',lblPx:8},{id:3,cx:.79,lbl:'MIX'}],
+    [{id:0,cx:.205,lbl:'RATE'},{id:1,cx:.40,lbl:'DEPTH'},{id:2,cx:.595,lbl:'LO FILTER',lblPx:8},{id:3,cx:.79,lbl:'E.LEVEL',lblPx:8}],
     'Bass','Chorus','CB-3');
   P.so2 = { w:300,h:480, knobs:[{id:0,cx:.34,cy:.235,r:.088,style:'boss'},{id:1,cx:.66,cy:.235,r:.088,style:'boss'}],
     ptr:rgb(236,232,224), draw(d){ chiefBody(d,112,70,66); const w=rgb(236,232,224);
@@ -2501,18 +2512,22 @@
       textSpaced(d,.50*W,.905*H,F.barlow,9,wt,'INDEX AUDIO',1.2); } };
 
   // Deja Chorus — Fulltone Deja'Vibe-style: matte-black landscape box, white
-  // pinstripe border + script logo, two top knobs + two mode toggles, a big
-  // offset knob + BYPASS stomp + blue LED. Recreated brand-free. Rate0 Depth1 Mix2.
+  // pinstripe border + script logo, three top knobs + two mode toggles, a big
+  // offset knob + BYPASS stomp + blue LED. Recreated brand-free.
+  // Real controls: Intensity0 Speed1 Speed2 SpeedSel3 Volume4 Mode5.
   P.dejachorus = { w:480, h:300, knobs:[
-      {id:0,cx:.155,cy:.205,r:.066,style:'boss'},
-      {id:1,cx:.430,cy:.205,r:.066,style:'boss'},
-      {id:2,cx:.825,cy:.560,r:.110,style:'boss'}],
+      {id:1,cx:.135,cy:.205,r:.055,style:'boss'},
+      {id:3,cx:.260,cy:.205,r:.040,style:'bat'},
+      {id:5,cx:.340,cy:.205,r:.040,style:'bat'},
+      {id:2,cx:.465,cy:.205,r:.055,style:'boss'},
+      {id:4,cx:.640,cy:.205,r:.055,style:'boss'},
+      {id:0,cx:.825,cy:.560,r:.110,style:'boss'}],
     ptr:rgb(236,238,242),
     draw(d){ const {ctx:c,W,H,s}=d; box(d,26,26,28); const wt=rgb(232,234,238);
       // white pinstripe border + a divider under the top knob strip
       c.save(); rr(c,16*s,16*s,W-32*s,H-32*s,10*s); c.strokeStyle=rgb(214,216,222); c.lineWidth=1.8*s; c.stroke(); c.restore();
       c.beginPath(); c.moveTo(22*s,H*.415); c.lineTo(W-22*s,H*.415); c.strokeStyle=rgb(214,216,222); c.lineWidth=1.3*s; c.stroke();
-      // two decorative mode toggles between the top knobs (Modern/Vintage, Vibrato/Chorus)
+      // two mode toggles between the top knobs (Speed select, Vibrato/Chorus).
       const tog=(tx,ty,up)=>{ const w0=9*s,h0=20*s;
         rr(c,tx-w0/2,ty-h0/2,w0,h0,3*s); c.fillStyle=rgb(16,16,18); c.fill();
         rr(c,tx-w0/2,ty-h0/2,w0,h0,3*s); c.strokeStyle=rgb(6,6,8); c.lineWidth=1*s; c.stroke();
@@ -2522,14 +2537,17 @@
         rr(c,tx-4*s,ly-6*s,8*s,12*s,2*s); c.strokeStyle=rgb(70,72,78); c.lineWidth=0.8*s; c.stroke(); };
       tog(.270*W,.205*H,false); tog(.330*W,.205*H,true);
       // top knob labels
-      textSpaced(d,.155*W,.370*H,F.barlow,8.5,wt,'RATE',0.6);
-      textSpaced(d,.430*W,.370*H,F.barlow,8.5,wt,'DEPTH',0.5);
+      textSpaced(d,.135*W,.370*H,F.barlow,7.6,wt,'SPEED1',0.25);
+      textSpaced(d,.260*W,.370*H,F.barlow,5.7,wt,'SPD SEL',0.05);
+      textSpaced(d,.340*W,.370*H,F.barlow,6.0,wt,'MODE',0.10);
+      textSpaced(d,.465*W,.370*H,F.barlow,7.6,wt,'SPEED2',0.25);
+      textSpaced(d,.640*W,.370*H,F.barlow,7.6,wt,'VOLUME',0.20);
       // white script logo + parody model code + brand
       textC(d,.375*W,.560*H,F.crete,40,wt,"Deja Chorus");
       textC(d,.585*W,.655*H,F.barlow,12,wt,'DC-1');
       textC(d,.46*W,.815*H,F.ink,22,wt,'ExtraTone');
-      // big MIX knob label + blue status LED
-      textSpaced(d,.825*W,.815*H,F.barlow,9,wt,'MIX',0.6);
+      // big intensity knob label + blue status LED
+      textSpaced(d,.825*W,.815*H,F.barlow,8.2,wt,'INTENSITY',0.20);
       ledDot(d,W*.655,H*.610,true,70,150,234);
       // bypass footswitch
       footRound(d,W*.205,H*.730,20*s);
@@ -2566,14 +2584,14 @@
       textSpaced(d,.5*W,.775*H,F.anton,18,wt,'GUITAR  PEDAL',1.5);
       textSpaced(d,.5*W,.910*H,F.barlow,10,wt,'STONEMAN',1.4); } };
 
-  // Carl Unlimited — Chandler Germanium Drive-style: royal-blue enclosure, gold
-  // pinstripe frames, two yellow pointer knobs (white scale ticks), two 3-way
-  // mode toggles, gold serif logo, red LED in a chrome bezel, footswitch.
-  // Recreated brand-free. Params: Gain0 Tone1.
+  // Germanium Drive - Skywave/Broadcast-style. Real controls:
+  // Gain0 LowCut1 Level2 GainMode3 Voltage4.
   P.germaniumdrive = { w:300, h:500, knobs:[
-      {id:0,cx:.22,cy:.250,r:.085,style:'pointer',cap:[230,202,74]},
-      {id:1,cx:.50,cy:.250,r:.085,style:'pointer',cap:[230,202,74]},
-      {id:2,cx:.78,cy:.250,r:.085,style:'pointer',cap:[230,202,74]}],
+      {id:0,cx:.18,cy:.250,r:.066,style:'pointer',cap:[230,202,74]},
+      {id:1,cx:.34,cy:.250,r:.066,style:'pointer',cap:[230,202,74]},
+      {id:2,cx:.50,cy:.250,r:.066,style:'pointer',cap:[230,202,74]},
+      {id:3,cx:.66,cy:.250,r:.066,style:'pointer',cap:[230,202,74]},
+      {id:4,cx:.82,cy:.250,r:.066,style:'pointer',cap:[230,202,74]}],
     tick:rgb(234,238,244), ptr:rgb(36,38,44),
     draw(d){ const {ctx:c,W,H,s}=d; box(d,40,54,132); const gold=rgb(216,178,68), wt=rgb(236,238,244);
       // two gold pinstripe frames (controls section + footswitch section)
@@ -2583,12 +2601,12 @@
       // top I/O legends
       textSpaced(d,.135*W,.062*H,F.barlow,9,gold,'OUT',0.5);
       textSpaced(d,.865*W,.062*H,F.barlow,9,gold,'IN',0.5);
-      // 'goes to 11' nod above the Gain knob
-      textC(d,.30*W,.168*H,F.barlow,8,wt,'11');
       // gold italic knob labels
-      textC(d,.22*W,.392*H,F.crete,15,gold,'Gain');
-      textC(d,.50*W,.392*H,F.crete,15,gold,'Level');
-      textC(d,.78*W,.392*H,F.crete,15,gold,'Voltage');
+      textC(d,.18*W,.392*H,F.crete,12,gold,'Gain');
+      textC(d,.34*W,.392*H,F.crete,12,gold,'Low Cut');
+      textC(d,.50*W,.392*H,F.crete,12,gold,'Level');
+      textC(d,.66*W,.392*H,F.crete,12,gold,'Mode');
+      textC(d,.82*W,.392*H,F.crete,12,gold,'Voltage');
       // two decorative 3-way mode toggles
       const tog=(tx,ty)=>{ const w0=11*s,h0=25*s;
         rr(c,tx-w0/2,ty-h0/2,w0,h0,4*s); c.fillStyle=rgb(18,20,28); c.fill();
@@ -2731,12 +2749,13 @@
       footRound(d,W*.50,H*.79,22*s);
       textSpaced(d,.78*W,.93*H,F.barlow,8.5,dk,'auditronics',0.2); } };
 
-  // Custom Drive — Fulltone OCD-style: cream box, two black knobs, an HP/LP voice
+  // Custom Drive - Fulltone OCD-style: cream box, three black knobs, an HP/LP voice
   // toggle + blue LED, fat black wordmark + script brand. Parody (ExtraTone / CDO).
-  // RS knob names; Voice is the binary HP/LP selector. Gain0 Tone1 Voice2.
+  // Real controls: Drive0 Tone1 Voice2 Volume3.
   P.cdo = { w:280,h:480, knobs:[
-      {id:0,cx:.26,cy:.215,r:.082,style:'davies'},
-      {id:1,cx:.74,cy:.215,r:.082,style:'davies'}],
+      {id:0,cx:.20,cy:.215,r:.072,style:'davies'},
+      {id:1,cx:.50,cy:.215,r:.068,style:'davies'},
+      {id:3,cx:.80,cy:.215,r:.072,style:'davies'}],
     switches:[{id:2,cx:.50,cy:.150,hs:.030}],
     ptr:rgb(240,240,242),
     draw(d,values){ const {ctx:c,W,H,s}=d; const m=8*s, dk=rgb(30,28,22), dim=rgb(150,146,132);
@@ -2744,9 +2763,10 @@
       const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(224,214,186)); bg.addColorStop(1,rgb(198,188,160));
       rr(c,m,m,W-2*m,H-2*m,14*s); c.fillStyle=bg; c.fill();
       rr(c,m,m,W-2*m,H-2*m,14*s); c.strokeStyle='rgba(0,0,0,0.3)'; c.lineWidth=2*s; c.stroke();
-      // knob labels (RS names, OCD-style script)
-      textC(d,.26*W,.105*H,F.crete,17,dk,'Gain');
-      textC(d,.74*W,.105*H,F.crete,17,dk,'Tone');
+      // knob labels
+      textC(d,.20*W,.105*H,F.crete,15,dk,'Drive');
+      textC(d,.50*W,.105*H,F.crete,15,dk,'Tone');
+      textC(d,.80*W,.105*H,F.crete,15,dk,'Volume');
       // HP/LP voice selector (toggle drawn by engine via switches) + blue LED
       const vv=(values&&values[2]!=null)?values[2]:0;
       textSpaced(d,.50*W,.082*H,F.barlow,8,vv>=0.5?dk:dim,'HP',0.3);
@@ -2758,15 +2778,17 @@
       textC(d,.50*W,.855*H,F.ink,24,dk,'ExtraTone');
       textSpaced(d,.50*W,.905*H,F.barlow,7,dk,'Built in the USA',0.3); } };
 
-  // Marshall GV-2 Guv'nor Plus-style: cream Marshall-compact body, five gold
+  // Marshall GV-2 Guv'nor Plus-style: cream Marshall-compact body, six gold
   // knobs, black oval gold-edged badge, gold stomp, script brand. Parody
-  // (Marsten / GM-2 Guvnor Minus). RS knob names. Gain0 Bass1 Mid2 Treble3 Deep4.
+  // (Marsten / GM-2 Guvnor Minus). Real controls:
+  // Gain0 Bass1 Mid2 Treble3 Deep4 Volume5.
   P.gm2 = { w:300,h:470, knobs:[
-      {id:0,cx:.12,cy:.150,r:.052,style:'pointer',cap:[200,164,84]},
-      {id:1,cx:.31,cy:.150,r:.052,style:'pointer',cap:[200,164,84]},
-      {id:2,cx:.50,cy:.150,r:.052,style:'pointer',cap:[200,164,84]},
-      {id:3,cx:.69,cy:.150,r:.052,style:'pointer',cap:[200,164,84]},
-      {id:4,cx:.88,cy:.150,r:.052,style:'pointer',cap:[200,164,84]}],
+      {id:0,cx:.095,cy:.150,r:.047,style:'pointer',cap:[200,164,84]},
+      {id:1,cx:.257,cy:.150,r:.047,style:'pointer',cap:[200,164,84]},
+      {id:2,cx:.419,cy:.150,r:.047,style:'pointer',cap:[200,164,84]},
+      {id:3,cx:.581,cy:.150,r:.047,style:'pointer',cap:[200,164,84]},
+      {id:4,cx:.743,cy:.150,r:.047,style:'pointer',cap:[200,164,84]},
+      {id:5,cx:.905,cy:.150,r:.047,style:'pointer',cap:[200,164,84]}],
     tick:rgb(150,140,110), ptr:rgb(40,36,26),
     draw(d){ const {ctx:c,W,H,s}=d; const m=8*s, dk=rgb(40,36,26), gold=rgb(202,166,86);
       c.fillStyle=rgb(8,8,9); c.fillRect(0,0,W,H);
@@ -2775,7 +2797,7 @@
       rr(c,m,m,W-2*m,H-2*m,14*s); c.strokeStyle='rgba(0,0,0,0.3)'; c.lineWidth=2*s; c.stroke();
       // red CHECK LED + knob labels (RS names)
       ledDot(d,W*.50,H*.045,true,224,40,40);
-      [['GAIN',.12],['BASS',.31],['MID',.50],['TREBLE',.69,6.5],['DEEP',.88]].forEach(k=>
+      [['GAIN',.095],['BASS',.257],['MID',.419],['TREBLE',.581,6.2],['DEEP',.743],['VOLUME',.905,6.0]].forEach(k=>
         textSpaced(d,k[1]*W,.235*H,F.barlow,k[2]||7.5,dk,k[0],0.2));
       // black oval gold-edged badge: GM-2 / GUVNOR / MINUS
       const ox=.50*W, oy=.46*H, orx=W*.27, ory=H*.105;
@@ -2839,9 +2861,9 @@
       c.beginPath(); c.arc(gx,gy,R*0.42,0,7); c.fillStyle=rgb(28,28,30); c.fill();
       textSpaced(d,.84*W,.79*H,F.bebas,18,ink,'GUITAR',0.5); } };
 
-  // Vintage Distortion — DOD 250 Overdrive Preamp-style: mustard-yellow box, two
+  // Vintage Distortion - DOD 250 Overdrive Preamp-style: mustard-yellow box, two
   // chrome knobs, lowercase logo, 'Overdrive Preamp/250' text, the horizontal vent
-  // grille + footswitch. Parody (sos 250). RS knob names. Gain0 Tone1.
+  // grille + footswitch. Parody (sos 250). Real controls: Gain0 Volume1.
   P.vintagedistortion = { w:280,h:470, knobs:[
       {id:0,cx:.28,cy:.210,r:.078,style:'boss'},
       {id:1,cx:.72,cy:.210,r:.078,style:'boss'}],
@@ -2851,10 +2873,10 @@
       const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(238,198,58)); bg.addColorStop(1,rgb(214,172,36));
       rr(c,m,m,W-2*m,H-2*m,14*s); c.fillStyle=bg; c.fill();
       rr(c,m,m,W-2*m,H-2*m,14*s); c.strokeStyle='rgba(0,0,0,0.35)'; c.lineWidth=2*s; c.stroke();
-      // lowercase brand logo (parody) + knob labels (RS names)
+      // lowercase brand logo (parody) + knob labels
       textC(d,.50*W,.072*H,F.anton,22,ink,'sos');
       textSpaced(d,.28*W,.115*H,F.barlow,8,ink,'GAIN',0.3);
-      textSpaced(d,.72*W,.115*H,F.barlow,8,ink,'TONE',0.3);
+      textSpaced(d,.72*W,.115*H,F.barlow,8,ink,'VOLUME',0.3);
       // model text
       textC(d,.50*W,.395*H,F.crete,30,ink,'Overdrive');
       textC(d,.53*W,.460*H,F.crete,22,ink,'Preamp/250');

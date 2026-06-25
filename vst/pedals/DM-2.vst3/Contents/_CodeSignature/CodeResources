@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/NpnDelay.so</key>
+		<key>x86_64-linux/DM-2.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			RLB53TYwm9U0OuQatycGg+8x+UwXRBkZnHRj8DakOJI=
 			</data>
 		</dict>
-		<key>x86_64-win/NpnDelay.vst3</key>
+		<key>x86_64-win/DM-2.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			G7aktYz1K8s2m52w3B3JI1yDXCY+on6//6EszCel5Os=
+			S6REG0QsFqbeAcJH/5ZbELe0mXaVVxurX+n0JiIu8bo=
 			</data>
 		</dict>
 	</dict>

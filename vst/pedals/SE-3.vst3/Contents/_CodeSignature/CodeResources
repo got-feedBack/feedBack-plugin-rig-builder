@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/BassFilterEcho.so</key>
+		<key>x86_64-linux/SE-3.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			9duo4y0X7b9rT6RCDmdOfGqPYDD7fb5n15GSeAiD6Vo=
 			</data>
 		</dict>
-		<key>x86_64-win/BassFilterEcho.vst3</key>
+		<key>x86_64-win/SE-3.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			BAn76clMMEHGBGmUJsr+J3fS1Nu5/oj/zSxXAZseRAc=
+			HBoTNQEd7bfTshElbHCvNjHM+oHlvgqpdci1tuXFaHQ=
 			</data>
 		</dict>
 	</dict>

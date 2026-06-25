@@ -3,23 +3,26 @@
 
 enum SuperBuzzParamId
 {
-    kGain = 0,
-    kTone,
+    kExpander = 0,
+    kToneSwitch,
+    kBalance,
     kParamCount
 };
 
 static const char* const kSuperBuzzNames[kParamCount] = {
-    "Gain",
-    "Tone",
+    "Expander",
+    "Tone SW",
+    "Balance",
 };
 
 static const char* const kSuperBuzzSymbols[kParamCount] = {
-    "gain",
-    "tone",
+    "expander",
+    "tone_sw",
+    "balance",
 };
 
-static const float kSuperBuzzMin[kParamCount] = { 0.0f, 0.0f };
-static const float kSuperBuzzMax[kParamCount] = { 1.0f, 1.0f };
-static const float kSuperBuzzDef[kParamCount] = { 0.62f, 0.58f };
+static const float kSuperBuzzMin[kParamCount] = { 0.0f, 0.0f, 0.0f };
+static const float kSuperBuzzMax[kParamCount] = { 1.0f, 1.0f, 1.0f };
+static const float kSuperBuzzDef[kParamCount] = { 0.62f, 1.0f, 0.62f };
 
 #endif // SUPER_BUZZ_PARAMS_H

@@ -12705,6 +12705,65 @@ function rbAdvState() {
     return rbState._adv;
 }
 
+const RB_ADV_STEREO_OUT_RS = new Set([
+    'Pedal_StereoChorus',
+    'Pedal_DigitalChorus',
+    'Pedal_VintageChorus',
+    'Bass_Pedal_BassChorus',
+    'Pedal_SendInTheClones',
+    'Pedal_TremOle',
+    'Pedal_NoFiEcho',
+    'Pedal_Limiter',
+    'Rack_StereoPhaser',
+    'Rack_StudioChorus',
+    'Rack_StudioDelay',
+    'Rack_StudioFlanger',
+    'Rack_TapeEcho',
+]);
+const RB_ADV_STEREO_OUT_STEMS = new Set([
+    '134stereochorus',
+    'analogchorus',
+    'ch5',
+    'digitalchorus',
+    'cb3',
+    'basschorus',
+    'attackoftheclones',
+    'sendintheclones',
+    'dynatrem',
+    'tremole',
+    'nofiecho',
+    'lm2',
+    'limiter',
+    'stereophaser',
+    'studiochorus',
+    'studiodelay',
+    'studioflanger',
+    'tapeecho',
+]);
+function rbAdvStemFromPath(path) {
+    return (path || '').split('/').pop().replace(/\.(vst3|component)$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+function rbAdvCatalogCanStereoOut(g) {
+    if (!g) return false;
+    const rs = g.rs_gear || g.type || '';
+    const stem = rbAdvStemFromPath(g.vst_path || g._vst_path || '');
+    return RB_ADV_STEREO_OUT_RS.has(rs) || RB_ADV_STEREO_OUT_STEMS.has(stem);
+}
+function rbAdvPieceCanStereoOut(piece, rsGear) {
+    const rs = rsGear || (piece && piece.type) || '';
+    const stem = piece ? rbCanvasStem(piece) : '';
+    return RB_ADV_STEREO_OUT_RS.has(rs) || RB_ADV_STEREO_OUT_STEMS.has(stem);
+}
+function rbAdvNodeCanStereoOut(n) {
+    if (!n || n.kind !== 'gear') return false;
+    let piece = null;
+    try {
+        const chain = rbStudioCurrentChain();
+        if (typeof n.pieceIdx === 'number' && n.pieceIdx >= 0) piece = chain[n.pieceIdx] || null;
+    } catch (_) {}
+    return rbAdvPieceCanStereoOut(piece, n.rsGear) || !!n.stereoOut;
+}
+
 // Zoom the node canvas (a sizer wrapper holds the scroll size; the two content
 // layers are transform:scale'd inside it so scroll works at any zoom).
 function rbAdvZoom(delta) {
@@ -12743,9 +12802,9 @@ function rbAdvPersist() {
         // live chain on restore (they can change without invalidating the graph).
         const nodes = adv.nodes.map(n => ({
             id: n.id, kind: n.kind, pieceIdx: (typeof n.pieceIdx === 'number' ? n.pieceIdx : -1),
-            kindLabel: n.kindLabel || null, label: n.label || null, x: n.x, y: n.y,
+            kindLabel: n.kindLabel || null, label: n.label || null, rsGear: n.rsGear || null, x: n.x, y: n.y,
             pan: (typeof n.pan === 'number' ? n.pan : 0),   // stereo pan (St-1)
-            stereoOut: !!n.stereoOut,                       // split L/R outputs (St-2)
+            stereoOut: rbAdvNodeCanStereoOut(n),            // optional L/R outputs (St-2)
         }));
         localStorage.setItem(rbAdvStorageKey(), JSON.stringify({ nodes, edges: adv.edges }));
     } catch (_) {}
@@ -12773,9 +12832,11 @@ function rbAdvRestore() {
             p._pan = pan;
             nodes.push({
                 id: n.id, kind: 'gear', pieceIdx: n.pieceIdx, kindLabel: n.kindLabel,
+                rsGear: n.rsGear || p.type || null,
                 label: p.real_name || p.type || 'Gear',
                 img: rbStudioPedalImg(p) || null, bypassed: !!p._bypassed,
-                x: n.x, y: n.y, pan, stereoOut: !!n.stereoOut,
+                x: n.x, y: n.y, pan,
+                stereoOut: rbAdvPieceCanStereoOut(p, n.rsGear) || !!n.stereoOut,
             });
         } else {
             // Always use the fresh terminal label (ignore any cached one, e.g. an
@@ -12853,6 +12914,7 @@ function rbAdvResetToChain() {
         img: rbStudioPedalImg(e.p) || null,
         bypassed: !!e.p.bypassed, x: 0, y: 0,
         pan: (typeof e.p._pan === 'number' ? e.p._pan : 0),   // stereo pan (St-1)
+        stereoOut: rbAdvPieceCanStereoOut(e.p, e.p.type),
     });
     const isPost = (e) => (e.p.slot || '').toLowerCase() === 'post_pedal';
     const pedals = g.pedal || [];
@@ -12979,6 +13041,7 @@ function rbAdvNodeHtml(n) {
     const thumb = n.img
         ? `<div class="rb-adv-node-thumb"><img src="${rbEsc(n.img)}" alt="" onerror="this.style.display='none'"></div>`
         : `<div class="rb-adv-node-thumb"></div>`;
+    const stereoOut = rbAdvNodeCanStereoOut(n);
     return `<div class="rb-adv-node ${n.bypassed ? 'rb-adv-node-bypassed' : ''} ${n._inactive ? 'rb-adv-node-inactive' : ''}" data-adv-node="${n.id}"
                  style="left:${n.x}px;top:${n.y}px">
                 <button class="rb-adv-node-del" data-adv-del="${n.id}" title="Remove from chain">✕</button>
@@ -12988,10 +13051,11 @@ function rbAdvNodeHtml(n) {
                 <div class="rb-adv-node-kind">${rbEsc(n.kindLabel || 'gear')}</div>
                 ${rbAdvPanHtml(n)}
                 <span class="rb-adv-jack rb-adv-jack-in" data-adv-jack="${n.id}" data-adv-side="in" data-adv-port="in"></span>
-                ${n.stereoOut
-                    ? `<span class="rb-adv-jack rb-adv-jack-out rb-adv-jack-l" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="L" title="Left output"></span>
+                ${stereoOut
+                    ? `<span class="rb-adv-jack rb-adv-jack-out rb-adv-jack-mono" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="out" title="Mono output (default)"></span>
+                       <span class="rb-adv-jack rb-adv-jack-out rb-adv-jack-l" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="L" title="Left output"></span>
                        <span class="rb-adv-jack rb-adv-jack-out rb-adv-jack-r" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="R" title="Right output"></span>`
-                    : `<span class="rb-adv-jack rb-adv-jack-out" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="out"></span>`}
+                    : `<span class="rb-adv-jack rb-adv-jack-out" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="out" title="Output"></span>`}
             </div>`;
 }
 
@@ -13039,7 +13103,8 @@ function rbAdvRenderCables(tempPath) {
         // Output anchor follows the port: a stereo-out node has L (upper) and R
         // (lower) jacks; everything else exits at the vertical centre.
         const port = e.fromPort || 'out';
-        const oy = (fn.stereoOut && port === 'L') ? 0.32 : (fn.stereoOut && port === 'R') ? 0.68 : 0.5;
+        const hasStereoPorts = rbAdvNodeCanStereoOut(fn);
+        const oy = (hasStereoPorts && port === 'L') ? 0.28 : (hasStereoPorts && port === 'R') ? 0.72 : 0.5;
         const x1 = fn.x + ((fEl && fEl.offsetWidth) || dimW(fn)), y1 = fn.y + fH * oy;
         const x2 = tn.x, y2 = tn.y + dimH(tn, tEl) / 2;
         const dx = Math.max(40, Math.abs(x2 - x1) * 0.5);
@@ -13047,7 +13112,7 @@ function rbAdvRenderCables(tempPath) {
         // Each edge: a wide invisible hit area (easy to grab, turns the cable red
         // on hover) + the visible cable. DOUBLE-click to disconnect (no ✕ button —
         // it made accidental deletes too easy). L/R cables are tinted.
-        const cls = (fn.stereoOut && port === 'L') ? ' rb-adv-cable-l' : (fn.stereoOut && port === 'R') ? ' rb-adv-cable-r' : '';
+        const cls = (hasStereoPorts && port === 'L') ? ' rb-adv-cable-l' : (hasStereoPorts && port === 'R') ? ' rb-adv-cable-r' : '';
         paths += `<g class="rb-adv-edge-g" data-adv-edge="${idx}">
             <path class="rb-adv-cable-hit" d="${d}"/>
             <path class="rb-adv-cable${cls}" d="${d}"/>
@@ -13083,18 +13148,11 @@ function rbAdvAttachNodeHandlers() {
         if (btn) { ev.preventDefault(); ev.stopPropagation(); return; }   // buttons are clicks, not drags
         if (ev.target.closest('.rb-adv-node-pan')) { ev.stopPropagation(); return; } // let the pan slider drag
         const nodeEl = ev.target.closest('.rb-adv-node');
-        // Ctrl/⌘-click a gear node → toggle its split L/R outputs (two out jacks).
-        if ((ev.ctrlKey || ev.metaKey) && nodeEl && !ev.target.closest('.rb-adv-jack')) {
-            ev.preventDefault(); ev.stopPropagation();
-            rbAdvToggleStereoOut(+nodeEl.dataset.advNode);
-            return;
-        }
         const jack = ev.target.closest('.rb-adv-jack');
         if (jack && jack.dataset.advSide === 'out') { rbAdvStartWire(ev, +jack.dataset.advJack, jack.dataset.advPort || 'out'); return; }
         if (nodeEl) rbAdvStartNodeDrag(ev, +nodeEl.dataset.advNode);
     });
-    // Ctrl-click on macOS also fires contextmenu — suppress it over a node so the
-    // split-output toggle doesn't pop the OS menu.
+    // Keep the browser/host context menu out of the canvas while wiring nodes.
     layer.addEventListener('contextmenu', ev => { if (ev.target.closest('.rb-adv-node')) ev.preventDefault(); });
     // Track which gear node the pointer is over, for the C/L/R pan hotkeys.
     layer.addEventListener('mouseover', ev => {
@@ -13116,24 +13174,15 @@ function rbAdvAttachNodeHandlers() {
     });
 }
 
-// Ctrl/⌘-click a gear node → toggle split L/R outputs. Two out jacks appear (L
-// upper, R lower) so you can wire each side to a different destination (e.g. a
-// stereo delay's L to amp A, R to amp B). Turning it back off collapses this
-// node's L/R cables to a single mono output per target.
+// Legacy external hook: older builds exposed L/R ports through a hidden toggle.
+// New behaviour keeps mono (M) as the default output and shows L/R automatically
+// for known stereo-source pedals/racks, so this only force-enables a custom node.
 function rbAdvToggleStereoOut(id) {
     const adv = rbAdvState();
     const n = adv.nodes.find(x => x.id === id);
     if (!n || n.kind !== 'gear') return;
-    n.stereoOut = !n.stereoOut;
-    if (!n.stereoOut) {
-        const seen = new Set();
-        adv.edges = adv.edges.filter(e => {
-            if (e.from !== id) return true;
-            e.fromPort = 'out';
-            if (seen.has(e.to)) return false;   // drop the now-duplicate after collapse
-            seen.add(e.to); return true;
-        });
-    }
+    if (rbAdvNodeCanStereoOut(n)) return;
+    n.stereoOut = true;
     rbAdvRenderCanvas();
     rbAdvPersist();
     rbAdvSyncAudio();
@@ -13353,8 +13402,9 @@ function rbAdvStartWire(ev, fromId, fromPort) {
     const fn = adv.nodes.find(n => n.id === fromId);
     const fEl = document.querySelector(`#rb-adv-nodes [data-adv-node="${fromId}"]`);
     if (!fn || !fEl) return;
-    // Start the rubber-band at the actual port anchor (L upper / R lower / centre).
-    const oy = (fn.stereoOut && fromPort === 'L') ? 0.32 : (fn.stereoOut && fromPort === 'R') ? 0.68 : 0.5;
+    // Start the rubber-band at the actual port anchor (L upper / R lower / mono centre).
+    const hasStereoPorts = rbAdvNodeCanStereoOut(fn);
+    const oy = (hasStereoPorts && fromPort === 'L') ? 0.28 : (hasStereoPorts && fromPort === 'R') ? 0.72 : 0.5;
     const x1 = fn.x + fEl.offsetWidth, y1 = fn.y + fEl.offsetHeight * oy;
     const move = e => {
         const p = rbAdvLayerPoint(e);
@@ -13502,6 +13552,7 @@ function rbAdvBindCanvasOnce() {
             label: data.name || data.rs_gear, kindLabel: data.cat,
             img: rbAdvGearImg(lookup) || null,
             x: Math.max(0, p.x - 64), y: Math.max(0, p.y - 46),
+            stereoOut: rbAdvCatalogCanStereoOut(lookup),
         };
         adv.nodes.push(node);
         rbAdvRenderCanvas();
@@ -13548,6 +13599,8 @@ async function rbAdvMaterializeGear(node) {
     const chain = rbStudioCurrentChain();
     chain.push(piece);
     node.pieceIdx = chain.length - 1;     // link the node to its now-real piece
+    node.rsGear = node.rsGear || piece.type || null;
+    node.stereoOut = rbAdvPieceCanStereoOut(piece, node.rsGear);
     rbAdvRenderCanvas();
     rbAdvPersist();
     try { await rbStudioPersist(); } catch (_) {}
@@ -13649,7 +13702,7 @@ async function rbStudioApplyStereoToEngine() {
             if (port !== 'L' && port !== 'R') continue;
             const from = nodeById.get(e.from);
             const to = nodeById.get(e.to);
-            if (!from || !from.stereoOut || !to) continue;
+            if (!from || !rbAdvNodeCanStereoOut(from) || !to) continue;
             if (to.kind === 'gear' && typeof to.pieceIdx === 'number' && to.pieceIdx >= 0)
                 srcByIdx.set(to.pieceIdx, port === 'L' ? 1 : 2);
         }

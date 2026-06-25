@@ -1,211 +1,120 @@
 /*
- * Chorus - Boss CE-2 style BBD chorus for the game's Pedal_Chorus.
- * The local schematic is a CE-2: MN3007 BBD, MN3101 clock, TL022 LFO, and a
- * dark wet path mixed with dry. the game exposes Rate, Depth, and Mix.
+ * CH-2 - Boss CE-2 style chorus.
+ *
+ * Reference: pedals/chorus.pdf. Component-guided model of the CE-2 signal
+ * blocks: uPC4558 input/output buffering, TL022 LFO, MN3101 clock, MN3007
+ * BBD delay, 1S2473/1S1588 bias protection and the fixed dry/wet mix of the
+ * real two-knob pedal.
  */
 #include "DistrhoPlugin.hpp"
 #include "ChorusParams.h"
+#include "../_shared/ChorusComponents.h"
 #include <cmath>
-#include <vector>
 
 START_NAMESPACE_DISTRHO
-
-namespace {
-
-static constexpr float kPi = 3.14159265359f;
-
-static inline float clamp01(float v)
-{
-    return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
-}
-
-static inline float smoothstep(float v)
-{
-    v = clamp01(v);
-    return v * v * (3.0f - 2.0f * v);
-}
-
-static inline float softClip(float x)
-{
-    return std::tanh(x);
-}
-
-static inline float onePoleCoeffHz(float hz, float sr)
-{
-    hz = std::fmax(10.0f, std::fmin(hz, sr * 0.45f));
-    return 1.0f - std::exp(-2.0f * kPi * hz / sr);
-}
-
-class DelayBuffer
-{
-    std::vector<float> data;
-    int writeIndex = 0;
-
-public:
-    void resize(int samples)
-    {
-        if (samples < 8)
-            samples = 8;
-        data.assign((size_t)samples, 0.0f);
-        writeIndex = 0;
-    }
-
-    void reset()
-    {
-        for (size_t i = 0; i < data.size(); ++i)
-            data[i] = 0.0f;
-        writeIndex = 0;
-    }
-
-    float read(float delaySamples) const
-    {
-        const int size = (int)data.size();
-        if (size <= 4)
-            return 0.0f;
-
-        delaySamples = std::fmax(1.0f, std::fmin(delaySamples, (float)(size - 3)));
-        float pos = (float)writeIndex - delaySamples;
-        while (pos < 0.0f)
-            pos += (float)size;
-        while (pos >= (float)size)
-            pos -= (float)size;
-
-        const int i0 = (int)std::floor(pos);
-        const int i1 = (i0 + 1) % size;
-        const float frac = pos - (float)i0;
-        return data[(size_t)i0] + (data[(size_t)i1] - data[(size_t)i0]) * frac;
-    }
-
-    void write(float x)
-    {
-        if (data.empty())
-            return;
-        data[(size_t)writeIndex] = x;
-        ++writeIndex;
-        if (writeIndex >= (int)data.size())
-            writeIndex = 0;
-    }
-};
-
-} // namespace
 
 class ChorusCore
 {
     float sampleRate = 48000.0f;
     float rate = kChorusDef[kRate];
     float depth = kChorusDef[kDepth];
-    float mix = kChorusDef[kMix];
-
-    DelayBuffer delay;
     float lfoPhase = 0.0f;
-    float hpX1 = 0.0f;
-    float hpY1 = 0.0f;
-    float preY = 0.0f;
-    float bbdY = 0.0f;
-    float compY = 0.0f;
+    float feedback = 0.0f;
 
-    float hpA = 0.0f;
-    float preA = 0.0f;
-    float bbdA = 0.0f;
-    float compA = 0.0f;
+    rbmod::DelayBuffer bbd;
+    rbmod::HighPass inputHp;
+    rbmod::LowPass inputLp;
+    rbmod::LowPass bbdLp1;
+    rbmod::LowPass bbdLp2;
+    rbmod::BbdCompander compander;
+    rbmod::NoiseSource noise;
 
     float currentRateHz() const
     {
-        return 0.08f * std::pow(75.0f, rate);
+        return 0.065f + 5.35f * std::pow(rbmod::clamp01(rate), 2.05f);
     }
 
     void updateFilters()
     {
-        const float dt = 1.0f / sampleRate;
-        const float hpHz = 34.0f;
-        const float hpRc = 1.0f / (2.0f * kPi * hpHz);
-        hpA = hpRc / (hpRc + dt);
-
-        const float d = smoothstep(depth);
-        preA = onePoleCoeffHz(7600.0f - 1300.0f * d, sampleRate);
-        bbdA = onePoleCoeffHz(4700.0f - 1300.0f * d, sampleRate);
-        compA = onePoleCoeffHz(18.0f, sampleRate);
-    }
-
-    float highPass(float x)
-    {
-        const float y = hpA * (hpY1 + x - hpX1);
-        hpX1 = x;
-        hpY1 = y;
-        return y;
-    }
-
-    float lowPass(float x, float& z, float a)
-    {
-        z += a * (x - z);
-        return z;
+        const float d = std::pow(rbmod::clamp01(depth), 1.85f);
+        inputHp.setHz(32.0f, sampleRate);
+        inputLp.setHz(7800.0f - 1300.0f * d, sampleRate);
+        bbdLp1.setHz(5200.0f - 1450.0f * d, sampleRate);
+        bbdLp2.setHz(3600.0f - 650.0f * d, sampleRate);
     }
 
 public:
-    void reset()
-    {
-        delay.reset();
-        lfoPhase = 0.0f;
-        hpX1 = hpY1 = preY = bbdY = compY = 0.0f;
-        updateFilters();
-    }
-
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
-        delay.resize((int)(sampleRate * 0.080f));
+        bbd.resizeForMs(sampleRate, 36.0f);
+        compander.setSampleRate(sampleRate, 24.0f);
+        updateFilters();
         reset();
+    }
+
+    void setSeed(unsigned int seed)
+    {
+        noise.seed(seed);
+    }
+
+    void reset()
+    {
+        bbd.reset();
+        inputHp.reset();
+        inputLp.reset();
+        bbdLp1.reset();
+        bbdLp2.reset();
+        compander.reset();
+        lfoPhase = 0.0f;
+        feedback = 0.0f;
     }
 
     void setRate(float v)
     {
-        rate = clamp01(v);
+        rate = rbmod::clamp01(v);
     }
 
     void setDepth(float v)
     {
-        depth = clamp01(v);
+        depth = rbmod::clamp01(v);
         updateFilters();
-    }
-
-    void setMix(float v)
-    {
-        mix = clamp01(v);
     }
 
     float process(float in)
     {
-        const float rateHz = currentRateHz();
-        lfoPhase += rateHz / sampleRate;
+        const float d = std::pow(rbmod::clamp01(depth), 1.85f);
+        lfoPhase += currentRateHz() / sampleRate;
         if (lfoPhase >= 1.0f)
-            lfoPhase -= 1.0f;
+            lfoPhase -= std::floor(lfoPhase);
 
-        const float lfo = 0.5f + 0.5f * std::sin(lfoPhase * 2.0f * kPi);
-        const float d = 0.10f + 0.90f * smoothstep(depth);
-        const float baseDelayMs = 8.4f + 1.8f * (1.0f - d);
-        const float widthMs = 0.28f + 4.6f * d;
-        const float delayMs = baseDelayMs + widthMs * (lfo - 0.5f);
-        const float delaySamples = delayMs * 0.001f * sampleRate;
+        // TL022 LFO is rounded-triangle-ish once it hits the MN3101 clock.
+        const float tri = 4.0f * std::fabs(lfoPhase - 0.5f) - 1.0f;
+        const float sine = std::sin(rbmod::kTwoPi * lfoPhase);
+        const float lfo = 0.58f * sine - 0.42f * tri;
 
-        float x = highPass(in);
-        x = lowPass(x, preY, preA);
-        x = 0.965f * x + 0.035f * softClip(x * (1.18f + 0.18f * d));
+        const float baseMs = 8.9f + 1.20f * (1.0f - d);
+        const float widthMs = 0.08f + 4.35f * d;
+        float delayMs = baseMs + widthMs * lfo;
+        delayMs = rbmod::clamp(delayMs, 3.4f, 20.0f);
 
-        const float wetRaw = delay.read(delaySamples);
-        delay.write(x);
+        float x = inputHp.process(in);
+        x = inputLp.process(x);
+        x = rbmod::softClip(x * (1.045f + 0.075f * d));
 
-        // MN3007-style dark, slightly compressed wet path. This keeps the
-        // chorus round instead of becoming a clean pitch vibrato.
-        float wet = lowPass(wetRaw, bbdY, bbdA);
-        compY += compA * (std::fabs(wet) - compY);
-        const float comp = 1.0f / (1.0f + 0.65f * compY);
-        wet = softClip(wet * comp * (1.04f + 0.15f * d));
+        const float write = rbmod::softClip(x + 0.018f * feedback);
+        float wet = bbd.read(delayMs * 0.001f * sampleRate);
+        bbd.write(write);
 
-        const float wetMix = 0.18f + 0.82f * mix;
-        const float dryLevel = 1.0f - 0.44f * wetMix;
-        const float wetLevel = 0.22f + 0.58f * wetMix;
-        const float y = x * dryLevel + wet * wetLevel;
-        return softClip(y * 0.92f) * 0.96f;
+        const float clockPenalty = rbmod::clamp01((delayMs - 4.0f) / 18.0f);
+        wet += noise.next() * (0.00028f + 0.00125f * clockPenalty);
+        wet = bbdLp2.process(bbdLp1.process(wet));
+        wet = compander.process(wet, 0.42f + 0.45f * d);
+        feedback = wet;
+
+        // CE-2 fixed mixer: dry dominates; wet is dark and below unity.
+        const float y = 0.78f * in + 0.52f * wet;
+        return rbmod::softClip(y * 0.96f) * 0.98f;
     }
 };
 
@@ -221,8 +130,6 @@ class ChorusPlugin : public Plugin
         right.setRate(params[kRate]);
         left.setDepth(params[kDepth]);
         right.setDepth(params[kDepth]);
-        left.setMix(params[kMix]);
-        right.setMix(params[kMix]);
     }
 
 public:
@@ -231,6 +138,8 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kChorusDef[i];
+        left.setSeed(0x43483231u);
+        right.setSeed(0x43483232u);
         left.setSampleRate((float)getSampleRate());
         right.setSampleRate((float)getSampleRate());
         applyAll();
@@ -238,10 +147,10 @@ public:
 
 protected:
     const char* getLabel() const override { return "Chorus"; }
-    const char* getDescription() const override { return "CE-2 style BBD chorus"; }
+    const char* getDescription() const override { return "Boss CE-2 style MN3007 chorus"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 1); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('C', 'h', 'o', 'r'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -265,7 +174,7 @@ protected:
     {
         if (index >= (uint32_t)kParamCount)
             return;
-        params[index] = clamp01(value);
+        params[index] = rbmod::clamp01(value);
         applyAll();
     }
 
@@ -282,6 +191,7 @@ protected:
         const float* inR = inputs[1];
         float* outL = outputs[0];
         float* outR = outputs[1];
+
         for (uint32_t i = 0; i < frames; ++i)
         {
             outL[i] = left.process(inL[i]);

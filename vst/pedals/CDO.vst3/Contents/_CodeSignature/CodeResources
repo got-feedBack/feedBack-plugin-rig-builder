@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/CustomDrive.so</key>
+		<key>x86_64-linux/CDO.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			GPePWfsWC/u/e9bpfWTZq1cYgKvt3EwB33w26lIr2wA=
+			GXtLM9cwmzvF/kEhFixxeYO6v+qeknx4tAFxYMsZAq4=
 			</data>
 		</dict>
-		<key>x86_64-win/CustomDrive.vst3</key>
+		<key>x86_64-win/CDO.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			/8z+OguVqzazT/61rAJ/vbtEtvAgJI3l1rbVvswPYjo=
+			vboSAuVXh2zNqEWkx/MOrJ3DEqw/sk36rBUu6h5gOpc=
 			</data>
 		</dict>
 	</dict>

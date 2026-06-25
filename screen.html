@@ -828,14 +828,16 @@
     .rb-adv-jack:hover{ box-shadow:0 0 10px rgba(140,180,250,.8); }
     .rb-adv-jack-in{ left:-9px; }
     .rb-adv-jack-out{ right:-9px; }
-    /* split L/R output jacks (St-2): L sits upper, R lower; tinted to match the
-       L/R cable colours. A small L/R glyph rides above each. */
-    .rb-adv-jack-l{ top:32%; background:radial-gradient(circle at 38% 32%, #bcd2ff, #4f78c8 60%, #22314e); }
-    .rb-adv-jack-r{ top:68%; background:radial-gradient(circle at 38% 32%, #ffd4bc, #c8784f 60%, #4e3122); }
-    .rb-adv-jack-l::before, .rb-adv-jack-r::before{ position:absolute; right:18px; top:50%; transform:translateY(-50%);
+    /* optional stereo source jacks: mono stays centred/default, L/R sit above
+       and below it so they can feed separate branches without replacing mono. */
+    .rb-adv-jack-l{ top:28%; background:radial-gradient(circle at 38% 32%, #bcd2ff, #4f78c8 60%, #22314e); }
+    .rb-adv-jack-r{ top:72%; background:radial-gradient(circle at 38% 32%, #ffd4bc, #c8784f 60%, #4e3122); }
+    .rb-adv-jack-mono{ background:radial-gradient(circle at 38% 32%, #d7e0ee, #748096 60%, #2a3142); }
+    .rb-adv-jack-l::before, .rb-adv-jack-r::before, .rb-adv-jack-mono::before{ position:absolute; right:18px; top:50%; transform:translateY(-50%);
         font-size:8px; font-weight:700; color:#9fb0c8; letter-spacing:.04em; }
     .rb-adv-jack-l::before{ content:"L"; }
     .rb-adv-jack-r::before{ content:"R"; }
+    .rb-adv-jack-mono::before{ content:"M"; }
     /* a cable path */
     /* solid stroke (NOT a url(#gradient) ref): an SVG gradient reference rebuilt
        via innerHTML doesn't repaint until a reflow, so gradient cables only
@@ -1068,7 +1070,7 @@
             </aside>
             <div class="rb-adv-main">
                 <div class="rb-adv-toolbar">
-                    <span class="rb-adv-hint">Drag gear in · drag a jack ● to wire · double-click a cable to disconnect</span>
+                    <span class="rb-adv-hint">Drag gear in · wire M by default · stereo pedals also expose L/R outs · double-click a cable to disconnect</span>
                     <div class="rb-adv-actions">
                         <button onclick="rbAdvZoom(-0.15)" class="rb-adv-btn rb-adv-btn-icon" title="Zoom out">−</button>
                         <span id="rb-adv-zoom-label" class="rb-adv-zoom-label">100%</span>
