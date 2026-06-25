@@ -28,7 +28,7 @@ static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x
 // Loudness standardization makeup into the soft knee. PLACEHOLDER — tune in
 // calibration (calibrate_amp_core.py). TracerCore already applies its own gain-
 // dependent outLevel; this is the final family-level trim.
-static constexpr float kTracerMakeup = 0.45f;
+static constexpr float kTracerMakeup = 0.32f;   // -3 dB: ran a touch hot vs the family
 
 class TracerPlugin : public Plugin
 {

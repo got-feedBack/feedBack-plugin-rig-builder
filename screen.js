@@ -6868,6 +6868,16 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
                     if (piece._vst_slot_id != null && api) { try { api.setParameter(piece._vst_slot_id, realId, val); } catch (_) {} }
                     piece._vst_params = piece._vst_params || {};
                     piece._vst_params[realId] = val;
+                    // Keep the LOGICAL-id value too so the song thumbnail redraws
+                    // the right knob on a fresh load (the spec draws by logical id).
+                    piece._vst_logical = piece._vst_logical || {};
+                    piece._vst_logical[logicalId] = val;
+                    // PERSIST: the canvas editor used to only stage the drag in
+                    // memory, so knob edits on a song's gear were LOST on exit/
+                    // reload (only the slider path auto-saved). Stamp + debounced
+                    // save to the song file, exactly like rbToneSetVstParam.
+                    rbStampVstState(piece);
+                    rbDebouncedToneSave(toneIdx, pIdx);
                 },
             });
         };

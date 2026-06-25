@@ -1,231 +1,47 @@
 /*
- * Aiden GT-300 — Eden WT-300 "The Traveler" (Valve-Tech hybrid bass preamp),
- * COMPONENT-LEVEL model.
+ * Aiden GT-300 — Eden WT-300 "The Traveler" (Valve-Tech hybrid bass preamp).
  *
- * Built from the Eden "BASS GUITAR PREAMP" factory schematic (David Eden,
- * 2-19-93, WT-300):
- *   • INPUT   — 12AX7 (YT1) twin-triode input stage (the "Valve-Tech" warmth)
- *   • GAIN/COMP — TL072 gain stage (VR1) with the Eden opto compressor
- *   • ENHANCE — TL072 contour (VR2): scoops the mids, lifts lows + highs
- *   • BASS    — low shelf (VR3, C19/.033)
- *   • SEMI-PARAMETRIC EQ — 3 sweepable bands (VR101/2/3 dual freq pots + VR4/5/6
- *               level): EQ1 30-300, EQ2 200-2k, EQ3 1.2-12k Hz, +/-15 dB
- *   • TREBLE  — high shelf (VR7) + the EQ-Clip indicator
- *   • MASTER  — TL072 output (VR8) with the Output-Limit limiter
+ * DPF wrapper (VST3 + AU). All DSP lives in the shared eden_core.hpp (circuit-real
+ * on the tube_stage.hpp framework): 12AX7 input valve + Eden opto comp + Enhance
+ * contour + Bass/Treble shelves + 3-band semi-parametric EQ + Master + SS power.
+ * Schematic: David Eden WT-300 preamp (2-19-93). Shared with the WT-550/WT-800C
+ * (same preamp; the model enum sets this head's 300 W low-end voicing).
  *
- * The input stage is the REAL nodal 12AX7 (Koren plate law, Newton/sample); the
- * EQ op-amps are clean (TL072) so the head stays hi-fi until pushed. The Eden
- * "Enhance" is the signature mid-scoop loudness contour. Shared nodal blocks
- * (Mna/Triode) are byte-identical to the Sharke HB5000 source.
+ * STEREO I/O, single mono core (the amp is a mono device): one EdenCore -> both
+ * outputs (dual-mono). The nonlinear chain runs at 2x oversampling.
  */
 #include "DistrhoPlugin.hpp"
 #include "EdenParams.h"
+#include "../../_shared/eden_core.hpp"
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
 
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
-static inline float softClip(float x) { return std::tanh(x); }
 
-// ── RBJ biquad — shelves + swept peaks ───────────────────────────────────────
-class Biquad {
-    float b0=1, b1=0, b2=0, a1=0, a2=0, z1=0, z2=0;
-public:
-    void reset() { z1 = z2 = 0.f; }
-    inline float process(float x) {
-        const float y = b0 * x + z1;
-        z1 = b1 * x - a1 * y + z2;
-        z2 = b2 * x - a2 * y;
-        return y;
-    }
-    void setLowShelf(float fc, float dB, float fs) {
-        const float A = std::pow(10.f, dB / 40.f);
-        const float w0 = 6.2831853f * fc / fs, cw = std::cos(w0), sw = std::sin(w0);
-        const float alpha = sw * 0.5f * 1.4142135f;
-        const float sA = std::sqrt(A), tsAa = 2.f * sA * alpha;
-        const float a0 =       (A + 1) + (A - 1) * cw + tsAa;
-        b0 =  A * ((A + 1) - (A - 1) * cw + tsAa) / a0;
-        b1 = 2*A * ((A - 1) - (A + 1) * cw)        / a0;
-        b2 =  A * ((A + 1) - (A - 1) * cw - tsAa)  / a0;
-        a1 = -2 * ((A - 1) + (A + 1) * cw)         / a0;
-        a2 =      ((A + 1) + (A - 1) * cw - tsAa)  / a0;
-    }
-    void setHighShelf(float fc, float dB, float fs) {
-        const float A = std::pow(10.f, dB / 40.f);
-        const float w0 = 6.2831853f * fc / fs, cw = std::cos(w0), sw = std::sin(w0);
-        const float alpha = sw * 0.5f * 1.4142135f;
-        const float sA = std::sqrt(A), tsAa = 2.f * sA * alpha;
-        const float a0 =       (A + 1) - (A - 1) * cw + tsAa;
-        b0 =  A * ((A + 1) + (A - 1) * cw + tsAa) / a0;
-        b1 = -2*A * ((A - 1) + (A + 1) * cw)      / a0;
-        b2 =  A * ((A + 1) + (A - 1) * cw - tsAa) / a0;
-        a1 =  2 * ((A - 1) - (A + 1) * cw)        / a0;
-        a2 =      ((A + 1) - (A - 1) * cw - tsAa) / a0;
-    }
-    void setPeak(float fc, float dB, float Q, float fs) {
-        if (fc > fs*0.49f) fc = fs*0.49f;
-        const float A = std::pow(10.f, dB / 40.f);
-        const float w0 = 6.2831853f * fc / fs, cw = std::cos(w0), sw = std::sin(w0);
-        const float alpha = sw / (2.f * Q);
-        const float a0 = 1 + alpha / A;
-        b0 = (1 + alpha * A) / a0;
-        b1 = (-2 * cw)       / a0;
-        b2 = (1 - alpha * A) / a0;
-        a1 = (-2 * cw)       / a0;
-        a2 = (1 - alpha / A) / a0;
-    }
-    void setBypass() { b0 = 1; b1 = b2 = a1 = a2 = 0; }
-};
-
-// ── Tiny fixed-size Modified Nodal Analysis solver (RT-safe) — for the 12AX7 ──
-struct Mna {
-    static const int MAXN = 8;
-    int sz, nn;
-    double A[MAXN*MAXN], b[MAXN], x[MAXN];
-    void init(int nN, int nX) { nn = nN; sz = nN + nX;
-        for (int i = 0; i < sz*sz; ++i) A[i] = 0.0; for (int i = 0; i < sz; ++i) b[i] = 0.0; }
-    inline void stampG(int a, int bb, double g) {
-        if (a>0)  { A[(a-1)*sz+(a-1)]  += g; if (bb>0) A[(a-1)*sz+(bb-1)] -= g; }
-        if (bb>0) { A[(bb-1)*sz+(bb-1)]+= g; if (a>0)  A[(bb-1)*sz+(a-1)] -= g; } }
-    inline void R(int a, int bb, double r) { if (r < 1e-9) r = 1e-9; stampG(a, bb, 1.0/r); }
-    inline void Isrc(int a, int bb, double I) { if (a>0) b[a-1] -= I; if (bb>0) b[bb-1] += I; }
-    inline void Vsrc(int a, double V, int k) { int r = nn+k;
-        if (a>0) { A[(a-1)*sz+r] += 1; A[r*sz+(a-1)] += 1; } b[r] = V; }
-    inline void gm(int oa, int ob, int ca, int cb, double g) {
-        if (oa>0) { if (ca>0) A[(oa-1)*sz+(ca-1)] += g; if (cb>0) A[(oa-1)*sz+(cb-1)] -= g; }
-        if (ob>0) { if (ca>0) A[(ob-1)*sz+(ca-1)] -= g; if (cb>0) A[(ob-1)*sz+(cb-1)] += g; } }
-    bool solve() { const int n = sz;
-        for (int col = 0; col < n; ++col) {
-            int piv = col; double mx = std::fabs(A[col*n+col]);
-            for (int r = col+1; r < n; ++r) { double v = std::fabs(A[r*n+col]); if (v > mx) { mx = v; piv = r; } }
-            if (mx < 1e-18) return false;
-            if (piv != col) { for (int c = 0; c < n; ++c) { double t = A[col*n+c]; A[col*n+c] = A[piv*n+c]; A[piv*n+c] = t; }
-                double t = b[col]; b[col] = b[piv]; b[piv] = t; }
-            const double d = A[col*n+col];
-            for (int r = 0; r < n; ++r) { if (r == col) continue; const double f = A[r*n+col]/d; if (f == 0) continue;
-                for (int c = col; c < n; ++c) A[r*n+c] -= f*A[col*n+c]; b[r] -= f*b[col]; } }
-        for (int i = 0; i < n; ++i) x[i] = b[i] / A[i*n+i];
-        return true; } };
-
-// ── 12AX7 input triode (Valve-Tech) — nodal Koren + Newton/sample ─────────────
-struct Triode {
-    double vG=0, vP=300, vK=1.5, dcAvg=300.0, T=1.0/48000.0;
-    void setT(float fs) { T = 1.0 / ((fs>0.f)?fs:48000.0); }
-    void reset() { vG=0; vP=300; vK=1.5; dcAvg=300.0; for (int i=0;i<2000;++i) process(0.0); }
-    static inline double Ip(double vgk, double vpk) {
-        const double MU=100, EX=1.4, KG1=1060, KP=600, KVB=300;
-        if (vpk < 0) vpk = 0;
-        double e1 = (vpk/KP)*std::log(1.0 + std::exp(KP*(1.0/MU + vgk/std::sqrt(KVB + vpk*vpk))));
-        if (e1 < 0) e1 = 0; return std::pow(e1, EX)/KG1*2.0; }
-    inline double process(double vin) {
-        const double Bp=300, Rp=100000, Rk=1500, h=1e-4;
-        double G=vG, P=vP, K=vK;
-        for (int it=0; it<12; ++it) {
-            Mna m; m.init(4, 2);
-            m.Vsrc(1, Bp, 0); m.Vsrc(2, vin, 1);
-            m.R(3, 1, Rp); m.R(4, 0, Rk);
-            const double vgk=G-K, vpk=P-K, ip=Ip(vgk,vpk);
-            const double gmv=(Ip(vgk+h,vpk)-ip)/h, gp=(Ip(vgk,vpk+h)-ip)/h;
-            m.gm(3,0,2,0,gmv); m.gm(3,0,3,0,gp); m.gm(3,0,4,0,-(gmv+gp));
-            m.gm(4,0,2,0,-gmv); m.gm(4,0,3,0,-gp); m.gm(4,0,4,0,(gmv+gp));
-            m.Isrc(3,0, ip-(gmv*G+gp*P-(gmv+gp)*K));
-            m.Isrc(4,0, -ip-(-gmv*G-gp*P+(gmv+gp)*K));
-            if (!m.solve()) break;
-            const double nP=m.x[2], nK=m.x[3]; const double err=std::fabs(nP-P)+std::fabs(nK-K);
-            G=m.x[1]; P=P+0.7*(nP-P); K=K+0.7*(nK-K);
-            if (err<1e-6) break;
-        }
-        if (!std::isfinite(P)) { reset(); return 0.0; }
-        vG=G; vP=P; vK=K;
-        dcAvg += 0.0008*(P-dcAvg);
-        return -(P - dcAvg) * (1.0/40.0);
-    }
-};
-
-// ── Eden opto compressor — gentle, always-on soft-knee gain reduction ─────────
-struct OptoComp {
-    float env=0, atk=0.002f, rel=0.06f;
-    void setSR(float fs){ atk = std::exp(-1.f/(0.004f*fs)); rel = std::exp(-1.f/(0.120f*fs)); }
-    void reset(){ env=0; }
-    inline float process(float x, float amount){     // amount 0..1 scales depth
-        const float a = std::fabs(x);
-        const float c = (a>env)?atk:rel; env = c*env + (1.f-c)*a;
-        const float thr = 0.25f;
-        float gr = 1.f;
-        if (env>thr){ const float over = env-thr; gr = 1.f/(1.f + amount*4.0f*over); }
-        return x*gr*(1.f + amount*0.25f);             // light make-up
-    }
-};
-
-class EdenChannel {
-    float fs = 48000.f;
-    Triode v1;                                   // 12AX7 input
-    OptoComp comp;
-    Biquad enhMid, enhLow, enhHigh;              // Eden Enhance contour
-    Biquad bqBass, bqTreble;                     // bass/treble shelves
-    Biquad band[3];                              // 3 semi-parametric peaks
-    float drive=1, master=1, compAmt=0;
-public:
-    void setSampleRate(float s){ fs=(s>0)?s:48000.f; v1.setT(s); comp.setSR(fs); }
-    void reset(){ v1.reset(); comp.reset();
-        enhMid.reset(); enhLow.reset(); enhHigh.reset(); bqBass.reset(); bqTreble.reset();
-        for (int i=0;i<3;++i) band[i].reset(); }
-
-    void setParams(const float* p) {
-        drive   = 0.6f + p[kGain] * 4.0f;            // clean-ish 12AX7 input drive
-        compAmt = p[kGain];                          // Eden Comp tracks the Gain knob
-
-        // Enhance: scoop mids, lift lows + highs (the Eden loudness contour).
-        const float e = p[kEnhance];
-        enhMid.setPeak(700.f, -e*14.f, 0.7f, fs);
-        enhLow.setLowShelf(100.f, e*3.5f, fs);
-        enhHigh.setHighShelf(3500.f, e*3.5f, fs);
-
-        bqBass.setLowShelf(50.f, (p[kBass]-0.5f)*30.f, fs);          // +/-15 dB
-        bqTreble.setHighShelf(5000.f, (p[kTreble]-0.5f)*30.f, fs);
-
-        const int fq[3] = { kP1Freq, kP2Freq, kP3Freq };
-        const int lv[3] = { kP1Level, kP2Level, kP3Level };
-        for (int i=0;i<3;++i){
-            const float fc = kEdenBandLo[i] * std::pow(kEdenBandHi[i]/kEdenBandLo[i], p[fq[i]]);
-            band[i].setPeak(fc, (p[lv[i]]-0.5f)*30.f, 0.8f, fs);    // +/-15 dB semi-param
-        }
-        master = p[kMaster] / 0.7f;
-    }
-
-    inline float process(float x) {
-        float s = (float)v1.process((double)(drive * x));   // 12AX7 input
-        s = comp.process(s, compAmt);                       // Eden opto comp
-        s = enhMid.process(s); s = enhLow.process(s); s = enhHigh.process(s);  // Enhance
-        s = bqBass.process(s);
-        s = band[0].process(s); s = band[1].process(s); s = band[2].process(s); // semi-param EQ
-        s = bqTreble.process(s);
-        return s * master;
-    }
-};
-
-// kMakeup boosts the clean preamp into the shared output stage; kLvl matches the
-// amp to the common multitone loudness (~-15 dBFS @ noon).
-static constexpr float kEdenMakeup = 6.50f;   // tuned offline
-static constexpr float kEdenLvl    = 0.3106f;
+static constexpr float kEdenMakeup = 0.50f;   // family-level trim (tuned offline)
 
 class EdenPlugin : public Plugin {
-    EdenChannel L, R;
+    eden::EdenCore core;
     float fParams[kParamCount];
-    void recalc(){ L.setParams(fParams); R.setParams(fParams); }
+    rbshared::Oversampler4x os;
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
+
 public:
     EdenPlugin() : Plugin(kParamCount, 0, 0) {
         for (int i=0;i<kParamCount;++i) fParams[i]=kEdenDef[i];
-        const float sr=(float)getSampleRate();
-        L.setSampleRate(sr); R.setSampleRate(sr); L.reset(); R.reset(); recalc();
+        core.setModel(eden::EdenCore::WT300);
+        core.setSampleRate(kOS * (float)getSampleRate());
+        core.setParams(fParams, kParamCount);
     }
 protected:
     const char* getLabel()       const override { return "AidenGT300"; }
-    const char* getDescription() const override { return "Eden WT-300 Valve-Tech bass preamp — component-level model"; }
+    const char* getDescription() const override { return "Eden WT-300 Valve-Tech bass head — circuit-real model"; }
     const char* getMaker()       const override { return "RigBuilder"; }
     const char* getLicense()     const override { return "ISC"; }
-    uint32_t    getVersion()     const override { return d_version(1, 0, 0); }
+    uint32_t    getVersion()     const override { return d_version(2, 0, 0); }
     int64_t     getUniqueId()    const override { return d_cconst('R', 'B', 'E', '3'); }
 
     void initParameter(uint32_t i, Parameter& p) override {
@@ -235,12 +51,20 @@ protected:
         p.ranges.min = kEdenMin[i]; p.ranges.max = kEdenMax[i]; p.ranges.def = kEdenDef[i];
     }
     float getParameterValue(uint32_t i) const override { return (i < (uint32_t)kParamCount) ? fParams[i] : 0.f; }
-    void  setParameterValue(uint32_t i, float v) override { if (i < (uint32_t)kParamCount) { fParams[i]=v; recalc(); } }
-    void  sampleRateChanged(double r) override { L.setSampleRate((float)r); R.setSampleRate((float)r); L.reset(); R.reset(); recalc(); }
+    void  setParameterValue(uint32_t i, float v) override { if (i < (uint32_t)kParamCount) { fParams[i]=v; core.setParams(fParams, kParamCount); } }
+    void  sampleRateChanged(double r) override { core.setSampleRate(kOS * (float)r); os.reset(); core.setParams(fParams, kParamCount); }
 
     void run(const float** in, float** out, uint32_t frames) override {
-        const float* iL=in[0]; const float* iR=in[1]; float* oL=out[0]; float* oR=out[1];
-        for (uint32_t i=0;i<frames;++i){ oL[i]=rbAmpLvl(kEdenLvl*softClip(kEdenMakeup*L.process(iL[i]))*0.98f); oR[i]=rbAmpLvl(kEdenLvl*softClip(kEdenMakeup*R.process(iR[i]))*0.98f); }
+        const float* i0 = in[0];
+        float* oL = out[0]; float* oR = out[1];
+        for (uint32_t i=0;i<frames;++i){
+            float ub[kOS];
+            os.upsample(i0[i], ub);
+            for (int k=0;k<kOS;++k)
+                ub[k] = rbAmpLvl(kEdenMakeup * core.process(ub[k]));
+            const float y = os.downsample(ub);
+            oL[i] = y; oR[i] = y;
+        }
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EdenPlugin)
 };

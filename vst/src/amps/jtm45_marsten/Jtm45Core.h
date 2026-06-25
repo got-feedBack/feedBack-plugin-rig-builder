@@ -1,7 +1,7 @@
-#ifndef PLEXI_CORE_H
-#define PLEXI_CORE_H
+#ifndef JTM45_CORE_H
+#define JTM45_CORE_H
 //
-// PlexiCore — Marshall Super Lead "Plexi" 1959, circuit-real on the shared
+// Jtm45Core — Marshall JTM45, circuit-real on the shared
 // tube_stage.hpp framework with CONTROLLED gain staging (clean at low Loudness ->
 // roar at high). Same proven pattern as Jcm800Core / the bass amps; rewritten from
 // the over-gained cascade that saturated every signal to ~100% THD.
@@ -14,7 +14,7 @@
 #include "../../_shared/tube_stage.hpp"
 #include <cmath>
 
-namespace plexi {
+namespace jtm45 {
 
 static constexpr float kPi = 3.14159265358979f;
 static inline float clamp01(float v){ return v<0?0:(v>1?1:v); }
@@ -27,14 +27,14 @@ struct Biquad {
         float a0=(A+1)-(A-1)*c+t; b0=A*((A+1)+(A-1)*c+t)/a0; b1=-2*A*((A-1)+(A+1)*c)/a0; b2=A*((A+1)+(A-1)*c-t)/a0; a1=2*((A-1)-(A+1)*c)/a0; a2=((A+1)-(A-1)*c-t)/a0; }
 };
 
-struct PlexiCore {
+struct Jtm45Core {
     float sr = 96000.0f;
     rbtube::HP1 inCoupling;
     rbtube::TubeStage vBright, vNormal, v3;
     Biquad brightShelf, presenceShelf;
     rbtube::ToneStackYeh tone;
     rbtube::PhaseInverterLTP12AT7 pi;
-    rbtube::PowerAmpEL34 power;
+    rbtube::PowerAmp5881 power;
     rbtube::LP1 otVoice;
 
     float pPres=.5f,pBass=.5f,pMid=.55f,pTreble=.62f,pL1=.62f,pL2=.0f,pInput=.5f;
@@ -59,12 +59,12 @@ struct PlexiCore {
         v3.set(sr, 1, 250.0f, 40.0f, 55.0f, 1500.0f);
 
         // Loudness knobs = the drive (non-master). Controlled span: clean -> roar.
-        gB = 0.30f + 7.5f * rbtube::PotTaper::audio(pL1, 1.30f);
-        gN = 0.30f + 7.5f * rbtube::PotTaper::audio(pL2, 1.30f);
+        gB = 0.30f + 5.0f * rbtube::PotTaper::audio(pL1, 1.30f);
+        gN = 0.30f + 5.0f * rbtube::PotTaper::audio(pL2, 1.30f);
         brightShelf.highShelf(sr, 2200.0f, 5.0f);
 
         // Plexi tone stack (Yeh): Treble 250k/500pF, Bass 1M/22nF, Mid 25k/22nF, slope 33k.
-        tone.setComponents(250e3, 1e6, 25e3, 33e3, 500e-12, 22e-9, 22e-9);
+        tone.setComponents(250e3, 1e6, 25e3, 33e3, 270e-12, 22e-9, 22e-9);
         tone.update(sr, pTreble, pMid, pBass);
         presenceShelf.highShelf(sr, 3000.0f, (pPres-0.5f)*10.0f);
 
@@ -95,5 +95,5 @@ struct PlexiCore {
     }
 };
 
-} // namespace plexi
-#endif // PLEXI_CORE_H
+} // namespace jtm45
+#endif // JTM45_CORE_H
