@@ -7,7 +7,6 @@
 #include "DistrhoPlugin.hpp"
 #include "VintageDistortionParams.h"
 #include "VintageDistortionCore.h"
-#include "../_shared/automakeup.hpp"
 #include "../../_shared/oversampler.hpp"
 #include <cmath>
 
@@ -33,8 +32,6 @@ class VintageDistortionPlugin : public Plugin
     vintagedistortion::VintageDistortionCore right;
     rbshared::Oversampler4x osL;
     rbshared::Oversampler4x osR;
-    RBAutoMakeup makeupL;
-    RBAutoMakeup makeupR;
     float params[kParamCount];
 
     static constexpr int kOS = rbshared::Oversampler4x::OS;
@@ -54,8 +51,6 @@ public:
         const float sr = (float)getSampleRate();
         left.setSampleRate(kOS * sr);
         right.setSampleRate(kOS * sr);
-        makeupL.setSampleRate(sr);
-        makeupR.setSampleRate(sr);
         applyAll();
     }
 
@@ -90,8 +85,6 @@ protected:
             return;
         params[index] = clamp01(value);
         applyAll();
-        makeupL.snap();
-        makeupR.snap();
     }
 
     void sampleRateChanged(double newSampleRate) override
@@ -101,8 +94,6 @@ protected:
         osR.reset();
         left.setSampleRate(kOS * sr);
         right.setSampleRate(kOS * sr);
-        makeupL.setSampleRate(sr);
-        makeupR.setSampleRate(sr);
         applyAll();
     }
 
@@ -128,8 +119,8 @@ protected:
 
             const float wetL = osL.downsample(ubL);
             const float wetR = osR.downsample(ubR);
-            outL[i] = finalLimit(makeupL.process(inL[i], wetL) * volume);
-            outR[i] = finalLimit(makeupR.process(inR[i], wetR) * volume);
+            outL[i] = finalLimit(wetL * volume);
+            outR[i] = finalLimit(wetR * volume);
         }
     }
 

@@ -131,8 +131,8 @@ class LineDriveCore
     RcLowPass odDiodeCap;
     RcLowPass distFeedbackCap;
     RcLowPass distDiodeCap;
-    RcLowPass colorOdLoad;
-    RcLowPass colorDistLoad;
+    RcHighPass colorOdCoupling;
+    RcHighPass colorDistCoupling;
     RcLowPass toneLowLeg;
     RcLowPass toneHighBleed;
     RcLowPass outputLoad;
@@ -158,10 +158,10 @@ class LineDriveCore
         odFeedbackCap.setRC(sampleRate, 68000.0f + d * kDrivePot, kSmallFeedbackCap);
         distFeedbackCap.setRC(sampleRate, 33000.0f + 0.45f * d * kDrivePot, kSmallFeedbackCap);
         odDiodeCap.setHz(sampleRate, 7200.0f - 1600.0f * d + 700.0f * t);
-        distDiodeCap.setHz(sampleRate, 5600.0f - 2300.0f * d + 1200.0f * t);
+        distDiodeCap.setHz(sampleRate, 6800.0f - 1900.0f * d + 1500.0f * t);
 
-        colorOdLoad.setRC(sampleRate, 10000.0f + c * kColorPot, kCouplingCap);
-        colorDistLoad.setRC(sampleRate, 10000.0f + (1.0f - c) * kColorPot, kCouplingCap);
+        colorOdCoupling.setRC(sampleRate, 33000.0f + c * kColorPot, 1.0e-6f);
+        colorDistCoupling.setRC(sampleRate, 12000.0f + (1.0f - c) * kColorPot, 1.0e-6f);
         blendCoupling.setRC(sampleRate, 22000.0f + 0.5f * kColorPot, kCouplingCap);
 
         toneLowLeg.setRC(sampleRate, 6800.0f + (1.0f - t) * kTonePot, kToneCap);
@@ -210,8 +210,8 @@ public:
         odDiodeCap.reset();
         distFeedbackCap.reset();
         distDiodeCap.reset();
-        colorOdLoad.reset();
-        colorDistLoad.reset();
+        colorOdCoupling.reset();
+        colorDistCoupling.reset();
         toneLowLeg.reset();
         toneHighBleed.reset();
         outputLoad.reset();
@@ -265,13 +265,13 @@ public:
         const float distFb = distFeedbackCap.process(dist);
         dist = (dist - 0.12f * distFb) * (2.2f + 14.0f * drive + 28.0f * d);
         dist = distOpamp.process(dist, 4.0f + 28.0f * d);
-        dist = distHardClipper.process(2.05f * dist);
+        dist = distHardClipper.process(2.55f * dist);
         dist = 0.74f * dist + 0.26f * std::tanh(2.1f * dist);
         dist = distDiodeCap.process(dist);
         dist = distDc.process(dist);
 
-        od = colorOdLoad.process(od);
-        dist = colorDistLoad.process(dist);
+        od = colorOdCoupling.process(od);
+        dist = colorDistCoupling.process(dist);
         const float odMix = std::cos(0.5f * kPi * c);
         const float distMix = std::sin(0.5f * kPi * c);
         float y = od * odMix + dist * distMix;
@@ -283,8 +283,8 @@ public:
         y = toneNetwork(y);
         y = outputLoad.process(outputCoupling.process(y));
 
-        const float trim = 0.82f / (1.0f + 0.22f * drive + 0.20f * d + 0.16f * c);
-        return std::tanh(1.02f * y * trim);
+        const float trim = 1.02f / (1.0f + 0.14f * drive + 0.12f * d + 0.10f * c);
+        return std::tanh(1.08f * y * trim);
     }
 };
 
