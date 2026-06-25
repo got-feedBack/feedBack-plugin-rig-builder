@@ -3955,15 +3955,15 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
             params: model.logicalParams,
             interactive: true,
             onChange: (logicalId, val) => {
-                const realId = model.idMap[logicalId] ?? logicalId;
-                if (piece._vst_slot_id != null && api) { try { api.setParameter(piece._vst_slot_id, realId, val); } catch (_) {} }
-                piece._vst_params = piece._vst_params || {};
-                piece._vst_params[realId] = val;
-                // Also keep the value under its LOGICAL id so a fresh-load room
-                // thumbnail (no live param model to map real→logical) renders the
-                // right knob — the canvas spec draws by logical id.
+                // Keep the value under its LOGICAL id so a fresh-load room thumbnail
+                // (no live param model to map real→logical) renders the right knob —
+                // the canvas spec draws by logical id.
                 piece._vst_logical = piece._vst_logical || {};
                 piece._vst_logical[logicalId] = val;
+                // Drive the live engine param. Slot id + real param id are resolved
+                // robustly against the live chain (see rbStudioApplyKnobToEngine) so
+                // the knob works even when the param meta wasn't ready at focus-open.
+                rbStudioApplyKnobToEngine(piece, idx, logicalId, val);
             },
         });
     };
@@ -4356,6 +4356,47 @@ async function rbStudioChainSlotIdForPiece(api, pieceIdx) {
     } catch (_) { return null; }
 }
 
+// Apply a canvas-knob change to the live engine, resolving BOTH the engine slot
+// id and the REAL engine param id robustly at call time.
+//
+// Two failure modes this guards against (both reported as "the knob does nothing"
+// or "the right knob controls the left one"):
+//   1. Stale slot id — a gear swap rebuilds the chain → new engine slot ids; the
+//      cached piece._vst_slot_id points at a dead slot. Re-resolve from the chain.
+//   2. Off-by-N param id — the canvas fires a LOGICAL id (position into the
+//      filtered param list). It must map to the REAL engine id. When the param
+//      meta wasn't ready at focus-open (common for the amp), the old code fell
+//      back to the raw logical id — but the engine PREPENDS "Buffer Size" +
+//      "Sample Rate", so real ids are shifted by 2: logical 0 (Gain/Volume) hit
+//      Buffer Size (no-op), logical 1 hit Sample Rate (no-op), and the rest drove
+//      the param two slots to the left. We re-fetch the meta live and map by
+//      filtered position instead of ever using the raw logical id.
+async function rbStudioApplyKnobToEngine(piece, idx, logicalId, val) {
+    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    if (!api || typeof api.setParameter !== 'function') return;
+    // 1. Resolve the engine slot (re-resolve if missing/stale).
+    let slotId = piece._vst_slot_id;
+    if (slotId == null) {
+        try { slotId = await rbStudioChainSlotIdForPiece(api, idx); } catch (_) { slotId = null; }
+        if (slotId != null) { piece._vst_slot_id = slotId; rbState._vstEditorSlot = slotId; }
+    }
+    if (slotId == null) return;     // gear not in the live chain → nothing to drive
+    // 2. Resolve the REAL engine param id for this logical (filtered) position.
+    let meta = piece._vst_param_meta;
+    if (!((meta || []).length) && typeof api.getParameters === 'function') {
+        try { meta = await api.getParameters(slotId); piece._vst_param_meta = meta || []; }
+        catch (_) { meta = piece._vst_param_meta || []; }
+    }
+    const filtered = rbFilterVstParams(meta || []);
+    if (logicalId >= filtered.length) return;       // can't map safely → skip (never drive a wrong param)
+    const p = filtered[logicalId];
+    const realId = p.id ?? p.paramId ?? p.index;
+    if (realId == null) return;
+    piece._vst_params = piece._vst_params || {};
+    piece._vst_params[realId] = val;                // persist under the REAL id
+    try { api.setParameter(slotId, realId, val); } catch (_) {}
+}
+
 async function rbStudioLoadFocusVst(idx, faceEl, growMs) {
     const room = document.getElementById('rb-studio-room');
     const piece = (rbStudioCurrentChain())[idx];
@@ -4552,12 +4593,41 @@ function rbStudioUpdateSwapCarousel() {
 // rig, so the new gear doesn't sound until the user re-selects the tone. Rebuild it
 // once the persist has reached the backend (so buildForSong re-fetches the new rig).
 async function rbStudioReloadLiveChainAfterSwap() {
+    // Wait for the persist to reach the backend so the reload re-fetches the
+    // swapped rig, then reload whatever monitor is actually live. Mirrors the
+    // proven reload block in rbAdvMaterializeGear: the live audio depends on the
+    // Studio view source — 'default' (idle default tone, loaded via the legacy
+    // loadPreset path), or 'song'/'saved' (rbStudioLoadMonitor / mega-chain).
+    // The old version only rebuilt the mega-chain, so an amp swap while sitting
+    // on the default/test tone didn't sound until the user re-selected the tone.
+    try { await rbState._studioPersistPromise; } catch (_) {}
     try {
-        const mc = (typeof RbMegaChain !== 'undefined') ? RbMegaChain : null;
-        if (!mc || typeof mc.isActive !== 'function' || !mc.isActive()) return;
-        try { await rbState._studioPersistPromise; } catch (_) {}
-        const fn = (typeof mc.state === 'function' && mc.state().filename) || rbState.currentSongFile;
-        if (fn) await mc.buildForSong(fn);   // rebuild with the swapped gear → sounds immediately
+        const v = rbState.studioView || { source: 'default' };
+        if (v.source === 'default') {
+            if (rbState._defaultToneActive) await rbReloadDefaultTone();
+        } else if (typeof rbStudioLoadMonitor === 'function') {
+            await rbStudioLoadMonitor();
+        }
+    } catch (_) {}
+    // The default-tone reload doesn't run rbStudioFinishMonitorLoad, so re-apply
+    // the stereo routing + graph connectivity (otherwise rebuilt slots come back
+    // at pan 0 / lose bypass-disconnect state).
+    try { await rbStudioApplyStereoToEngine(); } catch (_) {}
+    try { await rbAdvApplyConnectivity(); } catch (_) {}
+    // The rebuild reassigned engine slot ids → the focused piece's cached
+    // _vst_slot_id is now stale. Re-resolve it so its knobs drive the engine
+    // immediately (otherwise the first knob move after a swap hits a dead slot).
+    try {
+        const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const fidx = rbState._studioFocusIdx;
+        if (api && typeof fidx === 'number' && fidx >= 0) {
+            const fpiece = (rbStudioCurrentChain())[fidx];
+            if (fpiece) {
+                const sid = await rbStudioChainSlotIdForPiece(api, fidx);
+                fpiece._vst_slot_id = (sid != null) ? sid : null;
+                if (sid != null) rbState._vstEditorSlot = sid;
+            }
+        }
     } catch (_) {}
 }
 

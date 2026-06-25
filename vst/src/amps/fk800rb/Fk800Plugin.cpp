@@ -29,7 +29,11 @@ static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
 
 // Family loudness makeup into the soft knee (matches the en30/SVT convention).
-static constexpr float kFkMakeup = 0.9183f;
+// 2026-06-24: +5 dB total (0.9183 → 1.633) — FK read quiet vs the family in-app
+// (low crest ≈9 dB / low peak makes it perceive quieter). +7 dB (peak ≈0.87) let
+// hard notes graze the rbAmpLvl 0.90 knee → audible clip; backed off to peak ≈0.69
+// (~2.3 dB headroom to the knee) so it stays clean while clearly louder than stock.
+static constexpr float kFkMakeup = 1.633f;
 
 class Fk800Plugin : public Plugin {
     fk800gk::Fk800Core core;

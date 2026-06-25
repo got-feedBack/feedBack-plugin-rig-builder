@@ -134,7 +134,7 @@ struct SvtCore {
         // family target ~−14 LUFS (the rig trim finishes the leveling). Re-tuned 2026-06-24
         // DOWN ~7 dB: the old 17+15·Gain pinned the rbAmpLvl ceiling (peak 0.99 = "hot"
         // & "loud", needed the −15 pad to tame). 10+12·Gain keeps it CLEAN at default.
-        outLevel = std::pow(10.0f, 0.05f * (10.0f + 12.0f * pGain));
+        outLevel = std::pow(10.0f, 0.05f * (13.0f + 12.0f * pGain));
         // Pad-aware makeup: the −15 dB pad cuts pre-NAM drive (cleaner, less
         // compression), so the gain-staged makeup above over-drives the now-cleaner
         // signal into the ceiling. Trim it back when padded → the padded input stays
