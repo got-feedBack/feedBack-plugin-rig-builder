@@ -182,6 +182,7 @@ class RumbleverbChannel {
     rbtube::MultiNodeBPlus supply;
     rbtube::PowerAmpEL34 power;
     float gain=1, dvol=1, cvol=1, reverb=0, output=1, pwrDrive=1, cabSim=1;
+    float dirtyLift=1, cleanLift=1;
     bool dirty=true;
 public:
     void setSampleRate(float s) { fs=(s>0.f)?s:48000.f; vIn.setT(s); vDirty.setT(s); vClean.setT(s); }
@@ -196,21 +197,23 @@ public:
         hp.setHighpassQ(60.f, 0.7f, fs);
 
         // DIRTY channel: cascaded gain + 3-band stack (boost/cut about flat)
-        gain = 0.6f + p[kGain] * p[kGain] * 8.0f;
+        gain = 1.7f + p[kGain] * p[kGain] * 7.2f;
         dBass.setLowShelf (110.f, (p[kBass]   - 0.5f) * 18.f, fs);
         dMid.setPeak      (650.f, (p[kMiddle] - 0.5f) * 14.f, 0.8f, fs);
         dTreble.setHighShelf(3200.f, (p[kTreble] - 0.5f) * 18.f, fs);
-        dvol = p[kVolume] / 0.6f;
+        dvol = 0.42f + 0.96f * p[kVolume];
 
         // CLEAN channel: low drive + 2-band passive tone
         cBass.setLowShelf  (120.f, (p[kCleanBass]   - 0.5f) * 14.f, fs);
         cTreble.setHighShelf(3000.f,(p[kCleanTreble] - 0.5f) * 14.f, fs);
-        cvol = p[kCleanVolume] / 0.5f;
+        cvol = 0.45f + 1.10f * p[kCleanVolume];
 
         reverb   = p[kReverb];
         output   = p[kOutput] / 0.7f;
         pwrDrive = 0.5f + output * 0.85f;
         cabSim   = p[kCabSim];
+        dirtyLift = 1.0f + 42.0f * std::exp(-3.0f * p[kGain]) * std::exp(-1.1f * p[kVolume]);
+        cleanLift = 1.0f + 12.0f * std::exp(-2.4f * p[kCleanVolume]);
         pwrLP.setLowpassQ(14000.f - 3000.f * output, 0.7f, fs);  // EL34 + OT band-limit (opened, miked-cab top)
         coupleToDirty.set(fs, 1000000.0f, 22.0e-9f, 180000.0f,
                           0.12f, 0.52f, 1.45f);
@@ -243,12 +246,12 @@ public:
             float d = coupleToDirty.process(s, gain);
             d = (float)vDirty.process((double)d);                    // cascaded gain stage
             d = dBass.process(d); d = dMid.process(d); d = dTreble.process(d);
-            ch = d * dvol;
+            ch = d * dvol * dirtyLift;
         } else {
             float cln = coupleToClean.process(s, 1.2f);
             cln = (float)vClean.process((double)cln);                // gentle clean stage
             cln = cBass.process(cln); cln = cTreble.process(cln);
-            ch = cln * cvol;
+            ch = cln * cvol * cleanLift;
         }
         ch += spring.process(ch) * reverb * 0.6f;                    // valve spring blend
         const float load = std::fabs(ch) * (0.75f + 0.85f * output);

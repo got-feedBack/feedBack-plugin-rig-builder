@@ -296,13 +296,13 @@ class BluesbreakerCore
         // V1 coupling caps, the A1M Loudness pots and the 270k-ish mixer impedance
         // into V2a. Keeping separate states preserves the jumpered-channel feel.
         brightCoupleToRecovery.set(sampleRate, 1000000.0f, 22.0e-9f, 270000.0f,
-                                   0.16f, 0.42f, 1.08f);
+                                   0.30f, 0.06f, 0.18f);
         normalCoupleToRecovery.set(sampleRate, 1000000.0f, 22.0e-9f, 270000.0f,
-                                   0.14f, 0.38f, 0.94f);
+                                   0.30f, 0.05f, 0.16f);
         // V2 -> V3 coupling cap into the LTP input grid. The grid-leak recovery is
         // what gives the 1962 its softer "bloom" when Loudness is high.
         coupleToPi.set(sampleRate, 1000000.0f, 22.0e-9f, 100000.0f,
-                       0.18f, 0.35f, 0.90f);
+                       0.30f, 0.06f, 0.22f);
         phaseInverter.setMarshall(sampleRate, 0.95f + 1.45f * effDrive + 0.70f * pushed, 0.88f);
         // GZ34 + Marshall 45W/JTM45-family filter chain: moderate reservoir,
         // screen/PI node and slower preamp node. This replaces a single sag scalar
@@ -315,9 +315,9 @@ class BluesbreakerCore
                    0.15f + 0.06f * pushed,
                    0.08f + 0.03f * effDrive,
                    0.20f);
-        // 2x 5881 push-pull, FIXED bias (cold class-AB ~-45V). Global NFB is
-        // approximated by the presence shelf after the power/OT model.
-        power.set(sampleRate, 5.2f + 8.0f * effDrive + 10.0f * pushed, -45.0f, 0.24f, 50.0f, 11000.0f);
+        // 2x 5881 push-pull, fixed bias. Keep it warm enough that clean notes
+        // stay in class-AB conduction instead of crossing over/chopping.
+        power.set(sampleRate, 5.0f + 7.6f * effDrive + 8.4f * pushed, -38.0f, 0.24f, 50.0f, 11000.0f);
         power.out = 0.010f;
 
         // 220p bright caps (C5/C6) bleed treble across Volume I/II, most at low
@@ -407,8 +407,11 @@ public:
             case kBass:      bass = v; break;
             case kMiddle:    mid = v; break;
             case kTreble:    treble = v; break;
-            case kLoudness1: loud1 = v; break;
-            case kLoudness2: loud2 = v; break;
+            // Real pots at zero mute the amp, but game "Gain low" must mean a
+            // clean Bluesbreaker, not silence. Keep a small floor, then apply
+            // the pot only once after V1.
+            case kLoudness1: loud1 = std::fmax(0.26f, v); break;
+            case kLoudness2: loud2 = std::fmax(0.24f, v); break;
             case kInput:     input = v; break;
             case kCabSim:    cabSim = v; break;
             default: break;
@@ -432,28 +435,27 @@ public:
         x = pickupLoad.process(x);
         x = softClip(x * (1.05f + 0.10f * pushed)) * (0.95f - 0.04f * pushed);
 
-        // Ch I (bright/lead): 220p bright cap + body, its own REAL ECC83 (V1b),
-        // driven by Volume I. The JTM45 breaks up a touch earlier/warmer than plexi.
+        // Ch I (bright/lead): 220p bright cap + body, its own REAL ECC83 (V1b).
+        // Volume I is after V1, so it attenuates the V1 output once.
         float bch = brightCapShelf.process(brightBody.process(x));
-        bch = brightTube.process(brightMiller.process(bch) *
-                                 (1.8f + 11.0f * loud1) * bplus.preamp);
-        bch = brightCoupleToRecovery.process(bch, 0.72f + 3.0f * loud1);
-        // Ch II (normal): darker body, its own REAL ECC83 (V1a), driven by Volume II.
+        bch = brightTube.process(brightMiller.process(bch) * 4.55f * bplus.preamp);
+        bch = brightCoupleToRecovery.process(bch * loud1, 0.82f + 2.55f * loud1);
+        // Ch II (normal): darker body, its own REAL ECC83 (V1a).
         float nch = normalBody.process(x);
-        nch = normalTube.process(normalMiller.process(nch) *
-                                 (1.6f + 9.0f * loud2) * bplus.preamp);
-        nch = normalCoupleToRecovery.process(nch, 0.64f + 2.5f * loud2);
+        nch = normalTube.process(normalMiller.process(nch) * 3.95f * bplus.preamp);
+        nch = normalCoupleToRecovery.process(nch * loud2, 0.72f + 2.15f * loud2);
 
-        // Jumpered mix: each channel scaled by its Loudness pot, gated by cable.
-        float y = brightG * loud1 * bch + normalG * loud2 * 0.92f * nch;
+        // Jumpered mix: channel outputs are already scaled by their Loudness pots
+        // before the coupling/grid-leak state.
+        float y = brightG * bch + normalG * 0.92f * nch;
 
         // V2 ECC83 recovery / cathode follower into the tone stack (REAL).
         y = interstageHp.process(y);
         y = recoveryTube.process(recoveryMiller.process(y) *
-                                 (1.0f + 5.5f * effDrive) * bplus.preamp);
+                                 (10.0f + 2.2f * effDrive) * bplus.preamp);
         y = cathodeFollowerLp.process(y);
 
-        y = toneStack.process(y) * 1.70f;
+        y = toneStack.process(y) * 2.25f;
         y = stackMakeupLow.process(y);
         y = stackMakeupBody.process(y);
         y = phaseLowPass.process(y);
@@ -503,7 +505,8 @@ public:
             + 0.012f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.012f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.010f * std::fabs((pres - 0.5f) * 16.0f);
-        const float level = (0.72f + 0.14f * (1.0f - effDrive)) /
+        const float cleanPotLift = 1.0f + 4.8f * (1.0f - smoothstepRange(0.28f, 0.58f, loud1));
+        const float level = cleanPotLift * (0.72f + 0.14f * (1.0f - effDrive)) /
             ((1.0f + 0.28f * effDrive + 0.32f * pushed) * toneEnergy);
         return softClip(y * level) * 0.97f;
     }
@@ -581,7 +584,7 @@ protected:
         {
             float ub[kOS];
             os.upsample(3.2f * in0[i], ub);
-            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.560f * core.process(ub[k]));
+            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.820f * core.process(ub[k]));
             const float y = os.downsample(ub);
             outL[i] = y;
             outR[i] = y;   // dual-mono: one core, same signal both sides = centered/balanced

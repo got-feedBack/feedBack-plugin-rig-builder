@@ -109,11 +109,11 @@ struct Ac30FallbackSpeaker {
         // family. It is not fitted to, copied from, or dependent on any captured IR.
         hp.set(sr, 72.0f);
         coneRes.peaking(sr, 76.0f, 0.82f, 1.4f + 0.5f * hot);       // Blue Fs is 75 Hz
-        lowMidDip.peaking(sr, 420.0f, 0.78f, -2.6f);               // open-back AC30 low-mid hollow
-        alnicoChime.peaking(sr, 2900.0f, 0.82f, 6.2f + 2.5f * treble - 0.6f * cut);
-        fizzShelf.highShelf(sr, 5200.0f, -2.2f + 2.4f * treble - 0.5f * hot);
-        upperDamp.peaking(sr, 6900.0f, 0.88f, -1.0f - 0.5f * hot);
-        coneLp.lowpass(sr, 11600.0f + 2400.0f * treble - 700.0f * hot, 0.66f);
+        lowMidDip.peaking(sr, 480.0f, 0.80f, -3.4f);               // open-back AC30 low-mid hollow
+        alnicoChime.peaking(sr, 2900.0f, 0.82f, 4.2f + 1.6f * treble - 0.5f * cut);
+        fizzShelf.highShelf(sr, 6000.0f, 0.8f + 1.2f * treble - 0.3f * hot);
+        upperDamp.peaking(sr, 6900.0f, 0.88f, 0.0f);
+        coneLp.lowpass(sr, 15000.0f + 1600.0f * treble - 1100.0f * hot, 0.707f);
     }
 
     inline float process(float x) {
@@ -225,7 +225,7 @@ struct BoxDC30Core {
         tonestack.setComponents(ac30pot::kVr3Treble, ac30pot::kVr4Bass, 10.0e3, 100.0e3,
                                 56.0e-12, 22.0e-9, 22.0e-9);
         tonestack.update(sr, treble, 1.0f, bass);
-        cutLP.lowpass(sr, 7600.0f - 6700.0f * std::sqrt(cut), 0.7f); // Tone Cut: 7.6k(no cut)->0.9k(full)
+        cutLP.lowpass(sr, 26000.0f - 20000.0f * std::sqrt(cut), 0.7f); // Tone Cut: ~26k(no cut)->6k(full); was 7.6k->0.9k (parked at 6.5k = dark)
         // GZ34 supply + long-tail-pair PI + EL84 class-A push-pull. The PI now clips
         // and unbalances before the EL84s; B+ droops through power/screen/preamp nodes.
         supply.setGZ34Ac30(sr, driveVol);
@@ -258,7 +258,7 @@ struct BoxDC30Core {
         x = cutLP.process(x);                                      // Cut AFTER power amp (real AC30: tames the output treble, post-distortion)
         x = outputTransformer.process(x);
         const float cab = fallbackSpeaker.process(x);
-        x += pCabSim * (cab - x);
+        x += pCabSim * (0.65f * cab - x);
         if (pDepth > 0.0f){                                        // tremolo (amplitude)
             lfoPhase += lfoInc; if (lfoPhase >= 1.0f) lfoPhase -= 1.0f;
             float lfo = 0.5f * (1.0f + std::sin(2.0f * kPi * lfoPhase));

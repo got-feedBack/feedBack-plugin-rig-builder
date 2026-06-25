@@ -116,7 +116,7 @@ struct ChieftainCore {
     float lastPowerLoad=0.0f, lastScreenLoad=0.0f, lastPreampLoad=0.0f;
 
     void setSampleRate(float s){ sr=s; spring.setSampleRate(s); recalc(); reset(); }
-    void setVolume(float v){ pVolume=clamp01(v); recalc(); }
+    void setVolume(float v){ pVolume=std::fmax(0.30f, clamp01(v)); recalc(); }
     void setBass(float v){ pBass=clamp01(v); recalc(); }
     void setMid(float v){ pMid=clamp01(v); recalc(); }
     void setTreble(float v){ pTreble=clamp01(v); recalc(); }
@@ -149,14 +149,18 @@ struct ChieftainCore {
         // clean->crunch with NO ad-hoc curve. The Chieftain is the CLEAN /
         // big-headroom amp, so the pre-gain floor is generous (clean low) and the
         // ceiling modest (only light crunch at max) -- deliberately NOT a Boogie.
-        float vol   = std::pow(pVolume, 1.1f);                    // 250K audio taper
-        inScale     = 2.0f * (0.7f + 0.45f * pVolume);            // audio -> grid volts into V1 (keep V1 cleaner)
-        preGain     = 0.70f + 3.6f * vol;                         // VOLUME inter-stage pre-gain (raised floor: usable at moderate Volume, not dead until cranked)
+        const float panelVol = std::pow(pVolume, 1.1f);            // 250K audio taper
+        // The Chieftain is a clean/crunch amp. A real Volume pot fully down is mute,
+        // but the game uses "Gain low" to mean clean, not silence. Keep the taper
+        // while giving the tube chain an audible clean floor.
+        float vol   = 0.18f + 0.82f * panelVol;
+        inScale     = 2.0f * (0.7f + 0.45f * vol);                // audio -> grid volts into V1 (keep V1 cleaner)
+        preGain     = 0.70f + 3.6f * vol;                         // VOLUME inter-stage pre-gain
         gainOut     = 0.70f + 0.60f * vol;                        // post-V2 level into the PI / power amp
         inputMiller.set(sr,  68000.0f, 55.0f, 8.0f);              // input stopper + V1 Miller, ~25 kHz
         millerV2.set(sr,   180000.0f, 52.0f, 8.0f);               // tone/volume source into V2, ~9 kHz
         coupleToV2.set(sr, 1000000.0f, 22.0e-9f, 220000.0f,
-                       0.11f, 0.36f, 0.85f);
+                       0.24f, 0.13f, 0.38f);
 
         // Matchless TMB tone stack = the REAL R/C network (Yeh model), placed
         // after V1 (PAGE 1). Treble pot 1M, Bass pot 1M, Mid pot 250K, slope
@@ -166,7 +170,7 @@ struct ChieftainCore {
         tonestack.setComponents(1.0e6, 1.0e6, 250.0e3, 100.0e3, 5100.0e-12, 22.0e-9, 22.0e-9);
         tonestack.update(sr, pTreble, pMid, pBass);
 
-        coupleToPi.set(sr, 1000000.0f, 22.0e-9f, 100000.0f, 0.12f, 0.42f, 1.10f);
+        coupleToPi.set(sr, 1000000.0f, 22.0e-9f, 100000.0f, 0.24f, 0.12f, 0.40f);
         phaseInverter.setMarshall(sr, 0.78f + 1.25f * pMaster + 0.45f * vol, 0.86f);
         supply.set(sr,
                    115.0f, 32.0f,
@@ -181,7 +185,7 @@ struct ChieftainCore {
         // ~415V plate -> a fairly HOT class-AB point, big headroom). The bias is
         // hotter / sag a touch deeper than the Vox's fixed-ish EL84 -7.5; Master
         // + Volume together push it into power-amp breakup near the top.
-        power.set(sr, 2.5f + 9.0f * vol + 4.0f * pMaster, -11.5f, 0.13f);
+        power.set(sr, 2.5f + 9.0f * vol + 4.0f * pMaster, -11.5f, 0.11f);
         power.out   = 0.0075f;                                    // scale plate-volt differential to signal
         outLevel    = 0.62f * (0.85f + 0.30f * pMaster);          // post-power makeup, tracks Master
 
@@ -242,12 +246,12 @@ struct ChieftainCore {
         cab = spkLp.process(cab);
         x += pCabSim * (cab - x);
 
-        // Loudness flattening vs the VOLUME (= RS Gain): the game holds output
-        // VOLUME ~fixed and varies distortion, so normalize across the gain sweep
-        // -- a stronger makeup at low Volume (clean/quiet) decaying toward unity
-        // as the preamp is driven and self-compresses. Master adds a mild swing.
-        float gcDb = 40.371f - 76.307f * pVolume + 35.810f * pVolume * pVolume; // fit: lift the usable Volume range toward -16 dBFS (clean amp ramps in below ~0.5, peak-matched to the rest)
-        if (gcDb > 20.0f) gcDb = 20.0f; else if (gcDb < -6.0f) gcDb = -6.0f;
+        // Game-facing loudness trim only. The older curve could add +20 dB at
+        // clean settings, which slammed the output limiter and made clean notes
+        // sound gated/broken instead of simply lower gain. Keep this modest so
+        // the Chieftain stays a high-headroom clean/crunch amp.
+        float gcDb = 18.0f - 35.0f * pVolume;
+        if (gcDb > 10.0f) gcDb = 10.0f; else if (gcDb < -5.0f) gcDb = -5.0f;
         return x * outLevel * std::pow(10.0f, 0.05f * gcDb);
     }
 

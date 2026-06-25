@@ -99,7 +99,7 @@ protected:
             float ub[kOS];
             os.upsample(3.2f * in0[i], ub);
             for (int k = 0; k < kOS; ++k)                  // core + output soft-clip at 2x
-                ub[k] = rbAmpLvl(2.631f * core.process(ub[k]));
+                ub[k] = rbAmpLvl(0.850f * core.process(ub[k]));
             const float y = os.downsample(ub);
             outL[i] = y;
             outR[i] = y;   // dual-mono: one core, same signal both sides = centered/balanced

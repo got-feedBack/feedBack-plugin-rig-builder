@@ -523,7 +523,7 @@ public:
         // mid-sweep) so one output calibration spans the whole RS Gain range.
         float gcDb = 4.6f - 8.5f * m;
         if (gcDb > 14.0f) gcDb = 14.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
-        return softClip(y * level * masterGain) * 0.97f * std::pow(10.0f, 0.05f * gcDb);
+        return softClip(y * level * masterGain * std::pow(10.0f, 0.05f * gcDb)) * 0.97f;
     }
 };
 

@@ -185,11 +185,10 @@ class EmsCore
         speakerThump.setPeaking(sampleRate, 120.0f, 0.84f, 0.8f + 2.0f * bass);
         speakerLowMid.setPeaking(sampleRate, 420.0f + 90.0f * mid, 0.74f, -1.2f + 1.4f * mid);   // the Marshall mid dip
         speakerBite.setPeaking(sampleRate, 2600.0f + 480.0f * treble, 0.78f, 2.4f + 2.0f * treble - 0.5f * pushed);
-        // Was a fizz NOTCH (top cut, made it dark). Now an AIR high-shelf: lifts the
-        // top, retreats with gain (de-fizz on crank). Member name kept.
-        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, 9.5f + 2.0f * treble - 4.5f * pushed);
-        // Speaker LP opened from ~6.2k (too dark) to ~16k (miked cab), eases on crank.
-        speakerLp.setLowPass(sampleRate, 16000.0f + 1700.0f * treble - 3500.0f * pushed, 0.66f);
+        // Mild 4x12 top air. The previous +9.5 dB shelf created sample jumps
+        // in the fallback cab while the amp-only path stayed stable.
+        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, 3.5f + 1.5f * treble - 3.5f * pushed);
+        speakerLp.setLowPass(sampleRate, 13200.0f + 1200.0f * treble - 3200.0f * pushed, 0.66f);
     }
 
 public:
@@ -270,7 +269,7 @@ public:
         cab = speakerBite.process(cab);
         cab = speakerFizz.process(cab);
         cab = speakerLp.process(cab);
-        y += cabSim * (cab - y);
+        y += cabSim * (0.72f * cab - y);
 
         const float toneEnergy = 1.0f
             + 0.011f * std::fabs((bass - 0.5f) * 15.0f)

@@ -181,7 +181,7 @@ class Or50Core
         coupleToPi.set(sampleRate, 1000000.0f, 22.0e-9f, 100000.0f, 0.13f, 0.46f, 1.10f);
         phaseInverter.setComponents(sampleRate,
                                     0.78f + 1.25f * mPush + 0.55f * pushed + 0.36f * halfP,
-                                    0.84f, 310.0f, 47000.0f, 47000.0f, 10000.0f, 18.0f, 0.018f);
+                                    0.84f, 310.0f, 100000.0f, 82000.0f, 10000.0f, 18.0f, 0.045f); // plates 47k/47k -> 100k/82k: 47k/equal landed the LTP on a degenerate op-point (dead output)
         // GZ34/5AR4 supply: softer than the OR100 and more reactive in HALF.
         supply.set(sampleRate,
                    115.0f, 32.0f,
@@ -199,7 +199,7 @@ class Or50Core
                   -38.0f,                                               // EL34 fixed bias (~-35..-38V)
                   0.10f + 0.05f * halfP,                                // residual OT/power compression
                   60.0f, 11000.0f);                                     // OT band
-        power.out = 0.011f;
+        power.out = 0.037f;
 
         // Input network: R1 68K series + R2 1M grid leak (gentle HP), pickup loading.
         inputHp.setHighPass(sampleRate, 44.0f + 36.0f * g, 0.70f);
@@ -296,7 +296,7 @@ public:
         y = brightCap.process(y);
         y = coupleV1aToV1b.process(y, 0.75f + 4.5f * gain + 1.5f * pushed);
         // V1-B 12AX7 (REAL): the GAIN stage — the source of the Orange crunch.
-        y = v1b.process(v1bMiller.process(y) * (1.2f + 3.4f * gain + 1.6f * pushed) * bplus.preamp);
+        y = v1b.process(v1bMiller.process(y) * (1.8f + 6.5f * gain + 3.0f * pushed) * bplus.preamp);
 
         // C7 coupling -> V2-A 12AX7 (REAL): final preamp gain into the tone stack.
         y = interHp.process(y);

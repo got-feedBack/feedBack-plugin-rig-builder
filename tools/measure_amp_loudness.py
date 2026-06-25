@@ -26,7 +26,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent          # plugins/rig_builder
 AMPS = ROOT / "vst" / "src" / "amps"
-DPF_SRC = "../../DPF/distrho/src/DistrhoPlugin.cpp"     # relative to an amp dir
+DPF_SRC = "../DPF/distrho/src/DistrhoPlugin.cpp"        # relative to an amp dir
 TEMPLATE = (ROOT / "tools" / "amp_lufs_harness.cpp.in").read_text()
 MODEL = ROOT / "data" / "amp_loudness_model.json"
 STEPS = 11
@@ -133,7 +133,7 @@ def _compile_and_run(info: dict, gain_idx, vol_idx) -> dict | None:
         with tempfile.NamedTemporaryFile(suffix="_probe", delete=False) as tf:
             binpath = tf.name
         cmd = ["/usr/bin/clang++", "-isysroot", _sdk_path(), "-std=c++14", "-O2",
-               "-I.", "-I..", "-I../../DPF/distrho", "-I../../DPF/dgl",
+               "-I.", "-I..", "-I../DPF/distrho", "-I../DPF/dgl",
                "_lufs_probe.cpp", DPF_SRC, "-o", binpath]
         r = subprocess.run(cmd, cwd=d, capture_output=True, text=True)
         if r.returncode != 0:

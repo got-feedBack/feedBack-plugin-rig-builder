@@ -106,10 +106,10 @@ protected:
         {
             float ub[kOS];
             osL.upsample(3.2f * inL[i], ub);
-            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(1.184f *left.process(ub[k]));
+            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.950f *left.process(ub[k]));
             outL[i] = osL.downsample(ub);
             osR.upsample(3.2f * inR[i], ub);
-            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(1.184f *right.process(ub[k]));
+            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.950f *right.process(ub[k]));
             outR[i] = osR.downsample(ub);
         }
     }

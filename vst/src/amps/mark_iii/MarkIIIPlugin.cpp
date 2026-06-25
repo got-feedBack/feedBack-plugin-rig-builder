@@ -335,7 +335,7 @@ public:
         // loudness flattening vs LEAD DRIVE (clean post-output makeup; ~0 dB at drive 0.5)
         float gcDb = 7.778f - 21.378f * leadDrive + 11.748f * leadDrive * leadDrive;
         if (gcDb > 20.0f) gcDb = 20.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
-        return softClip(y * level) * 0.97f * std::pow(10.0f, 0.05f * gcDb);
+        return softClip(y * level * std::pow(10.0f, 0.05f * gcDb)) * 0.97f;
     }
 };
 
@@ -409,8 +409,8 @@ protected:
             osR.upsample(inR[i], ubR);
             for (int k = 0; k < kOS; ++k)
             {
-                ubL[k] = rbAmpLvl(1.325f * left.process(ubL[k]));
-                ubR[k] = rbAmpLvl(1.325f * right.process(ubR[k]));
+                ubL[k] = rbAmpLvl(0.800f * left.process(ubL[k]));
+                ubR[k] = rbAmpLvl(0.800f * right.process(ubR[k]));
             }
             outL[i] = osL.downsample(ubL);
             outR[i] = osR.downsample(ubR);

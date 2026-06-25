@@ -24,7 +24,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/CH-2.vst3",
-   "notes": "Bundled Boss CE-2 style BBD chorus based on the local schematic, using the game's Rate, Depth, and Mix knobs."
+   "notes": "Bundled Boss CE-2 style MN3007/MN3101 BBD chorus based on the local schematic. Real pedal controls: Rate and Depth; Rocksmith Mix is intentionally not exposed because the CE-2 has a fixed dry/wet mixer."
   }
  ],
  "Pedal_Chorus20": [
@@ -35,7 +35,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Deja Chorus.vst3",
-   "notes": "Bundled stereo BBD chorus/flanger based on the local Chorus 2.0 schematic, using the game's Rate, Depth, and Mix knobs."
+   "notes": "Bundled Deja Vibe/Uni-Vibe style optical chorus based on the local ElectroVibe/UniVibe schematics. Real controls: Intensity, Speed1, Speed2, Speed Select, Volume, Mode; Rocksmith pins Mode to Chorus."
   }
  ],
  "Pedal_StereoChorus": [
@@ -46,7 +46,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/134 Stereo Chorus.vst3",
-   "notes": "Bundled stereo BBD chorus clone using the game's Rate, Depth, and Mix knobs."
+   "notes": "Bundled MXR-style stereo analog BBD chorus with real Bass, Treble, Intensity, Width, and Speed controls. Mono input is expanded to true L/R modulation; stereo input is preserved. Rocksmith Rate/Depth/Mix map to Speed/Width/Intensity."
   }
  ],
  "Pedal_DigitalChorus": [
@@ -57,7 +57,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/CH-5.vst3",
-   "notes": "Bundled clean digital chorus based on the local digital chorus schematic, using the game's Rate, Depth, LoFilter, HiFilter, and Mix knobs."
+   "notes": "Bundled Boss CE-5 style digital chorus based on the local schematic. Real controls: E.Level, Rate, Depth, LoFilter, HiFilter; mono input is expanded to true L/R modulation and Rocksmith Mix maps to E.Level."
   }
  ],
  "Pedal_VintageChorus": [
@@ -68,7 +68,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/134 Stereo Chorus.vst3",
-   "notes": "Bundled warm analog stereo BBD chorus based on the local analog chorus schematic, using the game's Rate, Depth, and Mix knobs."
+   "notes": "Bundled warm MXR-style analog stereo BBD chorus based on the local analog chorus schematic. Real controls: Bass, Treble, Intensity, Width, Speed; mono input is expanded to true L/R modulation and Rocksmith Rate/Depth/Mix map to Speed/Width/Intensity."
   }
  ],
  "Bass_Pedal_BassChorus": [
@@ -78,7 +78,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/CB-3.vst3",
    "free": true,
-   "notes": "Bundled Boss CEB-3 model — BBD chorus with the bass Low Filter (keeps lows dry). Rate/Depth/LoFilter/Mix map 1:1 to RS."
+   "notes": "Bundled Boss CEB-3 style model using the ES56028 short digital delay core from the local schematic, with NJM022/M5223 analog conditioning and the real Rate, Depth, Low Filter, and E.Level controls. Mono input is expanded to true L/R modulation; Rocksmith LoFilter maps to Low Filter and Mix maps to E.Level."
   }
  ],
  "Pedal_Flanger": [
@@ -672,7 +672,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Germanium Drive.vst3",
-   "notes": "Bundled two-knob smooth germanium overdrive for the game's Gain/Tone pedal."
+   "notes": "Bundled Skywave/Broadcast-style germanium preamp drive based on the local schematic. Real controls: Gain, LowCut, Level, GainMode, Voltage; RS Tone maps to LowCut."
   }
  ],
  "Pedal_CustomDrive": [
@@ -683,7 +683,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/CDO.vst3",
-   "notes": "Bundled MOSFET/diode custom overdrive based on the local Custom Drive schematic, using the game's Gain, Tone, and Voice knobs."
+   "notes": "Bundled MOSFET/diode custom overdrive based on the local schematic. Real panel controls: Drive, Tone, Voice, Volume; RS Gain maps to Drive."
   }
  ],
  "Pedal_LineDrive": [
@@ -693,7 +693,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/OS-2.vst3",
    "free": true,
-   "notes": "Bundled Boss OS-2 style drive/distortion blend using the game Gain and Tone controls"
+   "notes": "Bundled Boss OS-2 style drive/distortion blend based on the local schematic. Real panel controls: Drive, Tone, Color, Level; RS Gain maps to Drive."
   }
  ],
  "Pedal_MarshallGuvnorPlus": [
@@ -703,7 +703,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/GM-2.vst3",
    "free": true,
-   "notes": "Bundled Marshall GV-2 Guv'nor Plus style drive using the game Gain, Bass, Mid, Treble and Deep controls"
+   "notes": "Bundled Marshall GV-2 Guv'nor Plus style drive based on the local schematic. Real panel controls: Gain, Bass, Mid, Treble, Deep, Volume."
   }
  ],
  "Pedal_SuperDrive": [
@@ -713,7 +713,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/SD-1.vst3",
    "free": true,
-   "notes": "Bundled Boss SD-1 style asymmetric feedback overdrive using the game Gain and Tone controls"
+   "notes": "Bundled Boss SD-1 style asymmetric feedback overdrive based on the local schematic. Real panel controls: Drive, Tone, Level; RS Gain maps to Drive."
   }
  ],
  "Pedal_RangeBooster": [
@@ -734,7 +734,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/DS-1.vst3",
    "free": true,
-   "notes": "Bundled Boss DS-1 style standard distortion using the game Gain and Tone controls"
+   "notes": "Bundled Boss DS-1 style standard distortion based on the local schematic. Real panel controls: Dist, Tone, Level; RS Gain maps to Dist."
   }
  ],
  "Pedal_VintageDistortion": [
@@ -744,7 +744,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/Vintage Distortion.vst3",
    "free": true,
-   "notes": "Bundled DOD 250 style op-amp/asymmetric diode distortion using the game Gain and Tone controls"
+   "notes": "Bundled DOD 250 style overdrive/preamp based on the local schematic. Real panel controls: Gain, Volume; RS Tone is not mapped because the pedal has no tone control."
   }
  ],
  "Pedal_MetalDistortion": [
@@ -754,7 +754,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/HM-2.vst3",
    "free": true,
-   "notes": "Bundled Boss HM-2 style alloy/heavy metal distortion using the game Gain and Tone controls"
+   "notes": "Bundled Boss HM-2 style heavy metal distortion based on the local schematic. Real panel controls: Dist, ColorLow, ColorHigh, Level; RS Gain maps to Dist."
   }
  ],
  "Bass_Pedal_BassDistortion": [
@@ -764,7 +764,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/Mouse.vst3",
    "free": true,
-   "notes": "Bundled Pro Co RAT model — LM308 high-gain + hard silicon clip + the RAT passive Filter low-pass. Gain(Distortion)/Tone(pre-clip)/Filter(RAT Filter) map 1:1 to RS."
+   "notes": "Bundled Pro Co RAT model — LM308 high-gain + hard 1N4148 clip + passive RAT Filter. Real controls are Distortion/Filter/Volume; RS Gain maps to Distortion, RS Filter/Tone map through the inverted RAT Filter, and Volume is pinned by the curated mapping."
   }
  ],
  "Bass_Pedal_BassOverdrive": [
@@ -774,7 +774,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/BLACKBRASS.vst3",
    "free": true,
-   "notes": "Bundled Darkglass Microtubes B3K model — clean+CMOS-clip parallel paths. Blend/Gain(Drive)/Filter(Grunt)/Tone(Attack) map 1:1 to RS."
+   "notes": "Bundled Darkglass Microtubes B3K model — J201/TL072 front end, CD4049UBE CMOS clipping and clean blend. Real controls are Blend/Drive/Level plus Attack/Grunt switches; RS Tone/Filter drive the two quantized switches and Level is pinned by the curated mapping."
   }
  ],
  "Pedal_FuzzWasHe": [
@@ -785,7 +785,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/BZ-1.vst3",
-   "notes": "Bundled two-knob Chief-style silicon fuzz based on the local schematic."
+   "notes": "Bundled Boss FZ-3-style silicon fuzz based on the local schematic. Real panel controls: Fuzz, Tone, Volume."
   }
  ],
  "Pedal_CaptFuzzle": [
@@ -807,7 +807,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Super-Buzz.vst3",
-   "notes": "Bundled octave fuzz based on the local schematic, using the game's Gain and Tone knobs."
+   "notes": "Bundled Univox Super-Fuzz-style octave fuzz based on the local schematic. Real controls: Expander, Tone SW, Balance; RS Gain maps to Expander."
   }
  ],
  "Pedal_BuzzToo": [
@@ -818,7 +818,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Big Buzz.vst3",
-   "notes": "Bundled triangle-era four-transistor fuzz based on the local schematic, using the game's Gain and Tone knobs."
+   "notes": "Bundled V1 Big Muff-style fuzz based on the local schematic. Real panel controls: Sustain, Tone, Volume; RS Gain maps to Sustain."
   }
  ],
  "Bass_Pedal_BassFuzz": [
@@ -828,7 +828,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/Bass Big Buzz.vst3",
    "free": true,
-   "notes": "Bundled EHX Bass Big Muff Pi model — 2-stage diode-clip fuzz + Big Muff tone stack + clean low-end blend. Gain/Tone/Filter map 1:1 to RS."
+   "notes": "Bundled EHX Bass Big Muff Pi model — BC547 gain stages, dual 1N4148 clipping cells, Big Muff tone stack and Bass/Dry switch. Real controls are Sustain/Tone/Volume plus Bass/Dry; RS Filter drives the quantized switch and Volume is pinned by the curated mapping."
   }
  ],
  "Pedal_OctaveUp": [
@@ -914,7 +914,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/MT-2.vst3",
    "free": true,
-   "notes": "Bundled Boss MT-2 style high-gain distortion using the game Gain, Bass, Mid and Treble controls"
+   "notes": "Bundled Boss MT-2 style high-gain distortion based on the local schematic. Real panel controls: Dist, Low, High, Middle, MiddleFreq, Level."
   }
  ],
  "Pedal_Enbiggenator": [
@@ -1005,7 +1005,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/Attack of the Clones.vst3",
    "free": true,
-   "notes": "Bundled Clone Theory style BBD chorus/doubler. Clones increases voice count/spread; Depth and Mix mirror the game."
+   "notes": "Bundled EHX Clone Theory style BBD chorus/vibrato based on the local layout. Real controls: Rate, Depth, ChVib, Flange; mono input is expanded to true L/R modulation and Rocksmith Clones/Depth/Mix map to Rate/Depth/ChVib."
   }
  ],
  "Bass_Pedal_EdenWTDI": [

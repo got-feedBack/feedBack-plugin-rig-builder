@@ -274,7 +274,7 @@ public:
         // loudness flattening vs GAIN (clean post-output makeup; anchored ~0 dB at gain 0.5)
         float gcDb = 5.368f - 13.638f * gain + 4.005f * gain * gain;
         if (gcDb > 20.0f) gcDb = 20.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
-        return softClip(y * level) * 0.95f * std::pow(10.0f, 0.05f * gcDb);
+        return softClip(y * level * std::pow(10.0f, 0.05f * gcDb)) * 0.95f;
     }
 };
 

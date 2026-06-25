@@ -91,10 +91,6 @@
    "Depth": {
     "param": "Depth",
     "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
    }
   },
   "khs chorus": {
@@ -121,26 +117,27 @@
    "Depth": {
     "param": "Depth",
     "scale": 0.01
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
    }
   }
  },
  "Pedal_Chorus20": {
   "chorus20": {
+   "_static": {
+    "Speed2": 0.44,
+    "SpeedSel": 0.0,
+    "Mode": 0.0
+   },
    "Rate": {
-    "param": "Rate",
+    "param": "Speed1",
     "scale": 0.1,
-    "_hint": "the game Chorus 2 Rate is stored as 0..10, so the bundled plugin receives Rate/10 and applies its BBD speed curve internally."
+    "_hint": "the game Chorus 2 Rate is stored as 0..10; map it to the Deja Vibe Speed1 control. Speed2 is static unless edited in the VST."
    },
    "Depth": {
-    "param": "Depth",
+    "param": "Intensity",
     "scale": 0.01
    },
    "Mix": {
-    "param": "Mix",
+    "param": "Volume",
     "scale": 0.01
    }
   },
@@ -160,23 +157,32 @@
    }
   },
   "deja chorus": {
+   "_static": {
+    "Speed2": 0.44,
+    "SpeedSel": 0.0,
+    "Mode": 0.0
+   },
    "Rate": {
-    "param": "Rate",
+    "param": "Speed1",
     "scale": 0.1,
-    "_hint": "the game Chorus 2 Rate is stored as 0..10, so the bundled plugin receives Rate/10 and applies its BBD speed curve internally."
+    "_hint": "the game Chorus 2 Rate is stored as 0..10; map it to the Deja Vibe Speed1 control. Mode is pinned to Chorus via _static."
    },
    "Depth": {
-    "param": "Depth",
+    "param": "Intensity",
     "scale": 0.01
    },
    "Mix": {
-    "param": "Mix",
+    "param": "Volume",
     "scale": 0.01
    }
   }
  },
  "Pedal_DigitalChorus": {
   "digitalchorus": {
+   "Mix": {
+    "param": "E.Level",
+    "scale": 0.01
+   },
    "Rate": {
     "param": "Rate",
     "scale": 0.1,
@@ -195,10 +201,6 @@
     "param": "HiFilter",
     "scale": 0.01,
     "_hint": "Higher RS HiFilter lowers the wet-path low-pass cutoff, matching the schematic's high-filter cut control."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
    }
   },
   "khs chorus": {
@@ -217,6 +219,10 @@
    }
   },
   "ch-5": {
+   "Mix": {
+    "param": "E.Level",
+    "scale": 0.01
+   },
    "Rate": {
     "param": "Rate",
     "scale": 0.1,
@@ -235,26 +241,26 @@
     "param": "HiFilter",
     "scale": 0.01,
     "_hint": "Higher RS HiFilter lowers the wet-path low-pass cutoff, matching the schematic's high-filter cut control."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
    }
   }
  },
  "Pedal_VintageChorus": {
   "analogchorus": {
+   "_static": {
+    "Bass": 0.5,
+    "Treble": 0.52
+   },
    "Rate": {
-    "param": "Rate",
+    "param": "Speed",
     "scale": 0.1,
     "_hint": "the game Vintage/Analog Chorus Rate is stored around 1..2, so the bundled plugin receives Rate/10 and keeps the LFO in a slow analog range."
    },
    "Depth": {
-    "param": "Depth",
+    "param": "Width",
     "scale": 0.01
    },
    "Mix": {
-    "param": "Mix",
+    "param": "Intensity",
     "scale": 0.01
    }
   },
@@ -274,17 +280,61 @@
    }
   },
   "134 stereo chorus": {
+   "_static": {
+    "Bass": 0.5,
+    "Treble": 0.52
+   },
    "Rate": {
-    "param": "Rate",
+    "param": "Speed",
     "scale": 0.1,
     "_hint": "the game Vintage/Analog Chorus Rate is stored around 1..2, so the bundled plugin receives Rate/10 and keeps the LFO in a slow analog range."
    },
    "Depth": {
-    "param": "Depth",
+    "param": "Width",
     "scale": 0.01
    },
    "Mix": {
-    "param": "Mix",
+    "param": "Intensity",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_StereoChorus": {
+  "analogchorus": {
+   "_static": {
+    "Bass": 0.5,
+    "Treble": 0.52
+   },
+   "Rate": {
+    "param": "Speed",
+    "scale": 0.1,
+    "_hint": "Stereo Chorus shares the bundled analog stereo chorus; map RS Rate to the real Speed knob."
+   },
+   "Depth": {
+    "param": "Width",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Intensity",
+    "scale": 0.01
+   }
+  },
+  "134 stereo chorus": {
+   "_static": {
+    "Bass": 0.5,
+    "Treble": 0.52
+   },
+   "Rate": {
+    "param": "Speed",
+    "scale": 0.1,
+    "_hint": "Stereo Chorus shares the bundled analog stereo chorus; map RS Rate to the real Speed knob."
+   },
+   "Depth": {
+    "param": "Width",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Intensity",
     "scale": 0.01
    }
   }
@@ -302,14 +352,14 @@
     "_hint": "RS Depth \u2192 LFO mod depth 0..1."
    },
    "LoFilter": {
-    "param": "LoFilter",
+    "param": "Low Filter",
     "scale": 0.01,
-    "_hint": "RS LoFilter \u2192 wet high-pass 0..1 (keeps lows dry)."
+    "_hint": "RS LoFilter -> real CEB-3 Low Filter; higher settings remove more bass from the wet ES56028 chorus path."
    },
    "Mix": {
-    "param": "Mix",
+    "param": "E.Level",
     "scale": 0.01,
-    "_hint": "RS Mix \u2192 dry/wet 0..1."
+    "_hint": "RS Mix -> real CEB-3 E.Level, the wet effect-level control."
    }
   },
   "khs chorus": {
@@ -339,47 +389,53 @@
     "_hint": "RS Depth \u2192 LFO mod depth 0..1."
    },
    "LoFilter": {
-    "param": "LoFilter",
+    "param": "Low Filter",
     "scale": 0.01,
-    "_hint": "RS LoFilter \u2192 wet high-pass 0..1 (keeps lows dry)."
+    "_hint": "RS LoFilter -> real CEB-3 Low Filter; higher settings remove more bass from the wet ES56028 chorus path."
    },
    "Mix": {
-    "param": "Mix",
+    "param": "E.Level",
     "scale": 0.01,
-    "_hint": "RS Mix \u2192 dry/wet 0..1."
+    "_hint": "RS Mix -> real CEB-3 E.Level, the wet effect-level control."
    }
   }
  },
  "Pedal_SendInTheClones": {
   "sendintheclones": {
+   "_static": {
+    "Flange": 0.0
+   },
    "Clones": {
-    "param": "Clones",
+    "param": "Rate",
     "scale": 0.01,
-    "offset": 0.1,
-    "_hint": "the game uses low Clones values like 1/11/35. Treat 1 as 'one audible clone' rather than 1%; the plugin's internal curve then turns larger values into more/spread-out voices."
+    "offset": 0.08,
+    "_hint": "RS Clones has no direct Clone Theory control; use it as the Rate driver so song presets still vary the modulation."
    },
    "Depth": {
     "param": "Depth",
     "scale": 0.01
    },
    "Mix": {
-    "param": "Mix",
+    "param": "ChVib",
     "scale": 0.01
    }
   },
   "attack of the clones": {
+   "_static": {
+    "Flange": 0.0
+   },
    "Clones": {
-    "param": "Clones",
+    "param": "Rate",
     "scale": 0.01,
-    "offset": 0.1,
-    "_hint": "the game uses low Clones values like 1/11/35. Treat 1 as 'one audible clone' rather than 1%; the plugin's internal curve then turns larger values into more/spread-out voices."
+    "offset": 0.08,
+    "_hint": "RS Clones has no direct Clone Theory control; use it as the Rate driver so song presets still vary the modulation."
    },
    "Depth": {
     "param": "Depth",
     "scale": 0.01
    },
    "Mix": {
-    "param": "Mix",
+    "param": "ChVib",
     "scale": 0.01
    }
   }
@@ -1784,12 +1840,14 @@
     "scale": 0.01
    },
    "Tone": {
-    "param": "Voltage",
+    "param": "LowCut",
     "scale": 0.01,
-    "_hint": "The Hudson Broadcast has no tone control; RS Tone drives the supply-starve VOLTAGE: low = dark/saggy/compressed (dying-battery), high = open/brighter."
+    "_hint": "The Skywave/Broadcast has no treble tone knob; RS Tone maps to the real LowCut control: lower = fuller, higher = tighter."
    },
    "_static": {
-    "Level": 0.55
+    "Level": 0.55,
+    "GainMode": 0.5,
+    "Voltage": 0.5
    }
   },
   "khs distortion": {
@@ -1823,15 +1881,21 @@
     "scale": 0.01
    },
    "Tone": {
-    "param": "Tone",
-    "scale": 0.01
+    "param": "LowCut",
+    "scale": 0.01,
+    "_hint": "The Skywave/Broadcast has no treble tone knob; RS Tone maps to the real LowCut control: lower = fuller, higher = tighter."
+   },
+   "_static": {
+    "Level": 0.55,
+    "GainMode": 0.5,
+    "Voltage": 0.5
    }
   }
  },
  "Pedal_CustomDrive": {
   "customdrive": {
    "Gain": {
-    "param": "Gain",
+    "param": "Drive",
     "scale": 0.01
    },
    "Tone": {
@@ -1842,6 +1906,9 @@
     "param": "Voice",
     "scale": 1.0,
     "_hint": "the game Voice is a binary 0/1 switch. CustomDrive treats <0.5 as the smoother voice and >=0.5 as the tighter/brighter voice."
+   },
+   "_static": {
+    "Volume": 0.62
    }
   },
   "khs distortion": {
@@ -1871,7 +1938,7 @@
   },
   "cdo": {
    "Gain": {
-    "param": "Gain",
+    "param": "Drive",
     "scale": 0.01
    },
    "Tone": {
@@ -1882,30 +1949,41 @@
     "param": "Voice",
     "scale": 1.0,
     "_hint": "the game Voice is a binary 0/1 switch. CustomDrive treats <0.5 as the smoother voice and >=0.5 as the tighter/brighter voice."
+   },
+   "_static": {
+    "Volume": 0.62
    }
   }
  },
  "Pedal_LineDrive": {
   "linedrive": {
    "Gain": {
-    "param": "Gain",
+    "param": "Drive",
     "scale": 0.01
    },
    "Tone": {
     "param": "Tone",
     "scale": 0.01,
     "_hint": "RS Tone 0-100 -> LineDrive Tone 0-1. Lower values are darker and thicker; higher values open the OS-2 style post-clipping tone network."
+   },
+   "_static": {
+    "Color": 0.58,
+    "Level": 0.62
    }
   },
   "os-2": {
    "Gain": {
-    "param": "Gain",
+    "param": "Drive",
     "scale": 0.01
    },
    "Tone": {
     "param": "Tone",
     "scale": 0.01,
     "_hint": "RS Tone 0-100 -> LineDrive Tone 0-1. Lower values are darker and thicker; higher values open the OS-2 style post-clipping tone network."
+   },
+   "_static": {
+    "Color": 0.58,
+    "Level": 0.62
    }
   }
  },
@@ -1935,6 +2013,9 @@
    "Deep": {
     "param": "Deep",
     "scale": 0.01
+   },
+   "_static": {
+    "Volume": 0.62
    }
   },
   "gm-2": {
@@ -1962,30 +2043,36 @@
    "Deep": {
     "param": "Deep",
     "scale": 0.01
+   },
+   "_static": {
+    "Volume": 0.62
    }
   }
  },
  "Bass_Pedal_BassOverdrive": {
   "bassoverdrive": {
+   "_static": {
+    "Level": 0.62
+   },
    "Blend": {
     "param": "Blend",
     "scale": 0.01,
     "_hint": "RS Blend 0-100 \u2192 clean/dist mix 0..1."
    },
    "Gain": {
-    "param": "Gain",
+    "param": "Drive",
     "scale": 0.01,
     "_hint": "RS Gain 0-100 \u2192 B3K Drive 0..1."
    },
    "Filter": {
-    "param": "Filter",
+    "param": "Grunt",
     "scale": 0.01,
-    "_hint": "RS Filter 0-100 \u2192 B3K Grunt 0..1 (low end into the clipper)."
+    "_hint": "RS Filter 0-100 \u2192 B3K Grunt 3-way switch (tight/normal/fat), quantized by the VST."
    },
    "Tone": {
-    "param": "Tone",
+    "param": "Attack",
     "scale": 0.01,
-    "_hint": "RS Tone 0-100 \u2192 B3K Attack 0..1 (treble of the distortion)."
+    "_hint": "RS Tone 0-100 \u2192 B3K Attack 3-way switch (dark/normal/bright), quantized by the VST."
    }
   },
   "khs distortion": {
@@ -2079,48 +2166,60 @@
  "Pedal_SuperDrive": {
   "superdrive": {
    "Gain": {
-    "param": "Gain",
+    "param": "Drive",
     "scale": 0.01
    },
    "Tone": {
     "param": "Tone",
     "scale": 0.01,
     "_hint": "RS Tone 0-100 -> SuperDrive Tone 0-1. Lower values keep the SD-1 darker and mid-forward; higher values open the top end after clipping."
+   },
+   "_static": {
+    "Level": 0.62
    }
   },
   "sd-1": {
    "Gain": {
-    "param": "Gain",
+    "param": "Drive",
     "scale": 0.01
    },
    "Tone": {
     "param": "Tone",
     "scale": 0.01,
     "_hint": "RS Tone 0-100 -> SuperDrive Tone 0-1. Lower values keep the SD-1 darker and mid-forward; higher values open the top end after clipping."
+   },
+   "_static": {
+    "Level": 0.62
    }
   }
  },
  "Pedal_Distortion": {
   "standarddistortion": {
    "Gain": {
-    "param": "Gain",
+    "param": "Dist",
     "scale": 0.01
    },
    "Tone": {
     "param": "Tone",
     "scale": 0.01,
     "_hint": "RS Tone 0-100 -> StandardDistortion Tone 0-1. Lower values are darker/thicker; higher values open the DS-1 style cutting top end."
+   },
+   "_static": {
+    "Level": 0.62
    }
   },
   "ds-1": {
    "Gain": {
-    "param": "Gain",
+    "param": "Dist",
     "scale": 0.01
    },
    "Tone": {
     "param": "Tone",
     "scale": 0.01,
     "_hint": "RS Tone 0-100 -> StandardDistortion Tone 0-1. Lower values are darker/thicker; higher values open the DS-1 style cutting top end."
+   },
+   "_static": {
+    "Level": 0.62
    }
   }
  },
@@ -2130,10 +2229,8 @@
     "param": "Gain",
     "scale": 0.01
    },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 -> VintageDistortion Tone 0-1. Lower values are darker and thicker; higher values open the DOD 250 style top end."
+   "_static": {
+    "Volume": 0.62
    }
   },
   "vintage distortion": {
@@ -2141,34 +2238,40 @@
     "param": "Gain",
     "scale": 0.01
    },
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01,
-    "_hint": "RS Tone 0-100 -> VintageDistortion Tone 0-1. Lower values are darker and thicker; higher values open the DOD 250 style top end."
+   "_static": {
+    "Volume": 0.62
    }
   }
  },
  "Pedal_MetalDistortion": {
   "alloydistortion": {
    "Gain": {
-    "param": "Gain",
+    "param": "Dist",
     "scale": 0.01
    },
    "Tone": {
-    "param": "Tone",
+    "param": "ColorHigh",
     "scale": 0.01,
-    "_hint": "RS Tone 0-100 -> AlloyDistortion Tone 0-1. Lower values emphasize the HM-2 low color; higher values add chainsaw high color."
+    "_hint": "RS Tone 0-100 -> HM-2 ColorHigh 0-1. ColorLow is pinned high to keep the classic low-color chainsaw voice."
+   },
+   "_static": {
+    "ColorLow": 0.82,
+    "Level": 0.62
    }
   },
   "hm-2": {
    "Gain": {
-    "param": "Gain",
+    "param": "Dist",
     "scale": 0.01
    },
    "Tone": {
-    "param": "Tone",
+    "param": "ColorHigh",
     "scale": 0.01,
-    "_hint": "RS Tone 0-100 -> AlloyDistortion Tone 0-1. Lower values emphasize the HM-2 low color; higher values add chainsaw high color."
+    "_hint": "RS Tone 0-100 -> HM-2 ColorHigh 0-1. ColorLow is pinned high to keep the classic low-color chainsaw voice."
+   },
+   "_static": {
+    "ColorLow": 0.82,
+    "Level": 0.62
    }
   }
  },
@@ -2556,20 +2659,25 @@
  },
  "Bass_Pedal_BassDistortion": {
   "bassdistortion": {
+   "_static": {
+    "Volume": 0.62
+   },
    "Gain": {
-    "param": "Gain",
+    "param": "Distortion",
     "scale": 0.01,
     "_hint": "RS Gain 0-100 \u2192 RAT Distortion (drive) 0..1."
    },
    "Tone": {
-    "param": "Tone",
+    "param": "Filter",
     "scale": 0.01,
-    "_hint": "RS Tone 0-100 \u2192 pre-clip brightness 0..1 (grit character)."
+    "invert": true,
+    "_hint": "Legacy RS Tone alias \u2192 RAT Filter. Real RAT has no Tone knob; higher RS brightness maps to a lower real Filter value."
    },
    "Filter": {
     "param": "Filter",
     "scale": 0.01,
-    "_hint": "RS Filter 0-100 \u2192 RAT Filter low-pass 0..1 (dark\u2194bright)."
+    "invert": true,
+    "_hint": "RS Filter 0-100 \u2192 RAT Filter. The real RAT Filter darkens clockwise, so this is inverted to preserve RS bright-at-high values."
    }
   },
   "khs distortion": {
@@ -2618,12 +2726,15 @@
  "Pedal_FuzzWasHe": {
   "bz-1": {
    "Gain": {
-    "param": "Gain",
+    "param": "Fuzz",
     "scale": 0.01
    },
    "Tone": {
     "param": "Tone",
     "scale": 0.01
+   },
+   "_static": {
+    "Volume": 0.62
    }
   },
   "khs distortion": {
@@ -2691,13 +2802,16 @@
  "Pedal_BuzzOne": {
   "super-buzz": {
    "Gain": {
-    "param": "Gain",
+    "param": "Expander",
     "scale": 0.01
    },
    "Tone": {
-    "param": "Tone",
+    "param": "Tone SW",
     "scale": 0.01,
-    "_hint": "Continuous octave-fuzz tone-switch balance: lower is thicker/nasal, higher is brighter and more scooped."
+    "_hint": "RS Tone selects the real Super-Fuzz tone switch: values below 50 choose the darker/nasal mode, values 50+ choose the brighter/scooped mode."
+   },
+   "_static": {
+    "Balance": 0.62
    }
   },
   "khs distortion": {
@@ -2765,8 +2879,11 @@
  },
  "Bass_Pedal_BassFuzz": {
   "bassfuzz": {
+   "_static": {
+    "Volume": 0.62
+   },
    "Gain": {
-    "param": "Gain",
+    "param": "Sustain",
     "scale": 0.01,
     "_hint": "RS Gain (sustain) 0-100 \u2192 Big Muff drive 0..1."
    },
@@ -2776,9 +2893,9 @@
     "_hint": "RS Tone 0-100 \u2192 Big Muff tone stack 0..1 (LP\u2194HP, mid scoop at 0.5)."
    },
    "Filter": {
-    "param": "Filter",
+    "param": "Bass/Dry",
     "scale": 0.01,
-    "_hint": "RS Filter 0-100 \u2192 clean low-end blend 0..1 (the bass-specific dry/bass mix)."
+    "_hint": "RS Filter 0-100 \u2192 Bass Big Muff 3-way Bass/Dry switch: normal/bass-boost/dry, quantized by the VST."
    }
   },
   "khs distortion": {
@@ -4989,50 +5106,58 @@
  "Pedal_ShredZone": {
   "shredzone": {
    "Gain": {
-    "param": "Gain",
+    "param": "Dist",
     "scale": 0.01
    },
    "Bass": {
-    "param": "Bass",
+    "param": "Low",
     "scale": 0.0714285714,
     "offset": 0.5,
-    "_hint": "RS Bass uses roughly -7..+7. Map 0 to the plugin's neutral 0.5."
+    "_hint": "RS Bass uses roughly -7..+7. Map 0 to the MT-2 Low control's neutral 0.5."
    },
    "Mid": {
-    "param": "Mid",
+    "param": "Middle",
     "scale": 0.0714285714,
     "offset": 0.5,
-    "_hint": "RS Mid uses roughly -7..+7. Map 0 to the plugin's neutral 0.5."
+    "_hint": "RS Mid uses roughly -7..+7. Map 0 to the MT-2 Middle control's neutral 0.5; MiddleFreq is pinned."
    },
    "Treble": {
-    "param": "Treble",
+    "param": "High",
     "scale": 0.0714285714,
     "offset": 0.5,
-    "_hint": "RS Treble uses roughly -7..+7. Map 0 to the plugin's neutral 0.5."
+    "_hint": "RS Treble uses roughly -7..+7. Map 0 to the MT-2 High control's neutral 0.5."
+   },
+   "_static": {
+    "MiddleFreq": 0.48,
+    "Level": 0.62
    }
   },
   "mt-2": {
    "Gain": {
-    "param": "Gain",
+    "param": "Dist",
     "scale": 0.01
    },
    "Bass": {
-    "param": "Bass",
+    "param": "Low",
     "scale": 0.0714285714,
     "offset": 0.5,
-    "_hint": "RS Bass uses roughly -7..+7. Map 0 to the plugin's neutral 0.5."
+    "_hint": "RS Bass uses roughly -7..+7. Map 0 to the MT-2 Low control's neutral 0.5."
    },
    "Mid": {
-    "param": "Mid",
+    "param": "Middle",
     "scale": 0.0714285714,
     "offset": 0.5,
-    "_hint": "RS Mid uses roughly -7..+7. Map 0 to the plugin's neutral 0.5."
+    "_hint": "RS Mid uses roughly -7..+7. Map 0 to the MT-2 Middle control's neutral 0.5; MiddleFreq is pinned."
    },
    "Treble": {
-    "param": "Treble",
+    "param": "High",
     "scale": 0.0714285714,
     "offset": 0.5,
-    "_hint": "RS Treble uses roughly -7..+7. Map 0 to the plugin's neutral 0.5."
+    "_hint": "RS Treble uses roughly -7..+7. Map 0 to the MT-2 High control's neutral 0.5."
+   },
+   "_static": {
+    "MiddleFreq": 0.48,
+    "Level": 0.62
    }
   }
  },
@@ -5400,8 +5525,9 @@
    "_hint": "Silla Boogie Duo Rectifier = the FULL 3-channel Dual Rectifier panel. The 5 RS knobs map 1:1 onto the RED channel (the signature high-gain voice); the channel is pinned to RED in MODERN mode with a BOLD (tight silicon) rectifier and Cab Sim via _static. Green/Orange channels sit at their defaults and stay editable by hand.",
    "Gain": {
     "param": "Red Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain -> Red channel Gain (the cascaded high-gain preamp). Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> Red channel Gain (the cascaded high-gain preamp). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Treble": {
     "param": "Red Treble",
@@ -5439,8 +5565,9 @@
    "_hint": "Silla Boogie Mark IIB = the FULL Mesa/Boogie Mark IIB panel (8 knobs + 5 pull-switches, NO graphic EQ). The CA_38 folder/schematic/photos are the Mark II (the gear-map name wrongly said 'Mark IV'). RS exposes only Gain/Bass/Mid/Treble: Gain -> LEAD DRIVE (the cascaded lead distortion), Bass/Mid/Treble -> the scooped Boogie tone stack placed before the gain. _static pins the LEAD channel, masters/volume at musical defaults, reverb + all pulls off, FULL (100W) power and Cab Sim.",
    "Gain": {
     "param": "Lead Drive",
-    "scale": 0.01,
-    "_hint": "RS Gain -> LEAD DRIVE (the cascaded Mark II lead gain). Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> LEAD DRIVE (the cascaded Mark II lead gain). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -5478,8 +5605,9 @@
    "_hint": "Silla Boogie Mark III = the FULL Mesa/Boogie Mark III panel (7 knobs + 5-band graphic EQ + Lead/Bright/EQ-In). RS exposes only Gain/Bass/Mid/Treble: Gain -> LEAD DRIVE (the cascaded lead distortion), Bass/Mid/Treble -> the scooped Boogie tone stack. _static pins the LEAD channel, the GEQ 'V' smile (80/6600 up, 750 down), EQ engaged, Bright off, masters/volume and Cab Sim at musical defaults. The pulls + GEQ faders stay editable on the face.",
    "Gain": {
     "param": "Lead Drive",
-    "scale": 0.01,
-    "_hint": "RS Gain -> LEAD DRIVE (cascaded lead distortion). Higher = more singing Boogie lead gain. Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> LEAD DRIVE (cascaded lead distortion). Higher = more singing Boogie lead gain. Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -5557,8 +5685,9 @@
    "_hint": "BOX AC30 = the FULL Vox AC30C2 panel (modelled from Vox_ac30c2.pdf). The AC30 has no Mid or Bright pot, so those RS knobs are mapped to REAL circuit behaviour: Mid -> Normal-channel Volume with the input jumpered to Both (the classic AC30 channel-jumper fills the Vox mid-scoop), and Bright -> the Top Boost brilliance bright-cap. Gain/Treble/Bass/Pres map straight onto the panel.",
    "Gain": {
     "param": "TB Vol",
-    "scale": 0.01,
-    "_hint": "RS Gain drives the Top-Boost (Brilliant) channel Volume \u2014 the AC30C2's real gain control. Output loudness is held flat across the range by the model's makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain drives the Top-Boost (Brilliant) channel Volume \u2014 the AC30C2's real gain control. Output loudness is held flat across the range by the model's makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Treble": {
     "param": "Treble",
@@ -5746,8 +5875,9 @@
    "_hint": "BENDER DELUXE = the FULL Fender '57 Deluxe 5E3 panel (Tone, Inst Vol, Mic Vol only). On a 5E3 the VOLUME is the gain and there is one Tone control; the famous trick is jumpering the Mic channel for body. So RS Gain -> Inst Vol, Treble -> Tone, Mid -> Mic Vol (jumper). Bright picks the Instrument bright/normal input; Bass + Pres have no 5E3 pot so they drive hidden shelves.",
    "Gain": {
     "param": "Inst Vol",
-    "scale": 0.01,
-    "_hint": "On a 5E3 the Instrument Volume IS the gain \u2014 it cleans up / breaks up as you turn it. RS Gain drives it; loudness is held flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "On a 5E3 the Instrument Volume IS the gain \u2014 it cleans up / breaks up as you turn it. RS Gain drives it; loudness is held flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Treble": {
     "param": "Tone",
@@ -5785,8 +5915,9 @@
    "_hint": "Bender Bassman = the FULL Fender Bassman 5F6-A tweed panel (2 jumperable channels + 6 knobs). The 5F6-A has no gain knob \u2014 the volumes ARE the gain \u2014 so RS Gain drives the Bright Volume into breakup. Treble/Bass/Mid -> the real FMV tone stack, Pres -> Presence. Input pinned to BOTH (jumpered, the signature tone) with Normal Vol as the blend via _static; all editable by hand.",
    "Gain": {
     "param": "Bright Vol",
-    "scale": 0.01,
-    "_hint": "RS Gain -> Bright channel Volume (the 5F6-A breaks up via volume, not a gain knob). Higher = more 5881 power-amp drive / grind. Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> Bright channel Volume (the 5F6-A breaks up via volume, not a gain knob). Higher = more 5881 power-amp drive / grind. Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -5809,10 +5940,10 @@
     "_hint": "RS Pres -> Presence (5K, power-amp NFB) and upper speaker bite."
    },
    "_static": {
-   "Input": 0.5,
-   "Normal Vol": 0.4,
-   "Cab Sim": 1.0,
-   "_note": "Input pinned to BOTH (jumpered Bright+Normal \u2014 the classic 5F6-A tone). Normal Vol at a musical blend so RS Gain (-> Bright Vol) sweeps the breakup over a full summed signal. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Both volumes + the cable stay editable by hand."
+    "Input": 0.5,
+    "Normal Vol": 0.4,
+    "Cab Sim": 1.0,
+    "_note": "Input pinned to BOTH (jumpered Bright+Normal \u2014 the classic 5F6-A tone). Normal Vol at a musical blend so RS Gain (-> Bright Vol) sweeps the breakup over a full summed signal. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Both volumes + the cable stay editable by hand."
    }
   }
  },
@@ -5821,13 +5952,15 @@
    "_hint": "Marsten Plexi = the FULL Marshall 1959 Super Lead panel. The RS amp exposes the two Loudness pots directly (gain_proxy_knobs = Loudness1/Loudness2), NOT a generic Gain \u2014 so they map 1:1: Loudness1 -> HIGH TREBLE/bright channel (Loudness I), Loudness2 -> NORMAL channel (Loudness II). The Loudness pots ARE the gain (non-master amp), so cranking them drives the EL34 grind. Bass/Mid/Treble -> Marshall tone stack (33K slope, 220pF treble cap), Pres -> Presence. Aliases (Middle/Presence/HighTreble/Normal/Gain) are tolerated for whatever the tone actually carries; absent keys are ignored.",
    "Loudness1": {
     "param": "Loudness I",
-    "scale": 0.01,
-    "_hint": "RS Loudness1 -> Loudness I (HIGH TREBLE / bright channel). The plexi breaks up via loudness; higher = more EL34 power-amp grind. Held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Loudness1 -> Loudness I (HIGH TREBLE / bright channel). The plexi breaks up via loudness; higher = more EL34 power-amp grind. Held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Loudness2": {
     "param": "Loudness II",
-    "scale": 0.01,
-    "_hint": "RS Loudness2 -> Loudness II (NORMAL channel). Up = the fuller jumpered plexi voice."
+    "scale": 0.0076,
+    "_hint": "RS Loudness2 -> Loudness II (NORMAL channel). Up = the fuller jumpered plexi voice. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -5861,8 +5994,9 @@
    },
    "Gain": {
     "param": "Loudness I",
-    "scale": 0.01,
-    "_hint": "fallback: if a tone exposes a generic Gain instead of Loudness1, drive Loudness I."
+    "scale": 0.0076,
+    "_hint": "fallback: if a tone exposes a generic Gain instead of Loudness1, drive Loudness I. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "_static": {
     "Input": 0.5,
@@ -5876,8 +6010,9 @@
    "_hint": "Ganddi Superdrive 45 = the Budda Superdrive 45 Series II (the gear map's generic name is 'Vox AC50' but the curated gain_variants are 'Budda Super Drive Clean/Crunch/Lead Modern'). RS Gain -> DRIVE (the hi-gain channel distortion), Bass/Mid/Treble -> Budda tone stack. _static pins Channel = Hi-gain and Modern = ON (the variants were captured Modern); Master/Rhythm/Cab Sim sit at musical defaults. The three pull-pots (Channel/Modern/Brite) stay editable on the face.",
    "Gain": {
     "param": "Drive",
-    "scale": 0.01,
-    "_hint": "RS Gain -> DRIVE (hi-gain channel distortion). Higher = more cascaded 12AX7 grind into the KT66s. Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> DRIVE (hi-gain channel distortion). Higher = more cascaded 12AX7 grind into the KT66s. Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -5910,8 +6045,9 @@
    "_hint": "Lovolt DR504 = the Hiwatt DR504 'Custom 50' (the gear map's generic name is 'Peavey 5150' but the folder + schematic are the Hiwatt DR504). No gain knob, so RS Gain -> BRILLIANT VOL (the brilliant channel volume = the breakup driver). Bass/Mid/Treble -> tone stack, Pres -> Presence. _static pins the input to BOTH (jumpered), Normal Vol, Master Vol and Cab Sim at musical defaults. Switch the input cable / volumes on the face by hand.",
    "Gain": {
     "param": "Brilliant Vol",
-    "scale": 0.01,
-    "_hint": "RS Gain -> BRILLIANT VOL (the bright channel volume; the Hiwatt has no gain knob). Higher = more breakup. Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> BRILLIANT VOL (the bright channel volume; the Hiwatt has no gain knob). Higher = more breakup. Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -5947,8 +6083,9 @@
    "_hint": "Lovolt DR103 = the Hiwatt DR103 'Custom 100' (the 100W sibling of the DR504). No gain knob, so RS Gain -> BRILLIANT VOL (the breakup driver). Bass/Mid/Treble -> tone stack, Pres -> Presence. _static pins the input to BOTH (jumpered = the bridged DR103 voice), Normal Vol, Master Vol and Cab Sim at musical defaults.",
    "Gain": {
     "param": "Brilliant Vol",
-    "scale": 0.01,
-    "_hint": "RS Gain -> BRILLIANT VOL (the bright channel volume; the Hiwatt has no gain knob). Higher = more breakup (the 100W stays clean even longer). Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> BRILLIANT VOL (the bright channel volume; the Hiwatt has no gain knob). Higher = more breakup (the 100W stays clean even longer). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -5984,8 +6121,9 @@
    "_hint": "Marsten VS100 = the Marshall Valvestate VS100RH hybrid head. Three modes (Clean / OD1 crunch / OD2 lead); the OD2 lead is the voice for songs, so RS Gain -> OD2 GAIN (the Valvestate diode-clip lead distortion), Bass/Mid/Treble -> the OD2 tone stack. _static pins the CHANNEL to OD2, OD2 Volume + Contour at musical defaults, reverb/FX off, Cab Sim on, and the Clean/OD1 controls at sensible idles. Switch channel, dial reverb/FX, or reshape Clean/OD1 on the face by hand.",
    "Gain": {
     "param": "OD2 Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain -> OD2 GAIN (the high-gain Valvestate lead). Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> OD2 GAIN (the high-gain Valvestate lead). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "OD2 Bass",
@@ -6025,8 +6163,9 @@
    "_hint": "Unparallel DC30 = the Matchless DC30 (a hand-wired AC30-class amp, NOT a Vox AC30 \u2014 the gear-map name was a wrong placeholder). No gain knob: the channel Volume drives the EL84 breakup. RS Gain -> CH1 VOLUME (the Brilliant channel), Bass/Treble -> the Ch1 VOX top-boost stack. Channel 1 has NO mid control, so RS Mid is not mapped. _static pins the Brilliant channel, the EF86 channel + Tone, Cut, Master and Cab Sim at musical defaults.",
    "Gain": {
     "param": "Ch1 Volume",
-    "scale": 0.01,
-    "_hint": "RS Gain -> CH1 VOLUME (the Brilliant channel volume = the class-A EL84 breakup driver). Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> CH1 VOLUME (the Brilliant channel volume = the class-A EL84 breakup driver). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -6054,8 +6193,9 @@
    "_hint": "Unparallel Chieftain = the Matchless Chieftain Reverb (a clean/crunch boutique EL34 head, NOT a Vox AC15 \u2014 the gear-map name was a wrong placeholder). No gain knob: the Volume drives the preamp into the EL34s. RS Gain -> VOLUME, Bass/Mid/Treble -> the Marshall-style tone stack. _static pins Brilliance (presence), Master, Reverb and Cab Sim.",
    "Gain": {
     "param": "Volume",
-    "scale": 0.01,
-    "_hint": "RS Gain -> VOLUME (drives the preamp into the EL34 power amp). Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> VOLUME (drives the preamp into the EL34 power amp). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -6086,8 +6226,9 @@
    "_hint": "Mr. Y MAZ 38 = Dr. Z Maz 38 (Senior NR). RS Gain -> VOLUME (the preamp/drive), Bass/Mid/Treble -> the Vox-meets-Fender TMB tone stack. _static pins Cut, Master and Cab Sim. No reverb (Senior NR).",
    "Gain": {
     "param": "Volume",
-    "scale": 0.01,
-    "_hint": "RS Gain -> VOLUME (the only preamp/drive control). Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> VOLUME (the only preamp/drive control). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -6117,8 +6258,9 @@
    "_hint": "Mr. Y EMS = Dr. Z EMS, a Marshall JCM800 2204-style master-volume head with a HI/LO gain switch. RS Gain -> GAIN (the JCM800 preamp drive), Bass/Mid/Treble -> Marshall tone stack, Pres -> Presence. _static pins the master Volume, HI gain mode and Cab Sim.",
    "Gain": {
     "param": "Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain -> GAIN (the cascaded JCM800 preamp drive). Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> GAIN (the cascaded JCM800 preamp drive). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -6180,8 +6322,9 @@
    "_hint": "Amp_AT20 is the Ampeg SVT-CL (gear map's generic name 'Marshall JCM 1'). It reuses the SAME bundled amp as Bass_Amp_BT975B \u2014 the Sampleg SBT-CL \u2014 with the identical knob mapping.",
    "Gain": {
     "param": "Gain",
-    "scale": 0.033,
-    "_hint": "RS Gain -> preamp Gain/drive 0..1 (the 12AX7 SVT growl)."
+    "scale": 0.02508,
+    "_hint": "RS Gain -> preamp Gain/drive 0..1 (the 12AX7 SVT growl). RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -6208,8 +6351,9 @@
    "_hint": "Sampleg VH-140C = the Ampeg VH-140C (gear map's generic name 'Marshall JCM 800'). The lead voice is CHANNEL B, so RS Gain -> Channel B Gain (the diode-clip drive), Bass/Mid/Treble -> Channel B Low/Mid/High. _static pins the LEAD channel (B), reverb + chorus OFF (RS adds those), and Channel A at a clean default. All editable on the face.",
    "Gain": {
     "param": "B Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain -> CHANNEL B Gain (the 1N914 diode distortion drive). Higher = tighter, more aggressive. Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> CHANNEL B Gain (the 1N914 diode distortion drive). Higher = tighter, more aggressive. Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "B Low",
@@ -6243,8 +6387,9 @@
    "_hint": "Citrus OR100 = the Orange OR100 (vintage Graphic head). RS Gain -> GAIN (the HF Drive), Bass/Mid/Treble -> the tone stack (Middle = the FAC). _static pins Volume (master), Depth, FULL power and Cab Sim. Dial Volume/Depth/HALF on the face by hand.",
    "Gain": {
     "param": "Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain -> GAIN (HF Drive). Higher = more EL34 grind (the Orange doom chunk). Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> GAIN (HF Drive). Higher = more EL34 grind (the Orange doom chunk). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -6275,8 +6420,9 @@
    "_hint": "Citrus OR50 = the Orange OR50H (the 50W sibling of the OR100, reconstructed from the OR100 schematic). RS Gain -> GAIN, Bass/Mid/Treble -> tone stack (Middle = the FAC). _static pins Volume, Depth, FULL power and Cab Sim.",
    "Gain": {
     "param": "Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain -> GAIN (HF Drive). The 50W breaks up a touch earlier than the OR100. Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> GAIN (HF Drive). The 50W breaks up a touch earlier than the OR100. Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -6760,8 +6906,9 @@
   "citrusbigtremor": {
    "Gain": {
     "param": "Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain 0-100 -> preamp drive 0..1."
+    "scale": 0.0076,
+    "_hint": "RS Gain 0-100 -> preamp drive 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Tone": {
     "param": "Tone",
@@ -6780,8 +6927,9 @@
   "citrusrumbleverb50": {
    "Gain": {
     "param": "Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain 0-100 -> Dirty channel gain 0..1."
+    "scale": 0.0076,
+    "_hint": "RS Gain 0-100 -> Dirty channel gain 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -6815,8 +6963,9 @@
   "epicallcentura": {
    "Gain": {
     "param": "Volume",
-    "scale": 0.01,
-    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1."
+    "scale": 0.0076,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "_static": {
     "Tone": 0.5,
@@ -6831,8 +6980,9 @@
   "epicallcentura": {
    "Gain": {
     "param": "Volume",
-    "scale": 0.01,
-    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1."
+    "scale": 0.0076,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "_static": {
     "Tone": 0.5,
@@ -6847,8 +6997,9 @@
   "epicallcentura": {
    "Gain": {
     "param": "Volume",
-    "scale": 0.01,
-    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1."
+    "scale": 0.0076,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "_static": {
     "Tone": 0.5,
@@ -6863,8 +7014,9 @@
   "epicallruby": {
    "Gain": {
     "param": "Volume",
-    "scale": 0.01,
-    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1."
+    "scale": 0.0076,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -6886,8 +7038,9 @@
   "hipzonga8": {
    "Gain": {
     "param": "Volume",
-    "scale": 0.01,
-    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1."
+    "scale": 0.0076,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -6911,8 +7064,9 @@
   "hipzonga79rvt": {
    "Gain": {
     "param": "Volume",
-    "scale": 0.01,
-    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1."
+    "scale": 0.0076,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -6937,8 +7091,9 @@
   "hipzonga88": {
    "Gain": {
     "param": "Volume",
-    "scale": 0.01,
-    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1."
+    "scale": 0.0076,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -6961,8 +7116,9 @@
    "_hint": "Marsten JCM800 = Marshall JCM800 2204 (50W master-volume). RS Gain -> PREAMP VOL (the 2204 cascaded drive), Bass/Mid/Treble -> Marshall tone stack, Pres -> Presence. _static pins the master Volume.",
    "Gain": {
     "param": "Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain -> PREAMP VOL (the 2204 drive). Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> PREAMP VOL (the 2204 drive). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -6996,8 +7152,9 @@
    "_hint": "Marsten JTM45 = Marshall JTM45 (non-master, like the Plexi). RS Gain -> LOUDNESS 1 (High-Treble channel volume = breakup driver); Bass/Mid/Treble -> Marshall tone stack, Pres -> Presence. _static: Loudness 2 + Input (jumpered).",
    "Gain": {
     "param": "Loudness 1",
-    "scale": 0.01,
-    "_hint": "RS Gain -> LOUDNESS 1 (the breakup driver)."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> LOUDNESS 1 (the breakup driver). RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -7029,8 +7186,9 @@
    "_hint": "Marsten Bluesbreaker = Marshall 1962 (JTM45 + tremolo). RS Gain -> LOUDNESS 1; Bass/Mid/Treble -> stack, Pres -> Presence. _static: Loudness 2, Input jumpered, tremolo OFF (Intensity 0), Cab Sim on until host cab/IR bypass.",
    "Gain": {
     "param": "Loudness 1",
-    "scale": 0.01,
-    "_hint": "RS Gain -> LOUDNESS 1 (breakup driver)."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> LOUDNESS 1 (breakup driver). RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -7063,8 +7221,9 @@
    "_hint": "Marsten DSL15 = Marshall DSL15H (Classic/Ultra). RS Gain -> ULTRA GAIN (channel pinned Ultra); Bass/Mid/Treble -> EQ, Pres -> Presence. _static pins the channel, volumes, Deep/Tone Shift and Cab Sim.",
    "Gain": {
     "param": "Ultra Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain -> ULTRA GAIN (the OD channel drive)."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> ULTRA GAIN (the OD channel drive). RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -7099,8 +7258,9 @@
    "_hint": "Marsten JVM410 = Marshall JVM410H (4-channel). RS Gain -> GAIN; Bass/Mid/Treble -> stack, Pres -> Presence. _static pins Channel=OD1, Mode=orange, Volume/Resonance/Master, Reverb off and Cab Sim on.",
    "Gain": {
     "param": "Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain -> GAIN (the selected channel's drive)."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> GAIN (the selected channel's drive). RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -7135,8 +7295,9 @@
    "_hint": "Engel Fireball = ENGL Fireball 100 (high-gain metal). RS Gain -> LEAD GAIN (channel pinned Lead); Bass/Mid/Treble -> stack, Pres -> Presence. _static pins the Lead channel, masters, switches.",
    "Gain": {
     "param": "Lead Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain -> LEAD GAIN (the high-gain lead drive)."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> LEAD GAIN (the high-gain lead drive). RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -7172,8 +7333,9 @@
    "_hint": "Polystone MiniBrute = Polytone Mini-Brute (solid-state clean jazz combo). RS Gain -> VOLUME (clean level), Bass/Treble -> tone. No Mid control (RS Mid unmapped). _static pins Brite.",
    "Gain": {
     "param": "Volume",
-    "scale": 0.01,
-    "_hint": "RS Gain -> VOLUME (the clean level; this amp stays clean)."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> VOLUME (the clean level; this amp stays clean). RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -7226,8 +7388,9 @@
    "_hint": "Citrus AD50 = the Orange AD50 Custom Shop (50W AB / 30W A). RS Gain -> GAIN, Bass/Treble -> 2-band shelving EQ, Pres -> Presence (power-amp NFB). _static pins Master, Sustain boost OFF and Class AB.",
    "Gain": {
     "param": "Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain -> preamp drive (extra-hot 12AX7 stage). Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> preamp drive (extra-hot 12AX7 stage). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -7263,8 +7426,9 @@
    "_hint": "Citrus Jimmy Bean = the Orange Jimmy Bean JB150 (1975 solid-state twin-channel + tremolo + sustain). RS Gain -> SUSTAIN (solid-state sustain/compressor), Bass/Treble -> Baxandall EQ. _static pins Volume, tremolo OFF, CH1, Bright off.",
    "Gain": {
     "param": "Sustain",
-    "scale": 0.01,
-    "_hint": "RS Gain -> SUSTAIN (solid-state compression/soft-clip). Loudness held ~flat by the makeup."
+    "scale": 0.0076,
+    "_hint": "RS Gain -> SUSTAIN (solid-state compression/soft-clip). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Bass",
@@ -7292,8 +7456,9 @@
    "_hint": "Multiversal 610 = the UA 610-A tube DI/preamp. RS Gain -> Gain (V1 drive); Bass -> Low EQ; Treble -> High EQ. The real 610 has NO mid control, so RS Mid/MidFreq are dropped. _static pins Level, Lo gain, Line input.",
    "Gain": {
     "param": "Gain",
-    "scale": 0.01,
-    "_hint": "RS Gain 0-100 -> V1 12AX7 drive 0..1."
+    "scale": 0.0076,
+    "_hint": "RS Gain 0-100 -> V1 12AX7 drive 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
    },
    "Bass": {
     "param": "Low EQ",

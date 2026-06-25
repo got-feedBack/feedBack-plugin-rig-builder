@@ -171,7 +171,7 @@ class Or100Core
         // the lower-drive Orange/Matamp feel instead of a hot Marshall splitter.
         phaseInverter.setComponents(sampleRate,
                                     0.72f + 1.05f * vol + 0.45f * pushed + 0.30f * halfP,
-                                    0.82f, 320.0f, 47000.0f, 47000.0f, 10000.0f, 18.0f, 0.018f);
+                                    0.82f, 320.0f, 100000.0f, 82000.0f, 10000.0f, 18.0f, 0.045f); // plates 47k/47k -> 100k/82k: 47k/equal landed the LTP on a degenerate op-point (dead output)
         supply.set(sampleRate,
                    18.0f, 100.0f,
                    1000.0f, 50.0f,
@@ -184,8 +184,8 @@ class Or100Core
         // compress more than 6L6 -> the thick Orange midrange grind. The master
         // VOLUME (not gain) cooks the power amp; HALF power -> earlier breakup.
         power.set(sampleRate, 8.5f + 9.0f * vol + 7.0f * pushed + 3.5f * halfP,
-                  -40.0f, 0.07f + 0.04f * halfP, 48.0f, 10500.0f);
-        power.out = 0.010f;
+                  -36.0f, 0.07f + 0.04f * halfP, 48.0f, 10500.0f);
+        power.out = 0.240f; // NOTE: OR100 is a clean/dynamic amp (crest ~25) — caps ~-26 dBFS at peak-match; reaching -16 needs a preamp re-voice (ear-validate), not just level
 
         // ── input / interstage shaping ────────────────────────────────────────
         inputHp.setHighPass(sampleRate, 42.0f + 40.0f * g, 0.70f);
@@ -337,7 +337,8 @@ public:
             + 0.009f * std::fabs((depth - 0.5f) * 14.0f);
         const float level = (0.62f + 0.12f * (1.0f - gain)) /
             ((1.0f + 0.30f * smoothstep(volume) + 0.20f * pushed) * toneEnergy);
-        return y * level;
+        const float highGainTrim = 1.0f - 0.45f * pushed;
+        return softClip(y * level) * (0.97f * highGainTrim);
     }
 };
 

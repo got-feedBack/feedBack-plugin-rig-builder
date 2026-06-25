@@ -401,8 +401,8 @@ protected:
             osR.upsample(inR[i], ubR);
             for (int k = 0; k < kOS; ++k)
             {
-                ubL[k] = rbAmpLvl(1.25f * left.process(ubL[k]));
-                ubR[k] = rbAmpLvl(1.25f * right.process(ubR[k]));
+                ubL[k] = rbAmpLvl(0.62f * left.process(ubL[k]));
+                ubR[k] = rbAmpLvl(0.62f * right.process(ubR[k]));
             }
             outL[i] = osL.downsample(ubL);
             outR[i] = osR.downsample(ubR);

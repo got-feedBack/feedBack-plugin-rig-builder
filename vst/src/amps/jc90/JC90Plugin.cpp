@@ -33,7 +33,6 @@ static constexpr float kPi = 3.14159265359f;
 
 static inline float clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
 static inline float clampFreq(float hz, float sr) { return std::fmax(20.0f, std::fmin(hz, sr * 0.45f)); }
-static inline float softClip(float x) { return std::tanh(x); }
 static inline float eqDb(float v, float rangeDb) { return (clamp01(v) - 0.5f) * 2.0f * rangeDb; }
 
 class Biquad
@@ -414,8 +413,8 @@ protected:
         {
             float oL, oR;
             core.process(3.2f * inL[i], 3.2f * inR[i], oL, oR);
-            outL[i] = rbAmpLvl(0.161f * oL);
-            outR[i] = rbAmpLvl(0.161f * oR);
+            outL[i] = rbAmpLvl(0.110f * oL);
+            outR[i] = rbAmpLvl(0.110f * oR);
         }
     }
 

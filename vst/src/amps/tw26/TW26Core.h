@@ -22,6 +22,7 @@ namespace tw26 {
 
 static constexpr float kPi = 3.14159265358979f;
 static inline float clamp01(float v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+static inline float softClip(float x) { return std::tanh(x); }
 
 // RBJ biquad (peaking / shelves / low-pass), denormal-flushed.
 struct Biquad {
@@ -91,14 +92,17 @@ struct TW26Core {
         micPot  = rbtube::PotTaper::audio(pMic,  1.28f);
         tonePot = rbtube::PotTaper::audio(pTone, 1.18f);
         inScale = 3.25f;
-        preGain = 0.75f + 11.0f * instPot + 5.4f * micPot;
-        gainOut = 0.82f + 1.65f * instPot + 0.45f * micPot;
+        // 5E3 Volume pots are post-V1 attenuators feeding V2. Do not also
+        // multiply the V2/PI drive by the pot, or low settings disappear and
+        // high settings overcharge the coupling caps.
+        preGain = 4.6f;
+        gainOut = 1.20f;
 
         // 0.1uF coupling caps into ~1M grid leaks in the 5E3 preamp path; 0.022uF
         // into the cathodyne grid. Positive-grid drive now charges/recover caps
         // instead of passing through ideal HPFs.
-        coupleToV2.set(sr, 1000000.0f, 100.0e-9f, 68000.0f, 0.11f, 0.58f, 1.65f);
-        coupleToPi.set(sr, 1000000.0f, 22.0e-9f, 220000.0f, 0.13f, 0.52f, 1.45f);
+        coupleToV2.set(sr, 1000000.0f, 100.0e-9f, 68000.0f, 0.30f, 0.07f, 0.24f);
+        coupleToPi.set(sr, 1000000.0f, 22.0e-9f, 220000.0f, 0.30f, 0.07f, 0.22f);
         phaseInverter.set(sr, 0.95f + 2.85f * instPot + 0.70f * micPot,
                           0.92f, 250.0f, 56000.0f, 56000.0f, 2.3f, 0.0f);
 
@@ -144,9 +148,12 @@ struct TW26Core {
         // hold ~constant RMS across the InstVol sweep — the tweed Volume IS the gain,
         // so without this it swings ~24 dB). Anchored ~0 dB at Vol 0.5; applied after
         // all distortion so it's pure volume (no tone/crest change).
-        float gcDb = 18.785f - 72.971f * pInst + 42.864f * pInst * pInst; // re-fit: hold ~-16 dBFS flat (old poly was INVERTED: louder at low gain)
-        if (gcDb > 18.0f) gcDb = 18.0f; else if (gcDb < -14.0f) gcDb = -14.0f;
-        return x * outLevel * std::pow(10.0f, 0.05f * gcDb);
+        // Keep only mild makeup. A real 5E3 gets louder as Volume rises; forcing
+        // low-volume cleans up to the same RMS slams the output safety stage and
+        // makes the "clean" setting sound broken.
+        float gcDb = 2.0f - 6.0f * pInst;
+        if (gcDb > 4.0f) gcDb = 4.0f; else if (gcDb < -8.0f) gcDb = -8.0f;
+        return softClip(x * outLevel * std::pow(10.0f, 0.05f * gcDb)) * 0.82f;
     }
 };
 

@@ -340,9 +340,13 @@ class TW40Core
         // Input cable: Bright(<0.25) / Both(jumpered, 0.25-0.75) / Normal(>=0.75)
         brightG = (input < 0.75f) ? 1.0f : 0.0f;
         normalG = (input >= 0.25f) ? 1.0f : 0.0f;
-        // Overall drive: the volumes ARE the gain (5F6-A has no gain knob). Both
-        // channels jumpered sum, so the amp is driven harder.
-        effDrive = clamp01(brightG * brightVol + normalG * normalVol * 0.85f);
+        // Overall drive: in a 5F6-A the Volume pots are AFTER the 12AY7 input
+        // triodes. They attenuate the V1 outputs before the mixer/recovery grid;
+        // they do not change the guitar level hitting V1. Keep a small floor for
+        // Rocksmith clean tones, but apply it only once at the real volume node.
+        const float brightVolPos = 0.22f + 0.78f * smoothstep(brightVol);
+        const float normalVolPos = 0.22f + 0.78f * smoothstep(normalVol);
+        effDrive = clamp01(brightG * brightVolPos + normalG * normalVolPos * 0.85f);
 
         const float g = smoothstep(effDrive);
         const float pushed = smoothstepRange(0.42f, 0.92f, effDrive);
@@ -354,17 +358,17 @@ class TW40Core
         brightMiller.set(sampleRate, 68000.0f, 24.0f, 8.0f);            // 5F6-A input stopper + 12AY7 Miller
         normalMiller.set(sampleRate, 68000.0f, 24.0f, 8.0f);
         recoveryMiller.set(sampleRate, 180000.0f, 52.0f, 8.0f);         // mixed volume source + 12AX7 Miller
-        coupleToRecovery.set(sampleRate, 1000000.0f, 22.0e-9f, 68000.0f, 0.12f, 0.45f, 1.15f);
-        coupleToPi.set(sampleRate, 1000000.0f, 100.0e-9f, 220000.0f, 0.13f, 0.44f, 1.20f);
-        phaseInverter.setMarshall(sampleRate, 0.95f + 2.85f * effDrive + 1.15f * pushed, 0.88f);
+        coupleToRecovery.set(sampleRate, 1000000.0f, 22.0e-9f, 68000.0f, 0.30f, 0.06f, 0.18f);
+        coupleToPi.set(sampleRate, 1000000.0f, 100.0e-9f, 220000.0f, 0.30f, 0.06f, 0.20f);
+        phaseInverter.setMarshall(sampleRate, 0.88f + 2.20f * effDrive + 0.75f * pushed, 0.88f);
         // 5F6-A GZ34 supply: rectifier reservoir -> choke/screen node -> preamp
         // dropping resistor. Bassman is stiffer than 5E3 but still breathes when loud.
         supply.set(sampleRate, 115.0f, 20.0f, 800.0f, 20.0f, 10000.0f, 20.0f,
                    0.18f + 0.05f * pushed, 0.11f + 0.04f * pushed,
                    0.055f + 0.020f * pushed, 0.18f);
-        // 2x 5881 push-pull, FIXED bias (cold class-AB ~-45V), GZ34 = moderate sag,
-        // NFB approximated by the presence shelf. Loud/tight with headroom (vs the 5E3).
-        power.set(sampleRate, 2.2f + 6.8f * effDrive + 8.5f * pushed, -45.0f, 0.18f, 45.0f, 11000.0f);
+        // 2x 5881 push-pull, fixed bias. -45V was too cold for this Koren 5881
+        // table: clean notes fell below conduction and breakup crossed over harshly.
+        power.set(sampleRate, 2.8f + 5.0f * effDrive + 3.8f * pushed, -38.0f, 0.18f, 45.0f, 11000.0f);
         power.out = 0.010f;
 
         // The 100pF bright cap bleeds treble most at LOW Bright Volume; plus base
@@ -406,16 +410,16 @@ class TW40Core
                                  0.8f + 1.9f * mid - 0.7f * pushed);
         // Upper-mid presence ("bite", 2-3 kHz), only gently eased when cranked.
         speakerBite.setPeaking(sampleRate, 2650.0f + 520.0f * treble, 0.78f,
-                               9.2f + 2.2f * treble + 1.6f * pres - 7.4f * pushed);
+                               6.2f + 1.6f * treble + 1.2f * pres - 5.4f * pushed);
         // Air high-shelf (replaces the old fizz NOTCH): lifts the open-tweed top. The
         // 5F6-A "cranked" is a loud clean/edge amp (not a fizz monster), so the
         // gain-dependent retreat is GENTLE -- it stays bright even jumpered/loud.
         speakerAir.setHighShelf(sampleRate, 4600.0f, 0.70f,
-                                18.5f + 2.0f * treble + 2.0f * pres - 16.5f * pushed);
+                                8.2f + 1.4f * treble + 1.2f * pres - 7.0f * pushed);
         // Speaker LP opened WAY up (was ~6.2k = "apagado") so the cab is bright like a
         // miked 4x10; only eases a touch under heavy drive.
-        speakerLp.setLowPass(sampleRate, 18500.0f + 2200.0f * treble + 1400.0f * pres
-                                         - 8500.0f * pushed, 0.66f);
+        speakerLp.setLowPass(sampleRate, 15000.0f + 1600.0f * treble + 1000.0f * pres
+                                         - 6200.0f * pushed, 0.66f);
     }
 
 public:
@@ -476,20 +480,24 @@ public:
         x = pickupLoad.process(x);
         x = softClip(x * (1.04f + 0.08f * pushed)) * (0.96f - 0.04f * pushed);
 
-        // BRIGHT channel: bright cap + body, its own REAL 12AY7, driven by Bright Vol.
+        // BRIGHT/NORMAL V1 grids are fixed-gain 12AY7 inputs. The Volume pots are
+        // applied after these triodes, exactly like the Bassman schematic.
+        const float brightVolPos = 0.22f + 0.78f * smoothstep(brightVol);
+        const float normalVolPos = 0.22f + 0.78f * smoothstep(normalVol);
+
         float bch = brightShelf.process(brightBody.process(x));
-        bch = brightTube.process(brightMiller.process(bch) * (1.8f + 11.0f * brightVol) * bplus.preamp);
-        // NORMAL channel: darker body, its own REAL 12AY7, driven by Normal Vol.
+        bch = brightTube.process(brightMiller.process(bch) * 4.80f * bplus.preamp);
+        // NORMAL channel: darker body, its own REAL 12AY7.
         float nch = normalBody.process(x);
-        nch = normalTube.process(normalMiller.process(nch) * (1.6f + 9.0f * normalVol) * bplus.preamp);
+        nch = normalTube.process(normalMiller.process(nch) * 4.30f * bplus.preamp);
 
         // Jumpered mix: each channel scaled by its Volume and gated by the cable.
-        float y = brightG * brightVol * bch + normalG * normalVol * 0.92f * nch;
+        float y = brightG * brightVolPos * bch + normalG * normalVolPos * 0.92f * nch;
 
         // 12AX7 recovery into the FMV tone stack (REAL).
         y = interstageHp.process(y);
-        y = coupleToRecovery.process(y, 1.0f + 3.9f * effDrive);
-        y = recoveryTube.process(recoveryMiller.process(y) * bplus.preamp);
+        y = coupleToRecovery.process(y, 2.0f + 3.6f * effDrive);
+        y = recoveryTube.process(recoveryMiller.process(y) * (1.4f + 1.2f * effDrive) * bplus.preamp);
         y = cathodeFollowerLp.process(y);
 
         y = toneStack.process(y) * 1.70f;
@@ -516,22 +524,20 @@ public:
         cab = speakerLp.process(cab);
         y = ampOnly + cabSim * (cab - ampOnly);
 
-        // Loudness normalization: the volumes-as-gain means a low-volume setting
-        // is much quieter than a cranked one. cleanMakeup lifts the quiet end so
-        // the RS Gain (-> Bright Volume) sweep stays within a couple dB and the
-        // single shared kLvl stage stays calibrated.
+        // Loudness normalization: post-circuit only. Do not use exponential clean
+        // makeup here; that pushes low-gain cleans into the output limiter and
+        // makes overdrive sound broken instead of tube-compressed.
         const float toneEnergy = 1.0f
             + 0.011f * std::fabs((bass - 0.5f) * 15.0f)
             + 0.012f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.012f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.010f * std::fabs((pres - 0.5f) * 16.0f);
-        const float cleanMakeup = 1.0f + 3.0f * std::exp(-effDrive / 0.30f);
-        const float level = (0.72f + 0.14f * (1.0f - effDrive)) * cleanMakeup /
-            ((1.0f + 0.28f * effDrive + 0.32f * pushed) * toneEnergy);
+        const float level = (0.64f + 0.10f * (1.0f - effDrive)) /
+            ((1.0f + 0.22f * effDrive + 0.20f * pushed) * toneEnergy);
         // loudness flattening vs the Bright Volume/gain (clean post-output makeup; ~0 dB at 0.5)
         float gcDb = 6.477f - 17.069f * brightVol + 8.125f * brightVol * brightVol;
-        if (gcDb > 20.0f) gcDb = 20.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
-        return softClip(y * level) * 0.97f * std::pow(10.0f, 0.05f * gcDb);
+        if (gcDb > 12.0f) gcDb = 12.0f; else if (gcDb < -9.0f) gcDb = -9.0f;
+        return softClip(y * level * std::pow(10.0f, 0.05f * gcDb)) * 0.97f;
     }
 };
 

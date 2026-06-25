@@ -286,10 +286,10 @@ class Jtm45Core
         // where a cranked JTM45 starts to "bloom": the caps recover after grid
         // current instead of acting like a static high-pass.
         brightCoupleToRecovery.set(sampleRate, 1000000.0f, 22.0e-9f, 270000.0f,
-                                   0.16f, 0.42f, 1.10f);
+                                   0.30f, 0.06f, 0.18f);
         normalCoupleToRecovery.set(sampleRate, 1000000.0f, 22.0e-9f, 270000.0f,
-                                   0.14f, 0.38f, 0.95f);
-        coupleToPi.set(sampleRate, 1000000.0f, 22.0e-9f, 100000.0f, 0.18f, 0.35f, 0.90f);
+                                   0.30f, 0.05f, 0.16f);
+        coupleToPi.set(sampleRate, 1000000.0f, 22.0e-9f, 100000.0f, 0.30f, 0.06f, 0.22f);
         phaseInverter.setMarshall(sampleRate, 0.95f + 1.50f * effDrive + 0.75f * pushed, 0.88f);
         supply.set(sampleRate,
                    115.0f, 32.0f,          // GZ34 + reservoir
@@ -303,7 +303,7 @@ class Jtm45Core
         // (less-negative bias) + earlier breakup than the later EL34 Plexi.
         // GZ34 sag is modelled in the B+ nodes above; local power sag stays moderate.
         // NFB is approximated by the presence shelf.
-        power.set(sampleRate, 6.8f + 8.5f * effDrive + 9.0f * pushed, -45.0f, 0.24f, 48.0f, 11200.0f);
+        power.set(sampleRate, 6.2f + 8.0f * effDrive + 7.8f * pushed, -38.0f, 0.24f, 48.0f, 11200.0f);
         power.out = 0.0100f;
 
         inputHp.setHighPass(sampleRate, 42.0f + 52.0f * g + 28.0f * pushed, 0.70f);
@@ -380,8 +380,8 @@ public:
             case kBass:      bass = v; break;
             case kMiddle:    mid = v; break;
             case kTreble:    treble = v; break;
-            case kLoudness1: loud1 = v; break;
-            case kLoudness2: loud2 = v; break;
+            case kLoudness1: loud1 = std::fmax(0.26f, v); break;
+            case kLoudness2: loud2 = std::fmax(0.24f, v); break;
             case kInput:     input = v; break;
             case kCabSim:    cabSim = v; break;
             default: break;
@@ -405,23 +405,25 @@ public:
         x = softClip(x * (1.05f + 0.10f * pushed)) * (0.95f - 0.04f * pushed);
 
         // HIGH TREBLE (bright) channel: 500pF bright cap + body, REAL 12AX7.
+        // Loudness sits after V1, so V1 grid drive is fixed.
         float bch = brightCapShelf.process(brightBody.process(x));
-        bch = brightTube.process(brightMiller.process(bch) * (3.4f + 3.4f * loud1) * bplus.preamp);
-        bch = brightCoupleToRecovery.process(bch, 0.70f + 2.8f * loud1);
+        bch = brightTube.process(brightMiller.process(bch) * 4.60f * bplus.preamp);
+        bch = brightCoupleToRecovery.process(bch * loud1, 0.82f + 2.45f * loud1);
         // NORMAL channel: darker body, REAL 12AX7.
         float nch = normalBody.process(x);
-        nch = normalTube.process(normalMiller.process(nch) * (2.8f + 3.0f * loud2) * bplus.preamp);
-        nch = normalCoupleToRecovery.process(nch, 0.62f + 2.3f * loud2);
+        nch = normalTube.process(normalMiller.process(nch) * 4.00f * bplus.preamp);
+        nch = normalCoupleToRecovery.process(nch * loud2, 0.72f + 2.05f * loud2);
 
-        // Jumpered mix: each channel scaled by its Loudness pot, gated by the cable.
-        float y = brightG * loud1 * bch + normalG * loud2 * 0.92f * nch;
+        // Jumpered mix: channel outputs are already scaled by their Loudness pots
+        // before the coupling/grid-leak state.
+        float y = brightG * bch + normalG * 0.92f * nch;
 
         // V2a 12AX7 recovery / V2b cathode follower into the tone stack — REAL.
         y = interstageHp.process(y);
-        y = recoveryTube.process(recoveryMiller.process(y) * (2.6f + 2.2f * effDrive) * bplus.preamp);
+        y = recoveryTube.process(recoveryMiller.process(y) * (10.5f + 2.0f * effDrive) * bplus.preamp);
         y = cathodeFollowerLp.process(y);
 
-        y = toneStack.process(y) * 1.70f;
+        y = toneStack.process(y) * 2.25f;
         y = stackMakeupLow.process(y);
         y = stackMakeupBody.process(y);
         y = phaseLowPass.process(y);
@@ -454,7 +456,8 @@ public:
             + 0.012f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.012f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.010f * std::fabs((pres - 0.5f) * 16.0f);
-        const float level = (0.585f + 0.15f * (1.0f - effDrive)) /
+        const float cleanPotLift = 1.0f + 3.2f * (1.0f - smoothstepRange(0.28f, 0.58f, loud1));
+        const float level = cleanPotLift * (0.74f + 0.16f * (1.0f - effDrive)) /
             ((1.0f + 0.30f * effDrive + 0.16f * pushed) * toneEnergy);
         // Final OT clip: drive harder as the amp is cranked so a cranked JTM45
         // genuinely squashes its peaks (crest collapses) like the OT/rectifier do.
@@ -544,10 +547,10 @@ protected:
         {
             float ub[kOS];
             osL.upsample(3.2f * inL[i], ub);
-            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.158f * left.process(ub[k]));
+            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.450f * left.process(ub[k]));
             outL[i] = osL.downsample(ub);
             osR.upsample(3.2f * inR[i], ub);
-            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.158f * right.process(ub[k]));
+            for (int k = 0; k < kOS; ++k) ub[k] = rbAmpLvl(0.450f * right.process(ub[k]));
             outR[i] = osR.downsample(ub);
         }
     }

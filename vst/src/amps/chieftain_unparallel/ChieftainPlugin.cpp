@@ -104,7 +104,7 @@ protected:
         for (uint32_t i = 0; i < frames; ++i)
         {
             float ub[kOS];
-            os.upsample(3.2f * in0[i], ub);
+            os.upsample(2.35f * in0[i], ub);
             for (int k = 0; k < kOS; ++k)                  // core + output soft-clip at 2x
                 ub[k] = rbAmpLvl(0.560f * core.process(ub[k]));
             const float y = os.downsample(ub);

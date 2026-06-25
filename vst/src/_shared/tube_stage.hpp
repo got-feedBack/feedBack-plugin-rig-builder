@@ -55,82 +55,104 @@ static inline float switchBlend(float v, float center = 0.5f, float width = 0.08
 // PowerAmpPP template serves every amp. Add an amp's tubes here (generate the table
 // in gx_tube.py first). ftube/ranode are the generated lookups (namespace rbtube).
 struct Tube12AX7 {
+    static constexpr float vmin = AX7_VMIN;
+    static constexpr float vmax = AX7_VMAX;
     static constexpr float cGridCathodePf = 1.6f;
     static constexpr float cGridPlatePf = 1.7f;
     static inline float ftube(int t,float v){return AX7_ftube(t,v);}
     static inline float ranode(int t,float v){return AX7_ranode(t,v);}
 };
 struct Tube12AY7 {
+    static constexpr float vmin = AY7_VMIN;
+    static constexpr float vmax = AY7_VMAX;
     static constexpr float cGridCathodePf = 1.3f;
     static constexpr float cGridPlatePf = 1.3f;
     static inline float ftube(int t,float v){return AY7_ftube(t,v);}
     static inline float ranode(int t,float v){return AY7_ranode(t,v);}
 };
 struct Tube12AT7 {
+    static constexpr float vmin = AT7_VMIN;
+    static constexpr float vmax = AT7_VMAX;
     static constexpr float cGridCathodePf = 2.2f;  // input G to (H+K), Tung-Sol 12AT7.pdf
     static constexpr float cGridPlatePf = 1.5f;    // G to P, Tung-Sol 12AT7.pdf
     static inline float ftube(int t,float v){return AT7_ftube(t,v);}
     static inline float ranode(int t,float v){return AT7_ranode(t,v);}
 };
 struct Tube6EU7 {
+    static constexpr float vmin = EU7_VMIN;
+    static constexpr float vmax = EU7_VMAX;
     static constexpr float cGridCathodePf = 1.6f;  // input G to (H+K), RCA 6EU7.pdf
     static constexpr float cGridPlatePf = 1.5f;    // G to P, RCA 6EU7.pdf
     static inline float ftube(int t,float v){return EU7_ftube(t,v);}
     static inline float ranode(int t,float v){return EU7_ranode(t,v);}
 };
 struct Tube6SL7 {
+    static constexpr float vmin = SL7_VMIN;
+    static constexpr float vmax = SL7_VMAX;
     static constexpr float cGridCathodePf = 3.2f;  // average of both sections, RCA 6SL7GT.pdf
     static constexpr float cGridPlatePf = 2.8f;    // G to P, RCA 6SL7GT.pdf
     static inline float ftube(int t,float v){return SL7_ftube(t,v);}
     static inline float ranode(int t,float v){return SL7_ranode(t,v);}
 };
 struct Tube6SF5 {
+    static constexpr float vmin = SF5_VMIN;
+    static constexpr float vmax = SF5_VMAX;
     static constexpr float cGridCathodePf = 2.0f;  // conservative high-mu triode input C
     static constexpr float cGridPlatePf = 1.6f;    // conservative 12AX7-family Cgp
     static inline float ftube(int t,float v){return SF5_ftube(t,v);}
     static inline float ranode(int t,float v){return SF5_ranode(t,v);}
 };
 struct Tube12AU7 {
+    static constexpr float vmin = AU7_VMIN;
+    static constexpr float vmax = AU7_VMAX;
     static constexpr float cGridCathodePf = 1.6f;  // G to K, Brimar 12AU7.pdf
     static constexpr float cGridPlatePf = 1.5f;    // G to A, Brimar 12AU7.pdf
     static inline float ftube(int t,float v){return AU7_ftube(t,v);}
     static inline float ranode(int t,float v){return AU7_ranode(t,v);}
 };
 struct Tube7199T {
+    static constexpr float vmin = N99T_VMIN;
+    static constexpr float vmax = N99T_VMAX;
     static constexpr float cGridCathodePf = 2.3f;  // triode input G to H+K, Sylvania 7199.pdf
     static constexpr float cGridPlatePf = 2.0f;    // triode G to P, Sylvania 7199.pdf
     static inline float ftube(int t,float v){return N99T_ftube(t,v);}
     static inline float ranode(int t,float v){return N99T_ranode(t,v);}
 };
 struct TubeEF86 {
+    static constexpr float vmin = EF86_VMIN;
+    static constexpr float vmax = EF86_VMAX;
     static constexpr float cGridCathodePf = 3.8f;   // Cg1(all except anode), EF86.pdf
     static constexpr float cGridPlatePf = 0.05f;    // Cag1 max, EF86.pdf
     static inline float ftube(int t,float v){return EF86_ftube(t,v);}
     static inline float ranode(int t,float v){return EF86_ranode(t,v);}
 };
 struct Tube5879 {
+    static constexpr float vmin = N5879_VMIN;
+    static constexpr float vmax = N5879_VMAX;
     static constexpr float cGridCathodePf = 2.7f;   // input capacitance, RCA 5879.pdf
     static constexpr float cGridPlatePf = 0.11f;    // G1 to plate max, RCA 5879.pdf
     static inline float ftube(int t,float v){return N5879_ftube(t,v);}
     static inline float ranode(int t,float v){return N5879_ranode(t,v);}
 };
 struct Tube7199P {
+    static constexpr float vmin = N99P_VMIN;
+    static constexpr float vmax = N99P_VMAX;
     static constexpr float cGridCathodePf = 5.0f;   // pentode input capacitance, Sylvania 7199.pdf
     static constexpr float cGridPlatePf = 0.06f;    // G1 to plate max, Sylvania 7199.pdf
     static inline float ftube(int t,float v){return N99P_ftube(t,v);}
     static inline float ranode(int t,float v){return N99P_ranode(t,v);}
 };
-struct TubeEL84  { static inline float ftube(int t,float v){return EL84_ftube(t,v);} };
-struct Tube6BM8  { static inline float ftube(int t,float v){return BM8_ftube(t,v);} };
-struct Tube6V6   { static inline float ftube(int t,float v){return V6_ftube(t,v);} };
-struct Tube6L6   { static inline float ftube(int t,float v){return L6_ftube(t,v);} };
-struct Tube6L6G  { static inline float ftube(int t,float v){return L6G_ftube(t,v);} };
-struct Tube5881  { static inline float ftube(int t,float v){return T5881_ftube(t,v);} };
-struct Tube6L6GC { static inline float ftube(int t,float v){return L6GC_ftube(t,v);} };
-struct TubeKT66  { static inline float ftube(int t,float v){return KT66_ftube(t,v);} };
-struct TubeEL34  { static inline float ftube(int t,float v){return EL34P_ftube(t,v);} };
-struct Tube6550  { static inline float ftube(int t,float v){return T6550_ftube(t,v);} };
-struct TubeKT88  { static inline float ftube(int t,float v){return TKT88_ftube(t,v);} };
+struct TubeEL84  { static constexpr float vmin = EL84_VMIN;  static constexpr float vmax = EL84_VMAX;  static inline float ftube(int t,float v){return EL84_ftube(t,v);} };
+struct Tube6BM8  { static constexpr float vmin = BM8_VMIN;   static constexpr float vmax = BM8_VMAX;   static inline float ftube(int t,float v){return BM8_ftube(t,v);} };
+struct Tube6V6   { static constexpr float vmin = V6_VMIN;    static constexpr float vmax = V6_VMAX;    static inline float ftube(int t,float v){return V6_ftube(t,v);} };
+struct Tube6L6   { static constexpr float vmin = L6_VMIN;    static constexpr float vmax = L6_VMAX;    static inline float ftube(int t,float v){return L6_ftube(t,v);} };
+struct Tube6L6G  { static constexpr float vmin = L6G_VMIN;   static constexpr float vmax = L6G_VMAX;   static inline float ftube(int t,float v){return L6G_ftube(t,v);} };
+struct Tube5881  { static constexpr float vmin = T5881_VMIN; static constexpr float vmax = T5881_VMAX; static inline float ftube(int t,float v){return T5881_ftube(t,v);} };
+struct Tube6L6GC { static constexpr float vmin = L6GC_VMIN;  static constexpr float vmax = L6GC_VMAX;  static inline float ftube(int t,float v){return L6GC_ftube(t,v);} };
+struct TubeKT66  { static constexpr float vmin = KT66_VMIN;  static constexpr float vmax = KT66_VMAX;  static inline float ftube(int t,float v){return KT66_ftube(t,v);} };
+struct TubeEL34  { static constexpr float vmin = EL34P_VMIN; static constexpr float vmax = EL34P_VMAX; static inline float ftube(int t,float v){return EL34P_ftube(t,v);} };
+struct Tube6550  { static constexpr float vmin = T6550_VMIN; static constexpr float vmax = T6550_VMAX; static inline float ftube(int t,float v){return T6550_ftube(t,v);} };
+struct TubeKT88  { static constexpr float vmin = TKT88_VMIN; static constexpr float vmax = TKT88_VMAX; static inline float ftube(int t,float v){return TKT88_ftube(t,v);} };
 
 // one-pole low-pass (anti-alias / Miller / cathode-bypass / coupling rolloff)
 struct LP1 {
@@ -185,6 +207,7 @@ struct CouplingCapGridLeak {
         }
         if (charge < 0.0f) charge = 0.0f;
         if (charge > maxShift) charge = maxShift;
+
         return dn(y - charge);
     }
 
@@ -442,10 +465,18 @@ struct TubeStageT {
     void set(float sr, int Ri_tab, float vplusV, float dividerV, float fckHz, float RkV) {
         setWithPlate(sr, Ri_tab, vplusV, dividerV, fckHz, RkV, 100000.0f);
     }
+    static inline float softTableLimit(float v) {
+        const float knee = 0.35f;
+        const float lo = TUBE::vmin + 0.08f;
+        const float hi = TUBE::vmax - 0.08f;
+        if (v > hi - knee) return (hi - knee) + knee * std::tanh((v - (hi - knee)) / knee);
+        if (v < lo + knee) return (lo + knee) + knee * std::tanh((v - (lo + knee)) / knee);
+        return v;
+    }
     inline float process(float x) {           // x = grid signal in volts
         x = antiAlias.process(x);
         float u = x + vk;                     // grid + cathode auto-bias feedback (signed)
-        float s = TUBE::ftube(tab, u - Vk0) + (VkC - vplus);   // recentered plate voltage
+        float s = TUBE::ftube(tab, softTableLimit(u - Vk0)) + (VkC - vplus);   // recentered plate voltage
         vk = cathodeLP.process(s * kFb);      // next-sample cathode feedback (Ck-filtered)
         return dcBlock.process(s / divider);  // scale plate volts back down to signal
     }
@@ -670,14 +701,32 @@ struct PowerAmpPPT {
         rel = 1.0f - std::exp(-1.0f / (0.130f * sr));
         drive = driveV; bias = biasV; sagDepth = sagDepthV;
     }
+    static inline float softTableLimit(float v) {
+        const float knee = 1.5f;
+        const float lo = TUBE::vmin + 0.35f;
+        const float hi = TUBE::vmax - 0.35f;
+        if (v > hi - knee) return (hi - knee) + knee * std::tanh((v - (hi - knee)) / knee);
+        if (v < lo + knee) return (lo + knee) + knee * std::tanh((v - (lo + knee)) / knee);
+        return v;
+    }
     inline float process(float x) {
-        float e = std::fabs(x);
+        // Treat the power tube drive as load current, not as an unbounded sag
+        // command. The old absolute-value target let high-gain preamps collapse
+        // the virtual supply into a gated/cut-off sound. This keeps the same
+        // pick-responsive compression but bounds it like the newer B+ node model.
+        const float absX = std::fabs(x);
+        float e = absX / (1.0f + absX);
         sag += (e - sag) * (e > sag ? atk : rel);
         float s = 1.0f / (1.0f + sagDepth * sag);    // supply sag -> compression
         float b = bias - biasShift * sag * s;         // cathode bias drifts negative (class-A->AB)
         float xb = x * drive * s;
+        // Smooth the drive into the generated Koren table. The table lookup itself
+        // clamps at the datasheet grid-voltage range; hitting that hard edge makes
+        // audible sample-to-sample jumps on hot low-gain transients.
+        const float vp = softTableLimit(b + xb);
+        const float vn = softTableLimit(b - xb);
         // push-pull: two power tubes anti-phase, OT sums the differential plate voltage
-        float y = TUBE::ftube(0, b + xb) - TUBE::ftube(0, b - xb);
+        float y = TUBE::ftube(0, vp) - TUBE::ftube(0, vn);
         y = otLP.process(otHP.process(y));
         return dn(y * out * s);
     }

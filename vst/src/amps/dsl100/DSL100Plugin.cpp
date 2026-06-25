@@ -555,11 +555,9 @@ public:
             + 0.013f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.011f * std::fabs((presence - 0.5f) * 16.0f)
             + 0.010f * std::fabs((resonance - 0.5f) * 16.0f);
-        // The clean / low-gain region barely saturates, so without help it sits
-        // ~14 dB below the cranked Ultra voice. cleanMakeup lifts it so the whole
-        // RS Gain sweep stays within a couple dB (one kLvl calibration fits all).
-        const float cleanMakeup = 1.0f + 2.0f * std::exp(-m / 0.30f);
-        const float level = (0.74f + 0.12f * (1.0f - m)) * cleanMakeup /
+        // No exponential cleanMakeup: it raises low-gain tones after the real
+        // stages and can slam the safety clip while the tube path is still clean.
+        const float level = (0.82f + 0.10f * (1.0f - m)) /
             ((1.0f + 0.32f * m + 0.64f * ultraMix) * toneEnergy * chDrive);
 
         // Master volume (selected 1/2). Centred at 0.5 = unity so RS songs that
@@ -570,7 +568,7 @@ public:
         // loudness flattening vs the Classic->Ultra morph (clean post-output makeup; ~0 dB at 0.5)
         float gcDb = -0.277f + 6.753f * channel - 10.261f * channel * channel;
         if (gcDb > 12.0f) gcDb = 12.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
-        return softClip(y * level * masterGain) * 0.97f * std::pow(10.0f, 0.05f * gcDb);
+        return softClip(y * level * masterGain * std::pow(10.0f, 0.05f * gcDb)) * 0.97f;
     }
 };
 
@@ -658,8 +656,8 @@ protected:
             osR.upsample(3.2f * inR[i], ubR);
             for (int k = 0; k < kOS; ++k)
             {
-                ubL[k] = rbAmpLvl(0.721f * left.process(ubL[k]));
-                ubR[k] = rbAmpLvl(0.721f * right.process(ubR[k]));
+                ubL[k] = rbAmpLvl(0.550f * left.process(ubL[k]));
+                ubR[k] = rbAmpLvl(0.550f * right.process(ubR[k]));
             }
             outL[i] = osL.downsample(ubL);
             outR[i] = osR.downsample(ubR);

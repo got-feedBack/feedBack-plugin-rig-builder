@@ -359,7 +359,7 @@ public:
         // ~0 dB at morph 0.5).
         float gcDb = 8.317f - 20.537f * channel + 5.580f * channel * channel;
         if (gcDb > 20.0f) gcDb = 20.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
-        return softClip(y * level) * 0.98f * std::pow(10.0f, 0.05f * gcDb);
+        return softClip(y * level * std::pow(10.0f, 0.05f * gcDb)) * 0.98f;
     }
 };
 

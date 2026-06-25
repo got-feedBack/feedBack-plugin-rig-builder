@@ -423,7 +423,7 @@ public:
         float crunch = ch1Body.process(x);
         crunch = vCrunch.process(crunchMiller.process(crunch) * (0.9f + 3.0f * m) * bplus.preamp);
 
-        float y = ch1 * cleanMix + crunch * crunchMix + aor * leadMix;
+        float y = ch1 * cleanMix + crunch * crunchMix - aor * leadMix; // aor = 2 triode stages (non-inverting) vs ch1/crunch's 1 (inverting); negate to phase-align, else the crunch->lead crossfade cancels into a mid-sweep notch
         y = interHp.process(y);
         y = interLp.process(y);
 

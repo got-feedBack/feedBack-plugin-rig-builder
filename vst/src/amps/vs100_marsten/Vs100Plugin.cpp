@@ -243,16 +243,15 @@ public:
         cab = speakerLp.process(cab);
         y += cabSim * (cab - y);
 
-        // Loudness normalization: the active channel's gain is the drive proxy;
-        // cleanMakeup keeps the RS Gain (-> OD2 Gain) sweep ~flat; the active
-        // volume gives a mild swing. ~-14 dBFS reference.
+        // Loudness normalization: keep the active volume swing, but do not apply
+        // exponential post-circuit clean makeup; it creates the same broken crest
+        // curve as the tube Marshalls when the input is clean.
         const float lvl = o2W ? od2Vol : (o1W ? od1Vol : clVol);
         const float toneEnergy = 1.0f
             + 0.012f * std::fabs(((o2W ? od2Bass : clBass) - 0.5f) * 16.0f)
             + 0.012f * std::fabs(((o2W ? od2Mid : clMid) - 0.5f) * 16.0f)
             + 0.012f * std::fabs(((o2W ? od2Treble : clTreble) - 0.5f) * 16.0f);
-        const float cleanMakeup = 1.0f + 1.4f * std::exp(-drv / 0.34f);
-        const float level = 0.74f * cleanMakeup / ((1.0f + 0.55f * lvl) * toneEnergy);
+        const float level = 0.88f / ((1.0f + 0.55f * lvl) * toneEnergy);
         return softClip(y * level) * 0.97f;
     }
 };
