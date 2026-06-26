@@ -248,6 +248,19 @@
       c.beginPath(); c.arc(cx+Math.cos(a)*R*0.40, cy+Math.sin(a)*R*0.40, R*0.09,0,7); c.fillStyle=rgb(70,74,82); c.fill();
       return;
     }
+    if (style==='capplain') {
+      // Plain coloured cap + white pointer (GML 8200 look). No tick fan — the
+      // dB/Hz/Q scales are printed on the panel by the spec's draw() routine.
+      const g=c.createRadialGradient(cx-R*0.35,cy-R*0.42,R*0.1,cx,cy,R*1.12);
+      g.addColorStop(0,rgb(clamp(capR+52,0,255),clamp(capG+52,0,255),clamp(capB+52,0,255)));
+      g.addColorStop(1,rgb(capR*0.5,capG*0.5,capB*0.5));
+      c.beginPath(); c.arc(cx,cy,R,0,7); c.fillStyle=g; c.fill();
+      c.strokeStyle=rgb(8,8,10); c.lineWidth=1.4*s; c.stroke();
+      c.beginPath(); c.moveTo(cx+R*0.12*Math.cos(a),cy+R*0.12*Math.sin(a)); c.lineTo(cx+R*0.94*Math.cos(a),cy+R*0.94*Math.sin(a));
+      c.lineCap='round'; c.strokeStyle=rgb(246,246,249); c.lineWidth=2.4*s; c.stroke(); c.lineCap='butt';
+      c.beginPath(); c.arc(cx-R*0.24,cy-R*0.28,R*0.12,0,7); c.fillStyle='rgba(255,255,255,0.22)'; c.fill();
+      return;
+    }
     if (style==='ampeg') {
       // Ampeg SVT knob: chrome/silver skirt, black top insert, white pointer,
       // dark 0–10 tick fan engraved on the silver panel just outside the skirt.
@@ -4166,7 +4179,7 @@
       {id:3,cx:.420,cy:.51,r:.039,style:'knurled'},  // Release
       {id:4,cx:.525,cy:.51,r:.039,style:'knurled'}], // Output (= OUTPUT GAIN)
     tick:rgb(150,152,158), ptr:rgb(30,30,32),
-    draw(d){ const {ctx:c,W,H}=d, ew=W*0.045;
+    draw(d, vals){ vals=vals||{}; const {ctx:c,W,H}=d, ew=W*0.045;
       c.fillStyle=rgb(10,10,12); c.fillRect(0,0,W,H);
       // walnut side panels
       const wood=(x)=>{ const wg=c.createLinearGradient(x,0,x+ew,0);
@@ -4216,7 +4229,10 @@
         textC(d,mcx+Math.cos(t)*(mR+11),mcy+Math.sin(t)*(mR+11)+3,F.barlow,8,i>=4?rgb(150,30,30):rgb(30,55,128),n); });
       textC(d,mcx,vy+vh*0.55,F.barlow,10,rgb(38,66,142),'DECIBELS');
       textC(d,mcx,vy+vh*0.78,F.bebas,16,rgb(38,66,142),'HZX');
-      const nt=a0+(a1-a0)*0.42; c.strokeStyle=rgb(22,22,26); c.lineWidth=2;
+      // Live gain-reduction needle (vals.__gr = GR normalized 0..1 from the VST's
+      // GR output param). Rests at the "0" mark and swings LEFT as reduction rises.
+      const grv=Math.max(0,Math.min(1,vals.__gr||0));
+      const nt=a0+(a1-a0)*Math.max(0.04, 0.667 - grv*0.58); c.strokeStyle=rgb(22,22,26); c.lineWidth=2;
       c.beginPath(); c.moveTo(mcx,mcy); c.lineTo(mcx+Math.cos(nt)*mR*0.98,mcy+Math.sin(nt)*mR*0.98); c.stroke();
       c.beginPath(); c.arc(mcx,mcy,3,0,7); c.fillStyle=rgb(22,22,26); c.fill();
       // ── brand logo ──
@@ -4225,93 +4241,112 @@
       textC(d,.825*W,.815*H,F.bebas,37,w,'165');
       textC(d,.768*W,.882*H,F.barlow,11,dim,'COMPRESSOR / LIMITER'); } };
   P.studiodelay     = rackSpec({title:'STUDIO DELAY',      accent:[105,135,205], names:['Time L','Time R','Feedback','Filter','Mix']});
-  // Parametric EQ — GML 8200 look: black wide rack, COLOUR-coded knobs per band
-  // (centred), centre LNG logo, "MODEL 8300 PARAMETRIC EQUALIZER" bottom.
-  // RS params: Bass0 BassFreq1 LoMid2 LoMidFreq3 LoMidQ4 HiMid5 HiMidFreq6 HiMidQ7 Treble8 TrebleFreq9.
-  P.lng = { w:960, h:300,
-    knobs:[
-      {id:0,cx:.15,cy:.26,r:.028,style:'pointer',cap:[196,44,44]},   // Bass gain (red)
-      {id:1,cx:.15,cy:.62,r:.026,style:'pointer',cap:[196,44,44]},   // BassFreq
-      {id:2,cx:.31,cy:.26,r:.024,style:'pointer',cap:[214,178,46]},  // LoMid gain (yellow)
-      {id:3,cx:.31,cy:.52,r:.024,style:'pointer',cap:[214,178,46]},  // LoMidFreq
-      {id:4,cx:.31,cy:.78,r:.024,style:'pointer',cap:[214,178,46]},  // LoMidQ
-      {id:5,cx:.69,cy:.26,r:.024,style:'pointer',cap:[60,150,70]},   // HiMid gain (green)
-      {id:6,cx:.69,cy:.52,r:.024,style:'pointer',cap:[60,150,70]},   // HiMidFreq
-      {id:7,cx:.69,cy:.78,r:.024,style:'pointer',cap:[60,150,70]},   // HiMidQ
-      {id:8,cx:.85,cy:.26,r:.028,style:'pointer',cap:[64,112,200]},  // Treble gain (blue)
-      {id:9,cx:.85,cy:.62,r:.026,style:'pointer',cap:[64,112,200]}], // TrebleFreq
-    tick:rgb(110,112,118), ptr:rgb(238,240,244),
-    draw(d){ const {ctx:c,W,H}=d, m=7;
-      c.fillStyle=rgb(8,8,10); c.fillRect(0,0,W,H);
-      const g=c.createLinearGradient(0,0,0,H); g.addColorStop(0,rgb(30,30,34)); g.addColorStop(1,rgb(15,15,18));
-      rr(c,m,m,W-2*m,H-2*m,8); c.fillStyle=g; c.fill();
-      rr(c,m,m,W-2*m,H-2*m,8); c.strokeStyle=rgb(10,10,12); c.lineWidth=2; c.stroke();
-      [W*.03,W*.97].forEach(ex=>{ screw(d,ex,H*.13); screw(d,ex,H*.87); });
-      const w=rgb(228,230,234), dim=rgb(166,168,174);
-      // band headers
-      textC(d,.15*W,.085*H,F.barlow,16,w,'LOW EQ');
-      textC(d,.31*W,.085*H,F.barlow,16,w,'LOW MID');
-      textC(d,.69*W,.085*H,F.barlow,16,w,'HIGH MID');
-      textC(d,.85*W,.085*H,F.barlow,16,w,'HIGH EQ');
-      // per-knob function labels (below each knob)
-      const sub=(cx,cy,r,t)=> textC(d, cx*W, cy*H + r*W + 14, F.barlow, 12.5, dim, t);
-      sub(.15,.26,.028,'GAIN'); sub(.15,.62,.026,'FREQ');
-      sub(.31,.26,.024,'GAIN'); sub(.31,.52,.024,'FREQ'); sub(.31,.78,.024,'Q');
-      sub(.69,.26,.024,'GAIN'); sub(.69,.52,.024,'FREQ'); sub(.69,.78,.024,'Q');
-      sub(.85,.26,.028,'GAIN'); sub(.85,.62,.026,'FREQ');
-      // centre: LNG logo + green LED + EQ-IN button
-      ledDot(d,.50*W,.13*H,true,90,220,90);
-      textC(d,.50*W,.40*H,F.bebas,38,w,'LNG');
-      rr(c,.475*W,.57*H,.05*W,.12*H,3); c.fillStyle=rgb(196,44,44); c.fill();
-      textC(d,.50*W,.75*H,F.barlow,11,dim,'EQ IN');
-      textC(d,W-m-16,H*0.93,F.barlow,11,dim,'MODEL 8300   PARAMETRIC EQUALIZER   SERIES II','right'); } };
-  // Graphic EQ — API 550b look: tall black 500-series module, column of API star
-  // knobs (gain) each with a small freq knob, blue freq scales, HF/LF toggles, IN.
-  // Parody: API arrow + "G-550". RS params (10): Bass0 BassFreq1 LoMid2 LoMidFreq3
-  // Mid4 MidFreq5 HiMid6 HiMidFreq7 Treble8 TrebleFreq9 (HIGH at top → LOW bottom).
-  P.g550 = { w:300, h:740,
-    knobs:[
-      {id:8,cx:.40,cy:.165,r:.090,style:'api'}, {id:9,cx:.78,cy:.165,r:.052,style:'api'},  // HIGH (Treble) + freq
-      {id:6,cx:.40,cy:.310,r:.090,style:'api'}, {id:7,cx:.78,cy:.310,r:.052,style:'api'},  // HI-MID
-      {id:4,cx:.40,cy:.455,r:.090,style:'api'}, {id:5,cx:.78,cy:.455,r:.052,style:'api'},  // MID
-      {id:2,cx:.40,cy:.600,r:.090,style:'api'}, {id:3,cx:.78,cy:.600,r:.052,style:'api'},  // LO-MID
-      {id:0,cx:.40,cy:.745,r:.090,style:'api'}, {id:1,cx:.78,cy:.745,r:.052,style:'api'}], // LOW (Bass)
-    tick:rgb(150,154,160), ptr:rgb(40,44,52),
-    draw(d){ const {ctx:c,W,H}=d, m=6;
-      c.fillStyle=rgb(8,9,11); c.fillRect(0,0,W,H);
-      const bg=c.createLinearGradient(0,0,0,H); bg.addColorStop(0,rgb(30,31,34)); bg.addColorStop(1,rgb(18,19,22));
-      rr(c,m,m,W-2*m,H-2*m,8); c.fillStyle=bg; c.fill();
-      rr(c,m,m,W-2*m,H-2*m,8); c.strokeStyle=rgb(6,7,9); c.lineWidth=2; c.stroke();
-      screw(d,.5*W,.032*H); screw(d,.5*W,.968*H);
-      const blu=rgb(86,150,214), wt=rgb(228,230,234), dim=rgb(150,154,160);
-      // APX arrow logo + model (parody)
-      c.beginPath(); c.moveTo(.16*W,.062*H); c.lineTo(.25*W,.044*H); c.lineTo(.25*W,.080*H); c.closePath();
-      c.fillStyle=blu; c.fill(); c.fillRect(.25*W,.056*H,.05*W,.012*H);
-      textC(d,.44*W,.062*H,F.bebas,26,blu,'APX');
-      textC(d,.70*W,.062*H,F.bebas,30,blu,'G-550');
-      // bands
-      const bands=[['HIGH',.165],['HI-MID',.310],['MID',.455],['LO-MID',.600],['LOW',.745]];
-      const frng=['2.5k–20k','800–12.5k','300–5k','75–1k','30–400'];
-      // boost/cut scale (dB): 0 at top, −2/+2 then 4/6/9/12 down each side — matches ang()
-      const gscale=[[.5,'0'],[.4,'−2'],[.3,'−4'],[.2,'−6'],[.1,'−9'],[0,'−12'],[.6,'+2'],[.7,'+4'],[.8,'+6'],[.9,'+9'],[1,'+12']];
-      const gr=.090*W*1.66;
-      bands.forEach((b,i)=>{ const cy=b[1]*H;
-        textC(d,.070*W,cy,F.barlow,13,wt,b[0],'left');
-        gscale.forEach(s=>{ const an=(135+s[0]*270)*Math.PI/180;
-          textC(d,.40*W+Math.cos(an)*gr, cy+Math.sin(an)*gr+2, F.barlow,9.5, s[1]==='0'?wt:dim, s[1]); });
-        // frequency range under the small freq knob (blue)
-        textC(d,.78*W,(b[1]+.060)*H,F.barlow,9.5,blu,frng[i]+' Hz'); });
-      // HF / LF peak-shelf toggles
-      const tog=(cy,lbl)=>{ rr(c,.895*W,(cy-.022)*H,.06*W,.05*H,2); c.fillStyle=rgb(28,29,32); c.fill();
-        rr(c,.895*W,(cy-.022)*H,.06*W,.05*H,2); c.strokeStyle=rgb(70,72,76); c.lineWidth=1; c.stroke();
-        c.beginPath(); c.arc(.925*W,(cy-.008)*H,.016*W,0,7); c.fillStyle=rgb(160,162,166); c.fill();
-        textC(d,.925*W,(cy+.04)*H,F.barlow,9,dim,lbl); };
-      tog(.235,'HF'); tog(.675,'LF');
-      // IN bypass + LED (bottom)
-      ledDot(d,.305*W,.905*H,false,210,52,42);
-      rr(c,.42*W,.882*H,.07*W,.05*H,3); c.fillStyle=rgb(232,234,232); c.fill();
-      rr(c,.42*W,.882*H,.07*W,.05*H,3); c.strokeStyle=rgb(120,122,124); c.lineWidth=1; c.stroke();
-      textC(d,.50*W,.952*H,F.bebas,17,wt,'IN'); } };
+  // Parametric EQ — GML 8200 look: black wide rack, 5 COLOUR-coded bands. Each
+  // band = a GAIN knob (top) + a CONCENTRIC Freq(outer)/Q(inner) knob (bottom),
+  // like the real 8200. Low/High Q at its minimum = shelf (the DSP detent).
+  // VST params (15): per band b → gain=3b, freq=3b+1, Q=3b+2;
+  //   b0 LOW, b1 LO-MID, b2 MID, b3 HI-MID, b4 HIGH.
+  P.lng = (function(){
+    const COLS=[.11,.295,.50,.705,.89];
+    // band colours like the real 8200: red, yellow, green, white, blue
+    const CAP=[[200,52,52],[222,190,46],[64,178,92],[236,238,240],[70,120,210]];
+    const HEAD=['LOW EQ','LOW EQ','MID EQ','HIGH EQ','HIGH EQ'];
+    const FR=[[30,300],[120,2000],[120,8000],[400,8000],[1500,16000]];   // freq min/max per band
+    const gainCy=.26, fqCy=.58, gR=.030, fR_=.041, qR=.020;
+    const knobs=[];
+    for(let b=0;b<5;b++){
+      knobs.push({id:b*3,   cx:COLS[b], cy:gainCy, r:gR,  style:'capplain', cap:CAP[b]});       // gain (colour)
+      knobs.push({id:b*3+1, cx:COLS[b], cy:fqCy,   r:fR_, style:'capplain', cap:[22,22,26]});   // freq (outer, black)
+      knobs.push({id:b*3+2, cx:COLS[b], cy:fqCy,   r:qR,  style:'capplain', cap:CAP[b]});       // Q (inner, colour)
+    }
+    const fmtHz=hz=> hz>=1000 ? (hz%1000===0?(hz/1000)+'k':(hz/1000).toFixed(1)+'k') : ''+hz;
+    return { w:960, h:300, knobs, tick:rgb(110,112,118), ptr:rgb(238,240,244),
+      draw(d, vals){ vals=vals||{}; const {ctx:c,W,H}=d, m=7;
+        c.fillStyle=rgb(8,8,10); c.fillRect(0,0,W,H);
+        const g=c.createLinearGradient(0,0,0,H); g.addColorStop(0,rgb(26,27,31)); g.addColorStop(1,rgb(14,14,17));
+        rr(c,m,m,W-2*m,H-2*m,8); c.fillStyle=g; c.fill();
+        rr(c,m,m,W-2*m,H-2*m,8); c.strokeStyle=rgb(10,10,12); c.lineWidth=2; c.stroke();
+        [W*.025,W*.975].forEach(ex=>{ screw(d,ex,H*.10); screw(d,ex,H*.90); });
+        const dim=rgb(170,172,178), wht=rgb(228,230,234);
+        // numeric scale arc around a knob: items=[[val0..1,label|null],…]
+        const scale=(cxp,cyp,Rp,items,col,fpx)=>{ items.forEach(it=>{ const an=(135+it[0]*270)*Math.PI/180;
+          c.strokeStyle=col; c.lineWidth=1.3; c.beginPath();
+          c.moveTo(cxp+Math.cos(an)*Rp*1.18, cyp+Math.sin(an)*Rp*1.18); c.lineTo(cxp+Math.cos(an)*Rp*1.34, cyp+Math.sin(an)*Rp*1.34); c.stroke();
+          if(it[1]!=null) textC(d, cxp+Math.cos(an)*Rp*1.72, cyp+Math.sin(an)*Rp*1.72+4, F.barlow, fpx, col, it[1]); }); };
+        for(let b=0;b<5;b++){
+          const cx=COLS[b]*W, gcy=gainCy*H, fcy=fqCy*H, gRp=gR*W, fRp=fR_*W;
+          const cap=rgb(CAP[b][0],CAP[b][1],CAP[b][2]);
+          // GAIN: CUT 0 dB BOOST header + ±dB scale (0 top, cut left / boost right)
+          textC(d,cx-gRp*1.65,gcy-gRp*1.6,F.barlow,11,dim,'CUT','right');
+          textC(d,cx,gcy-gRp*1.95,F.barlow,12,wht,'0 dB');
+          textC(d,cx+gRp*1.65,gcy-gRp*1.6,F.barlow,11,dim,'BOOST','left');
+          scale(cx,gcy,gRp,[[0,'15'],[0.25,null],[0.5,null],[0.75,null],[1,'15']],dim,11);
+          // FREQ scale (Hz) around the outer freq knob
+          const fr=FR[b];
+          scale(cx,fcy,fRp,[[0,fmtHz(fr[0])],[0.5,null],[1,fmtHz(fr[1])]],cap,11);
+          // sub labels (no band-name header)
+          textC(d,cx,fcy+fRp*1.62,F.barlow,11,dim,'FREQ');
+          textC(d,cx,fcy+fRp*1.62+14,F.barlow,9.5,dim,'(Q centre)');
+        }
+        // centre L/R + EQ IN (cosmetic) and model strip
+        textC(d,W*.5,.945*H,F.barlow,11,dim,'MODEL 8300    PARAMETRIC EQUALIZER    SERIES II'); } };
+  })();
+  // Graphic EQ — API 550L look: tall black 500-series module, 4 bands stacked
+  // (HF top → LF bottom). Each band = a CONCENTRIC knob: WHITE = Boost/Cut (gain,
+  // outer), BLUE = Frequency (inner). The stepped frequency value is printed in
+  // blue under each knob. LF/HF have a PEAK/SHELF toggle. Parody: APX + "G-550".
+  // VST params (10): Bass0 BassFreq1 BassShelf2 LoMid3 LoMidFreq4 HiMid5 HiMidFreq6
+  //   Treble7 TrebleFreq8 TrebleShelf9.
+  P.g550 = (function(){
+    const F_LF=[30,40,50,100,200,300,400], F_LMF=[75,150,180,240,500,700,1000],
+          F_HMF=[800,1500,3000,5000,8000,10000,12500], F_HF=[2500,5000,7000,10000,12500,15000,20000];
+    const G=[-12,-9,-6,-4,-2,0,2,4,6,9,12];
+    const snap=(v,a)=>a[Math.max(0,Math.min(a.length-1,Math.round(v*(a.length-1))))];
+    const fmt=hz=> hz>=1000 ? (hz%1000===0?(hz/1000)+'k':(hz/1000).toFixed(1)+'k') : ''+hz;
+    // band: name, cy, gain id, freq id, freq array, shelf id (or -1)
+    const B=[['HF',.205,7,8,F_HF,9],['HI-MID',.405,5,6,F_HMF,-1],['LO-MID',.605,3,4,F_LMF,-1],['LOW',.805,0,1,F_LF,2]];
+    const CX=.50, gR=.115, fR=.060;
+    const knobs=[];
+    B.forEach(b=>{ knobs.push({id:b[2],cx:CX,cy:b[1],r:gR,style:'api'});                          // gain (API star, outer)
+                   knobs.push({id:b[3],cx:CX,cy:b[1],r:fR,style:'capplain',cap:[58,120,200]}); }); // freq (blue, inner)
+    // HF/LF band filter toggles (peak ∧ / shelf) in the gaps between bands, left side.
+    const switches=[{id:9,cx:.20,cy:.305,hs:.024},{id:2,cx:.20,cy:.705,hs:.024}];
+    return { w:280, h:760, knobs, switches, tick:rgb(150,154,160), ptr:rgb(40,44,52),
+      draw(d, vals){ vals=vals||{}; const {ctx:c,W,H}=d, m=6;
+        c.fillStyle=rgb(8,9,11); c.fillRect(0,0,W,H);
+        const bg=c.createLinearGradient(0,0,0,H); bg.addColorStop(0,rgb(30,31,34)); bg.addColorStop(1,rgb(18,19,22));
+        rr(c,m,m,W-2*m,H-2*m,8); c.fillStyle=bg; c.fill();
+        rr(c,m,m,W-2*m,H-2*m,8); c.strokeStyle=rgb(6,7,9); c.lineWidth=2; c.stroke();
+        screw(d,.5*W,.026*H); screw(d,.5*W,.974*H);
+        const blu=rgb(96,165,225), wt=rgb(228,230,234), dim=rgb(150,154,160);
+        c.beginPath(); c.moveTo(.12*W,.052*H); c.lineTo(.22*W,.038*H); c.lineTo(.22*W,.066*H); c.closePath(); c.fillStyle=blu; c.fill();
+        textC(d,.42*W,.052*H,F.bebas,22,blu,'APX'); textC(d,.74*W,.052*H,F.bebas,24,blu,'G-550');
+        // boost/cut dB scale (white) — symmetric, 0 at top, INNER radius
+        const gscale=[[.5,'0'],[.4,'2'],[.3,'4'],[.2,'6'],[.1,'9'],[0,'12'],[.6,'2'],[.7,'4'],[.8,'6'],[.9,'9'],[1,'12']];
+        const gr=gR*W*1.50;
+        // 7 frequency labels: OUTSIDE the gain, arc from top-left (250°) down the
+        // left side to bottom-right (66°) — "bordeando", all the same blue.
+        const fAng=i=>(250 - i*(250-66)/6)*Math.PI/180, fr2=gR*W*2.08;
+        B.forEach(b=>{ const cy=b[1]*H, cxp=CX*W;
+          textC(d,cxp-gR*W*0.20,(b[1]-gR*1.14)*H,F.barlow,12,wt,'−');  // − above-left of 0
+          textC(d,cxp+gR*W*0.20,(b[1]-gR*1.14)*H,F.barlow,12,wt,'+');  // + above-right
+          gscale.forEach(s=>{ const an=(135+s[0]*270)*Math.PI/180;
+            textC(d,cxp+Math.cos(an)*gr, cy+Math.sin(an)*gr+3, F.barlow,11, s[1]==='0'?wt:dim, s[1]); });
+          b[4].forEach((hz,i)=>{ const an=fAng(i);
+            textC(d,cxp+Math.cos(an)*fr2, cy+Math.sin(an)*fr2+3, F.barlow,10.5, blu, fmt(hz)); });
+        });
+        // HF / LF filter toggle glyphs + labels (peak ∧ top, shelf curve bottom)
+        const tgl=(cy,lbl)=>{ const x=.20*W, y=cy*H;
+          textC(d,x-.10*W,y,F.barlow,9.5,wt,lbl,'left');
+          textC(d,x,y-.022*H,F.barlow,10,dim,'∧');             // peak
+          c.strokeStyle=dim; c.lineWidth=1.2; c.beginPath();    // shelf curve
+          c.moveTo(x-.03*W,y+.026*H); c.lineTo(x-.005*W,y+.026*H); c.quadraticCurveTo(x+.01*W,y+.026*H,x+.012*W,y+.018*H); c.stroke(); };
+        tgl(.305,'HF'); tgl(.705,'LF');
+        // IN bypass + LED (bottom)
+        ledDot(d,.355*W,.923*H,false,210,52,42);
+        rr(c,.44*W,.910*H,.12*W,.034*H,3); c.fillStyle=rgb(232,234,232); c.fill();
+        textC(d,.50*W,.955*H,F.bebas,11,rgb(20,20,22),'EQ'); } };
+  })();
   P.studiopitch     = rackSpec({title:'STUDIO PITCH',      accent:[160,185,150], names:['Pitch','Tone','Mix','Pan']});
   P.studioplate     = rackSpec({title:'STUDIO PLATE',      accent:[200,180,168], names:['Time','Tone','Depth','Mix']});
   P.studioverb      = rackSpec({title:'STUDIO VERB',       accent:[120,195,175], names:['Time','Tone','Depth','Mix']});
@@ -7211,7 +7246,8 @@
   function drawSpec(canvas, spec, values) {
     const d = makeCtx(canvas, spec);
     spec.draw(d, values || {});         // EQ faders are drawn inside spec.draw
-    (spec.knobs || []).forEach(k => {
+    // Draw larger knobs first so concentric inner knobs land on top.
+    [...(spec.knobs || [])].sort((a, b) => b.r - a.r).forEach(k => {
       const v = (values && values[k.id] != null) ? values[k.id] : 0.5;
       knob(d, k.cx * d.W, k.cy * d.H, k.r * d.W, v, k.style,
            (k.cap || [40, 40, 44])[0], (k.cap || [40, 40, 44])[1], (k.cap || [40, 40, 44])[2],
@@ -7257,9 +7293,16 @@
     const toSpec = (clientX, clientY) => { const rect = canvas.getBoundingClientRect();
       const sx = spec.w / canvas.clientWidth, sy = spec.h / (canvas.clientHeight || 1);
       return { x: (clientX - rect.left) * sx, y: (clientY - rect.top) * sy }; };
-    const hitKnob = (x, y) => { for (let i = 0; i < (spec.knobs || []).length; i++) {
-      const k = spec.knobs[i], dx = x - k.cx * spec.w, dy = y - k.cy * spec.h, R = k.r * spec.w * 1.25 + 6;
-      if (dx * dx + dy * dy <= R * R) return i; } return -1; };
+    // Pick the SMALLEST-radius knob under the cursor. For concentric pairs (two
+    // knobs sharing a centre — inner + outer ring) this routes a centre click to
+    // the inner knob and a ring click to the outer; for normal (non-overlapping)
+    // knobs only one matches, so behaviour is unchanged.
+    const hitKnob = (x, y) => { let best = -1, bestR = Infinity;
+      for (let i = 0; i < (spec.knobs || []).length; i++) {
+        const k = spec.knobs[i], dx = x - k.cx * spec.w, dy = y - k.cy * spec.h, R = k.r * spec.w * 1.25 + 6;
+        if (dx * dx + dy * dy <= R * R && k.r < bestR) { best = i; bestR = k.r; }
+      }
+      return best; };
     const hitFader = (x, y) => { if (y < G.plateY - 8 || y > G.plateY + G.plateH + 8) return -1;
       const i = Math.floor((x - G.faderL) / G.colW); return (i >= 0 && i < G.n) ? i : -1; };
     canvas.addEventListener('mousedown', e => {

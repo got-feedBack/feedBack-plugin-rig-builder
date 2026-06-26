@@ -260,6 +260,17 @@ function rbConfiguredChainInputDrive() {
         ? window.__rbChainInputDrive : 8.0;
 }
 
+// Clean input-level calibration trim (linear ×, persisted as nam_input_calibration).
+// This is a FLAT multiplier applied on top of the amp-drive in rbApplyChainInputDrive
+// (engine input = drive × calibration). It's what the "Input" fader shows/edits and
+// what the note-detect Calibration Wizard writes (raw DI → −12 dBFS). Unlike the
+// drive baseline it has NO clean floor, so a reduction (e.g. 0.7× ≈ −3 dB) really
+// lowers the level. Default 1.0 = 0 dB = no trim (identical to the old behaviour).
+function rbInputCalibration() {
+    return (typeof window.__rbInputCalibration === 'number' && window.__rbInputCalibration > 0)
+        ? window.__rbInputCalibration : 1.0;
+}
+
 function rbCleanGuitarChainInputDrive(maxDrive) {
     // The backend's NAM output normalization and the captures themselves
     // expect a guitar-level push even for clean amps. Unity made clean tones
@@ -351,7 +362,12 @@ function rbDriveForChainInput(opts) {
 function rbApplyChainInputDrive(opts) {
     // While the node graph is disconnected (Input/Output unwired) the chain is
     // silenced at the source — keep it silent even if a scheduled re-poll fires.
-    const drive = rbState._advSilenced ? 0 : rbDriveForChainInput(opts);
+    // The clean calibration trim (rbInputCalibration) rides on top of the
+    // amp-drive: engine input = drive × calibration. This is the ONE place that
+    // owns the engine 'input' node, so the Calibration Wizard's −12 dBFS result
+    // (handed to us as nam_input_calibration) and the amp drive combine into a
+    // single value instead of overwriting each other.
+    const drive = rbState._advSilenced ? 0 : (rbDriveForChainInput(opts) * rbInputCalibration());
     // Re-poll guard: the song-playback callers fire this ~600 ms after
     // the bundle's chain load — but `highway.getStringCount()` may not
     // have absorbed the song_info WS message yet (it defaults to 6
@@ -911,29 +927,44 @@ async function rbSetChainMakeup(dbIn) {
     }).catch(() => {});
 }
 
-// "Desktop Input" — the pre-NAM input gain for GUITAR amps (bass auto-uses 1×).
-// This is the same control that used to be the Setup "Input chain" / "Amp drive"
-// knob; it is now surfaced as the in-game "Desktop Input" fader too, so Setup and
-// the in-game mixer drive ONE value. Range 0–5, default 1× (no boost). Persists to
-// /settings (nam_chain_input_drive) and re-applies live through
-// rbApplyChainInputDrive (which keeps the bass/guitar branch correct).
+// "Input" — the clean input-level trim (calibration), shown in dB. This is the
+// value the note-detect Calibration Wizard normalizes to −12 dBFS, surfaced on
+// the fader so the wizard's result is visible and editable here. It rides ON TOP
+// of the automatic amp-drive (engine input = drive × this), so a reduction really
+// lowers the level even where the guitar drive floor would otherwise pin it.
+// Default 0 dB (1×) = no trim = identical to the old behaviour. Persists to
+// /settings (nam_input_calibration) and re-applies live via rbApplyChainInputDrive.
+// (The amp-DRIVE baseline lives in nam_chain_input_drive — internal/auto now.)
 async function rbSetDesktopInput(dbIn) {
     const d = rbClampDb(dbIn);
     const val = rbDbToLin(d);   // linear × for the engine + persisted setting
-    window.__rbChainInputDrive = val;
+    window.__rbInputCalibration = val;
     const el = document.getElementById('rb-amp-drive-val');
     if (el) el.textContent = rbFmtDb(d);
     // Keep the Setup knob visually in sync when the change came from the in-game
-    // "Desktop Input" fader (set() only re-renders, no onChange → no loop).
+    // "Input" fader (set() only re-renders, no onChange → no loop).
     if (window.__rbDesktopInputKnob && typeof window.__rbDesktopInputKnob.set === 'function') {
         try { window.__rbDesktopInputKnob.set(d); } catch (_) {}
     }
     rbApplyChainInputDrive();   // re-applies respecting bass detection
     fetch(`${window.RB_API}/settings`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nam_chain_input_drive: val }),
+        body: JSON.stringify({ nam_input_calibration: val }),
     }).catch(() => {});
 }
+
+// The note-detect Calibration Wizard hands its −12 dBFS result here (raw DI peak
+// normalized to a clean × trim) so an already-open Rig Builder moves its "Input"
+// fader and re-applies live. The wizard also persists nam_input_calibration via
+// the backend, so a fresh Rig Builder load picks it up even if it wasn't open.
+// Calling e.detail.ack() tells the wizard Rig Builder consumed it and now owns the
+// engine input node — so the wizard stops re-asserting its own engineInputGain.
+window.addEventListener('rig-builder:set-input-calibration', (e) => {
+    const g = e && e.detail && Number(e.detail.gain);
+    if (!Number.isFinite(g) || g <= 0) return;
+    try { if (typeof e.detail.ack === 'function') e.detail.ack(); } catch (_) {}
+    rbSetDesktopInput(rbLinToDb(g));
+});
 
 // ── In-game mixer faders: "Input" + "AMP" ──────────────────────────────────
 // rig_builder owns BOTH the level faders the player sees while playing, so Setup
@@ -942,9 +973,10 @@ async function rbSetDesktopInput(dbIn) {
 // "Desktop Chain" mix participants (rig_builder re-applied over them on every
 // chain reload anyway — they were dead during gameplay).
 //
-//   • Input → window.__rbChainInputDrive (persisted nam_chain_input_drive).
-//     Pre-NAM input gain; rbApplyChainInputDrive re-applies it on every reload,
-//     so it sticks through tone changes.
+//   • Input → window.__rbInputCalibration (persisted nam_input_calibration).
+//     Clean input-level trim (what the Calibration Wizard normalizes to −12 dBFS);
+//     rbApplyChainInputDrive multiplies it onto the amp-drive on every reload, so
+//     it sticks through tone changes.
 //   • AMP   → window.__rbChainMakeup (persisted chain_makeup). Output trim applied
 //     POST-leveler via rbSetChainMakeup — so, unlike a raw setGain('chain') fader,
 //     the final leveler RE-APPLIES it every tick instead of cancelling it on the
@@ -971,7 +1003,7 @@ function rbRegisterLevelFaders() {
         unit: 'dB',
         min: RB_LEVEL_DB_MIN, max: RB_LEVEL_DB_MAX, step: 0.5,
         defaultValue: 0,
-        getValue: () => rbLinToDb(window.__rbChainInputDrive),
+        getValue: () => rbLinToDb(rbInputCalibration()),
         setValue: (v) => { rbSetDesktopInput(v); },
     });
     api.registerFader({
@@ -1176,6 +1208,13 @@ async function rbPreLoadMute(chainLen, targetGain, opts) {
 
     async function autoApplyChain() {
         if (window.__rbAmpAutoApply === false) return;
+        // Tone override: load the chosen user tone instead of the song's tone
+        // (once per song; tone changes keep the same override tone).
+        if (rbToneOverrideActive()) {
+            const f = window.slopsmith && window.slopsmith.currentSong && window.slopsmith.currentSong.filename;
+            await rbLoadOverrideToneForSong(f).catch(() => {});
+            return;
+        }
         // When mega-chain mode owns the engine, we MUST NOT call
         // loadPreset here — it would clobber the pre-loaded whole-song
         // chain and leave only this single tone's stages loaded. The
@@ -3222,8 +3261,21 @@ window.addEventListener('rig-builder:tones-state', () => rbInjectPlayerToneButto
             window.__rbChainInputDrive = s.nam_chain_input_drive;
             console.log(`[rig_builder] chain input drive = ${window.__rbChainInputDrive} (read from /settings)`);
         }
+        // Clean input calibration trim (Calibration Wizard's −12 dBFS result).
+        // Cache early so rbApplyChainInputDrive applies it before the Setup UI
+        // (rbLoadSettings) ever runs — e.g. a song loaded before opening Rig Builder.
+        if (s && typeof s.nam_input_calibration === 'number') {
+            window.__rbInputCalibration = s.nam_input_calibration;
+            console.log(`[rig_builder] input calibration = ${window.__rbInputCalibration} (read from /settings)`);
+        }
         if (s && typeof s.chain_makeup === 'number') {
             window.__rbChainMakeup = s.chain_makeup;
+        }
+        // Tone override — cache early so triggerBuild / autoApplyChain honour it
+        // before the Setup UI (rbLoadSettings) has run.
+        if (s && typeof s.tone_override_enabled !== 'undefined') {
+            rbToneOverride.enabled = !!s.tone_override_enabled;
+            rbToneOverride.name = (typeof s.tone_override_name === 'string') ? s.tone_override_name : '';
         }
     }).catch(() => {});
 
@@ -3232,6 +3284,13 @@ window.addEventListener('rig-builder:tones-state', () => rbInjectPlayerToneButto
     let _buildingFile = null;
 
     function triggerBuild(filename, source) {
+        // Tone override: ignore the song's tone entirely. Tear down any mega-chain
+        // and play the user's chosen tone instead (loaded once per song).
+        if (rbToneOverrideActive()) {
+            try { if (RbMegaChain.isActive() || RbMegaChain.isPending()) RbMegaChain.teardown(false).catch(() => {}); } catch (_) {}
+            rbLoadOverrideToneForSong(filename).catch(() => {});
+            return;
+        }
         if (!RbMegaChain.settingKnown()) {
             if (filename) {
                 RbMegaChain.markPending(filename);
@@ -3950,6 +4009,7 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
         if (!drawValues || !Object.keys(drawValues).length) {
             try { drawValues = rbCanvasThumbValues(piece) || {}; } catch (_) { drawValues = {}; }
         }
+        canvas.__rbVals = drawValues;   // live values object (also used by the GR-meter poll)
         window.RBPedalCanvas.attach(canvas, stem, {
             values: drawValues,
             params: model.logicalParams,
@@ -3969,12 +4029,18 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
     };
     if (window.RBPedalCanvas.ready) window.RBPedalCanvas.ready().then(draw);
     draw();
+    // Real-time GR meter (dbx/HZX) — DISABLED until the engine surfaces VST OUTPUT
+    // params: getParameters() returns the GR output param stuck at 0 (JUCE/the
+    // sandbox proxy don't sync read-only/output params from the plugin). When a
+    // host-side change pushes the live GR value, re-enable this line.
+    // try { rbStartGrMeterPoll(canvas, piece, idx, stem); } catch (_) {}
     // Redraw once the amp has finished growing to its focused size so the
     // canvas backing store matches the larger on-screen size (stays crisp).
     setTimeout(draw, 520);
 }
 
 async function rbStudioCloseFocus() {
+    try { rbStopGrMeterPoll(); } catch (_) {}   // stop the dbx GR-meter poll
     const room = document.getElementById('rb-studio-room');
     const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
     const bar = document.getElementById('rb-studio-focus-bar');
@@ -4326,6 +4392,37 @@ function rbStudioPedalStep(delta) {
 
 // Load a focused gear's VST into the editor slot + restore its saved params,
 // then swap its static face for the interactive canvas. Shared loader for the
+// ── Real-time gain-reduction VU (dbx 160 / HZX) ─────────────────────────────
+// The HZX VST exposes a "GR" OUTPUT param (gain reduction). getParameters(slot)
+// returns each param's live VALUE, so we poll it and redraw the canvas needle —
+// no engine change needed. Only the dbx comp (stem 'hzx') has a GR meter.
+let _rbGrPoll = null;
+function rbStopGrMeterPoll() { if (_rbGrPoll) { clearInterval(_rbGrPoll); _rbGrPoll = null; } }
+function rbStartGrMeterPoll(canvas, piece, idx, stem) {
+    rbStopGrMeterPoll();
+    if (stem !== 'hzx') return;
+    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    if (!api || typeof api.getParameters !== 'function' || !window.RBPedalCanvas) return;
+    let slotId = null, grIdx = -1, misses = 0;
+    _rbGrPoll = setInterval(async () => {
+        if (!document.body.contains(canvas)) { rbStopGrMeterPoll(); return; }
+        const vals = canvas.__rbVals; if (!vals) return;
+        try {
+            if (slotId == null) {
+                slotId = (piece && piece._vst_slot_id != null) ? piece._vst_slot_id
+                       : await rbStudioChainSlotIdForPiece(api, idx).catch(() => null);
+                if (slotId == null) { if (++misses > 40) rbStopGrMeterPoll(); return; }
+            }
+            const plist = await api.getParameters(slotId);
+            if (!Array.isArray(plist) || !plist.length) return;
+            if (grIdx < 0 || grIdx >= plist.length || String(plist[grIdx].name || '').toLowerCase() !== 'gr')
+                grIdx = plist.findIndex(p => String(p.name || '').toLowerCase() === 'gr');
+            vals.__gr = (grIdx >= 0) ? Math.max(0, Math.min(1, Number(plist[grIdx].value) || 0)) : 0;
+            window.RBPedalCanvas.render(canvas, stem, vals);
+        } catch (_) {}
+    }, 70);
+}
+
 // pedal focus (the amp has its own inline copy with the grow-timed swap).
 // Map a focused Studio piece to its slot id in the ALREADY-LOADED engine chain,
 // matching the VST path directly against getChainState() (Nth slot with that
@@ -4863,6 +4960,117 @@ async function rbStudioFinishMonitorLoad(api, chain) {
 // tone's native preset and force the LEGACY loadPreset path (delete payload.id
 // — the v0.3.0 audio-effects executor routes to a song-bound route that's
 // silent with no song active). No-ops during a song preview/audition.
+// ── "Play a specific tone" override ─────────────────────────────────────────
+// When enabled (Setup tab), every song plays ONE chosen user tone — the Default
+// tone or a saved Studio tone — instead of its own tone, reusing the proven
+// default-tone / saved-tone legacy load path. Persisted as tone_override_enabled
+// / tone_override_name in /settings.
+const rbToneOverride = { enabled: false, name: '' };
+let _rbOverrideLoadedKey = null;   // (songFile|toneName) the override last loaded
+
+function rbToneOverrideActive() { return !!rbToneOverride.enabled; }
+function rbResetOverrideLoaded() { _rbOverrideLoadedKey = null; }
+
+// Load the chosen override tone NOW. name '' = Default tone; otherwise a saved
+// Studio tone by name (falls back to Default if it's gone).
+async function rbLoadOverrideTone() {
+    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    if (!api) return;
+    const name = rbToneOverride.name || '';
+    if (!name) { try { await rbReloadDefaultTone(); } catch (_) {} return; }
+    const t = (rbState.savedTones || []).find(x => x.name === name);
+    if (!t || t.id == null) { try { await rbReloadDefaultTone(); } catch (_) {} return; }
+    if (typeof rbLoadNativePresetPayload !== 'function') return;
+    try {
+        const r = await fetch(`${window.RB_API}/native_preset_full/${t.id}`);
+        if (!r.ok) return;
+        const payload = await r.json();
+        if (!payload || !payload.native_preset) return;
+        try { if (typeof rbCloseActiveVstEditor === 'function') await rbCloseActiveVstEditor(); } catch (_) {}
+        delete payload.id;   // force the legacy monitor path (executor route is silent at idle)
+        await rbLoadNativePresetPayload(api, payload, { mode: 'preview', authorization: 'user-action' });
+        try { await rbStudioFinishMonitorLoad(api, payload.native_preset.chain); } catch (_) {}
+        rbState._defaultToneActive = true;
+    } catch (e) { console.warn('[rig_builder] tone override load failed:', e); }
+}
+
+// Load the override tone for a song, ONCE per (song, tone) — idempotent so the
+// bundle's per-tone-change re-apply doesn't cause an audible reload every section.
+async function rbLoadOverrideToneForSong(filename) {
+    const key = (filename || '') + '|' + (rbToneOverride.name || '');
+    if (_rbOverrideLoadedKey === key) return;
+    _rbOverrideLoadedKey = key;
+    await rbLoadOverrideTone();
+}
+
+// Fill the Setup dropdown with Default + the user's saved Studio tones.
+function rbPopulateToneOverrideSelect() {
+    const sel = document.getElementById('rb-tone-override-name');
+    if (!sel) return;
+    const cur = rbToneOverride.name || '';
+    sel.innerHTML = '<option value="">Default tone</option>'
+        + (rbState.savedTones || []).map(t => `<option value="${rbEsc(t.name)}">${rbEsc(t.name)}</option>`).join('');
+    sel.value = cur;
+    if (sel.value !== cur) { sel.value = ''; rbToneOverride.name = ''; }   // chosen tone deleted → Default
+}
+
+function rbPersistToneOverride() {
+    fetch(`${window.RB_API}/settings`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tone_override_enabled: rbToneOverride.enabled, tone_override_name: rbToneOverride.name }),
+    }).catch(() => {});
+}
+
+// Apply (override ON) or undo (OFF) the override to whatever is playing now.
+async function rbApplyToneOverrideNow() {
+    const cur = window.slopsmith && window.slopsmith.currentSong;
+    const filename = cur && cur.filename;
+    if (rbToneOverride.enabled) {
+        try { if (typeof RbMegaChain !== 'undefined' && (RbMegaChain.isActive() || RbMegaChain.isPending())) await RbMegaChain.teardown(false); } catch (_) {}
+        _rbOverrideLoadedKey = (filename || '') + '|' + (rbToneOverride.name || '');
+        await rbLoadOverrideTone();
+    } else {
+        // Restore the song's own tone: rebuild the mega-chain if on; otherwise the
+        // next tone change / song reload re-applies it.
+        rbResetOverrideLoaded();
+        try {
+            if (filename && typeof RbMegaChain !== 'undefined' && window.__rbMegaChainSetting) {
+                RbMegaChain.buildForSong(filename).catch(() => {});
+            } else if (rbState._defaultToneActive) {
+                await rbReloadDefaultTone();
+            }
+        } catch (_) {}
+    }
+}
+
+function rbInitToneOverrideUI(s) {
+    const cb = document.getElementById('rb-tone-override-enabled');
+    const sel = document.getElementById('rb-tone-override-name');
+    if (!cb || !sel) return;
+    if (s) {
+        rbToneOverride.enabled = !!s.tone_override_enabled;
+        rbToneOverride.name = (typeof s.tone_override_name === 'string') ? s.tone_override_name : '';
+    }
+    cb.checked = rbToneOverride.enabled;
+    sel.disabled = !rbToneOverride.enabled;
+    rbPopulateToneOverrideSelect();
+    if (cb.__rbWired) return;
+    cb.__rbWired = true;
+    cb.addEventListener('change', () => {
+        rbToneOverride.enabled = cb.checked;
+        sel.disabled = !cb.checked;
+        rbResetOverrideLoaded();
+        rbPersistToneOverride();
+        rbApplyToneOverrideNow().catch(() => {});
+    });
+    sel.addEventListener('change', () => {
+        rbToneOverride.name = sel.value || '';
+        rbResetOverrideLoaded();
+        rbPersistToneOverride();
+        if (rbToneOverride.enabled) rbApplyToneOverrideNow().catch(() => {});
+    });
+}
+
 async function rbStudioLoadMonitor() {
     const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
     if (!api || typeof rbLoadNativePresetPayload !== 'function') return;
@@ -4995,6 +5203,7 @@ async function rbStudioLoadSavedTones() {
         rbState.savedTones = Array.isArray(d.tones) ? d.tones : [];
     } catch (_) { rbState.savedTones = []; }
     try { rbStudioRenderToneChips(); } catch (_) {}
+    try { rbPopulateToneOverrideSelect(); } catch (_) {}   // keep the Setup override dropdown in sync
 }
 
 // ── Manage tab: inventory of downloaded NAM/IR files ────────────────
@@ -12462,15 +12671,21 @@ async function rbLoadSettings() {
     // sees it even if the user never opens Settings. rbLoadSettings is
     // called from rbInit so this runs at page-load.
     window.__rbMegaChainSetting = !!s.mega_chain_mode;
+    // "Play a specific tone" override — set the checkbox + dropdown from settings.
+    try { rbInitToneOverrideUI(s); } catch (_) {}
     // Refresh the chain-input drive cache too — picks up any change the
     // user made via Settings (or via a direct settings POST in DevTools).
     if (typeof s.nam_chain_input_drive === 'number') {
         window.__rbChainInputDrive = s.nam_chain_input_drive;
     }
+    if (typeof s.nam_input_calibration === 'number') {
+        window.__rbInputCalibration = s.nam_input_calibration;
+    }
     // "Input" knob (the in-game "Input" fader's twin) — shown in dB, default 0 dB.
-    // Reflects the latest value, including edits made via the in-game fader during
-    // songs (each edit persisted nam_chain_input_drive as a linear ×).
-    const advDb = rbLinToDb((typeof s.nam_chain_input_drive === 'number') ? s.nam_chain_input_drive : 1.0);
+    // Reflects the clean input calibration trim (nam_input_calibration), including
+    // edits made via the in-game fader during songs and the Calibration Wizard's
+    // −12 dBFS result handed to us via rig-builder:set-input-calibration.
+    const advDb = rbLinToDb(rbInputCalibration());
     if (!window.__rbDesktopInputKnob)
         window.__rbDesktopInputKnob = rbAttachKnob('rb-amp-drive-knob', { min: RB_LEVEL_DB_MIN, max: RB_LEVEL_DB_MAX, def: 0, value: advDb, onChange: rbSetDesktopInput });
     else window.__rbDesktopInputKnob.set(advDb);

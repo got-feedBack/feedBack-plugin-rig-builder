@@ -313,6 +313,19 @@ _DEFAULT_SETTINGS = {
     # bass players reported amps sounding over-distorted. Users who WANT more
     # amp saturation can raise it with the "Amp drive" slider in Settings.
     "nam_chain_input_drive": 1.0,
+    # Clean input-level calibration trim (linear ×, default 1.0 = 0 dB = no trim).
+    # Distinct from nam_chain_input_drive (the amp-DRIVE baseline, which has a
+    # per-amp clean floor): this is a flat multiplier applied ON TOP of the drive
+    # so the engine input = drive × calibration. The note-detect Calibration
+    # Wizard writes it (raw DI normalized to −12 dBFS), and the Rig Builder "Input"
+    # fader shows/edits it. A reduction here (e.g. 0.7× ≈ −3 dB) actually lowers
+    # the level even when the guitar drive floor would otherwise pin the drive.
+    "nam_input_calibration": 1.0,
+    # Tone override: play EVERY song with one specific user tone instead of the
+    # song's own tone. `tone_override_name` = "" (the Default tone) or a saved
+    # Studio tone's name. Used by the Setup-tab "specific tone" control.
+    "tone_override_enabled": False,
+    "tone_override_name": "",
     # When ON, bypasses the cabinet slot on EVERY song's tones — for users who'd
     # rather run no cab (raw amp) or their own external cab sim. Default ON: the
     # extracted the game cab IRs are weak/colourless, so out of the box we skip
@@ -6622,6 +6635,19 @@ def setup(app, context):
                 v = float(data["nam_chain_input_drive"])
                 # Input-chain (amp drive) knob: range 0–5, default 1× (no boost).
                 allowed["nam_chain_input_drive"] = max(0.0, min(5.0, v))
+            except (TypeError, ValueError):
+                pass
+        if "tone_override_enabled" in data:
+            allowed["tone_override_enabled"] = bool(data["tone_override_enabled"])
+        if "tone_override_name" in data:
+            allowed["tone_override_name"] = str(data["tone_override_name"])[:200]
+        if "nam_input_calibration" in data:
+            try:
+                # Clean input-level trim (the "Input" fader / Calibration Wizard's
+                # −12 dBFS result). Linear ×, applied on top of the amp drive. Range
+                # covers the fader (−24..+12 dB ≈ 0.063..3.98×) and the wizard's
+                # 0.1..5 clamp; default 1× = no trim.
+                allowed["nam_input_calibration"] = max(0.05, min(5.0, float(data["nam_input_calibration"])))
             except (TypeError, ValueError):
                 pass
         if "chain_makeup" in data:
