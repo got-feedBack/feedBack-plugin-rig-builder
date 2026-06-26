@@ -863,25 +863,28 @@
  },
  "Bass_Pedal_BassFlanger": {
   "bassflanger": {
+   "_static": {
+    "Manual": 0.45
+   },
    "Rate": {
     "param": "Rate",
     "scale": 0.01,
-    "_hint": "RS Rate\u2192LFO speed 0..1 (0.05..5 Hz)."
+    "_hint": "RS Rate maps to the BF-2B Rate control."
    },
    "Depth": {
     "param": "Depth",
     "scale": 0.01,
-    "_hint": "RS Depth\u2192sweep width 0..1."
+    "_hint": "RS Depth maps to the BF-2B Depth control."
    },
    "Filter": {
-    "param": "Filter",
+    "param": "Res",
     "scale": 0.01,
-    "_hint": "RS Filter\u2192Resonance/feedback 0..1 (the jet)."
+    "_hint": "RS Filter is reused as the BF-2B Resonance control."
    },
    "Mix": {
-    "param": "Mix",
+    "param": "Res",
     "scale": 0.01,
-    "_hint": "RS Mix\u2192dry/wet 0..1."
+    "_hint": "The BF-2B has no Mix control; RS Mix is reused as the real Resonance knob."
    }
   },
   "khs flanger": {
@@ -921,25 +924,53 @@
    }
   },
   "fl-3": {
+   "_static": {
+    "Manual": 0.45
+   },
    "Rate": {
     "param": "Rate",
     "scale": 0.01,
-    "_hint": "RS Rate\u2192LFO speed 0..1 (0.05..5 Hz)."
+    "_hint": "RS Rate maps to the BF-2B Rate control."
    },
    "Depth": {
     "param": "Depth",
     "scale": 0.01,
-    "_hint": "RS Depth\u2192sweep width 0..1."
+    "_hint": "RS Depth maps to the BF-2B Depth control."
    },
    "Filter": {
-    "param": "Filter",
+    "param": "Res",
     "scale": 0.01,
-    "_hint": "RS Filter\u2192Resonance/feedback 0..1 (the jet)."
+    "_hint": "RS Filter is reused as the BF-2B Resonance control."
    },
    "Mix": {
-    "param": "Mix",
+    "param": "Res",
     "scale": 0.01,
-    "_hint": "RS Mix\u2192dry/wet 0..1."
+    "_hint": "The BF-2B has no Mix control; RS Mix is reused as the real Resonance knob."
+   }
+  },
+  "fl3": {
+   "_static": {
+    "Manual": 0.45
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS Rate maps to the BF-2B Rate control."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth maps to the BF-2B Depth control."
+   },
+   "Filter": {
+    "param": "Res",
+    "scale": 0.01,
+    "_hint": "RS Filter is reused as the BF-2B Resonance control."
+   },
+   "Mix": {
+    "param": "Res",
+    "scale": 0.01,
+    "_hint": "The BF-2B has no Mix control; RS Mix is reused as the real Resonance knob."
    }
   }
  },
@@ -3322,15 +3353,19 @@
  },
  "Pedal_LoFiFilter": {
   "lofifilter": {
+   "_static": {
+    "Level": 0.66,
+    "Lo": 0.2
+   },
    "FilterType": {
-    "param": "FilterType",
+    "param": "Hi",
     "scale": 0.01,
-    "_hint": "RS FilterType moves the Lofinator-style Lo/Hi filter window."
+    "_hint": "RS FilterType drives the real Hi cut/lo-fi window control."
    },
    "Mix": {
-    "param": "Mix",
+    "param": "Drive",
     "scale": 0.01,
-    "_hint": "RS Mix controls drive, resonance, lo-fi texture, and wet intensity."
+    "_hint": "RS Mix drives the real Drive control; Level and Lo are pinned in _static."
    }
   },
   "khs filter": {
@@ -3346,44 +3381,56 @@
    }
   },
   "lo fi filter": {
+   "_static": {
+    "Level": 0.66,
+    "Lo": 0.2
+   },
    "FilterType": {
-    "param": "FilterType",
+    "param": "Hi",
     "scale": 0.01,
-    "_hint": "RS FilterType moves the Lofinator-style Lo/Hi filter window."
+    "_hint": "RS FilterType drives the real Hi cut/lo-fi window control."
    },
    "Mix": {
-    "param": "Mix",
+    "param": "Drive",
     "scale": 0.01,
-    "_hint": "RS Mix controls drive, resonance, lo-fi texture, and wet intensity."
+    "_hint": "RS Mix drives the real Drive control; Level and Lo are pinned in _static."
    }
   }
  },
  "Pedal_BobFilter": {
   "bobfilter": {
+   "_static": {
+    "Output": 0.68,
+    "Pattern": 0.28
+   },
    "Sens": {
-    "param": "Sens",
-    "scale": 0.01
+    "param": "Drive",
+    "scale": 0.008,
+    "offset": 0.18,
+    "_hint": "RS Sens drives the real Drive/input amount with a floor so the filter keeps moving."
    },
    "Attack": {
-    "param": "Attack",
+    "param": "Envelope",
     "scale": 0.004016064257028112,
     "offset": -0.004016064257028112,
-    "_hint": "RS Attack is observed 1-250 ms. BobFilter stores it normalized: (ms - 1) / 249."
+    "invert": true,
+    "_hint": "RS Attack is observed 1-250 ms; smaller attack means faster MF-105 envelope response."
    },
    "Release": {
-    "param": "Release",
-    "scale": 0.00101010101010101,
-    "offset": -0.0101010101010101,
-    "_hint": "RS Release is observed 10-1000 ms. BobFilter stores it normalized: (ms - 10) / 990."
+    "param": "Rate",
+    "scale": 0.00072,
+    "offset": -0.0072,
+    "invert": true,
+    "_hint": "RS Release has no direct MF-105 panel equivalent, so it biases the pattern rate slower at larger values."
    },
    "Mix": {
     "param": "Mix",
     "scale": 0.01
    },
    "Filter": {
-    "param": "Filter",
+    "param": "Mode",
     "scale": 1.0,
-    "_hint": "the game Filter is a binary 0/1 voicing switch."
+    "_hint": "the game Filter is a binary 0/1 voicing switch mapped to Mids/Bass Mode."
    }
   },
   "khs filter": {
@@ -3397,66 +3444,65 @@
    }
   },
   "fm105": {
+   "_static": {
+    "Output": 0.68,
+    "Pattern": 0.28
+   },
    "Sens": {
-    "param": "Sens",
-    "scale": 0.01
+    "param": "Drive",
+    "scale": 0.008,
+    "offset": 0.18,
+    "_hint": "RS Sens drives the real Drive/input amount with a floor so the filter keeps moving."
    },
    "Attack": {
-    "param": "Attack",
+    "param": "Envelope",
     "scale": 0.004016064257028112,
     "offset": -0.004016064257028112,
-    "_hint": "RS Attack is observed 1-250 ms. BobFilter stores it normalized: (ms - 1) / 249."
+    "invert": true,
+    "_hint": "RS Attack is observed 1-250 ms; smaller attack means faster MF-105 envelope response."
    },
    "Release": {
-    "param": "Release",
-    "scale": 0.00101010101010101,
-    "offset": -0.0101010101010101,
-    "_hint": "RS Release is observed 10-1000 ms. BobFilter stores it normalized: (ms - 10) / 990."
+    "param": "Rate",
+    "scale": 0.00072,
+    "offset": -0.0072,
+    "invert": true,
+    "_hint": "RS Release has no direct MF-105 panel equivalent, so it biases the pattern rate slower at larger values."
    },
    "Mix": {
     "param": "Mix",
     "scale": 0.01
    },
    "Filter": {
-    "param": "Filter",
+    "param": "Mode",
     "scale": 1.0,
-    "_hint": "the game Filter is a binary 0/1 voicing switch."
+    "_hint": "the game Filter is a binary 0/1 voicing switch mapped to Mids/Bass Mode."
    }
   }
  },
  "Pedal_AutoFilter": {
   "autofilter": {
    "FilterType": {
-    "param": "FilterType",
+    "param": "Mode",
     "scale": 0.5,
     "_hint": "0/1/2 maps to Mu-Tron style low-pass / band-pass / high-pass."
    },
    "Res": {
-    "param": "Res",
+    "param": "Peak",
     "scale": 0.01,
     "_hint": "Peak/resonance amount."
    },
    "Sens": {
-    "param": "Sens",
-    "scale": 0.01,
-    "_hint": "Input detector sensitivity and sweep range. The plugin keeps an internal floor so low RS values still sweep."
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.001,
-    "_hint": "RS Attack is stored as a large raw time value; /1000 keeps it in normalized envelope range."
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.001,
-    "_hint": "RS Release is stored as a large raw time value; /1000 keeps it in normalized envelope range."
+    "param": "Gain",
+    "scale": 0.008,
+    "offset": 0.18,
+    "_hint": "Input detector sensitivity and sweep range. The mapping keeps a floor so low RS values still sweep."
    },
    "_static": {
-    "FilterType": 0.5,
-    "Res": 0.55,
-    "Sens": 0.45,
-    "Attack": 0.06,
-    "Release": 0.14
+    "Mode": 0.5,
+    "Peak": 0.56,
+    "Gain": 0.46,
+    "Range": 1.0,
+    "Direction": 1.0
    }
   },
   "autosweep": {
@@ -3502,36 +3548,27 @@
   },
   "bu-tron iii": {
    "FilterType": {
-    "param": "FilterType",
+    "param": "Mode",
     "scale": 0.5,
     "_hint": "0/1/2 maps to Mu-Tron style low-pass / band-pass / high-pass."
    },
    "Res": {
-    "param": "Res",
+    "param": "Peak",
     "scale": 0.01,
     "_hint": "Peak/resonance amount."
    },
    "Sens": {
-    "param": "Sens",
-    "scale": 0.01,
-    "_hint": "Input detector sensitivity and sweep range. The plugin keeps an internal floor so low RS values still sweep."
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.001,
-    "_hint": "RS Attack is stored as a large raw time value; /1000 keeps it in normalized envelope range."
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.001,
-    "_hint": "RS Release is stored as a large raw time value; /1000 keeps it in normalized envelope range."
+    "param": "Gain",
+    "scale": 0.008,
+    "offset": 0.18,
+    "_hint": "Input detector sensitivity and sweep range. The mapping keeps a floor so low RS values still sweep."
    },
    "_static": {
-    "FilterType": 0.5,
-    "Res": 0.55,
-    "Sens": 0.45,
-    "Attack": 0.06,
-    "Release": 0.14
+    "Mode": 0.5,
+    "Peak": 0.56,
+    "Gain": 0.46,
+    "Range": 1.0,
+    "Direction": 1.0
    }
   }
  },

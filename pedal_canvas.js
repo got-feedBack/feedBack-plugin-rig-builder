@@ -1728,7 +1728,7 @@
     [{id:0,cx:.205,lbl:'TIME'},{id:1,cx:.40,lbl:'FEEDBACK',lblPx:7.5},{id:2,cx:.595,lbl:'MIX'},{id:3,cx:.79,lbl:'FILTER',lblPx:8}],
     'Bass','Delay','DL-3');
   P.fl3 = chiefSpec(300,480,[96,80,134],
-    [{id:0,cx:.205,lbl:'RATE'},{id:1,cx:.40,lbl:'DEPTH'},{id:2,cx:.595,lbl:'FILTER',lblPx:8},{id:3,cx:.79,lbl:'MIX'}],
+    [{id:0,cx:.205,lbl:'MANUAL',lblPx:8},{id:1,cx:.40,lbl:'DEPTH'},{id:2,cx:.595,lbl:'RATE'},{id:3,cx:.79,lbl:'RES'}],
     'Bass','Flanger','FL-3');
 
   function boxSpec(w,h,col,knobs,wordmark,sub,accent,wfont){ return { w,h,
@@ -2628,10 +2628,11 @@
       textC(d,.5*W,.908*H,F.anton,17,gold,'GERMANIUM');
       textC(d,.5*W,.940*H,F.anton,17,gold,'DRIVE'); } };
 
-  // Ibañez LF6 "Lo Fi" — Ibanez LF7-style lo-fi filter on the Tonelok body.
-  // Labels use the RS knob names. Params: FilterType0 Mix1.
+  // Ibañez LF6 "Lo Fi" — Lofinator-style lo-fi filter on the Tonelok body.
+  // Real controls: Drive0 Level1 Lo2 Hi3.
   P.lofifilter = ibanezSpec(280,460,
-    [{id:0,cx:.32,r:.090,lbl:'FILTER TYPE',lblPx:7},{id:1,cx:.68,r:.090,lbl:'MIX'}],
+    [{id:0,cx:.18,r:.065,lbl:'DRIVE'},{id:1,cx:.42,r:.065,lbl:'LEVEL'},
+     {id:2,cx:.64,r:.065,lbl:'LO'},{id:3,cx:.84,r:.065,lbl:'HI'}],
     'LF6','LO FI');
 
   // NoFi Echo — Ibanez DE7-style: the Ibanez Tonelok (silver) template.
@@ -2711,36 +2712,38 @@
     'FM104');
 
   // Bob Filter — Moog MF-105 MuRF-style: custom foog layout (not the simple
-  // foogSpec box) — two knob rows, decorative LFO/FREQ slide switches, the
-  // signature 8-band FILTERS slider bank, an LED row + foog logo + stomp.
-  // Parody (foogermooger / FM105). RS knob names. Sens0 Attack1 Release2 Mix3 Filter4.
-  P.fm105 = { w:320,h:480, knobs:[
-      {id:0,cx:.22,cy:.165,r:.072,style:'moog'},
-      {id:3,cx:.50,cy:.165,r:.072,style:'moog'},
-      {id:1,cx:.30,cy:.345,r:.072,style:'moog'},
-      {id:2,cx:.70,cy:.345,r:.072,style:'moog'}],
-    switches:[{id:4,cx:.78,cy:.175,hs:.036}],
+  // foogSpec box) — two knob rows, decorative LFO switch, the signature
+  // 8-band FILTERS slider bank, an LED row + foog logo + stomp.
+  // Real controls: Drive0 Output1 Pattern2 Rate3 Envelope4 Mix5 Mode6.
+  P.fm105 = { w:340,h:500, knobs:[
+      {id:0,cx:.20,cy:.165,r:.064,style:'moog'},
+      {id:1,cx:.50,cy:.165,r:.064,style:'moog'},
+      {id:2,cx:.80,cy:.165,r:.064,style:'moog'},
+      {id:3,cx:.24,cy:.345,r:.062,style:'moog'},
+      {id:4,cx:.50,cy:.345,r:.062,style:'moog'},
+      {id:5,cx:.74,cy:.345,r:.062,style:'moog'}],
+    switches:[{id:6,cx:.90,cy:.345,hs:.032}],
     tick:rgb(150,152,158), ptr:rgb(238,240,244),
     draw(d,values){ const {ctx:c,W,H,s}=d; foogBody(d); const wt=rgb(226,228,232), dim=rgb(150,152,158);
       // brand + model
       textC(d,.34*W,.052*H,F.crete,17,wt,'foogermooger');
       textC(d,.74*W,.052*H,F.crete,15,wt,'FM105');
-      // knob labels (RS names) above each knob
-      const KL=[['SENS',.22,.165],['MIX',.50,.165],['ATTACK',.30,.345],['RELEASE',.70,.345]];
+      // knob labels (real panel names) above each knob
+      const KL=[['DRIVE',.20,.165],['OUTPUT',.50,.165],['PATTERN',.80,.165],
+                ['RATE',.24,.345],['ENVELOPE',.50,.345],['MIX',.74,.345]];
       KL.forEach(k=> textSpaced(d,k[1]*W,(k[2]-.072-.018)*H,F.barlow,8,wt,k[0],0.3));
-      // FILTER is a 2-mode selector (engine draws the toggle via `switches`):
-      // WAH sweep (value<0.5) vs voiced MuRF BANK (>=0.5). Active label brightens.
-      const fv=(values&&values[4]!=null)?values[4]:1;
-      textSpaced(d,.78*W,(.165-.072-.018)*H,F.barlow,8,wt,'FILTER',0.3);
-      textSpaced(d,.78*W,.252*H,F.barlow,6.5,fv<0.5?wt:dim,'WAH',0.2);
-      textSpaced(d,.78*W,.286*H,F.barlow,6.5,fv>=0.5?wt:dim,'BANK',0.2);
-      // decorative slide switches (LFO OFF/ON, FREQ BASS/MIDS) between the 2nd-row knobs
+      // MODE is the Bass/Mids range selector (engine draws the toggle via `switches`).
+      const mv=(values&&values[6]!=null)?values[6]:1;
+      textSpaced(d,.90*W,(.345-.072-.018)*H,F.barlow,7.5,wt,'MODE',0.3);
+      textSpaced(d,.90*W,.410*H,F.barlow,6.2,mv<0.5?wt:dim,'MIDS',0.2);
+      textSpaced(d,.90*W,.440*H,F.barlow,6.2,mv>=0.5?wt:dim,'BASS',0.2);
+      // decorative LFO slide switch between the 2nd-row knobs
       const slide=(sx,on,lbl)=>{ const sw=15*s, sh=8*s, sy=.345*H;
         rr(c,sx-sw/2,sy-sh/2,sw,sh,3*s); c.fillStyle=rgb(38,38,42); c.fill();
         rr(c,sx-sw/2,sy-sh/2,sw,sh,3*s); c.strokeStyle=rgb(10,10,12); c.lineWidth=0.8*s; c.stroke();
         rr(c,sx+(on?1:-1)*sw*0.18-sw*0.16,sy-sh/2+1.2*s,sw*0.32,sh-2.4*s,2*s); c.fillStyle=rgb(228,230,234); c.fill();
         textSpaced(d,sx,(.345-.030)*H,F.barlow,5.5,wt,lbl,0.2); };
-      slide(.445*W,true,'LFO'); slide(.560*W,false,'FREQ');
+      slide(.375*W,true,'LFO');
       // FILTERS slider bank (decorative, MuRF signature)
       const bx=W*.105, bw=W*.81, by=H*.45, bh=H*.20;
       rr(c,bx,by,bw,bh,7*s); c.strokeStyle=wt; c.lineWidth=1.6*s; c.stroke();
@@ -2760,16 +2763,15 @@
 
   // Auto Filter — Mu-Tron III-style: brushed-silver box, blue control panel with
   // black scaled knobs, rainbow maker logo + a red POWER lever, wordmark + brand
-  // + chrome stomp. Parody (Bu-Tron III / auditronics). RS knob names.
-  // FilterType0 Res1 Sens2 Attack3 Release4.
+  // + chrome stomp. Parody (Bu-Tron III / auditronics). Real controls:
+  // Gain0 Peak1 Mode2 Range3 Direction4.
   P.butroniii = { w:300,h:470, knobs:[
-      {id:1,cx:.22,cy:.290,r:.058,style:'pointer',cap:[26,26,28]},
-      {id:2,cx:.22,cy:.440,r:.058,style:'pointer',cap:[26,26,28]},
-      {id:3,cx:.55,cy:.180,r:.058,style:'pointer',cap:[26,26,28]},
-      {id:4,cx:.55,cy:.360,r:.058,style:'pointer',cap:[26,26,28]}],
-    sw3:[{id:0,cx:.185,cy:.150}],
+      {id:0,cx:.24,cy:.330,r:.064,style:'pointer',cap:[26,26,28]},
+      {id:1,cx:.56,cy:.330,r:.064,style:'pointer',cap:[26,26,28]}],
+    sw3:[{id:2,cx:.190,cy:.145}],
+    switches:[{id:3,cx:.805,cy:.188,hs:.034},{id:4,cx:.805,cy:.365,hs:.034}],
     tick:rgb(200,210,230), ptr:rgb(240,242,246),
-    draw(d){ const {ctx:c,W,H,s}=d; const m=8*s, wt=rgb(238,240,244), dk=rgb(30,30,34);
+    draw(d,values){ const {ctx:c,W,H,s}=d; const m=8*s, wt=rgb(238,240,244), dim=rgb(185,195,220), dk=rgb(30,30,34);
       // brushed-silver box
       c.fillStyle=rgb(8,8,10); c.fillRect(0,0,W,H);
       const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(196,198,202)); bg.addColorStop(1,rgb(162,164,170));
@@ -2783,16 +2785,25 @@
       // rainbow maker logo (top-right of panel)
       const lx=W*.74, ly=H*.085, bw=6*s, bh=20*s;
       [[214,52,52],[70,176,90],[64,120,212]].forEach((col,i)=>{ rr(c,lx+i*(bw+2*s),ly,bw,bh,1.5*s); c.fillStyle=rgb(col[0],col[1],col[2]); c.fill(); });
-      // knob labels (RS names) below each knob
-      [['RES',.22,.290,8],['SENS',.22,.440,8],['ATTACK',.55,.180,7.5],['RELEASE',.55,.360,7.5]]
+      // knob labels (real names) below each knob
+      [['GAIN',.24,.330,8],['PEAK',.56,.330,8]]
         .forEach(k=> textSpaced(d,k[1]*W,(k[2]+.085)*H,F.barlow,k[3],wt,k[0],0.2));
-      // FilterType 3-way MODE selector (LP/BP/HP) — lever drawn by engine via sw3
+      // 3-way MODE selector (LP/BP/HP) — lever drawn by engine via sw3.
       textSpaced(d,.185*W,.072*H,F.barlow,7,wt,'MODE',0.3);
       textSpaced(d,.305*W,.118*H,F.barlow,6.5,wt,'HP',0.2);
       textSpaced(d,.305*W,.150*H,F.barlow,6.5,wt,'BP',0.2);
       textSpaced(d,.305*W,.182*H,F.barlow,6.5,wt,'LP',0.2);
+      // Range and Direction toggles (switch hit areas are provided in `switches`).
+      const rv=(values&&values[3]!=null)?values[3]:1;
+      const dv=(values&&values[4]!=null)?values[4]:1;
+      textSpaced(d,.805*W,.108*H,F.barlow,7,wt,'RANGE',0.3);
+      textSpaced(d,.805*W,.230*H,F.barlow,6.2,rv<0.5?wt:dim,'LOW',0.2);
+      textSpaced(d,.805*W,.260*H,F.barlow,6.2,rv>=0.5?wt:dim,'HIGH',0.2);
+      textSpaced(d,.805*W,.285*H,F.barlow,7,wt,'DIRECTION',0.3);
+      textSpaced(d,.805*W,.405*H,F.barlow,6.2,dv<0.5?wt:dim,'DOWN',0.2);
+      textSpaced(d,.805*W,.435*H,F.barlow,6.2,dv>=0.5?wt:dim,'UP',0.2);
       // decorative POWER lever (red, ON) lower-right of panel
-      const px=W*.80, py=H*.40;
+      const px=W*.80, py=H*.475;
       rr(c,px-9*s,py-7*s,18*s,14*s,3*s); c.fillStyle=rgb(28,30,38); c.fill();
       rr(c,px+1*s,py-9*s,8*s,13*s,2*s); c.fillStyle=rgb(206,44,44); c.fill();
       textSpaced(d,px,py+15*s,F.barlow,6,wt,'POWER',0.2);

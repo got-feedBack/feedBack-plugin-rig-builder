@@ -29,6 +29,11 @@ static inline BbdChipSpec mn3207Bf2ClockedSpec()
     return { 1024, 40000.0f, 500000.0f, 0.5f, 0.92f, 0.0011f, 0.000030f };
 }
 
+static inline BbdChipSpec mn3204Spec()
+{
+    return { 512, 40000.0f, 500000.0f, 0.5f, 0.90f, 0.0009f, 0.000032f };
+}
+
 static inline BbdChipSpec sad1024Spec()
 {
     return { 1024, 1500.0f, 1500000.0f, 0.5f, 1.05f, 0.0014f, 0.000035f };

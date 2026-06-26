@@ -143,7 +143,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/FL-3.vst3",
    "free": true,
-   "notes": "Bundled Boss BF-2/BF-3 model adapted for bass — modulated delay + feedback (Filter=resonance), lows kept clean. Rate/Depth/Filter/Mix map 1:1."
+   "notes": "Bundled Boss BF-2B style component-guided bass flanger using M5218P/TL022 conditioning and MN3102/MN3204 BBD delay. Real controls: Manual, Depth, Rate, Res; Rocksmith Filter/Mix translate to the real resonance path."
   }
  ],
  "Pedal_Phaser": [
@@ -622,7 +622,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Lo Fi Filter.vst3",
-   "notes": "Bundled Lofinator-style lo-fi filter based on the local schematic, using the game's FilterType and Mix knobs."
+   "notes": "Bundled Lofinator-style lo-fi filter based on the local schematic. The plugin exposes the real Drive, Level, Lo and Hi controls; Rocksmith FilterType/Mix are translated in the mapping table."
   }
  ],
  "Pedal_BobFilter": [
@@ -633,7 +633,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/FM105.vst3",
-   "notes": "Bundled Moog/MuRF-style analog filter based on the local MF-105 schematic, using the game's Sens, Attack, Release, Mix, and Filter knobs."
+   "notes": "Bundled Moog/MuRF-style analog filter based on the local MF-105 schematic. The plugin exposes Drive, Output, Pattern, Rate, Envelope, Mix and Mode; Rocksmith Sens/Attack/Release/Mix/Filter are translated in the mapping table."
   }
  ],
  "Pedal_AutoFilter": [
@@ -643,7 +643,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/BU-TRON III.vst3",
    "free": true,
-   "notes": "Bundled Mu-Tron III style envelope filter based on the local Auto Filter schematic, using the game's FilterType, Res, Sens, Attack and Release knobs."
+   "notes": "Bundled Mu-Tron III style envelope filter based on the local Auto Filter schematic. The plugin exposes Gain, Peak, Mode, Range and Direction; Rocksmith FilterType/Res/Sens/Attack/Release are translated in the mapping table."
   },
   {
    "name": "AutoSweep",

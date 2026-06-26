@@ -1,111 +1,152 @@
 /*
- * BassFlanger — Boss BF-2/BF-3 flanger model for Bass_Pedal_BassFlanger,
- * adapted for bass.
+ * BassFlanger / FL-3 - Boss BF-2B style bass flanger.
  *
- * Flanger = a SHORT LFO-modulated delay (~0.4–3.5 ms) summed with the dry
- * signal, with FEEDBACK around the delay to create the resonant "jet" (the
- * comb filter's resonance). Bass adaptation: the wet + feedback path is
- * high-passed so the low end stays solid and the feedback can't build up a
- * muddy sub rumble — only the highs flange. Delay range tuned for bass, not
- * the BF-2's guitar BBD clock values.
- * the game knobs: Rate, Depth, Filter (= Resonance/feedback), Mix.
+ * Local reference: pedals/BOSS BF-2 BF-2B.pdf. The BF-2B page uses M5218P
+ * audio opamps, TL022 LFO/clock support, MN3102 clock driver and MN3204
+ * 512-stage BBD. The service notes specify a 0.5 ms - 6.5 ms delay sweep and
+ * 100 ms - 16 s LFO period; the plugin exposes the real Manual, Depth, Rate
+ * and Res controls and keeps dry/wet fixed like the hardware.
  */
 #include "DistrhoPlugin.hpp"
 #include "BassFlangerParams.h"
-#include <cmath>
-#include <cstring>
+#include "../_shared/FlangerComponents.h"
 
 START_NAMESPACE_DISTRHO
 
-static inline float onePoleCoef(float fc, float fs) {
-    const float c = 1.0f - std::exp(-6.2831853f * fc / fs);
-    return c < 0.0f ? 0.0f : (c > 1.0f ? 1.0f : c);
+namespace {
+
+static inline float clamp01(float value)
+{
+    return value < 0.0f ? 0.0f : (value > 1.0f ? 1.0f : value);
 }
 
-class Flanger {
-    static const int BUF = 1024;       // ~21 ms at 48 kHz — flanger delays are short
-    float buf[BUF];
-    int   wpos = 0;
-    float fs = 48000.f;
-    double phase = 0.0;
-    float lfoInc = 0.f;
-    float baseSamp = 19.f, depthSamp = 70.f;
-    float feedback = 0.4f;
-    float cHP = 0.05f, zHP = 0.f;
-    float mix = 0.6f;
-public:
-    void reset(float startPhase) { std::memset(buf, 0, sizeof(buf)); wpos = 0; zHP = 0.f; phase = startPhase; }
-    void setSampleRate(float s) { fs = (s > 0.f) ? s : 48000.f; }
-    void setParams(float rate, float depth, float filterP, float mixP) {
-        const float rateHz = 0.05f + rate * 5.0f;          // 0.05 .. 5 Hz
-        lfoInc    = 6.2831853f * rateHz / fs;
-        baseSamp  = 0.0004f * fs;                          // ~0.4 ms base delay
-        depthSamp = depth * 0.003f * fs;                   // up to ~3 ms sweep
-        feedback  = filterP * 0.85f;                       // resonance / jet (clamped < 1)
-        cHP       = onePoleCoef(120.0f, fs);               // keep lows out of wet + feedback (bass)
-        mix       = mixP;
-    }
-    inline float process(float x) {
-        const float lfo = std::sin((float)phase);
-        phase += lfoInc; if (phase > 6.2831853) phase -= 6.2831853;
-        const float delay = baseSamp + depthSamp * (0.5f * (lfo + 1.0f));
-        float rp = (float)wpos - delay;
-        while (rp < 0.f) rp += BUF;
-        const int i0 = (int)rp; const float fr = rp - i0;
-        const int i1 = (i0 + 1) % BUF;
-        float wet = buf[i0] * (1.0f - fr) + buf[i1] * fr;
-        // high-pass the wet so the low end stays dry/solid and the feedback
-        // can't accumulate sub-bass rumble
-        zHP += cHP * (wet - zHP);
-        wet = wet - zHP;
-        // write input + feedback of the (high-passed) wet → resonant jet
-        buf[wpos] = x + feedback * wet;
-        wpos = (wpos + 1) % BUF;
-        return x * (1.0f - 0.5f * mix) + wet * mix;
-    }
-};
+static rbflanger::FlangerVoicing bf2bVoicing()
+{
+    rbflanger::FlangerVoicing v;
+    v.bbd = rbflanger::mn3204Spec();
+    v.opamp = rbshared::m5218Spec();
+    v.minDelayMs = 0.52f;
+    v.maxDelayMs = 6.45f;
+    v.minRateHz = 0.0625f;
+    v.maxRateHz = 10.0f;
+    v.inputHpHz = 36.0f;
+    v.inputLpHz = 7200.0f;
+    v.bbdLpHz = 5350.0f;
+    v.outputLpHz = 6400.0f;
+    v.colorHpHz = 1550.0f;
+    v.delaySlewHz = 92.0f;
+    v.feedbackMax = 0.74f;
+    v.feedbackSign = -1.0f;
+    v.wetSign = -1.0f;
+    v.dryLevel = 0.94f;
+    v.wetLevel = 0.62f;
+    v.dryDucking = 0.08f;
+    v.wetMixMin = 0.22f;
+    v.wetMixScale = 0.78f;
+    v.lfoTriangle = 0.90f;
+    v.flangeRangeMaxMs = 6.45f;
+    v.depthBase = 0.030f;
+    v.depthScale = 0.58f;
+    v.driveMinDb = -1.2f;
+    v.driveMaxDb = 4.4f;
+    v.outputMinDb = -0.9f;
+    v.outputMaxDb = 0.7f;
+    v.compander = 0.55f;
+    return v;
+}
 
-class BassFlangerPlugin : public Plugin {
-    Flanger L, R;
-    float fParams[kParamCount];
-    void recalc() {
-        L.setParams(fParams[kRate], fParams[kDepth], fParams[kFilter], fParams[kMix]);
-        R.setParams(fParams[kRate], fParams[kDepth], fParams[kFilter], fParams[kMix]);
+} // namespace
+
+class BassFlangerPlugin : public Plugin
+{
+    rbflanger::AnalogBbdFlanger left;
+    rbflanger::AnalogBbdFlanger right;
+    float params[kParamCount];
+
+    void applyAll()
+    {
+        left.setControls(params[kManual], params[kDepth], params[kRate], params[kRes],
+                         0.86f, 0.36f, 0.58f, false);
+        right.setControls(params[kManual], params[kDepth], params[kRate], params[kRes],
+                          0.86f, 0.36f, 0.58f, false);
     }
+
 public:
-    BassFlangerPlugin() : Plugin(kParamCount, 0, 0) {
-        for (int i = 0; i < kParamCount; ++i) fParams[i] = kBassFlangerDef[i];
-        const float sr = (float)getSampleRate();
-        L.setSampleRate(sr); R.setSampleRate(sr);
-        L.reset(0.0f); R.reset(1.5708f);
-        recalc();
+    BassFlangerPlugin()
+        : Plugin(kParamCount, 0, 0)
+    {
+        for (int i = 0; i < kParamCount; ++i)
+            params[i] = kBassFlangerDef[i];
+
+        const rbflanger::FlangerVoicing voice = bf2bVoicing();
+        left.setVoicing(voice);
+        right.setVoicing(voice);
+        left.setPhaseOffset(0.00f);
+        right.setPhaseOffset(0.018f);
+        left.setSampleRate((float)getSampleRate());
+        right.setSampleRate((float)getSampleRate());
+        applyAll();
     }
+
 protected:
-    const char* getLabel()       const override { return "BassFlanger"; }
-    const char* getDescription() const override { return "Boss BF-2/BF-3 bass flanger"; }
-    const char* getMaker()       const override { return "RigBuilder"; }
-    const char* getLicense()     const override { return "ISC"; }
-    uint32_t    getVersion()     const override { return d_version(1, 0, 0); }
-    int64_t     getUniqueId()    const override { return d_cconst('R', 'B', 'F', 'l'); }
+    const char* getLabel() const override { return "BassFlanger"; }
+    const char* getDescription() const override { return "Boss BF-2B style MN3204 BBD bass flanger"; }
+    const char* getMaker() const override { return "RigBuilder"; }
+    const char* getLicense() const override { return "ISC"; }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    int64_t getUniqueId() const override { return d_cconst('R', 'B', 'F', 'l'); }
 
-    void initParameter(uint32_t i, Parameter& p) override {
-        if (i >= (uint32_t)kParamCount) return;
-        p.hints = kParameterIsAutomatable;
-        p.name = kBassFlangerNames[i]; p.symbol = kBassFlangerSymbols[i];
-        p.ranges.min = kBassFlangerMin[i]; p.ranges.max = kBassFlangerMax[i]; p.ranges.def = kBassFlangerDef[i];
+    void initParameter(uint32_t index, Parameter& parameter) override
+    {
+        if (index >= (uint32_t)kParamCount)
+            return;
+        parameter.hints = kParameterIsAutomatable;
+        parameter.name = kBassFlangerNames[index];
+        parameter.symbol = kBassFlangerSymbols[index];
+        parameter.ranges.min = kBassFlangerMin[index];
+        parameter.ranges.max = kBassFlangerMax[index];
+        parameter.ranges.def = kBassFlangerDef[index];
     }
-    float getParameterValue(uint32_t i) const override { return (i < (uint32_t)kParamCount) ? fParams[i] : 0.f; }
-    void  setParameterValue(uint32_t i, float v) override { if (i < (uint32_t)kParamCount) { fParams[i] = v; recalc(); } }
-    void  sampleRateChanged(double r) override { L.setSampleRate((float)r); R.setSampleRate((float)r); L.reset(0.0f); R.reset(1.5708f); recalc(); }
 
-    void run(const float** in, float** out, uint32_t frames) override {
-        const float* iL = in[0]; const float* iR = in[1];
-        float* oL = out[0]; float* oR = out[1];
-        for (uint32_t i = 0; i < frames; ++i) { oL[i] = L.process(iL[i]); oR[i] = R.process(iR[i]); }
+    float getParameterValue(uint32_t index) const override
+    {
+        return index < (uint32_t)kParamCount ? params[index] : 0.0f;
     }
+
+    void setParameterValue(uint32_t index, float value) override
+    {
+        if (index >= (uint32_t)kParamCount)
+            return;
+        params[index] = clamp01(value);
+        applyAll();
+    }
+
+    void sampleRateChanged(double newSampleRate) override
+    {
+        left.setSampleRate((float)newSampleRate);
+        right.setSampleRate((float)newSampleRate);
+        applyAll();
+    }
+
+    void run(const float** inputs, float** outputs, uint32_t frames) override
+    {
+        float* outL = outputs[0];
+        float* outR = outputs[1];
+
+        for (uint32_t i = 0; i < frames; ++i)
+        {
+            const rbmod::StereoInputPair feed = rbmod::stereoPedalFeeds(inputs[0][i], inputs[1][i]);
+            outL[i] = left.process(feed.left);
+            outR[i] = right.process(feed.right);
+        }
+    }
+
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BassFlangerPlugin)
 };
 
-Plugin* createPlugin() { return new BassFlangerPlugin(); }
+Plugin* createPlugin()
+{
+    return new BassFlangerPlugin();
+}
 
 END_NAMESPACE_DISTRHO
