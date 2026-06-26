@@ -3,34 +3,34 @@
 
 enum AcousticSimulatorParamId
 {
-    kTone = 0,
-    kMidShift,
+    kGain = 0,
+    kTop,
     kBody,
-    kMid,
+    kVolume,
     kParamCount
 };
 
 static const char* const kAcousticSimulatorNames[kParamCount] = {
-    "Tone",
-    "MidShift",
+    "Gain",
+    "Top",
     "Body",
-    "Mid",
+    "Volume",
 };
 
 static const char* const kAcousticSimulatorSymbols[kParamCount] = {
-    "tone",
-    "midshift",
+    "gain",
+    "top",
     "body",
-    "mid",
+    "volume",
 };
 
 static const float kAcousticSimulatorMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f };
 static const float kAcousticSimulatorMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f };
 static const float kAcousticSimulatorDef[kParamCount] = {
-    0.75f,
-    (800.0f - 275.0f) / (3000.0f - 275.0f),
-    0.40f,
-    0.30f,
+    0.44f,
+    0.68f,
+    0.48f,
+    0.62f,
 };
 
 #endif // ACOUSTIC_SIMULATOR_PARAMS_H

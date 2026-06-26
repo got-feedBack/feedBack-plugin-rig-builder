@@ -3,26 +3,23 @@
 
 enum DynamicsCompressionParamId
 {
-    kComp = 0,
-    kAttack,
-    kRelease,
+    kOutput = 0,
+    kSensitivity,
     kParamCount
 };
 
 static const char* const kDynamicsCompressionNames[kParamCount] = {
-    "Comp",
-    "Attack",
-    "Release",
+    "Output",
+    "Sensitivity",
 };
 
 static const char* const kDynamicsCompressionSymbols[kParamCount] = {
-    "comp",
-    "attack",
-    "release",
+    "output",
+    "sensitivity",
 };
 
-static const float kDynamicsCompressionMin[kParamCount] = { 0.0f, 0.0f, 0.0f };
-static const float kDynamicsCompressionMax[kParamCount] = { 1.0f, 1.0f, 1.0f };
-static const float kDynamicsCompressionDef[kParamCount] = { 0.42f, 0.28f, 0.18f };
+static const float kDynamicsCompressionMin[kParamCount] = { 0.0f, 0.0f };
+static const float kDynamicsCompressionMax[kParamCount] = { 1.0f, 1.0f };
+static const float kDynamicsCompressionDef[kParamCount] = { 0.62f, 0.42f };
 
 #endif // DYNAMICS_COMPRESSION_PARAMS_H

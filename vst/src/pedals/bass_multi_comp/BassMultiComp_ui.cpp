@@ -1,6 +1,5 @@
-/* BassMultiComp UI — copyright-free chrome compressor look (RS 'MB Comp'):
- * brushed-silver box, two big knobs (Compress, Rate) + a small Filter knob,
- * dark lettering, heavy wordmark. 3 knobs = RS count. */
+/* BassMultiComp UI — copyright-free chrome compressor look. Real panel:
+ * Comp, Sens, Gain and a three-way mode selector. */
 #include "BassMultiCompParams.h"
 #include "../_shared/pedalkit.hpp"
 START_NAMESPACE_DISTRHO
@@ -9,9 +8,10 @@ public:
     BassMultiCompUI() : PedalKitUI(320, 470, kParamCount, kBassMultiCompDef) {
         names_ = kBassMultiCompNames; labelFont_ = fBarlow;
         labelClr = Color(40,42,46); pointerClr = Color(30,32,36); tickClr = Color(96,98,104);
-        addKnob(kCompress, 0.30f, 0.26f, 0.105f, 70,72,78, 0);
-        addKnob(kRate,     0.70f, 0.26f, 0.105f, 70,72,78, 0);
-        addKnob(kFilter,   0.50f, 0.42f, 0.072f, 70,72,78, 0);
+        addKnob(kComp, 0.25f, 0.25f, 0.095f, 70,72,78, 0);
+        addKnob(kSens, 0.50f, 0.25f, 0.095f, 70,72,78, 0);
+        addKnob(kGain, 0.75f, 0.25f, 0.095f, 70,72,78, 0);
+        addToggle(kMode, 0.50f, 0.47f, 0.050f, 3);
     }
 protected:
     void drawFace() override {

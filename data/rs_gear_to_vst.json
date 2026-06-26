@@ -13,7 +13,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Acoustic Emulator.vst3",
-   "notes": "Bundled acoustic simulator based on the local blue-button acoustic pedal schematic, using the game's Tone, MidShift, Body, and Mid knobs."
+   "notes": "Bundled blue-button acoustic simulator based on the local schematic, with TL072/TL061 stages, 2N4339/J201 FET voice branch, 1N4148/green LED diode ladder, and real Gain, Top, Body, Volume controls. Rocksmith Tone maps to Top, Body to Body, Mid to Gain, and Volume is pinned."
   }
  ],
  "Pedal_Chorus": [
@@ -89,7 +89,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/FL-2.vst3",
-   "notes": "Bundled BBD flanger clone using the game's Rate, Depth, and Mix knobs."
+   "notes": "Bundled Boss BF-2 style component-guided BBD flanger. Real controls: Manual, Depth, Rate, Res; Rocksmith Rate/Depth map directly and Mix maps to Res because the hardware has fixed wet/dry blend."
   }
  ],
  "Pedal_80sFlanger": [
@@ -100,7 +100,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/N117R Flanger.vst3",
-   "notes": "Bundled MXR Flanger Original/SAD1024 style BBD flanger based on the local 80s flanger schematic, using the game's Rate, Depth, and Mix knobs."
+   "notes": "Bundled MXR M117 Flanger Original/SAD1024 style model based on the local 80s flanger schematic. Real controls: Manual, Width, Speed, Regen; Rocksmith Rate maps to Speed, Depth to Width, and Mix to Regen."
   }
  ],
  "Pedal_ClassicFlanger": [
@@ -111,18 +111,18 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/FL-2.vst3",
-   "notes": "Bundled Boss BF-2/MN3207 style BBD flanger based on the local classic flanger schematic, using the game's Rate, Depth, and Mix knobs."
+   "notes": "Bundled Boss BF-2/MN3207 style component-guided BBD flanger based on the local classic schematic. Real controls: Manual, Depth, Rate, Res; Rocksmith Mix maps to Res."
   }
  ],
  "Pedal_ModernFlanger": [
   {
-   "name": "ModernFlanger",
+   "name": "FM108",
    "manufacturer": "RigBuilder",
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/pedals/FM107.vst3",
-   "notes": "Bundled MF-108M/Cluster Flux style BBD flanger based on the local modern flange schematic, using the game's Rate, Depth, Regen, and Mix knobs."
+   "bundled": "vst/pedals/FM108.vst3",
+   "notes": "Bundled Moog MF-108M Cluster Flux style component-guided BBD flanger based on the local modern flange schematic. Real controls: Time, Range, Feedback, Drive, Output Level, Mix, LFO Shape, LFO Rate, LFO Amount; Rocksmith Rate/Depth/Regen/Mix map to LFO Rate/LFO Amount/Feedback/Mix and Range is pinned to FLANGE."
   }
  ],
  "Pedal_VintageFlanger": [
@@ -133,7 +133,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Deluxe Servant.vst3",
-   "notes": "Bundled Deluxe Electric Mistress style BBD flanger based on the local vintage flanger schematic, using the game's Rate, Depth, and Mix knobs."
+   "notes": "Bundled Deluxe Electric Mistress style component-guided BBD flanger based on the local vintage schematic. Real controls: Rate, Range, Color, Matrix; Rocksmith Depth maps to Range and Mix maps to Color."
   }
  ],
  "Bass_Pedal_BassFlanger": [
@@ -143,7 +143,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/FL-3.vst3",
    "free": true,
-   "notes": "Bundled Boss BF-2/BF-3 model adapted for bass — modulated delay + feedback (Filter=resonance), lows kept clean. Rate/Depth/Filter/Mix map 1:1."
+   "notes": "Bundled Boss BF-2B style component-guided bass flanger using M5218P/TL022 conditioning and MN3102/MN3204 BBD delay. Real controls: Manual, Depth, Rate, Res; Rocksmith Filter/Mix translate to the real resonance path."
   }
  ],
  "Pedal_Phaser": [
@@ -455,7 +455,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/dyna comp.vst3",
-   "notes": "Bundled Dyna Comp-style pedal compressor using the game's Comp, Attack, and Release knobs."
+   "notes": "Bundled CA3080 Dyna Comp-style compressor with real Output and Sensitivity controls. Rocksmith Comp maps to Sensitivity; Output is pinned by the curated mapping."
   }
  ],
  "Pedal_Compressor": [
@@ -466,7 +466,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/dyna comp.vst3",
-   "notes": "Bundled Dyna Comp-style compressor using the game's Comp, Attack, and Release knobs."
+   "notes": "Bundled CA3080 Dyna Comp-style compressor with real Output and Sensitivity controls. Rocksmith Comp maps to Sensitivity; Output is pinned by the curated mapping."
   }
  ],
  "Bass_Pedal_MBComp": [
@@ -477,7 +477,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Multi Comp.vst3",
-   "notes": "Bundled EBS MultiComp-style multiband bass compressor based on the local schematic, using the game's Compress, Filter, and Rate knobs."
+   "notes": "Bundled EBS MultiComp 2-style bass compressor based on the local schematic, with real Comp, Sens, Gain and Mode controls. Rocksmith Compress maps to Comp; Filter maps to Sens; Gain and Mode are pinned."
   }
  ],
  "Pedal_EQ5": [
@@ -568,7 +568,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/LM-2.vst3",
    "free": true,
-   "notes": "Bundled two-knob stereo peak limiter using the game's Limit and Rate controls"
+   "notes": "Bundled Boss LM-2-style VCA limiter with real Level, Tone, Release and Threshold controls. Rocksmith Limit maps to Threshold; Rate maps inverted to Release."
   }
  ],
  "Pedal_USWah": [
@@ -622,7 +622,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Lo Fi Filter.vst3",
-   "notes": "Bundled Lofinator-style lo-fi filter based on the local schematic, using the game's FilterType and Mix knobs."
+   "notes": "Bundled Lofinator-style lo-fi filter based on the local schematic. The plugin exposes the real Drive, Level, Lo and Hi controls; Rocksmith FilterType/Mix are translated in the mapping table."
   }
  ],
  "Pedal_BobFilter": [
@@ -633,7 +633,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/FM105.vst3",
-   "notes": "Bundled Moog/MuRF-style analog filter based on the local MF-105 schematic, using the game's Sens, Attack, Release, Mix, and Filter knobs."
+   "notes": "Bundled Moog/MuRF-style analog filter based on the local MF-105 schematic. The plugin exposes Drive, Output, Pattern, Rate, Envelope, Mix and Mode; Rocksmith Sens/Attack/Release/Mix/Filter are translated in the mapping table."
   }
  ],
  "Pedal_AutoFilter": [
@@ -643,7 +643,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/BU-TRON III.vst3",
    "free": true,
-   "notes": "Bundled Mu-Tron III style envelope filter based on the local Auto Filter schematic, using the game's FilterType, Res, Sens, Attack and Release knobs."
+   "notes": "Bundled Mu-Tron III style envelope filter based on the local Auto Filter schematic. The plugin exposes Gain, Peak, Mode, Range and Direction; Rocksmith FilterType/Res/Sens/Attack/Release are translated in the mapping table."
   },
   {
    "name": "AutoSweep",
@@ -904,7 +904,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Beta Fist.vst3",
-   "notes": "Bundled heavy saturated compressor based on the game's description, using the game's Smash and Rate knobs."
+   "notes": "Bundled Lazy Sprocket / Boss SG-1-style slow-gear circuit based on the local schematic. Real controls are Sensitivity and Attack; Rocksmith Smash maps to Sensitivity and Rate maps inverted to Attack."
   }
  ],
  "Pedal_ShredZone": [

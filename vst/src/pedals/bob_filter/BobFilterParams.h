@@ -3,37 +3,45 @@
 
 enum BobFilterParamId
 {
-    kSens = 0,
-    kAttack,
-    kRelease,
+    kDrive = 0,
+    kOutput,
+    kPattern,
+    kRate,
+    kEnvelope,
     kMix,
-    kFilter,
+    kMode,
     kParamCount
 };
 
 static const char* const kBobFilterNames[kParamCount] = {
-    "Sens",
-    "Attack",
-    "Release",
+    "Drive",
+    "Output",
+    "Pattern",
+    "Rate",
+    "Envelope",
     "Mix",
-    "Filter",
+    "Mode",
 };
 
 static const char* const kBobFilterSymbols[kParamCount] = {
-    "sens",
-    "attack",
-    "release",
+    "drive",
+    "output",
+    "pattern",
+    "rate",
+    "envelope",
     "mix",
-    "filter",
+    "mode",
 };
 
-static const float kBobFilterMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
-static const float kBobFilterMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
+static const float kBobFilterMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+static const float kBobFilterMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
 static const float kBobFilterDef[kParamCount] = {
-    0.75f,
-    (55.0f - 1.0f) / (250.0f - 1.0f),
-    (180.0f - 10.0f) / (1000.0f - 10.0f),
-    0.80f,
+    0.48f,
+    0.68f,
+    0.28f,
+    0.34f,
+    0.62f,
+    0.78f,
     1.0f,
 };
 

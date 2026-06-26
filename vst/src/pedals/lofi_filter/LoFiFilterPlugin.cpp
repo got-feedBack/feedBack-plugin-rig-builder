@@ -1,9 +1,9 @@
 /*
- * LoFiFilter - Lofinator-inspired filter for the game's Pedal_LoFiFilter.
- * The local PedalPCB schematic has an op-amp drive stage, clipping diodes,
- * two NJM13600 OTA filter stages, and Lo/Hi controls. the game exposes only
- * FilterType and Mix, so FilterType moves the Lo/Hi filter window while Mix
- * controls drive, resonance, texture, and wet intensity.
+ * LoFiFilter - PedalPCB Lofinator-style OTA filter.
+ * The local schematic has NJM4558 drive/recovery stages, 1N4148 clipping, two
+ * NJM13600 OTA filter stages, a 2SC1815 support transistor and the real Drive,
+ * Level, Lo and Hi controls. Rocksmith FilterType/Mix are translated in the
+ * mapping table rather than exposed as fake plugin knobs.
  */
 #include "DistrhoPlugin.hpp"
 #include "LoFiFilterParams.h"
@@ -104,8 +104,10 @@ public:
 class LoFiFilterCore
 {
     float sampleRate = 48000.0f;
-    float filterType = kLoFiFilterDef[kFilterType];
-    float mix = kLoFiFilterDef[kMix];
+    float drive = kLoFiFilterDef[kDrive];
+    float level = kLoFiFilterDef[kLevel];
+    float lo = kLoFiFilterDef[kLo];
+    float hi = kLoFiFilterDef[kHi];
 
     Biquad inputHp;
     Biquad preLow;
@@ -125,34 +127,33 @@ class LoFiFilterCore
 
     void updateFilters()
     {
-        const float t = clamp01(filterType);
-        const float amount = std::sqrt(clamp01(mix));
+        const float d = std::sqrt(clamp01(drive));
+        const float loPot = std::pow(clamp01(lo), 1.55f);  // A20K low-cut pot.
+        const float hiPot = std::pow(clamp01(hi), 0.92f);  // B20K high-cut pot.
 
-        const float lowNorm = std::pow(t, 1.35f);
-        const float highNorm = std::pow(t, 0.78f);
-        float lowCut = 52.0f + 1180.0f * lowNorm;
-        float highCut = 620.0f + 7050.0f * highNorm;
+        float lowCut = 32.0f + 1450.0f * loPot;
+        float highCut = 540.0f + 7600.0f * hiPot;
         if (highCut < lowCut * 2.15f)
             highCut = lowCut * 2.15f;
 
-        const float q = 0.70f + 1.85f * amount;
+        const float q = 0.70f + 1.65f * d;
         inputHp.setHighPass(sampleRate, 36.0f, 0.70f);
-        preLow.setLowPass(sampleRate, 8800.0f - 2200.0f * amount, 0.72f);
+        preLow.setLowPass(sampleRate, 9100.0f - 1900.0f * d, 0.72f);
         loStageA.setHighPass(sampleRate, lowCut, q);
         loStageB.setHighPass(sampleRate, lowCut * 0.82f + 42.0f, q * 0.86f);
         hiStageA.setLowPass(sampleRate, highCut, q * 0.92f);
         hiStageB.setLowPass(sampleRate, highCut * 0.76f + 350.0f, q * 0.82f);
 
         const float center = std::sqrt(lowCut * highCut);
-        bandPeak.setBandPass(sampleRate, center, 1.15f + 3.10f * amount);
-        outputLow.setLowPass(sampleRate, 7600.0f - 2400.0f * amount, 0.68f);
+        bandPeak.setBandPass(sampleRate, center, 1.05f + 2.80f * d);
+        outputLow.setLowPass(sampleRate, 7600.0f - 2200.0f * d, 0.68f);
 
         const float hpHz = 24.0f;
         const float dt = 1.0f / sampleRate;
         const float rc = 1.0f / (2.0f * kPi * hpHz);
         dcA = rc / (rc + dt);
 
-        holdPeriod = 1 + (int)std::floor(amount * amount * 7.0f + (1.0f - t) * amount * 3.0f);
+        holdPeriod = 1 + (int)std::floor(d * d * 6.0f + (1.0f - hiPot) * d * 3.0f);
         if (holdPeriod < 1)
             holdPeriod = 1;
     }
@@ -198,61 +199,66 @@ public:
         reset();
     }
 
-    void setFilterType(float v)
+    void setDrive(float v)
     {
-        filterType = clamp01(v);
+        drive = clamp01(v);
         updateFilters();
     }
 
-    void setMix(float v)
+    void setLevel(float v)
     {
-        mix = clamp01(v);
+        level = clamp01(v);
+    }
+
+    void setLo(float v)
+    {
+        lo = clamp01(v);
+        updateFilters();
+    }
+
+    void setHi(float v)
+    {
+        hi = clamp01(v);
         updateFilters();
     }
 
     float process(float in)
     {
-        const float amount = std::sqrt(clamp01(mix));
-        const float t = clamp01(filterType);
+        const float d = std::sqrt(clamp01(drive));
 
         float x = inputHp.process(in);
         x = preLow.process(x);
 
-        const float drive = 1.08f + 3.65f * amount;
-        float driven = x * drive;
-        const float diode = std::tanh(driven * (0.82f + 0.28f * amount));
-        const float asym = std::tanh((driven + 0.10f * amount) * (1.45f + 0.55f * amount)) - 0.055f * amount;
-        driven = lerp(diode, asym, 0.38f + 0.34f * amount);
+        const float driveGain = 1.02f + 5.45f * d;
+        float driven = x * driveGain;
+        const float diode = std::tanh(driven * (0.82f + 0.35f * d));
+        const float asym = std::tanh((driven + 0.10f * d) * (1.45f + 0.65f * d)) - 0.055f * d;
+        driven = lerp(diode, asym, 0.34f + 0.38f * d);
 
         float filtered = loStageA.process(driven);
         filtered = loStageB.process(filtered);
         filtered = hiStageA.process(filtered);
         filtered = hiStageB.process(filtered);
 
-        const float peak = bandPeak.process(driven) * (0.28f + 0.82f * amount);
-        float wet = filtered * (0.76f + 0.22f * amount) + peak;
+        const float peak = bandPeak.process(driven) * (0.22f + 0.72f * d);
+        float wet = filtered * (0.80f + 0.18f * d) + peak;
 
-        const float fold = std::sin(wet * (1.2f + 1.7f * amount)) * (0.05f + 0.13f * amount);
+        const float fold = std::sin(wet * (1.2f + 1.55f * d)) * (0.04f + 0.12f * d);
         wet = wet + fold;
 
         if (holdPeriod > 1)
-            wet = lerp(wet, sampleHold(wet), 0.26f + 0.38f * amount);
+            wet = lerp(wet, sampleHold(wet), 0.20f + 0.34f * d);
 
-        const float bits = 14.0f - 7.0f * amount;
+        const float bits = 14.0f - 6.4f * d;
         const float levels = std::pow(2.0f, bits);
         wet = std::floor(wet * levels + (wet >= 0.0f ? 0.5f : -0.5f)) / levels;
         wet = outputLow.process(wet);
 
-        // Low FilterType settings are intentionally darker and more choked;
-        // high settings keep more dry edge for the Lofinator's bright band.
-        // the game chains often place this pedal before clean amps, so the
-        // filter must not work like an output boost when Mix is high.
-        const float wetShare = 0.48f + 0.26f * amount;
-        const float dryLevel = (1.0f - 0.42f * wetShare) * (0.94f + 0.06f * t);
-        const float wetLevel = wetShare * (0.42f + 0.26f * amount);
-        float y = in * dryLevel + wet * wetLevel;
+        // Lofinator is an inline filter, not a wet/dry blend. Keep a tiny
+        // direct leakage to mimic op-amp feedthrough and preserve attack.
+        float y = wet * (0.88f + 0.20f * d) + in * (0.045f + 0.025f * (1.0f - d));
         y = removeDc(y);
-        const float outputTrim = 0.82f / (1.0f + 0.18f * amount);
+        const float outputTrim = (0.10f + 1.34f * clamp01(level)) / (1.0f + 0.20f * d);
         y = std::tanh(y * 0.92f) * outputTrim;
         return y;
     }
@@ -266,10 +272,14 @@ class LoFiFilterPlugin : public Plugin
 
     void applyAll()
     {
-        left.setFilterType(params[kFilterType]);
-        right.setFilterType(params[kFilterType]);
-        left.setMix(params[kMix]);
-        right.setMix(params[kMix]);
+        left.setDrive(params[kDrive]);
+        right.setDrive(params[kDrive]);
+        left.setLevel(params[kLevel]);
+        right.setLevel(params[kLevel]);
+        left.setLo(params[kLo]);
+        right.setLo(params[kLo]);
+        left.setHi(params[kHi]);
+        right.setHi(params[kHi]);
     }
 
 public:
@@ -288,7 +298,7 @@ protected:
     const char* getDescription() const override { return "Lo-fi resonant filter"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 1); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('L', 'f', 'F', 't'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

@@ -1,12 +1,12 @@
 /*
- * AutoFilter - Mu-Tron III style envelope filter for the game's
- * Pedal_AutoFilter.
+ * AutoFilter - Mu-Tron III / Neutron style envelope filter.
  *
  * Local references: pedals/auto filter.gif and pedals/auto filter_2.gif. The
- * schematic/layout show the Mu-Tron/Neutron topology: op-amp preamp, envelope
- * detector, LED/LDR sweep cells, peak control and selectable LP/BP/HP filter.
- * the game exposes FilterType, Res, Sens, Attack and Release, so gain/range
- * and direction are internally calibrated.
+ * schematic/layout show TL072/TL074 op-amp filtering, ICL7660 negative rail,
+ * dual LED/LDR sweep cells (NSL32-style), Peak control and selectable LP/BP/HP,
+ * Range and Direction switches. The DSP keeps the wah resonator as the main
+ * voice in every mode; Mode changes the parallel color and Direction only flips
+ * the control voltage sweep.
  */
 #include "DistrhoPlugin.hpp"
 #include "AutoFilterParams.h"
@@ -108,11 +108,11 @@ public:
 class AutoFilterCore
 {
     float sampleRate = 48000.0f;
-    float filterType = kAutoFilterDef[kFilterType];
-    float res = kAutoFilterDef[kRes];
-    float sens = kAutoFilterDef[kSens];
-    float attack = kAutoFilterDef[kAttack];
-    float release = kAutoFilterDef[kRelease];
+    float gain = kAutoFilterDef[kGain];
+    float peak = kAutoFilterDef[kPeak];
+    float mode = kAutoFilterDef[kMode];
+    float range = kAutoFilterDef[kRange];
+    float direction = kAutoFilterDef[kDirection];
 
     OnePole inputHpDc;
     OnePole preTone;
@@ -131,36 +131,33 @@ class AutoFilterCore
 
     void updateFilters()
     {
-        preTone.setLowPass(sampleRate, 8800.0f - 2600.0f * res);
-        postTone.setLowPass(sampleRate, 7600.0f - 2200.0f * res);
+        const float p = smoothstep(peak);
+        preTone.setLowPass(sampleRate, 9100.0f - 2600.0f * p);
+        postTone.setLowPass(sampleRate, 7800.0f - 2100.0f * p);
 
-        // the game stores Attack/Release as large raw values. The JSON maps
-        // them through /1000 so 128 becomes 0.128, which lands in useful
-        // Mu-Tron-style envelope times here.
-        const float atk = smoothstep(attack);
-        const float rel = smoothstep(release);
-        envAttackA = onePoleCoeffMs(1.2f + 155.0f * atk, sampleRate);
-        envReleaseA = onePoleCoeffMs(24.0f + 720.0f * rel, sampleRate);
-
-        // LED/LDR cells lag behind the detector; that little smear is what
-        // keeps the sweep vocal instead of sounding like a sterile EQ follow.
-        optoAttackA = onePoleCoeffMs(4.0f + 105.0f * atk, sampleRate);
-        optoReleaseA = onePoleCoeffMs(70.0f + 480.0f * rel, sampleRate);
+        // NSL32-style opto: the detector charges quickly, the LDR conducts
+        // slightly later and releases much more slowly than the rectifier.
+        envAttackA = onePoleCoeffMs(0.8f, sampleRate);
+        envReleaseA = onePoleCoeffMs(18.0f + 60.0f * (1.0f - gain), sampleRate);
+        optoAttackA = onePoleCoeffMs(2.2f + 5.5f * (1.0f - range), sampleRate);
+        optoReleaseA = onePoleCoeffMs(22.0f + 72.0f * (1.0f - gain), sampleRate);
     }
 
     int modeIndex() const
     {
-        if (filterType < 0.25f)
+        if (mode < 0.25f)
             return 0; // low-pass
-        if (filterType < 0.75f)
+        if (mode < 0.75f)
             return 1; // band-pass
         return 2;     // high-pass
     }
 
     void updateEnvelope(float x)
     {
-        const float drive = 1.3f + 18.0f * std::pow(clamp01(sens), 1.25f);
-        const float detector = clamp01(std::fabs(x) * drive);
+        const float g = smoothstep(gain);
+        const float rectified = std::fabs(x);
+        const float detectorDrive = 12.0f + 48.0f * std::pow(clamp01(gain), 1.18f);
+        const float detector = clamp01((1.0f - std::exp(-rectified * detectorDrive)) * (0.72f + 0.45f * g));
         const float envA = detector > env ? envAttackA : envReleaseA;
         env += envA * (detector - env);
 
@@ -187,32 +184,32 @@ public:
         reset();
     }
 
-    void setFilterType(float v)
+    void setGain(float v)
     {
-        filterType = clamp01(v);
-    }
-
-    void setRes(float v)
-    {
-        res = clamp01(v);
+        gain = clamp01(v);
         updateFilters();
     }
 
-    void setSens(float v)
+    void setPeak(float v)
     {
-        sens = clamp01(v);
-    }
-
-    void setAttack(float v)
-    {
-        attack = clamp01(v);
+        peak = clamp01(v);
         updateFilters();
     }
 
-    void setRelease(float v)
+    void setMode(float v)
     {
-        release = clamp01(v);
+        mode = clamp01(v);
+    }
+
+    void setRange(float v)
+    {
+        range = clamp01(v);
         updateFilters();
+    }
+
+    void setDirection(float v)
+    {
+        direction = clamp01(v);
     }
 
     float process(float in)
@@ -222,50 +219,49 @@ public:
         float x = in - dcIn;
         x = preTone.process(x);
 
-        const float inputGain = 1.05f + 1.15f * sens;
+        const float g = smoothstep(gain);
+        const float p = smoothstep(peak);
+        const float inputGain = 0.88f + 2.15f * g;
         const float pre = softClip(x * inputGain);
         updateEnvelope(pre);
 
         const int mode = modeIndex();
-        const float s = smoothstep(sens);
-        const float r = smoothstep(res);
+        const bool highRange = range >= 0.5f;
+        const bool upSweep = direction >= 0.5f;
 
-        float minHz = 85.0f;
-        float maxHz = 2700.0f;
-        if (mode == 1)
-        {
-            minHz = 150.0f;
-            maxHz = 3600.0f;
-        }
-        else if (mode == 2)
-        {
-            minHz = 240.0f;
-            maxHz = 5200.0f;
-        }
+        float sweep = std::pow(clamp01(opto * (1.25f + 1.35f * g)), 0.58f);
+        sweep = smoothstep(sweep);
+        if (!upSweep)
+            sweep = 1.0f - sweep;
 
-        const float sweep = smoothstep(opto * (0.66f + 0.72f * s));
+        const float minHz = highRange ? 115.0f : 68.0f;
+        const float maxHz = highRange ? 3850.0f : 2100.0f;
         const float cutoff = minHz * std::pow(maxHz / minHz, sweep);
-        lastCutoff += 0.30f * (cutoff - lastCutoff);
+        lastCutoff += 0.38f * (cutoff - lastCutoff);
 
-        const float q = 0.58f + 8.2f * r + 3.0f * r * s;
+        const float q = 0.78f + 11.5f * p + 3.5f * p * g;
         float low = 0.0f;
         float band = 0.0f;
         float high = 0.0f;
         filter.process(pre, sampleRate, lastCutoff, q, low, band, high);
 
-        float wet = low;
-        if (mode == 1)
-            wet = band * (1.25f + 0.55f * r);
+        // The Mu-Tron mode switch changes which filter node is emphasized, but
+        // the musical identity is still the swept resonant LDR wah. Keep band
+        // energy dominant so Direction never feels like a HP/LP type switch.
+        const float wah = band * (2.35f + 2.65f * p + 0.85f * g);
+        float wet = wah + low * 0.20f;
+        if (mode == 0)
+            wet = wah * 0.92f + low * (0.52f + 0.16f * p);
         else if (mode == 2)
-            wet = high * (0.90f + 0.45f * r);
+            wet = wah * 0.96f + high * (0.20f + 0.18f * p);
 
         // The real pedal is buffered and not fully wet. A small dry path keeps
-        // low-res presets musical while high Sens/Res still quacks hard.
-        const float dryLeak = 0.18f - 0.08f * r;
-        wet = wet * (1.12f + 0.42f * s + 0.28f * r) + pre * dryLeak;
+        // low-peak presets musical while high Gain/Peak still quacks hard.
+        const float dryLeak = 0.095f - 0.045f * p;
+        wet = wet * (1.34f + 0.64f * g + 0.42f * p) + pre * dryLeak;
         wet = postTone.process(wet);
 
-        const float level = 0.88f / (1.0f + 0.24f * r);
+        const float level = 0.88f / (1.0f + 0.24f * p);
         return softClip(wet * level) * 0.98f;
     }
 };
@@ -278,16 +274,16 @@ class AutoFilterPlugin : public Plugin
 
     void applyAll()
     {
-        left.setFilterType(params[kFilterType]);
-        right.setFilterType(params[kFilterType]);
-        left.setRes(params[kRes]);
-        right.setRes(params[kRes]);
-        left.setSens(params[kSens]);
-        right.setSens(params[kSens]);
-        left.setAttack(params[kAttack]);
-        right.setAttack(params[kAttack]);
-        left.setRelease(params[kRelease]);
-        right.setRelease(params[kRelease]);
+        left.setGain(params[kGain]);
+        right.setGain(params[kGain]);
+        left.setPeak(params[kPeak]);
+        right.setPeak(params[kPeak]);
+        left.setMode(params[kMode]);
+        right.setMode(params[kMode]);
+        left.setRange(params[kRange]);
+        right.setRange(params[kRange]);
+        left.setDirection(params[kDirection]);
+        right.setDirection(params[kDirection]);
     }
 
 public:
@@ -306,7 +302,7 @@ protected:
     const char* getDescription() const override { return "Mu-Tron III style envelope filter"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('A', 't', 'F', 'l'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

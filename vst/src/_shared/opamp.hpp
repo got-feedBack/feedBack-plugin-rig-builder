@@ -19,14 +19,54 @@ static inline OpAmpSpec tl072Spec()
     return { 3000000.0f, 13.0f, 3.1f, 3.1f, 3.2f };
 }
 
+static inline OpAmpSpec tl074aSpec()
+{
+    return { 3000000.0f, 13.0f, 3.1f, 3.1f, 3.2f };
+}
+
 static inline OpAmpSpec tl082Spec()
 {
     return { 3000000.0f, 13.0f, 3.0f, 3.0f, 3.2f };
 }
 
+static inline OpAmpSpec tl061Spec()
+{
+    return { 1000000.0f, 3.5f, 2.45f, 2.45f, 3.0f };
+}
+
+static inline OpAmpSpec tl064Spec()
+{
+    return { 1000000.0f, 3.5f, 2.45f, 2.45f, 3.0f };
+}
+
 static inline OpAmpSpec tlc2264Spec()
 {
     return { 710000.0f, 0.55f, 3.7f, 3.7f, 3.2f };
+}
+
+static inline OpAmpSpec tlv2374Spec()
+{
+    return { 3000000.0f, 2.4f, 3.65f, 3.65f, 3.2f };
+}
+
+static inline OpAmpSpec opa1644Spec()
+{
+    return { 11000000.0f, 20.0f, 4.1f, 4.1f, 3.2f };
+}
+
+static inline OpAmpSpec ts921Spec()
+{
+    return { 4000000.0f, 1.3f, 3.8f, 3.8f, 3.2f };
+}
+
+static inline OpAmpSpec ts922Spec()
+{
+    return { 4000000.0f, 1.3f, 3.8f, 3.8f, 3.2f };
+}
+
+static inline OpAmpSpec ts925Spec()
+{
+    return { 4000000.0f, 1.3f, 3.9f, 3.9f, 3.2f };
 }
 
 static inline OpAmpSpec njm4558Spec()
@@ -59,6 +99,11 @@ static inline OpAmpSpec lm741Spec()
     return { 1000000.0f, 0.5f, 2.5f, 2.5f, 3.0f };
 }
 
+static inline OpAmpSpec lm324Spec()
+{
+    return { 1200000.0f, 0.5f, 2.55f, 2.55f, 3.0f };
+}
+
 static inline OpAmpSpec lm308Spec()
 {
     return { 800000.0f, 0.30f, 2.5f, 2.5f, 3.0f };
@@ -77,6 +122,11 @@ static inline OpAmpSpec njm022bSpec()
 static inline OpAmpSpec m5223Spec()
 {
     return { 1000000.0f, 0.9f, 2.35f, 2.35f, 3.0f };
+}
+
+static inline OpAmpSpec ba718Spec()
+{
+    return { 1000000.0f, 0.8f, 2.25f, 2.25f, 3.0f };
 }
 
 class OpAmpStage

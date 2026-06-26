@@ -22,6 +22,22 @@ struct DiodeSpec
     float maxAbsV;
 };
 
+struct JfetSpec
+{
+    float vgsOffMinV;
+    float vgsOffMaxV;
+    float idssMinMa;
+    float idssMaxMa;
+    float rdsOnMaxOhm;
+    float cissPf;
+    float crssPf;
+};
+
+static inline JfetSpec jfet2N4339()
+{
+    return { -0.6f, -1.8f, 0.5f, 1.5f, 1700.0f, 7.0f, 3.0f };
+}
+
 static inline DiodeSpec diode1N4148()
 {
     return { 2.52e-9f, 1.75f, 1.20f };
@@ -42,6 +58,11 @@ static inline DiodeSpec diode1SS133()
     return { 2.10e-9f, 1.72f, 1.15f };
 }
 
+static inline DiodeSpec diodeS5500G()
+{
+    return { 2.25e-9f, 1.75f, 1.20f };
+}
+
 static inline DiodeSpec diode1SS301()
 {
     return { 2.30e-9f, 1.74f, 1.15f };
@@ -57,6 +78,11 @@ static inline DiodeSpec diode1N34A()
     return { 2.20e-7f, 1.35f, 0.90f };
 }
 
+static inline DiodeSpec diode1S188FM()
+{
+    return { 1.75e-7f, 1.38f, 0.88f };
+}
+
 static inline DiodeSpec diodeOA90()
 {
     return { 1.10e-7f, 1.42f, 0.85f };
@@ -70,6 +96,21 @@ static inline DiodeSpec diode1S1830Rectifier()
 static inline DiodeSpec diode1N5817()
 {
     return { 1.20e-6f, 1.08f, 0.65f };
+}
+
+static inline DiodeSpec diodeBAT54()
+{
+    return { 1.20e-6f, 1.08f, 0.65f };
+}
+
+static inline DiodeSpec diodeBAT54S()
+{
+    return { 1.20e-6f, 1.08f, 0.65f };
+}
+
+static inline DiodeSpec diodeBAS28()
+{
+    return { 1.85e-9f, 1.82f, 1.20f };
 }
 
 static inline DiodeSpec junctionBC547C()
@@ -97,9 +138,34 @@ static inline DiodeSpec zenerRD5V6()
     return { 2.0e-10f, 2.00f, 5.80f };
 }
 
+static inline DiodeSpec zenerRD5V1()
+{
+    return { 2.0e-10f, 2.00f, 5.18f };
+}
+
+static inline DiodeSpec zenerRD11E()
+{
+    return { 1.6e-10f, 2.00f, 11.2f };
+}
+
+static inline DiodeSpec zenerBZX84C2V7()
+{
+    return { 3.0e-10f, 2.00f, 2.90f };
+}
+
+static inline DiodeSpec zenerBZV49C10()
+{
+    return { 1.2e-10f, 2.00f, 10.30f };
+}
+
 static inline DiodeSpec redLed3mm()
 {
     return { 1.0e-18f, 2.05f, 2.10f };
+}
+
+static inline DiodeSpec greenLed5mm()
+{
+    return { 8.0e-20f, 2.10f, 3.35f };
 }
 
 class AntiParallelDiodePair
