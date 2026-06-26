@@ -1,21 +1,31 @@
 /*
- * BassMultiComp - multiband bass compressor for the game's Bass_Pedal_MBComp.
- * Reference: local "multi bass comp" EBS MultiComp 2-style schematic. The
- * circuit is reduced to the game's controls: Compress, Filter, and Rate.
+ * BassMultiComp - EBS MultiComp 2-style bass compressor.
+ *
+ * Real panel: Comp, Sens, Gain and Mode. Component references come from the
+ * local Black Label MultiComp 2 schematic: BC850C input buffer, PMBFJ113 JFET
+ * gain elements, TS922/TS925 audio filters, TL064 detector/control stages,
+ * BAS28/BAT54 rectifiers and BC857B control buffers.
  */
 #include "DistrhoPlugin.hpp"
 #include "BassMultiCompParams.h"
+#include "../../_shared/opamp.hpp"
+#include "../../_shared/semiconductors.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
 
 namespace {
 
-static constexpr float kPi = 3.14159265359f;
+static constexpr float kPi = 3.14159265358979323846f;
 
 static inline float clamp01(float v)
 {
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
+}
+
+static inline float dn(float v)
+{
+    return std::fabs(v) < 1.0e-15f ? 0.0f : v;
 }
 
 static inline float dbToGain(float db)
@@ -25,191 +35,311 @@ static inline float dbToGain(float db)
 
 static inline float ampToDb(float amp)
 {
-    return 20.0f * std::log10(std::fmax(amp, 1.0e-7f));
+    return 20.0f * std::log10(std::fmax(amp, 1.0e-8f));
 }
 
-static inline float timeCoeff(float ms, float sr)
+static inline float coeffMs(float ms, float sr)
 {
-    const float samples = std::fmax(1.0f, ms * 0.001f * sr);
-    return std::exp(-1.0f / samples);
+    return 1.0f - std::exp(-1.0f / std::fmax(1.0f, ms * 0.001f * sr));
 }
 
-class EnvelopeFollower
+static inline float audioTaper(float v)
 {
-    float env = 0.0f;
-    float attackCoeff = 0.0f;
-    float releaseCoeff = 0.0f;
+    return std::pow(clamp01(v), 1.65f);
+}
+
+class RcHighPass
+{
+    float a = 0.0f;
+    float x1 = 0.0f;
+    float y1 = 0.0f;
 
 public:
-    void reset()
+    void setRC(float sr, float rOhm, float cFarad)
     {
-        env = 0.0f;
+        const float rc = rOhm * cFarad;
+        const float dt = 1.0f / (sr > 1000.0f ? sr : 48000.0f);
+        a = rc / (rc + dt);
     }
 
-    void setTimes(float sr, float attackMs, float releaseMs)
+    void reset()
     {
-        attackCoeff = timeCoeff(attackMs, sr);
-        releaseCoeff = timeCoeff(releaseMs, sr);
+        x1 = y1 = 0.0f;
     }
 
     float process(float x)
     {
-        const float target = std::fabs(x);
-        const float coeff = target > env ? attackCoeff : releaseCoeff;
-        env = target + coeff * (env - target);
-        return env;
+        const float y = a * (y1 + x - x1);
+        x1 = x;
+        y1 = dn(y);
+        return y1;
     }
 };
+
+class OnePole
+{
+    float a = 0.0f;
+    float y = 0.0f;
+
+public:
+    void setHz(float sr, float hz)
+    {
+        a = 1.0f - std::exp(-2.0f * kPi * hz / (sr > 1000.0f ? sr : 48000.0f));
+    }
+
+    void reset()
+    {
+        y = 0.0f;
+    }
+
+    float process(float x)
+    {
+        y += a * (x - y);
+        y = dn(y);
+        return y;
+    }
+};
+
+struct BandDetector
+{
+    float env = 0.0f;
+    float gain = 1.0f;
+    float attackA = 0.0f;
+    float releaseA = 0.0f;
+    float gainAttackA = 0.0f;
+    float gainReleaseA = 0.0f;
+
+    void setTimes(float sr, float attackMs, float releaseMs)
+    {
+        attackA = coeffMs(attackMs, sr);
+        releaseA = coeffMs(releaseMs, sr);
+        gainAttackA = coeffMs(attackMs * 1.25f + 1.0f, sr);
+        gainReleaseA = coeffMs(releaseMs * 0.88f + 12.0f, sr);
+    }
+
+    void reset()
+    {
+        env = 0.0f;
+        gain = 1.0f;
+    }
+
+    float process(float x, float thresholdDb, float ratio, float maxReductionDb)
+    {
+        const float rect = std::fabs(x);
+        const float envA = rect > env ? attackA : releaseA;
+        env += envA * (rect - env);
+        env = dn(env);
+
+        const float over = ampToDb(env) - thresholdDb;
+        const float kneeDb = 5.0f;
+        float reductionDb = 0.0f;
+        if (over > -0.5f * kneeDb)
+        {
+            const float eff = over < 0.5f * kneeDb
+                ? ((over + 0.5f * kneeDb) * (over + 0.5f * kneeDb)) / (2.0f * kneeDb)
+                : over;
+            reductionDb = std::fmin(maxReductionDb, eff * (1.0f - 1.0f / ratio));
+        }
+
+        const float wanted = dbToGain(-reductionDb);
+        const float a = wanted < gain ? gainAttackA : gainReleaseA;
+        gain += a * (wanted - gain);
+        gain = std::fmax(0.035f, std::fmin(1.0f, gain));
+        return gain;
+    }
+};
+
+static inline float bc850Input(float x)
+{
+    return 0.90f * x + 0.10f * std::tanh(1.45f * x) / 1.45f;
+}
+
+static inline float jfetAttenuator(float x, float gain, float controlDepth)
+{
+    const float g = std::fmax(0.025f, std::fmin(1.0f, gain));
+    const float rdson = 100.0f + 3050.0f * (1.0f - g);
+    const float divider = 47000.0f / (47000.0f + rdson * controlDepth);
+    return x * divider;
+}
 
 } // namespace
 
 class BassMultiCompCore
 {
     float sampleRate = 48000.0f;
-    float compress = kBassMultiCompDef[kCompress];
-    float filter = kBassMultiCompDef[kFilter];
-    float rate = kBassMultiCompDef[kRate];
+    float comp = kBassMultiCompDef[kComp];
+    float sens = kBassMultiCompDef[kSens];
+    float gain = kBassMultiCompDef[kGain];
+    float mode = kBassMultiCompDef[kMode];
 
-    float lowState = 0.0f;
-    float crossoverA = 0.0f;
-    float lowDc = 0.0f;
-    float outDc = 0.0f;
-    float hpA = 0.0f;
+    RcHighPass inputCap;
+    RcHighPass outputCap;
+    OnePole splitLowA;
+    OnePole splitLowB;
+    OnePole highTone;
+    OnePole tubeLow;
+    rbshared::OpAmpStage inputAmp;
+    rbshared::OpAmpStage lowAmp;
+    rbshared::OpAmpStage highAmp;
+    rbshared::OpAmpStage detectorAmp;
+    rbcomponents::AntiParallelDiodePair bas28Pair;
+    rbcomponents::AntiParallelDiodePair bat54Pair;
+    BandDetector lowDetector;
+    BandDetector highDetector;
+    BandDetector fullDetector;
 
-    // Auto-makeup state: slow-smoothed mean-square of the clean vs the
-    // compressed (pre-makeup) signal. makeup = sqrt(msClean/msComp) drives
-    // the compressed path back to the input's level, so raising Compress
-    // keeps the OUTPUT loudness constant regardless of how much reduction
-    // the bands apply (replaces the old open-loop curve that ballooned to
-    // +16 dB at Compress=1).
-    float msClean = 0.0f;
-    float msWet = 0.0f;
-    float msCoeff = 0.0f;
+    float outputGain = 1.0f;
+    float lowThresholdDb = -18.0f;
+    float highThresholdDb = -20.0f;
+    float fullThresholdDb = -18.0f;
+    float lowRatio = 2.8f;
+    float highRatio = 2.5f;
+    float fullRatio = 3.0f;
+    float maxLowReduction = 14.0f;
+    float maxHighReduction = 12.0f;
+    float maxFullReduction = 16.0f;
+    int modeIndex = 1;
 
-    EnvelopeFollower lowEnv;
-    EnvelopeFollower highEnv;
-
-    void updateFilters()
+    void update()
     {
-        const float cutoff = 110.0f + filter * (1000.0f - 110.0f);
-        crossoverA = 1.0f - std::exp(-2.0f * kPi * cutoff / sampleRate);
+        const float c = audioTaper(comp);
+        const float s = audioTaper(sens);
+        modeIndex = mode < 0.33f ? 0 : (mode < 0.66f ? 1 : 2);
 
-        const float hpHz = 28.0f;
-        const float dt = 1.0f / sampleRate;
-        const float rc = 1.0f / (2.0f * kPi * hpHz);
-        hpA = rc / (rc + dt);
+        inputCap.setRC(sampleRate, 1000000.0f, 0.68e-6f);
+        outputCap.setRC(sampleRate, 100000.0f, 10.0e-6f);
 
-        // Higher Rate recovers faster. Low band is intentionally slower to
-        // hold bass sustain; high band reacts quicker to pick noise.
-        const float lowRelease = 520.0f - 455.0f * rate;
-        const float highRelease = 320.0f - 270.0f * rate;
-        lowEnv.setTimes(sampleRate, 13.0f - 7.0f * rate, lowRelease);
-        highEnv.setTimes(sampleRate, 5.0f - 2.5f * rate, highRelease);
+        const float crossover = 235.0f + 165.0f * s;
+        splitLowA.setHz(sampleRate, crossover);
+        splitLowB.setHz(sampleRate, crossover * 1.18f);
+        highTone.setHz(sampleRate, 7800.0f - 1200.0f * c);
+        tubeLow.setHz(sampleRate, 5200.0f);
 
-        // ~250 ms loudness window for the auto-makeup tracker — slow enough
-        // not to pump on note onsets, fast enough to settle within a phrase.
-        msCoeff = 1.0f - std::exp(-1.0f / std::fmax(1.0f, 0.250f * sampleRate));
-    }
+        lowDetector.setTimes(sampleRate, 11.0f - 5.5f * c, 340.0f - 190.0f * c);
+        highDetector.setTimes(sampleRate, 4.0f - 1.4f * c, 210.0f - 115.0f * c);
+        fullDetector.setTimes(sampleRate, 7.0f - 2.5f * c, 260.0f - 135.0f * c);
 
-    float highPass(float x)
-    {
-        const float y = hpA * (outDc + x - lowDc);
-        lowDc = x;
-        outDc = y;
-        return y;
-    }
+        lowThresholdDb = -8.0f - 28.0f * s - 5.0f * c;
+        highThresholdDb = -10.0f - 25.0f * s - 4.0f * c;
+        fullThresholdDb = -9.0f - 27.0f * s - 4.0f * c;
+        lowRatio = 1.25f + 6.0f * c;
+        highRatio = 1.20f + 5.0f * c;
+        fullRatio = 1.25f + 6.2f * c;
+        maxLowReduction = 5.0f + 18.0f * c;
+        maxHighReduction = 4.0f + 15.0f * c;
+        maxFullReduction = 5.0f + 18.0f * c;
+        outputGain = dbToGain(-18.0f + 32.0f * clamp01(gain));
 
-    float bandGain(float env, bool lowBand) const
-    {
-        const float c = compress;
-        const float threshold = lowBand ? (-7.5f - 28.5f * c) : (-9.5f - 26.0f * c);
-        const float ratio = lowBand ? (1.15f + 5.8f * c) : (1.10f + 4.4f * c);
-        const float maxReduction = lowBand ? (7.0f + 15.0f * c) : (5.0f + 12.0f * c);
-        const float knee = 5.0f;
-        const float envDb = ampToDb(env);
-        const float over = envDb - threshold;
-        if (over <= -knee * 0.5f)
-            return 1.0f;
-
-        float effectiveOver = over;
-        if (over < knee * 0.5f)
-        {
-            const float x = over + knee * 0.5f;
-            effectiveOver = (x * x) / (2.0f * knee);
-        }
-
-        const float reduction = std::fmin(maxReduction, effectiveOver * (1.0f - 1.0f / ratio));
-        return dbToGain(-reduction);
+        bas28Pair.setSpec(rbcomponents::diodeBAS28());
+        bas28Pair.setSourceR(15000.0f - 6000.0f * s);
+        bat54Pair.setSpec(rbcomponents::diodeBAT54());
+        bat54Pair.setSourceR(12000.0f - 5200.0f * s);
     }
 
 public:
-    void reset()
-    {
-        lowState = 0.0f;
-        lowDc = outDc = 0.0f;
-        msClean = msWet = 0.0f;
-        lowEnv.reset();
-        highEnv.reset();
-        updateFilters();
-    }
-
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
+        inputAmp.setSpec(rbshared::ts921Spec());
+        lowAmp.setSpec(rbshared::ts925Spec());
+        highAmp.setSpec(rbshared::ts925Spec());
+        detectorAmp.setSpec(rbshared::tl064Spec());
+        inputAmp.setSampleRate(sampleRate);
+        lowAmp.setSampleRate(sampleRate);
+        highAmp.setSampleRate(sampleRate);
+        detectorAmp.setSampleRate(sampleRate);
         reset();
     }
 
-    void setCompress(float v)
+    void reset()
     {
-        compress = clamp01(v);
-        updateFilters();
+        inputCap.reset();
+        outputCap.reset();
+        splitLowA.reset();
+        splitLowB.reset();
+        highTone.reset();
+        tubeLow.reset();
+        inputAmp.reset();
+        lowAmp.reset();
+        highAmp.reset();
+        detectorAmp.reset();
+        bas28Pair.reset();
+        bat54Pair.reset();
+        lowDetector.reset();
+        highDetector.reset();
+        fullDetector.reset();
+        update();
     }
 
-    void setFilter(float v)
+    void setComp(float v)
     {
-        filter = clamp01(v);
-        updateFilters();
+        comp = clamp01(v);
+        update();
     }
 
-    void setRate(float v)
+    void setSens(float v)
     {
-        rate = clamp01(v);
-        updateFilters();
+        sens = clamp01(v);
+        update();
+    }
+
+    void setGain(float v)
+    {
+        gain = clamp01(v);
+        update();
+    }
+
+    void setMode(float v)
+    {
+        mode = clamp01(v);
+        update();
     }
 
     float process(float in)
     {
-        const float clean = highPass(in);
+        float x = inputCap.process(bc850Input(in));
+        x = inputAmp.process(x, 1.35f);
 
-        lowState += crossoverA * (clean - lowState);
-        const float low = lowState;
-        const float high = clean - low;
+        const float detectorDrive = detectorAmp.process(std::fabs(x), 2.2f);
+        (void)detectorDrive;
 
-        const float lowGain = bandGain(lowEnv.process(low), true);
-        const float highGain = bandGain(highEnv.process(high), false);
-        const float compressed = low * lowGain + high * highGain;
+        float y = x;
+        if (modeIndex == 1)
+        {
+            float low = splitLowA.process(x);
+            low = splitLowB.process(low);
+            float high = x - low;
 
-        // Parallel component keeps attack and makes low Compress settings feel
-        // like the original pedal rather than a studio limiter.
-        const float dry = 0.20f * (1.0f - compress) + 0.05f;
-        const float wet = clean * dry + compressed * (1.0f - dry);
-        // Auto-makeup (closed loop): drive the FULL wet mix to the clean
-        // signal's smoothed RMS so the OUTPUT loudness stays constant as
-        // Compress rises instead of ballooning. Matches the whole mix (not
-        // just the compressed band) so it can CUT as well as boost; range-
-        // limited (-12..+18 dB) so silence/noise can't blow up. See
-        // AMP_LOUDNESS.md.
-        msClean += msCoeff * (clean * clean - msClean);
-        msWet += msCoeff * (wet * wet - msWet);
-        float makeup = 1.0f;
-        if (msWet > 1.0e-9f && msClean > 1.0e-9f)
-            makeup = std::sqrt(msClean / msWet);
-        makeup = std::fmin(dbToGain(18.0f), std::fmax(dbToGain(-12.0f), makeup));
-        float y = wet * makeup;
+            const float lowRect = std::fabs(bat54Pair.process(low * 1.65f));
+            const float highRect = std::fabs(bas28Pair.process(high * 1.80f));
+            const float lowGain = lowDetector.process(lowRect, lowThresholdDb, lowRatio, maxLowReduction);
+            const float highGain = highDetector.process(highRect, highThresholdDb, highRatio, maxHighReduction);
 
-        // Very light output safety, not an audible drive stage.
-        y = std::tanh(y * 0.98f) * 0.99f;
-        return y;
+            low = lowAmp.process(jfetAttenuator(low, lowGain, 1.0f), 2.0f);
+            high = highAmp.process(jfetAttenuator(high, highGain, 0.82f), 2.0f);
+            high = highTone.process(high);
+            y = low + high;
+        }
+        else
+        {
+            const float rect = std::fabs(bas28Pair.process(x * 1.72f));
+            const float g = fullDetector.process(rect, fullThresholdDb, fullRatio, maxFullReduction);
+            y = jfetAttenuator(x, g, 1.0f);
+
+            if (modeIndex == 2)
+            {
+                const float warm = std::tanh(y * (1.35f + 0.85f * comp));
+                y = 0.78f * y + 0.22f * warm;
+                y = tubeLow.process(y);
+            }
+            else
+            {
+                y = highTone.process(y);
+            }
+        }
+
+        y = outputCap.process(y * outputGain);
+        return std::tanh(y * 1.04f) * 0.98f;
     }
 };
 
@@ -221,12 +351,14 @@ class BassMultiCompPlugin : public Plugin
 
     void applyAll()
     {
-        left.setCompress(params[kCompress]);
-        right.setCompress(params[kCompress]);
-        left.setFilter(params[kFilter]);
-        right.setFilter(params[kFilter]);
-        left.setRate(params[kRate]);
-        right.setRate(params[kRate]);
+        left.setComp(params[kComp]);
+        right.setComp(params[kComp]);
+        left.setSens(params[kSens]);
+        right.setSens(params[kSens]);
+        left.setGain(params[kGain]);
+        right.setGain(params[kGain]);
+        left.setMode(params[kMode]);
+        right.setMode(params[kMode]);
     }
 
 public:
@@ -242,10 +374,10 @@ public:
 
 protected:
     const char* getLabel() const override { return "BassMultiComp"; }
-    const char* getDescription() const override { return "Multiband bass compressor"; }
+    const char* getDescription() const override { return "EBS MultiComp 2-style bass compressor"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 1); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('B', 'm', 'c', 'p'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

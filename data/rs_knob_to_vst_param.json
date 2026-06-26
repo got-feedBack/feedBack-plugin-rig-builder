@@ -41,43 +41,43 @@
  },
  "Pedal_AcousticEmulator": {
   "acousticsimulator": {
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01
+   "_static": {
+    "Volume": 0.62
    },
-   "MidShift": {
-    "param": "MidShift",
-    "scale": 0.0003669724770642202,
-    "offset": -0.10091743119266056,
-    "_hint": "RS MidShift is 275-3000 Hz. AcousticSimulator stores it normalized: (Hz - 275) / 2725."
+   "Tone": {
+    "param": "Top",
+    "scale": 0.01,
+    "_hint": "RS Tone drives the real Top control."
    },
    "Body": {
     "param": "Body",
-    "scale": 0.01
+    "scale": 0.01,
+    "_hint": "RS Body drives the real Body control."
    },
    "Mid": {
-    "param": "Mid",
-    "scale": 0.01
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Mid is reused as the real Gain control. MidShift is skipped because the real pedal has no MidShift knob."
    }
   },
   "acoustic emulator": {
-   "Tone": {
-    "param": "Tone",
-    "scale": 0.01
+   "_static": {
+    "Volume": 0.62
    },
-   "MidShift": {
-    "param": "MidShift",
-    "scale": 0.0003669724770642202,
-    "offset": -0.10091743119266056,
-    "_hint": "RS MidShift is 275-3000 Hz. AcousticSimulator stores it normalized: (Hz - 275) / 2725."
+   "Tone": {
+    "param": "Top",
+    "scale": 0.01,
+    "_hint": "RS Tone drives the real Top control."
    },
    "Body": {
     "param": "Body",
-    "scale": 0.01
+    "scale": 0.01,
+    "_hint": "RS Body drives the real Body control."
    },
    "Mid": {
-    "param": "Mid",
-    "scale": 0.01
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Mid is reused as the real Gain control. MidShift is skipped because the real pedal has no MidShift knob."
    }
   }
  },
@@ -441,6 +441,28 @@
   }
  },
  "Pedal_Flanger": {
+  "classicflanger": {
+   "_static": {
+    "Manual": 0.42
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Res",
+    "scale": 0.01,
+    "_hint": "The BF-2 has no Mix control; RS Mix is reused as the real Resonance knob."
+   },
+   "Feedback": {
+    "param": "Res",
+    "scale": 0.01
+   }
+  },
   "khs flanger": {
    "Rate": {
     "param": "Rate",
@@ -484,17 +506,21 @@
  },
  "Pedal_80sFlanger": {
   "eightiesflanger": {
+   "_static": {
+    "Manual": 0.48
+   },
    "Rate": {
-    "param": "Rate",
+    "param": "Speed",
     "scale": 0.01
    },
    "Depth": {
-    "param": "Depth",
+    "param": "Width",
     "scale": 0.01
    },
    "Mix": {
-    "param": "Mix",
-    "scale": 0.01
+    "param": "Regen",
+    "scale": 0.01,
+    "_hint": "The MXR M117 has no Mix control; RS Mix is reused as the real Regen knob."
    }
   },
   "khs flanger": {
@@ -534,22 +560,28 @@
    }
   },
   "n117r flanger": {
+   "_static": {
+    "Manual": 0.48
+   },
    "Rate": {
-    "param": "Rate",
+    "param": "Speed",
     "scale": 0.01
    },
    "Depth": {
-    "param": "Depth",
+    "param": "Width",
     "scale": 0.01
    },
    "Mix": {
-    "param": "Mix",
+    "param": "Regen",
     "scale": 0.01
    }
   }
  },
  "Pedal_ClassicFlanger": {
   "classicflanger": {
+   "_static": {
+    "Manual": 0.42
+   },
    "Rate": {
     "param": "Rate",
     "scale": 0.01
@@ -559,8 +591,9 @@
     "scale": 0.01
    },
    "Mix": {
-    "param": "Mix",
-    "scale": 0.01
+    "param": "Res",
+    "scale": 0.01,
+    "_hint": "The BF-2 has no Mix control; RS Mix is reused as the real Resonance knob."
    }
   },
   "khs flanger": {
@@ -600,6 +633,9 @@
    }
   },
   "fl-2": {
+   "_static": {
+    "Manual": 0.42
+   },
    "Rate": {
     "param": "Rate",
     "scale": 0.01
@@ -609,28 +645,35 @@
     "scale": 0.01
    },
    "Mix": {
-    "param": "Mix",
+    "param": "Res",
     "scale": 0.01
    }
   }
  },
  "Pedal_ModernFlanger": {
   "modernflanger": {
+   "_static": {
+    "Drive": 0.38,
+    "Output Level": 0.88,
+    "Time": 0.54,
+    "Range": 0.0,
+    "LFO Shape": 0.08
+   },
    "Rate": {
-    "param": "Rate",
+    "param": "LFO Rate",
     "scale": 0.01
    },
    "Depth": {
-    "param": "Depth",
+    "param": "LFO Amount",
     "scale": 0.01
    },
    "Regen": {
-    "param": "Regen",
+    "param": "Feedback",
     "scale": 0.01,
-    "_hint": "the game calls the feedback control Regen; the bundled MF-108M style flanger uses it as BBD feedback/regeneration."
+    "_hint": "The game calls the feedback control Regen; the bundled MF-108M style flanger uses the real Feedback knob."
    },
    "Feedback": {
-    "param": "Regen",
+    "param": "Feedback",
     "scale": 0.01,
     "_hint": "Alias for any extracted rows that use Feedback instead of Regen."
    },
@@ -683,24 +726,61 @@
     "scale": 0.01
    }
   },
-  "fm107": {
+  "fm108": {
+   "_static": {
+    "Drive": 0.38,
+    "Output Level": 0.88,
+    "Time": 0.54,
+    "Range": 0.0,
+    "LFO Shape": 0.08
+   },
    "Rate": {
-    "param": "Rate",
+    "param": "LFO Rate",
     "scale": 0.01
    },
    "Depth": {
-    "param": "Depth",
+    "param": "LFO Amount",
     "scale": 0.01
    },
    "Regen": {
-    "param": "Regen",
+    "param": "Feedback",
     "scale": 0.01,
-    "_hint": "the game calls the feedback control Regen; the bundled MF-108M style flanger uses it as BBD feedback/regeneration."
+    "_hint": "The game calls the feedback control Regen; the bundled MF-108M style flanger uses the real Feedback knob."
    },
    "Feedback": {
-    "param": "Regen",
+    "param": "Feedback",
     "scale": 0.01,
     "_hint": "Alias for any extracted rows that use Feedback instead of Regen."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "fm107": {
+   "_static": {
+    "Drive": 0.38,
+    "Output Level": 0.88,
+    "Time": 0.54,
+    "Range": 0.0,
+    "LFO Shape": 0.08
+   },
+   "Rate": {
+    "param": "LFO Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "LFO Amount",
+    "scale": 0.01
+   },
+   "Regen": {
+    "param": "Feedback",
+    "scale": 0.01,
+    "_hint": "Legacy FM107 bundle alias; the actual pedal is MF-108M/FM108."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
    },
    "Mix": {
     "param": "Mix",
@@ -710,17 +790,21 @@
  },
  "Pedal_VintageFlanger": {
   "vintageflanger": {
+   "_static": {
+    "Matrix": 0.0
+   },
    "Rate": {
     "param": "Rate",
     "scale": 0.01
    },
    "Depth": {
-    "param": "Depth",
+    "param": "Range",
     "scale": 0.01
    },
    "Mix": {
-    "param": "Mix",
-    "scale": 0.01
+    "param": "Color",
+    "scale": 0.01,
+    "_hint": "The Deluxe Electric Mistress has no Mix control; RS Mix is reused as the real Color feedback knob."
    }
   },
   "khs flanger": {
@@ -760,16 +844,19 @@
    }
   },
   "deluxe servant": {
+   "_static": {
+    "Matrix": 0.0
+   },
    "Rate": {
     "param": "Rate",
     "scale": 0.01
    },
    "Depth": {
-    "param": "Depth",
+    "param": "Range",
     "scale": 0.01
    },
    "Mix": {
-    "param": "Mix",
+    "param": "Color",
     "scale": 0.01
    }
   }
@@ -2943,18 +3030,13 @@
  },
  "Pedal_Compression": {
   "dynamicscompression": {
+   "_static": {
+    "Output": 0.62
+   },
    "Comp": {
-    "param": "Comp",
-    "scale": 0.01
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.01
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.0016666666666666668,
-    "_hint": "RS Release reaches ~540 ms in the DB. Normalize by 600 so DynamicsCompression can preserve long releases instead of clamping above 100."
+    "param": "Sensitivity",
+    "scale": 0.01,
+    "_hint": "RS Comp drives the real Dyna Comp Sensitivity pot. Output is pinned because the real pedal has no Attack/Release controls."
    }
   },
   "khs compressor": {
@@ -2982,22 +3064,35 @@
    }
   },
   "dyna comp": {
+   "_static": {
+    "Output": 0.62
+   },
    "Comp": {
-    "param": "Comp",
-    "scale": 0.01
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.01
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.0016666666666666668,
-    "_hint": "RS Release reaches ~540 ms in the DB. Normalize by 600 so DynamicsCompression can preserve long releases instead of clamping above 100."
+    "param": "Sensitivity",
+    "scale": 0.01,
+    "_hint": "RS Comp drives the real Dyna Comp Sensitivity pot. Output is pinned because the real pedal has no Attack/Release controls."
    }
   }
  },
  "Pedal_Compressor": {
+  "dynamicscompression": {
+   "_static": {
+    "Output": 0.62
+   },
+   "Comp": {
+    "param": "Sensitivity",
+    "scale": 0.01
+   }
+  },
+  "dyna comp": {
+   "_static": {
+    "Output": 0.62
+   },
+   "Comp": {
+    "param": "Sensitivity",
+    "scale": 0.01
+   }
+  },
   "khs compressor": {
    "Comp": {
     "param": "Threshold",
@@ -3032,20 +3127,19 @@
  },
  "Bass_Pedal_MBComp": {
   "bassmulticomp": {
+   "_static": {
+    "Gain": 0.56,
+    "Mode": 0.50
+   },
    "Compress": {
-    "param": "Compress",
-    "scale": 0.01
+    "param": "Comp",
+    "scale": 0.01,
+    "_hint": "RS Compress drives the real EBS Comp control."
    },
    "Filter": {
-    "param": "Filter",
-    "scale": 0.0011235955056179776,
-    "offset": -0.12359550561797752,
-    "_hint": "RS Filter is the multiband crossover in Hz, observed 110-1000. BassMultiComp stores it normalized: (Hz - 110) / 890."
-   },
-   "Rate": {
-    "param": "Rate",
+    "param": "Sens",
     "scale": 0.01,
-    "_hint": "Higher RS Rate recovers faster."
+    "_hint": "RS Filter is reused as the real EBS Sens control. Gain and Mode are pinned by _static."
    }
   },
   "khs compressor": {
@@ -3065,20 +3159,19 @@
    }
   },
   "multi comp": {
+   "_static": {
+    "Gain": 0.56,
+    "Mode": 0.50
+   },
    "Compress": {
-    "param": "Compress",
-    "scale": 0.01
+    "param": "Comp",
+    "scale": 0.01,
+    "_hint": "RS Compress drives the real EBS Comp control."
    },
    "Filter": {
-    "param": "Filter",
-    "scale": 0.0011235955056179776,
-    "offset": -0.12359550561797752,
-    "_hint": "RS Filter is the multiband crossover in Hz, observed 110-1000. BassMultiComp stores it normalized: (Hz - 110) / 890."
-   },
-   "Rate": {
-    "param": "Rate",
+    "param": "Sens",
     "scale": 0.01,
-    "_hint": "Higher RS Rate recovers faster."
+    "_hint": "RS Filter is reused as the real EBS Sens control. Gain and Mode are pinned by _static."
    }
   }
  },
@@ -4290,14 +4383,15 @@
  "Pedal_Swole": {
   "swole": {
    "Smash": {
-    "param": "Smash",
+    "param": "Sensitivity",
     "scale": 0.01,
-    "_hint": "the game Smash controls heavy compression ratio, makeup and saturation."
+    "_hint": "RS Smash drives the real Lazy Sprocket/SG-1 Sensitivity control."
    },
    "Rate": {
-    "param": "Rate",
+    "param": "Attack",
     "scale": 0.01,
-    "_hint": "the game Rate controls compressor recovery speed; higher is faster."
+    "invert": true,
+    "_hint": "RS Rate is perceived speed, so it maps inverted to the real Attack pot."
    }
   },
   "khs filter": {
@@ -4312,14 +4406,15 @@
   },
   "beta fist": {
    "Smash": {
-    "param": "Smash",
+    "param": "Sensitivity",
     "scale": 0.01,
-    "_hint": "the game Smash controls heavy compression ratio, makeup and saturation."
+    "_hint": "RS Smash drives the real Lazy Sprocket/SG-1 Sensitivity control."
    },
    "Rate": {
-    "param": "Rate",
+    "param": "Attack",
     "scale": 0.01,
-    "_hint": "the game Rate controls compressor recovery speed; higher is faster."
+    "invert": true,
+    "_hint": "RS Rate is perceived speed, so it maps inverted to the real Attack pot."
    }
   }
  },
@@ -4365,27 +4460,37 @@
  },
  "Pedal_Limiter": {
   "limiter": {
+   "_static": {
+    "Level": 0.58,
+    "Tone": 0.52
+   },
    "Limit": {
-    "param": "Limit",
+    "param": "Threshold",
     "scale": 0.01,
-    "_hint": "the game sends 0-100-ish limiter amount. The plugin uses an internal threshold curve so low library values still limit audibly."
+    "_hint": "RS Limit drives the real LM-2 Threshold pot."
    },
    "Rate": {
-    "param": "Rate",
+    "param": "Release",
     "scale": 0.01,
-    "_hint": "Recovery speed; higher the game Rate recovers faster."
+    "invert": true,
+    "_hint": "RS Rate is recovery speed, so it maps inverted to the real Release pot."
    }
   },
   "lm-2": {
+   "_static": {
+    "Level": 0.58,
+    "Tone": 0.52
+   },
    "Limit": {
-    "param": "Limit",
+    "param": "Threshold",
     "scale": 0.01,
-    "_hint": "the game sends 0-100-ish limiter amount. The plugin uses an internal threshold curve so low library values still limit audibly."
+    "_hint": "RS Limit drives the real LM-2 Threshold pot."
    },
    "Rate": {
-    "param": "Rate",
+    "param": "Release",
     "scale": 0.01,
-    "_hint": "Recovery speed; higher the game Rate recovers faster."
+    "invert": true,
+    "_hint": "RS Rate is recovery speed, so it maps inverted to the real Release pot."
    }
   }
  },
@@ -5875,9 +5980,9 @@
    "_hint": "BENDER DELUXE = the FULL Fender '57 Deluxe 5E3 panel (Tone, Inst Vol, Mic Vol only). On a 5E3 the VOLUME is the gain and there is one Tone control; the famous trick is jumpering the Mic channel for body. So RS Gain -> Inst Vol, Treble -> Tone, Mid -> Mic Vol (jumper). Bright picks the Instrument bright/normal input; Bass + Pres have no 5E3 pot so they drive hidden shelves.",
    "Gain": {
     "param": "Inst Vol",
-    "scale": 0.0076,
-    "_hint": "On a 5E3 the Instrument Volume IS the gain \u2014 it cleans up / breaks up as you turn it. RS Gain drives it; loudness is held flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
-    "offset": 0.24
+    "scale": 0.0084,
+    "_hint": "On a 5E3 the Instrument Volume IS the gain \u2014 it cleans up / breaks up as you turn it. RS Gain drives it; loudness is held flat by the makeup. RS 0 maps to a low-but-audible real pot position; the curve is trimmed so the Deluxe does not break up too early.",
+    "offset": 0.16
    },
    "Treble": {
     "param": "Tone",

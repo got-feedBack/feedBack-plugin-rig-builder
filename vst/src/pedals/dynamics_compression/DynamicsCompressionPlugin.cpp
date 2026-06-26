@@ -1,20 +1,31 @@
 /*
- * DynamicsCompression - Dyna Comp-style compressor for the game's
- * Pedal_Compression. The references are MXR Dynacomp / Dyna Comp CA3080 OTA
- * schematics. the game exposes Comp, Attack, and Release, so this model keeps
- * the OTA-style squeeze and sustain while mapping those three controls.
+ * DynamicsCompression - MXR Dyna Comp / Ross-style CA3080 OTA compressor.
+ *
+ * Real panel: Output + Sensitivity. The model follows the classic schematic:
+ * BJT input buffer, CA3080 transconductance gain cell, rectified sidechain and
+ * fixed RC ballistics. No closed-loop RMS makeup is used; the Output pot is the
+ * real loudness control.
  */
 #include "DistrhoPlugin.hpp"
 #include "DynamicsCompressionParams.h"
+#include "../../_shared/opamp.hpp"
+#include "../../_shared/semiconductors.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
 
 namespace {
 
+static constexpr float kPi = 3.14159265358979323846f;
+
 static inline float clamp01(float v)
 {
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
+}
+
+static inline float dn(float v)
+{
+    return std::fabs(v) < 1.0e-15f ? 0.0f : v;
 }
 
 static inline float dbToAmp(float db)
@@ -24,12 +35,75 @@ static inline float dbToAmp(float db)
 
 static inline float ampToDb(float amp)
 {
-    return 20.0f * std::log10(amp + 1.0e-9f);
+    return 20.0f * std::log10(std::fmax(amp, 1.0e-8f));
 }
 
-static inline float softClip(float x)
+static inline float coeffMs(float ms, float sr)
 {
-    return std::tanh(x);
+    return 1.0f - std::exp(-1.0f / std::fmax(1.0f, ms * 0.001f * sr));
+}
+
+static inline float audioTaper(float v)
+{
+    return std::pow(clamp01(v), 1.65f);
+}
+
+class RcHighPass
+{
+    float a = 0.0f;
+    float x1 = 0.0f;
+    float y1 = 0.0f;
+
+public:
+    void setRC(float sr, float rOhm, float cFarad)
+    {
+        const float rc = rOhm * cFarad;
+        const float dt = 1.0f / (sr > 1000.0f ? sr : 48000.0f);
+        a = rc / (rc + dt);
+    }
+
+    void reset()
+    {
+        x1 = y1 = 0.0f;
+    }
+
+    float process(float x)
+    {
+        const float y = a * (y1 + x - x1);
+        x1 = x;
+        y1 = dn(y);
+        return y1;
+    }
+};
+
+class OnePoleLowPass
+{
+    float a = 0.0f;
+    float y = 0.0f;
+
+public:
+    void setHz(float sr, float hz)
+    {
+        a = 1.0f - std::exp(-2.0f * kPi * hz / (sr > 1000.0f ? sr : 48000.0f));
+    }
+
+    void reset()
+    {
+        y = 0.0f;
+    }
+
+    float process(float x)
+    {
+        y += a * (x - y);
+        y = dn(y);
+        return y;
+    }
+};
+
+static inline float bjtBuffer(float x, float drive)
+{
+    const float shaped = std::tanh(x * drive);
+    return 0.86f * x + 0.14f * shaped / std::fmax(0.25f, drive);
 }
 
 } // namespace
@@ -37,163 +111,129 @@ static inline float softClip(float x)
 class DynamicsCompressionCore
 {
     float sampleRate = 48000.0f;
-    float comp = kDynamicsCompressionDef[kComp];
-    float attack = kDynamicsCompressionDef[kAttack];
-    float release = kDynamicsCompressionDef[kRelease];
+    float output = kDynamicsCompressionDef[kOutput];
+    float sensitivity = kDynamicsCompressionDef[kSensitivity];
 
-    float hpX1 = 0.0f;
-    float hpY1 = 0.0f;
-    float toneY = 0.0f;
-    float env = 0.0f;
-    float gainSmooth = 1.0f;
+    RcHighPass inputCap;
+    OnePoleLowPass otaBandwidth;
+    OnePoleLowPass outputTone;
+    rbshared::OpAmpStage recoveryAmp;
+    rbcomponents::AntiParallelDiodePair otaInputClamp;
 
-    float hpA = 0.0f;
-    float toneA = 0.0f;
-    float attackA = 0.0f;
-    float releaseA = 0.0f;
-    float gainA = 0.0f;
+    float detector = 0.0f;
+    float gainCell = 1.0f;
+    float detAttackA = 0.0f;
+    float detReleaseA = 0.0f;
+    float gainAttackA = 0.0f;
+    float gainReleaseA = 0.0f;
+    float outputGain = 1.0f;
+    float makeupGain = 1.0f;
+    float thresholdDb = -24.0f;
+    float ratio = 5.0f;
+    float maxReductionDb = 18.0f;
+    float otaDrive = 1.0f;
 
-    // Closed-loop auto-makeup: match the wet mix's smoothed RMS to the clean
-    // signal's so raising Comp keeps OUTPUT loudness constant (replaces the
-    // old open-loop curve that reached +21 dB at Comp=1).
-    float msClean = 0.0f;
-    float msWet = 0.0f;
-    float msCoeff = 0.0f;
-
-    void updateFilters()
+    void update()
     {
-        const float dt = 1.0f / sampleRate;
+        const float s = audioTaper(sensitivity);
 
-        const float hpHz = 24.0f;
-        const float hpRc = 1.0f / (2.0f * 3.14159265359f * hpHz);
-        hpA = hpRc / (hpRc + dt);
+        inputCap.setRC(sampleRate, 1010000.0f, 0.01e-6f);
+        otaBandwidth.setHz(sampleRate, 11800.0f - 3200.0f * s);
+        outputTone.setHz(sampleRate, 7600.0f - 1700.0f * s);
 
-        // Dyna Comp-style pedals are not hi-fi bright after heavy squeeze.
-        const float toneHz = 7600.0f - 1800.0f * comp;
-        toneA = 1.0f - std::exp(-2.0f * 3.14159265359f * toneHz / sampleRate);
+        // CA3080 sidechain: very fast charge, slower sustain/release as the
+        // Sensitivity pot raises the control current.
+        detAttackA = coeffMs(1.4f + 2.2f * (1.0f - s), sampleRate);
+        detReleaseA = coeffMs(85.0f + 410.0f * s, sampleRate);
+        gainAttackA = coeffMs(2.2f + 4.0f * (1.0f - s), sampleRate);
+        gainReleaseA = coeffMs(70.0f + 360.0f * s, sampleRate);
 
-        // RS Attack is stored 0..100-ish; slower values preserve more pick.
-        const float attackMs = 1.2f + 78.0f * attack * attack;
-        // RS Release values reach about 540; mapping code normalizes by 600.
-        const float releaseMs = 20.0f + 580.0f * release;
-        attackA = 1.0f - std::exp(-1.0f / (0.001f * attackMs * sampleRate));
-        releaseA = 1.0f - std::exp(-1.0f / (0.001f * releaseMs * sampleRate));
+        thresholdDb = -10.0f - 34.0f * s;
+        ratio = 1.45f + 11.5f * s;
+        maxReductionDb = 8.0f + 22.0f * s;
+        makeupGain = dbToAmp(1.0f + 12.0f * s);
+        outputGain = dbToAmp(-18.0f + 30.0f * clamp01(output));
+        otaDrive = 1.05f + 0.72f * s;
 
-        gainA = 1.0f - std::exp(-1.0f / (0.006f * sampleRate));
-
-        // ~250 ms loudness window for the auto-makeup tracker.
-        msCoeff = 1.0f - std::exp(-1.0f / std::fmax(1.0f, 0.250f * sampleRate));
+        otaInputClamp.setSpec(rbcomponents::diode1N914());
+        otaInputClamp.setSourceR(8200.0f - 3200.0f * s);
     }
 
-    float highPass(float x)
+    float targetGain(float env) const
     {
-        const float y = hpA * (hpY1 + x - hpX1);
-        hpX1 = x;
-        hpY1 = y;
-        return y;
-    }
+        const float levelDb = ampToDb(env);
+        const float over = levelDb - thresholdDb;
+        if (over <= -3.0f)
+            return 1.0f;
 
-    float lowPass(float x)
-    {
-        toneY += toneA * (x - toneY);
-        return toneY;
-    }
-
-    void updateEnvelope(float x)
-    {
-        const float detector = std::sqrt(x * x + 1.0e-8f);
-        const float a = detector > env ? attackA : releaseA;
-        env += a * (detector - env);
-    }
-
-    float gainComputer()
-    {
-        const float amount = comp;
-        const float thresholdDb = -12.0f - 34.0f * amount;
-        const float ratio = 1.35f + 9.5f * amount;
-        const float kneeDb = 5.0f + 7.0f * (1.0f - amount);
-        const float envDb = ampToDb(env);
-        const float over = envDb - thresholdDb;
-
-        float reductionDb = 0.0f;
-        if (over > -0.5f * kneeDb)
+        const float kneeDb = 6.0f;
+        float effectiveOver = over;
+        if (over < 0.5f * kneeDb)
         {
-            const float compressed = over < 0.5f * kneeDb
-                ? ((over + 0.5f * kneeDb) * (over + 0.5f * kneeDb)) / (2.0f * kneeDb)
-                : over;
-            reductionDb = compressed * (1.0f - 1.0f / ratio);
+            const float x = over + 0.5f * kneeDb;
+            effectiveOver = (x * x) / (2.0f * kneeDb);
         }
 
-        const float target = dbToAmp(-reductionDb);
-        gainSmooth += gainA * (target - gainSmooth);
-        return gainSmooth;
+        const float reductionDb = std::fmin(maxReductionDb, effectiveOver * (1.0f - 1.0f / ratio));
+        return dbToAmp(-reductionDb);
     }
 
 public:
-    void reset()
-    {
-        hpX1 = hpY1 = toneY = env = 0.0f;
-        gainSmooth = 1.0f;
-        msClean = msWet = 0.0f;
-        updateFilters();
-    }
-
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
+        recoveryAmp.setSpec(rbshared::m5218Spec());
+        recoveryAmp.setSampleRate(sampleRate);
         reset();
     }
 
-    void setComp(float v)
+    void reset()
     {
-        comp = clamp01(v);
-        updateFilters();
+        inputCap.reset();
+        otaBandwidth.reset();
+        outputTone.reset();
+        recoveryAmp.reset();
+        otaInputClamp.reset();
+        detector = 0.0f;
+        gainCell = 1.0f;
+        update();
     }
 
-    void setAttack(float v)
+    void setOutput(float v)
     {
-        attack = clamp01(v);
-        updateFilters();
+        output = clamp01(v);
+        update();
     }
 
-    void setRelease(float v)
+    void setSensitivity(float v)
     {
-        release = clamp01(v);
-        updateFilters();
+        sensitivity = clamp01(v);
+        update();
     }
 
     float process(float in)
     {
-        float x = highPass(in);
-        const float ref = x;   // clean loudness reference (pre input-drive)
+        float x = inputCap.process(in);
+        x = bjtBuffer(x, 1.18f + 0.22f * sensitivity);
 
-        // Input transistor and OTA input rounding. Keep it subtle: this is
-        // compression color, not distortion.
-        const float inputDrive = 1.05f + 0.55f * comp;
-        x = 0.88f * x + 0.12f * softClip(x * inputDrive);
+        const float rectified = std::fabs(x);
+        const float detA = rectified > detector ? detAttackA : detReleaseA;
+        detector += detA * (rectified - detector);
+        detector = dn(detector);
 
-        updateEnvelope(x);
-        const float gr = gainComputer();
+        const float wantedGain = targetGain(detector);
+        const float gainA = wantedGain < gainCell ? gainAttackA : gainReleaseA;
+        gainCell += gainA * (wantedGain - gainCell);
+        gainCell = std::fmax(0.025f, std::fmin(1.0f, gainCell));
 
-        const float wet = x * gr;
-        const float dryKeep = 0.04f + 0.10f * attack;
-        float y = wet * (1.0f - dryKeep) + x * dryKeep;
-
-        // Auto-makeup (closed loop): match the wet mix's smoothed RMS to the
-        // clean signal's so the OUTPUT loudness stays constant as Comp rises
-        // instead of ballooning. Can cut as well as boost; range-limited
-        // (-12..+18 dB) so silence/noise can't blow up. See AMP_LOUDNESS.md.
-        msClean += msCoeff * (ref * ref - msClean);
-        msWet += msCoeff * (y * y - msWet);
-        float makeup = 1.0f;
-        if (msWet > 1.0e-9f && msClean > 1.0e-9f)
-            makeup = std::sqrt(msClean / msWet);
-        makeup = std::fmin(dbToAmp(18.0f), std::fmax(dbToAmp(-12.0f), makeup));
-        y *= makeup;
-
-        y = softClip(y * (0.94f + 0.08f * comp)) * 0.98f;
-        y = lowPass(y);
-        return y;
+        // The OTA input pair rounds before the current-controlled gain cell.
+        float otaIn = otaInputClamp.process(x * otaDrive);
+        otaIn = otaBandwidth.process(otaIn);
+        float y = otaIn * gainCell * makeupGain;
+        y = recoveryAmp.process(y, 3.0f + 7.0f * sensitivity);
+        y = outputTone.process(y);
+        y *= outputGain;
+        return std::tanh(y * 1.06f) * 0.98f;
     }
 };
 
@@ -205,12 +245,10 @@ class DynamicsCompressionPlugin : public Plugin
 
     void applyAll()
     {
-        left.setComp(params[kComp]);
-        right.setComp(params[kComp]);
-        left.setAttack(params[kAttack]);
-        right.setAttack(params[kAttack]);
-        left.setRelease(params[kRelease]);
-        right.setRelease(params[kRelease]);
+        left.setOutput(params[kOutput]);
+        right.setOutput(params[kOutput]);
+        left.setSensitivity(params[kSensitivity]);
+        right.setSensitivity(params[kSensitivity]);
     }
 
 public:
@@ -226,10 +264,10 @@ public:
 
 protected:
     const char* getLabel() const override { return "DynamicsCompression"; }
-    const char* getDescription() const override { return "Dyna Comp-style pedal compressor"; }
+    const char* getDescription() const override { return "CA3080 OTA Dyna Comp-style compressor"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 1); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('D', 'c', 'm', 'p'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
