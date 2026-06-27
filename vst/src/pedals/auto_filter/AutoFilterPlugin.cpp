@@ -105,6 +105,18 @@ public:
 
 } // namespace
 
+// Musitronics Mu-Tron III — circuit-real model (schematic S/N 02050 + R.G. Keen
+// verified layout). A 2-pole STATE-VARIABLE FILTER whose two integrator resistors
+// are PHOTOCELLS (LDRs) swept by an envelope-driven LED (NOT an OTA filter). The
+// MODE switch hard-selects the LP / BP / HP node. PEAK = the SVF damping feedback
+// (resonance/Q). RANGE swaps the integrator caps (two sweep bands). DIRECTION
+// inverts the control voltage (filter opens vs closes on attack). GAIN = envelope
+// sensitivity only (drives the detector, never the audio level).
+//
+// The smooth "vowel" sweep is the photocell lag, modelled as a 2-stage detector:
+// a fast electronic rectifier (~3/15 ms) feeding the slow LED→LDR optocoupler
+// (NSL-32: rise TR≈55 ms, decay TD≈80–90 ms). That lag IS the smoothing — no
+// cosmetic smoothstep/pow shaping, no pre/post tone LPF, no dry leak.
 class AutoFilterCore
 {
     float sampleRate = 48000.0f;
@@ -114,33 +126,23 @@ class AutoFilterCore
     float range = kAutoFilterDef[kRange];
     float direction = kAutoFilterDef[kDirection];
 
-    OnePole inputHpDc;
-    OnePole preTone;
-    OnePole postTone;
     Svf filter;
 
     float dcIn = 0.0f;
-    float env = 0.0f;
-    float opto = 0.0f;
-    float lastCutoff = 450.0f;
+    float env = 0.0f;     // fast electronic full-wave rectifier
+    float opto = 0.0f;    // slow LED→LDR photocell (the Mu-Tron lag)
+    float lastCutoff = 300.0f;
 
-    float envAttackA = 0.0f;
-    float envReleaseA = 0.0f;
-    float optoAttackA = 0.0f;
-    float optoReleaseA = 0.0f;
+    float rectAtkA = 0.0f, rectRelA = 0.0f;
+    float optoAtkA = 0.0f, optoRelA = 0.0f;
 
-    void updateFilters()
+    void updateCoeffs()
     {
-        const float p = smoothstep(peak);
-        preTone.setLowPass(sampleRate, 9100.0f - 2600.0f * p);
-        postTone.setLowPass(sampleRate, 7800.0f - 2100.0f * p);
-
-        // NSL32-style opto: the detector charges quickly, the LDR conducts
-        // slightly later and releases much more slowly than the rectifier.
-        envAttackA = onePoleCoeffMs(0.8f, sampleRate);
-        envReleaseA = onePoleCoeffMs(18.0f + 60.0f * (1.0f - gain), sampleRate);
-        optoAttackA = onePoleCoeffMs(2.2f + 5.5f * (1.0f - range), sampleRate);
-        optoReleaseA = onePoleCoeffMs(22.0f + 72.0f * (1.0f - gain), sampleRate);
+        // Fixed time constants — a real Mu-Tron III has NO attack/release pots.
+        rectAtkA = onePoleCoeffMs(3.0f, sampleRate);    // precision rectifier, fast
+        rectRelA = onePoleCoeffMs(15.0f, sampleRate);
+        optoAtkA = onePoleCoeffMs(55.0f, sampleRate);   // NSL-32 rise time TR
+        optoRelA = onePoleCoeffMs(90.0f, sampleRate);   // NSL-32 decay TD (+ CdS tail)
     }
 
     int modeIndex() const
@@ -152,30 +154,13 @@ class AutoFilterCore
         return 2;     // high-pass
     }
 
-    void updateEnvelope(float x)
-    {
-        const float g = smoothstep(gain);
-        const float rectified = std::fabs(x);
-        const float detectorDrive = 12.0f + 48.0f * std::pow(clamp01(gain), 1.18f);
-        const float detector = clamp01((1.0f - std::exp(-rectified * detectorDrive)) * (0.72f + 0.45f * g));
-        const float envA = detector > env ? envAttackA : envReleaseA;
-        env += envA * (detector - env);
-
-        const float optoTarget = smoothstep(env);
-        const float optoA = optoTarget > opto ? optoAttackA : optoReleaseA;
-        opto += optoA * (optoTarget - opto);
-    }
-
 public:
     void reset()
     {
-        inputHpDc.reset();
-        preTone.reset();
-        postTone.reset();
         filter.reset();
         dcIn = env = opto = 0.0f;
-        lastCutoff = 450.0f;
-        updateFilters();
+        lastCutoff = 300.0f;
+        updateCoeffs();
     }
 
     void setSampleRate(float sr)
@@ -184,85 +169,57 @@ public:
         reset();
     }
 
-    void setGain(float v)
-    {
-        gain = clamp01(v);
-        updateFilters();
-    }
-
-    void setPeak(float v)
-    {
-        peak = clamp01(v);
-        updateFilters();
-    }
-
-    void setMode(float v)
-    {
-        mode = clamp01(v);
-    }
-
-    void setRange(float v)
-    {
-        range = clamp01(v);
-        updateFilters();
-    }
-
-    void setDirection(float v)
-    {
-        direction = clamp01(v);
-    }
+    void setGain(float v)      { gain = clamp01(v); }
+    void setPeak(float v)      { peak = clamp01(v); }
+    void setMode(float v)      { mode = clamp01(v); }
+    void setRange(float v)     { range = clamp01(v); }
+    void setDirection(float v) { direction = clamp01(v); }
 
     float process(float in)
     {
-        // Simple input high-pass/DC blocker without a biquad allocation.
+        // input DC blocker (~7 Hz one-pole high-pass)
         dcIn += 0.0009f * (in - dcIn);
-        float x = in - dcIn;
-        x = preTone.process(x);
+        const float x = in - dcIn;
 
-        const float g = smoothstep(gain);
-        const float p = smoothstep(peak);
-        const float inputGain = 0.88f + 2.15f * g;
-        const float pre = softClip(x * inputGain);
-        updateEnvelope(pre);
+        // --- envelope detector (GAIN = sensitivity only) ---
+        const float detDrive = 1.0f + 9.0f * gain;            // input sensitivity into the rectifier
+        const float rect = std::fabs(x) * detDrive;
+        env += (rect > env ? rectAtkA : rectRelA) * (rect - env);
+        // LED → LDR photocell lag: the smooth Mu-Tron "vowel" sweep
+        const float optoTarget = clamp01(env);
+        opto += (optoTarget > opto ? optoAtkA : optoRelA) * (optoTarget - opto);
 
-        const int mode = modeIndex();
-        const bool highRange = range >= 0.5f;
-        const bool upSweep = direction >= 0.5f;
-
-        float sweep = std::pow(clamp01(opto * (1.25f + 1.35f * g)), 0.58f);
-        sweep = smoothstep(sweep);
-        if (!upSweep)
+        // sweep 0..1; DIRECTION DOWN inverts the CV (filter closes on attack)
+        float sweep = clamp01(opto);
+        if (direction < 0.5f)
             sweep = 1.0f - sweep;
 
-        const float minHz = highRange ? 115.0f : 68.0f;
-        const float maxHz = highRange ? 3850.0f : 2100.0f;
-        const float cutoff = minHz * std::pow(maxHz / minHz, sweep);
-        lastCutoff += 0.38f * (cutoff - lastCutoff);
+        // RANGE = integrator-cap swap -> two log sweep bands (from R*C + LDR window)
+        const bool highRange = range >= 0.5f;
+        const float fcMin = highRange ? 200.0f : 100.0f;
+        const float fcMax = highRange ? 4000.0f : 1800.0f;
+        const float cutoff = fcMin * std::pow(fcMax / fcMin, sweep);
+        lastCutoff += 0.5f * (cutoff - lastCutoff);           // light de-zipper (LDR already smooth)
 
-        const float q = 0.78f + 11.5f * p + 3.5f * p * g;
-        float low = 0.0f;
-        float band = 0.0f;
-        float high = 0.0f;
-        filter.process(pre, sampleRate, lastCutoff, q, low, band, high);
+        // PEAK = SVF damping/feedback = resonance. Log taper, ~0.7 (flat) -> ~18 (quack).
+        const float q = 0.7f * std::pow(26.0f, peak);
 
-        // The Mu-Tron mode switch changes which filter node is emphasized, but
-        // the musical identity is still the swept resonant LDR wah. Keep band
-        // energy dominant so Direction never feels like a HP/LP type switch.
-        const float wah = band * (2.35f + 2.65f * p + 0.85f * g);
-        float wet = wah + low * 0.20f;
-        if (mode == 0)
-            wet = wah * 0.92f + low * (0.52f + 0.16f * p);
-        else if (mode == 2)
-            wet = wah * 0.96f + high * (0.20f + 0.18f * p);
+        float low = 0.0f, band = 0.0f, high = 0.0f;
+        filter.process(x, sampleRate, lastCutoff, q, low, band, high);
 
-        // The real pedal is buffered and not fully wet. A small dry path keeps
-        // low-peak presets musical while high Gain/Peak still quacks hard.
-        const float dryLeak = 0.095f - 0.045f * p;
-        wet = wet * (1.34f + 0.64f * g + 0.42f * p) + pre * dryLeak;
-        wet = postTone.process(wet);
+        // MODE = clean node select (LP / BP / HP). Per-mode makeup level-matches the
+        // three nodes at low Peak (a high-Q SVF BP/HP peak harder than the LP DC unity).
+        const int m = modeIndex();
+        float wet;
+        if (m == 0)
+            wet = low * 1.05f;
+        else if (m == 1)
+            wet = band * 1.35f;       // band-pass = the signature Mu-Tron quack
+        else
+            wet = high * 0.85f;
 
-        const float level = 0.88f / (1.0f + 0.24f * p);
-        return softClip(wet * level) * 0.98f;
+        // clean output buffer + soft safety clip on the resonant peaks
+        return softClip(wet * 0.92f);
     }
 };
 
@@ -302,7 +259,7 @@ protected:
     const char* getDescription() const override { return "Mu-Tron III style envelope filter"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('A', 't', 'F', 'l'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

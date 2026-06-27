@@ -24,13 +24,15 @@ static inline float clamp01(float v)
 
 static inline float finalLimit(float x)
 {
-    return std::tanh(0.98f * x);
+    // ASYMMETRIC soft limiter — a real FZ-1A germanium stage clips harder on one
+    // polarity; a symmetric tanh here would undo the Ge asymmetry built in the core.
+    return (x >= 0.0f) ? std::tanh(0.90f * x) : std::tanh(1.18f * x);
 }
 
 static inline float staticFuzzMakeup(float fuzz)
 {
     const float f = clamp01(fuzz);
-    return 2.10f / (0.74f + 0.46f * f);
+    return 0.85f / (0.74f + 0.46f * f);
 }
 
 } // namespace
@@ -68,7 +70,7 @@ protected:
     const char* getDescription() const override { return "1.5 V three-2N1305 germanium fuzz"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('B', 'z', 't', 'n'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

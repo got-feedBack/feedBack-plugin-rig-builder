@@ -18,6 +18,17 @@ static inline float dn(float v)
     return std::fabs(v) < 1.0e-15f ? 0.0f : v;
 }
 
+// Soft half-wave Ge rectifier (a single OA-90 diode passing its forward half).
+// Smooth softplus turn-on around the knee vf with a Ge-soft transition nvt.
+// geHalfWave(+s)+geHalfWave(-s) = |s| = the full-wave-rectified OCTAVE-UP.
+static inline float geHalfWave(float v, float vf, float nvt)
+{
+    const float a = (v - vf) / nvt;
+    if (a > 18.0f) return v - vf;        // fully forward-conducting
+    if (a < -18.0f) return 0.0f;         // reverse: off
+    return nvt * std::log1p(std::exp(a));
+}
+
 class RcHighPass
 {
     float a = 0.0f;
@@ -126,6 +137,8 @@ class SuperBuzzCore
     RcLowPass splitterMiller;
     RcLowPass toneBrightCap;
     RcLowPass toneDarkCap;
+    RcHighPass scoopHp;     // mid-band extraction for the tone-switch scoop notch
+    RcLowPass scoopLp;
     RcLowPass outputLoad;
     DcBlock q1Dc;
     DcBlock q2Dc;
@@ -165,15 +178,18 @@ class SuperBuzzCore
         balanceToQ6.setRC(sampleRate, kBalance, kCStage);
         outputCoupling.setRC(sampleRate, kOutputLoad, kCStage);
 
-        q1Miller.setHz(sampleRate, 8200.0f - 900.0f * e);
+        // Q1 collector 1nF / 47k ≈ 3.4 kHz — the defining creamy Super-Fuzz rolloff
+        // (was set ~2.4x too bright/fizzy).
+        q1Miller.setHz(sampleRate, 3600.0f - 300.0f * e);
         q2Miller.setHz(sampleRate, 6800.0f - 1300.0f * e);
         q3Miller.setHz(sampleRate, 6200.0f - 1600.0f * e);
         splitterMiller.setHz(sampleRate, 7200.0f - 1300.0f * e);
-        toneBrightCap.setRC(sampleRate, kToneR3, kToneCapBright);
+        toneBrightCap.setRC(sampleRate, kToneR1, kToneCapBright);   // 1nF/47k ≈ 3.4 kHz
         toneDarkCap.setRC(sampleRate, kToneR1 + kToneR2, kToneCapDark);
+        // tone-switch mid-scoop band ≈ 350 Hz .. 1.6 kHz (center ~750 Hz "tin-can" notch)
+        scoopHp.setRC(sampleRate, 45470.0f, 1.0e-8f);
+        scoopLp.setHz(sampleRate, 1600.0f);
         outputLoad.setHz(sampleRate, 9800.0f);
-        oa90.setSpec(rbcomponents::diodeOA90());
-        oa90.setSourceR(2500.0f - 1500.0f * e);
 
         sagAttack = 1.0f - std::exp(-1.0f / (0.010f * sampleRate));
         sagRelease = 1.0f - std::exp(-1.0f / (0.090f * sampleRate));
@@ -188,15 +204,13 @@ class SuperBuzzCore
 
     float toneNetwork(float x)
     {
+        // Tone SW: a passive mid-scoop. The "expander/tin-can" position cuts a deep
+        // notch around ~750 Hz (the .1µF shunt path); the bright/full position keeps
+        // a shallow scoop + the 1nF/47k top. Both derived from the schematic R/C.
+        const float mid = scoopLp.process(scoopHp.process(x));   // ~350 Hz..1.6 kHz band
         if (toneBright)
-        {
-            const float cap = toneBrightCap.process(x);
-            return 0.92f * (x - 0.78f * cap) + 0.08f * x;
-        }
-
-        const float dark = toneDarkCap.process(x);
-        const float nasal = x - 0.44f * dark;
-        return 0.82f * dark + 0.24f * nasal;
+            return x - 0.30f * mid;        // full/bright voice
+        return x - 1.10f * mid;            // deep mid-scoop "tin-can"
     }
 
 public:
@@ -223,6 +237,8 @@ public:
         splitterMiller.reset();
         toneBrightCap.reset();
         toneDarkCap.reset();
+        scoopHp.reset();
+        scoopLp.reset();
         outputLoad.reset();
         q1Dc.reset();
         q2Dc.reset();
@@ -252,39 +268,50 @@ public:
 
         float x = inputCoupling.process(0.96f * in);
 
-        // Q1/Q2 2SC828 preamp and feedback network before the Expander pot.
-        x = bjtStage(x, 4.4f + 3.2f * e, -0.026f,
+        // Q1/Q2 2SC828 preamp. Kept only moderately overdriven: the splitter+rectifier
+        // must see a signal that still has a FUNDAMENTAL waveform (rectifying an already-
+        // squared wave yields DC, not an octave). The square fuzz comes from the rectified
+        // octave waveform + the post-octave drive, not from slamming the preamp.
+        x = bjtStage(x, 1.8f + 1.6f * e, -0.026f,
                      1.22f, 1.05f, rail * 0.74f, rail * 0.62f);
         x = q1Miller.process(q1Dc.process(x));
         x = q2Coupling.process(x);
 
-        x = bjtStage(x, 3.7f + 4.6f * e, 0.018f,
+        x = bjtStage(x, 1.6f + 2.0f * e, 0.018f,
                      1.34f, 1.12f, rail * 0.78f, rail * 0.66f);
         x = q2Miller.process(q2Dc.process(x));
 
         // EXPANDER 50 kB: drive into Q3 and the phase-split octave pair.
-        x = expanderCoupling.process(x * (0.08f + 0.92f * e));
-        x = bjtStage(x, 4.2f + 10.0f * e, -0.032f,
+        x = expanderCoupling.process(x * (0.20f + 0.80f * e));
+        x = bjtStage(x, 1.8f + 1.9f * e, -0.032f,
                      1.42f + 0.28f * e, 1.18f + 0.18f * e,
                      rail * 0.78f, rail * 0.68f);
         x = q3Miller.process(q3Dc.process(x));
 
+        // Q4/Q5 phase splitter — two anti-phase copies. Lightly overdriven (asymmetry
+        // adds grit) but NOT squared, so the rectifier can frequency-double them.
         const float upperIn = splitterUpperC.process(x);
         const float lowerIn = splitterLowerC.process(-x);
-        const float upper = bjtStage(upperIn, 5.6f + 11.0f * e, 0.024f,
+        const float upper = bjtStage(upperIn, 2.2f + 1.7f * e, 0.024f,
                                      1.35f, 1.12f, rail * 0.74f, rail * 0.66f);
-        const float lower = bjtStage(lowerIn, 5.2f + 10.0f * e, 0.022f,
+        const float lower = bjtStage(lowerIn, 2.0f + 1.6f * e, 0.022f,
                                      1.32f, 1.10f, rail * 0.74f, rail * 0.66f);
 
-        // The push-pull pair is recombined into a strong full-wave octave; a
-        // controlled amount of fundamental leakage keeps it guitar-like.
-        float octave = upper + lower;
-        const float fundamental = upper - lower;
-        octave = splitterMiller.process(splitDc.process(octave));
-        float y = 0.24f * fundamental + (0.64f + 0.56f * e) * octave;
+        // OCTAVE-UP — the two OA-90 germanium diodes FULL-WAVE RECTIFY the anti-phase
+        // push-pull collectors: each diode passes only its forward (positive) half, and
+        // the halves are summed at the common node. geHalfWave(+s)+geHalfWave(-s) = |s|,
+        // i.e. real frequency doubling that tracks pitch (NOT an even-harmonic fake).
+        // The OA-90 soft Ge knee gives the mushy octave threshold. No separate clipper
+        // here — the schematic has none at this node; the square fuzz is the slammed
+        // Q1..Q5 preamp + the rectifier itself.
+        const float upRect = geHalfWave(upper, 0.06f, 0.045f);
+        const float loRect = geHalfWave(lower, 0.06f, 0.045f);
+        float octave = splitDc.process(upRect + loRect);     // strip the rectification DC
+        octave = splitterMiller.process(octave);
+        const float fundamental = upper - lower;             // push-pull difference = fundamental
+        float y = 0.14f * fundamental + (1.5f + 0.9f * e) * octave;
 
         updateSag(y);
-        y = oa90.process(2.1f * y);
         y = diodeToToneA.process(y);
         y = diodeToToneB.process(y);
         y = toneNetwork(y);
@@ -295,7 +322,7 @@ public:
         y = outputLoad.process(q6Dc.process(y));
         y = outputCoupling.process(y);
 
-        const float trim = 0.46f / (1.0f + 0.18f * e);
+        const float trim = 0.32f / (1.0f + 0.18f * e);
         return std::tanh(y * trim);
     }
 };

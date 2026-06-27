@@ -219,13 +219,16 @@ class BigBuzzCore
     float clippedStage(float x, RcLowPass& feedbackCap, rbcomponents::AntiParallelDiodePair& diodes,
                        float drive, float bias, float rail, float asym)
     {
-        const float hfFeedback = feedbackCap.process(x);
-        float y = bjtStage(x - 0.34f * hfFeedback, drive, bias,
-                           1.45f, 1.18f + asym, rail * 0.82f, rail * 0.72f);
-        y = diodes.process(2.15f * y);
-        y = bjtStage(y, 1.55f + 0.55f * sustain, -0.004f,
-                     1.18f, 1.06f, rail * 0.76f, rail * 0.66f);
-        return y;
+        // Common-emitter 2N5133 gain stage. In a real Big Muff the transistor itself
+        // barely clips — the anti-parallel 1N914 pair sits ACROSS the 470k collector-base
+        // feedback resistor and clamps the CLOSED-LOOP swing (the smooth, sustaining clip).
+        const float amp = bjtStage(x, drive, bias,
+                                   1.45f, 1.18f + asym, rail * 0.82f, rail * 0.72f);
+        const float clipped = diodes.process(2.15f * amp);   // 1N914 pair clamps the swing (heavy)
+        // The 500pF cap (Cf) across the 470k feedback gently rolls off the CLIPPED highs —
+        // the Muff smooths/de-fizzes the top of the clip rather than fully bypassing it.
+        const float tamed = feedbackCap.process(clipped);    // ~680 Hz feedback rolloff
+        return clipped - 0.32f * (clipped - tamed);
     }
 
     float toneStack(float x)

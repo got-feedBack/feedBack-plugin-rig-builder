@@ -53,7 +53,7 @@ struct TW26Core {
     rbtube::PhaseInverterCathodyne12AX7 phaseInverter; // V2B split-load PI
     rbtube::MultiNodeBPlus supply;      // 5Y3 + 16uF nodes + 4k7/22k droppers
     rbtube::PowerAmp6V6  power;         // 2x 6V6 push-pull, cathode-biased, no NFB
-    Biquad brightSh, bassSh, spkBody, spkRoll;
+    Biquad brightSh, bassSh, spkBody, spkRoll, midScoop;
     rbtube::TweedTone tweedTone;        // real 5E3 single Tone control (R10/C4/C5 circuit)
     // params (0..1), interface identical to the old TW26Core
     float pTone=0.6f, pInst=0.45f, pMic=0.0f, pBright=1.0f, pBass=0.5f, pPres=0.5f, pCabSim=1.0f;
@@ -71,7 +71,7 @@ struct TW26Core {
     void setCabSim(float v){ pCabSim=clamp01(v); }
     void reset(){ inputCoupling.reset(); instMiller.reset(); micMiller.reset(); instV1.reset(); micV1.reset(); v2.reset();
         millerV2.reset(); coupleToV2.reset(); coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset();
-        brightSh.reset(); bassSh.reset(); tweedTone.reset(); spkBody.reset(); spkRoll.reset();
+        brightSh.reset(); bassSh.reset(); tweedTone.reset(); spkBody.reset(); spkRoll.reset(); midScoop.reset();
         lastPowerLoad = lastScreenLoad = lastPreampLoad = 0.0f; }
 
     void recalc(){
@@ -95,7 +95,10 @@ struct TW26Core {
         // 5E3 Volume pots are post-V1 attenuators feeding V2. Do not also
         // multiply the V2/PI drive by the pot, or low settings disappear and
         // high settings overcharge the coupling caps.
-        preGain = 4.6f;
+        // 0.45x (was 4.6) so it breaks up around the real 5E3 knob range at the
+        // calibrated -12 dBFS input -- it was distorting far too early (crest ~9
+        // at noon vs the amp-only Woodrow reference's ~13).
+        preGain = 0.45f * 4.6f;
         gainOut = 1.20f;
 
         // 0.1uF coupling caps into ~1M grid leaks in the 5E3 preamp path; 0.022uF
@@ -120,7 +123,8 @@ struct TW26Core {
         power.biasShift = 3.0f;
         outLevel = 0.52f * (1.0f - 0.28f * instPot);               // level comp across the volume range
         // 1x12 tweed speaker (mild, pre-cab) + Presence top lift
-        spkBody.peaking(sr, 130.0f, 0.8f, 2.0f);
+        spkBody.peaking(sr, 90.0f, 0.6f, 9.0f);                  // fuller lows to match the bassy amp-only Woodrow reference (was thin)
+        midScoop.peaking(sr, 1500.0f, 0.9f, -4.0f);             // scoop the upper-mids (ours was ~+3.5 dB hot vs the ref)
         spkRoll.highShelf(sr, 3500.0f, 2.0f + 6.0f * pPres);      // Presence
     }
 
@@ -142,7 +146,7 @@ struct TW26Core {
         x = power.process(x * bplus.power * bplus.screen);        // 6V6 push-pull
         lastPowerLoad = std::fabs(x) * (0.50f + 0.80f * instPot);
         const float ampOnly = x;
-        const float cab = spkRoll.process(spkBody.process(ampOnly)); // 1x12 voicing
+        const float cab = spkRoll.process(midScoop.process(spkBody.process(ampOnly))); // 1x12 voicing
         x = ampOnly + pCabSim * (cab - ampOnly);
         // loudness flattening vs the Volume/gain: a CLEAN post-output makeup (fit to
         // hold ~constant RMS across the InstVol sweep — the tweed Volume IS the gain,
@@ -151,8 +155,8 @@ struct TW26Core {
         // Keep only mild makeup. A real 5E3 gets louder as Volume rises; forcing
         // low-volume cleans up to the same RMS slams the output safety stage and
         // makes the "clean" setting sound broken.
-        float gcDb = 2.0f - 6.0f * pInst;
-        if (gcDb > 4.0f) gcDb = 4.0f; else if (gcDb < -8.0f) gcDb = -8.0f;
+        float gcDb = 6.0f - 9.0f * pInst;                          // re-fit for the 0.45x preGain (flatter across the volume range)
+        if (gcDb > 8.0f) gcDb = 8.0f; else if (gcDb < -8.0f) gcDb = -8.0f;
         return softClip(x * outLevel * std::pow(10.0f, 0.05f * gcDb)) * 0.82f;
     }
 };

@@ -1,15 +1,23 @@
 #include "DistrhoPlugin.hpp"
 #include "TW26Params.h"
-#include "../../_shared/guitar_amp_core.hpp"
+#include "TW26Core.h"
 #include "../../_shared/oversampler.hpp"
 #include <cmath>
 START_NAMESPACE_DISTRHO
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
 class TW26Plugin : public Plugin {
-    rbgtr::AmpCore<rbtube::Tube6V6> core; float fP[kParamCount];
+    tw26::TW26Core core; float fP[kParamCount];
     rbshared::Oversampler4x os; static constexpr int kOS = rbshared::Oversampler4x::OS;
-    void applyAll(){ core.configure(250e3,250e3,10e3,100e3,250e-12,100e-9,47e-9, 0.30f, 5.0f,13.0f,3000.0f,4.0f);core.setGain(fP[kInstVol]);core.setBass(fP[kBass]);core.setMiddle(0.5f);core.setTreble(fP[kTone]);core.setPresence(fP[kPresence]);core.setVolume(0.7f); }
+    void applyAll(){
+        core.setTone(fP[kTone]);
+        core.setInstVol(fP[kInstVol]);
+        core.setMicVol(fP[kMicVol]);
+        core.setBright(fP[kBright]);
+        core.setBass(fP[kBass]);
+        core.setPresence(fP[kPresence]);
+        core.setCabSim(fP[kCabSim]);
+    }
 public:
     TW26Plugin() : Plugin(kParamCount,0,0){ for(int i=0;i<kParamCount;++i)fP[i]=kTW26Def[i]; core.setSampleRate(kOS*(float)getSampleRate()); applyAll(); }
 protected:
@@ -27,7 +35,7 @@ protected:
     void sampleRateChanged(double r) override { core.setSampleRate(kOS*(float)r); os.reset(); applyAll(); }
     void run(const float** in, float** out, uint32_t frames) override { const float* i0=in[0]; float* oL=out[0]; float* oR=out[1];
         for(uint32_t i=0;i<frames;++i){ float ub[kOS]; os.upsample(i0[i],ub);
-            for(int k=0;k<kOS;++k) ub[k]=rbAmpLvl(0.50f*core.process(ub[k])); const float y=os.downsample(ub); oL[i]=y; oR[i]=y; } }
+            for(int k=0;k<kOS;++k) ub[k]=rbAmpLvl(1.285f*core.process(ub[k])); const float y=os.downsample(ub); oL[i]=y; oR[i]=y; } }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TW26Plugin)
 };
 Plugin* createPlugin(){ return new TW26Plugin(); }

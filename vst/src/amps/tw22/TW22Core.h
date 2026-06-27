@@ -181,12 +181,16 @@ class TW22Core {
     float lastPowerLoad=0, lastScreenLoad=0, lastPreampLoad=0;
 
     void updateFilters() {
-        const float wBurn = smoothstep(channel);    // 0=Vintage .. 1=Burn
+        // Remap the RS Gain (channel) so the Burn channel / crunch only arrives near
+        // Gain 6 (was ~5): clean below, crunch from ~0.6 up. channel^1.6 leaves the
+        // full-Burn end (1.0) untouched and just delays the low/mid onset.
+        const float ch = std::pow(channel, 1.6f);
+        const float wBurn = smoothstep(ch);    // 0=Vintage .. 1=Burn
         vintVolPot = rbtube::PotTaper::audio(vintVol, 1.24f);
         gain1Pot = rbtube::PotTaper::audio(gain1, 1.18f);
         gain2Pot = rbtube::PotTaper::audio(gain2, 1.16f);
         burnVolPot = rbtube::PotTaper::audio(burnVol, 1.20f);
-        const float hot = smoothstepRange(0.45f, 1.0f, channel) * smoothstep(gain1Pot);
+        const float hot = smoothstepRange(0.45f, 1.0f, ch) * smoothstep(gain1Pot);
 
         // ── real 12AX7 / 6V6 circuit stages (cathode-biased, self-bias solved) ──
         vintTube.set(sampleRate, 1, 250.0f, 40.0f, 30.0f, 1500.0f);   // Vintage 1x 12AX7
@@ -245,8 +249,8 @@ class TW22Core {
         presence.setHighShelf(sampleRate, 2900.0f, 0.80f, -3.0f + 8.0f * presenceK);
 
         // --- Celestion V30 12" (bright / tight, modest body) ---
-        speakerHp.setHighPass(sampleRate, 84.0f, 0.72f);
-        speakerBody.setPeaking(sampleRate, 205.0f, 0.80f, 2.4f + 1.6f * (wBurn * burnBass + (1.0f - wBurn) * vintBass) - 0.4f * hot);
+        speakerHp.setHighPass(sampleRate, 135.0f, 0.72f);        // tighter low end to match the reference (was 84 = too much sub)
+        speakerBody.setPeaking(sampleRate, 205.0f, 0.80f, -1.0f + 1.6f * (wBurn * burnBass + (1.0f - wBurn) * vintBass) - 0.4f * hot);
         // Bite tracks gain too (more presence on crank, less at low gain).
         speakerBite.setPeaking(sampleRate, 2600.0f + 500.0f * burnTre, 0.72f, 2.5f + 2.4f * burnTre + 0.8f * wBurn + 1.3f * hot);
         // AIR high-shelf: lifts the V30 top. The AmpliTube SuperSonic gets
@@ -292,9 +296,10 @@ public:
     void setCabSim(float v)    { cabSim = clamp01(v); }
 
     float process(float in) {
-        const float wBurn = smoothstep(channel);     // crossfade weight
+        const float ch = std::pow(channel, 1.6f);   // crunch onset at ~Gain 6 (see updateFilters)
+        const float wBurn = smoothstep(ch);     // crossfade weight
         const float wVint = 1.0f - wBurn;
-        const float hot = smoothstepRange(0.45f, 1.0f, channel) * smoothstep(gain1Pot);
+        const float hot = smoothstepRange(0.45f, 1.0f, ch) * smoothstep(gain1Pot);
         const rbtube::SupplyScales bplus = supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
         float x = inputHp.process(in);
         x = inputBright.process(x);
@@ -353,11 +358,11 @@ public:
             + 0.013f * std::fabs((burnBass - 0.5f) * 20.0f)
             + 0.012f * std::fabs((burnMid - 0.5f) * 22.0f)
             + 0.014f * std::fabs((burnTre - 0.5f) * 22.0f);
-        const float makeup = 0.47f + 1.10f / (1.0f + std::exp(11.0f * (channel - 0.30f)));
+        const float makeup = 0.47f + 1.10f / (1.0f + std::exp(11.0f * (ch - 0.30f)));
         const float level = makeup / toneEnergy;
         // loudness flattening vs the Vintage->Burn morph/gain (clean post-output makeup;
-        // ~0 dB at morph 0.5).
-        float gcDb = 8.317f - 20.537f * channel + 5.580f * channel * channel;
+        // ~0 dB at morph 0.5). Tracks the remapped channel so loudness follows the knob.
+        float gcDb = 8.317f - 20.537f * ch + 5.580f * ch * ch;
         if (gcDb > 20.0f) gcDb = 20.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
         return softClip(y * level * std::pow(10.0f, 0.05f * gcDb)) * 0.98f;
     }

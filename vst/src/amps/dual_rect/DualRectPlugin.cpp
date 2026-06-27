@@ -32,6 +32,7 @@ class DualRectPlugin : public Plugin {
         core.setChannel(ch);
         core.setActive(fParams[base+0], fParams[base+1], fParams[base+2], fParams[base+3],
                        fParams[base+4], fParams[base+5], fParams[kOutput], fParams[kRectifier]);
+        core.setMode(fParams[base+6]);   // base+6 = per-channel Mode (Clean/Pushed · Raw/Vintage/Modern) — was DEAD
     }
 public:
     DualRectPlugin() : Plugin(kParamCount, 0, 0) {
@@ -44,7 +45,7 @@ protected:
     const char* getDescription() const override { return "Mesa Boogie Dual Rectifier style amp — circuit-real model"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(2, 0, 0); }
+    uint32_t getVersion() const override { return d_version(2, 0, 2); }
     int64_t getUniqueId() const override { return d_cconst('D', 'R', 'C', 'T'); }
 
     void initParameter(uint32_t i, Parameter& p) override {

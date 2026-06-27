@@ -136,6 +136,7 @@ class Dr103Core
     rbtube::ToneStackYeh toneStack;     // real Hiwatt TMB (double — stable at 192k)
     Biquad stackMakeupLow, stackMakeupBody, phaseLp, presenceShelf;
     Biquad speakerHp, speakerThump, speakerLowMid, speakerBite, speakerFizz, speakerLp;
+    Biquad otPwrHp, otPwrLp;   // OT rolloff for the clean linear power stage
     DcBlock dcBlock;
     // ── real circuit (Koren tubes) replacing the tanh asymTube ──
     rbtube::TubeStage    vBright, vNormal, vRecovery;   // 12AX7 stages (Brilliant + Normal + recovery)
@@ -174,31 +175,31 @@ class Dr103Core
         const float bright = clamp01(0.32f * treble + 0.20f * pres + 0.45f * (1.0f - brightVol));
 
         inputHp.setHighPass(sampleRate, 40.0f + 30.0f * g, 0.70f);
-        pickupLoad.setLowPass(sampleRate, 13500.0f - 1200.0f * pushed + 800.0f * treble, 0.64f);
+        pickupLoad.setLowPass(sampleRate, 17500.0f - 1200.0f * pushed + 800.0f * treble, 0.64f);
         brightCapShelf.setHighShelf(sampleRate, 1500.0f + 1100.0f * treble, 0.70f, -0.8f + 5.2f * bright + 1.6f * pres);
         brightBody.setPeaking(sampleRate, 680.0f + 360.0f * mid, 0.80f, -0.4f + 2.2f * mid);
-        normalBody.setPeaking(sampleRate, 200.0f + 60.0f * bass, 0.72f, 0.6f + 2.2f * bass - 0.8f * pushed);
+        normalBody.setPeaking(sampleRate, 120.0f + 40.0f * bass, 0.70f, 3.0f + 2.2f * bass - 0.8f * pushed);   // Normal channel = fuller lows than Brilliant (22nF coupling vs the bright cap)
 
         interstageHp.setHighPass(sampleRate, 52.0f + 50.0f * pushed, 0.70f);
-        cathodeLp.setLowPass(sampleRate, 9500.0f + 1500.0f * treble - 1100.0f * pushed, 0.64f);
+        cathodeLp.setLowPass(sampleRate, 14000.0f + 1500.0f * treble - 1100.0f * pushed, 0.64f);
         // Hiwatt tone stack — CIRCUIT-REAL (Yeh, real R/C from the hwpre1 schematic):
         // Treble 250k/250pF, Bass 500k/22nF, Mid 100k/22nF (the big Hiwatt mid), slope 56k.
         toneStack.setComponents(250e3, 500e3, 100e3, 56e3, 250e-12, 22e-9, 22e-9);
         toneStack.update(sampleRate, treble, mid, bass);
-        stackMakeupLow.setLowShelf(sampleRate, 120.0f + 30.0f * bass, 0.72f, eqDb(bass, 4.4f));
+        stackMakeupLow.setLowShelf(sampleRate, 120.0f + 30.0f * bass, 0.72f, eqDb(bass, 1.5f));
         // the famous Hiwatt strong mids (100K mid pot) — a gentle upper-mid push
         stackMakeupBody.setPeaking(sampleRate, 620.0f + 180.0f * mid, 0.62f, -0.6f + 4.6f * mid);
-        phaseLp.setLowPass(sampleRate, 10500.0f + 1500.0f * treble + 900.0f * pres - 2000.0f * pushed, 0.64f);
+        phaseLp.setLowPass(sampleRate, 14000.0f + 1500.0f * treble + 900.0f * pres - 2000.0f * pushed, 0.64f);
         presenceShelf.setHighShelf(sampleRate, 2600.0f + 900.0f * pres, 0.78f, -3.6f + 8.4f * pres + 0.9f * treble);
 
-        // Hiwatt 4x12 (Fane) voicing: full lows, strong mids, smooth top.
-        speakerHp.setHighPass(sampleRate, 72.0f, 0.72f);
-        speakerThump.setPeaking(sampleRate, 116.0f, 0.84f, 1.3f + 2.6f * bass);
+        // Hiwatt 4x12 (Fane) voicing — TIGHT lows + BRIGHT/present top (the amp-only reference is
+        // the tightest + brightest of the family: bright_10 80=-16.6, 12.5k=-15.9). Was too dark/full.
+        speakerHp.setHighPass(sampleRate, 100.0f, 0.72f);
+        speakerThump.setPeaking(sampleRate, 116.0f, 0.84f, -1.5f + 1.6f * bass);
         speakerLowMid.setPeaking(sampleRate, 420.0f + 90.0f * mid, 0.74f, 1.0f + 2.2f * mid);
         speakerBite.setPeaking(sampleRate, 2400.0f + 500.0f * treble, 0.78f, 2.0f + 1.8f * treble + 1.0f * pres - 0.5f * pushed);
-        // a real Hiwatt 4x12 (Fane) ROLLS OFF the top (smooth) — no +9 dB fizz shelf
-        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, -3.5f + 2.0f * treble + 2.0f * pres - 2.0f * pushed);
-        speakerLp.setLowPass(sampleRate, 12000.0f + 1700.0f * treble + 800.0f * pres - 3000.0f * pushed, 0.66f);
+        speakerFizz.setHighShelf(sampleRate, 3800.0f, 0.70f, 4.5f + 2.0f * treble + 1.5f * pres - 1.0f * pushed);
+        speakerLp.setLowPass(sampleRate, 16000.0f + 1700.0f * treble + 800.0f * pres - 1500.0f * pushed, 0.66f);
 
         // 4x EL34 (~100W) power amp — stiff supply, LOW sag/drive (the Hiwatt stays
         // clean & loud, breaks up only when the Master is cranked).
@@ -216,7 +217,12 @@ class Dr103Core
                    0.040f + 0.018f * pushed,
                    0.025f + 0.012f * preDrive,
                    0.13f);
-        power.set(sampleRate, 1.0f + 5.0f * mPush + 3.0f * pushed, -42.0f, 0.05f, 50.0f, 12000.0f);
+        // ⚠️ GATING FIX: -42V biased the EL34 into cutoff so small/clean signals dropped to SILENCE
+        // (the same failure the Bassman 5881 had at cold bias). Warm to -34V + a higher FLOOR drive
+        // so the power amp always conducts (clean passes); breakup still ramps with the Master.
+        // REAL Koren EL34 power amp (restored — it was NOT the gate; the phase inverter was). Clean
+        // -38V op point + the big stiff Hiwatt supply = high headroom, breaks up only when cranked.
+        power.set(sampleRate, 0.45f + 3.0f * mPush + 2.0f * pushed, -38.0f, 0.05f, 50.0f, 12000.0f);
         power.out = 0.011f;
     }
 
@@ -227,6 +233,7 @@ public:
         interstageHp.reset(); cathodeLp.reset();
         toneStack.reset(); stackMakeupLow.reset(); stackMakeupBody.reset(); phaseLp.reset(); presenceShelf.reset();
         speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset(); speakerBite.reset(); speakerFizz.reset(); speakerLp.reset();
+        otPwrHp.reset(); otPwrLp.reset();
         dcBlock.reset(); sag = 0.0f;
         brightMiller.reset(); normalMiller.reset(); recoveryMiller.reset();
         toneStack.reset(); vBright.reset(); vNormal.reset(); vRecovery.reset();
@@ -274,7 +281,7 @@ public:
         // Gentle drive: the Hiwatt has huge headroom, so it stays clean until cranked.
         float bch = brightCapShelf.process(brightBody.process(x));
         bch = vBright.process(brightMiller.process(bch) *
-                              (2.0f + 16.0f * brightVol) * bplus.preamp);
+                              (2.0f + 16.0f * brightVol) * bplus.preamp);   // CLEAN Hiwatt gain (reverted — the amp must stay clean, not distort from the start)
         float nch = normalBody.process(x);
         nch = vNormal.process(normalMiller.process(nch) *
                               (1.5f + 11.0f * normalVol) * bplus.preamp);
@@ -293,16 +300,19 @@ public:
         y = stackMakeupBody.process(y);
         y = phaseLp.process(y);
 
-        // MASTER VOLUME into the power amp
-        y *= 0.20f + 1.30f * master;
-        y = coupleToPi.process(y, 1.0f + 0.08f * pushed);
+        // MASTER VOLUME into the power amp (the breakup driver — keeps the EL34 CLEAN at low/normal
+        // settings; only a cranked Master drives it into breakup, like a real Hiwatt).
+        y *= 0.45f + 1.05f * master;
         lastPreampLoad = 0.07f * std::fabs(y) + 0.03f * preDrive;
-        y = phaseInverter.process(y * bplus.screen);
+        // CLEAN LINEAR phase-inverter — THIS was the gate (the Koren LTP cut small signals to silence
+        // at low drive). Linear here = no gating; the REAL Koren EL34 power amp (below) keeps the
+        // authentic power-tube breakup. Modest gain so the EL34 stays clean until the Master cranks.
+        y = y * bplus.screen * 0.42f;
         lastPowerLoad = 0.60f * std::fabs(y) + 0.10f * pushed;
         lastScreenLoad = 0.38f * std::fabs(y) + 0.05f * preDrive;
 
-        // 4x EL34 (~100W) — REAL pentode table + OT. The big Hiwatt supply is
-        // intentionally stiff and mostly clean.
+        // 4x EL34 (~100W) — REAL Koren pentode table + OT (authentic power-tube breakup). The big
+        // Hiwatt supply is stiff so it stays clean & loud, breaking up only when the Master is cranked.
         y = power.process(y * bplus.power * bplus.screen);
 
         y = presenceShelf.process(y);
@@ -324,8 +334,8 @@ public:
             + 0.012f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.012f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.010f * std::fabs((pres - 0.5f) * 16.0f);
-        const float cleanMakeup = 1.0f + 2.0f * std::exp(-preDrive / 0.30f);
-        const float level = (0.66f + 0.12f * (1.0f - preDrive)) * cleanMakeup /
+        const float cleanMakeup = 1.0f + 1.0f * std::exp(-preDrive / 0.30f);
+        const float level = (0.36f + 0.10f * (1.0f - preDrive)) * cleanMakeup /
             ((1.0f + 0.40f * mPush + 0.20f * pushed) * toneEnergy);
         return softClip(y * level) * 0.97f;
     }
@@ -355,7 +365,7 @@ protected:
     const char* getDescription() const override { return "Hiwatt DR103 Custom 100 style amp"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1,0,4); }
     int64_t getUniqueId() const override { return d_cconst('L', 'd', '0', '3'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

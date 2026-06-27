@@ -212,26 +212,29 @@ public:
 
         float x = inputCoupling.process(0.91f * in); // R1/R2 divider loss
 
-        // Q1: 2N1305 common-emitter input amp (R3 10 k collector load).
-        // Low rail + germanium leakage give asymmetry before the fuzz network.
-        x = geStage(x, 8.5f + 18.0f * f, -0.19f, 1.45f, 2.25f,
+        // Q1: 2N1305 common-emitter input amp (R3 10 k collector load), FIXED gain.
+        // The real FZ-1A's FUZZ pot is NOT here — Q1 just sets up the signal. Low rail
+        // + germanium leakage give the asymmetry before the fuzz network.
+        x = geStage(x, 9.5f + 5.0f * f, -0.19f, 1.45f, 2.25f,
                     rail * 0.74f, rail * 0.58f);
         x = q1Miller.process(q1Dc.process(x));
         x = q1ToQ2.process(x);
 
-        // Q2: main FUZZ/bias/feedback stage. The 50 kB pot changes the effective
-        // emitter feedback around R5/R6 and the base bias, so it changes texture
-        // and gating more than level.
-        float y = geStage(x, 5.0f + 38.0f * f2, -0.11f - 0.13f * f,
+        // Q2: THE FUZZ stage. The real 50 kB pot sits in the Q2 bias/feedback network
+        // (R5/R6 2.2k + the 50k pot), so FUZZ collapses Q2's OPERATING POINT toward
+        // cutoff — it controls bias/gating/texture, not a clean level. Sweeping the bias
+        // ~-0.05 -> -0.45 across the knob is what makes the FZ-1A go from sputter to a
+        // hard, gated splat (instead of just "louder").
+        float y = geStage(x, 6.0f + 34.0f * f2, -0.05f - 0.40f * f,
                           1.65f + 0.45f * f, 2.55f + 0.75f * f,
                           rail * (0.72f - 0.08f * f), rail * (0.62f + 0.04f * f));
         updateSag(y);
         y = q2Miller.process(q2Dc.process(y));
         y = q2ToQ3.process(y);
 
-        // Q3: fixed recovery/output 2N1305. It clips less than Q2 but folds the
+        // Q3: fixed recovery/output 2N1305 (also not FUZZ-controlled). It folds the
         // already-square wave into the raspy 1.5 V output stage.
-        y = geStage(y + 0.045f * x, 4.2f + 7.8f * f, -0.075f,
+        y = geStage(y + 0.045f * x, 4.8f + 2.0f * f, -0.075f,
                     1.35f, 2.05f, rail * 0.70f, rail * 0.56f);
         y = q3Miller.process(q3Dc.process(y));
 

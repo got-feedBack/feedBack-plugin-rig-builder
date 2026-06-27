@@ -1,15 +1,30 @@
 #include "DistrhoPlugin.hpp"
 #include "TW22Params.h"
-#include "../../_shared/guitar_amp_core.hpp"
+#include "TW22Core.h"
 #include "../../_shared/oversampler.hpp"
 #include <cmath>
 START_NAMESPACE_DISTRHO
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
 class TW22Plugin : public Plugin {
-    rbgtr::AmpCore<rbtube::Tube6V6> core; float fP[kParamCount];
+    tw22::TW22Core core; float fP[kParamCount];
     rbshared::Oversampler4x os; static constexpr int kOS = rbshared::Oversampler4x::OS;
-    void applyAll(){ bool burn=fP[kChannel]>=0.5f; float g=burn?fP[kGain1]:fP[kVintVol]; float v=burn?fP[kBurnVol]:0.7f;core.configure(250e3,250e3,10e3,100e3,250e-12,100e-9,47e-9, burn?0.45f:0.25f, burn?8.0f:3.0f,13.0f,3000.0f,4.0f);core.setGain(g);core.setBass(burn?fP[kBurnBass]:fP[kVintBass]);core.setMiddle(burn?fP[kBurnMid]:0.5f);core.setTreble(burn?fP[kBurnTreble]:fP[kVintTreble]);core.setPresence(fP[kPresence]);core.setVolume(v); }
+    void applyAll(){
+        core.setVintVol(fP[kVintVol]);
+        core.setVintTreble(fP[kVintTreble]);
+        core.setVintBass(fP[kVintBass]);
+        core.setNormFat(fP[kNormFat]);
+        core.setChannel(fP[kChannel]);
+        core.setGain1(fP[kGain1]);
+        core.setGain2(fP[kGain2]);
+        core.setBurnTreble(fP[kBurnTreble]);
+        core.setBurnBass(fP[kBurnBass]);
+        core.setBurnMid(fP[kBurnMid]);
+        core.setBurnVol(fP[kBurnVol]);
+        core.setReverb(fP[kReverb]);
+        core.setPresence(fP[kPresence]);
+        core.setCabSim(fP[kCabSim]);
+    }
 public:
     TW22Plugin() : Plugin(kParamCount,0,0){ for(int i=0;i<kParamCount;++i)fP[i]=kTW22Def[i]; core.setSampleRate(kOS*(float)getSampleRate()); applyAll(); }
 protected:

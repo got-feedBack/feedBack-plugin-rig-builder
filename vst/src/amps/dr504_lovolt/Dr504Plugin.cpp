@@ -174,31 +174,31 @@ class Dr504Core
         const float bright = clamp01(0.32f * treble + 0.20f * pres + 0.45f * (1.0f - brightVol));
 
         inputHp.setHighPass(sampleRate, 40.0f + 30.0f * g, 0.70f);
-        pickupLoad.setLowPass(sampleRate, 13500.0f - 1200.0f * pushed + 800.0f * treble, 0.64f);
+        pickupLoad.setLowPass(sampleRate, 17500.0f - 1200.0f * pushed + 800.0f * treble, 0.64f);
         brightCapShelf.setHighShelf(sampleRate, 1500.0f + 1100.0f * treble, 0.70f, -0.8f + 5.2f * bright + 1.6f * pres);
         brightBody.setPeaking(sampleRate, 680.0f + 360.0f * mid, 0.80f, -0.4f + 2.2f * mid);
-        normalBody.setPeaking(sampleRate, 200.0f + 60.0f * bass, 0.72f, 0.6f + 2.2f * bass - 0.8f * pushed);
+        normalBody.setPeaking(sampleRate, 120.0f + 40.0f * bass, 0.70f, 3.0f + 2.2f * bass - 0.8f * pushed);   // Normal channel = fuller lows than Brilliant
 
         interstageHp.setHighPass(sampleRate, 52.0f + 50.0f * pushed, 0.70f);
-        cathodeLp.setLowPass(sampleRate, 9500.0f + 1500.0f * treble - 1100.0f * pushed, 0.64f);
+        cathodeLp.setLowPass(sampleRate, 14000.0f + 1500.0f * treble - 1100.0f * pushed, 0.64f);
         // Hiwatt tone stack — CIRCUIT-REAL (Yeh, real R/C from the hwpre1 schematic):
         // Treble 250k/250pF, Bass 500k/22nF, Mid 100k/22nF (the big Hiwatt mid), slope 56k.
         toneStack.setComponents(250e3, 500e3, 100e3, 56e3, 250e-12, 22e-9, 22e-9);
         toneStack.update(sampleRate, treble, mid, bass);
-        stackMakeupLow.setLowShelf(sampleRate, 120.0f + 30.0f * bass, 0.72f, eqDb(bass, 4.4f));
+        stackMakeupLow.setLowShelf(sampleRate, 120.0f + 30.0f * bass, 0.72f, eqDb(bass, 1.5f));
         // the famous Hiwatt strong mids (100K mid pot) — a gentle upper-mid push
         stackMakeupBody.setPeaking(sampleRate, 620.0f + 180.0f * mid, 0.62f, -0.6f + 4.6f * mid);
-        phaseLp.setLowPass(sampleRate, 10500.0f + 1500.0f * treble + 900.0f * pres - 2000.0f * pushed, 0.64f);
+        phaseLp.setLowPass(sampleRate, 14000.0f + 1500.0f * treble + 900.0f * pres - 2000.0f * pushed, 0.64f);
         presenceShelf.setHighShelf(sampleRate, 2600.0f + 900.0f * pres, 0.78f, -3.6f + 8.4f * pres + 0.9f * treble);
 
-        // Hiwatt 4x12 (Fane) voicing: full lows, strong mids, smooth top.
-        speakerHp.setHighPass(sampleRate, 78.0f, 0.72f);
-        speakerThump.setPeaking(sampleRate, 120.0f, 0.84f, 1.0f + 2.4f * bass);
+        // Hiwatt 4x12 (Fane) voicing — TIGHT lows + BRIGHT/present top (the Hiwatt family is the
+        // tightest + brightest; the DR103 reference confirms it). Was too dark/full.
+        speakerHp.setHighPass(sampleRate, 100.0f, 0.72f);
+        speakerThump.setPeaking(sampleRate, 120.0f, 0.84f, -1.5f + 1.6f * bass);
         speakerLowMid.setPeaking(sampleRate, 420.0f + 90.0f * mid, 0.74f, 1.0f + 2.2f * mid);
         speakerBite.setPeaking(sampleRate, 2400.0f + 500.0f * treble, 0.78f, 2.0f + 1.8f * treble + 1.0f * pres - 0.5f * pushed);
-        // a real Hiwatt 4x12 (Fane) ROLLS OFF the top (smooth) — no +9 dB fizz shelf
-        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, -3.5f + 2.0f * treble + 2.0f * pres - 2.0f * pushed);
-        speakerLp.setLowPass(sampleRate, 12000.0f + 1700.0f * treble + 800.0f * pres - 3000.0f * pushed, 0.66f);
+        speakerFizz.setHighShelf(sampleRate, 3800.0f, 0.70f, 4.5f + 2.0f * treble + 1.5f * pres - 1.0f * pushed);
+        speakerLp.setLowPass(sampleRate, 16000.0f + 1700.0f * treble + 800.0f * pres - 1500.0f * pushed, 0.66f);
 
         // 2x EL34 (~50W) — slightly less headroom than the DR103 (a touch more sag/
         // drive) but still the high-headroom Hiwatt; breaks up when the Master is up.
@@ -216,7 +216,9 @@ class Dr504Core
                    0.055f + 0.025f * pushed,
                    0.035f + 0.015f * preDrive,
                    0.14f);
-        power.set(sampleRate, 1.1f + 5.5f * mPush + 3.2f * pushed, -42.0f, 0.07f, 50.0f, 12000.0f);
+        // REAL Koren EL34 power amp, driven GENTLY so it stays clean and only breaks up cranked.
+        // DR504 = 2x EL34, schematic bias −36V; a touch more drive than the DR103 (50W clips earlier).
+        power.set(sampleRate, 0.55f + 3.4f * mPush + 2.3f * pushed, -36.0f, 0.07f, 50.0f, 12000.0f);
         power.out = 0.011f;
     }
 
@@ -294,11 +296,13 @@ public:
         y = stackMakeupBody.process(y);
         y = phaseLp.process(y);
 
-        // MASTER VOLUME into the power amp
-        y *= 0.20f + 1.30f * master;
-        y = coupleToPi.process(y, 1.0f + 0.10f * pushed);
+        // MASTER VOLUME into the power amp (breakup driver; keeps the 50W EL34 clean at low/normal).
+        y *= 0.45f + 1.05f * master;
         lastPreampLoad = 0.08f * std::fabs(y) + 0.03f * preDrive;
-        y = phaseInverter.process(y * bplus.screen);
+        // CLEAN LINEAR phase-inverter — the Koren LTP was THE GATE (cut small signals to −240 dBFS
+        // silence at low drive; see the DR103 fix). Linear here = no gating; the real Koren EL34 power
+        // amp below keeps the authentic breakup. Modest gain so the 50W EL34 stays clean until cranked.
+        y = y * bplus.screen * 0.42f;
         lastPowerLoad = 0.65f * std::fabs(y) + 0.12f * pushed;
         lastScreenLoad = 0.42f * std::fabs(y) + 0.06f * preDrive;
 
@@ -325,8 +329,8 @@ public:
             + 0.012f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.012f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.010f * std::fabs((pres - 0.5f) * 16.0f);
-        const float cleanMakeup = 1.0f + 2.0f * std::exp(-preDrive / 0.30f);
-        const float level = (0.66f + 0.12f * (1.0f - preDrive)) * cleanMakeup /
+        const float cleanMakeup = 1.0f + 1.0f * std::exp(-preDrive / 0.30f);
+        const float level = (0.28f + 0.09f * (1.0f - preDrive)) * cleanMakeup /
             ((1.0f + 0.40f * mPush + 0.20f * pushed) * toneEnergy);
         return softClip(y * level) * 0.97f;
     }
@@ -356,7 +360,7 @@ protected:
     const char* getDescription() const override { return "Hiwatt DR504 Custom 50 style amp"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1,0,1); }
     int64_t getUniqueId() const override { return d_cconst('L', 'v', '5', '0'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

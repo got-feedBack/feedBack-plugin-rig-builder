@@ -1,6 +1,6 @@
 #include "DistrhoPlugin.hpp"
 #include "TW40Params.h"
-#include "../../_shared/guitar_amp_core.hpp"
+#include "../../_shared/guitar_amp_core.hpp"  // stable shared core (own Bassman5F6A core gates the 5881 at low gain in real use -> reverted; see harness Jun26)
 #include "../../_shared/oversampler.hpp"
 #include <cmath>
 START_NAMESPACE_DISTRHO
@@ -9,7 +9,7 @@ static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x
 class TW40Plugin : public Plugin {
     rbgtr::AmpCore<rbtube::Tube5881> core; float fP[kParamCount];
     rbshared::Oversampler4x os; static constexpr int kOS = rbshared::Oversampler4x::OS;
-    void applyAll(){ core.configure(250e3,250e3,10e3,100e3,250e-12,100e-9,47e-9, 0.30f, 5.0f,13.0f,3000.0f,4.0f);core.setGain(fP[kBrightVol]);core.setBass(fP[kBass]);core.setMiddle(fP[kMiddle]);core.setTreble(fP[kTreble]);core.setPresence(fP[kPresence]);core.setVolume(0.7f); }
+    void applyAll(){ core.configure(250e3,250e3,10e3,100e3,250e-12,100e-9,47e-9, 0.45f, 15.0f,13.0f,3000.0f,6.0f, 1300.0f,-2.0f);core.setGain(fP[kBrightVol]);core.setBass(fP[kBass]);core.setMiddle(fP[kMiddle]);core.setTreble(fP[kTreble]);core.setPresence(fP[kPresence]);core.setVolume(0.7f); }
 public:
     TW40Plugin() : Plugin(kParamCount,0,0){ for(int i=0;i<kParamCount;++i)fP[i]=kTW40Def[i]; core.setSampleRate(kOS*(float)getSampleRate()); applyAll(); }
 protected:
@@ -17,7 +17,7 @@ protected:
     const char* getDescription() const override { return "TW40 — circuit-real model"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(2,0,0); }
+    uint32_t getVersion() const override { return d_version(2,0,5); }
     int64_t getUniqueId() const override { return d_cconst('T','w','4','0'); }
     void initParameter(uint32_t i, Parameter& p) override { if(i>=(uint32_t)kParamCount)return; p.hints=kParameterIsAutomatable;
         if(i==(uint32_t)kCabSim)p.hints|=kParameterIsBoolean;

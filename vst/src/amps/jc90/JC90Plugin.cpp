@@ -5,9 +5,11 @@
  * Local reference (modelled component-by-component):
  *   amps/Roland JC-90 (CS-90)/JC-90.pdf  (S. Nagata)
  *
- * SOLID-STATE (M5218 op-amps + transistor power amp, NO tubes): a clean,
- * high-headroom preamp with a diode-clipping DISTORTION, a passive tone stack
- * (+ HI-TREBLE), a spring REVERB, and the signature analogue BBD STEREO CHORUS
+ * SOLID-STATE (M5218 op-amps + 2SC3181 transistor power amp, NO tubes): a clean,
+ * high-headroom preamp with a two-stage op-amp gain block clipped on anti-parallel
+ * LEDs (D5/D6, shunt to ground via R20=22k — harder/brighter than the JC-120's
+ * silicon), the DISTORTION pot (50kC reverse-log), a passive Fender FMV tone stack
+ * (+ the variable HI-TREBLE air shelf), a spring REVERB, and the analogue BBD STEREO CHORUS
  * / Vibrato — the dry feeds one speaker and the pitch-modulated wet the other,
  * so the chorus opens up wide. See JC90Params.h.
  *
@@ -88,32 +90,42 @@ public:
     float process(float x) { const float y = x - x1 + 0.995f * y1; x1 = x; y1 = y; return y; }
 };
 
-// Real anti-parallel silicon diode-pair clipper (Shockley model). A series R drives
-// a shunt pair of back-to-back diodes to ground; the node voltage v (= the output)
-// solves the node KCL by Newton — the same physical-solve style as the tube cathode
-// loop, NOT a tanh fit:
-//     (vin - v)/R = 2*Is*sinh(v / (n*Vt))            [two diodes, anti-parallel]
-// Below ~0.45 V the diodes are off and v ≈ vin (the JC stays clean); above it they
-// clamp with the diodes' exponential knee — a sharper, buzzier, odd-harmonic edge
-// than tanh (the gritty solid-state JC distortion).
+// Real anti-parallel LED-pair clipper (Shockley model). The JC-90's DISTORTION
+// (unlike the JC-120's silicon 1S2473) clips on two back-to-back LEDs — D5/D6,
+// labelled "LED" on the schematic — across R20 = 22k. LEDs have a much higher
+// forward voltage (~1.6 V vs ~0.6 V silicon), so the amp keeps clean headroom
+// LONGER and then hits a HARDER, brighter clip ceiling. The node voltage v
+// (= output) solves the node KCL by Newton, the physical-solve style, NOT a
+// tanh fit. Per the schematic the LED pair is SHUNTED BY A CAP (the C19 0.12µF /
+// C 0.015µF network around D5/D6) — a capacitor ACROSS the clipping diodes that
+// integrates the clip node, rounding the hard clip's sharp edges and rolling off
+// the harsh high-order odd harmonics (it de-fizzes the JC hard clip into its
+// smoother grit). It is NOT a second diode soft-clip stage — the JC-90, unlike
+// the JC-120, has no feedback-loop clipping diodes (confirmed: only D5/D6).
+// Backward-Euler companion for the cap: i_C = gC*(v - vPrev), gC = C*Fs.
+//     (v - vin)/R + 2*Is*sinh(v/nVt) + gC*(v - vPrev) = 0   [LEDs ∥ cap, to gnd]
 struct DiodeClipper
 {
-    static constexpr float Is  = 2.52e-9f;            // 1N4148-class saturation current
-    static constexpr float nVt = 1.752f * 0.02585f;   // emission coeff * thermal voltage (~45 mV)
-    float R = 2200.0f;
-    float v = 0.0f;                                   // warm-start from the previous sample
-    void reset() { v = 0.0f; }
+    static constexpr float Is  = 1.0e-18f;            // red-LED saturation current (Vf ~1.6 V)
+    static constexpr float nVt = 1.90f * 0.02585f;    // LED emission coeff * thermal voltage (~49 mV)
+    static constexpr float Cclamp = 2.7e-9f;          // de-fizz cap across the LEDs (~2.7kHz clip rolloff @22k)
+    float R = 22000.0f;                               // real R20 = 22k series into the shunt LED pair
+    float gC = 0.0f;                                  // cap companion conductance = Cclamp * sampleRate
+    float v = 0.0f, vPrev = 0.0f;                     // warm-start from the previous sample
+    void setSampleRate(float sr) { gC = Cclamp * (sr > 1000.0f ? sr : 48000.0f); }
+    void reset() { v = 0.0f; vPrev = 0.0f; }
     inline float process(float vin)
     {
         for (int i = 0; i < 8; ++i)
         {
             const float e  = v / nVt;
             const float sh = std::sinh(e), ch = std::cosh(e);
-            const float f  = (v - vin) / R + 2.0f * Is * sh;
-            const float fp = 1.0f / R + 2.0f * Is * ch / nVt;
+            const float f  = (v - vin) / R + 2.0f * Is * sh + gC * (v - vPrev);
+            const float fp = 1.0f / R + 2.0f * Is * ch / nVt + gC;
             v -= f / fp;
-            if (v > 1.0f) v = 1.0f; else if (v < -1.0f) v = -1.0f;   // bound -> sinh can't overflow
+            if (v > 3.0f) v = 3.0f; else if (v < -3.0f) v = -3.0f;   // LED Vf ~1.6 -> bound higher; sinh can't overflow
         }
+        vPrev = v;
         return v;
     }
 };
@@ -207,7 +219,7 @@ class JC90Core
 
     Biquad inputHp, inputLp, distPre, distPost;
     Biquad toneBass, toneMid, toneTreble, hiTrebleShelf;
-    Biquad speakerLp, speakerThump;
+    Biquad speakerLp, speakerThump, speakerBite;
     DcBlock dcBlock;
     SpringReverb spring;
     Chorus chorus;
@@ -216,19 +228,30 @@ class JC90Core
     void updateFilters()
     {
         inputHp.setHighPass(sampleRate, 38.0f, 0.70f);
-        inputLp.setLowPass(sampleRate, 12000.0f, 0.64f);
-        // distortion voicing: tighten lows + de-fizz as it's pushed (the JC
-        // diode distortion is gritty/buzzy but still solid-state-clean otherwise)
+        inputLp.setLowPass(sampleRate, 15000.0f, 0.64f);   // opened: the JC top is bright/glassy
+        // distortion voicing: tighten lows + de-fizz as it's pushed. LED clipping is
+        // brighter/buzzier than silicon, so the post LP sits higher than the JC-120's.
         distPre.setHighPass(sampleRate, 90.0f + 170.0f * distortion, 0.70f);
-        distPost.setLowPass(sampleRate, 7400.0f - 1100.0f * distortion, 0.66f);
-        // passive tone stack (Fender-ish) + the extra HI-TREBLE shelf
-        toneBass.setLowShelf(sampleRate, 110.0f, 0.72f, eqDb(bass, 11.0f));
-        toneMid.setPeaking(sampleRate, 560.0f, 0.70f, eqDb(mid, 9.0f));
-        toneTreble.setHighShelf(sampleRate, 2200.0f, 0.74f, eqDb(treble, 11.0f));
-        hiTrebleShelf.setHighShelf(sampleRate, 5200.0f, 0.80f, -0.5f + 12.0f * hiTreble);
-        // solid-state combo speaker (2x10-ish): gentle thump + top roll-off (opened, miked-cab top)
-        speakerThump.setPeaking(sampleRate, 110.0f, 0.85f, 1.6f);
-        speakerLp.setLowPass(sampleRate, 13500.0f + 1500.0f * treble + 1200.0f * hiTreble - 2500.0f * distortion, 0.66f);
+        // de-fizz the heavy settings: the LED hard clip stays buzzy at max drive even with the
+        // clamp cap, so roll the post-clip top down more as Distortion rises (wet path only — the
+        // clean path never touches distPost). Moderate, to keep the JC's characteristic grit.
+        distPost.setLowPass(sampleRate, 7500.0f - 1500.0f * distortion, 0.66f);
+        // CIRCUIT-REAL passive Fender FMV tone stack (JC-90 schematic): TREBLE 250k/220pF,
+        // MIDDLE 10k, BASS 250k/0.082µF (slope R3 100k). The TREBLE is a glassy ~9kHz shelf
+        // (220pF/250k) — NOT a 2.2k presence hump; that was the same dark error the JC-120 had.
+        toneBass.setLowShelf(sampleRate, 60.0f, 0.72f, eqDb(bass, 14.0f));
+        toneMid.setPeaking(sampleRate, 350.0f, 0.72f, eqDb(mid, 12.0f));
+        toneTreble.setHighShelf(sampleRate, 9000.0f, 0.74f, eqDb(treble, 15.0f));
+        // HI-TREBLE (VR3 1M + C4 470pF): the JC-90's dedicated variable "air" high shelf
+        // ABOVE the main treble band — this is the JC-90's brightness control (it has no
+        // fixed volume bright cap like the JC-120). 470pF/1M -> upper-treble shelf ~7.5kHz.
+        hiTrebleShelf.setHighShelf(sampleRate, 7500.0f, 0.80f, -0.5f + 13.0f * hiTreble);
+        // solid-state combo speaker (2x10): gentle thump + top roll-off (opened, miked-cab top).
+        // Less low thump than the JC-120's 2x12.
+        speakerThump.setPeaking(sampleRate, 110.0f, 0.85f, 1.2f);
+        // bright JC voice (brilliance/presence), eased back as it distorts (LED harmonics add their own top)
+        speakerBite.setHighShelf(sampleRate, 2300.0f, 0.72f, 6.5f - 3.0f * distortion);
+        speakerLp.setLowPass(sampleRate, 14000.0f + 1500.0f * treble + 1200.0f * hiTreble - 1800.0f * distortion, 0.66f);
     }
 
 public:
@@ -236,7 +259,7 @@ public:
     {
         inputHp.reset(); inputLp.reset(); distPre.reset(); distPost.reset();
         toneBass.reset(); toneMid.reset(); toneTreble.reset(); hiTrebleShelf.reset();
-        speakerLp.reset(); speakerThump.reset(); dcBlock.reset(); diode.reset();
+        speakerLp.reset(); speakerThump.reset(); speakerBite.reset(); dcBlock.reset(); diode.reset();
         spring.clear(); chorus.clear();
         updateFilters();
     }
@@ -244,6 +267,7 @@ public:
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
+        diode.setSampleRate(sampleRate);
         spring.setSampleRate(sampleRate);
         chorus.setSampleRate(sampleRate);
         chorus.setRate(rate);
@@ -285,12 +309,15 @@ public:
         // rising = more drive into a gritty clip, blended back over the clean.
         const float clean = x;
         float d = distPre.process(x);
-        // Drive the signal up to diode-conduction voltage, then through the REAL
-        // Shockley diode-pair clipper (Newton-solved). Below threshold it passes
-        // clean; above, the diodes clamp with their exponential knee = the gritty,
-        // odd-harmonic solid-state JC edge (no tanh fit).
-        const float drive = 1.0f + 34.0f * distortion;
-        d = diode.process(d * drive) * 1.9f;          // diodes clamp ~±0.5V -> makeup ~unity
+        // Drive the signal up to LED-conduction voltage, then through the REAL
+        // Shockley LED-pair clipper (Newton-solved). Below threshold it passes clean;
+        // above, the LEDs clamp with their steep exponential knee = the gritty,
+        // odd-harmonic solid-state JC-90 edge (no tanh fit). The two M5218 op-amp
+        // stages (×6.5 then ×~120 set by the 50kC DISTORTION pot) give a reverse-log
+        // gain sweep — most of the drive lives in the top of the knob (distC = dist²).
+        const float distC = distortion * distortion;
+        const float drive = 1.0f + 28.0f * distC;
+        d = diode.process(d * drive) * 0.62f;         // LEDs clamp ~±1.6V -> makeup ~unity
         d = distPost.process(d);
         // clean->distorted blend with makeup so the distorted level ~tracks clean
         const float w = distortion;
@@ -310,6 +337,7 @@ public:
         // solid-state combo fallback speaker (bypassable for external cab/IR)
         const float ampOnly = y;
         float cab = speakerThump.process(ampOnly);
+        cab = speakerBite.process(cab);
         cab = speakerLp.process(cab);
         y = ampOnly + cabSim * (cab - ampOnly);
 
@@ -320,13 +348,13 @@ public:
             + 0.013f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.013f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.011f * std::fabs((hiTreble - 0.5f) * 16.0f);
-        // The clean JC has little gain while the diode clipper gets much hotter
-        // with Distortion, so autoGain boosts the clean end and compensates the
-        // drive → multitone RMS stays ~flat (~-14 dBFS) across the Distortion sweep.
-        const float autoGain = std::exp(-3.5f * distortion + 1.1f * distortion * distortion);
-        const float level = (8.3f * autoGain) / ((0.55f + 0.95f * volume) * toneEnergy);
-        // loudness flattening vs Distortion (clean makeup; ~0 dB at distortion 0.5)
-        y *= level * std::pow(10.0f, 0.05f * (-2.059f + 2.821f * distortion + 2.464f * distortion * distortion));
+        const float volNorm = 1.0f / ((0.55f + 0.95f * volume) * toneEnergy);
+        // dist loudness flattening, matched on the Brit DI to the calibrated JC-120 sibling
+        // (~-20.5 dBFS RMS, flat across the Distortion sweep). The clean end needs a big makeup
+        // (a clean amp has high crest / low RMS); the LED-clipped end compresses, so the taper
+        // steps DOWN with Distortion. Hot clean peaks ride the rbAmpLvl soft-limiter, like the JC-120.
+        const float gDb = 17.6f - 15.8f * distortion + 2.0f * distortion * distortion;
+        y *= volNorm * std::pow(10.0f, 0.05f * gDb);
 
         // spring REVERB (parallel send/return)
         if (reverb > 0.0005f)
@@ -371,7 +399,7 @@ protected:
     const char* getDescription() const override { return "Roland JC-90 Jazz Chorus style solid-state amp (stereo chorus)"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1, 0, 2); }
     int64_t getUniqueId() const override { return d_cconst('J', 'c', '9', '0'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

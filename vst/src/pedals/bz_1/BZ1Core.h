@@ -149,12 +149,14 @@ class BZ1Core
     RcLowPass toneLow;
     RcLowPass toneHigh;
     RcLowPass toneBody;
+    RcLowPass fbLp;        // R12 100k / C6 1n shunt-feedback rolloff (~1.6 kHz)
     DcBlock q2Dc;
     DcBlock q3Dc;
     DcBlock q4Dc;
     DcBlock q5Dc;
     DcBlock q6Dc;
 
+    float fbState = 0.0f;  // Fuzz Face shunt feedback memory: Q5 emitter -> Q4 base
     float sagEnv = 0.0f;
     float sagAttack = 0.0f;
     float sagRelease = 0.0f;
@@ -202,9 +204,12 @@ class BZ1Core
         const float fuzzR = 950.0f - 830.0f * smoothTaper(f);
         fuzzBypass.setRC(sampleRate, fuzzR < 120.0f ? 120.0f : fuzzR, kC7);
 
+        fbLp.setRC(sampleRate, kR12, 1.0e-9f);   // R12 100k / C6 1n -> ~1.6 kHz feedback rolloff
+
         toneLow.setRC(sampleRate, kR21 + kR22 + 80000.0f * (1.0f - t), kC12);
         toneHigh.setRC(sampleRate, kR20 + 100000.0f * t, kC11);
-        toneBody.setHz(sampleRate, 1200.0f + 1300.0f * t);
+        // real Big Muff mid-scoop sits ~400 Hz-1 kHz (was placed 1.2-2.5 kHz = too nasal/thin)
+        toneBody.setHz(sampleRate, 700.0f + 650.0f * t);
 
         sagAttack = 1.0f - std::exp(-1.0f / (0.010f * sampleRate));
         sagRelease = 1.0f - std::exp(-1.0f / (0.085f * sampleRate));
@@ -265,6 +270,8 @@ public:
         toneLow.reset();
         toneHigh.reset();
         toneBody.reset();
+        fbLp.reset();
+        fbState = 0.0f;
         q2Dc.reset();
         q3Dc.reset();
         q4Dc.reset();
@@ -298,12 +305,14 @@ public:
         x = jfetBuffer(x);
         x = jfetToQ2.process(x);
 
-        float y = bjtStage(x, 4.2f + 4.6f * f, -0.035f,
+        // Q2/Q3 front gain — baselines lowered so FUZZ actually sweeps clean->heavy
+        // (they used to saturate at every FUZZ setting, making the knob inert).
+        float y = bjtStage(x, 2.0f + 6.0f * f, -0.035f,
                            1.25f + 0.45f * f, 1.05f + 0.22f * f,
                            railC * 0.72f, railC * 0.62f);
         y = q2Miller.process(q2Dc.process(y));
 
-        y = bjtStage(y, 3.4f + 7.0f * f, 0.022f,
+        y = bjtStage(y, 1.8f + 8.4f * f, 0.022f,
                      1.42f + 0.70f * f, 1.22f + 0.38f * f,
                      railC * 0.76f, railC * 0.67f);
         y = q3Miller.process(q3Dc.process(y));
@@ -311,7 +320,15 @@ public:
 
         const float bypass = fuzzBypass.process(y);
         const float fuzzDrive = 0.72f * y + (0.44f + 1.10f * smoothTaper(f)) * bypass;
-        y = bjtStage(fuzzDrive, 5.8f + 23.0f * f2, -0.060f - 0.025f * f,
+
+        // Q4/Q5 = the SILICON FUZZ FACE cell: a direct-coupled pair with REAL shunt
+        // feedback from Q5's output back to Q4's base (R12 100k ∥ C6 1n). The negative
+        // feedback collapses the bias as the signal grows -> the gated sputter / note
+        // bloom that defines the FZ-3. FUZZ deepens the loop (less Q5 emitter
+        // degeneration = hotter loop = more gating). C6 rolls off the HF feedback.
+        const float fbBeta = 0.30f + 0.55f * f;
+        const float q4in = fuzzDrive - fbBeta * fbState;
+        y = bjtStage(q4in, 5.8f + 23.0f * f2, -0.060f - 0.025f * f,
                      1.55f + 1.20f * f, 1.22f + 0.82f * f,
                      railA * (0.74f - 0.06f * f), railA * (0.66f + 0.04f * f));
         updateSag(y);
@@ -321,6 +338,7 @@ public:
                      0.034f + 0.012f * f,
                      1.28f + 0.92f * f, 1.08f + 0.62f * f,
                      railA * 0.78f, railA * 0.68f);
+        fbState = fbLp.process(y);   // Q5 output -> feedback (HF-shunted by C6), used next sample
         y = q5Miller.process(q5Dc.process(y));
         y = q5ToQ6.process(y);
 

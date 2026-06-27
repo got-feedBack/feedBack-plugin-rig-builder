@@ -155,6 +155,34 @@ public:
 
 } // namespace
 
+// Moog MF-105/MF-105M MuRF — circuit-real model (Moog schematic, Rev A 2009).
+// A STATIC bank of 8 multiple-feedback bandpass filters at fixed centers (two
+// voicings: MIDS and BASS, switched by MODE). The animation is NOT a swept wah
+// (the old model invented one) — it's a stepped SEQUENCER that gates each band's
+// VCA: a pattern picks which bands fire on each step, RATE clocks the steps, and
+// each band's level is an attack/decay envelope whose DECAY length is the ENVELOPE
+// pot (short = staccato gating, long = smooth bloom). DRIVE = gentle input overload,
+// MIX = dry/wet, OUTPUT = clean level.
+//
+// Pattern set: the real per-step tables live in the unit's MCU firmware (not on the
+// schematic), so these are a faithful RECONSTRUCTION of documented MuRF behaviour.
+// Each byte = a bitmask of the 8 bands ON for that step (bit i = band i, 0=lowest).
+static const int kPatternLen[12] = { 1, 8, 8, 2, 14, 4, 2, 2, 6, 4, 4, 4 };
+static const unsigned char kPatterns[12][16] = {
+    { 0xFF },                                                                   // 0 Drone (all on = static resonator)
+    { 0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80 },                                // 1 Up walk (low->high)
+    { 0x80,0x40,0x20,0x10,0x08,0x04,0x02,0x01 },                                // 2 Down walk
+    { 0x55,0xAA },                                                              // 3 Odd/even alternate
+    { 0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x40,0x20,0x10,0x08,0x04,0x02 },  // 4 Up-down bounce
+    { 0x03,0x0C,0x30,0xC0 },                                                    // 5 Two-band cluster sweep
+    { 0x07,0x00 },                                                             // 6 Low pulse (bands 0-2)
+    { 0xE0,0x00 },                                                             // 7 High pulse (bands 5-7)
+    { 0x49,0x92,0x24,0xB6,0x6D,0xDB },                                          // 8 Pseudo-random
+    { 0x15,0x2A,0x54,0xA8 },                                                    // 9 Every-other walking
+    { 0x81,0x42,0x24,0x18 },                                                    // 10 Inward (edges -> center)
+    { 0x18,0x24,0x42,0x81 },                                                    // 11 Outward (center -> edges)
+};
+
 class BobFilterCore
 {
     float sampleRate = 48000.0f;
@@ -167,39 +195,51 @@ class BobFilterCore
     float mode = kBobFilterDef[kMode];
 
     Biquad bands[kBandCount];
-    Svf wah;
-    EnvelopeFollower env;
+    float gate[kBandCount];      // per-band VCA gain (the animation envelope)
+    int gPhase[kBandCount];      // 0 = attack, 1 = decay
+    float stepPhase = 0.0f;      // [0,1) within the current step
+    int stepIndex = 0;
+    float hpX1 = 0.0f, hpY1 = 0.0f, hpA = 0.0f;
 
-    float lp = 0.0f;
-    float wahCutoff = 420.0f;
-    float stepPhase = 0.0f;
-    float hpX1 = 0.0f;
-    float hpY1 = 0.0f;
-    float hpA = 0.0f;
+    float atkA = 0.0f, decA = 0.0f;
+
+    int patternIndex() const
+    {
+        int p = (int)(clamp01(pattern) * 11.999f);
+        return p < 0 ? 0 : (p > 11 ? 11 : p);
+    }
+
+    void retrigger(int step)
+    {
+        const int p = patternIndex();
+        const unsigned char mask = kPatterns[p][step % kPatternLen[p]];
+        for (int i = 0; i < kBandCount; ++i)
+            if (mask & (1 << i))
+                gPhase[i] = 0;   // attack (fire this band)
+    }
 
     void updateFilters()
     {
-        static const float bassCenters[kBandCount] = {
-            110.0f, 160.0f, 240.0f, 350.0f,
-            525.0f, 775.0f, 1200.0f, 1800.0f,
-        };
+        // Band centers straight from the schematic (Hz). MODE = voicing switch.
         static const float midsCenters[kBandCount] = {
-            200.0f, 300.0f, 450.0f, 675.0f,
-            1000.0f, 1500.0f, 2200.0f, 3400.0f,
+            200.0f, 300.0f, 450.0f, 675.0f, 1000.0f, 1500.0f, 2200.0f, 3400.0f,
+        };
+        static const float bassCenters[kBandCount] = {
+            110.0f, 160.0f, 240.0f, 350.0f, 525.0f, 775.0f, 1200.0f, 1800.0f,
         };
         const float* centers = mode >= 0.5f ? bassCenters : midsCenters;
-        const float q = 5.2f + 4.4f * audioTaper(drive);
+        // MFB bandpass Q is fixed and mild (~2.5) — the MuRF bands deliberately
+        // overlap; Q must NOT depend on Drive (the old model's big mistake).
         for (int i = 0; i < kBandCount; ++i)
-            bands[i].setBandPass(sampleRate, centers[i], q);
+            bands[i].setBandPass(sampleRate, centers[i], 2.5f);
 
-        const float e = audioTaper(envelope);
-        const float attackMs = 2.0f + 34.0f * (1.0f - e);
-        const float releaseMs = 44.0f + 235.0f * (1.0f - e);
-        env.setTimes(sampleRate, attackMs, releaseMs);
+        // per-band animation envelope: fast attack, ENVELOPE pot = decay length.
+        atkA = 1.0f - std::exp(-1.0f / (0.003f * sampleRate));             // 3 ms attack
+        const float decMs = 20.0f + 1500.0f * audioTaper(envelope);       // staccato -> bloom
+        decA = 1.0f - std::exp(-1.0f / (0.001f * decMs * sampleRate));
 
-        const float hpHz = 30.0f;
         const float dt = 1.0f / sampleRate;
-        const float rc = 1.0f / (2.0f * kPi * hpHz);
+        const float rc = 1.0f / (2.0f * kPi * 30.0f);                     // input HP ~30 Hz
         hpA = rc / (rc + dt);
     }
 
@@ -214,13 +254,16 @@ class BobFilterCore
 public:
     void reset()
     {
-        lp = stepPhase = hpX1 = hpY1 = 0.0f;
-        wahCutoff = 420.0f;
-        env.reset();
-        wah.reset();
+        stepPhase = hpX1 = hpY1 = 0.0f;
+        stepIndex = 0;
         for (int i = 0; i < kBandCount; ++i)
+        {
             bands[i].reset();
+            gate[i] = 0.0f;
+            gPhase[i] = 1;   // start decayed
+        }
         updateFilters();
+        retrigger(0);        // fire the first step
     }
 
     void setSampleRate(float sr)
@@ -229,133 +272,53 @@ public:
         reset();
     }
 
-    void setDrive(float v)
-    {
-        drive = clamp01(v);
-        updateFilters();
-    }
-
-    void setOutput(float v)
-    {
-        output = clamp01(v);
-    }
-
-    void setPattern(float v)
-    {
-        pattern = clamp01(v);
-    }
-
-    void setRate(float v)
-    {
-        rate = clamp01(v);
-    }
-
-    void setEnvelope(float v)
-    {
-        envelope = clamp01(v);
-        updateFilters();
-    }
-
-    void setMix(float v)
-    {
-        mix = clamp01(v);
-    }
-
-    void setMode(float v)
-    {
-        mode = clamp01(v);
-        updateFilters();
-    }
-
-    float advancePattern()
-    {
-        const float rateHz = 0.08f + 8.4f * std::pow(clamp01(rate), 1.85f);
-        stepPhase += rateHz / sampleRate;
-        stepPhase -= std::floor(stepPhase);
-        return stepPhase * (float)kBandCount;
-    }
-
-    float patternGate(int band, float activeBand) const
-    {
-        static const float patterns[6][8] = {
-            { 1.00f, 0.35f, 0.85f, 0.25f, 0.75f, 0.40f, 0.90f, 0.30f },
-            { 0.20f, 0.95f, 0.30f, 0.85f, 0.45f, 0.75f, 0.55f, 1.00f },
-            { 1.00f, 0.15f, 0.15f, 0.90f, 0.25f, 0.25f, 0.82f, 0.35f },
-            { 0.35f, 0.60f, 1.00f, 0.50f, 0.28f, 0.88f, 0.42f, 0.72f },
-            { 0.85f, 0.75f, 0.62f, 0.48f, 0.35f, 0.52f, 0.70f, 1.00f },
-            { 0.55f, 1.00f, 0.72f, 0.35f, 0.92f, 0.46f, 0.80f, 0.28f },
-        };
-        const int p = (int)std::floor(clamp01(pattern) * 5.99f);
-        const float seq = patterns[p < 0 ? 0 : (p > 5 ? 5 : p)][band];
-        const float d = std::fabs(activeBand - (float)band);
-        const float wrapped = std::fmin(d, (float)kBandCount - d);
-        const float pulse = std::fmax(0.0f, 1.0f - wrapped * 0.85f);
-        return 0.25f + 0.75f * (seq * (0.30f + 0.70f * pulse));
-    }
+    void setDrive(float v)    { drive = clamp01(v); }
+    void setOutput(float v)   { output = clamp01(v); }
+    void setPattern(float v)  { pattern = clamp01(v); }
+    void setRate(float v)     { rate = clamp01(v); }
+    void setEnvelope(float v) { envelope = clamp01(v); updateFilters(); }
+    void setMix(float v)      { mix = clamp01(v); }
+    void setMode(float v)     { mode = clamp01(v); updateFilters(); }
 
     float process(float in)
     {
         float x = highPass(in);
-        const float driveGain = 0.95f + 5.2f * audioTaper(drive);
-        x = std::tanh(x * driveGain);
-        const float bassMode = mode >= 0.5f ? 1.0f : 0.0f;
 
-        const float dTaper = audioTaper(drive);
-        const float eTaper = audioTaper(envelope);
-        const float rawEnv = env.process(x * (5.2f + 19.0f * dTaper));
-        float sweep = std::pow(clamp01(rawEnv * (3.2f + 9.4f * eTaper)), 0.56f);
-        sweep = sweep * sweep * (3.0f - 2.0f * sweep);
+        // DRIVE — gentle pre-filter input overload (NOT a fuzz; unity at small signal)
+        const float dg = 1.0f + 2.2f * audioTaper(drive);
+        x = std::tanh(x * dg) * (1.0f / std::tanh(dg)) * 0.85f;
 
-        const float envMix = eTaper;
-        const float pos = bassMode > 0.5f ? (7.0f - 7.0f * sweep) : (7.0f * sweep);
-        const float activeBand = advancePattern();
+        // --- sequencer clock: advance the step, retrigger the firing bands ---
+        const float stepHz = 0.3f * std::pow(30.0f, clamp01(rate));   // ~0.3 .. 9 Hz
+        stepPhase += stepHz / sampleRate;
+        if (stepPhase >= 1.0f)
+        {
+            stepPhase -= 1.0f;
+            stepIndex = (stepIndex + 1) % kPatternLen[patternIndex()];
+            retrigger(stepIndex);
+        }
+
+        // --- per-band VCA envelopes (attack to 1, then decay over the ENV time) ---
         float bank = 0.0f;
-        float norm = 0.0f;
         for (int i = 0; i < kBandCount; ++i)
         {
-            const float d = std::fabs(pos - (float)i);
-            const float w = std::fmax(0.0f, 1.0f - d * 0.92f);
-            const float b = bands[i].process(x);
-            const float gate = patternGate(i, activeBand);
-            const float weight = (0.28f + 0.72f * envMix * w) * gate;
-            bank += b * weight;
-            norm += weight;
+            if (gPhase[i] == 0)
+            {
+                gate[i] += atkA * (1.0f - gate[i]);
+                if (gate[i] > 0.99f) gPhase[i] = 1;
+            }
+            else
+            {
+                gate[i] += decA * (0.0f - gate[i]);
+            }
+            bank += bands[i].process(x) * gate[i];
         }
-        if (norm > 1.0e-6f)
-            bank /= norm;
+        bank *= 0.42f;   // sum of 8 resonant bands -> tame to ~unity
 
-        const float minHz = bassMode > 0.5f ? 130.0f : 210.0f;
-        const float maxHz = bassMode > 0.5f ? 2350.0f : 5200.0f;
-        const float targetCutoff = minHz * std::pow(maxHz / minHz, sweep);
-        wahCutoff += 0.35f * (targetCutoff - wahCutoff);
-
-        float wahLow = 0.0f;
-        float wahBand = 0.0f;
-        float wahHigh = 0.0f;
-        const float wahQ = 2.8f + 7.6f * envMix + 3.0f * dTaper;
-        wah.process(x, sampleRate, wahCutoff, wahQ, wahLow, wahBand, wahHigh);
-
-        const float lpCutoff = bassMode > 0.5f
-            ? (150.0f + 4100.0f * sweep)
-            : (260.0f + 7000.0f * sweep);
-        lp += onePoleCoeff(lpCutoff, sampleRate) * (x - lp);
-
-        const float resonance = 1.02f + 1.30f * dTaper;
-        const float wahWet = wahBand * (2.55f + 1.90f * envMix + 0.95f * dTaper)
-                           + wahLow * (bassMode > 0.5f ? 0.18f : 0.06f);
-        float wet = bassMode > 0.5f
-            ? (wahWet * 1.05f + bank * (0.34f + 0.18f * drive) + lp * 0.10f)
-            : (wahWet * 1.08f + bank * (0.30f + 0.16f * drive) + lp * 0.12f);
-        wet *= resonance;
-
-        const float dryLevel = 1.0f - 0.96f * mix;
-        const float wetLevel = mix * (1.05f + 0.22f * drive);
-        float y = x * dryLevel + wet * wetLevel;
-
-        // Moog-style control paths can hit hot resonances; keep this as a soft
-        // output guard rather than a distortion effect.
-        const float outGain = 0.12f + 1.35f * audioTaper(output);
-        y = std::tanh(y * 0.92f) * outGain;
+        // MIX dry/wet, OUTPUT clean level
+        const float dry = x;
+        float y = dry * (1.0f - mix) + bank * mix * 1.9f;
+        y *= 0.15f + 1.70f * audioTaper(output);
         return y;
     }
 };
@@ -400,7 +363,7 @@ protected:
     const char* getDescription() const override { return "Moog-style analog filter"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('B', 'f', 'l', 't'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

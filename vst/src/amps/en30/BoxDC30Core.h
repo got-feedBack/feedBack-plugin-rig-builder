@@ -107,13 +107,13 @@ struct Ac30FallbackSpeaker {
     void set(float sr, float treble, float cut, float hot) {
         // Fallback cab voice kept in sync with our synthetic Box_2x12_Alnico IR
         // family. It is not fitted to, copied from, or dependent on any captured IR.
-        hp.set(sr, 72.0f);
-        coneRes.peaking(sr, 76.0f, 0.82f, 1.4f + 0.5f * hot);       // Blue Fs is 75 Hz
-        lowMidDip.peaking(sr, 480.0f, 0.80f, -3.4f);               // open-back AC30 low-mid hollow
-        alnicoChime.peaking(sr, 2900.0f, 0.82f, 4.2f + 1.6f * treble - 0.5f * cut);
-        fizzShelf.highShelf(sr, 6000.0f, 0.8f + 1.2f * treble - 0.3f * hot);
+        hp.set(sr, 50.0f);
+        coneRes.peaking(sr, 76.0f, 0.82f, 3.2f + 0.5f * hot);       // body to fill the thin lows vs the line-out ref
+        lowMidDip.peaking(sr, 480.0f, 0.80f, -2.2f);               // shallower hollow (was masking 315-630)
+        alnicoChime.peaking(sr, 2900.0f, 0.82f, 2.4f + 1.2f * treble - 0.5f * cut); // eased (the brighter treble baseline already lifts the upper-mids)
+        fizzShelf.highShelf(sr, 4500.0f, 2.4f + 1.3f * treble - 0.3f * hot);
         upperDamp.peaking(sr, 6900.0f, 0.88f, 0.0f);
-        coneLp.lowpass(sr, 15000.0f + 1600.0f * treble - 1100.0f * hot, 0.707f);
+        coneLp.lowpass(sr, 18000.0f + 1600.0f * treble - 1100.0f * hot, 0.707f);
     }
 
     inline float process(float x) {
@@ -189,7 +189,7 @@ struct BoxDC30Core {
         const float vol    = ac30pot::audioA(pTBVol);              // VR2 A500K Top Boost Volume
         const float nvol   = ac30pot::audioA(pNVol);               // VR1 A500K Normal Volume
         const float master = ac30pot::audioA(pMaster);             // VR10 A500K Master Volume
-        const float treble = ac30pot::audioA(pTreble);             // VR3 A1M Treble
+        const float treble = 0.62f + 0.38f * ac30pot::audioA(pTreble); // VR3 A1M Treble, brightened baseline so the default voicing matches the bright amp-only reference (was audioA alone = too dark by default)
         const float bass   = ac30pot::audioA(pBass);               // VR4 A1M Bass
         const float cut    = ac30pot::toneCutBleed(pCut);          // VR9 B220K + C80 4n7 Tone Cut
         const float tbSourceOhms = 47000.0f + ac30pot::wiperSourceOhms(ac30pot::kVr2TbVol, vol);
@@ -201,7 +201,7 @@ struct BoxDC30Core {
         // downstream 12AX7/PI model still needs enough volts to match a cranked AC30.
         // driveVol is only that calibration term: it keeps low settings clean while
         // moving breakup from 3 o'clock down to the real AC30 noon/1-o'clock region.
-        preGain     = 0.35f + 7.8f * driveVol;
+        preGain     = 0.45f * (0.35f + 7.8f * driveVol); // 0.45x: raise the breakup threshold for the calibrated -12 dBFS input (was distorting too early at low/mid TB Vol)
         gainOut     = 0.60f + 0.70f * driveVol;                    // post-V3 level into the PI/power amp
         // 12AX7 Miller loading. Guitarix uses fixed ~6.5 kHz low-pass sections around
         // its tubestages; here the cutoff comes from Cgk + Cgp*(1+Av) and the driving
@@ -268,8 +268,12 @@ struct BoxDC30Core {
         // circuit. Keep it tied to panel position; tying it to the A500K electrical
         // taper over-boosts mid knob settings and can turn distortion onset into
         // audible spikes.
-        float gcDb = 20.716f - 76.618f * pTBVol + 49.000f * pTBVol * pTBVol; // re-fit: hold ~-16 dBFS flat across TBVol (was hot/+4 dB at top)
-        if (gcDb > 20.0f) gcDb = 20.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
+        // Re-fit for the 0.45x preGain. Brings the cranked end to ~-16 dBFS but
+        // deliberately leaves low TB Vol quieter (clean), so the makeup never boosts
+        // the clean signal into the output soft-knee (which would re-add early
+        // breakup). The app's final leveler equalises tone-to-tone loudness.
+        float gcDb = 34.86f - 97.05f * pTBVol + 57.68f * pTBVol * pTBVol;
+        if (gcDb > 24.0f) gcDb = 24.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
         return x * outLevel * std::pow(10.0f, 0.05f * gcDb);
     }
 };

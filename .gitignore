@@ -46,7 +46,11 @@ vst/src/**/README.md
 # Local VST build outputs (CMake/JUCE + DPF). Binaries ship inside the
 # committed .vst3 bundles under vst/<cat>/; the source build trees do not.
 vst/src/**/build/
+vst/src/**/build_local/
+vst/src/**/bin/
 vst/src/**/cibuild/
+vst/src/amps/DPF/
 vst/src/amps/tw22/SuperNova22-TW22ns/
+vst/src/amps/tw40/rig_builder/
 *.bak-*
 

@@ -99,7 +99,7 @@ struct DiodeClipper
 {
     static constexpr float Is  = 2.52e-9f;            // 1N4148-class saturation current
     static constexpr float nVt = 1.752f * 0.02585f;   // emission coeff * thermal voltage (~45 mV)
-    float R = 2200.0f;
+    float R = 10000.0f;                               // real R37 = 10k series into the shunt diode pair
     float v = 0.0f;                                   // warm-start from the previous sample
     void reset() { v = 0.0f; }
     inline float process(float vin)
@@ -205,7 +205,7 @@ class JC120Core
 
     Biquad inputHp, inputLp, distPre, distPost;
     Biquad toneBass, toneMid, toneTreble, brightShelf;
-    Biquad speakerLp, speakerThump;
+    Biquad speakerLp, speakerThump, speakerBite;
     DcBlock dcBlock;
     SpringReverb spring;
     Chorus chorus;
@@ -214,21 +214,29 @@ class JC120Core
     void updateFilters()
     {
         inputHp.setHighPass(sampleRate, 38.0f, 0.70f);
-        inputLp.setLowPass(sampleRate, 12000.0f, 0.64f);
+        inputLp.setLowPass(sampleRate, 15000.0f, 0.64f);
         // distortion voicing: tighten lows + de-fizz as it's pushed (the JC
         // diode distortion is gritty/buzzy but still solid-state-clean otherwise)
         distPre.setHighPass(sampleRate, 90.0f + 170.0f * distortion, 0.70f);
         distPost.setLowPass(sampleRate, 7400.0f - 1100.0f * distortion, 0.66f);
         // passive tone stack — ranges from the spec (TREBLE 17dB@10k, MIDDLE
         // 13dB@350Hz, BASS 14dB@50Hz) + the fixed BRIGHT (5dB@10kHz) shelf.
-        toneBass.setLowShelf(sampleRate, 100.0f, 0.72f, eqDb(bass, 12.0f));
-        toneMid.setPeaking(sampleRate, 380.0f, 0.72f, eqDb(mid, 11.0f));
-        toneTreble.setHighShelf(sampleRate, 2600.0f, 0.74f, eqDb(treble, 12.0f));
-        // BRIGHT switch on the JC-120 is a fixed +5dB@10kHz lift — baked in.
-        brightShelf.setHighShelf(sampleRate, 5500.0f, 0.80f, 5.5f);
+        // CIRCUIT-REAL tone stack (service manual): TREBLE 250k @10kHz ±17dB, MIDDLE 10k @350Hz ±13dB,
+        // BASS 250k @60Hz ±14dB. The TREBLE is a 10kHz shelf (not 2.6k) — the glassy JC top is real
+        // 10kHz air + the speaker rolloff below, NOT a wide presence boost.
+        toneBass.setLowShelf(sampleRate, 60.0f, 0.72f, eqDb(bass, 14.0f));
+        toneMid.setPeaking(sampleRate, 350.0f, 0.72f, eqDb(mid, 13.0f));
+        toneTreble.setHighShelf(sampleRate, 10000.0f, 0.74f, eqDb(treble, 17.0f));
+        // BRIGHT: real = a +5dB @10kHz treble-bleed shelf across the 1M Volume pot. Baked on.
+        brightShelf.setHighShelf(sampleRate, 10000.0f, 0.80f, 5.0f);
         // solid-state combo speaker (2x12): gentle thump + top roll-off (opened, miked-cab top)
-        speakerThump.setPeaking(sampleRate, 105.0f, 0.85f, 1.6f);
-        speakerLp.setLowPass(sampleRate, 13500.0f + 1500.0f * treble - 2500.0f * distortion, 0.66f);
+        speakerThump.setPeaking(sampleRate, 105.0f, 0.85f, 1.0f);
+        // The Roland JC speaker/voice is BRIGHT (the amp-only ref top extends to 12.5k). Presence shelf
+        // tuned to the ref — stronger when CLEAN (no diode harmonics to brighten it) than when distorted.
+        // Presence/brilliance to the bright JC reference. Capped at a moderate lift — the clean DI has
+        // little real >5k content, so a bigger shelf would just amplify hiss on this quiet solid-state amp.
+        speakerBite.setHighShelf(sampleRate, 2300.0f, 0.72f, 8.5f - 4.0f * distortion);
+        speakerLp.setLowPass(sampleRate, 13500.0f + 1500.0f * treble - 1500.0f * distortion, 0.66f);
     }
 
 public:
@@ -236,7 +244,7 @@ public:
     {
         inputHp.reset(); inputLp.reset(); distPre.reset(); distPost.reset();
         toneBass.reset(); toneMid.reset(); toneTreble.reset(); brightShelf.reset();
-        speakerLp.reset(); speakerThump.reset(); dcBlock.reset(); diode.reset();
+        speakerLp.reset(); speakerThump.reset(); speakerBite.reset(); dcBlock.reset(); diode.reset();
         spring.clear(); chorus.clear();
         updateFilters();
     }
@@ -288,7 +296,9 @@ public:
         // Shockley diode-pair clipper (Newton-solved). Below threshold it passes
         // clean; above, the diodes clamp with their exponential knee = the gritty,
         // odd-harmonic solid-state JC edge (no tanh fit).
-        const float drive = 1.0f + 34.0f * distortion;
+        // DISTORTION pot is a reverse-log (C) 10k — most of the gain is in the top of the sweep.
+        const float distC = distortion * distortion;
+        const float drive = 1.0f + 60.0f * distC;
         d = diode.process(d * drive) * 1.9f;          // diodes clamp ~±0.5V -> makeup ~unity
         d = distPost.process(d);
         // clean->distorted blend with makeup so the distorted level ~tracks clean
@@ -309,6 +319,7 @@ public:
         // solid-state combo fallback speaker (bypassable for external cab/IR)
         const float ampOnly = y;
         float cab = speakerThump.process(ampOnly);
+        cab = speakerBite.process(cab);
         cab = speakerLp.process(cab);
         y = ampOnly + cabSim * (cab - ampOnly);
 
@@ -369,7 +380,7 @@ protected:
     const char* getDescription() const override { return "Ronald JC-120 Jazz Chorus style solid-state amp (stereo chorus)"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1,0,1); }
     int64_t getUniqueId() const override { return d_cconst('J', 'c', '1', '2'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

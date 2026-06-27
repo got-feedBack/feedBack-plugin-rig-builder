@@ -7,8 +7,8 @@
 // the over-gained cascade that saturated every signal to ~100% THD.
 //
 //   IN -> coupling -> Bright + Normal 12AX7 channels (Loudness I / II, jumpered)
-//   -> Plexi tone stack (Yeh) -> presence -> recovery 12AX7 -> 12AX7 LTP PI
-//   -> 4x EL34 (non-master: the Loudness knobs drive the whole amp) -> OT roll.
+//   -> JTM45 FMV tone stack (Yeh, slope 56k) -> presence -> driven recovery 12AX7 ->
+//   12AX7 LTP PI -> 2x 5881 (~KT66; non-master: the Loudness knobs drive the whole amp) -> OT roll.
 //   Runs 2x oversampled.
 //
 #include "../../_shared/tube_stage.hpp"
@@ -31,14 +31,14 @@ struct Jtm45Core {
     float sr = 96000.0f;
     rbtube::HP1 inCoupling;
     rbtube::TubeStage vBright, vNormal, v3;
-    Biquad brightShelf, presenceShelf;
+    Biquad brightShelf, presenceShelf, outTilt;
     rbtube::ToneStackYeh tone;
     rbtube::PhaseInverterLTP12AT7 pi;
     rbtube::PowerAmp5881 power;
     rbtube::LP1 otVoice;
 
     float pPres=.5f,pBass=.5f,pMid=.55f,pTreble=.62f,pL1=.62f,pL2=.0f,pInput=.5f;
-    float gB=1.f,gN=1.f,piDrive=6.f,outLevel=1.f;
+    float gB=1.f,gN=1.f,v3Drive=1.f,piDrive=6.f,outLevel=1.f;
 
     void setSampleRate(float s){ sr=s; recalc(); reset(); }
     void setPresence(float v){ pPres=clamp01(v); recalc(); }
@@ -50,32 +50,37 @@ struct Jtm45Core {
     void setInput(float v){ pInput=clamp01(v); recalc(); }
 
     void reset(){ inCoupling.reset(); vBright.reset(); vNormal.reset(); v3.reset();
-        brightShelf.reset(); tone.reset(); presenceShelf.reset(); pi.reset(); power.reset(); otVoice.reset(); }
+        brightShelf.reset(); tone.reset(); presenceShelf.reset(); outTilt.reset(); pi.reset(); power.reset(); otVoice.reset(); }
 
     void recalc(){
-        inCoupling.set(sr, 30.0f);
+        inCoupling.set(sr, 90.0f);   // tighten lows to the amp-only reference (was 30 = too full)
         vBright.set(sr, 1, 250.0f, 40.0f, 25.0f, 1500.0f);
         vNormal.set(sr, 1, 250.0f, 40.0f, 40.0f, 1500.0f);
         v3.set(sr, 1, 250.0f, 40.0f, 55.0f, 1500.0f);
 
-        // Loudness knobs = the drive (non-master). Controlled span: clean -> roar.
-        gB = 0.30f + 5.0f * rbtube::PotTaper::audio(pL1, 1.30f);
-        gN = 0.30f + 5.0f * rbtube::PotTaper::audio(pL2, 1.30f);
+        // Loudness knobs = the drive (non-master). Span raised + a driven recovery so the JTM45
+        // actually breaks up when cranked (ref crest ~6.3) — was far too clean (crest ~12).
+        gB = 0.30f + 9.0f * rbtube::PotTaper::audio(pL1, 1.30f);
+        gN = 0.30f + 9.0f * rbtube::PotTaper::audio(pL2, 1.30f);
+        const float drv0 = (pL1 > pL2 ? pL1 : pL2);
+        v3Drive = 1.0f + 5.0f * rbtube::PotTaper::audio(drv0, 1.30f);
         brightShelf.highShelf(sr, 2200.0f, 5.0f);
 
-        // Plexi tone stack (Yeh): Treble 250k/500pF, Bass 1M/22nF, Mid 25k/22nF, slope 33k.
-        tone.setComponents(250e3, 1e6, 25e3, 33e3, 270e-12, 22e-9, 22e-9);
+        // JTM45 Bassman-derived FMV tone stack (Yeh), circuit-real: Treble 250k/270pF, Bass 1M/.02,
+        // Mid 25k/.02, slope 56k (NOT the Plexi's 33k — the 56k slope is the JTM45's mid voicing).
+        tone.setComponents(250e3, 1e6, 25e3, 56e3, 270e-12, 22e-9, 22e-9);
         tone.update(sr, pTreble, pMid, pBass);
         presenceShelf.highShelf(sr, 3000.0f, (pPres-0.5f)*10.0f);
 
         piDrive = 6.0f;
         pi.setFenderAB763(sr, 1.0f, 1.0f);
-        power.set(sr, 1.6f, -38.0f, 0.06f, 30.0f, 11000.0f);   // 4x EL34 (non-master)
+        power.set(sr, 1.6f, -38.0f, 0.06f, 30.0f, 11000.0f);   // 2x 5881 (~KT66), non-master
         power.out = 0.011f;
-        otVoice.set(sr, 9000.0f);
+        otVoice.set(sr, 14000.0f);                  // opened from 9k for the amp-only bright top
+        outTilt.highShelf(sr, 2600.0f, 5.0f);       // presence/air tilt to match the bright reference
 
-        const float drv = (pL1 > pL2 ? pL1 : pL2);
-        outLevel = std::pow(10.0f, 0.05f * (13.5f - 7.0f * drv));
+        const float drv = drv0;
+        outLevel = std::pow(10.0f, 0.05f * (15.0f - 16.0f * drv + 6.0f * drv * drv));
     }
 
     inline float process(float x){
@@ -87,10 +92,11 @@ struct Jtm45Core {
         float y = 0.6f * (jb*b + jn*n);
         y = tone.process(y);
         y = presenceShelf.process(y);
-        y = v3.process(y);
+        y = v3.process(y * v3Drive);
         y = pi.process(y * piDrive);
         y = power.process(y);
         y = otVoice.process(y);
+        y = outTilt.process(y);
         return y * outLevel;
     }
 };

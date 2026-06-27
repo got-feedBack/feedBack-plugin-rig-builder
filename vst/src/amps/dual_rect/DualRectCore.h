@@ -40,13 +40,14 @@ struct DualRectCore {
 
     // active-channel params (selected from the 3 channels by kChannel)
     int ch=2;  // 0 Green, 1 Orange, 2 Red
-    float pGain=.7f,pTreble=.6f,pMid=.4f,pBass=.55f,pPres=.5f,pMaster=.55f,pOutput=.6f,pRect=1.f;
-    float g1=1.f,g2=1.f,g3=1.f,piDrive=6.f,outLevel=1.f; int nStages=2;
+    float pGain=.7f,pTreble=.6f,pMid=.4f,pBass=.55f,pPres=.5f,pMaster=.55f,pOutput=.6f,pRect=1.f,pMode=1.f;
+    float g1=1.f,g2=1.f,g3=1.f,g4=1.f,piDrive=6.f,outLevel=1.f; int nStages=2;
 
     void setSampleRate(float s){ sr=s; recalc(); reset(); }
 
     // The plugin passes the full param array + resolves the active channel.
     void setChannel(int c){ ch=c; recalc(); }
+    void setMode(float m){ pMode=clamp01(m); recalc(); }   // Green Clean(0)/Pushed(1); Orange/Red Raw(0)/Vintage(.5)/Modern(1)
     void setActive(float gain,float treble,float mid,float bass,float pres,float master,float output,float rect){
         pGain=clamp01(gain); pTreble=clamp01(treble); pMid=clamp01(mid); pBass=clamp01(bass);
         pPres=clamp01(pres); pMaster=clamp01(master); pOutput=clamp01(output); pRect=clamp01(rect); recalc(); }
@@ -55,7 +56,7 @@ struct DualRectCore {
         midScoop.reset(); presenceShelf.reset(); tone.reset(); pi.reset(); power.reset(); otVoice.reset(); }
 
     void recalc(){
-        inCoupling.set(sr, 30.0f);
+        inCoupling.set(sr, 70.0f);   // tighten lows pre-distortion to match the tight amp-only Recto reference (was 30 Hz = too full)
         v1.set(sr, 1, 250.0f, 40.0f, 25.0f, 1500.0f);
         v2.set(sr, 1, 250.0f, 40.0f, 25.0f, 1500.0f);
         v3.set(sr, 1, 250.0f, 40.0f, 30.0f, 1500.0f);
@@ -63,19 +64,29 @@ struct DualRectCore {
 
         const float gA = rbtube::PotTaper::audio(pGain, 1.30f);
         // Per-channel gain staging + stage count (Green clean, Red high-gain roar).
-        if (ch == 0) {            // GREEN clean
-            g1 = 0.3f + 1.8f*gA; g2 = 0.4f + 1.2f*gA; g3 = 1.0f; nStages = 2;
-        } else if (ch == 1) {     // ORANGE crunch
-            g1 = 0.4f + 4.0f*gA; g2 = 0.5f + 3.0f*gA; g3 = 0.6f + 2.0f*gA; nStages = 3;
-        } else {                  // RED high gain (musical, not a static square)
-            g1 = 0.5f + 5.5f*gA; g2 = 0.6f + 4.0f*gA; g3 = 0.7f + 3.0f*gA; nStages = 3;
+        // modeGain: Green Clean->Pushed adds breakup; Orange/Red Raw(loose/clean) -> Modern(hottest).
+        float modeGain;
+        if (ch == 0) {            // GREEN clean (g4 = unity recovery)
+            g1 = 0.3f + 1.8f*gA; g2 = 0.4f + 1.2f*gA; g3 = 1.0f; g4 = 1.0f; nStages = 2;
+            modeGain = 1.0f + 0.8f*pMode;
+        } else if (ch == 1) {     // ORANGE crunch (g4 = unity recovery)
+            g1 = 0.4f + 2.8f*gA; g2 = 0.5f + 2.0f*gA; g3 = 0.6f + 1.4f*gA; g4 = 1.0f; nStages = 3;
+            modeGain = 0.7f + 0.3f*pMode;
+        } else {                  // RED — THE heavy-metal channel: deep 4-stage cascade (drives v4 too)
+            g1 = 0.6f + 6.5f*gA; g2 = 0.7f + 5.0f*gA; g3 = 0.8f + 3.5f*gA;
+            g4 = 1.3f + 4.5f*gA; nStages = 3;   // 4th driven stage = the Recto sustain/aggression (real = 5 stages)
+            modeGain = 0.7f + 0.3f*pMode;        // Raw looser, Modern hottest
         }
+        g1 *= modeGain; g2 *= modeGain; g3 *= modeGain; g4 *= modeGain;
 
-        // Mesa tone stack (Yeh): Treble 250k/500pF, Bass 250k/22nF, Mid 25k/22nF, slope 100k.
-        tone.setComponents(250e3, 250e3, 25e3, 100e3, 500e-12, 22e-9, 22e-9);
+        // Per-channel tone stack (circuit-real, Yeh DOUBLE-precision — float NaNs at 192k).
+        // Green (CH1): 250k/250k/25k, slope 150k, 250pF/.1/.047. Orange+Red (CH2/CH3) share the
+        // tighter stack: Bass pot 25k (NOT 250k) + slope 47k + 500pF/.02/.02 = the real Recto low end.
+        if (ch == 0)  tone.setComponents(250e3, 250e3, 25e3, 150e3, 250e-12, 100e-9, 47e-9);
+        else          tone.setComponents(250e3,  25e3, 25e3,  47e3, 500e-12,  20e-9, 20e-9);
         tone.update(sr, pTreble, pMid, pBass);
-        // Recto "Modern" mid-scoop on the high-gain channels.
-        midScoop.peak(sr, 650.0f, (ch>=1)? -5.0f : 0.0f, 0.8f);
+        // Recto "Modern" mid-scoop — scales with MODE on the high-gain channels (Raw=flat, Modern=full −5dB).
+        midScoop.peak(sr, 650.0f, (ch>=1)? -5.0f*pMode : 0.0f, 0.8f);
         presenceShelf.highShelf(sr, 3000.0f, (pPres-0.5f)*10.0f);
 
         piDrive = 6.0f;
@@ -84,7 +95,7 @@ struct DualRectCore {
         const float vol = rbtube::PotTaper::audio(pMaster, 1.15f);
         power.set(sr, 0.5f + 2.2f*vol, -36.0f, 0.05f + 0.04f*(1.0f-pRect), 30.0f, 11000.0f);
         power.out = 0.012f;
-        otVoice.set(sr, 9000.0f);
+        otVoice.set(sr, 14000.0f);   // open the top to match the bright amp-only reference (was 9k = too dark)
 
         // Makeup decreases with gain so the Gain knob is drive, not volume. The
         // master Output sets level on top.
@@ -100,7 +111,7 @@ struct DualRectCore {
         y = tone.process(y);
         y = midScoop.process(y);
         y = presenceShelf.process(y);
-        y = v4.process(y);                 // recovery
+        y = v4.process(y * g4);            // recovery (Green/Orange) / 4th gain stage (Red metal)
         y = pi.process(y * piDrive);
         y = power.process(y);
         y = otVoice.process(y);

@@ -36,13 +36,13 @@ struct Jcm800Core {
     rbtube::TubeStage v1, v2, v3;          // 12AX7: input, GAIN-driven, recovery
     Biquad brightShelf;                    // bright cap across the gain pot
     rbtube::ToneStackYeh tone;             // Marshall TMB (Yeh)
-    Biquad presenceShelf;                  // power-amp NFB presence
+    Biquad presenceShelf, outTilt;         // power-amp NFB presence + amp-only top tilt
     rbtube::PhaseInverterLTP12AT7 pi;      // LTP phase inverter
     rbtube::PowerAmpEL34 power;            // 2x EL34
     rbtube::LP1 otVoice;
 
     float pGain=.6f,pBass=.5f,pMid=.5f,pTreble=.5f,pPres=.5f,pVol=.6f;
-    float gDrive=1.f, piDrive=6.f, outLevel=1.f;
+    float gDrive=1.f, piDrive=6.f, outLevel=1.f, v3Drive=1.f;
 
     void setSampleRate(float s){ sr=s; recalc(); reset(); }
     void setGain(float v){ pGain=clamp01(v); recalc(); }
@@ -53,17 +53,23 @@ struct Jcm800Core {
     void setVolume(float v){ pVol=clamp01(v); recalc(); }
 
     void reset(){ inCoupling.reset(); v1.reset(); v2.reset(); v3.reset(); brightShelf.reset();
-        tone.reset(); presenceShelf.reset(); pi.reset(); power.reset(); otVoice.reset(); }
+        tone.reset(); presenceShelf.reset(); outTilt.reset(); pi.reset(); power.reset(); otVoice.reset(); }
 
     void recalc(){
-        inCoupling.set(sr, 30.0f);
-        v1.set(sr, 1, 250.0f, 40.0f, 25.0f, 1500.0f);    // input 12AX7
-        v2.set(sr, 1, 250.0f, 40.0f, 25.0f, 1500.0f);    // GAIN-driven 12AX7
+        // Re-voice dialed against the amp-only reference render (top end + crunch onset):
+        // bigger gain span + a recovery-stage drive that scales with Gain, tighter input
+        // HP (120Hz) to firm the low end, brighter OT roll (16k) + a top tilt (+9 @ 2.6k).
+        constexpr float kGSpan = 11.0f;    // GAIN-pot span into V2 (clean -> crunch)
+        constexpr float kV3Ex  = 10.0f;    // recovery-stage extra drive, scales with Gain
+        constexpr float kHp    = 120.0f;   // input coupling HP (firm lows)
+        inCoupling.set(sr, kHp);
+        v1.set(sr, 1, 250.0f, 40.0f, 25.0f, 1500.0f);    // V1A input 12AX7
+        v2.set(sr, 1, 250.0f, 40.0f, 22.0f, 2700.0f);    // V2A (2204): slightly colder bias than V1 (2k7 cathode) -> a touch of asymmetric crunch, not a fuzz
         v3.set(sr, 1, 250.0f, 40.0f, 55.0f, 1500.0f);    // recovery 12AX7
 
-        // The 2204 GAIN pot: controlled drive into V2 (clean -> crunch). Small,
-        // tube-friendly span (the OLD cascade used 0.55+16*gain = a square wave).
-        gDrive = 0.30f + 6.0f * rbtube::PotTaper::audio(pGain, 1.30f);
+        // The 2204 GAIN pot: controlled drive into V2 (clean -> crunch).
+        gDrive = 0.45f + kGSpan * rbtube::PotTaper::audio(pGain, 1.30f);
+        v3Drive = 1.0f + kV3Ex * rbtube::PotTaper::audio(pGain, 1.30f);
         brightShelf.highShelf(sr, 2000.0f, 4.0f * (1.0f - pGain));   // bright at low gain
 
         // Marshall tone stack (Yeh): Treble 220k/470pF, Bass 1M/22nF, Mid 22k/22nF, slope 33k.
@@ -77,11 +83,17 @@ struct Jcm800Core {
         const float vol = rbtube::PotTaper::audio(pVol, 1.15f);
         power.set(sr, 0.5f + 2.2f*vol, -38.0f, 0.06f, 30.0f, 11000.0f);
         power.out = 0.011f;
-        otVoice.set(sr, 9000.0f);
+        constexpr float kOt   = 16000.0f;  // brighter OT roll (open top, matches reference)
+        constexpr float kTilt = 9.0f;      // amp-only top tilt @ 2.6k (presence/edge)
+        otVoice.set(sr, kOt);
+        outTilt.highShelf(sr, 2600.0f, kTilt);
 
         // Loudness makeup: DECREASES with Gain to cancel the drive's level rise, so
         // the Gain knob adds distortion (not volume) and output stays ~flat ~-15 LUFS.
-        outLevel = std::pow(10.0f, 0.05f * (13.2f - 7.0f * pGain));
+        // Loudness makeup: DECREASES with Gain to cancel the drive's level rise, so the
+        // Gain knob adds distortion (not volume). Refit for the GS=11 re-voice so the
+        // operating range sits ~-16 dBFS and peaks stay below the output soft-knee (no clip).
+        outLevel = std::pow(10.0f, 0.05f * (5.5f - 5.0f * pGain));
     }
 
     inline float process(float x){
@@ -90,10 +102,11 @@ struct Jcm800Core {
         y = v2.process(brightShelf.process(y) * gDrive); // GAIN-driven 12AX7
         y = tone.process(y);                             // Marshall TMB
         y = presenceShelf.process(y);
-        y = v3.process(y);                               // recovery
+        y = v3.process(y * v3Drive);                     // recovery
         y = pi.process(y * piDrive);                     // LTP PI
         y = power.process(y);                            // 2x EL34
         y = otVoice.process(y);
+        y = outTilt.process(y);
         return y * outLevel;
     }
 };
