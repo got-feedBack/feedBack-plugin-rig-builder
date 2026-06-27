@@ -345,7 +345,10 @@ _DEFAULT_SETTINGS = {
     # then adjusts setGain('chain', X) so every complete chain lands near
     # the same perceived level.
     "final_chain_normalize": True,
-    "final_chain_target_rms_db": -14.0,
+    # -15.5 (was -14): sits the leveled tone slightly UNDER the song's backing
+    # (normalized to -12 LUFS, ×0.8 backing fader ≈ -13.9 heard) so the tone
+    # doesn't dominate the mix (tone-vs-backing balance pass).
+    "final_chain_target_rms_db": -15.5,
     "final_chain_min_gain_db": -20.0,
     "final_chain_max_gain_db": 20.0,
     "final_chain_gate_db": -45.0,

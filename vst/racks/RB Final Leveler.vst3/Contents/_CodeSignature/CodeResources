@@ -18,6 +18,20 @@
 			HPtUHLO0kIP0oRgwd73ujCoz+kFqDax22XwqIY0foSQ=
 			</data>
 		</dict>
+		<key>x86_64-linux/RB Final Leveler.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			SobVECaaXuczeSHo5VpTkE8SCfe+t/OigjjPGliX7tU=
+			</data>
+		</dict>
+		<key>x86_64-win/RB Final Leveler.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			MCVy8T6vE0Bj0z/Q5D8/2CJfxKmUiHmcDJND+OA2YZk=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>
