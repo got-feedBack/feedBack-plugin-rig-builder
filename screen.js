@@ -1,4 +1,16 @@
 // NAM Rig Builder plugin — the game tone → NAM preset mapping UI.
+
+// ── Desktop-bridge back-compat ──────────────────────────────────────────────
+// The host renamed window.slopsmithDesktop → window.feedBackDesktop
+// (got-feedback/feedBack-desktop#40). On desktop builds that still expose only
+// the legacy name, alias it so the feedBackDesktop reads below work on every
+// desktop in any release order. No-op in the browser and on the new bridge.
+try {
+    if (typeof window !== 'undefined' && !window.feedBackDesktop && window.slopsmithDesktop) {
+        window.feedBackDesktop = window.slopsmithDesktop;
+    }
+} catch (_) { /* frozen window — ignore */ }
+
 window.RB_API = window.RB_API || '/api/plugins/rig_builder';
 
 window.NAM_API = window.NAM_API || '/api/plugins/nam_tone';
