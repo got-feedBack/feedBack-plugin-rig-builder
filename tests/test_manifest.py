@@ -89,7 +89,7 @@ def test_screen_registers_executable_audio_effects_provider():
     assert "RB_AUDIO_EFFECTS_ROUTE_KEY" not in src
     assert "window.__rbPlaybackSettingsKey = ''" in src
     assert "window.__rbPlaybackSettingsFilename" in src
-    assert "slopsmithDesktop.audioEffects" not in src
+    assert "feedBackDesktop.audioEffects" not in src
     assert "function rbEnsureCapabilitiesRegistered" in src
     assert "rbEnsureCapabilitiesRegistered(0)" in src
 

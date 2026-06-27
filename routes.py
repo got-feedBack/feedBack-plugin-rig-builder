@@ -7737,7 +7737,7 @@ def setup(app, context):
 
     # ── VST plugin endpoints (Fase C: known list + assign + state) ────
     # The native engine owns the actual VST scan + load via the JS bridge
-    # (`window.slopsmithDesktop.audio.getKnownPlugins() / loadVST / ...`).
+    # (`window.feedBackDesktop.audio.getKnownPlugins() / loadVST / ...`).
     # The Python side just persists the user's choice per (song, gear) so
     # we can rebuild the chain on Listen without re-scanning each time.
 

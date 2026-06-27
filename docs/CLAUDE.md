@@ -85,7 +85,7 @@ Key paths:
   audio engine and `nam_tone.db` (`presets`, `tone_mappings`). rig_builder
   writes into those tables + an added `preset_pieces` table (full chain).
 - The DSP: native module `slopsmith_audio.node` (C++) via
-  `window.slopsmithDesktop.audio.loadPreset(JSON)`, with a WASM worklet
+  `window.feedBackDesktop.audio.loadPreset(JSON)`, with a WASM worklet
   fallback (`nam-core.wasm` + `nam-processor.js`) that is **single-NAM**.
 - The bundle's `get_native_preset` builds a 2-stage chain (one amp NAM + one
   cab IR) from `presets.model_file`/`ir_file`.
