@@ -39,7 +39,8 @@ public:
         levelInitialized = false;
         detectorSeeded = false;
         warmupSamples = 0;
-        silenceSamples = 0;
+        gateHoldSamples = 0;
+        gateGain = 1.0f;
         msEnv = 0.0;
         rawMsEnv = 0.0;
         designKWeighting(sr);
@@ -175,29 +176,13 @@ public:
             warmupSamples += numSamples;
         const bool warm = warmupSamples >= kWarmupHold;
 
-        // Silence timer: count samples below the gate so we HOLD through short
-        // musical gaps (note tails — no pumping) but RELEASE the gain to unity on
-        // SUSTAINED silence. Without this the AGC held its boost and kept
-        // amplifying the idle noise floor.
-        if (hasSignal) silenceSamples = 0;
-        else if (silenceSamples < (1 << 30)) silenceSamples += numSamples;
-        const int kSilenceHold = int(1.0 * sr);    // ~1 s hold (keeps fuzz sustain/gaps boosted) before releasing
-        bool gatedRelease = false;
-
-        if (!warm)
+        if (!hasSignal || !warm)
         {
-            // Still warming the detector — don't chase a level we can't trust.
+            // Silence OR still warming the detector — HOLD the gain. The idle
+            // noise floor is ducked by the separate OUTPUT GATE below (NOT by
+            // dropping the AGC gain), so when playing resumes the level is already
+            // correct and the note is never muted by a slow gain recovery.
             wantedGainDb = currentGainDb;
-        }
-        else if (!hasSignal)
-        {
-            if (silenceSamples <= kSilenceHold)
-                wantedGainDb = currentGainDb;       // short gap: hold (no pumping)
-            else
-            {
-                wantedGainDb = 0.0f;                // sustained silence: release to unity
-                gatedRelease = true;                // so the idle noise floor is NOT boosted
-            }
         }
         else
         {
@@ -251,18 +236,30 @@ public:
         // harder on a change, so a tone switch lands at level almost immediately.
         const float urgency = juce::jlimit(0.0f, 1.0f, (gapDb - 1.0f) / 5.0f);
         const float fastMs = 8.0f;
-        float timeMs = baseMs * (1.0f - urgency) + fastMs * urgency;
-        // The gated release to unity must be a GENTLE fade (~600 ms), not the
-        // urgency-fast convergence, or the noise floor pumps the instant you stop
-        // playing.
-        if (gatedRelease)
-            timeMs = 600.0f;
+        const float timeMs = baseMs * (1.0f - urgency) + fastMs * urgency;
 
         const float blockSeconds = float(numSamples / sr);
         const float alpha = 1.0f - std::exp(-blockSeconds / std::max(0.001f, timeMs / 1000.0f));
 
         currentGainDb += (wantedGainDb - currentGainDb) * juce::jlimit(0.0f, 1.0f, alpha);
         currentGainDb = juce::jlimit(-maxCutDb, maxBoostDb, currentGainDb);
+
+        // ── Idle-noise GATE (separate from the AGC) ──────────────────────────
+        // The AGC HOLDS its boost during silence (above), which alone would keep
+        // amplifying the idle noise floor. So duck the OUTPUT with a real noise
+        // gate that OPENS fast on the CURRENT block's level (a note attack passes
+        // un-muted) and CLOSES with a 300 ms hold + slow release on sustained
+        // silence. Being a separate output multiplier — not the AGC gain — note
+        // onsets are NEVER muted by a slow gain recovery (the bug with the old
+        // release-to-unity: "de repente el fuzz se mutea").
+        const float instRawDb = (rawBlockMs > 1.0e-12)
+            ? float(10.0 * std::log10(rawBlockMs)) : -120.0f;
+        const bool gateOpenNow = instRawDb >= effGateDb;
+        if (gateOpenNow) gateHoldSamples = int(0.30 * sr);             // 300 ms hold
+        else if (gateHoldSamples > 0) gateHoldSamples = std::max(0, gateHoldSamples - numSamples);
+        const float gateTarget = (gateOpenNow || gateHoldSamples > 0) ? 1.0f : 0.0f;
+        const float gateAtkCoef = 1.0f - std::exp(-1.0f / std::max(1.0f, 0.003f * float(sr)));  // ~3 ms open
+        const float gateRelCoef = 1.0f - std::exp(-1.0f / std::max(1.0f, 0.250f * float(sr)));  // ~250 ms close
 
         // Order matters: AGC (loudness normalize) -> brickwall limiter on the
         // NORMALIZED signal -> makeup (Output Trim, the user's loudness) LAST.
@@ -288,7 +285,9 @@ public:
             const float need = (pk > ceilLin && pk > 0.0f) ? (ceilLin / pk) : 1.0f;
             if (need < limGain) limGain = need;                       // instant attack: no overshoot
             else                limGain += relCoef * (need - limGain); // slow release
-            const float tot = gAgc * limGain * makeupGain * confidence;  // ...makeup + warm-up fade, last
+            const float gc = (gateTarget > gateGain) ? gateAtkCoef : gateRelCoef;
+            gateGain += gc * (gateTarget - gateGain);                  // fast-open / slow-close noise gate
+            const float tot = gAgc * limGain * makeupGain * confidence * gateGain;  // ...makeup, warm-up fade, gate, last
             for (int ch = 0; ch < numChannels; ++ch)
                 buffer.getWritePointer(ch)[i] *= tot;
         }
@@ -332,7 +331,8 @@ private:
     bool levelInitialized = false;
     bool detectorSeeded = false;   // jump msEnv to the real level on first signal
     int warmupSamples = 0;         // signal samples seen — gates the first gain decision
-    int silenceSamples = 0;        // samples below the gate — drives the release-to-unity
+    int gateHoldSamples = 0;       // output noise-gate hold counter
+    float gateGain = 1.0f;         // output noise-gate gain (fast attack / slow release)
     double msEnv = 0.0;   // running mean-square of the K-weighted signal (~30 ms)
     double rawMsEnv = 0.0; // running mean-square of the UNWEIGHTED signal — caps sub-heavy boost
 
