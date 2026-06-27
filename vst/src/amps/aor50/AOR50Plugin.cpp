@@ -1,15 +1,26 @@
 #include "DistrhoPlugin.hpp"
 #include "AOR50Params.h"
-#include "../../_shared/guitar_amp_core.hpp"
+#include "Aor50Core.h"
 #include "../../_shared/oversampler.hpp"
 #include <cmath>
 START_NAMESPACE_DISTRHO
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
 class AOR50Plugin : public Plugin {
-    rbgtr::AmpCore<rbtube::TubeEL34> core; float fP[kParamCount];
+    aor50::Aor50Core core; float fP[kParamCount];
     rbshared::Oversampler4x os; static constexpr int kOS = rbshared::Oversampler4x::OS;
-    void applyAll(){ bool aor=fP[kChannel]>=0.5f; float g=aor?fP[kAorPreamp]:fP[kCh1Preamp]; float v=aor?fP[kAorMaster]:fP[kCh1Master];core.configure(250e3,470e3,25e3,33e3,250e-12,22e-9,22e-9, aor?0.45f:0.25f, aor?8.0f:3.0f,13.0f,3000.0f,4.0f);core.setGain(g);core.setBass(fP[kBass]);core.setMiddle(fP[kMiddle]);core.setTreble(fP[kTreble]);core.setPresence(fP[kPresence]);core.setVolume(v); }
+    void applyAll(){
+        const bool aor = fP[kChannel] >= 0.5f;
+        core.aor        = aor;
+        core.brightOn   = (aor ? fP[kAorBright] : fP[kCh1Bright]) >= 0.5f;
+        core.deepOn     = fP[kDeep]     >= 0.5f;
+        core.midBoostOn = fP[kMidBoost] >= 0.5f;
+        core.pGain   = aor ? fP[kAorPreamp] : fP[kCh1Preamp];
+        core.pMaster = aor ? fP[kAorMaster] : fP[kCh1Master];
+        core.pBass = fP[kBass]; core.pMid = fP[kMiddle]; core.pTreble = fP[kTreble];
+        core.pPres = fP[kPresence];
+        core.recalc();
+    }
 public:
     AOR50Plugin() : Plugin(kParamCount,0,0){ for(int i=0;i<kParamCount;++i)fP[i]=kAOR50Def[i]; core.setSampleRate(kOS*(float)getSampleRate()); applyAll(); }
 protected:
@@ -17,7 +28,7 @@ protected:
     const char* getDescription() const override { return "AOR50 — circuit-real model"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(2,0,0); }
+    uint32_t getVersion() const override { return d_version(2,1,0); }
     int64_t getUniqueId() const override { return d_cconst('A','r','5','0'); }
     void initParameter(uint32_t i, Parameter& p) override { if(i>=(uint32_t)kParamCount)return; p.hints=kParameterIsAutomatable;
         if(i==(uint32_t)kChannel||i==(uint32_t)kAorBright||i==(uint32_t)kCh1Bright||i==(uint32_t)kDeep||i==(uint32_t)kMidBoost||i==(uint32_t)kCabSim)p.hints|=kParameterIsBoolean;

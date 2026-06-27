@@ -1,8 +1,10 @@
 /*
  * RangeBooster - Rangemaster-style treble booster for the game's
- * Pedal_RangeBooster. Reference: single OC44 germanium transistor, tiny input
- * coupling cap, fixed bias, and one Boost pot. the game exposes only Boost,
- * so the DSP uses that one control for range emphasis and transistor color.
+ * Pedal_RangeBooster. Reference: local Rangemaster schematic with C1=5nF,
+ * R1=470k, R2=68k, OC44 PNP germanium transistor, R3=3.9k bypassed by C3=47uF,
+ * VR1=A10k collector-load Boost, and C4=10nF output coupling. The project has a
+ * 2N1305 germanium datasheet on hand rather than an OC44 sheet, so its hFE,
+ * leakage, and capacitance ranges are used only as a conservative Ge reference.
  */
 #include "DistrhoPlugin.hpp"
 #include "RangeBoosterParams.h"
@@ -22,9 +24,29 @@ static inline float softClip(float x)
     return std::tanh(x);
 }
 
-static inline float asymClip(float x, float posDrive, float negDrive)
+static inline float audioTaper(float v)
 {
-    return x >= 0.0f ? softClip(x * posDrive) : softClip(x * negDrive);
+    return std::pow(clamp01(v), 1.75f);
+}
+
+static inline float hpCoeff(float hz, float sr)
+{
+    const float pi = 3.14159265359f;
+    const float dt = 1.0f / sr;
+    const float rc = 1.0f / (2.0f * pi * hz);
+    return rc / (rc + dt);
+}
+
+static inline float lpCoeff(float hz, float sr)
+{
+    const float pi = 3.14159265359f;
+    return 1.0f - std::exp(-2.0f * pi * hz / sr);
+}
+
+static inline float geCommonEmitterCurve(float x, float posHeadroom, float negHeadroom)
+{
+    return x >= 0.0f ? posHeadroom * softClip(x / posHeadroom)
+                     : negHeadroom * softClip(x / negHeadroom);
 }
 
 } // namespace
@@ -38,33 +60,74 @@ class RangeBoosterCore
     float inputHpY1 = 0.0f;
     float outputHpX1 = 0.0f;
     float outputHpY1 = 0.0f;
-    float brightY = 0.0f;
-    float topY = 0.0f;
+    float millerY = 0.0f;
+    float collectorY = 0.0f;
+    float biasMemory = 0.0f;
+    float rectifiedInput = 0.0f;
 
     float inputHpA = 0.0f;
     float outputHpA = 0.0f;
-    float brightA = 0.0f;
-    float topA = 0.0f;
+    float millerA = 0.0f;
+    float collectorA = 0.0f;
+    float rectifierA = 0.0f;
+    float biasA = 0.0f;
+
+    float collectorNorm = 0.0f;
+    float stageDrive = 1.0f;
+    float posHeadroom = 0.42f;
+    float negHeadroom = 0.70f;
+    float dcBias = -0.04f;
+    float outputLevel = 1.0f;
 
     void updateFilters()
     {
-        const float dt = 1.0f / sampleRate;
+        const float pi = 3.14159265359f;
+        const float c1 = 5.0e-9f;
+        const float r1 = 470.0e3f;
+        const float r2 = 68.0e3f;
+        const float c4 = 10.0e-9f;
+        const float nextAmpInput = 470.0e3f;
 
-        // 5nF input cap into the Rangemaster bias network: intentionally
-        // high-passed, but not so thin that low guitar notes disappear.
-        const float inputHpHz = 180.0f + 610.0f * boost;
-        const float inputHpRc = 1.0f / (2.0f * 3.14159265359f * inputHpHz);
-        inputHpA = inputHpRc / (inputHpRc + dt);
+        const float pot = audioTaper(boost);
+        collectorNorm = 0.08f + 0.92f * pot;
 
-        const float outputHpHz = 58.0f + 32.0f * boost;
-        const float outputHpRc = 1.0f / (2.0f * 3.14159265359f * outputHpHz);
-        outputHpA = outputHpRc / (outputHpRc + dt);
+        // C1 feeding the R1/R2 bias ladder is the main Rangemaster treble shelf.
+        // The transistor base loads that network a little harder as collector
+        // load/gain rises, so the corner moves only slightly with Boost.
+        const float rBias = 1.0f / (1.0f / r1 + 1.0f / r2);
+        const float inputLoad = rBias * (0.96f - 0.16f * collectorNorm);
+        const float inputHpHz = 1.0f / (2.0f * pi * c1 * inputLoad);
+        inputHpA = hpCoeff(inputHpHz, sampleRate);
 
-        const float brightHz = 760.0f + 1320.0f * boost;
-        brightA = 1.0f - std::exp(-2.0f * 3.14159265359f * brightHz / sampleRate);
+        // C4 is a coupling cap into the following amp/input, not the tone shaper.
+        const float outputHpHz = 1.0f / (2.0f * pi * c4 * nextAmpInput);
+        outputHpA = hpCoeff(outputHpHz, sampleRate);
 
-        const float topHz = 6800.0f + 5200.0f * (1.0f - boost);
-        topA = 1.0f - std::exp(-2.0f * 3.14159265359f * topHz / sampleRate);
+        // Approximate OC44/2N1305 germanium capacitances. Cob is multiplied by
+        // common-emitter gain (Miller), so max Boost naturally dulls the fizz.
+        const float smallSignalGain = 8.0f + 22.0f * collectorNorm;
+        const float millerCap = 9.0e-12f + 20.0e-12f * (1.0f + smallSignalGain);
+        float millerHz = 1.0f / (2.0f * pi * 22.0e3f * millerCap);
+        if (millerHz < 7800.0f)
+            millerHz = 7800.0f;
+        if (millerHz > 21000.0f)
+            millerHz = 21000.0f;
+        millerA = lpCoeff(millerHz, sampleRate);
+
+        // A small collector/cable pole keeps the one-transistor boost bright but
+        // not metallic when it hits clean amp inputs directly.
+        collectorA = lpCoeff(15000.0f - 5200.0f * collectorNorm, sampleRate);
+
+        rectifierA = lpCoeff(42.0f, sampleRate);
+        biasA = lpCoeff(7.0f, sampleRate);
+
+        // VR1 is the A10k collector-load control. More resistance gives more gain
+        // and less clean headroom, just like turning the real Boost up.
+        stageDrive = 1.65f + 10.8f * collectorNorm;
+        posHeadroom = 0.44f - 0.11f * collectorNorm;
+        negHeadroom = 0.78f - 0.10f * collectorNorm;
+        dcBias = -0.030f - 0.044f * collectorNorm;
+        outputLevel = 0.42f + 0.82f * collectorNorm;
     }
 
     float inputHighPass(float x)
@@ -93,7 +156,7 @@ public:
     void reset()
     {
         inputHpX1 = inputHpY1 = outputHpX1 = outputHpY1 = 0.0f;
-        brightY = topY = 0.0f;
+        millerY = collectorY = biasMemory = rectifiedInput = 0.0f;
         updateFilters();
     }
 
@@ -113,29 +176,25 @@ public:
     {
         float x = inputHighPass(in);
 
-        // Treble emphasis around the transistor input. Low Boost keeps body;
-        // high Boost increasingly shifts the pedal toward focused upper mids.
-        const float low = lowPass(x, brightY, brightA);
-        const float high = x - (0.58f + 0.18f * boost) * low;
-        x = low * (0.42f - 0.20f * boost) + high * (1.10f + 1.65f * boost);
+        // Germanium leakage and bias drift are low-frequency effects. Keep them
+        // small and slow so the pedal compresses like Ge without pumping volume.
+        rectifiedInput += rectifierA * (std::fabs(x) - rectifiedInput);
+        const float targetBiasShift = -0.020f * collectorNorm * rectifiedInput;
+        biasMemory += biasA * (targetBiasShift - biasMemory);
 
-        // One germanium transistor stage. the game presets often put this in
-        // front of clean amps, so the transistor adds bite without acting like
-        // a hidden output knob.
-        const float boost2 = boost * boost;
-        const float stageGain = 1.05f + 2.05f * boost + 0.85f * boost2;
-        const float bias = -0.024f - 0.024f * boost;
-        float y = x * stageGain + bias;
-        y = asymClip(y, 0.78f + 0.55f * boost, 0.62f + 0.42f * boost);
+        const float bias = dcBias + biasMemory;
+        const float driven = x * stageDrive + bias;
+        const float idle = geCommonEmitterCurve(bias, posHeadroom, negHeadroom);
+        float y = geCommonEmitterCurve(driven, posHeadroom, negHeadroom) - idle;
 
-        // Output cap and mild top-end smoothing.
+        // Common-emitter phase inversion is musically irrelevant here, but the
+        // inverted sign keeps this stage consistent with the physical collector.
+        y = -y;
+
+        y = lowPass(y, millerY, millerA);
+        y = lowPass(y, collectorY, collectorA);
         y = outputHighPass(y);
-        y = lowPass(y, topY, topA);
-
-        // the game does not expose output level here. Keep the pedal close to
-        // unity and let Boost mostly change the emphasized frequency range.
-        const float level = 0.70f + 0.40f * boost;
-        return y * level;
+        return y * outputLevel;
     }
 };
 

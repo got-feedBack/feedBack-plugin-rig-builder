@@ -1,15 +1,22 @@
 #include "DistrhoPlugin.hpp"
 #include "Dc30Params.h"
-#include "../../_shared/guitar_amp_core.hpp"
+#include "Dc30Core.h"
 #include "../../_shared/oversampler.hpp"
 #include <cmath>
 START_NAMESPACE_DISTRHO
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
 class Dc30Plugin : public Plugin {
-    rbgtr::AmpCore<rbtube::TubeEL84> core; float fP[kParamCount];
+    dc30::Dc30Core core; float fP[kParamCount];
     rbshared::Oversampler4x os; static constexpr int kOS = rbshared::Oversampler4x::OS;
-    void applyAll(){ bool ch2=fP[kChannel]>=0.5f; float g=ch2?fP[kCh2Volume]:fP[kCh1Volume];core.configure(250e3,1e6,25e3,33e3,250e-12,22e-9,22e-9, 0.30f, 4.0f,13.0f,3500.0f,4.0f,650.0f,0.0f,8.0f,-7.5f);core.setGain(g);core.setBass(fP[kBass]);core.setMiddle(0.5f);core.setTreble(fP[kTreble]);core.setPresence(0.5f);core.setVolume(fP[kMaster]); }
+    void applyAll(){
+        core.ch2     = fP[kChannel] >= 0.5f;
+        core.pCh1Vol = fP[kCh1Volume];
+        core.pCh2Vol = fP[kCh2Volume];
+        core.pBass = fP[kBass]; core.pTreble = fP[kTreble];
+        core.pTone = fP[kTone]; core.pCut = fP[kCut]; core.pMaster = fP[kMaster];
+        core.recalc();
+    }
 public:
     Dc30Plugin() : Plugin(kParamCount,0,0){ for(int i=0;i<kParamCount;++i)fP[i]=kDc30Def[i]; core.setSampleRate(kOS*(float)getSampleRate()); applyAll(); }
 protected:
@@ -17,7 +24,7 @@ protected:
     const char* getDescription() const override { return "UnparallelDC30 — circuit-real model"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(2,0,0); }
+    uint32_t getVersion() const override { return d_version(2,1,0); }
     int64_t getUniqueId() const override { return d_cconst('U','d','3','0'); }
     void initParameter(uint32_t i, Parameter& p) override { if(i>=(uint32_t)kParamCount)return; p.hints=kParameterIsAutomatable;
         if(i==(uint32_t)kChannel||i==(uint32_t)kCabSim)p.hints|=kParameterIsBoolean;

@@ -2454,9 +2454,18 @@ const RbMegaChain = (function () {
         const exact = _mega.tones.find(t => t.tone_key === toneKey);
         if (exact) return exact;
         const wanted = String(toneKey).trim().toLowerCase();
-        return _mega.tones.find(t =>
+        const ci = _mega.tones.find(t =>
             String(t.tone_key || '').trim().toLowerCase() === wanted
-        ) || null;
+        );
+        if (ci) return ci;
+        // Last resort: strip case + separators/punctuation so the highway's tone
+        // NAME ("Reptilia Lead", "Reptilia-Lead") still matches the seeded RS Key
+        // ("Reptilia_lead"). Distinct tones (…_lead vs …_bass) normalise to
+        // different strings, so this can never cross-match the WRONG tone.
+        const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+        const wn = norm(toneKey);
+        if (!wn) return null;
+        return _mega.tones.find(t => norm(t.tone_key) === wn) || null;
     }
 
     // Mute the song's "guitar" stem so the original DI doesn't double up
@@ -2875,7 +2884,22 @@ const RbMegaChain = (function () {
                 });
                 if (!key || key === _activeToneKey) return;
                 const tone = _findToneByKey(key);
-                if (!tone) return;
+                if (!tone) {
+                    // The highway published a tone but NONE of this song's seeded
+                    // tones matched it — the cause of "wrong/no tone" (we fall back
+                    // to a default instead of the chart's actual section tone). Log
+                    // it ONCE per song so the exact key mismatch is visible.
+                    if (_mega && !_mega._loggedNoMatch) {
+                        _mega._loggedNoMatch = true;
+                        console.warn(
+                            `[rig_builder mega-chain] highway tone "${key}" did NOT match `
+                            + `any seeded tone for this song — seeded keys: `
+                            + `[${(_mega.tones || []).map(t => t.tone_key).join(', ')}]. `
+                            + `Using the default-tone fallback (the seed's RS tone Key likely `
+                            + `differs from the chart's published tone name).`);
+                    }
+                    return;
+                }
                 _applyActiveTone(tone.tone_key).then(() => {
                     rbSignalChainLoaded().catch(() => {});   // un-mute on the first real tone
                     const src = allowFirstChange ? 'first-change-or-base' : 'base';
