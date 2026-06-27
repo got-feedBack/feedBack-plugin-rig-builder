@@ -601,7 +601,7 @@ all manual ones.
 ### Native file picker
 
 `Browse…` buttons next to the two `gears.psarc` inputs (Regenerate gear map,
-Extract the game IRs) call `window.slopsmithDesktop.pickFile([...])` (the
+Extract the game IRs) call `window.feedBackDesktop.pickFile([...])` (the
 host's `dialog:pickFile` IPC — same one `audio_engine` uses) →
 `rbBrowseForPsarc`. Degrades to manual entry if no desktop bridge.
 
@@ -1186,7 +1186,7 @@ builds a native_preset with **every** NAM piece as its own type-1 stage
 *stable* sort preserves the original `slot_order` among multiple pedals in
 the same slot, e.g. Reptilia_dist's 2 pre-pedals) plus the cab IR as
 type-2. `rbListenTone` loads it straight into the native engine
-(`window.slopsmithDesktop.audio`: clearChain → loadPreset → setGain →
+(`window.feedBackDesktop.audio`: clearChain → loadPreset → setGain →
 setMonitorMute(false) → startAudio) and **logs `slotsLoaded`** to the
 console. That number vs the chain length is the verdict on whether the
 engine chains multiple NAMs:
@@ -1436,7 +1436,7 @@ back to the old wrapper (they still only apply in preview).
    - The **real DSP is compiled**, so a plugin can't change the actual
      capability: `nam_tone/wasm/nam-core.wasm` (WebAssembly) and
      `app.asar.unpacked/build/Release/slopsmith_audio.node` (native C++,
-     reached via `window.slopsmithDesktop.audio.loadPreset`). The WASM
+     reached via `window.feedBackDesktop.audio.loadPreset`). The WASM
      worklet (`nam-processor.js`) holds a **single** NAM context
      (`this._ctx`, one `_nam_load_model`) → the browser fallback is
      definitively single-NAM.

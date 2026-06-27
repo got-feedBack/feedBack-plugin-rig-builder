@@ -1,4 +1,16 @@
 // NAM Rig Builder plugin — the game tone → NAM preset mapping UI.
+
+// ── Desktop-bridge back-compat ──────────────────────────────────────────────
+// The host renamed window.slopsmithDesktop → window.feedBackDesktop
+// (got-feedback/feedBack-desktop#40). On desktop builds that still expose only
+// the legacy name, alias it so the feedBackDesktop reads below work on every
+// desktop in any release order. No-op in the browser and on the new bridge.
+try {
+    if (typeof window !== 'undefined' && !window.feedBackDesktop && window.slopsmithDesktop) {
+        window.feedBackDesktop = window.slopsmithDesktop;
+    }
+} catch (_) { /* frozen window — ignore */ }
+
 window.RB_API = window.RB_API || '/api/plugins/rig_builder';
 
 window.NAM_API = window.NAM_API || '/api/plugins/nam_tone';
@@ -182,7 +194,7 @@ function rbSetImmersiveTopbar(on) {
                     + (data.missing && data.missing.length ? ` · missing files: ${data.missing.join(', ')}` : ''));
                 // PROACTIVE TRANSIENT KILL: the bundle calls loadPreset ~1ms
                 // after we return this response. We can't monkey-patch
-                // `slopsmithDesktop.audio.loadPreset` directly because the
+                // `feedBackDesktop.audio.loadPreset` directly because the
                 // object is frozen by Electron's contextBridge (we verified
                 // this: assignments silently no-op). But the exposed methods
                 // *are* callable from here, so we mute right now — before
@@ -371,7 +383,7 @@ function rbApplyChainInputDrive(opts) {
     }
     return rbSetRouteGainsWithHost({ input: drive }, 'chain-input-drive').then((handled) => {
         if (handled) return;
-        const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const audio = window.feedBackDesktop && window.feedBackDesktop.audio;
         if (!audio || typeof audio.setGain !== 'function') return;
         return audio.setGain('input', drive).catch((e) => {
             console.warn('[rig_builder] setGain(input,', drive, ') failed:', e);
@@ -541,7 +553,7 @@ async function rbApplyChainOutputGain(opts) {
     const target = rbClampChainGainTarget(rbChainGainTargetFor(chain));
     window.__rbPendingChainGainTarget = target;
     if (await rbSetRouteGainsWithHost({ chain: target }, 'chain-output-gain')) return;
-    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const audio = window.feedBackDesktop && window.feedBackDesktop.audio;
     if (!audio || typeof audio.setGain !== 'function') return;
     return audio.setGain('chain', target).catch((e) => {
         console.warn('[rig_builder] setGain(chain,', target, ') failed:', e);
@@ -709,7 +721,7 @@ async function rbStartFinalChainNormalizer(chainSpec, opts) {
     rbStopFinalChainNormalizer();
 
     const chain = Array.isArray(chainSpec) ? chainSpec : [];
-    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const audio = window.feedBackDesktop && window.feedBackDesktop.audio;
     if (!audio || typeof audio.setGain !== 'function') return;
 
     if (rbChainHasFinalLeveler(chain)) {
@@ -902,7 +914,7 @@ async function rbSetChainMakeup(dbIn) {
     }
     const base = (typeof window.__rbChainBaseTarget === 'number') ? window.__rbChainBaseTarget : 1.0;
     if (!appliedPostLeveler && !(await rbSetRouteGainsWithHost({ chain: base * val }, 'chain-makeup'))) {
-        const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const audio = window.feedBackDesktop && window.feedBackDesktop.audio;
         if (audio && typeof audio.setGain === 'function') audio.setGain('chain', base * val).catch(() => {});
     }
     fetch(`${window.RB_API}/settings`, {
@@ -1039,7 +1051,7 @@ async function rbPreLoadMute(chainLen, targetGain, opts) {
         return;                            // coalesce rapid tone changes
     }
     _rbMuteInFlight = true;
-    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const audio = window.feedBackDesktop && window.feedBackDesktop.audio;
     if (!audio) { _rbMuteInFlight = false; return; }
     const target = pendingTarget;   // was 4 — chains can need ~20×
     // Hold the chain muted until the WHOLE chain has loaded AND the post-load
@@ -1108,9 +1120,9 @@ async function rbPreLoadMute(chainLen, targetGain, opts) {
 }
 
 // NOTE: an earlier version of this file tried to monkey-patch
-// `window.slopsmithDesktop.audio.loadPreset` to mute monitor + zero the
+// `window.feedBackDesktop.audio.loadPreset` to mute monitor + zero the
 // chain gain during load. That approach is dead: Electron's
-// contextBridge exposes `slopsmithDesktop.audio` as a frozen object —
+// contextBridge exposes `feedBackDesktop.audio` as a frozen object —
 // you can call its methods, but `api.loadPreset = function` silently
 // no-ops, so the wrap was never actually installed. We confirmed this
 // in DevTools (api.__rbWrapped stayed undefined). The transient-kill
@@ -1191,7 +1203,7 @@ async function rbPreLoadMute(chainLen, targetGain, opts) {
                 && window.slopsmith.currentSong
                 && window.slopsmith.currentSong.filename;
             if (!filename) return;
-            const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+            const api = window.feedBackDesktop && window.feedBackDesktop.audio;
             if (!api || typeof api.loadPreset !== 'function') return;
 
             const r = await rbFetchLegacyNamToneMappings(filename);
@@ -1936,7 +1948,7 @@ function rbRecordLegacyNativeLoadBridge(reason, status) {
         routeKey: RB_EFFECTS_ROUTE_KEY,
         bridgeId: 'audio-effects.legacy-native-load',
         pluginId: RB_PLUGIN_ID,
-        legacySurface: 'window.slopsmithDesktop.audio.loadPreset',
+        legacySurface: 'window.feedBackDesktop.audio.loadPreset',
         status: status || 'used',
         reason: rbShortSafeText(reason || 'Rig Builder direct Desktop loadPreset used'),
     });
@@ -2364,7 +2376,7 @@ const RbMegaChain = (function () {
     }
 
     function _api() {
-        const a = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const a = window.feedBackDesktop && window.feedBackDesktop.audio;
         return (a && typeof a.loadPreset === 'function') ? a : null;
     }
 
@@ -3639,7 +3651,7 @@ function rbRenderStudioRoom() {
     if (el.classList.contains('rb-focus-active') || el.classList.contains('rb-pfocus')) {
         el.classList.remove('rb-focus-active', 'rb-pfocus', 'rb-gfocus-pedal', 'rb-gfocus-rack', 'rb-swap-active');
         rbState._studioPedalAddMode = false;
-        try { rbTeardownVstEditor(window.slopsmithDesktop && window.slopsmithDesktop.audio); } catch (_) {}
+        try { rbTeardownVstEditor(window.feedBackDesktop && window.feedBackDesktop.audio); } catch (_) {}
     }
     const g = rbStudioGroupDefault();
     const amp = g.amp[0];
@@ -3855,7 +3867,7 @@ async function rbStudioFocusAmp(idx) {
     rbState._studioFocusIdx = idx;
     rbState._studioFocusKind = 'amp';
     const _focusStart = Date.now();   // so the canvas swap waits out the grow animation
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     const vstPath = rbEffVstPath(piece);
     const name = piece.real_name || piece.type || 'Amp';
 
@@ -3909,7 +3921,7 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
     const piece = (rbStudioCurrentChain())[idx];
     const face = faceEl;
     if (!piece || !face) return;
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     const stem = rbCanvasStem(piece);
     if (!(window.RBPedalCanvas && (window.RBPedalCanvas.has(stem) || (piece._vst_param_meta || []).length))) return;
     face.innerHTML = `<canvas class="rb-amp-face-canvas" style="width:100%;display:block;cursor:ns-resize;touch-action:none"></canvas>`;
@@ -3962,7 +3974,7 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
 
 async function rbStudioCloseFocus() {
     const room = document.getElementById('rb-studio-room');
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     const bar = document.getElementById('rb-studio-focus-bar');
     const idx = rbState._studioFocusIdx;
     const kind = rbState._studioFocusKind || 'amp';
@@ -4238,7 +4250,7 @@ function rbStudioRemovePedal() {
     const idx = rbState._studioFocusIdx;
     const arr = rbStudioCurrentChain();
     if (idx == null || idx < 0 || !arr[idx]) return;
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     try { rbTeardownVstEditor(api); } catch (_) {}
     const prevPos = rbState._studioPedalPos || 0;
     arr.splice(idx, 1);
@@ -4346,7 +4358,7 @@ async function rbStudioLoadFocusVst(idx, faceEl, growMs) {
     const room = document.getElementById('rb-studio-room');
     const piece = (rbStudioCurrentChain())[idx];
     if (!room || !piece || !faceEl) return;
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     const vstPath = rbEffVstPath(piece);
     if (!vstPath || !api) return;            // static face stays; nothing to load
     if (rbState._vstEditorBusy) return;
@@ -4765,7 +4777,7 @@ async function rbStudioFinishMonitorLoad(api, chain) {
 // — the v0.3.0 audio-effects executor routes to a song-bound route that's
 // silent with no song active). No-ops during a song preview/audition.
 async function rbStudioLoadMonitor() {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     if (!api || typeof rbLoadNativePresetPayload !== 'function') return;
     if (rbState.listeningTone != null || rbState._auditionId) return;   // a song preview/playback owns the engine
     if (rbState._studioMonitorBusy) return;                             // own flag — independent of _vstEditorBusy
@@ -6343,7 +6355,7 @@ async function rbCloseActiveVstEditor() {
     if (slot == null) return;
     rbState._vstEditorSlot = null;
     rbState._vstEditorInChain = false;
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     if (api && api.closePluginEditor) {
         try { await api.closePluginEditor(slot); } catch (_) {}
     }
@@ -6374,7 +6386,7 @@ async function rbOnLeaveRigBuilder() {
         } else if (hadEditor) {
             // The inline editor left its VST loaded in the engine; clear it so
             // it doesn't linger or get torn down under a half-closed window.
-            const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+            const api = window.feedBackDesktop && window.feedBackDesktop.audio;
             if (api && api.clearChain) await api.clearChain().catch(() => {});
         }
     } finally {
@@ -6469,7 +6481,7 @@ async function rbToneEditVst(toneIdx, pIdx) {
     if (!piece) return;
     const editor = document.getElementById(`rb-tone-vst-editor-${toneIdx}-${pIdx}`);
     if (!editor) return;
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     // Toggle close if already open — tear the editor VST down cleanly.
     if (!editor.classList.contains('hidden')) {
         editor.classList.add('hidden');
@@ -6746,7 +6758,7 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
             </div>
             <div class="text-[10px] text-gray-500 text-center mt-1">Drag a knob up/down to adjust</div>`;
         const canvas = document.getElementById(`rb-tone-vst-canvas-${toneIdx}-${pIdx}`);
-        const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const api = window.feedBackDesktop && window.feedBackDesktop.audio;
         const draw = () => {
             const model = rbCanvasParamModel(piece);   // values keyed by logical idx + name; idMap logical→real
             window.RBPedalCanvas.attach(canvas, stem, {
@@ -6808,7 +6820,7 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
 }
 
 async function rbToneSetVstParam(toneIdx, pIdx, paramId, value, valueDisplayEl) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
     if (!piece || piece._vst_slot_id == null) return;
     const v = parseFloat(value);
@@ -6858,7 +6870,7 @@ function rbDebouncedToneSave(toneIdx, pIdx) {
         const piece = rbState.songTones && rbState.songTones.tones[toneIdx]
             && rbState.songTones.tones[toneIdx].chain[pIdx];
         if (piece && piece._vst_slot_id != null) {
-            const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+            const api = window.feedBackDesktop && window.feedBackDesktop.audio;
             const opaque = await rbCaptureVstOpaqueState(api,
                 piece._vst_path || (piece.assigned && piece.assigned.vst_path));
             rbStampVstState(piece, opaque);
@@ -6871,7 +6883,7 @@ function rbDebouncedToneSave(toneIdx, pIdx) {
 }
 
 async function rbToneCaptureVstState(toneIdx, pIdx) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
     if (!piece) return;
     const editor = document.getElementById(`rb-tone-vst-editor-${toneIdx}-${pIdx}`);
@@ -7259,7 +7271,7 @@ function rbDefaultToneHasContent() {
 // SYNC the audio-effects capability so the host actually routes input through
 // it (without that select-chain dispatch the plan loads but stays silent).
 async function rbLoadDefaultTone(options) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     if (!api) return false;
     const r = await fetch(`${window.RB_API}/default_tone/native`);
     if (!r.ok) return false;
@@ -7537,7 +7549,7 @@ async function rbMasterEditVst(role, idx) {
     if (!piece) return;
     const editor = document.getElementById(`rb-master-${role}-editor-${idx}`);
     if (!editor) return;
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     // Toggle close if already open — tear the editor VST down cleanly.
     if (!editor.classList.contains('hidden')) {
         editor.classList.add('hidden');
@@ -7639,7 +7651,7 @@ function rbMasterRenderInlineVstParams(role, idx) {
             </div>
             <div class="text-[10px] text-gray-500 text-center mt-1">Drag a knob up/down to adjust</div>`;
         const canvas = document.getElementById(`rb-master-${role}-canvas-${idx}`);
-        const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const api = window.feedBackDesktop && window.feedBackDesktop.audio;
         const draw = () => {
             const model = rbCanvasParamModel(piece);
             window.RBPedalCanvas.attach(canvas, stem, {
@@ -7705,7 +7717,7 @@ function rbMasterRenderInlineVstParams(role, idx) {
 }
 
 async function rbMasterSetVstParam(role, idx, paramId, value, valueDisplayEl) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     const piece = rbState.master[role][idx];
     if (!piece || piece._vst_slot_id == null) return;
     const v = parseFloat(value);
@@ -7751,7 +7763,7 @@ function rbDebouncedMasterSave(role) {
         const piece = arr.find(p => p && p._vst_slot_id != null
             && p._vst_slot_id === rbState._vstEditorSlot);
         if (piece) {
-            const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+            const api = window.feedBackDesktop && window.feedBackDesktop.audio;
             const opaque = await rbCaptureVstOpaqueState(api,
                 piece._vst_path || (piece.assigned && piece.assigned.vst_path));
             rbStampVstState(piece, opaque);
@@ -7762,7 +7774,7 @@ function rbDebouncedMasterSave(role) {
 }
 
 async function rbMasterCaptureVstState(role, idx) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     const piece = rbState.master[role][idx];
     if (!piece) return;
     const editor = document.getElementById(`rb-master-${role}-editor-${idx}`);
@@ -8048,7 +8060,7 @@ function rbMasterApplyLibrary(role, idx, fileName, kind) {
 }
 
 async function rbMasterAssignVstPick(role, idx) {
-    const host = window.slopsmithDesktop;
+    const host = window.feedBackDesktop;
     if (!host || typeof host.pickFile !== 'function') {
         return alert('File picker not available — paste the path manually instead.');
     }
@@ -8694,7 +8706,7 @@ async function rbComputeRsMappedParams(rsGearType, rsKnobs, vstStem, paramsList)
 // message when no mapping exists for the (rs_gear, vst) pair so the user
 // knows whether to curate the table or replicate manually.
 async function rbApplyRsSettingsToVst(toneIdx, pIdx) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
     const statusEl = document.getElementById(`rb-vst-status-${toneIdx}-${pIdx}`);
     const setStatus = (m) => { if (statusEl) statusEl.textContent = m; };
@@ -8833,7 +8845,7 @@ function rbUpdatePathFromInput(toneIdx, pIdx, path) {
 // by path. Sidesteps scanPlugins entirely — engine just loads what we
 // hand it, no introspection of the install dirs required.
 async function rbPickVstFile(toneIdx, pIdx) {
-    const host = window.slopsmithDesktop;
+    const host = window.feedBackDesktop;
     const statusEl = document.getElementById(`rb-vst-status-${toneIdx}-${pIdx}`);
     const setStatus = (m) => { if (statusEl) statusEl.textContent = m; };
     if (!host || typeof host.pickFile !== 'function') {
@@ -8870,7 +8882,7 @@ async function rbLoadKnownVsts() {
     //      user who already scanned there gets plugins for free.
     //   2. Our backend filesystem cache /vst/known — persisted on our side.
     //   3. Empty list, user must click Scan.
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     const mergeByPath = (a, b) => {
         const byPath = new Map();
         for (const p of (a || [])) if (p && p.path) byPath.set(p.path, p);
@@ -8926,7 +8938,7 @@ async function rbLoadKnownVsts() {
 // separately from VST3 if available — AU scanning is the more crash-prone
 // of the two formats on macOS.
 async function rbDoVstScan(statusSetter) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     if (!api || typeof api.scanPlugins !== 'function' || typeof api.getKnownPlugins !== 'function') {
         throw new Error('Native VST hosting not available (running in WASM-only mode?)');
     }
@@ -9214,7 +9226,7 @@ async function rbRestoreSavedParamsToSlot(api, slotId, savedParams, vstPath = ''
 }
 
 async function rbLoadAndEditVst(toneIdx, pIdx) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     if (!api) return alert('Native VST hosting not available');
     const path = rbResolveStagedPath(toneIdx, pIdx);
     if (!path) return alert('Pick a plugin first (Pick file or dropdown)');
@@ -9382,7 +9394,7 @@ function rbReapplyVstParamsAfterLoad(chainSpec, delayMs) {
     const hasVst = chainSpec.some(s => s && s.type === 0);
     if (!hasVst) return;        // no point scheduling work
     setTimeout(() => {
-        const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const api = window.feedBackDesktop && window.feedBackDesktop.audio;
         if (!api) return;
         rbReapplyVstParamsToChain(api, chainSpec).catch((e) =>
             console.warn('[rig_builder] re-apply VST params (deferred):', e));
@@ -9456,7 +9468,7 @@ function rbRenderInlineVstParams(toneIdx, pIdx) {
 // "current value" display next to the slider. Also stages the new value in
 // the piece's pending params dict so Capture/Assign read it.
 async function rbSetVstParam(toneIdx, pIdx, paramId, value, valueDisplayEl) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
     if (piece._vst_slot_id == null) return;
     const v = parseFloat(value);
@@ -9496,7 +9508,7 @@ async function rbSetVstParam(toneIdx, pIdx, paramId, value, valueDisplayEl) {
 }
 
 async function rbCaptureVstState(toneIdx, pIdx) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
     const statusEl = document.getElementById(`rb-vst-status-${toneIdx}-${pIdx}`);
     if (statusEl) statusEl.textContent = 'capturing…';
@@ -9718,7 +9730,7 @@ async function rbSaveTonePreset(toneIdx, filename) {
 
 // Native desktop audio engine, or null (e.g. browser/WASM-only mode).
 function rbNativeAudio() {
-    const a = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const a = window.feedBackDesktop && window.feedBackDesktop.audio;
     return (a && typeof a.loadPreset === 'function' && typeof a.startAudio === 'function') ? a : null;
 }
 
@@ -11602,7 +11614,7 @@ async function rbCatalogUpdatePathFromInput(panelId, rsGear, path) {
 }
 
 async function rbCatalogPickFile(panelId, rsGear, currentFormat) {
-    const host = window.slopsmithDesktop;
+    const host = window.feedBackDesktop;
     const statusEl = document.getElementById(`${panelId}-status`);
     const setStatus = (m) => { if (statusEl) statusEl.textContent = m; };
     if (!host || typeof host.pickFile !== 'function') {
@@ -11644,7 +11656,7 @@ async function rbCatalogScanVsts(panelId, rsGear, curPath, curFormat) {
 }
 
 async function rbCatalogLoadAndEdit(panelId) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     if (!api) return alert('Native VST hosting not available');
     const path = rbCatalogResolveStagedPath(panelId);
     if (!path) return alert('Pick a plugin first (📁 Pick file or dropdown)');
@@ -11666,7 +11678,7 @@ async function rbCatalogLoadAndEdit(panelId) {
 }
 
 async function rbCatalogCaptureState(panelId) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     if (!api || typeof api.savePreset !== 'function') {
         return alert('savePreset() not available');
     }
@@ -11753,7 +11765,7 @@ async function rbLoadCatalogVstSuggestions(rsGearType, panelId) {
 // Use after a freshly-loaded VST so you know the slot id (returned by
 // loadVST, also visible in [rig_builder restore] logs).
 window.rbSweepParam = async function (slotId, paramName, steps) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     if (!api || typeof api.setParameter !== 'function' || typeof api.getParameters !== 'function') {
         console.error('[rb-sweep] No audio API or missing setParameter / getParameters'); return;
     }
@@ -12580,7 +12592,7 @@ async function rbExportDefaults() {
 // (same translucent-blue panel as Gear/Master) where the rig is shown as
 // draggable nodes wired with guitar cables. Multiple inputs into a node = a
 // parallel merge (the engine SUMS them); multiple outputs = a split. Live audio
-// wiring (window.slopsmithDesktop.audio.setNodeInputs) is feature-detected so it
+// wiring (window.feedBackDesktop.audio.setNodeInputs) is feature-detected so it
 // no-ops on engines without graph support; the graph is the source for the v2
 // native_preset (Phase 4 persists it).
 // ════════════════════════════════════════════════════════════════════════
@@ -13041,7 +13053,7 @@ async function rbAdvToggleBypass(id) {
     rbAdvPersist();
     // Live bypass on the engine slot (best effort — only if the monitor is loaded).
     try {
-        const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const api = window.feedBackDesktop && window.feedBackDesktop.audio;
         if (api && piece && typeof api.setBypass === 'function') {
             const slotId = await rbStudioChainSlotIdForPiece(api, n.pieceIdx);
             if (slotId != null) await api.setBypass(slotId, n.bypassed);
@@ -13084,7 +13096,7 @@ async function rbAdvEditNode(id) {
     // two editors). So ensure the meta is present, but DON'T clobber the piece's
     // already-edited _vst_params with engine reads (the amp's live slot can read
     // back at defaults, which wiped the saved knob values + lagged the image).
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     try {
         const slotId = await rbStudioChainSlotIdForPiece(api, n.pieceIdx);
         piece._vst_slot_id = slotId;
@@ -13469,7 +13481,7 @@ async function rbAdvOnPanInput(id, val) {
     const lbl = document.querySelector(`[data-adv-pan-val="${id}"]`);
     if (lbl) lbl.textContent = rbAdvPanLabel(pan);
     rbAdvPersist();
-    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const audio = window.feedBackDesktop && window.feedBackDesktop.audio;
     if (audio && typeof audio.setPan === 'function'
         && typeof n.pieceIdx === 'number' && n.pieceIdx >= 0) {
         try {
@@ -13486,7 +13498,7 @@ async function rbAdvOnPanInput(id, val) {
 // the chain behaves exactly as before. Feature-detected: a no-op on an engine
 // without setPan/setBranch (the currently shipped build), so nothing breaks there.
 async function rbStudioApplyStereoToEngine() {
-    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const audio = window.feedBackDesktop && window.feedBackDesktop.audio;
     if (!audio) return;
     const hasPan = typeof audio.setPan === 'function';
     const hasBranch = typeof audio.setBranch === 'function';
@@ -13561,7 +13573,7 @@ async function rbStudioApplyStereoToEngine() {
 // there. Engine bypass = the user's own bypass OR graph-inactive; the user's
 // _bypassed flag is left intact so reconnecting restores it.
 async function rbAdvApplyConnectivity() {
-    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const audio = window.feedBackDesktop && window.feedBackDesktop.audio;
     if (!audio) return;
     const adv = rbState._adv;
     if (!adv || !Array.isArray(adv.nodes) || !adv.nodes.length) return;
