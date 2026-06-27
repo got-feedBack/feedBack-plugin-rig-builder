@@ -1,17 +1,24 @@
 /*
  * BassFuzz - EHX Bass Big Muff Pi style model for Bass_Pedal_BassFuzz.
  *
- * Schematic blocks modeled here: input coupling, BC547 common-emitter gain
- * stages, two 1N4148 anti-parallel clipping cells, Big Muff passive tone stack,
- * the bass-version mode switch, and the TLC2264 output/buffer behavior.
+ * Reworked to the same recipe as the other fuzzes (Big Buzz / Buzz-Tone / …):
+ *   - circuit model lives DPF-free in BassFuzzCore.h,
+ *   - the nonlinear core runs OVERSAMPLED to tame clipping aliasing,
+ *   - RBAutoMakeup loudness-locks the wet output to the dry DI so the Sustain
+ *     knob changes the FUZZ, not the volume — this is what stops the synth-bass
+ *     tone from blasting over the song,
+ *   - the real Volume pot is applied AFTER makeup (defaults to ~unity).
  */
 #include "DistrhoPlugin.hpp"
 #include "BassFuzzParams.h"
-#include "../_shared/opamp.hpp"
-#include "../_shared/semiconductors.hpp"
+#include "BassFuzzCore.h"
+#include "../../_shared/oversampler.hpp"
+#include "../../_shared/automakeup.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
+
+namespace {
 
 static inline float clamp01(float v)
 {
@@ -23,133 +30,29 @@ static inline float quantize3(float v)
     return v < 0.25f ? 0.0f : (v < 0.75f ? 0.5f : 1.0f);
 }
 
-static inline float onePoleCoef(float fc, float fs)
+static inline float finalLimit(float x)
 {
-    const float c = 1.0f - std::exp(-6.2831853f * fc / fs);
-    return c < 0.0f ? 0.0f : (c > 1.0f ? 1.0f : c);
+    return std::tanh(0.98f * x);
 }
 
-static inline float audioTaper(float v)
-{
-    const float x = clamp01(v);
-    return std::pow(x, 2.15f);
-}
-
-static inline float bjtCommonEmitter(float x, float bias)
-{
-    const float shifted = x + bias;
-    const float compressed = std::tanh(shifted) - 0.18f * std::tanh(0.28f * shifted);
-    return compressed - (std::tanh(bias) - 0.18f * std::tanh(0.28f * bias));
-}
-
-class BassBigMuff
-{
-    float fs = 48000.0f;
-    float zInput = 0.0f;
-    float zCleanLow = 0.0f;
-    float zStage1 = 0.0f;
-    float zStage2 = 0.0f;
-    float zToneLow = 0.0f;
-    float zToneHigh = 0.0f;
-    float zOutDc = 0.0f;
-    float cInput = 0.0f;
-    float cCleanLow = 0.0f;
-    float cStage1 = 0.0f;
-    float cStage2 = 0.0f;
-    float cToneLow = 0.0f;
-    float cToneHigh = 0.0f;
-    float cOutDc = 0.0f;
-    float sustainGain = 55.0f;
-    float tone = 0.52f;
-    float volumeGain = 0.75f;
-    float mode = 0.0f;
-    rbshared::OpAmpStage inputBuffer;
-    rbshared::OpAmpStage outputBuffer;
-    rbcomponents::AntiParallelDiodePair clip1;
-    rbcomponents::AntiParallelDiodePair clip2;
-
-public:
-    BassBigMuff()
-    {
-        inputBuffer.setSpec(rbshared::tlc2264Spec());
-        outputBuffer.setSpec(rbshared::tlc2264Spec());
-        clip1.setSpec(rbcomponents::diode1N4148());
-        clip2.setSpec(rbcomponents::diode1N4148());
-        clip1.setSourceR(3900.0f);
-        clip2.setSourceR(3300.0f);
-    }
-
-    void setSampleRate(float s)
-    {
-        fs = s > 1000.0f ? s : 48000.0f;
-        inputBuffer.setSampleRate(fs);
-        outputBuffer.setSampleRate(fs);
-        recalcFixed();
-    }
-
-    void recalcFixed()
-    {
-        cInput = onePoleCoef(37.0f, fs);
-        cCleanLow = onePoleCoef(155.0f, fs);
-        cStage1 = onePoleCoef(6900.0f, fs);
-        cStage2 = onePoleCoef(5600.0f, fs);
-        cToneLow = onePoleCoef(520.0f, fs);
-        cToneHigh = onePoleCoef(760.0f, fs);
-        cOutDc = onePoleCoef(12.0f, fs);
-    }
-
-    void setParams(float sustain, float toneP, float volume, float bassDry)
-    {
-        sustainGain = 18.0f + 145.0f * audioTaper(sustain);
-        tone = clamp01(toneP);
-        volumeGain = 2.15f * audioTaper(volume);
-        mode = quantize3(bassDry);
-    }
-
-    float process(float x)
-    {
-        zCleanLow += cCleanLow * (x - zCleanLow);
-        const float lowTap = zCleanLow;
-
-        zInput += cInput * (x - zInput);
-        float s = inputBuffer.process(x - zInput, 1.4f);
-
-        s = bjtCommonEmitter(s * sustainGain, 0.14f);
-        s = clip1.process(s);
-        zStage1 += cStage1 * (s - zStage1);
-        s = zStage1;
-
-        s = bjtCommonEmitter(s * (5.0f + 14.0f * audioTaper(sustainGain / 163.0f)), -0.09f);
-        s = clip2.process(s);
-        zStage2 += cStage2 * (s - zStage2);
-        s = zStage2;
-
-        zToneLow += cToneLow * (s - zToneLow);
-        zToneHigh += cToneHigh * (s - zToneHigh);
-        const float low = zToneLow * 1.55f;
-        const float high = (s - zToneHigh) * 1.28f;
-        float out = low * (1.0f - tone) + high * tone;
-
-        if (mode == 0.5f)
-            out = out * 0.88f + lowTap * 0.95f;
-        else if (mode > 0.5f)
-            out = out * 0.62f + x * 0.58f + lowTap * 0.45f;
-
-        out = outputBuffer.process(out, 2.2f);
-        zOutDc += cOutDc * (out - zOutDc);
-        return (out - zOutDc) * volumeGain;
-    }
-};
+} // namespace
 
 class BassFuzzPlugin : public Plugin
 {
-    BassBigMuff L, R;
+    bassfuzz::BassBigMuffCore left;
+    bassfuzz::BassBigMuffCore right;
+    rbshared::Oversampler4x osL;
+    rbshared::Oversampler4x osR;
+    RBAutoMakeup makeupL;
+    RBAutoMakeup makeupR;
     float fParams[kParamCount];
 
-    void recalc()
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
+
+    void applyAll()
     {
-        L.setParams(fParams[kSustain], fParams[kTone], fParams[kVolume], fParams[kBassDry]);
-        R.setParams(fParams[kSustain], fParams[kTone], fParams[kVolume], fParams[kBassDry]);
+        left.setParams(fParams[kSustain], fParams[kTone], fParams[kBassDry]);
+        right.setParams(fParams[kSustain], fParams[kTone], fParams[kBassDry]);
     }
 
 public:
@@ -159,9 +62,11 @@ public:
         for (int i = 0; i < kParamCount; ++i)
             fParams[i] = kBassFuzzDef[i];
         const float sr = (float)getSampleRate();
-        L.setSampleRate(sr);
-        R.setSampleRate(sr);
-        recalc();
+        left.setSampleRate(kOS * sr);
+        right.setSampleRate(kOS * sr);
+        makeupL.setSampleRate(sr);
+        makeupR.setSampleRate(sr);
+        applyAll();
     }
 
 protected:
@@ -169,7 +74,7 @@ protected:
     const char* getDescription() const override { return "Bass Big Muff Pi fuzz"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('R', 'B', 'F', 'z'); }
 
     void initParameter(uint32_t i, Parameter& p) override
@@ -194,14 +99,24 @@ protected:
         if (i >= (uint32_t)kParamCount)
             return;
         fParams[i] = (i == (uint32_t)kBassDry) ? quantize3(v) : clamp01(v);
-        recalc();
+        applyAll();
+        // Re-level fast while a knob is moving (no steady-state bias).
+        makeupL.snap();
+        makeupR.snap();
     }
 
     void sampleRateChanged(double r) override
     {
-        L.setSampleRate((float)r);
-        R.setSampleRate((float)r);
-        recalc();
+        const float sr = (float)r;
+        osL.reset();
+        osR.reset();
+        left.reset();
+        right.reset();
+        left.setSampleRate(kOS * sr);
+        right.setSampleRate(kOS * sr);
+        makeupL.setSampleRate(sr);
+        makeupR.setSampleRate(sr);
+        applyAll();
     }
 
     void run(const float** in, float** out, uint32_t frames) override
@@ -210,10 +125,31 @@ protected:
         const float* iR = in[1];
         float* oL = out[0];
         float* oR = out[1];
+        // Volume pot applied AFTER makeup. 1.35 (was 1.6) seats the pedal ~1.5 dB
+        // under the DI at the default so the synth-bass fuzz sits just below the
+        // mix instead of right at it.
+        const float volume = 1.35f * fParams[kVolume];
+        float ubL[kOS];
+        float ubR[kOS];
+
         for (uint32_t i = 0; i < frames; ++i)
         {
-            oL[i] = L.process(iL[i]);
-            oR[i] = R.process(iR[i]);
+            const float dryL = iL[i];
+            const float dryR = iR[i];
+
+            osL.upsample(dryL, ubL);
+            osR.upsample(dryR, ubR);
+            for (int k = 0; k < kOS; ++k)
+            {
+                ubL[k] = left.process(ubL[k]);
+                ubR[k] = right.process(ubR[k]);
+            }
+            const float wetL = osL.downsample(ubL);
+            const float wetR = osR.downsample(ubR);
+
+            // Loudness-lock wet→dry, then the real Volume pot, then a soft peak limit.
+            oL[i] = finalLimit(makeupL.process(dryL, wetL) * volume);
+            oR[i] = finalLimit(makeupR.process(dryR, wetR) * volume);
         }
     }
 

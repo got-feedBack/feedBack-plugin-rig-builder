@@ -20,7 +20,7 @@ electronics equations.
 | `Pedal_FuzzWasHe` | `BZ-1.vst3` | Boss FZ-3 style silicon fuzz | `pedals/Fuzz Was He.pdf` / Aion Argent | Reworked with real Fuzz/Tone/Volume controls |
 | `Pedal_BuzzToo` | `Big Buzz.vst3` | Big Muff V1 / triangle-era topology | `pedals/buzz 2.jpg` | Reworked with real Sustain/Tone/Volume controls |
 | `Pedal_BuzzOne` | `Super-Buzz.vst3` | Univox Super-Fuzz octave fuzz | `pedals/buzz 1.gif` | Reworked with real Expander/Tone SW/Balance controls |
-| `Bass_Pedal_BassFuzz` | `Bass Big Buzz.vst3` | Bass Big Muff style | existing source note; bass pedal | Leave for bass pass unless asked |
+| `Bass_Pedal_BassFuzz` | `Bass Big Buzz.vst3` | Bass Big Muff style | existing source note; bass pedal | Reworked: core moved to `BassFuzzCore.h` (DPF-free), 2x oversampled, **RBAutoMakeup** loudness-locks wet→dry so Sustain no longer changes level (offline sweep: output −0.3 dB vs DI, flat across Sustain 0→1). Volume applied post-makeup. Fixes the synth-bass tone blasting over the song. Installed/signed locally to `Bass Big Buzz.vst3` + `BassFuzz.vst3`. |
 
 ## Pattern Used For Buzz-Tone
 
