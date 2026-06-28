@@ -42,7 +42,7 @@ class Or100Plugin : public Plugin {
 
     void cfg(){
         core.setTone(250e3, 470e3, 25e3, 33e3, 250e-12, 22e-9, 22e-9);
-        core.cfgDirtySpan = 6.5f; core.cfgNStages = 2; core.cfgHpDirty = 72.0f;   // 100W = fuller lows
+        core.cfgDirtySpan = 11.0f; core.cfgNStages = 4; core.cfgHpDirty = 72.0f;  // deep cascade -> grind at max; 100W fuller lows
         core.cfgBias = -38.0f; core.cfgPwDrive = 4.0f; core.cfgTilt = 6.0f; core.cfgScoop = -1.0f;  // mid-forward
     }
     void applyAll(){
@@ -51,19 +51,20 @@ class Or100Plugin : public Plugin {
         core.pGain=fP[kGain]; core.pBass=fP[kBass]; core.pMid=fP[kMiddle]; core.pTreble=fP[kTreble];
         core.pPres=0.5f; core.pVol=fP[kVolume];
         core.inBoost   = half ? 1.3f : 1.0f;
-        core.cfgPwDrive = half ? 6.0f : 4.0f;
+        core.cfgPwDrive = half ? 7.0f : 6.0f;               // power-amp squash = grind at max
         core.cfgOt      = half ? 9000.0f : 11000.0f;
-        core.cfgMkDirty = (half ? -6.0f : -4.0f);            // ~-16 dBFS
+        core.cfgMkDirty = (half ? -9.5f : -8.0f);           // ~-16 dBFS (pwDrive + dark cab)
         core.recalc();
 
         // Thick/boomy OR120 voice -> a gentler low-shelf cut than the OR50; DEPTH
         // (the bass-cap rotary) low shelf from tight (-4) to fat (+4).
+        // Dark + boomy + mid-scooped, like the OR50 family (same amp, just 100W).
         cabOn = fP[kCabSim] >= 0.5f;
-        cabHP.highpass(osr, 75.0f, 0.70f);
-        cabLowShelf.lowShelf(osr, 300.0f, -3.0f);
+        cabHP.highpass(osr, 65.0f, 0.70f);
+        cabLowShelf.lowShelf(osr, 320.0f, -1.0f);            // keep the boom
         cabDepth.lowShelf(osr, 130.0f, (fP[kDepth]-0.5f)*8.0f);
-        cabPresence.peak(osr, 2600.0f, 4.0f, 0.55f);
-        cabTopRoll.lowpass(osr, half ? 6500.0f : 8000.0f, 0.70f);
+        cabPresence.peak(osr, 1700.0f, -5.0f, 0.9f);         // mid SCOOP
+        cabTopRoll.lowpass(osr, half ? 3300.0f : 3800.0f, 0.70f);   // DARK
     }
 public:
     Or100Plugin() : Plugin(kParamCount,0,0){ for(int i=0;i<kParamCount;++i)fP[i]=kOr100Def[i];

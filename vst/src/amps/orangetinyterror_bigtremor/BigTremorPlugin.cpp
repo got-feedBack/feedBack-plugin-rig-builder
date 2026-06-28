@@ -52,14 +52,16 @@ class BigTremorPlugin : public Plugin {
         core.inBoost   = half ? 1.3f : 1.0f;                 // 7W breaks up earlier
         core.cfgPwDrive = half ? 5.0f : 3.5f;                // 7W slams the EL84 harder
         core.cfgOt      = half ? 9000.0f : 11000.0f;         // 7W softer/darker
-        core.cfgMkDirty = (half ? -10.5f : -9.0f);           // ~-16 dBFS
+        core.cfgMkDirty = (half ? -7.5f : -6.0f);            // ~-16 dBFS (dark cab loses level)
         core.recalc();
 
+        // The REAL Tiny Terror is DARK + heavily mid-scooped + tight (ref tinyterr_gain_*:
+        // hm ~-6.5, hi ~-19, lo ~0, crest ~8) — NOT bright. Dark cab + a deep mid scoop.
         cabOn = fP[kCabSim] >= 0.5f;
-        cabHP.highpass(osr, 85.0f, 0.70f);
-        cabLowShelf.lowShelf(osr, 240.0f, -4.0f);
-        cabPresence.peak(osr, 3000.0f, 4.0f, 0.55f);         // V30 bite
-        cabTopRoll.lowpass(osr, half ? 6000.0f : 7500.0f, 0.70f);
+        cabHP.highpass(osr, 120.0f, 0.70f);                  // tight lows (ref lo ~0)
+        cabLowShelf.lowShelf(osr, 300.0f, -7.0f);
+        cabPresence.peak(osr, 1600.0f, -4.0f, 0.9f);         // mid SCOOP (ref hm ~-6.5)
+        cabTopRoll.lowpass(osr, half ? 2900.0f : 3300.0f, 0.70f);   // DARK (ref hi ~-19)
     }
 public:
     BigTremorPlugin() : Plugin(kParamCount,0,0){ for(int i=0;i<kParamCount;++i)fP[i]=kBigTremorDef[i];

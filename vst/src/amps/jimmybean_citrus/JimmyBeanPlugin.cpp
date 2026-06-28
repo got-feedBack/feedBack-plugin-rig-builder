@@ -245,18 +245,33 @@ public:
 
         y = dcBlock2.process(y);
 
-        // Loudness normalization: SUSTAIN adds dirt + level, so cleanMakeup carries
-        // the low-SUSTAIN compensation and the level settles flat-ish (~-14 dBFS)
-        // across the SUSTAIN sweep. toneEnergy keeps big BASS/TREBLE/BRIGHT boosts
-        // from running the shared kLvl stage hot.
+        // Output makeup: near-LINEAR so the CLEAN channel stays CLEAN. The old
+        // softClip(y*level) ran a ~4.4x tanh on the clean signal -> ~36% THD and
+        // crest 5 (a fuzz, not a clean solid-state amp). Now the gain is mostly
+        // linear and only a transparent soft knee touches the peaks; ALL the dirt
+        // comes from SUSTAIN. toneEnergy keeps big EQ/BRIGHT boosts off the knee;
+        // volNorm keeps the master VOLUME roughly loudness-normalised.
         const float toneEnergy = 1.0f
             + 0.030f * std::fabs((bass - 0.5f) * 16.0f)
             + 0.018f * std::fabs((treble - 0.5f) * 16.0f)
-            + (bright >= 0.5f ? 0.06f : 0.0f)
-            + 1.85f * sus * sus + 0.35f * sus;
-        const float cleanMakeup = 1.0f + 2.4f * std::exp(-sustain / 0.30f);
-        const float level = (1.32f * cleanMakeup) / ((0.70f + 0.55f * smoothstep(volume)) * toneEnergy);
-        y = softClip(y * level) * 0.97f;
+            + (bright >= 0.5f ? 0.06f : 0.0f);
+        const float volNorm = 0.70f + 0.55f * smoothstep(volume);
+        // Near-LINEAR makeup: the raw pre-makeup signal is fully clean (guitar
+        // crest ~20), so keep the gain modest and let only the very top peaks
+        // reach the soft knee. ALL the dirt comes from SUSTAIN, which already
+        // adds level+compression, so trim the makeup as it climbs.
+        // The SUSTAIN block adds level ~quadratically (more clip = more RMS), so
+        // the makeup drops along a quadratic fit to keep the swept loudness flat
+        // (~-16.5 dBFS) from clean to full sustain.
+        const float makeup = (1.26f - 1.91f * sus + 0.95f * sus * sus) / (toneEnergy * volNorm);
+        y *= makeup;
+        // transparent soft knee: clean below +/-0.85, gentle tanh ceiling to 0.99
+        // (only the dynamic peaks get limited, the body of the note stays clean).
+        {
+            const float a = std::fabs(y);
+            if (a > 0.85f)
+                y = (y < 0.0f ? -1.0f : 1.0f) * (0.85f + 0.14f * std::tanh((a - 0.85f) / 0.14f));
+        }
 
         // TREMOLO = an amplitude LFO on the output. SPEED = rate 2..8 Hz via a
         // per-sample phase accumulator (no Date/rand). DEPTH = amount; 0 = OFF.
@@ -335,8 +350,8 @@ protected:
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = rbAmpLvl(0.280f * left.process(3.2f * inL[i]));
-            outR[i] = rbAmpLvl(0.280f * right.process(3.2f * inR[i]));
+            outL[i] = rbAmpLvl(0.62f * left.process(2.6f * inL[i]));
+            outR[i] = rbAmpLvl(0.62f * right.process(2.6f * inR[i]));
         }
     }
 

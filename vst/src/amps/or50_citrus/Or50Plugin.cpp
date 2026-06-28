@@ -42,8 +42,8 @@ class Or50Plugin : public Plugin {
 
     void cfg(){
         core.setTone(250e3, 470e3, 25e3, 33e3, 250e-12, 22e-9, 22e-9);
-        core.cfgDirtySpan = 6.5f; core.cfgNStages = 2; core.cfgHpDirty = 78.0f;
-        core.cfgBias = -38.0f; core.cfgPwDrive = 3.5f; core.cfgTilt = 6.0f; core.cfgScoop = -1.0f;  // mid-forward
+        core.cfgDirtySpan = 11.0f; core.cfgNStages = 4; core.cfgHpDirty = 78.0f;  // deep cascade -> grind at max
+        core.cfgBias = -38.0f; core.cfgPwDrive = 6.0f; core.cfgTilt = 6.0f; core.cfgScoop = -1.0f;  // power-amp squash
     }
     void applyAll(){
         const bool half = fP[kHalf] >= 0.5f;     // FULL(0) / HALF power
@@ -53,17 +53,20 @@ class Or50Plugin : public Plugin {
         core.inBoost   = half ? 1.3f : 1.0f;                 // HALF breaks up earlier
         core.cfgPwDrive = half ? 5.0f : 3.5f;
         core.cfgOt      = half ? 9000.0f : 11000.0f;         // HALF softer/darker
-        core.cfgMkDirty = (half ? -5.0f : -3.0f);            // ~-16 dBFS
+        core.cfgMkDirty = (half ? -5.0f : -3.5f);            // ~-16 dBFS (dark cab loses level)
         core.recalc();
 
         // DEPTH = the bass-cap rotary (low-end voicing), was DEAD: a 130 Hz low shelf
         // from tight (-4) to fat (+4).
+        // The REAL OR50 (ref or50_gain_*) is BOOMY + heavily mid-scooped + DARK +
+        // compressed (lo ~+6, hm ~-8, hi ~-19, crest ~6) — the vintage "doom chunk".
+        // Keep the big lows (barely cut), a deep mid scoop, a dark top.
         cabOn = fP[kCabSim] >= 0.5f;
-        cabHP.highpass(osr, 80.0f, 0.70f);
-        cabLowShelf.lowShelf(osr, 300.0f, -5.0f);            // tame the boomy raw EL34 lows
+        cabHP.highpass(osr, 68.0f, 0.70f);
+        cabLowShelf.lowShelf(osr, 320.0f, -1.0f);            // keep the boom (ref lo +6)
         cabDepth.lowShelf(osr, 130.0f, (fP[kDepth]-0.5f)*8.0f);
-        cabPresence.peak(osr, 2600.0f, 4.0f, 0.55f);
-        cabTopRoll.lowpass(osr, half ? 6500.0f : 8000.0f, 0.70f);
+        cabPresence.peak(osr, 1700.0f, -6.0f, 0.9f);         // deep mid SCOOP (ref hm -8)
+        cabTopRoll.lowpass(osr, half ? 3000.0f : 3500.0f, 0.70f);   // DARK (ref hi -19)
     }
 public:
     Or50Plugin() : Plugin(kParamCount,0,0){ for(int i=0;i<kParamCount;++i)fP[i]=kOr50Def[i];

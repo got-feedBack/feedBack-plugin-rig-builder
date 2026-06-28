@@ -151,9 +151,14 @@ struct Dc30Core {
 
         // Loudness flattening (plugin-level), per channel, decreasing with drive ->
         // ~-16 dBFS cranked, clean stays quieter. (Same method as BoxDC30 gcDb.)
+        // ⚠️ Low channel Volume collapses the preamp ~50 dB (clean + quiet, as a real
+        // amp does) -> the OLD makeup (cap +24, gentle curve) left it inaudible (~-43
+        // dBFS = "no suena a ganancia baja"). A MUCH steeper curve + a +42 cap pulls the
+        // quiet low-Vol settings up to audible while the cranked top stays ~-16.
         const float dv = ch2 ? pCh2Vol : pCh1Vol;
-        float gcDb = (ch2 ? 35.5f : 34.86f) - 97.05f*dv + 57.68f*dv*dv;
-        if (gcDb > 24.0f) gcDb = 24.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
+        float gcDb = ch2 ? (37.0f - 88.0f*dv + 52.0f*dv*dv)
+                         : (52.0f - 120.0f*dv + 66.0f*dv*dv);
+        if (gcDb > 42.0f) gcDb = 42.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
         return x * std::pow(10.0f, 0.05f * gcDb);
     }
 };

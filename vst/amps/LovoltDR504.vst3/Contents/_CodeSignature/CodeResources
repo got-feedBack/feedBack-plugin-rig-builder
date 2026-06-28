@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/LovoltDR504.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			DexVxkJ4aKhsBfuPRyKuTt2mduttwVarirxucvhKvxs=
+			</data>
+		</dict>
+		<key>x86_64-win/LovoltDR504.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			UccpboLL/Otp+BV6qNRiBO7WOvoP6IYQgrnD6Oe9IYg=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

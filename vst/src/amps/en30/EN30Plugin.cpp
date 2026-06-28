@@ -23,15 +23,32 @@ START_NAMESPACE_DISTRHO
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
 
+// Minimal peaking biquad for the Top-Boost upper-mid scoop (en30-only — keeps the
+// shared BoxDC30Core / DC30 untouched).
+struct En30Bq {
+    float b0=1,b1=0,b2=0,a1=0,a2=0,x1=0,x2=0,y1=0,y2=0;
+    inline float process(float x){ float y=b0*x+b1*x1+b2*x2-a1*y1-a2*y2; x2=x1;x1=x;y2=y1;y1=y; return y; }
+    void reset(){ x1=x2=y1=y2=0; }
+    void peak(float sr,float f,float dB,float Q){ if(dB==0.0f||sr<1000.0f){b0=1;b1=b2=a1=a2=0;return;} if(f>sr*0.49f)f=sr*0.49f;
+        const float pi=3.14159265358979f, A=std::pow(10.f,dB/40.f),w=2*pi*f/sr,c=std::cos(w),s=std::sin(w),al=s/(2*Q),a0=1+al/A;
+        b0=(1+al*A)/a0; b1=-2*c/a0; b2=(1-al*A)/a0; a1=-2*c/a0; a2=(1-al/A)/a0; }
+};
+
 class EN30Plugin : public Plugin
 {
     boxdc30::BoxDC30Core core;
     float params[kParamCount];
     rbshared::Oversampler4x os;                 // 4x anti-alias around the nonlinear chain
     static constexpr int kOS = rbshared::Oversampler4x::OS;
+    float osr = 96000.0f;
+    En30Bq scoop;                               // Top-Boost upper-mid scoop (ref consensus)
 
     void applyAll()
     {
+        // The AC30 Top Boost is upper-mid scooped (the ac30 reference is hm ~-5; the
+        // UAD "ruby" ref ~0) -> a gentle ~1.7 kHz dip that scales with the Top Boost
+        // weight (Input): Normal flat, Top Boost the full scoop. Lands hm ~-3 (consensus).
+        scoop.peak(osr, 1850.0f, -4.0f * params[kInput], 1.15f);
         core.setNormalVol(params[kNormalVol]);
         core.setTBVol(params[kTBVol]);
         core.setTreble(params[kTreble]);
@@ -53,7 +70,8 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kEN30Def[i];
-        core.setSampleRate(kOS * (float)getSampleRate());
+        osr = kOS * (float)getSampleRate();
+        core.setSampleRate(osr);
         applyAll();
     }
 
@@ -92,7 +110,8 @@ protected:
 
     void sampleRateChanged(double newSampleRate) override
     {
-        core.setSampleRate(kOS * (float)newSampleRate);
+        osr = kOS * (float)newSampleRate;
+        core.setSampleRate(osr);
         os.reset();
         applyAll();
     }
@@ -106,8 +125,8 @@ protected:
         {
             float ub[kOS];
             os.upsample(3.2f * in0[i], ub);
-            for (int k = 0; k < kOS; ++k)                  // core + output soft-clip at 4x
-                ub[k] = rbAmpLvl(0.891f * core.process(ub[k]));
+            for (int k = 0; k < kOS; ++k)                  // core + Top-Boost scoop + soft-clip at 4x
+                ub[k] = rbAmpLvl(0.891f * scoop.process(core.process(ub[k])));
             const float y = os.downsample(ub);
             outL[i] = y;
             outR[i] = y;   // dual-mono: one core, same signal both sides = centered/balanced

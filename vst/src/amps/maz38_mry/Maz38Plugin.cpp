@@ -39,7 +39,7 @@ class Maz38Plugin : public Plugin {
         // -> the "Vox-meets-Fender" voice). The old config used Marshall-ish values
         // (1M bass / 33k slope / 22n / 22n) which is the wrong family. EL84 power, -7.5V.
         core.configure(250e3,250e3,10e3,56e3, 250e-12,100e-9,47e-9,
-                       0.30f, 5.0f, -2.5f, 3000.0f, 4.0f, 650.0f, 0.0f, 8.0f, -7.5f);
+                       0.30f, 11.0f, -5.0f, 3000.0f, 4.0f, 650.0f, 0.0f, 8.0f, -7.5f);  // span 11 = more breakup at max; makeup -5 -> ~-16
         core.setGain(fP[kVolume]);
         core.setBass(fP[kBass]); core.setMiddle(fP[kMiddle]); core.setTreble(fP[kTreble]);
         core.setPresence(0.5f); core.setVolume(fP[kMaster]);

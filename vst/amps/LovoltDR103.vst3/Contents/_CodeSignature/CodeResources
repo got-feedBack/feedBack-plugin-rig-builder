@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/LovoltDR103.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			vx1ZEnssg1bcmCgGzJw4tGwMqH7WqHBHlSROEftVXC4=
+			</data>
+		</dict>
+		<key>x86_64-win/LovoltDR103.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			p49h3/zvnM9vvTVgyrjSrAjzmVFPv5tHGDes2qc6irY=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

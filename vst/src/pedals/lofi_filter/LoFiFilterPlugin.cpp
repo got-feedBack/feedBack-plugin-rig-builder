@@ -145,7 +145,7 @@ class LoFiFilterCore
         hiStageB.setLowPass(sampleRate, highCut * 0.76f + 350.0f, q * 0.82f);
 
         const float center = std::sqrt(lowCut * highCut);
-        bandPeak.setBandPass(sampleRate, center, 1.05f + 2.80f * d);
+        bandPeak.setBandPass(sampleRate, center, 0.70f + 0.85f * d);   // low Q -> no resonant ringing ("ruido raro")
         outputLow.setLowPass(sampleRate, 7600.0f - 2200.0f * d, 0.68f);
 
         const float hpHz = 24.0f;
@@ -229,37 +229,40 @@ public:
         float x = inputHp.process(in);
         x = preLow.process(x);
 
-        const float driveGain = 1.02f + 5.45f * d;
+        // Drive is a SUBTLE level/grit, NOT a distortion (user: "super level, casi no
+        // distorsiona"): a gentle input gain + a soft near-linear knee, no hard clip.
+        // Drive is a SUBTLE level/texture control, NOT a distortion. The user
+        // wants it to behave like a clean "level" knob ("no debería distorsionar
+        // casi nada"): a small clean gain + an almost-linear soft knee that only
+        // grazes saturation at the very top of the travel.
+        const float driveGain = 1.0f + 0.40f * d;
         float driven = x * driveGain;
-        const float diode = std::tanh(driven * (0.82f + 0.35f * d));
-        const float asym = std::tanh((driven + 0.10f * d) * (1.45f + 0.65f * d)) - 0.055f * d;
-        driven = lerp(diode, asym, 0.34f + 0.38f * d);
+        driven = lerp(driven, std::tanh(driven), 0.06f * d);
 
         float filtered = loStageA.process(driven);
         filtered = loStageB.process(filtered);
         filtered = hiStageA.process(filtered);
         filtered = hiStageB.process(filtered);
 
-        const float peak = bandPeak.process(driven) * (0.22f + 0.72f * d);
-        float wet = filtered * (0.80f + 0.18f * d) + peak;
+        // Gentle low-Q resonant colour, kept quiet so it never rings as a
+        // background tone ("ruido raro de fondo").
+        const float peak = bandPeak.process(driven) * (0.08f + 0.10f * d);
+        float wet = filtered * (0.90f + 0.06f * d) + peak;
 
-        const float fold = std::sin(wet * (1.2f + 1.55f * d)) * (0.04f + 0.12f * d);
-        wet = wet + fold;
-
-        if (holdPeriod > 1)
-            wet = lerp(wet, sampleHold(wet), 0.20f + 0.34f * d);
-
-        const float bits = 14.0f - 6.4f * d;
+        // No sample-hold downsampling (it was the aliasing "ruido raro de fondo").
+        // Near-transparent bit reduction — only a hint of lo-fi flavour at max.
+        const float bits = 16.0f - 1.0f * d;
         const float levels = std::pow(2.0f, bits);
         wet = std::floor(wet * levels + (wet >= 0.0f ? 0.5f : -0.5f)) / levels;
         wet = outputLow.process(wet);
 
         // Lofinator is an inline filter, not a wet/dry blend. Keep a tiny
         // direct leakage to mimic op-amp feedthrough and preserve attack.
-        float y = wet * (0.88f + 0.20f * d) + in * (0.045f + 0.025f * (1.0f - d));
+        float y = wet * (0.92f + 0.06f * d) + in * 0.04f;
         y = removeDc(y);
-        const float outputTrim = (0.10f + 1.34f * clamp01(level)) / (1.0f + 0.20f * d);
-        y = std::tanh(y * 0.92f) * outputTrim;
+        // Near-linear makeup with only a gentle safety limiter (no audible clip).
+        const float outputTrim = 0.55f + 1.50f * clamp01(level);
+        y = std::tanh(y * 0.80f) * outputTrim;
         return y;
     }
 };

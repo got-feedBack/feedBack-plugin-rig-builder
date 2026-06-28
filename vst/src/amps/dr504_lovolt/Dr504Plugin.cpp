@@ -176,18 +176,19 @@ class Dr504Core
         inputHp.setHighPass(sampleRate, 40.0f + 30.0f * g, 0.70f);
         pickupLoad.setLowPass(sampleRate, 17500.0f - 1200.0f * pushed + 800.0f * treble, 0.64f);
         brightCapShelf.setHighShelf(sampleRate, 1500.0f + 1100.0f * treble, 0.70f, -0.8f + 5.2f * bright + 1.6f * pres);
-        brightBody.setPeaking(sampleRate, 680.0f + 360.0f * mid, 0.80f, -0.4f + 2.2f * mid);
+        brightBody.setPeaking(sampleRate, 700.0f + 250.0f * mid, 0.60f, -0.1f + 0.9f * mid);   // gentler (was -0.4..+1.8, boxy)
         normalBody.setPeaking(sampleRate, 120.0f + 40.0f * bass, 0.70f, 3.0f + 2.2f * bass - 0.8f * pushed);   // Normal channel = fuller lows than Brilliant
 
         interstageHp.setHighPass(sampleRate, 52.0f + 50.0f * pushed, 0.70f);
         cathodeLp.setLowPass(sampleRate, 14000.0f + 1500.0f * treble - 1100.0f * pushed, 0.64f);
         // Hiwatt tone stack — CIRCUIT-REAL (Yeh, real R/C from the hwpre1 schematic):
         // Treble 250k/250pF, Bass 500k/22nF, Mid 100k/22nF (the big Hiwatt mid), slope 56k.
-        toneStack.setComponents(250e3, 500e3, 100e3, 56e3, 250e-12, 22e-9, 22e-9);
-        toneStack.update(sampleRate, treble, mid, bass);
+        toneStack.setComponents(250e3, 500e3, 47e3, 56e3, 250e-12, 22e-9, 22e-9);   // Mid pot 100k->47k: tame the over-wide/boxy Middle
+        toneStack.update(sampleRate, treble, 0.28f + 0.46f * mid, bass);            // compress the Middle knob range (was full 0..1 = filters/boosts too much)
         stackMakeupLow.setLowShelf(sampleRate, 120.0f + 30.0f * bass, 0.72f, eqDb(bass, 1.5f));
-        // the famous Hiwatt strong mids (100K mid pot) — a gentle upper-mid push
-        stackMakeupBody.setPeaking(sampleRate, 620.0f + 180.0f * mid, 0.62f, -0.6f + 4.6f * mid);
+        // the Hiwatt mids — a GENTLE upper-mid push (was -0.6..+4.0 dB = the boxy
+        // "en lata" resonant ~700 Hz peak the user heard; now ±~1.5 dB, wider Q).
+        stackMakeupBody.setPeaking(sampleRate, 640.0f + 160.0f * mid, 0.50f, -0.3f + 1.8f * mid);
         phaseLp.setLowPass(sampleRate, 14000.0f + 1500.0f * treble + 900.0f * pres - 2000.0f * pushed, 0.64f);
         presenceShelf.setHighShelf(sampleRate, 2600.0f + 900.0f * pres, 0.78f, -3.6f + 8.4f * pres + 0.9f * treble);
 

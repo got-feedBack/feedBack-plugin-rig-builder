@@ -80,8 +80,8 @@ class RumbleverbPlugin : public Plugin {
         cabOn = fP[kCabSim] >= 0.5f;
         cabHP.highpass(osr, 85.0f, 0.70f);
         cabLowShelf.lowShelf(osr, 240.0f, -4.0f);
-        cabPresence.peak(osr, 3300.0f, 4.0f, 0.55f);
-        cabTopRoll.lowpass(osr, 7800.0f, 0.70f);
+        cabPresence.peak(osr, 3000.0f, 2.0f, 0.6f);
+        cabTopRoll.lowpass(osr, 5200.0f, 0.70f);     // darker -> ref rockerverb_gain_7 hi ~-11
     }
 public:
     RumbleverbPlugin() : Plugin(kParamCount,0,0){ for(int i=0;i<kParamCount;++i)fP[i]=kRumbleverbDef[i];
