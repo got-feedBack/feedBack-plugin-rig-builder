@@ -91,11 +91,16 @@ class RangeBoosterCore
         const float pot = audioTaper(boost);
         collectorNorm = 0.08f + 0.92f * pot;
 
-        // C1 feeding the R1/R2 bias ladder is the main Rangemaster treble shelf.
-        // The transistor base loads that network a little harder as collector
-        // load/gain rises, so the corner moves only slightly with Boost.
+        // C1 into the R1/R2 bias ladder IN PARALLEL WITH the OC44 base input
+        // impedance (hie) is the Rangemaster treble shelf — its defining bass cut.
+        // The emitter is bypassed (R3/C3) so the base looks ~hie = beta*re; the OC44
+        // runs at a low (~50-100uA) bias current -> high hie (~85k), which sits across
+        // R1||R2 (59k) and pulls the high-pass corner up to ~900 Hz (a TRUE treble
+        // booster). Modelling R1||R2 alone parked it ~560 Hz = too bassy / not bright.
         const float rBias = 1.0f / (1.0f / r1 + 1.0f / r2);
-        const float inputLoad = rBias * (0.96f - 0.16f * collectorNorm);
+        const float hie = 85.0e3f;                          // OC44 base input impedance (emitter bypassed)
+        const float rBaseNode = (rBias * hie) / (rBias + hie);
+        const float inputLoad = rBaseNode * (0.96f - 0.16f * collectorNorm);
         const float inputHpHz = 1.0f / (2.0f * pi * c1 * inputLoad);
         inputHpA = hpCoeff(inputHpHz, sampleRate);
 
