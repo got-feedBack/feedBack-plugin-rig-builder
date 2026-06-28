@@ -252,7 +252,11 @@ public:
             + 0.012f * std::fabs(((o2W ? od2Mid : clMid) - 0.5f) * 16.0f)
             + 0.012f * std::fabs(((o2W ? od2Treble : clTreble) - 0.5f) * 16.0f);
         const float level = 0.88f / ((1.0f + 0.55f * lvl) * toneEnergy);
-        return softClip(y * level) * 0.97f;
+        // Per-channel POST makeup (after the power-amp softClip, so it does NOT add
+        // clipping to the clean) -> all three channels land ~-16 dBFS at the operating
+        // point. Clean is intrinsically the quietest (least gain) -> the biggest boost.
+        const float postGain = o2W ? 1.67f : (o1W ? 1.91f : 3.7f);
+        return softClip(y * level) * postGain;
     }
 };
 

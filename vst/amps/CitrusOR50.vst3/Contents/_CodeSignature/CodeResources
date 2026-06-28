@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/CitrusOR50.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			HwP16OMbQGPpDkgJXm0uUDg0NXQOba5w0Pu9v7aJU5k=
+			</data>
+		</dict>
+		<key>x86_64-win/CitrusOR50.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			YCw4+Xe/biYjEXuHJBFyhuFm/Fw9e4dYxW4DyaPiDYo=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

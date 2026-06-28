@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/MarstenVS100.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			yTuThl1FMyy1wZQQIpMEtc5GjVZM5/TcmSHT6d4h4/M=
+			</data>
+		</dict>
+		<key>x86_64-win/MarstenVS100.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			+uswwBUy3w9HJgh00PVc4jGfON0H8DLUZowmmmaVQgg=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

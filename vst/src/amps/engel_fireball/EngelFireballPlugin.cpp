@@ -1,15 +1,25 @@
 #include "DistrhoPlugin.hpp"
 #include "EngelFireballParams.h"
-#include "../../_shared/guitar_amp_core.hpp"
+#include "EngelFireballCore.h"
 #include "../../_shared/oversampler.hpp"
 #include <cmath>
 START_NAMESPACE_DISTRHO
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
 class EngelFireballPlugin : public Plugin {
-    rbgtr::AmpCore<rbtube::Tube6L6GC> core; float fP[kParamCount];
+    engel::EngelFireballCore core; float fP[kParamCount];
     rbshared::Oversampler4x os; static constexpr int kOS = rbshared::Oversampler4x::OS;
-    void applyAll(){ bool ld=fP[kChannel]>=0.5f; float g=ld?fP[kLeadGain]:fP[kCleanGain]; float v=ld?fP[kLeadVolume]:fP[kMaster];core.configure(250e3,250e3,25e3,100e3,500e-12,22e-9,22e-9, ld?0.55f:0.25f, ld?10.0f:3.0f,13.0f,3000.0f,4.0f);core.setGain(g);core.setBass(fP[kBass]);core.setMiddle(fP[kMiddle]);core.setTreble(fP[kTreble]);core.setPresence(fP[kPresence]);core.setVolume(v); }
+    void applyAll(){
+        core.lead     = fP[kChannel]  >= 0.5f;
+        core.bright   = fP[kBright]   >= 0.5f;   // were DEAD
+        core.bottom   = fP[kBottom]   >= 0.5f;
+        core.midBoost = fP[kMidBoost] >= 0.5f;
+        core.cabOn    = fP[kCabSim]   >= 0.5f;
+        core.pCleanGain=fP[kCleanGain]; core.pLeadGain=fP[kLeadGain];
+        core.pBass=fP[kBass]; core.pMid=fP[kMiddle]; core.pTreble=fP[kTreble];
+        core.pPres=fP[kPresence]; core.pLeadVol=fP[kLeadVolume]; core.pMaster=fP[kMaster];
+        core.recalc();
+    }
 public:
     EngelFireballPlugin() : Plugin(kParamCount,0,0){ for(int i=0;i<kParamCount;++i)fP[i]=kEngelFireballDef[i]; core.setSampleRate(kOS*(float)getSampleRate()); applyAll(); }
 protected:
@@ -17,7 +27,7 @@ protected:
     const char* getDescription() const override { return "EngelFireball — circuit-real model"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(2,0,0); }
+    uint32_t getVersion() const override { return d_version(2,1,0); }
     int64_t getUniqueId() const override { return d_cconst('E','g','f','b'); }
     void initParameter(uint32_t i, Parameter& p) override { if(i>=(uint32_t)kParamCount)return; p.hints=kParameterIsAutomatable;
         if(i==(uint32_t)kChannel||i==(uint32_t)kBright||i==(uint32_t)kBottom||i==(uint32_t)kMidBoost||i==(uint32_t)kCabSim)p.hints|=kParameterIsBoolean;
