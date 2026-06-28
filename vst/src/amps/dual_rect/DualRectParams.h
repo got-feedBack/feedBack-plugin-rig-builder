@@ -35,6 +35,7 @@ enum DualRectParamId
     // --- CH3 RED (the game high-gain channel) ---
     kC3Gain, kC3Treble, kC3Mid, kC3Bass, kC3Presence, kC3Master,
     kC3Mode,        // Raw(0) / Vintage(0.5) / Modern(1)
+    kCabSim,        // fallback V30 4x12 speaker voice; host bypasses when using an external cab/IR
     kParamCount
 };
 
@@ -42,20 +43,20 @@ static const char* const kDualRectNames[kParamCount] = {
     "Channel", "Output", "Rectifier",
     "Green Gain", "Green Treble", "Green Mid", "Green Bass", "Green Presence", "Green Master", "Green Mode",
     "Orange Gain", "Orange Treble", "Orange Mid", "Orange Bass", "Orange Presence", "Orange Master", "Orange Mode",
-    "Red Gain", "Red Treble", "Red Mid", "Red Bass", "Red Presence", "Red Master", "Red Mode",
+    "Red Gain", "Red Treble", "Red Mid", "Red Bass", "Red Presence", "Red Master", "Red Mode", "Cab Sim",
 };
 
 static const char* const kDualRectSymbols[kParamCount] = {
     "channel", "output", "rectifier",
     "c1gain", "c1treble", "c1mid", "c1bass", "c1presence", "c1master", "c1mode",
     "c2gain", "c2treble", "c2mid", "c2bass", "c2presence", "c2master", "c2mode",
-    "c3gain", "c3treble", "c3mid", "c3bass", "c3presence", "c3master", "c3mode",
+    "c3gain", "c3treble", "c3mid", "c3bass", "c3presence", "c3master", "c3mode", "cabsim",
 };
 
 static const float kDualRectMin[kParamCount] = {
-    0,0,0, 0,0,0,0,0,0,0, 0,0,0,0,0,0,0, 0,0,0,0,0,0,0 };
+    0,0,0, 0,0,0,0,0,0,0, 0,0,0,0,0,0,0, 0,0,0,0,0,0,0, 0 };
 static const float kDualRectMax[kParamCount] = {
-    1,1,1, 1,1,1,1,1,1,1, 1,1,1,1,1,1,1, 1,1,1,1,1,1,1 };
+    1,1,1, 1,1,1,1,1,1,1, 1,1,1,1,1,1,1, 1,1,1,1,1,1,1, 1 };
 // Manual-insert default: Red channel, Modern mode, Bold (tight) rectifier, a
 // classic high-gain Recto setting (scooped mids); Green/Orange at usable values.
 static const float kDualRectDef[kParamCount] = {
@@ -63,6 +64,7 @@ static const float kDualRectDef[kParamCount] = {
     0.35f, 0.55f, 0.55f, 0.50f, 0.40f, 0.55f, 0.00f,      // Green
     0.65f, 0.60f, 0.45f, 0.55f, 0.45f, 0.55f, 1.00f,      // Orange
     0.72f, 0.62f, 0.38f, 0.55f, 0.50f, 0.55f, 1.00f,      // Red (Modern)
+    1.00f,                                                 // Cab Sim
 };
 
 #endif // DUAL_RECT_PARAMS_H

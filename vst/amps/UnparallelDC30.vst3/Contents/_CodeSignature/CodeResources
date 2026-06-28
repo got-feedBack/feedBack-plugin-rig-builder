@@ -18,20 +18,6 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/UnparallelDC30.so</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			piD+DUSQH0f/K+hdwMbtGyF4sKVko3IkGhF8SjDF+hU=
-			</data>
-		</dict>
-		<key>x86_64-win/UnparallelDC30.vst3</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			fORXwqkYBmu581QGJaBMKVRIGf2dMsZA0T6HDWI2IpU=
-			</data>
-		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

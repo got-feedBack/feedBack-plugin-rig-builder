@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/PeeBeeTMinus.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			UUPkoJiA5i2jyqhELAIDAZT9LbuPPZ2gxSgxYMazE5Y=
+			</data>
+		</dict>
+		<key>x86_64-win/PeeBeeTMinus.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			IdAKM5//or2muLWNRv90bBDXqOdPE1fPkXWvTOHjG8k=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

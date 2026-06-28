@@ -28,23 +28,24 @@ enum TW40ParamId
     kBass,           // FMV tone stack Bass (1M)                      [RS Bass]
     kMiddle,         // FMV tone stack Middle (25K)                   [RS Mid]
     kPresence,       // Presence (5K, power-amp NFB)                  [RS Pres]
+    kCabSim,         // fallback 4x10 speaker voice
     kParamCount
 };
 
 static const char* const kTW40Names[kParamCount] = {
-    "Input", "Bright Vol", "Normal Vol", "Treble", "Bass", "Middle", "Presence",
+    "Input", "Bright Vol", "Normal Vol", "Treble", "Bass", "Middle", "Presence", "Cab Sim",
 };
 
 static const char* const kTW40Symbols[kParamCount] = {
-    "input", "brightvol", "normalvol", "treble", "bass", "middle", "presence",
+    "input", "brightvol", "normalvol", "treble", "bass", "middle", "presence", "cabsim",
 };
 
-static const float kTW40Min[kParamCount] = { 0,0,0,0,0,0,0 };
-static const float kTW40Max[kParamCount] = { 1,1,1,1,1,1,1 };
+static const float kTW40Min[kParamCount] = { 0,0,0,0,0,0,0,0 };
+static const float kTW40Max[kParamCount] = { 1,1,1,1,1,1,1,1 };
 // Manual-insert defaults: jumpered (Both) input — the classic 5F6-A tone — with
 // Bright a touch past noon, Normal as the blend, FMV stack centred-ish.
 static const float kTW40Def[kParamCount] = {
-    0.50f, 0.58f, 0.42f, 0.60f, 0.50f, 0.55f, 0.45f,
+    0.50f, 0.58f, 0.42f, 0.60f, 0.50f, 0.55f, 0.45f, 1.00f,
 };
 
 #endif // TW40_PARAMS_H

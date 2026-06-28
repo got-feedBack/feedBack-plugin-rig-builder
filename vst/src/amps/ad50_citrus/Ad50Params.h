@@ -27,23 +27,24 @@ enum Ad50ParamId
     kMaster,        // MASTER — master volume (into the power amp)
     kSustain,       // SUSTAIN — footswitchable EQ-bypass gain/sustain boost
     kClassA,        // power: Class AB (0, 50W) / Class A (1, 30W)
+    kCabSim,        // fallback PPC-style speaker voice; host bypasses with external cab/IR
     kParamCount
 };
 
 static const char* const kAd50Names[kParamCount] = {
-    "Gain", "Bass", "Treble", "Presence", "Master", "Sustain", "Class A",
+    "Gain", "Bass", "Treble", "Presence", "Master", "Sustain", "Class A", "Cab Sim",
 };
 
 static const char* const kAd50Symbols[kParamCount] = {
-    "gain", "bass", "treble", "presence", "master", "sustain", "classa",
+    "gain", "bass", "treble", "presence", "master", "sustain", "classa", "cabsim",
 };
 
-static const float kAd50Min[kParamCount] = { 0,0,0,0,0,0,0 };
-static const float kAd50Max[kParamCount] = { 1,1,1,1,1,1,1 };
+static const float kAd50Min[kParamCount] = { 0,0,0,0,0,0,0,0 };
+static const float kAd50Max[kParamCount] = { 1,1,1,1,1,1,1,1 };
 // Manual-insert defaults: a thick Orange crunch — Gain past noon, EQ around noon,
 // Master past noon, Sustain off, Class AB (50W).
 static const float kAd50Def[kParamCount] = {
-    0.55f, 0.50f, 0.55f, 0.50f, 0.60f, 0.0f, 0.0f,
+    0.55f, 0.50f, 0.55f, 0.50f, 0.60f, 0.0f, 0.0f, 1.0f,
 };
 
 #endif // AD50_PARAMS_H

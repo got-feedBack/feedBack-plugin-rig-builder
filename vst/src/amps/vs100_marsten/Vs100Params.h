@@ -16,7 +16,8 @@
  *
  * the game (Amp_HG180): the OD2 lead is the voice, so RS Gain -> OD2 Gain,
  * Bass/Mid/Treble -> OD2 Bass/Middle/Treble. Channel pinned to OD2 + reverb/FX
- * off via _static; everything editable by hand.
+ * off via _static; everything editable by hand. CAB SIM is a temporary bundled
+ * cab voicing; the host can set it to 0 when an external cab/IR is present.
  */
 enum Vs100ParamId
 {
@@ -36,6 +37,7 @@ enum Vs100ParamId
     kFxMix,          // FX MIX (effects-loop blend)
     kCleanRev,       // CLEAN reverb
     kOdRev,          // OVERDRIVE reverb
+    kCabSim,         // temporary internal cab filter        [host]
     kParamCount
 };
 
@@ -43,18 +45,18 @@ static const char* const kVs100Names[kParamCount] = {
     "Channel", "Cl Volume", "Cl Bass", "Cl Middle", "Cl Treble",
     "OD1 Gain", "OD1 Volume",
     "OD2 Gain", "OD2 Contour", "OD2 Volume", "OD2 Bass", "OD2 Middle", "OD2 Treble",
-    "FX Mix", "Clean Reverb", "OD Reverb",
+    "FX Mix", "Clean Reverb", "OD Reverb", "Cab Sim",
 };
 
 static const char* const kVs100Symbols[kParamCount] = {
     "channel", "clvolume", "clbass", "clmiddle", "cltreble",
     "od1gain", "od1volume",
     "od2gain", "od2contour", "od2volume", "od2bass", "od2middle", "od2treble",
-    "fxmix", "cleanreverb", "odreverb",
+    "fxmix", "cleanreverb", "odreverb", "cab_sim",
 };
 
-static const float kVs100Min[kParamCount] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
-static const float kVs100Max[kParamCount] = { 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1 };
+static const float kVs100Min[kParamCount] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+static const float kVs100Max[kParamCount] = { 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1 };
 // Manual-insert defaults: OD2 lead mode, a singing Valvestate crunch/lead, EQ
 // centred-ish, reverb + FX off. Clean + OD1 sit at clean/crunch defaults.
 static const float kVs100Def[kParamCount] = {
@@ -62,6 +64,7 @@ static const float kVs100Def[kParamCount] = {
     0.50f, 0.50f,
     0.60f, 0.40f, 0.50f, 0.50f, 0.45f, 0.60f,
     0.00f, 0.00f, 0.00f,
+    1.00f,
 };
 
 #endif // VS100_PARAMS_H

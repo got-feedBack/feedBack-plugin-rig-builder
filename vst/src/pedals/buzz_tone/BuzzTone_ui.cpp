@@ -8,5 +8,5 @@
 #define PEDAL_ACB 105
 #define PEDAL_W 470
 #define PEDAL_H 300
-#define PEDAL_KNOBS { {0.40f,0.26f,0.105f}, {0.60f,0.26f,0.105f} }
+#define PEDAL_KNOBS { {0.34f,0.30f,0.118f}, {0.66f,0.30f,0.118f} }
 #include "../_shared/pedal_ui.hpp"

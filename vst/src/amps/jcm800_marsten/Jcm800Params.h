@@ -9,8 +9,9 @@
  *
  * Single-channel cascaded-gain head: V1a -> PREAMP VOL (the gain) -> V1b -> V2a
  * -> V2b cathode follower -> Marshall TMB tone stack (Treble 220k, Bass 1M,
- * Middle 22k, slope 33k, 470pF/22n/22n) -> MASTER VOL -> 2x EL34 (~50W) +
- * PRESENCE (power-amp NFB). The EMS is this same circuit + a HI/LO switch.
+ * Middle 22k, slope 33k, 470pF/22n/22n) -> MASTER VOL -> long-tail PI ->
+ * 2x EL34 (~50W) + PRESENCE (power-amp NFB). Cab Sim is a temporary fallback
+ * 4x12 voice for auditioning without an external cab/IR.
  *
  * the game gear Amp_MarshallJCM800. RS: Gain -> PREAMP VOL (the 2204 drive),
  * Bass/Mid/Treble -> tone stack, Pres -> Presence. Master pinned via _static.
@@ -23,21 +24,22 @@ enum Jcm800ParamId
     kTreble,        // TREBLE  Marshall tone stack (220k, 470pF)          [RS Treble]
     kPresence,      // PRESENCE — power-amp NFB                           [RS Pres]
     kVolume,        // MASTER VOL — master volume
+    kCabSim,        // fallback 4x12 voice: 0=amp-only, 1=internal cab sim
     kParamCount
 };
 
 static const char* const kJcm800Names[kParamCount] = {
-    "Gain", "Bass", "Middle", "Treble", "Presence", "Volume",
+    "Gain", "Bass", "Middle", "Treble", "Presence", "Volume", "Cab Sim",
 };
 static const char* const kJcm800Symbols[kParamCount] = {
-    "gain", "bass", "middle", "treble", "presence", "volume",
+    "gain", "bass", "middle", "treble", "presence", "volume", "cabsim",
 };
-static const float kJcm800Min[kParamCount] = { 0,0,0,0,0,0 };
-static const float kJcm800Max[kParamCount] = { 1,1,1,1,1,1 };
+static const float kJcm800Min[kParamCount] = { 0,0,0,0,0,0,0 };
+static const float kJcm800Max[kParamCount] = { 1,1,1,1,1,1,1 };
 // Manual-insert defaults: the classic 80s 2204 crunch — Preamp past noon, tone
 // centred, Presence + Master at musical defaults.
 static const float kJcm800Def[kParamCount] = {
-    0.62f, 0.50f, 0.50f, 0.55f, 0.50f, 0.60f,
+    0.62f, 0.50f, 0.50f, 0.55f, 0.50f, 0.60f, 1.00f,
 };
 
 #endif // JCM800_PARAMS_H

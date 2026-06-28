@@ -27,23 +27,24 @@ enum Or50ParamId
     kDepth,         // DEPTH — low-end voicing (the bass-cap rotary)
     kVolume,        // VOLUME — master volume (into the power amp)
     kHalf,          // output power: FULL(0) / HALF(1)
+    kCabSim,        // fallback PPC-style speaker voice; host bypasses when using an external cab/IR
     kParamCount
 };
 
 static const char* const kOr50Names[kParamCount] = {
-    "Gain", "Bass", "Middle", "Treble", "Depth", "Volume", "Half Power",
+    "Gain", "Bass", "Middle", "Treble", "Depth", "Volume", "Half Power", "Cab Sim",
 };
 
 static const char* const kOr50Symbols[kParamCount] = {
-    "gain", "bass", "middle", "treble", "depth", "volume", "halfpower",
+    "gain", "bass", "middle", "treble", "depth", "volume", "halfpower", "cabsim",
 };
 
-static const float kOr50Min[kParamCount] = { 0,0,0,0,0,0,0 };
-static const float kOr50Max[kParamCount] = { 1,1,1,1,1,1,1 };
+static const float kOr50Min[kParamCount] = { 0,0,0,0,0,0,0,0 };
+static const float kOr50Max[kParamCount] = { 1,1,1,1,1,1,1,1 };
 // Manual-insert defaults: a thick Orange crunch — Gain past noon, the strong FAC
 // mids, Depth + Volume around noon, FULL power.
 static const float kOr50Def[kParamCount] = {
-    0.55f, 0.50f, 0.55f, 0.55f, 0.50f, 0.55f, 0.0f,
+    0.55f, 0.50f, 0.55f, 0.55f, 0.50f, 0.55f, 0.0f, 1.0f,
 };
 
 #endif // OR50_PARAMS_H

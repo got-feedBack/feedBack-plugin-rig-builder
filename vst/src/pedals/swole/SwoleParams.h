@@ -1,27 +1,27 @@
 #ifndef SWOLE_PARAMS_H
 #define SWOLE_PARAMS_H
 
-// the game Pedal_Swole exposes Smash and Rate. the game describes it as a
-// very heavy saturated compression effect.
+// Real Lazy Sprocket / SG-1 controls. Rocksmith's Smash/Rate are mapped to
+// these in data/rs_knob_to_vst_param.json.
 enum SwoleParamId
 {
-    kSmash = 0,
-    kRate,
+    kSensitivity = 0,
+    kAttack,
     kParamCount
 };
 
 static const char* const kSwoleNames[kParamCount] = {
-    "Smash",
-    "Rate",
+    "Sensitivity",
+    "Attack",
 };
 
 static const char* const kSwoleSymbols[kParamCount] = {
-    "smash",
-    "rate",
+    "sensitivity",
+    "attack",
 };
 
 static const float kSwoleMin[kParamCount] = { 0.0f, 0.0f };
 static const float kSwoleMax[kParamCount] = { 1.0f, 1.0f };
-static const float kSwoleDef[kParamCount] = { 0.45f, 0.55f };
+static const float kSwoleDef[kParamCount] = { 0.52f, 0.38f };
 
 #endif // SWOLE_PARAMS_H

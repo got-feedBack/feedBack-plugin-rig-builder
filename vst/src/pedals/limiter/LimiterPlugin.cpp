@@ -1,23 +1,32 @@
 /*
- * Limiter - two-knob peak limiter for the game's Pedal_Limiter.
+ * LM-2 - Boss LM-2 Limiter-style pedal.
  *
- * the game exposes Limit and Rate only. Limit controls the amount/threshold;
- * Rate controls recovery speed. The detector is stereo-linked so limiting
- * does not pull the image left or right.
+ * Real panel: Level, Tone, Release, Threshold. Topology is modeled as the
+ * service-note circuit: input buffer, uPC1252H2 VCA, M5218/BA718/M5223
+ * detector/gain computer, diode rectifier network and transistor output
+ * buffer. S-5500G is power protection; 1S188FM-M is approximated with a
+ * Sanyo-style germanium detector curve.
  */
 #include "DistrhoPlugin.hpp"
 #include "LimiterParams.h"
+#include "../../_shared/opamp.hpp"
+#include "../../_shared/semiconductors.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
 
 namespace {
 
-static constexpr float kPi = 3.14159265359f;
+static constexpr float kPi = 3.14159265358979323846f;
 
 static inline float clamp01(float v)
 {
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
+}
+
+static inline float dn(float v)
+{
+    return std::fabs(v) < 1.0e-15f ? 0.0f : v;
 }
 
 static inline float dbToAmp(float db)
@@ -27,27 +36,74 @@ static inline float dbToAmp(float db)
 
 static inline float ampToDb(float amp)
 {
-    return 20.0f * std::log10(amp + 1.0e-9f);
+    return 20.0f * std::log10(std::fmax(amp, 1.0e-8f));
 }
 
-static inline float smoothstep(float v)
+static inline float coeffMs(float ms, float sr)
 {
-    v = clamp01(v);
-    return v * v * (3.0f - 2.0f * v);
+    return 1.0f - std::exp(-1.0f / std::fmax(1.0f, ms * 0.001f * sr));
 }
 
-static inline float coefMs(float ms, float sr)
+static inline float audioTaper(float v)
 {
-    if (ms <= 0.0f)
-        return 1.0f;
-    return 1.0f - std::exp(-1.0f / (ms * 0.001f * sr));
+    return std::pow(clamp01(v), 1.85f);
 }
 
-static inline float softCeiling(float x, float ceiling)
+class RcHighPass
 {
-    if (ceiling <= 0.0f)
-        return 0.0f;
-    return ceiling * std::tanh(x / ceiling);
+    float a = 0.0f;
+    float x1 = 0.0f;
+    float y1 = 0.0f;
+
+public:
+    void setRC(float sr, float rOhm, float cFarad)
+    {
+        const float rc = rOhm * cFarad;
+        const float dt = 1.0f / (sr > 1000.0f ? sr : 48000.0f);
+        a = rc / (rc + dt);
+    }
+
+    void reset()
+    {
+        x1 = y1 = 0.0f;
+    }
+
+    float process(float x)
+    {
+        const float y = a * (y1 + x - x1);
+        x1 = x;
+        y1 = dn(y);
+        return y1;
+    }
+};
+
+class OnePole
+{
+    float a = 0.0f;
+    float y = 0.0f;
+
+public:
+    void setHz(float sr, float hz)
+    {
+        a = 1.0f - std::exp(-2.0f * kPi * hz / (sr > 1000.0f ? sr : 48000.0f));
+    }
+
+    void reset()
+    {
+        y = 0.0f;
+    }
+
+    float process(float x)
+    {
+        y += a * (x - y);
+        y = dn(y);
+        return y;
+    }
+};
+
+static inline float transistorBuffer(float x)
+{
+    return 0.92f * x + 0.08f * std::tanh(1.35f * x) / 1.35f;
 }
 
 } // namespace
@@ -57,82 +113,90 @@ class LimiterPlugin : public Plugin
     float params[kParamCount];
     float sampleRate = 48000.0f;
 
-    float detector = 0.0f;
-    float reductionDb = 0.0f;
-    float toneL = 0.0f;
-    float toneR = 0.0f;
-    float hpXL = 0.0f;
-    float hpYL = 0.0f;
-    float hpXR = 0.0f;
-    float hpYR = 0.0f;
+    RcHighPass inputCapL;
+    RcHighPass inputCapR;
+    RcHighPass outputCapL;
+    RcHighPass outputCapR;
+    OnePole toneDarkL;
+    OnePole toneDarkR;
+    OnePole toneBrightL;
+    OnePole toneBrightR;
+    rbshared::OpAmpStage inputAmpL;
+    rbshared::OpAmpStage inputAmpR;
+    rbshared::OpAmpStage detectorAmp;
+    rbshared::OpAmpStage outputAmpL;
+    rbshared::OpAmpStage outputAmpR;
+    rbcomponents::AntiParallelDiodePair detectorClamp;
 
+    float detector = 0.0f;
+    float gainReductionDb = 0.0f;
     float thresholdDb = -18.0f;
-    float ratio = 14.0f;
-    float kneeDb = 3.5f;
-    float makeupDb = 1.5f;
-    float attackCoef = 0.0f;
-    float releaseCoef = 0.0f;
-    float grAttackCoef = 0.0f;
-    float grReleaseCoef = 0.0f;
-    float toneCoef = 0.0f;
-    float hpCoef = 0.0f;
-    float ceiling = 0.92f;
+    float ratio = 12.0f;
+    float maxReductionDb = 30.0f;
+    float attackA = 0.0f;
+    float releaseA = 0.0f;
+    float grAttackA = 0.0f;
+    float grReleaseA = 0.0f;
+    float levelGain = 1.0f;
+    float tone = kLimiterDef[kTone];
 
     void recalc()
     {
-        const float limit = clamp01(params[kLimit]);
-        const float rate = clamp01(params[kRate]);
-        const float amount = smoothstep(clamp01(0.18f + 1.45f * limit));
+        const float level = audioTaper(params[kLevel]);
+        tone = clamp01(params[kTone]);
+        const float release = clamp01(params[kRelease]);
+        const float threshold = audioTaper(params[kThreshold]);
 
-        thresholdDb = -5.5f - 31.0f * amount;
-        ratio = 8.0f + 32.0f * amount;
-        kneeDb = 5.5f - 2.6f * amount;
-        // Auto-makeup tracks the threshold/GR so raising Limit holds the OUTPUT
-        // level ~constant (loudness-transparent) instead of ducking. Tuned offline
-        // against a multitone Limit sweep. See AMP_LOUDNESS.md.
-        makeupDb = std::fmin(24.0f, 2.5f + (-thresholdDb - 5.5f) * (0.30f + 0.55f * amount));
+        inputCapL.setRC(sampleRate, 1010000.0f, 0.1e-6f);
+        inputCapR.setRC(sampleRate, 1010000.0f, 0.1e-6f);
+        outputCapL.setRC(sampleRate, 100000.0f, 10.0e-6f);
+        outputCapR.setRC(sampleRate, 100000.0f, 10.0e-6f);
 
-        const float attackMs = 0.22f + 1.20f * (1.0f - amount);
-        const float releaseMs = 55.0f + 720.0f * std::pow(1.0f - rate, 1.55f);
-        attackCoef = coefMs(attackMs, sampleRate);
-        releaseCoef = coefMs(releaseMs, sampleRate);
-        grAttackCoef = coefMs(0.60f + 1.8f * (1.0f - amount), sampleRate);
-        grReleaseCoef = coefMs(releaseMs * 0.72f, sampleRate);
-        toneCoef = 1.0f - std::exp(-2.0f * kPi * (13500.0f - 2600.0f * amount) / sampleRate);
+        // The LM-2 tone pot crossfades the post-VCA response from low/dark to
+        // bright. Keep it gentle; the real pedal is a limiter, not an EQ.
+        toneDarkL.setHz(sampleRate, 1450.0f + 2600.0f * tone);
+        toneDarkR.setHz(sampleRate, 1450.0f + 2600.0f * tone);
+        toneBrightL.setHz(sampleRate, 7200.0f + 6200.0f * tone);
+        toneBrightR.setHz(sampleRate, 7200.0f + 6200.0f * tone);
 
-        const float hpHz = 18.0f;
-        const float dt = 1.0f / sampleRate;
-        const float hpRc = 1.0f / (2.0f * kPi * hpHz);
-        hpCoef = hpRc / (hpRc + dt);
-        ceiling = dbToAmp(-0.45f - 0.65f * amount);
+        thresholdDb = -5.0f - 37.0f * threshold;
+        ratio = 4.0f + 26.0f * threshold;
+        maxReductionDb = 10.0f + 28.0f * threshold;
+
+        attackA = coeffMs(0.55f + 1.2f * (1.0f - threshold), sampleRate);
+        releaseA = coeffMs(35.0f + 760.0f * release, sampleRate);
+        grAttackA = coeffMs(0.85f + 2.0f * (1.0f - threshold), sampleRate);
+        grReleaseA = coeffMs(45.0f + 640.0f * release, sampleRate);
+        levelGain = dbToAmp(-28.0f + 42.0f * level);
+
+        detectorClamp.setSpec(rbcomponents::diode1S188FM());
+        detectorClamp.setSourceR(47000.0f - 18000.0f * threshold);
     }
 
-    float highPass(float x, float& x1, float& y1)
+    float toneNetwork(float x, OnePole& dark, OnePole& bright) const
     {
-        const float y = hpCoef * (y1 + x - x1);
-        x1 = x;
-        y1 = y;
-        return y;
+        const float low = dark.process(x);
+        const float highLimited = bright.process(x);
+        const float high = x - 0.60f * highLimited;
+        const float t = tone;
+        return low * (0.72f * (1.0f - t))
+             + high * (0.35f + 0.72f * t)
+             + x * 0.30f;
     }
 
-    float lowPass(float x, float& z)
-    {
-        z += toneCoef * (x - z);
-        return z;
-    }
-
-    float targetReduction(float levelDb) const
+    float gainComputer(float levelDb) const
     {
         const float over = levelDb - thresholdDb;
+        const float kneeDb = 4.5f;
         if (over <= -0.5f * kneeDb)
             return 0.0f;
 
         const float slope = 1.0f - 1.0f / ratio;
         if (over >= 0.5f * kneeDb)
-            return over * slope;
+            return std::fmin(maxReductionDb, over * slope);
 
         const float x = over + 0.5f * kneeDb;
-        return slope * (x * x) / (2.0f * kneeDb);
+        return std::fmin(maxReductionDb, slope * (x * x) / (2.0f * kneeDb));
     }
 
 public:
@@ -141,18 +205,15 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kLimiterDef[i];
-        sampleRate = (float)getSampleRate();
-        if (sampleRate <= 1000.0f)
-            sampleRate = 48000.0f;
-        recalc();
+        sampleRateChanged(getSampleRate());
     }
 
 protected:
     const char* getLabel() const override { return "Limiter"; }
-    const char* getDescription() const override { return "two-knob stereo peak limiter"; }
+    const char* getDescription() const override { return "Boss LM-2-style VCA limiter"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('L', 'i', 'm', 't'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -185,9 +246,30 @@ protected:
         sampleRate = (float)newSampleRate;
         if (sampleRate <= 1000.0f)
             sampleRate = 48000.0f;
-        detector = reductionDb = 0.0f;
-        toneL = toneR = 0.0f;
-        hpXL = hpYL = hpXR = hpYR = 0.0f;
+
+        inputCapL.reset();
+        inputCapR.reset();
+        outputCapL.reset();
+        outputCapR.reset();
+        toneDarkL.reset();
+        toneDarkR.reset();
+        toneBrightL.reset();
+        toneBrightR.reset();
+
+        inputAmpL.setSpec(rbshared::m5218Spec());
+        inputAmpR.setSpec(rbshared::m5218Spec());
+        detectorAmp.setSpec(rbshared::ba718Spec());
+        outputAmpL.setSpec(rbshared::m5223Spec());
+        outputAmpR.setSpec(rbshared::m5223Spec());
+        inputAmpL.setSampleRate(sampleRate);
+        inputAmpR.setSampleRate(sampleRate);
+        detectorAmp.setSampleRate(sampleRate);
+        outputAmpL.setSampleRate(sampleRate);
+        outputAmpR.setSampleRate(sampleRate);
+
+        detectorClamp.reset();
+        detector = 0.0f;
+        gainReductionDb = 0.0f;
         recalc();
     }
 
@@ -200,22 +282,36 @@ protected:
 
         for (uint32_t i = 0; i < frames; ++i)
         {
-            const float l = highPass(inL[i], hpXL, hpYL);
-            const float r = highPass(inR[i], hpXR, hpYR);
-            const float peak = std::fmax(std::fabs(l), std::fabs(r));
-            const float envCoef = peak > detector ? attackCoef : releaseCoef;
-            detector += envCoef * (peak - detector);
+            float l = inputCapL.process(transistorBuffer(inL[i]));
+            float r = inputCapR.process(transistorBuffer(inR[i]));
+            l = inputAmpL.process(l, 1.8f);
+            r = inputAmpR.process(r, 1.8f);
 
-            const float levelDb = ampToDb(detector);
-            const float targetDb = targetReduction(levelDb);
-            const float grCoef = targetDb > reductionDb ? grAttackCoef : grReleaseCoef;
-            reductionDb += grCoef * (targetDb - reductionDb);
+            const float linked = std::fmax(std::fabs(l), std::fabs(r));
+            const float rect = std::fabs(detectorClamp.process(linked * 1.85f));
+            const float sensed = detectorAmp.process(rect, 4.0f);
+            const float envA = sensed > detector ? attackA : releaseA;
+            detector += envA * (sensed - detector);
+            detector = dn(detector);
 
-            const float gain = dbToAmp(makeupDb - reductionDb);
-            const float yL = lowPass(softCeiling(l * gain, ceiling), toneL);
-            const float yR = lowPass(softCeiling(r * gain, ceiling), toneR);
-            outL[i] = yL;
-            outR[i] = yR;
+            const float targetReduction = gainComputer(ampToDb(detector));
+            const float grA = targetReduction > gainReductionDb ? grAttackA : grReleaseA;
+            gainReductionDb += grA * (targetReduction - gainReductionDb);
+            gainReductionDb = std::fmax(0.0f, std::fmin(maxReductionDb, gainReductionDb));
+
+            // uPC1252H2 gain cell: dB control law, limited so silence cannot
+            // explode and heavy limiting stays smooth rather than chattery.
+            const float vcaGain = dbToAmp(-gainReductionDb);
+            l = outputAmpL.process(l * vcaGain, 2.4f);
+            r = outputAmpR.process(r * vcaGain, 2.4f);
+
+            l = toneNetwork(l, toneDarkL, toneBrightL);
+            r = toneNetwork(r, toneDarkR, toneBrightR);
+            l = outputCapL.process(l * levelGain);
+            r = outputCapR.process(r * levelGain);
+
+            outL[i] = std::tanh(l * 1.05f) * 0.98f;
+            outR[i] = std::tanh(r * 1.05f) * 0.98f;
         }
     }
 

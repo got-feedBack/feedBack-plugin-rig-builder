@@ -39,27 +39,28 @@ enum JC120ParamId
     kSpeed,          // CHORUS / Vibrato SPEED (rate)
     kDepth,          // CHORUS / Vibrato DEPTH
     kChorus,         // Off(0) / Chorus(0.5) / Vibrato(1) — the 3-way VIB/CHORUS lever
+    kCabSim,         // fallback 2x12 speaker voice
     kParamCount
 };
 
 static const char* const kJC120Names[kParamCount] = {
     "Volume", "Treble", "Middle", "Bass", "Distortion",
-    "Reverb", "Speed", "Depth", "Chorus",
+    "Reverb", "Speed", "Depth", "Chorus", "Cab Sim",
 };
 
 static const char* const kJC120Symbols[kParamCount] = {
     "volume", "treble", "middle", "bass", "distortion",
-    "reverb", "speed", "depth", "chorus",
+    "reverb", "speed", "depth", "chorus", "cabsim",
 };
 
-static const float kJC120Min[kParamCount] = { 0,0,0,0,0,0,0,0,0 };
-static const float kJC120Max[kParamCount] = { 1,1,1,1,1,1,1,1,1 };
+static const float kJC120Min[kParamCount] = { 0,0,0,0,0,0,0,0,0,0 };
+static const float kJC120Max[kParamCount] = { 1,1,1,1,1,1,1,1,1,1 };
 // Defaults: the JC clean (Distortion off), Chorus OFF (0 = the 3-way left
 // position) so the game songs aren't chorused by default — turn the Chorus
 // switch to Chorus(0.5)/Vibrato(1) by hand for the iconic JC shimmer.
 static const float kJC120Def[kParamCount] = {
     0.50f, 0.55f, 0.50f, 0.50f, 0.00f,
-    0.00f, 0.40f, 0.50f, 0.00f,
+    0.00f, 0.40f, 0.50f, 0.00f, 1.00f,
 };
 
 #endif // JC120_PARAMS_H

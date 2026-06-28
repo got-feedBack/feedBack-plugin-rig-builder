@@ -272,6 +272,17 @@ function rbConfiguredChainInputDrive() {
         ? window.__rbChainInputDrive : 8.0;
 }
 
+// Clean input-level calibration trim (linear ×, persisted as nam_input_calibration).
+// This is a FLAT multiplier applied on top of the amp-drive in rbApplyChainInputDrive
+// (engine input = drive × calibration). It's what the "Input" fader shows/edits and
+// what the note-detect Calibration Wizard writes (raw DI → −12 dBFS). Unlike the
+// drive baseline it has NO clean floor, so a reduction (e.g. 0.7× ≈ −3 dB) really
+// lowers the level. Default 1.0 = 0 dB = no trim (identical to the old behaviour).
+function rbInputCalibration() {
+    return (typeof window.__rbInputCalibration === 'number' && window.__rbInputCalibration > 0)
+        ? window.__rbInputCalibration : 1.0;
+}
+
 function rbCleanGuitarChainInputDrive(maxDrive) {
     // The backend's NAM output normalization and the captures themselves
     // expect a guitar-level push even for clean amps. Unity made clean tones
@@ -363,7 +374,12 @@ function rbDriveForChainInput(opts) {
 function rbApplyChainInputDrive(opts) {
     // While the node graph is disconnected (Input/Output unwired) the chain is
     // silenced at the source — keep it silent even if a scheduled re-poll fires.
-    const drive = rbState._advSilenced ? 0 : rbDriveForChainInput(opts);
+    // The clean calibration trim (rbInputCalibration) rides on top of the
+    // amp-drive: engine input = drive × calibration. This is the ONE place that
+    // owns the engine 'input' node, so the Calibration Wizard's −12 dBFS result
+    // (handed to us as nam_input_calibration) and the amp drive combine into a
+    // single value instead of overwriting each other.
+    const drive = rbState._advSilenced ? 0 : (rbDriveForChainInput(opts) * rbInputCalibration());
     // Re-poll guard: the song-playback callers fire this ~600 ms after
     // the bundle's chain load — but `highway.getStringCount()` may not
     // have absorbed the song_info WS message yet (it defaults to 6
@@ -923,29 +939,44 @@ async function rbSetChainMakeup(dbIn) {
     }).catch(() => {});
 }
 
-// "Desktop Input" — the pre-NAM input gain for GUITAR amps (bass auto-uses 1×).
-// This is the same control that used to be the Setup "Input chain" / "Amp drive"
-// knob; it is now surfaced as the in-game "Desktop Input" fader too, so Setup and
-// the in-game mixer drive ONE value. Range 0–5, default 1× (no boost). Persists to
-// /settings (nam_chain_input_drive) and re-applies live through
-// rbApplyChainInputDrive (which keeps the bass/guitar branch correct).
+// "Input" — the clean input-level trim (calibration), shown in dB. This is the
+// value the note-detect Calibration Wizard normalizes to −12 dBFS, surfaced on
+// the fader so the wizard's result is visible and editable here. It rides ON TOP
+// of the automatic amp-drive (engine input = drive × this), so a reduction really
+// lowers the level even where the guitar drive floor would otherwise pin it.
+// Default 0 dB (1×) = no trim = identical to the old behaviour. Persists to
+// /settings (nam_input_calibration) and re-applies live via rbApplyChainInputDrive.
+// (The amp-DRIVE baseline lives in nam_chain_input_drive — internal/auto now.)
 async function rbSetDesktopInput(dbIn) {
     const d = rbClampDb(dbIn);
     const val = rbDbToLin(d);   // linear × for the engine + persisted setting
-    window.__rbChainInputDrive = val;
+    window.__rbInputCalibration = val;
     const el = document.getElementById('rb-amp-drive-val');
     if (el) el.textContent = rbFmtDb(d);
     // Keep the Setup knob visually in sync when the change came from the in-game
-    // "Desktop Input" fader (set() only re-renders, no onChange → no loop).
+    // "Input" fader (set() only re-renders, no onChange → no loop).
     if (window.__rbDesktopInputKnob && typeof window.__rbDesktopInputKnob.set === 'function') {
         try { window.__rbDesktopInputKnob.set(d); } catch (_) {}
     }
     rbApplyChainInputDrive();   // re-applies respecting bass detection
     fetch(`${window.RB_API}/settings`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nam_chain_input_drive: val }),
+        body: JSON.stringify({ nam_input_calibration: val }),
     }).catch(() => {});
 }
+
+// The note-detect Calibration Wizard hands its −12 dBFS result here (raw DI peak
+// normalized to a clean × trim) so an already-open Rig Builder moves its "Input"
+// fader and re-applies live. The wizard also persists nam_input_calibration via
+// the backend, so a fresh Rig Builder load picks it up even if it wasn't open.
+// Calling e.detail.ack() tells the wizard Rig Builder consumed it and now owns the
+// engine input node — so the wizard stops re-asserting its own engineInputGain.
+window.addEventListener('rig-builder:set-input-calibration', (e) => {
+    const g = e && e.detail && Number(e.detail.gain);
+    if (!Number.isFinite(g) || g <= 0) return;
+    try { if (typeof e.detail.ack === 'function') e.detail.ack(); } catch (_) {}
+    rbSetDesktopInput(rbLinToDb(g));
+});
 
 // ── In-game mixer faders: "Input" + "AMP" ──────────────────────────────────
 // rig_builder owns BOTH the level faders the player sees while playing, so Setup
@@ -954,9 +985,10 @@ async function rbSetDesktopInput(dbIn) {
 // "Desktop Chain" mix participants (rig_builder re-applied over them on every
 // chain reload anyway — they were dead during gameplay).
 //
-//   • Input → window.__rbChainInputDrive (persisted nam_chain_input_drive).
-//     Pre-NAM input gain; rbApplyChainInputDrive re-applies it on every reload,
-//     so it sticks through tone changes.
+//   • Input → window.__rbInputCalibration (persisted nam_input_calibration).
+//     Clean input-level trim (what the Calibration Wizard normalizes to −12 dBFS);
+//     rbApplyChainInputDrive multiplies it onto the amp-drive on every reload, so
+//     it sticks through tone changes.
 //   • AMP   → window.__rbChainMakeup (persisted chain_makeup). Output trim applied
 //     POST-leveler via rbSetChainMakeup — so, unlike a raw setGain('chain') fader,
 //     the final leveler RE-APPLIES it every tick instead of cancelling it on the
@@ -983,7 +1015,7 @@ function rbRegisterLevelFaders() {
         unit: 'dB',
         min: RB_LEVEL_DB_MIN, max: RB_LEVEL_DB_MAX, step: 0.5,
         defaultValue: 0,
-        getValue: () => rbLinToDb(window.__rbChainInputDrive),
+        getValue: () => rbLinToDb(rbInputCalibration()),
         setValue: (v) => { rbSetDesktopInput(v); },
     });
     api.registerFader({
@@ -1188,6 +1220,13 @@ async function rbPreLoadMute(chainLen, targetGain, opts) {
 
     async function autoApplyChain() {
         if (window.__rbAmpAutoApply === false) return;
+        // Tone override: load the chosen user tone instead of the song's tone
+        // (once per song; tone changes keep the same override tone).
+        if (rbToneOverrideActive()) {
+            const f = window.slopsmith && window.slopsmith.currentSong && window.slopsmith.currentSong.filename;
+            await rbLoadOverrideToneForSong(f).catch(() => {});
+            return;
+        }
         // When mega-chain mode owns the engine, we MUST NOT call
         // loadPreset here — it would clobber the pre-loaded whole-song
         // chain and leave only this single tone's stages loaded. The
@@ -2292,6 +2331,11 @@ const RbMegaChain = (function () {
     let _activeFilename = null;
     let _lastError = null;
     let _mega = null;          // last fetched /mega_chain response
+    let _loadedViaAudioEffects = false;  // did the chain load via the audio-effects
+                               // provider (true) or fall back to legacy loadPreset
+                               // (false)? Tone-switch bypass must use the legacy
+                               // setBypass path when false — the provider's
+                               // activateSegment is a no-op on a legacy chain.
     let _buildGen = 0;         // bumped each buildForSong() — lets the 404 retry
                                // loop bail if a newer song load superseded it
     let _seedTried = null;     // filename we already kicked an on-demand seed for
@@ -2422,9 +2466,18 @@ const RbMegaChain = (function () {
         const exact = _mega.tones.find(t => t.tone_key === toneKey);
         if (exact) return exact;
         const wanted = String(toneKey).trim().toLowerCase();
-        return _mega.tones.find(t =>
+        const ci = _mega.tones.find(t =>
             String(t.tone_key || '').trim().toLowerCase() === wanted
-        ) || null;
+        );
+        if (ci) return ci;
+        // Last resort: strip case + separators/punctuation so the highway's tone
+        // NAME ("Reptilia Lead", "Reptilia-Lead") still matches the seeded RS Key
+        // ("Reptilia_lead"). Distinct tones (…_lead vs …_bass) normalise to
+        // different strings, so this can never cross-match the WRONG tone.
+        const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+        const wn = norm(toneKey);
+        if (!wn) return null;
+        return _mega.tones.find(t => norm(t.tone_key) === wn) || null;
     }
 
     // Mute the song's "guitar" stem so the original DI doesn't double up
@@ -2507,7 +2560,15 @@ const RbMegaChain = (function () {
         (_mega.master_post_slots || []).forEach(applyEntry);
         if (tone && Array.isArray(tone.slots)) tone.slots.forEach(applyEntry);
 
-        const activatedByHost = await rbActivateSegmentWithHost(segmentId, tone && tone.tone_key || activeToneKey || '');
+        // Only trust the audio-effects PROVIDER's segment activation when the chain
+        // was ACTUALLY loaded through that provider. When we fell back to legacy
+        // loadPreset (executor unavailable), the chain lives in the legacy engine and
+        // the provider's activateSegment is a no-op that STILL reports 'handled' →
+        // tones never get bypassed → the wrong tone plays (a guitar tone over the
+        // bass arrangement) or nothing at all. Force the manual setBypass then.
+        const activatedByHost = _loadedViaAudioEffects
+            ? await rbActivateSegmentWithHost(segmentId, tone && tone.tone_key || activeToneKey || '')
+            : false;
         if (!activatedByHost) {
             const changes = [];
             const mapLen = _indexToSlotId.length;
@@ -2664,6 +2725,7 @@ const RbMegaChain = (function () {
                 executorOptions: rbAudioEffectsLoadOptionsForChain(mega.native_preset.chain, { startAudio: true }),
             });
             loadedViaAudioEffects = !!loaded.viaAudioEffects;
+            _loadedViaAudioEffects = loadedViaAudioEffects;   // module flag for _applyActiveTone
             const res = loaded.result;
             void rbSyncAudioEffectsCapability('mega-chain-loaded', { chain: mega.native_preset.chain, mode: 'mega-chain', bridge: !loaded.viaAudioEffects });
             // Compute dedupe savings: total active_slot entries across
@@ -2834,7 +2896,22 @@ const RbMegaChain = (function () {
                 });
                 if (!key || key === _activeToneKey) return;
                 const tone = _findToneByKey(key);
-                if (!tone) return;
+                if (!tone) {
+                    // The highway published a tone but NONE of this song's seeded
+                    // tones matched it — the cause of "wrong/no tone" (we fall back
+                    // to a default instead of the chart's actual section tone). Log
+                    // it ONCE per song so the exact key mismatch is visible.
+                    if (_mega && !_mega._loggedNoMatch) {
+                        _mega._loggedNoMatch = true;
+                        console.warn(
+                            `[rig_builder mega-chain] highway tone "${key}" did NOT match `
+                            + `any seeded tone for this song — seeded keys: `
+                            + `[${(_mega.tones || []).map(t => t.tone_key).join(', ')}]. `
+                            + `Using the default-tone fallback (the seed's RS tone Key likely `
+                            + `differs from the chart's published tone name).`);
+                    }
+                    return;
+                }
                 _applyActiveTone(tone.tone_key).then(() => {
                     rbSignalChainLoaded().catch(() => {});   // un-mute on the first real tone
                     const src = allowFirstChange ? 'first-change-or-base' : 'base';
@@ -3220,8 +3297,21 @@ window.addEventListener('rig-builder:tones-state', () => rbInjectPlayerToneButto
             window.__rbChainInputDrive = s.nam_chain_input_drive;
             console.log(`[rig_builder] chain input drive = ${window.__rbChainInputDrive} (read from /settings)`);
         }
+        // Clean input calibration trim (Calibration Wizard's −12 dBFS result).
+        // Cache early so rbApplyChainInputDrive applies it before the Setup UI
+        // (rbLoadSettings) ever runs — e.g. a song loaded before opening Rig Builder.
+        if (s && typeof s.nam_input_calibration === 'number') {
+            window.__rbInputCalibration = s.nam_input_calibration;
+            console.log(`[rig_builder] input calibration = ${window.__rbInputCalibration} (read from /settings)`);
+        }
         if (s && typeof s.chain_makeup === 'number') {
             window.__rbChainMakeup = s.chain_makeup;
+        }
+        // Tone override — cache early so triggerBuild / autoApplyChain honour it
+        // before the Setup UI (rbLoadSettings) has run.
+        if (s && typeof s.tone_override_enabled !== 'undefined') {
+            rbToneOverride.enabled = !!s.tone_override_enabled;
+            rbToneOverride.name = (typeof s.tone_override_name === 'string') ? s.tone_override_name : '';
         }
     }).catch(() => {});
 
@@ -3230,6 +3320,13 @@ window.addEventListener('rig-builder:tones-state', () => rbInjectPlayerToneButto
     let _buildingFile = null;
 
     function triggerBuild(filename, source) {
+        // Tone override: ignore the song's tone entirely. Tear down any mega-chain
+        // and play the user's chosen tone instead (loaded once per song).
+        if (rbToneOverrideActive()) {
+            try { if (RbMegaChain.isActive() || RbMegaChain.isPending()) RbMegaChain.teardown(false).catch(() => {}); } catch (_) {}
+            rbLoadOverrideToneForSong(filename).catch(() => {});
+            return;
+        }
         if (!RbMegaChain.settingKnown()) {
             if (filename) {
                 RbMegaChain.markPending(filename);
@@ -3948,31 +4045,38 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
         if (!drawValues || !Object.keys(drawValues).length) {
             try { drawValues = rbCanvasThumbValues(piece) || {}; } catch (_) { drawValues = {}; }
         }
+        canvas.__rbVals = drawValues;   // live values object (also used by the GR-meter poll)
         window.RBPedalCanvas.attach(canvas, stem, {
             values: drawValues,
             params: model.logicalParams,
             interactive: true,
             onChange: (logicalId, val) => {
-                const realId = model.idMap[logicalId] ?? logicalId;
-                if (piece._vst_slot_id != null && api) { try { api.setParameter(piece._vst_slot_id, realId, val); } catch (_) {} }
-                piece._vst_params = piece._vst_params || {};
-                piece._vst_params[realId] = val;
-                // Also keep the value under its LOGICAL id so a fresh-load room
-                // thumbnail (no live param model to map real→logical) renders the
-                // right knob — the canvas spec draws by logical id.
+                // Keep the value under its LOGICAL id so a fresh-load room thumbnail
+                // (no live param model to map real→logical) renders the right knob —
+                // the canvas spec draws by logical id.
                 piece._vst_logical = piece._vst_logical || {};
                 piece._vst_logical[logicalId] = val;
+                // Drive the live engine param. Slot id + real param id are resolved
+                // robustly against the live chain (see rbStudioApplyKnobToEngine) so
+                // the knob works even when the param meta wasn't ready at focus-open.
+                rbStudioApplyKnobToEngine(piece, idx, logicalId, val);
             },
         });
     };
     if (window.RBPedalCanvas.ready) window.RBPedalCanvas.ready().then(draw);
     draw();
+    // Real-time GR meter (dbx/HZX) — DISABLED until the engine surfaces VST OUTPUT
+    // params: getParameters() returns the GR output param stuck at 0 (JUCE/the
+    // sandbox proxy don't sync read-only/output params from the plugin). When a
+    // host-side change pushes the live GR value, re-enable this line.
+    // try { rbStartGrMeterPoll(canvas, piece, idx, stem); } catch (_) {}
     // Redraw once the amp has finished growing to its focused size so the
     // canvas backing store matches the larger on-screen size (stays crisp).
     setTimeout(draw, 520);
 }
 
 async function rbStudioCloseFocus() {
+    try { rbStopGrMeterPoll(); } catch (_) {}   // stop the dbx GR-meter poll
     const room = document.getElementById('rb-studio-room');
     const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     const bar = document.getElementById('rb-studio-focus-bar');
@@ -4324,6 +4428,37 @@ function rbStudioPedalStep(delta) {
 
 // Load a focused gear's VST into the editor slot + restore its saved params,
 // then swap its static face for the interactive canvas. Shared loader for the
+// ── Real-time gain-reduction VU (dbx 160 / HZX) ─────────────────────────────
+// The HZX VST exposes a "GR" OUTPUT param (gain reduction). getParameters(slot)
+// returns each param's live VALUE, so we poll it and redraw the canvas needle —
+// no engine change needed. Only the dbx comp (stem 'hzx') has a GR meter.
+let _rbGrPoll = null;
+function rbStopGrMeterPoll() { if (_rbGrPoll) { clearInterval(_rbGrPoll); _rbGrPoll = null; } }
+function rbStartGrMeterPoll(canvas, piece, idx, stem) {
+    rbStopGrMeterPoll();
+    if (stem !== 'hzx') return;
+    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    if (!api || typeof api.getParameters !== 'function' || !window.RBPedalCanvas) return;
+    let slotId = null, grIdx = -1, misses = 0;
+    _rbGrPoll = setInterval(async () => {
+        if (!document.body.contains(canvas)) { rbStopGrMeterPoll(); return; }
+        const vals = canvas.__rbVals; if (!vals) return;
+        try {
+            if (slotId == null) {
+                slotId = (piece && piece._vst_slot_id != null) ? piece._vst_slot_id
+                       : await rbStudioChainSlotIdForPiece(api, idx).catch(() => null);
+                if (slotId == null) { if (++misses > 40) rbStopGrMeterPoll(); return; }
+            }
+            const plist = await api.getParameters(slotId);
+            if (!Array.isArray(plist) || !plist.length) return;
+            if (grIdx < 0 || grIdx >= plist.length || String(plist[grIdx].name || '').toLowerCase() !== 'gr')
+                grIdx = plist.findIndex(p => String(p.name || '').toLowerCase() === 'gr');
+            vals.__gr = (grIdx >= 0) ? Math.max(0, Math.min(1, Number(plist[grIdx].value) || 0)) : 0;
+            window.RBPedalCanvas.render(canvas, stem, vals);
+        } catch (_) {}
+    }, 70);
+}
+
 // pedal focus (the amp has its own inline copy with the grow-timed swap).
 // Map a focused Studio piece to its slot id in the ALREADY-LOADED engine chain,
 // matching the VST path directly against getChainState() (Nth slot with that
@@ -4352,6 +4487,47 @@ async function rbStudioChainSlotIdForPiece(api, pieceIdx) {
         }
         return null;
     } catch (_) { return null; }
+}
+
+// Apply a canvas-knob change to the live engine, resolving BOTH the engine slot
+// id and the REAL engine param id robustly at call time.
+//
+// Two failure modes this guards against (both reported as "the knob does nothing"
+// or "the right knob controls the left one"):
+//   1. Stale slot id — a gear swap rebuilds the chain → new engine slot ids; the
+//      cached piece._vst_slot_id points at a dead slot. Re-resolve from the chain.
+//   2. Off-by-N param id — the canvas fires a LOGICAL id (position into the
+//      filtered param list). It must map to the REAL engine id. When the param
+//      meta wasn't ready at focus-open (common for the amp), the old code fell
+//      back to the raw logical id — but the engine PREPENDS "Buffer Size" +
+//      "Sample Rate", so real ids are shifted by 2: logical 0 (Gain/Volume) hit
+//      Buffer Size (no-op), logical 1 hit Sample Rate (no-op), and the rest drove
+//      the param two slots to the left. We re-fetch the meta live and map by
+//      filtered position instead of ever using the raw logical id.
+async function rbStudioApplyKnobToEngine(piece, idx, logicalId, val) {
+    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    if (!api || typeof api.setParameter !== 'function') return;
+    // 1. Resolve the engine slot (re-resolve if missing/stale).
+    let slotId = piece._vst_slot_id;
+    if (slotId == null) {
+        try { slotId = await rbStudioChainSlotIdForPiece(api, idx); } catch (_) { slotId = null; }
+        if (slotId != null) { piece._vst_slot_id = slotId; rbState._vstEditorSlot = slotId; }
+    }
+    if (slotId == null) return;     // gear not in the live chain → nothing to drive
+    // 2. Resolve the REAL engine param id for this logical (filtered) position.
+    let meta = piece._vst_param_meta;
+    if (!((meta || []).length) && typeof api.getParameters === 'function') {
+        try { meta = await api.getParameters(slotId); piece._vst_param_meta = meta || []; }
+        catch (_) { meta = piece._vst_param_meta || []; }
+    }
+    const filtered = rbFilterVstParams(meta || []);
+    if (logicalId >= filtered.length) return;       // can't map safely → skip (never drive a wrong param)
+    const p = filtered[logicalId];
+    const realId = p.id ?? p.paramId ?? p.index;
+    if (realId == null) return;
+    piece._vst_params = piece._vst_params || {};
+    piece._vst_params[realId] = val;                // persist under the REAL id
+    try { api.setParameter(slotId, realId, val); } catch (_) {}
 }
 
 async function rbStudioLoadFocusVst(idx, faceEl, growMs) {
@@ -4546,6 +4722,48 @@ function rbStudioUpdateSwapCarousel() {
     });
 }
 
+// After a gear swap/add, the live song chain (mega-chain) was built from the OLD
+// rig, so the new gear doesn't sound until the user re-selects the tone. Rebuild it
+// once the persist has reached the backend (so buildForSong re-fetches the new rig).
+async function rbStudioReloadLiveChainAfterSwap() {
+    // Wait for the persist to reach the backend so the reload re-fetches the
+    // swapped rig, then reload whatever monitor is actually live. Mirrors the
+    // proven reload block in rbAdvMaterializeGear: the live audio depends on the
+    // Studio view source — 'default' (idle default tone, loaded via the legacy
+    // loadPreset path), or 'song'/'saved' (rbStudioLoadMonitor / mega-chain).
+    // The old version only rebuilt the mega-chain, so an amp swap while sitting
+    // on the default/test tone didn't sound until the user re-selected the tone.
+    try { await rbState._studioPersistPromise; } catch (_) {}
+    try {
+        const v = rbState.studioView || { source: 'default' };
+        if (v.source === 'default') {
+            if (rbState._defaultToneActive) await rbReloadDefaultTone();
+        } else if (typeof rbStudioLoadMonitor === 'function') {
+            await rbStudioLoadMonitor();
+        }
+    } catch (_) {}
+    // The default-tone reload doesn't run rbStudioFinishMonitorLoad, so re-apply
+    // the stereo routing + graph connectivity (otherwise rebuilt slots come back
+    // at pan 0 / lose bypass-disconnect state).
+    try { await rbStudioApplyStereoToEngine(); } catch (_) {}
+    try { await rbAdvApplyConnectivity(); } catch (_) {}
+    // The rebuild reassigned engine slot ids → the focused piece's cached
+    // _vst_slot_id is now stale. Re-resolve it so its knobs drive the engine
+    // immediately (otherwise the first knob move after a swap hits a dead slot).
+    try {
+        const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const fidx = rbState._studioFocusIdx;
+        if (api && typeof fidx === 'number' && fidx >= 0) {
+            const fpiece = (rbStudioCurrentChain())[fidx];
+            if (fpiece) {
+                const sid = await rbStudioChainSlotIdForPiece(api, fidx);
+                fpiece._vst_slot_id = (sid != null) ? sid : null;
+                if (sid != null) rbState._vstEditorSlot = sid;
+            }
+        }
+    } catch (_) {}
+}
+
 function rbStudioSwapToGear(rsGear) {
     const kind = rbState._swapKind || 'amp';
     const g = ((rbState.gearCatalog && rbState.gearCatalog[kind]) || []).find(x => x.rs_gear === rsGear);
@@ -4566,6 +4784,7 @@ function rbStudioSwapToGear(rsGear) {
         rbStudioCurrentChain().push(newPiece);
         rbState._studioPedalAddMode = false;
         try { rbStudioPersist(); } catch (_) {}
+        rbStudioReloadLiveChainAfterSwap();   // new pedal sounds without re-selecting the tone
         // Don't re-render the room here — it would wipe the focus layer + rail
         // (room children). The order already reflects the new piece; the floor
         // board repaints on close (rbStudioCloseFocus).
@@ -4587,6 +4806,7 @@ function rbStudioSwapToGear(rsGear) {
     piece._vst_state = null; piece._vst_params = null; piece._vst_logical = null;
     piece._vst_param_meta = null; piece._vst_slot_id = null; piece._vst_opaque = null;
     try { rbStudioPersist(); } catch (_) {}
+    rbStudioReloadLiveChainAfterSwap();   // rebuild the live song chain so the swap sounds without re-selecting the tone
     if (kind === 'amp') {
         // Show the new amp face immediately, then reload focus (loads its VST +
         // knobs and re-renders the rail with the new amp centred).
@@ -4776,6 +4996,117 @@ async function rbStudioFinishMonitorLoad(api, chain) {
 // tone's native preset and force the LEGACY loadPreset path (delete payload.id
 // — the v0.3.0 audio-effects executor routes to a song-bound route that's
 // silent with no song active). No-ops during a song preview/audition.
+// ── "Play a specific tone" override ─────────────────────────────────────────
+// When enabled (Setup tab), every song plays ONE chosen user tone — the Default
+// tone or a saved Studio tone — instead of its own tone, reusing the proven
+// default-tone / saved-tone legacy load path. Persisted as tone_override_enabled
+// / tone_override_name in /settings.
+const rbToneOverride = { enabled: false, name: '' };
+let _rbOverrideLoadedKey = null;   // (songFile|toneName) the override last loaded
+
+function rbToneOverrideActive() { return !!rbToneOverride.enabled; }
+function rbResetOverrideLoaded() { _rbOverrideLoadedKey = null; }
+
+// Load the chosen override tone NOW. name '' = Default tone; otherwise a saved
+// Studio tone by name (falls back to Default if it's gone).
+async function rbLoadOverrideTone() {
+    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    if (!api) return;
+    const name = rbToneOverride.name || '';
+    if (!name) { try { await rbReloadDefaultTone(); } catch (_) {} return; }
+    const t = (rbState.savedTones || []).find(x => x.name === name);
+    if (!t || t.id == null) { try { await rbReloadDefaultTone(); } catch (_) {} return; }
+    if (typeof rbLoadNativePresetPayload !== 'function') return;
+    try {
+        const r = await fetch(`${window.RB_API}/native_preset_full/${t.id}`);
+        if (!r.ok) return;
+        const payload = await r.json();
+        if (!payload || !payload.native_preset) return;
+        try { if (typeof rbCloseActiveVstEditor === 'function') await rbCloseActiveVstEditor(); } catch (_) {}
+        delete payload.id;   // force the legacy monitor path (executor route is silent at idle)
+        await rbLoadNativePresetPayload(api, payload, { mode: 'preview', authorization: 'user-action' });
+        try { await rbStudioFinishMonitorLoad(api, payload.native_preset.chain); } catch (_) {}
+        rbState._defaultToneActive = true;
+    } catch (e) { console.warn('[rig_builder] tone override load failed:', e); }
+}
+
+// Load the override tone for a song, ONCE per (song, tone) — idempotent so the
+// bundle's per-tone-change re-apply doesn't cause an audible reload every section.
+async function rbLoadOverrideToneForSong(filename) {
+    const key = (filename || '') + '|' + (rbToneOverride.name || '');
+    if (_rbOverrideLoadedKey === key) return;
+    _rbOverrideLoadedKey = key;
+    await rbLoadOverrideTone();
+}
+
+// Fill the Setup dropdown with Default + the user's saved Studio tones.
+function rbPopulateToneOverrideSelect() {
+    const sel = document.getElementById('rb-tone-override-name');
+    if (!sel) return;
+    const cur = rbToneOverride.name || '';
+    sel.innerHTML = '<option value="">Default tone</option>'
+        + (rbState.savedTones || []).map(t => `<option value="${rbEsc(t.name)}">${rbEsc(t.name)}</option>`).join('');
+    sel.value = cur;
+    if (sel.value !== cur) { sel.value = ''; rbToneOverride.name = ''; }   // chosen tone deleted → Default
+}
+
+function rbPersistToneOverride() {
+    fetch(`${window.RB_API}/settings`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tone_override_enabled: rbToneOverride.enabled, tone_override_name: rbToneOverride.name }),
+    }).catch(() => {});
+}
+
+// Apply (override ON) or undo (OFF) the override to whatever is playing now.
+async function rbApplyToneOverrideNow() {
+    const cur = window.slopsmith && window.slopsmith.currentSong;
+    const filename = cur && cur.filename;
+    if (rbToneOverride.enabled) {
+        try { if (typeof RbMegaChain !== 'undefined' && (RbMegaChain.isActive() || RbMegaChain.isPending())) await RbMegaChain.teardown(false); } catch (_) {}
+        _rbOverrideLoadedKey = (filename || '') + '|' + (rbToneOverride.name || '');
+        await rbLoadOverrideTone();
+    } else {
+        // Restore the song's own tone: rebuild the mega-chain if on; otherwise the
+        // next tone change / song reload re-applies it.
+        rbResetOverrideLoaded();
+        try {
+            if (filename && typeof RbMegaChain !== 'undefined' && window.__rbMegaChainSetting) {
+                RbMegaChain.buildForSong(filename).catch(() => {});
+            } else if (rbState._defaultToneActive) {
+                await rbReloadDefaultTone();
+            }
+        } catch (_) {}
+    }
+}
+
+function rbInitToneOverrideUI(s) {
+    const cb = document.getElementById('rb-tone-override-enabled');
+    const sel = document.getElementById('rb-tone-override-name');
+    if (!cb || !sel) return;
+    if (s) {
+        rbToneOverride.enabled = !!s.tone_override_enabled;
+        rbToneOverride.name = (typeof s.tone_override_name === 'string') ? s.tone_override_name : '';
+    }
+    cb.checked = rbToneOverride.enabled;
+    sel.disabled = !rbToneOverride.enabled;
+    rbPopulateToneOverrideSelect();
+    if (cb.__rbWired) return;
+    cb.__rbWired = true;
+    cb.addEventListener('change', () => {
+        rbToneOverride.enabled = cb.checked;
+        sel.disabled = !cb.checked;
+        rbResetOverrideLoaded();
+        rbPersistToneOverride();
+        rbApplyToneOverrideNow().catch(() => {});
+    });
+    sel.addEventListener('change', () => {
+        rbToneOverride.name = sel.value || '';
+        rbResetOverrideLoaded();
+        rbPersistToneOverride();
+        if (rbToneOverride.enabled) rbApplyToneOverrideNow().catch(() => {});
+    });
+}
+
 async function rbStudioLoadMonitor() {
     const api = window.feedBackDesktop && window.feedBackDesktop.audio;
     if (!api || typeof rbLoadNativePresetPayload !== 'function') return;
@@ -4908,6 +5239,7 @@ async function rbStudioLoadSavedTones() {
         rbState.savedTones = Array.isArray(d.tones) ? d.tones : [];
     } catch (_) { rbState.savedTones = []; }
     try { rbStudioRenderToneChips(); } catch (_) {}
+    try { rbPopulateToneOverrideSelect(); } catch (_) {}   // keep the Setup override dropdown in sync
 }
 
 // ── Manage tab: inventory of downloaded NAM/IR files ────────────────
@@ -6003,24 +6335,35 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
     const micVariants = p.cab_mic_variants || [];
     if (micVariants.length > 0) {
         const activeFile = effFile;
+        const allOurs = micVariants.every(v => v.our_synth);
+        const anyOurs = micVariants.some(v => v.our_synth);
         const btns = micVariants.map(v => {
             const active = v.ir_file === activeFile;
             if (!v.available || !v.ir_file) {
                 return `<button disabled title="IR not extracted"
                                 class="px-2.5 py-0.5 rounded border text-[11px] bg-dark-800/40 text-gray-600 border-gray-800 cursor-not-allowed">${rbEsc(v.label || v.suffix)}</button>`;
             }
+            const ours = !!v.our_synth;   // OUR own cab IR (rb_cab_overrides) — accent emerald, not RS sky
             const cls = active
-                ? 'bg-sky-700/60 text-sky-100 border-sky-500/60 font-semibold'
-                : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-sky-900/40 hover:text-sky-200 hover:border-sky-700/40';
+                ? (ours ? 'bg-emerald-700/60 text-emerald-100 border-emerald-500/60 font-semibold'
+                        : 'bg-sky-700/60 text-sky-100 border-sky-500/60 font-semibold')
+                : (ours ? 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-emerald-900/40 hover:text-emerald-200 hover:border-emerald-700/40'
+                        : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-sky-900/40 hover:text-sky-200 hover:border-sky-700/40');
             return `<button onclick="rbPickCabMic(${toneIdx}, ${pIdx}, '${rbEsc(v.ir_file).replace(/'/g,"\\'")}')"
-                            title="${rbEsc(v.mic_type || '')} · ${rbEsc(v.position || '')} (suffix ${rbEsc(v.suffix)})"
+                            title="${rbEsc(v.mic_type || '')} · ${rbEsc(v.position || '')} (suffix ${rbEsc(v.suffix)})${ours ? ' · IR propio' : ''}"
                             class="px-2.5 py-0.5 rounded border text-[11px] transition ${cls}">${rbEsc(v.label || v.suffix)}</button>`;
         }).join(' ');
+        const micBox = allOurs ? 'bg-emerald-900/15 border-emerald-800/30'
+                               : 'bg-sky-900/15 border-sky-800/30';
+        const micIcon = allOurs ? 'text-emerald-400' : 'text-sky-400';
+        const micNote = allOurs ? 'IRs propios — click para cambiar de micrófono'
+                       : anyOurs ? 'IRs propios + del juego — click para cambiar'
+                       : 'Cab IRs — click to switch';
         rsIrControl = `
-            <div class="bg-sky-900/15 border border-sky-800/30 rounded p-2.5 mt-2">
+            <div class="${micBox} border rounded p-2.5 mt-2">
                 <div class="flex items-center gap-2 mb-1.5">
-                    <span class="text-xs text-sky-400">🎙 Mic position</span>
-                    <span class="text-[10px] text-gray-500">Cab IRs — click to switch</span>
+                    <span class="text-xs ${micIcon}">🎙 Mic position</span>
+                    <span class="text-[10px] text-gray-500">${micNote}</span>
                 </div>
                 <div class="flex items-center gap-1.5 flex-wrap">${btns}</div>
             </div>`;
@@ -6770,6 +7113,16 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
                     if (piece._vst_slot_id != null && api) { try { api.setParameter(piece._vst_slot_id, realId, val); } catch (_) {} }
                     piece._vst_params = piece._vst_params || {};
                     piece._vst_params[realId] = val;
+                    // Keep the LOGICAL-id value too so the song thumbnail redraws
+                    // the right knob on a fresh load (the spec draws by logical id).
+                    piece._vst_logical = piece._vst_logical || {};
+                    piece._vst_logical[logicalId] = val;
+                    // PERSIST: the canvas editor used to only stage the drag in
+                    // memory, so knob edits on a song's gear were LOST on exit/
+                    // reload (only the slider path auto-saved). Stamp + debounced
+                    // save to the song file, exactly like rbToneSetVstParam.
+                    rbStampVstState(piece);
+                    rbDebouncedToneSave(toneIdx, pIdx);
                 },
             });
         };
@@ -10510,8 +10863,10 @@ function rbRenderGearDetail(g) {
         ? `<div class="flex items-center gap-1 flex-wrap">${g.mic_variants.map(v => {
             const vId = `rb-aud-${_rbCatalogSeq++}`;
             if (!v.available || !v.ir_file) return `<button disabled class="text-[10px] px-2 py-0.5 rounded bg-dark-800/50 text-gray-600 cursor-not-allowed">▶ ${rbEsc(v.label || v.suffix)}</button>`;
+            const aud = v.our_synth ? 'bg-emerald-900/30 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/40'
+                                    : 'bg-sky-900/30 hover:bg-sky-900/60 text-sky-300 border border-sky-800/40';
             return `<button id="${vId}" onclick="rbAuditionFile('${rbEsc(v.ir_file).replace(/'/g,"\\'")}','ir','${vId}')"
-                            class="text-[10px] px-2 py-0.5 rounded bg-sky-900/30 hover:bg-sky-900/60 text-sky-300 border border-sky-800/40">▶ ${rbEsc(v.label || v.suffix)}</button>`;
+                            class="text-[10px] px-2 py-0.5 rounded ${aud}">▶ ${rbEsc(v.label || v.suffix)}</button>`;
         }).join('')}</div>` : '';
     const visualBlock = rbCatalogVisualForGear(g, 'large');
 
@@ -10837,9 +11192,11 @@ function rbRenderCatalogCard(g) {
                 return `<button disabled title="IR not extracted — re-run Setup → Extract everything"
                                 class="text-[10px] px-2 py-0.5 rounded bg-dark-800/50 text-gray-600 cursor-not-allowed">▶ ${rbEsc(v.label || v.suffix)}</button>`;
             }
+            const aud = v.our_synth ? 'bg-emerald-900/30 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/40'
+                                    : 'bg-sky-900/30 hover:bg-sky-900/60 text-sky-300 border border-sky-800/40';
             return `<button id="${vId}" onclick="event.stopPropagation(); rbAuditionFile('${rbEsc(v.ir_file).replace(/'/g,"\\'")}','ir','${vId}')"
-                            title="${rbEsc(v.mic_type || '')} · ${rbEsc(v.position || '')} (suffix ${rbEsc(v.suffix)})"
-                            class="text-[10px] px-2 py-0.5 rounded bg-sky-900/30 hover:bg-sky-900/60 text-sky-300 border border-sky-800/40">▶ ${rbEsc(v.label || v.suffix)}</button>`;
+                            title="${rbEsc(v.mic_type || '')} · ${rbEsc(v.position || '')} (suffix ${rbEsc(v.suffix)})${v.our_synth ? ' · IR propio' : ''}"
+                            class="text-[10px] px-2 py-0.5 rounded ${aud}">▶ ${rbEsc(v.label || v.suffix)}</button>`;
         }).join(' ');
         micVariantAuditionRow = `<div class="flex items-center gap-1 flex-wrap">
             <span class="text-[10px] text-gray-500">Mic positions:</span>${btns}
@@ -12350,15 +12707,21 @@ async function rbLoadSettings() {
     // sees it even if the user never opens Settings. rbLoadSettings is
     // called from rbInit so this runs at page-load.
     window.__rbMegaChainSetting = !!s.mega_chain_mode;
+    // "Play a specific tone" override — set the checkbox + dropdown from settings.
+    try { rbInitToneOverrideUI(s); } catch (_) {}
     // Refresh the chain-input drive cache too — picks up any change the
     // user made via Settings (or via a direct settings POST in DevTools).
     if (typeof s.nam_chain_input_drive === 'number') {
         window.__rbChainInputDrive = s.nam_chain_input_drive;
     }
+    if (typeof s.nam_input_calibration === 'number') {
+        window.__rbInputCalibration = s.nam_input_calibration;
+    }
     // "Input" knob (the in-game "Input" fader's twin) — shown in dB, default 0 dB.
-    // Reflects the latest value, including edits made via the in-game fader during
-    // songs (each edit persisted nam_chain_input_drive as a linear ×).
-    const advDb = rbLinToDb((typeof s.nam_chain_input_drive === 'number') ? s.nam_chain_input_drive : 1.0);
+    // Reflects the clean input calibration trim (nam_input_calibration), including
+    // edits made via the in-game fader during songs and the Calibration Wizard's
+    // −12 dBFS result handed to us via rig-builder:set-input-calibration.
+    const advDb = rbLinToDb(rbInputCalibration());
     if (!window.__rbDesktopInputKnob)
         window.__rbDesktopInputKnob = rbAttachKnob('rb-amp-drive-knob', { min: RB_LEVEL_DB_MIN, max: RB_LEVEL_DB_MAX, def: 0, value: advDb, onChange: rbSetDesktopInput });
     else window.__rbDesktopInputKnob.set(advDb);
@@ -12603,6 +12966,65 @@ function rbAdvState() {
     return rbState._adv;
 }
 
+const RB_ADV_STEREO_OUT_RS = new Set([
+    'Pedal_StereoChorus',
+    'Pedal_DigitalChorus',
+    'Pedal_VintageChorus',
+    'Bass_Pedal_BassChorus',
+    'Pedal_SendInTheClones',
+    'Pedal_TremOle',
+    'Pedal_NoFiEcho',
+    'Pedal_Limiter',
+    'Rack_StereoPhaser',
+    'Rack_StudioChorus',
+    'Rack_StudioDelay',
+    'Rack_StudioFlanger',
+    'Rack_TapeEcho',
+]);
+const RB_ADV_STEREO_OUT_STEMS = new Set([
+    '134stereochorus',
+    'analogchorus',
+    'ch5',
+    'digitalchorus',
+    'cb3',
+    'basschorus',
+    'attackoftheclones',
+    'sendintheclones',
+    'dynatrem',
+    'tremole',
+    'nofiecho',
+    'lm2',
+    'limiter',
+    'stereophaser',
+    'studiochorus',
+    'studiodelay',
+    'studioflanger',
+    'tapeecho',
+]);
+function rbAdvStemFromPath(path) {
+    return (path || '').split('/').pop().replace(/\.(vst3|component)$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+function rbAdvCatalogCanStereoOut(g) {
+    if (!g) return false;
+    const rs = g.rs_gear || g.type || '';
+    const stem = rbAdvStemFromPath(g.vst_path || g._vst_path || '');
+    return RB_ADV_STEREO_OUT_RS.has(rs) || RB_ADV_STEREO_OUT_STEMS.has(stem);
+}
+function rbAdvPieceCanStereoOut(piece, rsGear) {
+    const rs = rsGear || (piece && piece.type) || '';
+    const stem = piece ? rbCanvasStem(piece) : '';
+    return RB_ADV_STEREO_OUT_RS.has(rs) || RB_ADV_STEREO_OUT_STEMS.has(stem);
+}
+function rbAdvNodeCanStereoOut(n) {
+    if (!n || n.kind !== 'gear') return false;
+    let piece = null;
+    try {
+        const chain = rbStudioCurrentChain();
+        if (typeof n.pieceIdx === 'number' && n.pieceIdx >= 0) piece = chain[n.pieceIdx] || null;
+    } catch (_) {}
+    return rbAdvPieceCanStereoOut(piece, n.rsGear) || !!n.stereoOut;
+}
+
 // Zoom the node canvas (a sizer wrapper holds the scroll size; the two content
 // layers are transform:scale'd inside it so scroll works at any zoom).
 function rbAdvZoom(delta) {
@@ -12641,9 +13063,9 @@ function rbAdvPersist() {
         // live chain on restore (they can change without invalidating the graph).
         const nodes = adv.nodes.map(n => ({
             id: n.id, kind: n.kind, pieceIdx: (typeof n.pieceIdx === 'number' ? n.pieceIdx : -1),
-            kindLabel: n.kindLabel || null, label: n.label || null, x: n.x, y: n.y,
+            kindLabel: n.kindLabel || null, label: n.label || null, rsGear: n.rsGear || null, x: n.x, y: n.y,
             pan: (typeof n.pan === 'number' ? n.pan : 0),   // stereo pan (St-1)
-            stereoOut: !!n.stereoOut,                       // split L/R outputs (St-2)
+            stereoOut: rbAdvNodeCanStereoOut(n),            // optional L/R outputs (St-2)
         }));
         localStorage.setItem(rbAdvStorageKey(), JSON.stringify({ nodes, edges: adv.edges }));
     } catch (_) {}
@@ -12671,9 +13093,11 @@ function rbAdvRestore() {
             p._pan = pan;
             nodes.push({
                 id: n.id, kind: 'gear', pieceIdx: n.pieceIdx, kindLabel: n.kindLabel,
+                rsGear: n.rsGear || p.type || null,
                 label: p.real_name || p.type || 'Gear',
                 img: rbStudioPedalImg(p) || null, bypassed: !!p._bypassed,
-                x: n.x, y: n.y, pan, stereoOut: !!n.stereoOut,
+                x: n.x, y: n.y, pan,
+                stereoOut: rbAdvPieceCanStereoOut(p, n.rsGear) || !!n.stereoOut,
             });
         } else {
             // Always use the fresh terminal label (ignore any cached one, e.g. an
@@ -12751,6 +13175,7 @@ function rbAdvResetToChain() {
         img: rbStudioPedalImg(e.p) || null,
         bypassed: !!e.p.bypassed, x: 0, y: 0,
         pan: (typeof e.p._pan === 'number' ? e.p._pan : 0),   // stereo pan (St-1)
+        stereoOut: rbAdvPieceCanStereoOut(e.p, e.p.type),
     });
     const isPost = (e) => (e.p.slot || '').toLowerCase() === 'post_pedal';
     const pedals = g.pedal || [];
@@ -12877,6 +13302,7 @@ function rbAdvNodeHtml(n) {
     const thumb = n.img
         ? `<div class="rb-adv-node-thumb"><img src="${rbEsc(n.img)}" alt="" onerror="this.style.display='none'"></div>`
         : `<div class="rb-adv-node-thumb"></div>`;
+    const stereoOut = rbAdvNodeCanStereoOut(n);
     return `<div class="rb-adv-node ${n.bypassed ? 'rb-adv-node-bypassed' : ''} ${n._inactive ? 'rb-adv-node-inactive' : ''}" data-adv-node="${n.id}"
                  style="left:${n.x}px;top:${n.y}px">
                 <button class="rb-adv-node-del" data-adv-del="${n.id}" title="Remove from chain">✕</button>
@@ -12886,10 +13312,11 @@ function rbAdvNodeHtml(n) {
                 <div class="rb-adv-node-kind">${rbEsc(n.kindLabel || 'gear')}</div>
                 ${rbAdvPanHtml(n)}
                 <span class="rb-adv-jack rb-adv-jack-in" data-adv-jack="${n.id}" data-adv-side="in" data-adv-port="in"></span>
-                ${n.stereoOut
-                    ? `<span class="rb-adv-jack rb-adv-jack-out rb-adv-jack-l" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="L" title="Left output"></span>
+                ${stereoOut
+                    ? `<span class="rb-adv-jack rb-adv-jack-out rb-adv-jack-mono" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="out" title="Mono output (default)"></span>
+                       <span class="rb-adv-jack rb-adv-jack-out rb-adv-jack-l" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="L" title="Left output"></span>
                        <span class="rb-adv-jack rb-adv-jack-out rb-adv-jack-r" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="R" title="Right output"></span>`
-                    : `<span class="rb-adv-jack rb-adv-jack-out" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="out"></span>`}
+                    : `<span class="rb-adv-jack rb-adv-jack-out" data-adv-jack="${n.id}" data-adv-side="out" data-adv-port="out" title="Output"></span>`}
             </div>`;
 }
 
@@ -12937,7 +13364,8 @@ function rbAdvRenderCables(tempPath) {
         // Output anchor follows the port: a stereo-out node has L (upper) and R
         // (lower) jacks; everything else exits at the vertical centre.
         const port = e.fromPort || 'out';
-        const oy = (fn.stereoOut && port === 'L') ? 0.32 : (fn.stereoOut && port === 'R') ? 0.68 : 0.5;
+        const hasStereoPorts = rbAdvNodeCanStereoOut(fn);
+        const oy = (hasStereoPorts && port === 'L') ? 0.28 : (hasStereoPorts && port === 'R') ? 0.72 : 0.5;
         const x1 = fn.x + ((fEl && fEl.offsetWidth) || dimW(fn)), y1 = fn.y + fH * oy;
         const x2 = tn.x, y2 = tn.y + dimH(tn, tEl) / 2;
         const dx = Math.max(40, Math.abs(x2 - x1) * 0.5);
@@ -12945,7 +13373,7 @@ function rbAdvRenderCables(tempPath) {
         // Each edge: a wide invisible hit area (easy to grab, turns the cable red
         // on hover) + the visible cable. DOUBLE-click to disconnect (no ✕ button —
         // it made accidental deletes too easy). L/R cables are tinted.
-        const cls = (fn.stereoOut && port === 'L') ? ' rb-adv-cable-l' : (fn.stereoOut && port === 'R') ? ' rb-adv-cable-r' : '';
+        const cls = (hasStereoPorts && port === 'L') ? ' rb-adv-cable-l' : (hasStereoPorts && port === 'R') ? ' rb-adv-cable-r' : '';
         paths += `<g class="rb-adv-edge-g" data-adv-edge="${idx}">
             <path class="rb-adv-cable-hit" d="${d}"/>
             <path class="rb-adv-cable${cls}" d="${d}"/>
@@ -12981,18 +13409,11 @@ function rbAdvAttachNodeHandlers() {
         if (btn) { ev.preventDefault(); ev.stopPropagation(); return; }   // buttons are clicks, not drags
         if (ev.target.closest('.rb-adv-node-pan')) { ev.stopPropagation(); return; } // let the pan slider drag
         const nodeEl = ev.target.closest('.rb-adv-node');
-        // Ctrl/⌘-click a gear node → toggle its split L/R outputs (two out jacks).
-        if ((ev.ctrlKey || ev.metaKey) && nodeEl && !ev.target.closest('.rb-adv-jack')) {
-            ev.preventDefault(); ev.stopPropagation();
-            rbAdvToggleStereoOut(+nodeEl.dataset.advNode);
-            return;
-        }
         const jack = ev.target.closest('.rb-adv-jack');
         if (jack && jack.dataset.advSide === 'out') { rbAdvStartWire(ev, +jack.dataset.advJack, jack.dataset.advPort || 'out'); return; }
         if (nodeEl) rbAdvStartNodeDrag(ev, +nodeEl.dataset.advNode);
     });
-    // Ctrl-click on macOS also fires contextmenu — suppress it over a node so the
-    // split-output toggle doesn't pop the OS menu.
+    // Keep the browser/host context menu out of the canvas while wiring nodes.
     layer.addEventListener('contextmenu', ev => { if (ev.target.closest('.rb-adv-node')) ev.preventDefault(); });
     // Track which gear node the pointer is over, for the C/L/R pan hotkeys.
     layer.addEventListener('mouseover', ev => {
@@ -13014,24 +13435,15 @@ function rbAdvAttachNodeHandlers() {
     });
 }
 
-// Ctrl/⌘-click a gear node → toggle split L/R outputs. Two out jacks appear (L
-// upper, R lower) so you can wire each side to a different destination (e.g. a
-// stereo delay's L to amp A, R to amp B). Turning it back off collapses this
-// node's L/R cables to a single mono output per target.
+// Legacy external hook: older builds exposed L/R ports through a hidden toggle.
+// New behaviour keeps mono (M) as the default output and shows L/R automatically
+// for known stereo-source pedals/racks, so this only force-enables a custom node.
 function rbAdvToggleStereoOut(id) {
     const adv = rbAdvState();
     const n = adv.nodes.find(x => x.id === id);
     if (!n || n.kind !== 'gear') return;
-    n.stereoOut = !n.stereoOut;
-    if (!n.stereoOut) {
-        const seen = new Set();
-        adv.edges = adv.edges.filter(e => {
-            if (e.from !== id) return true;
-            e.fromPort = 'out';
-            if (seen.has(e.to)) return false;   // drop the now-duplicate after collapse
-            seen.add(e.to); return true;
-        });
-    }
+    if (rbAdvNodeCanStereoOut(n)) return;
+    n.stereoOut = true;
     rbAdvRenderCanvas();
     rbAdvPersist();
     rbAdvSyncAudio();
@@ -13251,8 +13663,9 @@ function rbAdvStartWire(ev, fromId, fromPort) {
     const fn = adv.nodes.find(n => n.id === fromId);
     const fEl = document.querySelector(`#rb-adv-nodes [data-adv-node="${fromId}"]`);
     if (!fn || !fEl) return;
-    // Start the rubber-band at the actual port anchor (L upper / R lower / centre).
-    const oy = (fn.stereoOut && fromPort === 'L') ? 0.32 : (fn.stereoOut && fromPort === 'R') ? 0.68 : 0.5;
+    // Start the rubber-band at the actual port anchor (L upper / R lower / mono centre).
+    const hasStereoPorts = rbAdvNodeCanStereoOut(fn);
+    const oy = (hasStereoPorts && fromPort === 'L') ? 0.28 : (hasStereoPorts && fromPort === 'R') ? 0.72 : 0.5;
     const x1 = fn.x + fEl.offsetWidth, y1 = fn.y + fEl.offsetHeight * oy;
     const move = e => {
         const p = rbAdvLayerPoint(e);
@@ -13400,6 +13813,7 @@ function rbAdvBindCanvasOnce() {
             label: data.name || data.rs_gear, kindLabel: data.cat,
             img: rbAdvGearImg(lookup) || null,
             x: Math.max(0, p.x - 64), y: Math.max(0, p.y - 46),
+            stereoOut: rbAdvCatalogCanStereoOut(lookup),
         };
         adv.nodes.push(node);
         rbAdvRenderCanvas();
@@ -13446,6 +13860,8 @@ async function rbAdvMaterializeGear(node) {
     const chain = rbStudioCurrentChain();
     chain.push(piece);
     node.pieceIdx = chain.length - 1;     // link the node to its now-real piece
+    node.rsGear = node.rsGear || piece.type || null;
+    node.stereoOut = rbAdvPieceCanStereoOut(piece, node.rsGear);
     rbAdvRenderCanvas();
     rbAdvPersist();
     try { await rbStudioPersist(); } catch (_) {}
@@ -13547,7 +13963,7 @@ async function rbStudioApplyStereoToEngine() {
             if (port !== 'L' && port !== 'R') continue;
             const from = nodeById.get(e.from);
             const to = nodeById.get(e.to);
-            if (!from || !from.stereoOut || !to) continue;
+            if (!from || !rbAdvNodeCanStereoOut(from) || !to) continue;
             if (to.kind === 'gear' && typeof to.pieceIdx === 'number' && to.pieceIdx >= 0)
                 srcByIdx.set(to.pieceIdx, port === 'L' ? 1 : 2);
         }

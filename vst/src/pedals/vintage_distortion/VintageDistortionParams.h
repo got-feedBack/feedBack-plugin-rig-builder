@@ -4,22 +4,22 @@
 enum VintageDistortionParamId
 {
     kGain = 0,
-    kTone,
+    kVolume,
     kParamCount
 };
 
 static const char* const kVintageDistortionNames[kParamCount] = {
     "Gain",
-    "Tone",
+    "Volume",
 };
 
 static const char* const kVintageDistortionSymbols[kParamCount] = {
     "gain",
-    "tone",
+    "volume",
 };
 
 static const float kVintageDistortionMin[kParamCount] = { 0.0f, 0.0f };
 static const float kVintageDistortionMax[kParamCount] = { 1.0f, 1.0f };
-static const float kVintageDistortionDef[kParamCount] = { 0.35f, 0.55f };
+static const float kVintageDistortionDef[kParamCount] = { 0.35f, 0.62f };
 
 #endif // VINTAGE_DISTORTION_PARAMS_H

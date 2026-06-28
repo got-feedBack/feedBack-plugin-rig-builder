@@ -1,427 +1,165 @@
 #ifndef TW26_CORE_H
 #define TW26_CORE_H
-
-/*
- * TW26Core - BENDER DELUXE / Fender '57 Deluxe (5E3 tweed) component model.
- *
- * White-box audio model: each audible block is driven by the 5E3 schematic
- * component values rather than a literal SPICE solve.
- *
- * Local reference:
- *   amps/Fender Deluxe (TW26)/Fender-57-Deluxe-Schematic.pdf
- *
- * 5E3 topology modelled here:
- *   Input 68k grid -> V1 12AY7 first stage (low-mu ~44 = warm, early, soft) ->
- *   interactive Volume -> single tweed Tone network (1M pot, C5 .0047uF,
- *   C4 500pF) -> V2-A 12AX7 recovery gain -> V2-B 12AX7 cathodyne (split-load)
- *   phase inverter -> 2x 6V6GT push-pull, CATHODE-biased (R23 250R), NO global
- *   NFB -> 5Y3GT tube rectifier (heavy, blooming sag) -> 1x12 tweed speaker.
- *
- * The 5E3 is mid-forward and woody (NOT scooped like a blackface), compresses
- * and "blooms" early because of the tube rectifier + cathode bias, and breaks
- * up into a loose tweed grind when pushed.
- *
- * the game exposes Gain, Bass, Mid, Treble, Pres. The real amp has only two
- * Volumes + one Tone, so: Gain drives clean->tweed-breakup; Bass/Mid/Treble are
- * a tweed-voiced 3-band expansion of the single Tone control (kept mid-rich);
- * Pres is a gentle top-end lift (the 5E3 has no presence pot).
- */
-
-#include "TW26Params.h"
+//
+// TW26Core - BENDER DELUXE / Fender '57 Deluxe (5E3 tweed), REBUILT circuit-real
+// (same method as BOX AC30 / see REAL_TUBE_AMP_GUIDE.md). Real cathode-biased tube
+// stages with pure Koren transfer tables + the physical cathode auto-bias loop:
+//
+//   in -> V1A/V1B 12AY7 instrument+mic channels -> interactive volume/tone
+//   network -> V2A 12AX7 recovery -> V2B cathodyne PI -> 2x 6V6 push-pull
+//   power (cathode-biased, NO global NFB, heavy 5Y3 tube-rectifier sag) ->
+//   1x12 tweed speaker.
+//
+// The 5E3 VOLUME *is* the gain (it dirties as you turn up); the single Tone is the
+// only real EQ; jumpering the Mic channel fills body/mids. Bright/Bass/Presence have
+// no 5E3 pot -> they are voicing shelves driven by the game transform. Tubes use OUR
+// Koren tables (public model), not Guitarix GPL code.
+//
+#include "../../_shared/tube_stage.hpp"
 #include <cmath>
 
 namespace tw26 {
 
-static constexpr float kPi = 3.14159265359f;
-static constexpr float kEpsilon = 1.0e-9f;
+static constexpr float kPi = 3.14159265358979f;
+static inline float clamp01(float v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+static inline float softClip(float x) { return std::tanh(x); }
 
-static inline float clamp01(float v)
-{
-    return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
-}
-
-static inline float clampFreq(float hz, float sr)
-{
-    const float nyquist = sr * 0.45f;
-    return std::fmax(10.0f, std::fmin(hz, nyquist));
-}
-
-static inline float smoothstep(float v)
-{
-    v = clamp01(v);
-    return v * v * (3.0f - 2.0f * v);
-}
-
-static inline float smoothstepRange(float edge0, float edge1, float x)
-{
-    return smoothstep((x - edge0) / (edge1 - edge0));
-}
-
-static inline float softClip(float x)
-{
-    return std::tanh(x);
-}
-
-// --- smooth (C-infinity) tube transfer curves: asymmetric for even harmonics,
-//     NO piecewise zero-crossing kink (that injects buzz even on clean tones).
-static inline float triode12AY7(float x, float bias)
-{
-    // 12AY7: lower mu than a 12AX7 -> warmer, earlier, softer. Used at V1.
-    const float g = x + bias;
-    const float warped = 1.28f * g + 0.30f * g * std::fabs(g);
-    const float idle   = 1.28f * bias + 0.30f * bias * std::fabs(bias);
-    return std::tanh(warped) - std::tanh(idle);
-}
-
-static inline float triode12AX7(float x, float bias)
-{
-    const float g = x + bias;
-    const float warped = 1.55f * g + 0.34f * g * std::fabs(g);
-    const float idle   = 1.55f * bias + 0.34f * bias * std::fabs(bias);
-    return std::tanh(warped) - std::tanh(idle);
-}
-
-static inline float sixV6Pair(float x, float bias)
-{
-    // Cathode-biased push-pull pair (smooth, symmetric-ish with a touch of even
-    // harmonic from the shared-cathode bias shift).
-    const float p = std::tanh(1.28f * (x + bias) + 0.05f * x * x);
-    const float n = std::tanh(1.28f * (-x + bias) + 0.05f * x * x);
-    const float idle = std::tanh(1.28f * bias);
-    return 0.5f * ((p - idle) - (n - idle));
-}
-
-class RcHighPass
-{
-    float a = 0.0f, x1 = 0.0f, y1 = 0.0f;
-public:
-    void reset() { x1 = y1 = 0.0f; }
-    void setRC(float sr, float resistanceOhm, float capacitanceF)
-    {
-        const float dt = 1.0f / std::fmax(sr, 1000.0f);
-        const float tau = std::fmax(resistanceOhm * capacitanceF, kEpsilon);
-        a = tau / (tau + dt);
-    }
-    void setHz(float sr, float hz)
-    {
-        hz = clampFreq(hz, sr);
-        const float tau = 1.0f / (2.0f * kPi * hz);
-        const float dt = 1.0f / std::fmax(sr, 1000.0f);
-        a = tau / (tau + dt);
-    }
-    float process(float x)
-    {
-        const float y = a * (y1 + x - x1);
-        x1 = x; y1 = y;
-        return y;
-    }
+// RBJ biquad (peaking / shelves / low-pass), denormal-flushed.
+struct Biquad {
+    float b0=1,b1=0,b2=0,a1=0,a2=0,x1=0,x2=0,y1=0,y2=0;
+    inline float process(float x){ float y=b0*x+b1*x1+b2*x2-a1*y1-a2*y2; x2=x1;x1=x;y2=y1;y1=rbtube::dn(y); return y; }
+    void reset(){ x1=x2=y1=y2=0; }
+    void norm(float a0){ b0/=a0;b1/=a0;b2/=a0;a1/=a0;a2/=a0; }
+    void peaking(float sr,float f,float Q,float dB){ float A=powf(10,dB/40),w=2*kPi*f/sr,c=cosf(w),al=sinf(w)/(2*Q);
+        b0=1+al*A;b1=-2*c;b2=1-al*A; float a0=1+al/A;a1=-2*c;a2=1-al/A; norm(a0); }
+    void lowShelf(float sr,float f,float dB){ float A=powf(10,dB/40),w=2*kPi*f/sr,c=cosf(w),s=sinf(w),al=s/2*sqrtf((A+1/A)*1.0f+2); float rA=sqrtf(A);
+        b0=A*((A+1)-(A-1)*c+2*rA*al); b1=2*A*((A-1)-(A+1)*c); b2=A*((A+1)-(A-1)*c-2*rA*al);
+        float a0=(A+1)+(A-1)*c+2*rA*al; a1=-2*((A-1)+(A+1)*c); a2=(A+1)+(A-1)*c-2*rA*al; norm(a0); }
+    void highShelf(float sr,float f,float dB){ float A=powf(10,dB/40),w=2*kPi*f/sr,c=cosf(w),s=sinf(w),al=s/2*sqrtf((A+1/A)*1.0f+2); float rA=sqrtf(A);
+        b0=A*((A+1)+(A-1)*c+2*rA*al); b1=-2*A*((A-1)+(A+1)*c); b2=A*((A+1)+(A-1)*c-2*rA*al);
+        float a0=(A+1)-(A-1)*c+2*rA*al; a1=2*((A-1)-(A+1)*c); a2=(A+1)-(A-1)*c-2*rA*al; norm(a0); }
+    void lowpass(float sr,float f,float Q){ f=fminf(f,sr*0.49f); float w=2*kPi*f/sr,c=cosf(w),al=sinf(w)/(2*Q);
+        b0=(1-c)/2;b1=1-c;b2=(1-c)/2; float a0=1+al;a1=-2*c;a2=1-al; norm(a0); }
 };
 
-class RcLowPass
-{
-    float a = 1.0f, z = 0.0f;
-public:
-    void reset() { z = 0.0f; }
-    void setRC(float sr, float resistanceOhm, float capacitanceF)
-    {
-        const float dt = 1.0f / std::fmax(sr, 1000.0f);
-        const float tau = std::fmax(resistanceOhm * capacitanceF, kEpsilon);
-        a = dt / (tau + dt);
-    }
-    void setHz(float sr, float hz)
-    {
-        hz = clampFreq(hz, sr);
-        const float tau = 1.0f / (2.0f * kPi * hz);
-        const float dt = 1.0f / std::fmax(sr, 1000.0f);
-        a = dt / (tau + dt);
-    }
-    float process(float x) { z += a * (x - z); return z; }
-};
+struct TW26Core {
+    float sr = 48000.0f;
+    rbtube::HP1 inputCoupling;
+    rbtube::TubeStageAY7 instV1, micV1; // 12AY7 channel triodes (warm, low-mu)
+    rbtube::TubeStage    v2;            // V2A 12AX7 recovery/gain
+    rbtube::Miller12AY7 instMiller, micMiller;
+    rbtube::Miller12AX7 millerV2;       // Volume/Tone source -> 12AX7 Miller load
+    rbtube::CouplingCapGridLeak coupleToV2, coupleToPi;
+    rbtube::PhaseInverterCathodyne12AX7 phaseInverter; // V2B split-load PI
+    rbtube::MultiNodeBPlus supply;      // 5Y3 + 16uF nodes + 4k7/22k droppers
+    rbtube::PowerAmp6V6  power;         // 2x 6V6 push-pull, cathode-biased, no NFB
+    Biquad brightSh, bassSh, spkBody, spkRoll, midScoop;
+    rbtube::TweedTone tweedTone;        // real 5E3 single Tone control (R10/C4/C5 circuit)
+    // params (0..1), interface identical to the old TW26Core
+    float pTone=0.6f, pInst=0.45f, pMic=0.0f, pBright=1.0f, pBass=0.5f, pPres=0.5f, pCabSim=1.0f;
+    float inScale=1, preGain=1, gainOut=1, outLevel=1;
+    float instPot=0, micPot=0, tonePot=0;
+    float lastPowerLoad=0, lastScreenLoad=0, lastPreampLoad=0;
 
-class Biquad
-{
-    float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, a1 = 0.0f, a2 = 0.0f, z1 = 0.0f, z2 = 0.0f;
-    void set(float nb0, float nb1, float nb2, float na0, float na1, float na2)
-    {
-        if (std::fabs(na0) < 1.0e-12f) na0 = 1.0f;
-        const float invA0 = 1.0f / na0;
-        b0 = nb0 * invA0; b1 = nb1 * invA0; b2 = nb2 * invA0;
-        a1 = na1 * invA0; a2 = na2 * invA0;
-    }
-public:
-    void reset() { z1 = z2 = 0.0f; }
-    float process(float x)
-    {
-        const float y = b0 * x + z1;
-        z1 = b1 * x - a1 * y + z2;
-        z2 = b2 * x - a2 * y;
-        return y;
-    }
-    void setLowPass(float sr, float hz, float q)
-    {
-        hz = clampFreq(hz, sr);
-        const float w0 = 2.0f * kPi * hz / sr, c = std::cos(w0), alpha = std::sin(w0) / (2.0f * q);
-        set((1.0f - c) * 0.5f, 1.0f - c, (1.0f - c) * 0.5f, 1.0f + alpha, -2.0f * c, 1.0f - alpha);
-    }
-    void setHighPass(float sr, float hz, float q)
-    {
-        hz = clampFreq(hz, sr);
-        const float w0 = 2.0f * kPi * hz / sr, c = std::cos(w0), alpha = std::sin(w0) / (2.0f * q);
-        set((1.0f + c) * 0.5f, -(1.0f + c), (1.0f + c) * 0.5f, 1.0f + alpha, -2.0f * c, 1.0f - alpha);
-    }
-    void setPeaking(float sr, float hz, float q, float gainDb)
-    {
-        hz = clampFreq(hz, sr);
-        const float a = std::pow(10.0f, gainDb / 40.0f);
-        const float w0 = 2.0f * kPi * hz / sr, c = std::cos(w0), alpha = std::sin(w0) / (2.0f * q);
-        set(1.0f + alpha * a, -2.0f * c, 1.0f - alpha * a, 1.0f + alpha / a, -2.0f * c, 1.0f - alpha / a);
-    }
-    void setLowShelf(float sr, float hz, float slope, float gainDb)
-    {
-        hz = clampFreq(hz, sr);
-        const float a = std::pow(10.0f, gainDb / 40.0f);
-        const float w0 = 2.0f * kPi * hz / sr, c = std::cos(w0), s = std::sin(w0), rootA = std::sqrt(a);
-        const float alpha = s * 0.5f * std::sqrt((a + 1.0f / a) * (1.0f / slope - 1.0f) + 2.0f);
-        set(a * ((a + 1.0f) - (a - 1.0f) * c + 2.0f * rootA * alpha),
-            2.0f * a * ((a - 1.0f) - (a + 1.0f) * c),
-            a * ((a + 1.0f) - (a - 1.0f) * c - 2.0f * rootA * alpha),
-            (a + 1.0f) + (a - 1.0f) * c + 2.0f * rootA * alpha,
-            -2.0f * ((a - 1.0f) + (a + 1.0f) * c),
-            (a + 1.0f) + (a - 1.0f) * c - 2.0f * rootA * alpha);
-    }
-    void setHighShelf(float sr, float hz, float slope, float gainDb)
-    {
-        hz = clampFreq(hz, sr);
-        const float a = std::pow(10.0f, gainDb / 40.0f);
-        const float w0 = 2.0f * kPi * hz / sr, c = std::cos(w0), s = std::sin(w0), rootA = std::sqrt(a);
-        const float alpha = s * 0.5f * std::sqrt((a + 1.0f / a) * (1.0f / slope - 1.0f) + 2.0f);
-        set(a * ((a + 1.0f) + (a - 1.0f) * c + 2.0f * rootA * alpha),
-            -2.0f * a * ((a - 1.0f) + (a + 1.0f) * c),
-            a * ((a + 1.0f) + (a - 1.0f) * c - 2.0f * rootA * alpha),
-            (a + 1.0f) - (a - 1.0f) * c + 2.0f * rootA * alpha,
-            2.0f * ((a - 1.0f) - (a + 1.0f) * c),
-            (a + 1.0f) - (a - 1.0f) * c - 2.0f * rootA * alpha);
-    }
-};
+    void setSampleRate(float s){ sr=s; recalc(); reset(); }
+    void setTone(float v){ pTone=clamp01(v); recalc(); }
+    void setInstVol(float v){ pInst=clamp01(v); recalc(); }
+    void setMicVol(float v){ pMic=clamp01(v); recalc(); }
+    void setBright(float v){ pBright=clamp01(v); recalc(); }
+    void setBass(float v){ pBass=clamp01(v); recalc(); }
+    void setPresence(float v){ pPres=clamp01(v); recalc(); }
+    void setCabSim(float v){ pCabSim=clamp01(v); }
+    void reset(){ inputCoupling.reset(); instMiller.reset(); micMiller.reset(); instV1.reset(); micV1.reset(); v2.reset();
+        millerV2.reset(); coupleToV2.reset(); coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset();
+        brightSh.reset(); bassSh.reset(); tweedTone.reset(); spkBody.reset(); spkRoll.reset(); midScoop.reset();
+        lastPowerLoad = lastScreenLoad = lastPreampLoad = 0.0f; }
 
-class DcBlock
-{
-    float x1 = 0.0f, y1 = 0.0f;
-public:
-    void reset() { x1 = y1 = 0.0f; }
-    float process(float x) { const float y = x - x1 + 0.995f * y1; x1 = x; y1 = y; return y; }
-};
+    void recalc(){
+        inputCoupling.set(sr, 12.0f);
+        // Real cathode-biased stages (self-bias solved). Fender '57 Deluxe schematic:
+        // V1 12AY7 shared 820R/25uF cathode, 100k plates; V2A 12AX7 1k5/25uF.
+        instV1.set(sr, 0, 250.0f, 40.0f, 7.8f, 820.0f);
+        micV1.set(sr,  0, 250.0f, 40.0f, 7.8f, 820.0f);
+        v2.set(sr,    1, 250.0f, 40.0f, 4.2f, 1500.0f);
+        instMiller.set(sr, 68000.0f, 24.0f, 8.0f);
+        micMiller.set(sr,  68000.0f, 24.0f, 8.0f);
+        millerV2.set(sr,  180000.0f, 52.0f, 8.0f);
 
-// 5Y3GT tube rectifier + cathode-biased 6V6 supply: deep, slow, blooming sag —
-// the heart of the 5E3 "feel". Returns a 0..1 supply scale.
-class Y3CathodeBiasedSupply
-{
-    float sr = 48000.0f, rectSag = 0.0f, cathodeRise = 0.0f;
-    float sagAttack = 0.0f, sagRelease = 0.0f, cathodeCoeff = 0.0f;
-public:
-    void reset() { rectSag = 0.0f; cathodeRise = 0.0f; }
-    void setSampleRate(float sampleRate)
-    {
-        sr = sampleRate > 1000.0f ? sampleRate : 48000.0f;
-        // 5Y3 has high internal resistance + small filter caps -> quick dip,
-        // slow bloom recovery. Slower/deeper than a solid-state rectifier.
-        sagAttack = 1.0f - std::exp(-1.0f / (0.009f * sr));
-        sagRelease = 1.0f - std::exp(-1.0f / (0.220f * sr));
-        // 6V6 shared cathode R23 250R with 25u -> ~6 ms bias shift.
-        const float tau = 250.0f * 25.0e-6f;
-        cathodeCoeff = 1.0f - std::exp(-1.0f / (std::fmax(tau, 0.001f) * sr));
-    }
-    float process(float env, float gain, float hot)
-    {
-        rectSag += (env - rectSag) * (env > rectSag ? sagAttack : sagRelease);
-        cathodeRise += (env - cathodeRise) * cathodeCoeff;
-        const float bPlus = 1.0f / (1.0f + rectSag * (0.55f + 1.25f * gain + 0.55f * hot));
-        const float cathodeBias = 1.0f / (1.0f + cathodeRise * (0.30f + 0.50f * gain));
-        return bPlus * cathodeBias;
-    }
-};
+        // 1M audio volume controls and single 1M tone control. The electric taper is
+        // real; the drive constants are calibrated so breakup still arrives around
+        // the 5E3's real knob range instead of becoming a sterile linear sweep.
+        instPot = rbtube::PotTaper::audio(pInst, 1.28f);
+        micPot  = rbtube::PotTaper::audio(pMic,  1.28f);
+        tonePot = rbtube::PotTaper::audio(pTone, 1.18f);
+        inScale = 3.25f;
+        // 5E3 Volume pots are post-V1 attenuators feeding V2. Do not also
+        // multiply the V2/PI drive by the pot, or low settings disappear and
+        // high settings overcharge the coupling caps.
+        // 0.45x (was 4.6) so it breaks up around the real 5E3 knob range at the
+        // calibrated -12 dBFS input -- it was distorting far too early (crest ~9
+        // at noon vs the amp-only Woodrow reference's ~13).
+        preGain = 0.45f * 4.6f;
+        gainOut = 1.20f;
 
-class TW26Core
-{
-    float sampleRate = 48000.0f;
-    float tone    = kTW26Def[kTone];
-    float instVol = kTW26Def[kInstVol];   // Instrument Volume (= gain)
-    float micVol  = kTW26Def[kMicVol];    // Mic Volume (jumpered body)
-    float bright  = kTW26Def[kBright];    // Instrument bright input
-    float bass    = kTW26Def[kBass];      // hidden low shelf
-    float presK   = kTW26Def[kPresence];  // hidden power-amp top lift
+        // 0.1uF coupling caps into ~1M grid leaks in the 5E3 preamp path; 0.022uF
+        // into the cathodyne grid. Positive-grid drive now charges/recover caps
+        // instead of passing through ideal HPFs.
+        coupleToV2.set(sr, 1000000.0f, 100.0e-9f, 68000.0f, 0.30f, 0.07f, 0.24f);
+        coupleToPi.set(sr, 1000000.0f, 22.0e-9f, 220000.0f, 0.30f, 0.07f, 0.22f);
+        phaseInverter.set(sr, 0.95f + 2.85f * instPot + 0.70f * micPot,
+                          0.92f, 250.0f, 56000.0f, 56000.0f, 2.3f, 0.0f);
 
-    RcLowPass inputGrid;        // 68k grid into V1 Miller capacitance
-    RcHighPass instBright;      // bright input cap (input 1 bright vs 2 normal)
-    RcHighPass v1Coupling;      // C2 .1uF into the volume/tone
-    RcLowPass v1Miller;
-    RcHighPass micCoupling;     // Mic channel input coupling (jumpered second ch)
-    RcLowPass micLp;            // Mic channel is darker (no bright cap)
-    Biquad micBody;             // Mic channel low-mid body (the jumper fill)
-    RcHighPass toneTrebleBleed; // C5 .0047uF treble path of the single Tone pot
-    Biquad toneShelf;           // the single tweed Tone control (bright<->dark)
-    RcHighPass v2Coupling;      // C7 .022uF into V2-A
-    Biquad bassShelf;           // hidden RS Bass (5E3 has no bass pot)
-    Biquad tweedBody;           // fixed woody low-mid hump (tweed is mid-forward)
-    Biquad presenceShelf;       // hidden RS Pres (the 5E3 has no presence pot)
-    RcHighPass piCoupling;      // C9/C10 to the 6V6 grids
-    Y3CathodeBiasedSupply supply;
-    Biquad transformerLow;      // output transformer low resonance
-    Biquad speakerHp;
-    Biquad speakerBody;         // 1x12 tweed cone low-mid bump
-    Biquad speakerPresence;     // gentle upper-mid (tweed alnico, softer than V30)
-    Biquad speakerAir;          // 4.5k air shelf toward the UAD Woodrow reference top
-    Biquad speakerLp;           // tweed top rolloff (darker than a modern cab)
-    DcBlock dcBlock;
-
-    static float eqDb(float v, float rangeDb) { return (clamp01(v) - 0.5f) * 2.0f * rangeDb; }
-
-    void updateComponentValues()
-    {
-        const float g = smoothstep(instVol);                  // 5E3 volume = gain
-        const float hot = smoothstepRange(0.50f, 0.98f, instVol);
-
-        inputGrid.setRC(sampleRate, 68000.0f, 50.0e-12f);     // ~47 kHz ceiling
-        instBright.setHz(sampleRate, 1500.0f);                // bright-input treble cap
-        v1Coupling.setRC(sampleRate, 1000000.0f, 0.1e-6f);    // C2 .1uF / 1M -> ~1.6 Hz
-        v1Miller.setRC(sampleRate, 100000.0f, 90.0e-12f);     // plate/Miller rolloff
-
-        // Mic channel (the jumpered second channel): darker, low-mid forward.
-        micCoupling.setRC(sampleRate, 1000000.0f, 0.1e-6f);
-        micLp.setHz(sampleRate, 3600.0f);
-        micBody.setPeaking(sampleRate, 480.0f, 0.80f, 3.5f);
-
-        // Single tweed Tone control (treble bleed + a shelf for real range). Its
-        // corner lands in the presence band; the cap sees the network's effective
-        // R, not the raw 1M pot (that would push the corner sub-audio).
-        toneTrebleBleed.setRC(sampleRate, 1.0f / (2.0f * kPi * (2200.0f + 1800.0f * tone) * 0.0047e-6f), 0.0047e-6f);
-        toneShelf.setHighShelf(sampleRate, 1900.0f + 1100.0f * tone, 0.66f, -8.0f + 18.0f * tone);
-        v2Coupling.setRC(sampleRate, 470000.0f, 0.022e-6f);   // C7 .022uF -> ~15 Hz
-
-        // --- tweed body + hidden RS Bass / Pres ---
-        bassShelf.setLowShelf(sampleRate, 115.0f, 0.72f, eqDb(bass, 9.5f) + 2.4f);
-        tweedBody.setPeaking(sampleRate, 340.0f, 0.85f, 1.2f + 1.1f * g);
-        presenceShelf.setHighShelf(sampleRate, 3000.0f, 0.80f, -1.0f + 5.5f * presK);
-
-        piCoupling.setRC(sampleRate, 220000.0f, 0.1e-6f);     // ~7 Hz into the 6V6 grids
-        supply.setSampleRate(sampleRate);
-
-        // --- output transformer + 1x12 tweed speaker (Jensen-style, warm) ---
-        transformerLow.setPeaking(sampleRate, 95.0f, 0.72f, 2.0f + 1.8f * bass);
-        speakerHp.setHighPass(sampleRate, 70.0f, 0.72f);
-        speakerBody.setPeaking(sampleRate, 175.0f, 0.80f, 2.6f + 1.8f * bass - 0.5f * hot);
-        // Less upper-mid honk: the old +2.4 dB bump at 2.1k sat ~3 dB above the UAD
-        // Woodrow reference. Trimmed so the presence sits where the reference does.
-        // Cut the 2 k honk: the reference is SCOOPED there (we sat ~3 dB over). Slight dip.
-        speakerPresence.setPeaking(sampleRate, 2300.0f + 350.0f * tone, 0.85f, -3.2f + 1.0f * tone + 1.0f * presK);
-        // AIR shelf placed HIGH (5.5 k) so it lifts 6-14 k (where the Woodrow has air) WITHOUT
-        // re-boosting the 2-4 k presence. The reference top rises toward 14 k; LP opened to 16 k.
-        speakerAir.setHighShelf(sampleRate, 4000.0f, 0.7f, 16.5f + 2.0f * tone + 3.0f * presK);
-        speakerLp.setLowPass(sampleRate, 16000.0f + 2000.0f * presK + 1500.0f * tone, 0.66f);
+        // 5Y3 supply: 16uF reservoir/screen/preamp nodes, 4k7 and 22k droppers.
+        supply.set(sr, 420.0f, 16.0f, 4700.0f, 16.0f, 22000.0f, 16.0f,
+                   0.34f + 0.12f * instPot, 0.24f + 0.08f * instPot,
+                   0.13f + 0.04f * instPot, 0.26f);
+        // single tweed Tone control (one knob: dark<->bright tilt) + game Bright/Bass shelves
+        tweedTone.update(sr, tonePot);                             // real 5E3 Tone circuit
+        brightSh.highShelf(sr, 2500.0f, 6.0f * pBright);          // Bright input (cap)
+        bassSh.lowShelf(sr, 180.0f, -3.0f + 8.0f * pBass);        // hidden Bass shelf
+        // 2x 6V6 push-pull, cathode-biased, NO NFB, heavy 5Y3 sag (big bloom)
+        power.set(sr, 2.0f + 15.5f * instPot + 4.0f * micPot, -13.0f, 0.42f, 85.0f, 9000.0f);
+        power.out = 0.009f;
+        power.biasShift = 3.0f;
+        outLevel = 0.52f * (1.0f - 0.28f * instPot);               // level comp across the volume range
+        // 1x12 tweed speaker (mild, pre-cab) + Presence top lift
+        spkBody.peaking(sr, 90.0f, 0.6f, 9.0f);                  // fuller lows to match the bassy amp-only Woodrow reference (was thin)
+        midScoop.peaking(sr, 1500.0f, 0.9f, -4.0f);             // scoop the upper-mids (ours was ~+3.5 dB hot vs the ref)
+        spkRoll.highShelf(sr, 3500.0f, 2.0f + 6.0f * pPres);      // Presence
     }
 
-public:
-    void reset()
-    {
-        inputGrid.reset(); instBright.reset(); v1Coupling.reset(); v1Miller.reset();
-        micCoupling.reset(); micLp.reset(); micBody.reset();
-        toneTrebleBleed.reset(); toneShelf.reset(); v2Coupling.reset();
-        bassShelf.reset(); tweedBody.reset(); presenceShelf.reset();
-        piCoupling.reset(); supply.reset();
-        transformerLow.reset(); speakerHp.reset(); speakerBody.reset(); speakerPresence.reset(); speakerAir.reset(); speakerLp.reset();
-        dcBlock.reset();
-        updateComponentValues();
-    }
-
-    void setSampleRate(float sr) { sampleRate = sr > 1000.0f ? sr : 48000.0f; reset(); }
-
-    void setTone(float v)    { tone = clamp01(v);    updateComponentValues(); }
-    void setInstVol(float v) { instVol = clamp01(v); updateComponentValues(); }
-    void setMicVol(float v)  { micVol = clamp01(v);  updateComponentValues(); }
-    void setBright(float v)  { bright = clamp01(v);  updateComponentValues(); }
-    void setBass(float v)    { bass = clamp01(v);    updateComponentValues(); }
-    void setPresence(float v){ presK = clamp01(v);   updateComponentValues(); }
-
-    float process(float in)
-    {
-        const float g = smoothstep(instVol);                 // 5E3 volume = gain
-        const float hot = smoothstepRange(0.50f, 0.98f, instVol);
-
-        float x = inputGrid.process(in);
-
-        // Instrument bright input: input 1 (bright cap) vs input 2 (normal/darker)
-        float xi = x + instBright.process(x) * (0.45f * bright);
-
-        // V1 12AY7 first stage — warm, low-mu, soft early compression.
-        float inst = v1Coupling.process(xi);
-        const float v1Drive = 0.80f + 1.55f * instVol + 0.55f * g;
-        inst = triode12AY7(inst * (v1Drive * 0.72f), -0.020f - 0.020f * instVol);
-        inst = v1Miller.process(inst);
-
-        // Mic channel jumpered in (RS Mid): a darker, low-mid-forward parallel
-        // 12AY7 voice that fills body underneath the Instrument channel.
-        float y = inst;
-        if (micVol > 0.001f)
-        {
-            float mic = micLp.process(micCoupling.process(x));
-            mic = triode12AY7(mic * (0.7f + 1.1f * micVol), -0.020f);
-            mic = micBody.process(mic);
-            y += mic * (0.55f + 1.05f * micVol);
-        }
-
-        // interactive Volume + single tweed Tone control (treble bleed + shelf)
-        const float volume = 0.30f + 1.35f * g + 0.55f * hot;
-        y = (y + toneTrebleBleed.process(y) * (0.18f + 0.42f * tone)) * volume;
-        y = toneShelf.process(y);
-
-        // --- tweed body + hidden RS Bass ---
-        y = bassShelf.process(y);
-        y = tweedBody.process(y);
-
-        // V2-A 12AX7 recovery/gain stage
-        y = v2Coupling.process(y);
-        const float v2Drive = 0.85f + 1.65f * instVol + 1.55f * hot;
-        y = triode12AX7(y * (v2Drive * 0.78f), -0.012f - 0.018f * instVol);
-
-        // --- V2-B cathodyne PI + 6V6 push-pull, cathode-biased, no NFB,
-        //     5Y3 blooming sag ---
-        y = piCoupling.process(y);
-        const float env = std::fabs(y);
-        const float supplyScale = supply.process(env, instVol, hot);
-        const float powerDrive = (1.02f + 1.40f * instVol + 2.10f * hot) * supplyScale;
-        y = sixV6Pair(y * powerDrive, 0.03f + 0.012f * (tone - bass));
-        y = (0.92f * y + 0.08f * softClip(y * (1.5f + 0.9f * instVol))) * supplyScale;
-
-        y = dcBlock.process(y);
-
-        // --- output transformer + 1x12 tweed speaker + hidden presence ---
-        y = transformerLow.process(y);
-        y = speakerHp.process(y);
-        y = speakerBody.process(y);
-        y = speakerPresence.process(y);
-        y = presenceShelf.process(y);
-        y = speakerAir.process(y);
-        y = speakerLp.process(y);
-
-        // output makeup: hold perceived level ~constant across the Volume(=gain)
-        // sweep AND the jumpered Mic channel, so it sits at the BOX DC30 level.
-        const float micBlend = (micVol > 0.001f) ? micVol : 0.0f;
-        const float toneEnergy = 1.0f
-            + 0.013f * std::fabs((bass - 0.5f) * 20.0f)
-            + 0.013f * std::fabs((tone - 0.5f) * 20.0f)
-            + 0.06f * micBlend;
-        // The heavy 5Y3/cathode-bias sag pulls the steady level DOWN as the volume
-        // rises, so the makeup RISES with it to hold loudness ~constant while
-        // keeping the sag bloom/compression dynamics intact.
-        // RS Gain = distortion ONLY; the game holds the output VOLUME fixed. The base
-        // makeup (rising with g) offsets the 5Y3 sag; the extra low-gain term normalizes
-        // the clean/quiet end so LOW RS Gain plays at full volume too (was ~10 dB down).
-        const float makeup = (1.50f + 0.40f * g + 0.70f * hot) * (1.0f + 2.0f / (1.0f + g * 36.0f));
-        const float level = makeup / toneEnergy;
-        return softClip(y * level) * 0.98f;
+    inline float process(float x){
+        const rbtube::SupplyScales bplus = supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
+        x = inputCoupling.process(x);
+        const float instIn = brightSh.process(x);
+        const float micIn = bassSh.process(x * 0.92f);
+        float inst = instV1.process(instMiller.process(instIn) * inScale * bplus.preamp);
+        float mic = micV1.process(micMiller.process(micIn) * (inScale * 0.92f) * bplus.preamp);
+        x = inst * (0.10f + 2.35f * instPot) + mic * (0.03f + 1.65f * micPot);
+        x = tweedTone.process(x);                                 // real 5E3 Tone after V1
+        x = bassSh.process(x);
+        x = v2.process(millerV2.process(coupleToV2.process(x, preGain)) * bplus.preamp);
+        x = coupleToPi.process(x, gainOut);
+        lastPreampLoad = std::fabs(x) * (0.22f + 0.70f * instPot);
+        x = phaseInverter.process(x * bplus.screen);
+        lastScreenLoad = std::fabs(x) * (0.35f + 0.65f * instPot);
+        x = power.process(x * bplus.power * bplus.screen);        // 6V6 push-pull
+        lastPowerLoad = std::fabs(x) * (0.50f + 0.80f * instPot);
+        const float ampOnly = x;
+        const float cab = spkRoll.process(midScoop.process(spkBody.process(ampOnly))); // 1x12 voicing
+        x = ampOnly + pCabSim * (cab - ampOnly);
+        // loudness flattening vs the Volume/gain: a CLEAN post-output makeup (fit to
+        // hold ~constant RMS across the InstVol sweep — the tweed Volume IS the gain,
+        // so without this it swings ~24 dB). Anchored ~0 dB at Vol 0.5; applied after
+        // all distortion so it's pure volume (no tone/crest change).
+        // Keep only mild makeup. A real 5E3 gets louder as Volume rises; forcing
+        // low-volume cleans up to the same RMS slams the output safety stage and
+        // makes the "clean" setting sound broken.
+        float gcDb = 6.0f - 9.0f * pInst;                          // re-fit for the 0.45x preGain (flatter across the volume range)
+        if (gcDb > 8.0f) gcDb = 8.0f; else if (gcDb < -8.0f) gcDb = -8.0f;
+        return softClip(x * outLevel * std::pow(10.0f, 0.05f * gcDb)) * 0.82f;
     }
 };
 
 } // namespace tw26
-
 #endif // TW26_CORE_H

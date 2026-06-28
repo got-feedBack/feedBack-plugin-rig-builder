@@ -313,6 +313,19 @@ _DEFAULT_SETTINGS = {
     # bass players reported amps sounding over-distorted. Users who WANT more
     # amp saturation can raise it with the "Amp drive" slider in Settings.
     "nam_chain_input_drive": 1.0,
+    # Clean input-level calibration trim (linear ×, default 1.0 = 0 dB = no trim).
+    # Distinct from nam_chain_input_drive (the amp-DRIVE baseline, which has a
+    # per-amp clean floor): this is a flat multiplier applied ON TOP of the drive
+    # so the engine input = drive × calibration. The note-detect Calibration
+    # Wizard writes it (raw DI normalized to −12 dBFS), and the Rig Builder "Input"
+    # fader shows/edits it. A reduction here (e.g. 0.7× ≈ −3 dB) actually lowers
+    # the level even when the guitar drive floor would otherwise pin the drive.
+    "nam_input_calibration": 1.0,
+    # Tone override: play EVERY song with one specific user tone instead of the
+    # song's own tone. `tone_override_name` = "" (the Default tone) or a saved
+    # Studio tone's name. Used by the Setup-tab "specific tone" control.
+    "tone_override_enabled": False,
+    "tone_override_name": "",
     # When ON, bypasses the cabinet slot on EVERY song's tones — for users who'd
     # rather run no cab (raw amp) or their own external cab sim. Default ON: the
     # extracted the game cab IRs are weak/colourless, so out of the box we skip
@@ -332,7 +345,10 @@ _DEFAULT_SETTINGS = {
     # then adjusts setGain('chain', X) so every complete chain lands near
     # the same perceived level.
     "final_chain_normalize": True,
-    "final_chain_target_rms_db": -14.0,
+    # -15.5 (was -14): sits the leveled tone slightly UNDER the song's backing
+    # (normalized to -12 LUFS, ×0.8 backing fader ≈ -13.9 heard) so the tone
+    # doesn't dominate the mix (tone-vs-backing balance pass).
+    "final_chain_target_rms_db": -15.5,
     "final_chain_min_gain_db": -20.0,
     "final_chain_max_gain_db": 20.0,
     "final_chain_gate_db": -45.0,
@@ -555,7 +571,8 @@ _RENAMED_VST_BUNDLES = {
     "Enbiggenator.vst3":         "MIME.vst3",
     "BassEnbig.vst3":            "ENBIGGEN.vst3",
     "EdenWTDI.vst3":             "WT-DX.vst3",
-    "EN30.vst3":                 "BOX DC30.vst3",
+    "BOX DC30.vst3":             "BOX AC30.vst3",
+    "EN30.vst3":                 "BOX AC30.vst3",
     "TW22.vst3":                 "BENDER SUPERNOVA 22.vst3",
     "TW26.vst3":                 "BENDER DELUXE.vst3",
 }
@@ -1936,6 +1953,129 @@ def _load_rs_cab_mic_map() -> dict:
                              post=_CaseInsensitiveDict, empty=_CaseInsensitiveDict)
 
 
+def _load_cab_overrides() -> dict:
+    """Load (and cache) `rb_cab_overrides.json` — OUR own synthesized/captured
+    cab IRs that OVERRIDE the Rocksmith-extracted mic-position table for a cab.
+
+    Schema (one entry per cab gear key):
+      { "Cab_MARSHALL1960A": { "ir_dir": "cabs", "prefix": "Marsten_4x12" } }
+
+    The per-suffix file is NOT listed here — it is derived from the *authoritative*
+    Wwise `effect_name` of each RS mic-map entry (see `_override_variant`), which
+    also auto-fixes the condenser label rotation present in some extracted maps.
+
+    These ship WITH the plugin under nam_irs/<ir_dir>/, so the song editor marks
+    them always-available (no fragile on-disk existence gate — that flaked when
+    the generated mic-map was edited in place), they get the same +18 dB
+    convolution makeup as RS cabs via `_is_synth_cab_ir`, and they are exempt
+    from the global 'bypass all Rocksmith cabs' (their path is not under
+    nam_irs/rocksmith/, so `_is_rocksmith_ir_file` is False)."""
+    return _load_cached_json("rb_cab_overrides.json",
+                             post=_CaseInsensitiveDict, empty=_CaseInsensitiveDict)
+
+
+# effect_name token -> our filename stem / friendly labels
+_OVR_MIC = {"57": "dyn", "condenser": "cond", "ribbon": "ribbon"}
+_OVR_MIC_LABEL = {"dyn": "Dynamic", "cond": "Condenser", "ribbon": "Ribbon"}
+_OVR_POS_LABEL = {"cone": "Cone", "edge": "Edge", "offaxis": "OffAxis"}
+_OVR_POS_DESC = {"cone": "Cone (close)", "edge": "Edge", "offaxis": "Off-axis"}
+
+
+def _override_variant(ovr: dict, entry: dict) -> dict | None:
+    """Resolve OUR cab IR for one RS mic-map entry, deriving mic + position from
+    the entry's `effect_name` (Cab_<model>_<mic>_<pos>) — NOT its friendly
+    `label`, which is rotated for the condenser positions in some maps.
+
+    Returns {ir_file, label, position} or None when effect_name is unparseable
+    (caller then falls back to the RS file for that suffix)."""
+    parts = (entry.get("effect_name") or "").split("_")
+    if len(parts) < 2:
+        return None
+    mic = _OVR_MIC.get(parts[-2].lower())
+    pos = parts[-1].lower()
+    if not mic or pos not in _OVR_POS_DESC:
+        return None
+    ir_dir = str(ovr.get("ir_dir") or "cabs").strip("/")
+    prefix = str(ovr.get("prefix") or "")
+    return {
+        "ir_file": f"{ir_dir}/{prefix}_{mic}_{pos}.wav",
+        "label": f"{_OVR_MIC_LABEL[mic]} {_OVR_POS_LABEL[pos]}",
+        "position": _OVR_POS_DESC[pos],
+    }
+
+
+def _apply_cab_override(ir_path):
+    """Auto-substitute a Rocksmith cab IR with OUR own equivalent.
+
+    If `ir_path` is a Rocksmith mic-position IR for a cab we ship our own IRs
+    for (rb_cab_overrides.json), return OUR IR for the SAME mic position —
+    matched by the RS mic-map's `ir_file` basename, then resolved through the
+    authoritative `effect_name`. Otherwise return `ir_path` unchanged.
+
+    This makes every song that references an overridden RS cab play our own
+    distributable IR automatically, with NO per-song edit and WITHOUT touching
+    the stored preset_pieces row (we rewrite only at read / chain-build time).
+
+    Path form is preserved: an absolute `<irs_root>/rocksmith/<f>.wav` maps to
+    an absolute `<irs_root>/<ir_dir>/<our>.wav` (so the native engine resolves
+    it like any cab stage); a relative `rocksmith/<f>.wav` maps to the relative
+    `<ir_dir>/<our>.wav` (UI display / `assigned.file`). Idempotent — a path
+    already under our cab dir isn't a Rocksmith file, so it returns unchanged."""
+    if not ir_path:
+        return ir_path
+    s = str(ir_path)
+    if not _is_rocksmith_ir_file(s):
+        return ir_path
+    overrides = _load_cab_overrides()
+    if not overrides:
+        return ir_path
+    mic_map = _load_rs_cab_mic_map()
+    base = Path(s).name.lower()
+    for cab_key, ovr in overrides.items():
+        if not isinstance(ovr, dict):
+            continue                                    # skip the "_meta" doc string
+        for entry in (mic_map.get(cab_key) or {}).values():
+            ef = entry.get("ir_file") or ""
+            if ef and Path(ef).name.lower() == base:
+                o = _override_variant(ovr, entry)
+                if not o:
+                    return ir_path
+                rel = o["ir_file"]
+                pp = Path(s)
+                # RS IRs live at <irs_root>/rocksmith/<file>; swap the tail.
+                return str(pp.parent.parent / rel) if pp.is_absolute() else rel
+    return ir_path
+
+
+def _install_bundled_cab_irs() -> None:
+    """Install OUR bundled, distributable cab IRs into <config>/nam_irs/cabs/.
+
+    The override layer (rb_cab_overrides.json) points songs/catalog at
+    `cabs/<prefix>_<mic>_<pos>.wav`, which the engine loads from nam_irs/. So a
+    fresh install needs those files on disk. We ship them under
+    `<plugin>/assets/cab_irs/` and copy any that are MISSING here — never
+    overwriting, so a user's own re-synthesized IR is preserved. Runs once at
+    `setup()`; no-op when either dir is absent."""
+    if not _config_dir:
+        return
+    src = Path(__file__).resolve().parent / "assets" / "cab_irs"
+    if not src.is_dir():
+        return
+    dst = _config_dir / "nam_irs" / "cabs"
+    try:
+        dst.mkdir(parents=True, exist_ok=True)
+        n = 0
+        for wav in sorted(src.glob("*.wav")):
+            target = dst / wav.name
+            if not target.exists():
+                shutil.copy2(wav, target)
+                n += 1
+        if n:
+            log.info("installed %d bundled cab IR(s) into nam_irs/cabs", n)
+    except Exception:
+        log.exception("bundled cab IR install failed")
+
+
 # ── NAM/IR storage layout — category subdirs ─────────────────────────
 #
 # Before v1.2 every downloaded NAM landed in `nam_models/` flat and every
@@ -2607,7 +2747,10 @@ def _load_saved_chain(conn: sqlite3.Connection, preset_id: int,
             "preset_piece_id": piece_id,
             "preset_id": preset_id,
             "kind": kind,
-            "file": file,
+            # Show OUR cab IR when we ship one for this RS cab (rb_cab_overrides)
+            # so the song editor highlights the matching mic button and the label
+            # reads our file — mirrors the auto-substitution done at playback.
+            "file": _apply_cab_override(file),
             "tone3000_id": t3kid,
             "assigned_mode": assigned_mode,
             "vst_path": vst_path,
@@ -2708,22 +2851,34 @@ def _enrich_chain_piece(piece: dict, img_idx: dict | None = None) -> dict:
         # Cone", "Condenser Edge", "Tube Off-axis", …) instead of a raw
         # filename dropdown. Sorted by ir_index for stable layout.
         mic_map = _load_rs_cab_mic_map().get(rs_type) or {}
+        ovr = _load_cab_overrides().get(rs_type) or {}
         if mic_map and irs_root is not None:
             for suffix, entry in sorted(
                     mic_map.items(),
                     key=lambda kv: kv[1].get("ir_index", 99)):
                 f = entry.get("ir_file")
-                available = (
-                    bool(f) and (irs_root / f).exists()
-                )
+                label = entry.get("label") or suffix
+                position = entry.get("position")
+                # OUR shipped cab IRs override the RS mic-position table when
+                # rb_cab_overrides.json has an entry for this cab. Mark them
+                # always-available (we ship them; don't gate on an on-disk check
+                # that flaked when the generated mic-map was edited in place).
+                our = False
+                if ovr:
+                    o = _override_variant(ovr, entry)
+                    if o:
+                        f, label, position = o["ir_file"], o["label"], o["position"]
+                        our = True
+                available = True if our else (bool(f) and (irs_root / f).exists())
                 cab_mic_variants.append({
                     "suffix": suffix,
                     "ir_index": entry.get("ir_index"),
                     "ir_file": f,
-                    "label": entry.get("label") or suffix,
+                    "label": label,
                     "mic_type": entry.get("mic_type"),
-                    "position": entry.get("position"),
+                    "position": position,
                     "available": available,
+                    "our_synth": our,
                 })
 
     # Amp gain variant info — only relevant when the curator has
@@ -3503,6 +3658,16 @@ def _is_rocksmith_ir_file(value: str | Path | None) -> bool:
     return "rocksmith" in Path(value).as_posix().lower()
 
 
+def _is_synth_cab_ir(value: str | Path | None) -> bool:
+    """Our own synthesized/captured cab IRs live under nam_irs/cabs/. The engine's
+    JUCE convolution force-normalizes EVERY cab IR to ~-18 dB, so these need the
+    SAME +18 dB makeup as the RS cabs to land at a usable level — but they are NOT
+    rocksmith assets, so the global 'bypass all Rocksmith cabs' must NOT skip them."""
+    if not value:
+        return False
+    return "cabs/" in Path(value).as_posix().lower()
+
+
 def _ir_stage_gain(kind: str | None, ir_path: str | Path | None, base_gain: float = 1.0) -> float:
     """Final IR gain sent to the native engine.
 
@@ -3515,7 +3680,7 @@ def _ir_stage_gain(kind: str | None, ir_path: str | Path | None, base_gain: floa
         g = float(base_gain)
     except (TypeError, ValueError):
         g = 1.0
-    if (kind or "").lower() == "rs_ir" or _is_rocksmith_ir_file(ir_path):
+    if (kind or "").lower() == "rs_ir" or _is_rocksmith_ir_file(ir_path) or _is_synth_cab_ir(ir_path):
         return g * _RS_IR_MAKEUP
     return g
 
@@ -3888,6 +4053,12 @@ def _ir_stage(ir_path, *, bypassed, gain=1.0,
     `di_cab` (set only by the per-tone chain builders) swaps a BASS cab IR for
     its DI+cab blend when the feature is on — see the DI+Cab helpers."""
     ir_path = str(ir_path)
+    # Auto-use OUR own cab IR in place of the game's mic-position IR whenever
+    # we ship one (rb_cab_overrides.json). Done here (not via a DB rewrite) so it
+    # covers every chain-build path and stays non-destructive. After this the
+    # path is under nam_irs/cabs/ → NOT a game-shipped IR → exempt from the global
+    # bypass below, and `_is_synth_cab_ir` still applies the +18 dB makeup.
+    ir_path = _apply_cab_override(ir_path)
     # Global "Bypass all the game cabs" (Settings): force-skip the RS cab on the
     # song chain (di_cab path) so the user can run their own cab/IR. This makes the
     # toggle authoritative even for songs whose preset_pieces row predates / wasn't
@@ -3922,7 +4093,7 @@ def _ir_stage(ir_path, *, bypassed, gain=1.0,
     # `gain` above (engine-applied, works for VST + NAM amps alike), so keep the
     # chain-gain cab makeup neutral here — else NAM-amp chains would double it.
     p = Path(ir_path)
-    if _is_rocksmith_ir_file(p):
+    if _is_rocksmith_ir_file(p) or _is_synth_cab_ir(p):
         stage["cab_rms_makeup"] = round(1.0 if di_cab_blend else _ir_rms_makeup(p), 4)
     stage["state"] = _state_b64({"irPath": str(ir_path), "gain": gain})
     return stage
@@ -5832,6 +6003,98 @@ def _auto_download_for_song(filename: str, path: Path) -> dict:
         return {"ok": True, **counts}
 
 
+# Songs whose seed we've already reconciled this session — bounds
+# `_resync_stale_song_seed` to AT MOST one re-seed attempt per song per
+# run, so a song whose new gear genuinely can't be mapped can never spin
+# in a re-seed loop (check → still "stale" → check → …).
+_resynced_songs: set[str] = set()
+
+
+def _resync_stale_song_seed(song_key: str, path: Path) -> list[str]:
+    """Re-seed tones whose SOURCE gear changed under a stable filename.
+
+    A cloud library rewrites `sloppak_cache/<song>` in place (switching to a
+    different library, re-downloading a corrected chart) while the DLC entry
+    stays a 0-byte stub. The materialization watcher keys on DLC *size*, so it
+    never sees that change and never re-fires; and even if it did,
+    `_auto_download_for_song` skips any tone that already has a mapping. Net
+    effect: the seeded `tone_mappings`/`presets` keep describing the OLD gear,
+    so the song plays a wrong tone (e.g. an acoustic tone whose amp silently
+    became a tweed combo after a library swap).
+
+    Detect per-tone staleness by comparing the AMP gear key — every guitar/bass
+    tone has exactly one, it always resolves to a VST/NAM (so this can't false-
+    positive on an unmappable pedal and loop), and a user VST swap keeps the
+    rs_gear_type while only changing which plugin plays it, so this never fires
+    on a customised tone. When the amp key differs, the seed predates the
+    current sloppak: drop those tones' presets and let `_auto_download_for_song`
+    rebuild them from the live GearList (untouched tones keep their mapping and
+    are skipped, so user edits elsewhere in the song are preserved).
+
+    Returns the tone_keys that were re-seeded (empty when nothing was stale).
+    """
+    if song_key in _resynced_songs:
+        return []
+    if path.suffix.lower() != ".sloppak":
+        _resynced_songs.add(song_key)
+        return []
+    try:
+        raw_tones = _read_tones_from_sloppak(song_key, _get_dlc_dir())
+    except Exception:
+        return []   # transient cache miss — retry on the next open
+    if not raw_tones:
+        return []
+
+    def _amp_key(parsed: dict) -> str | None:
+        for piece in parsed.get("chain") or []:
+            if piece.get("slot") == "amp" and piece.get("type"):
+                return piece["type"]
+        return None
+
+    current_amp: dict[str, str | None] = {}
+    for raw in raw_tones:
+        parsed = _parse_tone(raw)
+        tk = parsed.get("key") or parsed.get("name")
+        if tk:
+            current_amp[tk] = _amp_key(parsed)
+
+    conn = _get_conn()
+    _filt, _args = _tone_mapping_filename_filter(song_key, path)
+    seeded_amp: dict[str, str] = {}
+    preset_by_tone: dict[str, int] = {}
+    for tk, pid, gear in conn.execute(
+        f"SELECT tm.tone_key, tm.preset_id, pp.rs_gear_type "
+        f"FROM tone_mappings tm JOIN preset_pieces pp ON pp.preset_id = tm.preset_id "
+        f"WHERE {_filt} AND pp.slot = 'amp'",
+        _args,
+    ).fetchall():
+        seeded_amp[tk] = gear
+        preset_by_tone[tk] = pid
+
+    # Mark handled now: even if the read/parse above was fine but nothing is
+    # stale, we don't want to re-read the sloppak on every open of this song.
+    _resynced_songs.add(song_key)
+
+    stale = [tk for tk, amp in current_amp.items()
+             if tk in seeded_amp and amp and amp != seeded_amp[tk]]
+    if not stale:
+        return []
+
+    for tk in stale:
+        pid = preset_by_tone[tk]
+        conn.execute("DELETE FROM tone_mappings WHERE preset_id = ?", (pid,))
+        conn.execute("DELETE FROM presets WHERE id = ?", (pid,))   # cascades pieces
+    conn.commit()
+    log.info("rig_builder: re-seeding %d stale tone(s) for %s (amp key changed): %s",
+             len(stale), song_key, stale)
+    try:
+        _auto_download_for_song(song_key, path)
+    except Exception:
+        log.warning("rig_builder: re-seed after stale-amp detection failed for %s",
+                    song_key, exc_info=True)
+    return stale
+
+
 # ── Background materialization watcher ───────────────────────────────
 
 # Polls the DLC dir; when a song flips from a 0-byte cloud stub to real
@@ -6241,6 +6504,10 @@ def setup(app, context):
     _get_conn()
     _load_settings()
 
+    # Install OUR bundled cab IRs into nam_irs/cabs so rb_cab_overrides
+    # resolves on a fresh install (copies only missing files).
+    _install_bundled_cab_irs()
+
     # Start the background materialization watcher so songs played from
     # Slopsmith's main view (which only triggers cloud_loader to put the
     # PSARC on disk) get their NAM chain auto-downloaded too — not just
@@ -6371,6 +6638,19 @@ def setup(app, context):
                 v = float(data["nam_chain_input_drive"])
                 # Input-chain (amp drive) knob: range 0–5, default 1× (no boost).
                 allowed["nam_chain_input_drive"] = max(0.0, min(5.0, v))
+            except (TypeError, ValueError):
+                pass
+        if "tone_override_enabled" in data:
+            allowed["tone_override_enabled"] = bool(data["tone_override_enabled"])
+        if "tone_override_name" in data:
+            allowed["tone_override_name"] = str(data["tone_override_name"])[:200]
+        if "nam_input_calibration" in data:
+            try:
+                # Clean input-level trim (the "Input" fader / Calibration Wizard's
+                # −12 dBFS result). Linear ×, applied on top of the amp drive. Range
+                # covers the fader (−24..+12 dB ≈ 0.063..3.98×) and the wizard's
+                # 0.1..5 clamp; default 1× = no trim.
+                allowed["nam_input_calibration"] = max(0.05, min(5.0, float(data["nam_input_calibration"])))
             except (TypeError, ValueError):
                 pass
         if "chain_makeup" in data:
@@ -7408,6 +7688,23 @@ def setup(app, context):
                 _filename_args,
             ).fetchall()
 
+        # Heal a stale seed before building the chain. A cloud library can
+        # rewrite this song's sloppak (and thus its GearList) in place — a
+        # library swap, a corrected chart — without changing the DLC stub the
+        # watcher keys on, so the seed silently keeps describing the OLD gear
+        # and the song plays a wrong tone. Re-seed any tone whose amp key
+        # drifted so `_lookup` below reads the freshly-rebuilt mapping. Bounded
+        # to one attempt per song per session; never touches tones whose gear
+        # didn't change. Best-effort — a failure here just builds from whatever
+        # is currently seeded (the prior behaviour).
+        try:
+            _song_path = _resolve_song_file(decoded)
+            if _song_path is not None:
+                _resync_stale_song_seed(decoded, _song_path)
+        except Exception:
+            log.warning("rig_builder: stale-seed resync check failed for %r",
+                        decoded, exc_info=True)
+
         mappings = _lookup(decoded)
         if not mappings:
             return JSONResponse(
@@ -8356,22 +8653,33 @@ def setup(app, context):
 
         def _mic_variants_for(rs_gear: str) -> list[dict]:
             spec = mic_map.get(rs_gear) or {}
+            ovr = _load_cab_overrides().get(rs_gear) or {}
             out = []
             for suffix, entry in sorted(spec.items(),
                                           key=lambda kv: kv[1].get("ir_index", 99)):
                 f = entry.get("ir_file")
-                available = (
-                    bool(f) and irs_root is not None
-                    and (irs_root / f).exists()
-                )
+                label = entry.get("label") or suffix
+                position = entry.get("position")
+                # OUR shipped cab IRs override the RS mic table (rb_cab_overrides),
+                # same as the per-song picker — always-available, label/position
+                # derived from the authoritative effect_name.
+                our = False
+                if ovr:
+                    o = _override_variant(ovr, entry)
+                    if o:
+                        f, label, position = o["ir_file"], o["label"], o["position"]
+                        our = True
+                available = True if our else (
+                    bool(f) and irs_root is not None and (irs_root / f).exists())
                 out.append({
                     "suffix": suffix,
                     "ir_index": entry.get("ir_index"),
                     "ir_file": f,
-                    "label": entry.get("label") or suffix,
+                    "label": label,
                     "mic_type": entry.get("mic_type"),
-                    "position": entry.get("position"),
+                    "position": position,
                     "available": available,
+                    "our_synth": our,
                 })
             return out
 
@@ -8451,7 +8759,10 @@ def setup(app, context):
                 "category": category,
                 "assigned": b["has_assignment"],
                 "kind": b["kind"],
-                "file": b["file"],
+                # Show OUR cab IR when we ship one (rb_cab_overrides) so the
+                # catalog card + its active mic highlight match the per-song
+                # editor and the ▶ audition plays ours. No-op for non-cab files.
+                "file": _apply_cab_override(b["file"]),
                 "vst_path": b["vst_path"],
                 "vst_format": b["vst_format"],
                 "vst_state": vst_state,

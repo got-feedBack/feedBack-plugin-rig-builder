@@ -35,7 +35,8 @@
  * the game: RS Gain -> GAIN (kChannel pinned to OD1 + kMode orange via the song
  * mapping); RS Bass/Mid/Treble -> the tone stack; RS Pres -> PRESENCE. The other
  * controls (Channel/Mode/Volume/Resonance/Master/Reverb) sit at musical defaults
- * via _static and stay editable by hand.
+ * via _static and stay editable by hand. CAB SIM is a temporary bundled 4x12
+ * voicing; the host can set it to 0 when an external cab/IR is present.
  */
 enum Jvm410ParamId
 {
@@ -50,28 +51,29 @@ enum Jvm410ParamId
     kResonance,     // RESONANCE — power-amp LF negative feedback (low-end thump)
     kMaster,        // MASTER — power-amp master volume
     kReverb,        // REVERB — op-amp digital reverb mix (off at 0)
+    kCabSim,        // temporary internal 4x12 cab filter       [host]
     kParamCount
 };
 
 static const char* const kJvm410Names[kParamCount] = {
     "Channel", "Mode", "Gain", "Volume", "Bass", "Middle", "Treble",
-    "Presence", "Resonance", "Master", "Reverb",
+    "Presence", "Resonance", "Master", "Reverb", "Cab Sim",
 };
 
 static const char* const kJvm410Symbols[kParamCount] = {
     "channel", "mode", "gain", "volume", "bass", "middle", "treble",
-    "presence", "resonance", "master", "reverb",
+    "presence", "resonance", "master", "reverb", "cab_sim",
 };
 
-static const float kJvm410Min[kParamCount] = { 0,0,0,0,0,0,0,0,0,0,0 };
-static const float kJvm410Max[kParamCount] = { 1,1,1,1,1,1,1,1,1,1,1 };
+static const float kJvm410Min[kParamCount] = { 0,0,0,0,0,0,0,0,0,0,0,0 };
+static const float kJvm410Max[kParamCount] = { 1,1,1,1,1,1,1,1,1,1,1,1 };
 
 // Manual-insert defaults: Channel 0.66 (OD1), Mode 0.5 (orange), a singing OD1
 // rhythm/lead at musical settings, reverb off. RS pins Channel/Mode and sweeps
 // GAIN; the rest stay editable on the face.
 static const float kJvm410Def[kParamCount] = {
     0.66f, 0.50f, 0.60f, 0.50f, 0.50f, 0.50f, 0.60f,
-    0.50f, 0.50f, 0.60f, 0.00f,
+    0.50f, 0.50f, 0.60f, 0.00f, 1.00f,
 };
 
 #endif // JVM410_PARAMS_H

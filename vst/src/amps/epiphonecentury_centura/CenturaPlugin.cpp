@@ -10,12 +10,12 @@
  *   • V2 12AX7 phase inverter -> 2x 6V6 push-pull (~15 W into 8 ohm @ 10% THD):
  *              the sweet, early-breaking American-style power section.
  *
- * Two real nodal 12AX7s (Koren + Newton/sample) into a passive tone tilt + an
- * input-voicing shelf, then a 6V6 push-pull saturator (early, sweet knee).
- * Shared MNA/Triode/Biquad blocks are byte-identical to the Citrus AD200 source.
+ * Two real nodal 12AX7s (Koren + Newton/sample) with per-stage Miller loading
+ * into a passive tone tilt + input-voicing shelf, then 6V6 push-pull power.
  */
 #include "DistrhoPlugin.hpp"
 #include "CenturaParams.h"
+#include "../../_shared/tube_stage.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -144,15 +144,21 @@ class CenturaChannel {
     float fs = 48000.f;
     Triode v1a, v1b;
     Biquad hp, voice, toneLo, toneHi, pwrLP;
-    float drive=1, level=1, pwrDrive=1;
-
-    // 2x 6V6 push-pull (~15 W): sweet, early-breaking American knee.
-    static inline float pushPull(float x) { return std::tanh(x * 1.05f) / 1.05f; }
+    Biquad cabHp, cabLo, cabHi, cabLp;
+    rbtube::Miller12AX7 inputMiller, secondMiller;
+    rbtube::CouplingCapGridLeak coupleToPi;
+    rbtube::PhaseInverterCathodyne12AX7 phaseInverter;
+    rbtube::MultiNodeBPlus supply;
+    rbtube::PowerAmp6V6 power;
+    float drive=1, level=1, pwrDrive=1, cabSim=1;
 public:
     void setSampleRate(float s) { fs=(s>0.f)?s:48000.f; v1a.setT(s); v1b.setT(s); }
-    void reset() { v1a.reset(); v1b.reset(); hp.reset(); voice.reset(); toneLo.reset(); toneHi.reset(); pwrLP.reset(); }
+    void reset() { v1a.reset(); v1b.reset(); hp.reset(); voice.reset(); toneLo.reset(); toneHi.reset(); pwrLP.reset();
+        cabHp.reset(); cabLo.reset(); cabHi.reset(); cabLp.reset();
+        inputMiller.reset(); secondMiller.reset();
+        coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset(); }
 
-    void setParams(float volume, float tone, float voiceP, bool boost) {
+    void setParams(float volume, float tone, float voiceP, bool boost, float cabSimP) {
         hp.setHighpassQ(65.f, 0.7f, fs);
         voice.setHighShelf(2600.f, (voiceP - 0.5f) * 16.f, fs);    // Dark .. Bright input
         // single non-master Volume drives the whole amp; Boost adds preamp gain
@@ -163,17 +169,45 @@ public:
         level    = 0.5f + volume * 0.8f;
         pwrDrive = 0.5f + volume * 0.9f;
         pwrLP.setLowpassQ(12500.f, 0.7f, fs);                      // 6V6 + OT, miked-cab vintage-bright
+        cabSim = cabSimP;
+        inputMiller.set(fs, 68000.0f, 45.0f, 8.0f);
+        secondMiller.set(fs, 180000.0f, 50.0f, 8.0f);
+        coupleToPi.set(fs, 1000000.0f, 22.0e-9f, 22000.0f, 0.10f, boost ? 0.70f : 0.52f, boost ? 2.0f : 1.5f);
+        phaseInverter.set(fs, 0.74f + 1.05f * volume + (boost ? 0.26f : 0.0f), 0.78f,
+                          260.0f, 56000.0f, 56000.0f, 2.7f, 0.015f);
+        supply.set(fs,
+                   135.0f, 22.0f,
+                   1000.0f, 16.0f,
+                   10000.0f, 16.0f,
+                   0.24f, 0.15f, 0.072f, 0.21f);
+        power.set(fs, 1.00f + 1.45f * volume + (boost ? 0.26f : 0.0f),
+                  -13.0f, 0.38f, 78.0f, 10800.0f + 900.0f * tone);
+        power.out = 0.0175f;
+        cabHp.setHighpassQ(80.f, 0.72f, fs);
+        cabLo.setLowShelf(135.f, 1.2f + 1.2f * volume, fs);
+        cabHi.setHighShelf(3600.f, -2.2f + 4.2f * tone + 1.4f * voiceP, fs);
+        cabLp.setLowpassQ(11200.f + 1600.f * tone, 0.66f, fs);
     }
 
     inline float process(float x) {
         float s = hp.process(x);
         s = voice.process(s);
-        s = (float)v1a.process((double)(2.5f * s));
-        s = (float)v1b.process((double)(drive * s));
+        s = (float)v1a.process((double)(2.5f * inputMiller.process(s)));
+        s = (float)v1b.process((double)secondMiller.process(drive * s));
         s = toneLo.process(s); s = toneHi.process(s);
-        s = pushPull(s * pwrDrive) * level;
+        const float load = std::fabs(s) * (0.70f + 0.85f * level);
+        const rbtube::SupplyScales bplus = supply.process(load, load * 0.55f, load * 0.25f);
+        s *= 0.92f + 0.08f * bplus.preamp;
+        s = coupleToPi.process(s * pwrDrive * bplus.screen, 1.0f);
+        s = phaseInverter.process(s) * bplus.screen;
+        s = power.process(s * bplus.power) * level;
         s = pwrLP.process(s);
-        return s;
+        const float ampOnly = s;
+        float cab = cabHp.process(ampOnly);
+        cab = cabLo.process(cab);
+        cab = cabHi.process(cab);
+        cab = cabLp.process(cab);
+        return ampOnly + cabSim * (cab - ampOnly);
     }
 };
 
@@ -185,8 +219,8 @@ class CenturaPlugin : public Plugin {
     float fParams[kParamCount];
     void recalc() {
         const bool boost = fParams[kBoost] > 0.5f;
-        L.setParams(fParams[kVolume], fParams[kTone], fParams[kVoice], boost);
-        R.setParams(fParams[kVolume], fParams[kTone], fParams[kVoice], boost);
+        L.setParams(fParams[kVolume], fParams[kTone], fParams[kVoice], boost, fParams[kCabSim]);
+        R.setParams(fParams[kVolume], fParams[kTone], fParams[kVoice], boost, fParams[kCabSim]);
     }
 public:
     CenturaPlugin() : Plugin(kParamCount, 0, 0) {
@@ -205,7 +239,7 @@ protected:
     void initParameter(uint32_t i, Parameter& p) override {
         if (i >= (uint32_t)kParamCount) return;
         p.hints = kParameterIsAutomatable;
-        if (i >= (uint32_t)kBoost) p.hints |= kParameterIsBoolean;
+        if (i == (uint32_t)kBoost) p.hints |= kParameterIsBoolean;
         p.name = kCenturaNames[i]; p.symbol = kCenturaSymbols[i];
         p.ranges.min = kCenturaMin[i]; p.ranges.max = kCenturaMax[i]; p.ranges.def = kCenturaDef[i];
     }

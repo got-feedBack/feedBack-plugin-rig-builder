@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/FreddyKrueger800BR.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			nw89MmLaCpbkxInswMYT3+ANo7Y3LRwzqcbP11pspiQ=
+			</data>
+		</dict>
+		<key>x86_64-win/FreddyKrueger800BR.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			pfGyX+TXWMLhShDI+V9++Di8mTjh2PmsgklCiBJdWDk=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

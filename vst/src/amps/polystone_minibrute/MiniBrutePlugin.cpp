@@ -104,6 +104,7 @@ class MiniBruteCore
     float bass   = kMiniBruteDef[kBass];
     float treble = kMiniBruteDef[kTreble];
     float brite  = kMiniBruteDef[kBrite];
+    float cabSim = kMiniBruteDef[kCabSim];
 
     Biquad inputHp, inputLp;           // 4558 preamp band-limit (C2 10pF / coupling)
     BaxandallTone tone;                // BASS/TREBLE TONE AMP
@@ -160,6 +161,7 @@ public:
             case kBass:   bass = v;   break;
             case kTreble: treble = v; break;
             case kBrite:  brite = v;  break;
+            case kCabSim: cabSim = v; break;
             default: break;
         }
         updateFilters();
@@ -191,11 +193,13 @@ public:
 
         y = dcBlock.process(y);
 
-        // small solid-state 1x12 combo cab
-        y = speakerHp.process(y);
-        y = speakerThump.process(y);
-        y = speakerBody.process(y);
-        y = speakerLp.process(y);
+        // small solid-state 1x12 fallback cab (bypassable for external cab/IR)
+        const float ampOnly = y;
+        float cab = speakerHp.process(ampOnly);
+        cab = speakerThump.process(cab);
+        cab = speakerBody.process(cab);
+        cab = speakerLp.process(cab);
+        y = ampOnly + cabSim * (cab - ampOnly);
 
         // Loudness normalization: VOLUME is the only drive but the amp stays
         // ~clean, so cleanMakeup carries the low-VOLUME compensation and the level
@@ -272,8 +276,8 @@ protected:
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = rbAmpLvl(0.560f * left.process(3.2f * inL[i]));
-            outR[i] = rbAmpLvl(0.560f * right.process(3.2f * inR[i]));
+            outL[i] = rbAmpLvl(0.360f * left.process(3.2f * inL[i]));
+            outR[i] = rbAmpLvl(0.360f * right.process(3.2f * inR[i]));
         }
     }
 

@@ -8,6 +8,7 @@ enum MarshallGuvnorPlusParamId
     kMid,
     kTreble,
     kDeep,
+    kVolume,
     kParamCount
 };
 
@@ -17,6 +18,7 @@ static const char* const kMarshallGuvnorPlusNames[kParamCount] = {
     "Mid",
     "Treble",
     "Deep",
+    "Volume",
 };
 
 static const char* const kMarshallGuvnorPlusSymbols[kParamCount] = {
@@ -25,10 +27,11 @@ static const char* const kMarshallGuvnorPlusSymbols[kParamCount] = {
     "mid",
     "treble",
     "deep",
+    "volume",
 };
 
-static const float kMarshallGuvnorPlusMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
-static const float kMarshallGuvnorPlusMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
-static const float kMarshallGuvnorPlusDef[kParamCount] = { 0.45f, 0.52f, 0.56f, 0.54f, 0.38f };
+static const float kMarshallGuvnorPlusMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+static const float kMarshallGuvnorPlusMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
+static const float kMarshallGuvnorPlusDef[kParamCount] = { 0.45f, 0.52f, 0.56f, 0.54f, 0.38f, 0.62f };
 
 #endif // MARSHALL_GUVNOR_PLUS_PARAMS_H

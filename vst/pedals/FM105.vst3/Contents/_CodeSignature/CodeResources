@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/BobFilter.so</key>
+		<key>x86_64-linux/FM105.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			25rsIO67G47NHE7BmnSXyKddmFTXDKWB9+HPsBcykT8=
 			</data>
 		</dict>
-		<key>x86_64-win/BobFilter.vst3</key>
+		<key>x86_64-win/FM105.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			Ks4LKXqT6DgNgMyhP/xVVSXBHB5UyQRa9bN24gFA1dQ=
+			CN5U53jQwQBBjvBYl9GGlf+sJNOVwvUVkxY696UZzlI=
 			</data>
 		</dict>
 	</dict>

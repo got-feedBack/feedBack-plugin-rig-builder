@@ -11,20 +11,21 @@
 enum CenturaParamId {
     kVolume = 0, kTone, kVoice,   // knobs
     kBoost,                        // switch (pull boost)
+    kCabSim,                       // fallback combo speaker voice
     kParamCount
 };
 
 static const char* const kCenturaNames[kParamCount] = {
-    "Volume", "Tone", "Voice", "Boost"
+    "Volume", "Tone", "Voice", "Boost", "Cab Sim"
 };
 static const char* const kCenturaSymbols[kParamCount] = {
-    "volume", "tone", "voice", "boost"
+    "volume", "tone", "voice", "boost", "cabsim"
 };
-static const float kCenturaMin[kParamCount] = { 0,0,0, 0 };
-static const float kCenturaMax[kParamCount] = { 1,1,1, 1 };
+static const float kCenturaMin[kParamCount] = { 0,0,0, 0,0 };
+static const float kCenturaMax[kParamCount] = { 1,1,1, 1,1 };
 // Volume 0.5; Tone 0.5; Voice 0.6 (Normal/slightly bright); Boost off.
 static const float kCenturaDef[kParamCount] = {
-    0.50f, 0.50f, 0.60f, 0.00f
+    0.50f, 0.50f, 0.60f, 0.00f, 1.00f
 };
 
 #endif // CENTURA_PARAMS_H

@@ -47,6 +47,10 @@ class RackUI : public UI
     int    fDrag;
     double fLastY;
     float  fDragVal;
+#ifdef RACK_METER_PARAM
+    float  fMeter;        // smoothed meter value shown (animated in uiIdle)
+    float  fMeterTarget;  // latest value from the DSP output param
+#endif
 
     float scale() const { return getWidth() / (float)RACK_W; }
     float kx(int i) const { return getWidth()  * kRackKnobs[i].cx; }
@@ -86,10 +90,60 @@ public:
     RackUI() : UI(DISTRHO_UI_DEFAULT_WIDTH, DISTRHO_UI_DEFAULT_HEIGHT), fDrag(-1), fLastY(0), fDragVal(0.5f) {
         loadSharedResources();
         for (int i = 0; i < RACK_COUNT; ++i) fValues[i] = RACK_DEFS[i];
+#ifdef RACK_METER_PARAM
+        fMeter = fMeterTarget = 0.0f;
+#endif
         setGeometryConstraints(RACK_W * 3 / 4, RACK_H * 3 / 4, true, false);
     }
 protected:
-    void parameterChanged(uint32_t i, float v) override { if (i < (uint32_t)RACK_COUNT) { fValues[i] = v; repaint(); } }
+    void parameterChanged(uint32_t i, float v) override {
+#ifdef RACK_METER_PARAM
+        if (i == (uint32_t)RACK_METER_PARAM) { fMeterTarget = v; return; }
+#endif
+        if (i < (uint32_t)RACK_COUNT) { fValues[i] = v; repaint(); }
+    }
+#ifdef RACK_METER_PARAM
+    // The host pushes the DSP output param infrequently; ease toward it here so the
+    // meter moves smoothly (fast attack, slower release — classic meter ballistics).
+    void uiIdle() override {
+        const float a = (fMeterTarget > fMeter) ? 0.45f : 0.12f;
+        const float nm = fMeter + (fMeterTarget - fMeter) * a;
+        if (std::fabs(nm - fMeter) > 1.0e-4f) { fMeter = nm; repaint(); }
+    }
+    // VU-style gain-reduction meter: needle swings LEFT as reduction increases
+    // (0 dB at the right, RACK_METER_MAX dB at the left), like the dbx 160 VU.
+    void drawMeter(float cx, float cy, float r, float f) {
+        const float gr = fMeter < 0.f ? 0.f : (fMeter > RACK_METER_MAX ? RACK_METER_MAX : fMeter);
+        // meter face
+        beginPath(); circle(cx, cy, r);        fillColor(Color(232, 226, 205)); fill();
+        beginPath(); circle(cx, cy, r);        strokeColor(Color(20,22,26)); strokeWidth(2.5f*f); stroke();
+        beginPath(); circle(cx, cy, r-3*f);    strokeColor(Color(180,175,158)); strokeWidth(1*f); stroke();
+        // scale arc (0 on the right at -35°, max on the left at -145°)
+        const float a0 = -35.0f * 3.14159265f/180.0f, a1 = -145.0f * 3.14159265f/180.0f;
+        beginPath();
+        for (int s = 0; s <= 24; ++s) { float a = a0 + (a1-a0)*s/24.f; float x=cx+(r-6*f)*std::cos(a), y=cy+(r-6*f)*std::sin(a); if(s==0)moveTo(x,y); else lineTo(x,y); }
+        strokeColor(Color(70,60,40)); strokeWidth(1.5f*f); stroke();
+        // ticks at 0,5,10,15,20 dB
+        textAlign(ALIGN_CENTER|ALIGN_MIDDLE); fontSize(6.5f*f); fillColor(Color(60,50,35));
+        for (int d = 0; d <= 20; d += 5) {
+            float a = a0 + (a1-a0)*(d/(float)RACK_METER_MAX);
+            float x0=cx+(r-6*f)*std::cos(a), y0=cy+(r-6*f)*std::sin(a), x1=cx+(r-11*f)*std::cos(a), y1=cy+(r-11*f)*std::sin(a);
+            beginPath(); moveTo(x0,y0); lineTo(x1,y1); strokeColor(Color(120,40,30)); strokeWidth(1.3f*f); stroke();
+            char lbl[8]; std::snprintf(lbl, sizeof(lbl), "%d", d);
+            text(cx+(r-17*f)*std::cos(a), cy+(r-17*f)*std::sin(a), lbl, NULL);
+        }
+        // needle
+        const float an = a0 + (a1-a0)*(gr/RACK_METER_MAX);
+        beginPath(); moveTo(cx, cy+r*0.15f); lineTo(cx+(r-6*f)*std::cos(an), cy+(r-6*f)*std::sin(an));
+        strokeColor(Color(20,20,24)); strokeWidth(2.0f*f); stroke();
+        beginPath(); circle(cx, cy+r*0.15f, 3*f); fillColor(Color(30,30,34)); fill();
+        // labels
+        textAlign(ALIGN_CENTER|ALIGN_TOP); fontSize(7*f); fillColor(Color(90,70,45));
+        text(cx, cy + r*0.34f, "GAIN REDUCTION", NULL);
+        textAlign(ALIGN_CENTER|ALIGN_BOTTOM); fontSize(6*f); fillColor(Color(120,40,30));
+        text(cx, cy - r*0.30f, RACK_METER_LABEL, NULL);
+    }
+#endif
 
     void onNanoDisplay() override {
         const float W = getWidth(), H = getHeight(), f = scale();
@@ -125,12 +179,16 @@ protected:
         fontSize(15*f); fillColor(Color(120, 255, 130)); text(lX + 10*f, lY + 9*f, RACK_TITLE, NULL);
         fontSize(8.5f*f); fillColor(Color(70, 180, 80)); text(lX + 10*f, lY + lH - 18*f, "USER PROG  ·  RIG BUILDER", NULL);
 
-        // decorative INPUT knob (far right)
+        // far right: a real meter if the rack exposes one, else a decorative knob
         const float ix = W - earW - 30*f, iy = H*0.5f, iR = H*0.26f;
+#ifdef RACK_METER_PARAM
+        drawMeter(ix, iy, iR, f);
+#else
         beginPath(); circle(ix, iy, iR); fillColor(Color(24,25,29)); fill();
         beginPath(); circle(ix, iy, iR); strokeColor(Color(80,82,88)); strokeWidth(2*f); stroke();
         beginPath(); circle(ix, iy, iR*0.55f); fillColor(Color(40,42,48)); fill();
         textAlign(ALIGN_RIGHT|ALIGN_MIDDLE); fontSize(8*f); fillColor(Color(150,152,158)); text(ix - iR - 4*f, iy, "INPUT", NULL);
+#endif
     }
 
     bool onMouse(const MouseEvent& ev) override {

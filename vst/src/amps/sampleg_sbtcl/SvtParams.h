@@ -31,7 +31,7 @@ static const float kSvtMax[kParamCount] = { 1,1,1,1,1,1, 1,1,1 };
 // 0.5; Master 0.7 ~ unity; switches off.
 static const float kSvtDef[kParamCount] = {
     0.50f, 0.50f, 0.50f, 0.50f, 0.50f, 0.70f,
-    0.00f, 0.00f, 0.00f
+    0.00f, 0.00f, 0.00f   // -15dB pad OFF by default (core is clean/leveled without it now)
 };
 
 // The 5 midrange-selector centre frequencies (Hz), in panel order.

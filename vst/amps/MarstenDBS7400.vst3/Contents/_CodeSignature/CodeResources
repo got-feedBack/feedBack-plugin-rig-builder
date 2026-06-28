@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/MarstenDBS7400.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			ganMYXckTDig3S8IA9cNphcl6SzdupRXESfMcRkvLHY=
+			</data>
+		</dict>
+		<key>x86_64-win/MarstenDBS7400.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			vmqLHRibsGREqFlUr/wc+Gg4PBemqyY0yYmdKQHcLiE=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

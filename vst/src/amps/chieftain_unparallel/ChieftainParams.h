@@ -36,23 +36,24 @@ enum ChieftainParamId
     kBrilliance,    // BRILLIANCE 500kA — presence high-shelf on the PI
     kMaster,        // MASTER 500kA  — power-amp master
     kReverb,        // REVERB 100kA  — spring reverb mix
+    kCabSim,        // fallback speaker voice; host bypasses when using an external cab/IR
     kParamCount
 };
 
 static const char* const kChieftainNames[kParamCount] = {
-    "Volume", "Bass", "Middle", "Treble", "Brilliance", "Master", "Reverb",
+    "Volume", "Bass", "Middle", "Treble", "Brilliance", "Master", "Reverb", "Cab Sim",
 };
 
 static const char* const kChieftainSymbols[kParamCount] = {
-    "volume", "bass", "middle", "treble", "brilliance", "master", "reverb",
+    "volume", "bass", "middle", "treble", "brilliance", "master", "reverb", "cabsim",
 };
 
-static const float kChieftainMin[kParamCount] = { 0,0,0,0,0,0,0 };
-static const float kChieftainMax[kParamCount] = { 1,1,1,1,1,1,1 };
+static const float kChieftainMin[kParamCount] = { 0,0,0,0,0,0,0,0 };
+static const float kChieftainMax[kParamCount] = { 1,1,1,1,1,1,1,1 };
 // Manual-insert defaults: a clean-ish boutique voice — Volume just past noon,
 // flat-ish tone stack, Brilliance backed off, Master open, reverb off.
 static const float kChieftainDef[kParamCount] = {
-    0.55f, 0.50f, 0.50f, 0.55f, 0.40f, 0.70f, 0.00f,
+    0.55f, 0.50f, 0.50f, 0.55f, 0.40f, 0.70f, 0.00f, 1.0f,
 };
 
 #endif // CHIEFTAIN_PARAMS_H

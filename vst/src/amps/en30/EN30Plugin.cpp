@@ -1,5 +1,5 @@
 /*
- * BOX DC30 - AC30 Top Boost-style amp for the game's Amp_EN30.
+ * BOX AC30 - AC30 Top Boost-style amp for the game's Amp_EN30.
  *
  * DPF wrapper (VST3 + AU). All the DSP lives in EN30Core.h (plain C++,
  * offline-testable); see that header for the circuit topology and schematic refs.
@@ -12,7 +12,8 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "EN30Params.h"
-#include "EN30Core.h"
+#include "BoxDC30Core.h"   // rebuilt Guitarix-style core (was EN30Core.h)
+#include "../../_shared/oversampler.hpp"
 
 START_NAMESPACE_DISTRHO
 
@@ -24,8 +25,10 @@ static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x
 
 class EN30Plugin : public Plugin
 {
-    en30::EN30Core core;
+    boxdc30::BoxDC30Core core;
     float params[kParamCount];
+    rbshared::Oversampler4x os;                 // 4x anti-alias around the nonlinear chain
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
 
     void applyAll()
     {
@@ -41,6 +44,7 @@ class EN30Plugin : public Plugin
         core.setMaster(params[kMaster]);
         core.setInput(params[kInput]);
         core.setBright(params[kBright]);
+        core.setCabSim(params[kCabSim]);
     }
 
 public:
@@ -49,13 +53,13 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kEN30Def[i];
-        core.setSampleRate((float)getSampleRate());
+        core.setSampleRate(kOS * (float)getSampleRate());
         applyAll();
     }
 
 protected:
-    const char* getLabel() const override { return "BOX DC30"; }
-    const char* getDescription() const override { return "BOX DC30 / AC30 Top Boost style amp"; }
+    const char* getLabel() const override { return "BOX AC30"; }
+    const char* getDescription() const override { return "BOX AC30 / AC30 Top Boost style amp"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
     uint32_t getVersion() const override { return d_version(1, 0, 0); }
@@ -82,13 +86,14 @@ protected:
     {
         if (index >= (uint32_t)kParamCount)
             return;
-        params[index] = en30::clamp01(value);
+        params[index] = boxdc30::clamp01(value);
         applyAll();
     }
 
     void sampleRateChanged(double newSampleRate) override
     {
-        core.setSampleRate((float)newSampleRate);
+        core.setSampleRate(kOS * (float)newSampleRate);
+        os.reset();
         applyAll();
     }
 
@@ -99,7 +104,11 @@ protected:
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            const float y = rbAmpLvl(0.505f * core.process(3.2f * in0[i]));
+            float ub[kOS];
+            os.upsample(3.2f * in0[i], ub);
+            for (int k = 0; k < kOS; ++k)                  // core + output soft-clip at 4x
+                ub[k] = rbAmpLvl(0.891f * core.process(ub[k]));
+            const float y = os.downsample(ub);
             outL[i] = y;
             outR[i] = y;   // dual-mono: one core, same signal both sides = centered/balanced
         }

@@ -5,18 +5,19 @@
  * From the 1949 Zephyr schematic (5879 pentode + 6SL7 + 6SF5 preamp/tremolo ->
  * 2x 6L6G push-pull, 5U4G rectifier, ~20 W). the game abstracts it to three
  * controls, so the model is:
- *   • V1 12AX7 input stage (stands in for the 5879/6SL7 vintage front end)
+ *   • V1 5879 pentode input stage
  *   • TONE  — passive Bass + Treble shelves
- *   • V2 12AX7 driver, pushed by Volume
+ *   • V2 6SL7 driver + 6SF5 recovery/color stage, pushed by Volume
  *   • 2x 6L6G push-pull (~20 W): big, warm American power section that blooms into
  *     vintage breakup when the Volume is cranked.
  *
- * Real nodal 12AX7s (Koren + Newton/sample) into passive tone shaping and a 6L6
- * push-pull saturator (late, round knee). Shared MNA/Triode/Biquad blocks are
- * byte-identical to the Citrus AD200 source.
+ * Tube tables are generated from the local 5879/6SL7/6SF5 datasheets with
+ * per-stage Miller loading into passive tone shaping and a 6L6G push-pull
+ * power section generated from the local Sylvania 6L6G datasheet.
  */
 #include "DistrhoPlugin.hpp"
 #include "RubyParams.h"
+#include "../../_shared/tube_stage.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -143,34 +144,77 @@ struct Triode {
 
 class RubyChannel {
     float fs = 48000.f;
-    Triode v1, v2;
+    rbtube::TubeStage5879 v1;
+    rbtube::TubeStage6SL7 v2;
+    rbtube::TubeStage6SF5 v3;
     Biquad hp, bass, treble, pwrLP;
-    float drive=1, level=1, pwrDrive=1;
-
-    // 2x 6L6G push-pull (~20 W): big, round, late American knee.
-    static inline float pushPull(float x) { return std::tanh(x * 0.72f) / 0.72f; }
+    Biquad cabHp, cabLo, cabHi, cabLp;
+    rbtube::Miller5879 inputMiller;
+    rbtube::Miller6SL7 driverMiller;
+    rbtube::Miller6SF5 recoveryMiller;
+    rbtube::CouplingCapGridLeak coupleToPi;
+    rbtube::PhaseInverterLTP12AX7 phaseInverter;
+    rbtube::MultiNodeBPlus supply;
+    rbtube::PowerAmp6L6G power;
+    float drive=1, level=1, pwrDrive=1, cabSim=1;
 public:
-    void setSampleRate(float s) { fs=(s>0.f)?s:48000.f; v1.setT(s); v2.setT(s); }
-    void reset() { v1.reset(); v2.reset(); hp.reset(); bass.reset(); treble.reset(); pwrLP.reset(); }
+    void setSampleRate(float s) { fs=(s>0.f)?s:48000.f; }
+    void reset() { v1.reset(); v2.reset(); v3.reset(); hp.reset(); bass.reset(); treble.reset(); pwrLP.reset();
+        cabHp.reset(); cabLo.reset(); cabHi.reset(); cabLp.reset();
+        inputMiller.reset(); driverMiller.reset(); recoveryMiller.reset();
+        coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset(); }
 
-    void setParams(float volume, float bassP, float trebleP) {
+    void setParams(float volume, float bassP, float trebleP, float cabSimP) {
         hp.setHighpassQ(60.f, 0.7f, fs);
         bass.setLowShelf  (120.f, (bassP   - 0.5f) * 16.f, fs);
         treble.setHighShelf(3000.f,(trebleP - 0.5f) * 14.f, fs);
-        drive    = 0.6f + volume * volume * 5.0f;          // Volume drives V2 into the 6L6s
+        drive    = 0.42f + volume * volume * 3.8f;         // Volume drives the 6SL7/6SF5 chain
         level    = 0.5f + volume * 0.8f;
         pwrDrive = 0.45f + volume * 0.8f;
-        pwrLP.setLowpassQ(12500.f, 0.7f, fs);              // vintage 6L6 + OT, miked-cab bright
+        pwrLP.setLowpassQ(12000.f, 0.7f, fs);              // vintage 6L6G + OT, miked-cab bright
+        cabSim = cabSimP;
+        v1.setWithPlate(fs, 1, 250.0f, 34.0f, 32.0f, 1500.0f, 220000.0f); // 5879 pentode, high plate load
+        v2.setWithPlate(fs, 1, 250.0f, 34.0f, 6.0f, 2200.0f, 100000.0f);  // 6SL7 driver
+        v3.setWithPlate(fs, 1, 250.0f, 48.0f, 8.0f, 1500.0f, 250000.0f);  // 6SF5 recovery/color
+        inputMiller.set(fs, 68000.0f, 30.0f, 6.0f);
+        driverMiller.set(fs, 220000.0f, 32.0f, 8.0f);
+        recoveryMiller.set(fs, 250000.0f, 42.0f, 8.0f);
+        coupleToPi.set(fs, 1000000.0f, 47.0e-9f, 47000.0f, 0.10f, 0.56f, 1.7f);
+        phaseInverter.setComponents(fs, 0.70f + 1.05f * volume, 0.78f,
+                                    275.0f, 100000.0f, 82000.0f, 1500.0f, 16.0f, 0.055f);
+        supply.set(fs,
+                   180.0f, 16.0f,
+                   1200.0f, 16.0f,
+                   10000.0f, 16.0f,
+                   0.28f, 0.18f, 0.085f, 0.24f);
+        power.set(fs, 0.78f + 1.38f * volume,
+                  -22.5f, 0.34f, 62.0f, 10000.0f + 800.0f * trebleP);
+        power.out = 0.0140f;
+        cabHp.setHighpassQ(74.f, 0.72f, fs);
+        cabLo.setLowShelf(120.f, 1.6f + 2.0f * bassP, fs);
+        cabHi.setHighShelf(3500.f, -2.8f + 4.5f * trebleP, fs);
+        cabLp.setLowpassQ(10800.f + 1700.f * trebleP, 0.66f, fs);
     }
 
     inline float process(float x) {
         float s = hp.process(x);
-        s = (float)v1.process((double)(2.2f * s));         // vintage input stage
+        s = v1.process(2.0f * inputMiller.process(s));      // 5879 pentode input
         s = bass.process(s); s = treble.process(s);        // passive tone
-        s = (float)v2.process((double)(drive * s));        // driver, pushed by Volume
-        s = pushPull(s * pwrDrive) * level;                // 2x 6L6 power
+        s = v2.process(driverMiller.process(drive * s));    // 6SL7 driver, pushed by Volume
+        s = v3.process(recoveryMiller.process((0.48f + 0.40f * level) * s));
+        const float load = std::fabs(s) * (0.68f + 0.82f * level);
+        const rbtube::SupplyScales bplus = supply.process(load, load * 0.55f, load * 0.24f);
+        s *= 0.92f + 0.08f * bplus.preamp;
+        s = coupleToPi.process(s * pwrDrive * bplus.screen, 1.0f);
+        s = phaseInverter.process(s) * bplus.screen;
+        s = power.process(s * bplus.power) * level;        // 2x 6L6G power
         s = pwrLP.process(s);
-        return s;
+        const float ampOnly = s;
+        float cab = cabHp.process(ampOnly);
+        cab = cabLo.process(cab);
+        cab = cabHi.process(cab);
+        cab = cabLp.process(cab);
+        return ampOnly + cabSim * (cab - ampOnly);
     }
 };
 
@@ -181,8 +225,8 @@ class RubyPlugin : public Plugin {
     RubyChannel L, R;
     float fParams[kParamCount];
     void recalc() {
-        L.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble]);
-        R.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble]);
+        L.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble], fParams[kCabSim]);
+        R.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble], fParams[kCabSim]);
     }
 public:
     RubyPlugin() : Plugin(kParamCount, 0, 0) {

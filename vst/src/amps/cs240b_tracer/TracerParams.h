@@ -26,7 +26,7 @@ static const float kTracerMax[kParamCount] = { 1,1,1,1,1,1,1,1, 1,1,1,1,1,1 };
 // Gain I 0.5; Gain II 0.4; Level 0.6; tone flat 0.5; Comp 0.4; Master 0.7;
 // all pulls/switches off.
 static const float kTracerDef[kParamCount] = {
-    0.50f, 0.40f, 0.60f, 0.50f, 0.50f, 0.50f, 0.40f, 0.70f,
+    0.50f, 0.40f, 0.60f, 0.50f, 0.50f, 0.50f, 0.40f, 0.55f,
     0.00f, 0.00f, 0.00f, 0.00f, 0.00f, 0.00f
 };
 

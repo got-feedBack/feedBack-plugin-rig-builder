@@ -141,7 +141,12 @@ class DbsChannel {
     SsPre ss;                            // clean op-amp gain (no tube)
     float gainDrive=1, master=1, blend=0.6f, graphicLvl=1.f;
     Biquad brite, deep;                  // Bright / Deep voicing shelves
+    Biquad valveVoice;                    // VALVE-blend warm voicing (IC10 filtered path)
     Biquad bqLo, bqHi;                    // Primary EQ (Lo / Hi — 2-band, no mid)
+    // Output LIMITER (the fixed 2nd 2252/2150 VCA on the OUTPUT sheet, before the
+    // master) — a soft ceiling so the SS power amp never hard-clips on transients.
+    static inline float outLimit(float x){ const float t=0.78f,c=0.97f,a=(x<0.f?-x:x);
+        return (a<=t) ? x : (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
     // compressor: envelope detector -> JFET voltage-controlled-resistor gain cell.
     // FIXED internal threshold (real 7400 has no threshold pot — only Depth + LED).
     static constexpr float kCompThr = 0.30f;
@@ -152,7 +157,7 @@ public:
     void setSampleRate(float s){ fs=(s>0)?s:48000.f; atk=msC(5.f,fs); rel=msC(140.f,fs);
         for (int i=0;i<kNumEq;++i){ eq[i].setT(s); eq[i].set(kEqFreqs[i], 1.1, 1e-8); eqG[i]=1.f; } }
     void reset(){ for (int i=0;i<kNumEq;++i) eq[i].reset();
-        brite.reset(); deep.reset(); bqLo.reset(); bqHi.reset(); env=0; }
+        brite.reset(); deep.reset(); valveVoice.reset(); bqLo.reset(); bqHi.reset(); env=0; }
 
     void setParams(const float* p) {
         const float pad = (p[kLoInput] > 0.5f) ? 0.35f : 1.0f;        // Lo input pad
@@ -164,6 +169,9 @@ public:
         gainDrive = (0.8f + p[kGain] * 3.0f) * pad;
         // Pre-amp Blend: VALVE (warm, soft) <-> SOLID-STATE (clean). 0 = valve, 1 = SS.
         blend = p[kBlend];
+        // The VALVE path is the IC10 filtered op-amp voicing (warm): soften the top
+        // (high-shelf cut) — that, with the mild soft-clip below, IS the "valve" feel.
+        valveVoice.setHighShelf(4500.f, -3.5f, fs);
 
         // Bright (HF lift ~+6 dB @ 3 kHz) / Deep (LF lift ~+6 dB @ 50 Hz) switches.
         if (p[kBright] > 0.5f) brite.setHighShelf(3000.f, 6.0f, fs); else brite.setBypass();
@@ -194,7 +202,8 @@ public:
         //    (warm soft-saturation). Pre-amp Blend sweeps between them.
         const double d = (double)(gainDrive * x);
         const double sClean = ss.process(d);
-        const double sValve = std::tanh(d * 1.4) * 0.71;       // ~unity small-signal, warm when pushed
+        // VALVE path: warm filtered op-amp voicing (IC10) + a mild soft-clip = "valve" feel.
+        const double sValve = (double)valveVoice.process((float)(std::tanh(d * 1.3) * 0.77));
         double s = blend * sClean + (1.0 - blend) * sValve;
         // 2. Bright / Deep voicing
         s = brite.process((float)s); s = deep.process((float)s);
@@ -216,7 +225,8 @@ public:
         //    then the Graphic Level make-up.
         if (graphicOn) { const double dry=s; double sum=dry;
           for (int i=0;i<kNumEq;++i) sum -= (eqG[i]-1.0) * eq[i].proc(dry); s = sum * graphicLvl; }
-        // 6. Volume → clean SS power
+        // 6. Output limiter (fixed 2nd VCA) → Volume → clean SS power
+        s = (double)outLimit((float)s);
         return (float)(s * master);
     }
 };
@@ -236,7 +246,7 @@ protected:
     const char* getDescription() const override { return "Marshall DBS 7400 solid-state bass head model"; }
     const char* getMaker()       const override { return "RigBuilder"; }
     const char* getLicense()     const override { return "ISC"; }
-    uint32_t    getVersion()     const override { return d_version(1, 0, 0); }
+    uint32_t    getVersion()     const override { return d_version(2, 0, 0); }
     int64_t     getUniqueId()    const override { return d_cconst('R', 'B', 'D', 'b'); }
 
     void initParameter(uint32_t i, Parameter& p) override {

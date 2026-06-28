@@ -1,330 +1,37 @@
-/*
- * CITRUS OR100 - Orange OR100 (vintage Graphic head) for the game's
- * Amp_OrangeOR100. Parody brand "Citrus"; the in-app face must never read "Orange".
- *
- * Local reference (modelled component-by-component):
- *   amps/Orange OR100/Orange100.pdf  (complete hand-drawn OR100 schematic)
- *
- * Single-channel British EL34 head: input -> ECC83 gain stages (GAIN = HF Drive)
- * -> tone stack (Bass/Middle[FAC]/Treble) + DEPTH (the low-end bass-cap voicing)
- * -> ECC81 long-tail PI -> 4x EL34 (~100W, FULL or HALF power) -> output. A thick,
- * midrange-forward "Orange" voice (the doom/stoner chunk). VOLUME is the master.
- *
- * the game: RS Gain -> GAIN; Bass/Mid/Treble -> tone stack. See
- * rs_knob_to_vst_param.json (Volume + Depth pinned via _static).
- */
 #include "DistrhoPlugin.hpp"
 #include "Or100Params.h"
+#include "../../_shared/guitar_amp_core.hpp"
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
-
 START_NAMESPACE_DISTRHO
-
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
-
-namespace {
-
-static constexpr float kPi = 3.14159265359f;
-static inline float clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
-static inline float clampFreq(float hz, float sr) { return std::fmax(20.0f, std::fmin(hz, sr * 0.45f)); }
-static inline float smoothstep(float v) { v = clamp01(v); return v * v * (3.0f - 2.0f * v); }
-static inline float smoothstepRange(float e0, float e1, float x) { return smoothstep((x - e0) / (e1 - e0)); }
-static inline float softClip(float x) { return std::tanh(x); }
-static inline float asymTube(float x, float drive, float bias)
-{
-    const float pushed = x * drive + bias;
-    const float y = std::tanh(pushed);
-    const float correction = std::tanh(bias);
-    return (y - correction) / (1.0f - 0.32f * std::fabs(correction));
-}
-static inline float tonePot(float v) { v = clamp01(v); return v < 0.001f ? 0.001f : (v > 0.999f ? 0.999f : v); }
-
-class Biquad
-{
-    float b0=1.0f,b1=0.0f,b2=0.0f,a1=0.0f,a2=0.0f,z1=0.0f,z2=0.0f;
-    void set(float nb0,float nb1,float nb2,float na0,float na1,float na2)
-    { if(std::fabs(na0)<1.0e-12f) na0=1.0f; const float i=1.0f/na0;
-      b0=nb0*i; b1=nb1*i; b2=nb2*i; a1=na1*i; a2=na2*i; }
+class Or100Plugin : public Plugin {
+    rbgtr::AmpCore<rbtube::TubeEL34> core; float fP[kParamCount];
+    rbshared::Oversampler4x os; static constexpr int kOS = rbshared::Oversampler4x::OS;
+    void applyAll(){ core.setGain(fP[kGain]); core.setBass(fP[kBass]); core.setMiddle(fP[kMiddle]);
+        core.setTreble(fP[kTreble]); core.setPresence(0.5f); core.setVolume(fP[kVolume]); }
 public:
-    void reset(){ z1=z2=0.0f; }
-    float process(float x){ const float y=b0*x+z1; z1=b1*x-a1*y+z2; z2=b2*x-a2*y; return y; }
-    void setHighPass(float sr,float hz,float q){ hz=clampFreq(hz,sr); const float w=2.0f*kPi*hz/sr,c=std::cos(w),al=std::sin(w)/(2.0f*q);
-        set((1.0f+c)*0.5f,-(1.0f+c),(1.0f+c)*0.5f,1.0f+al,-2.0f*c,1.0f-al); }
-    void setLowPass(float sr,float hz,float q){ hz=clampFreq(hz,sr); const float w=2.0f*kPi*hz/sr,c=std::cos(w),al=std::sin(w)/(2.0f*q);
-        set((1.0f-c)*0.5f,1.0f-c,(1.0f-c)*0.5f,1.0f+al,-2.0f*c,1.0f-al); }
-    void setPeaking(float sr,float hz,float q,float dB){ hz=clampFreq(hz,sr); const float a=std::pow(10.0f,dB/40.0f),w=2.0f*kPi*hz/sr,c=std::cos(w),al=std::sin(w)/(2.0f*q);
-        set(1.0f+al*a,-2.0f*c,1.0f-al*a,1.0f+al/a,-2.0f*c,1.0f-al/a); }
-    void setHighShelf(float sr,float hz,float sl,float dB){ hz=clampFreq(hz,sr); const float a=std::pow(10.0f,dB/40.0f),w=2.0f*kPi*hz/sr,c=std::cos(w),sn=std::sin(w),ra=std::sqrt(a),al=sn*0.5f*std::sqrt((a+1.0f/a)*(1.0f/sl-1.0f)+2.0f);
-        set(a*((a+1.0f)+(a-1.0f)*c+2.0f*ra*al),-2.0f*a*((a-1.0f)+(a+1.0f)*c),a*((a+1.0f)+(a-1.0f)*c-2.0f*ra*al),
-            (a+1.0f)-(a-1.0f)*c+2.0f*ra*al,2.0f*((a-1.0f)-(a+1.0f)*c),(a+1.0f)-(a-1.0f)*c-2.0f*ra*al); }
-    void setLowShelf(float sr,float hz,float sl,float dB){ hz=clampFreq(hz,sr); const float a=std::pow(10.0f,dB/40.0f),w=2.0f*kPi*hz/sr,c=std::cos(w),sn=std::sin(w),ra=std::sqrt(a),al=sn*0.5f*std::sqrt((a+1.0f/a)*(1.0f/sl-1.0f)+2.0f);
-        set(a*((a+1.0f)-(a-1.0f)*c+2.0f*ra*al),2.0f*a*((a-1.0f)-(a+1.0f)*c),a*((a+1.0f)-(a-1.0f)*c-2.0f*ra*al),
-            (a+1.0f)+(a-1.0f)*c+2.0f*ra*al,-2.0f*((a-1.0f)+(a+1.0f)*c),(a+1.0f)+(a-1.0f)*c-2.0f*ra*al); }
-};
-
-// British FMV tone stack (Marshall-derived values): Treble 250K, Bass 1M, Middle
-// 25K, slope 33K, C 470pF / 22nF / 22nF — the Orange thick voice is added on top.
-class Or100ToneStack
-{
-    float b0=1,b1=0,b2=0,b3=0,a1=0,a2=0,a3=0,x1=0,x2=0,x3=0,y1=0,y2=0,y3=0,sampleRate=48000.0f;
-public:
-    void reset(){ x1=x2=x3=y1=y2=y3=0.0f; }
-    void setSampleRate(float sr){ sampleRate=sr>1000.0f?sr:48000.0f; }
-    void update(float treble,float mid,float bass)
-    {
-        const float t=tonePot(treble),m=tonePot(mid),l=tonePot(bass);
-        const float R1=250.0e3f, R2=1.0e6f, R3=25.0e3f, R4=33.0e3f;
-        const float C1=470.0e-12f, C2=22.0e-9f, C3=22.0e-9f;
-        const float ab0=0.0f;
-        const float ab1=t*C1*R1 + m*C3*R3 + l*(C1*R2+C2*R2) + (C1*R3+C2*R3);
-        const float ab2=t*(C1*C2*R1*R4+C1*C3*R1*R4) - m*m*(C1*C3*R3*R3+C2*C3*R3*R3)
-                      + m*(C1*C3*R1*R3+C1*C3*R3*R3+C2*C3*R3*R3) + l*(C1*C2*R1*R2+C1*C2*R2*R4+C1*C3*R2*R4)
-                      + l*m*(C1*C3*R2*R3+C2*C3*R2*R3) + (C1*C2*R1*R3+C1*C2*R3*R4+C1*C3*R3*R4);
-        const float ab3=l*m*(C1*C2*C3*R1*R2*R3+C1*C2*C3*R2*R3*R4) - m*m*(C1*C2*C3*R1*R3*R3+C1*C2*C3*R3*R3*R4)
-                      + m*(C1*C2*C3*R1*R3*R3+C1*C2*C3*R3*R3*R4) + t*C1*C2*C3*R1*R3*R4 - t*m*C1*C2*C3*R1*R3*R4
-                      + t*l*C1*C2*C3*R1*R2*R4;
-        const float aa0=1.0f;
-        const float aa1=(C1*R1+C1*R3+C2*R3+C2*R4+C3*R4) + m*C3*R3 + l*(C1*R2+C2*R2);
-        const float aa2=m*(C1*C3*R1*R3-C2*C3*R3*R4+C1*C3*R3*R3+C2*C3*R3*R3) - m*m*(C1*C3*R3*R3+C2*C3*R3*R3)
-                      + l*m*(C1*C3*R2*R3+C2*C3*R2*R3) + l*(C1*C2*R2*R4+C1*C2*R1*R2+C1*C3*R2*R4+C2*C3*R2*R4)
-                      + (C1*C2*R1*R4+C1*C3*R1*R4+C1*C2*R3*R4+C1*C2*R1*R3+C1*C3*R3*R4+C2*C3*R3*R4);
-        const float aa3=l*m*(C1*C2*C3*R1*R2*R3+C1*C2*C3*R2*R3*R4) - m*m*(C1*C2*C3*R1*R3*R3+C1*C2*C3*R3*R3*R4)
-                      + m*(C1*C2*C3*R3*R3*R4+C1*C2*C3*R1*R3*R3-C1*C2*C3*R1*R3*R4) + l*(C1*C2*C3*R1*R2*R4) + C1*C2*C3*R1*R3*R4;
-        const float c=2.0f*sampleRate, c2=c*c, c3=c2*c;
-        const float nb0=-ab0-ab1*c-ab2*c2-ab3*c3, nb1=-3.0f*ab0-ab1*c+ab2*c2+3.0f*ab3*c3,
-                    nb2=-3.0f*ab0+ab1*c+ab2*c2-3.0f*ab3*c3, nb3=-ab0+ab1*c-ab2*c2+ab3*c3;
-        const float na0=-aa0-aa1*c-aa2*c2-aa3*c3, na1=-3.0f*aa0-aa1*c+aa2*c2+3.0f*aa3*c3,
-                    na2=-3.0f*aa0+aa1*c+aa2*c2-3.0f*aa3*c3, na3=-aa0+aa1*c-aa2*c2+aa3*c3;
-        if(std::fabs(na0)<1.0e-30f){ b0=1.0f; b1=b2=b3=a1=a2=a3=0.0f; return; }
-        const float i=1.0f/na0; b0=nb0*i; b1=nb1*i; b2=nb2*i; b3=nb3*i; a1=na1*i; a2=na2*i; a3=na3*i;
-    }
-    float process(float x){ const float y=b0*x+b1*x1+b2*x2+b3*x3-a1*y1-a2*y2-a3*y3;
-        x3=x2; x2=x1; x1=x; y3=y2; y2=y1; y1=y; return y; }
-};
-
-class DcBlock
-{
-    float x1=0.0f,y1=0.0f;
-public:
-    void reset(){ x1=y1=0.0f; }
-    float process(float x){ const float y=x-x1+0.995f*y1; x1=x; y1=y; return y; }
-};
-
-} // namespace
-
-class Or100Core
-{
-    float sampleRate = 48000.0f;
-    float gain   = kOr100Def[kGain];
-    float bass   = kOr100Def[kBass];
-    float mid    = kOr100Def[kMiddle];
-    float treble = kOr100Def[kTreble];
-    float depth  = kOr100Def[kDepth];
-    float volume = kOr100Def[kVolume];
-    float half   = kOr100Def[kHalf];
-
-    Biquad inputHp, pickupLoad, preBody, interHp, cathodeLp;
-    Or100ToneStack toneStack;
-    Biquad depthShelf, midThick, stackMakeupLow, phaseLp, presenceShelf;
-    Biquad speakerHp, speakerThump, speakerLowMid, speakerBite, speakerFizz, speakerLp;
-    DcBlock dcBlock;
-    float sag = 0.0f;
-
-    static float eqDb(float v, float r) { return (clamp01(v) - 0.5f) * 2.0f * r; }
-
-    void updateFilters()
-    {
-        const float g = smoothstep(gain);
-        const float pushed = smoothstepRange(0.40f, 0.92f, gain);
-        const float mPush = smoothstep(volume);
-
-        inputHp.setHighPass(sampleRate, 46.0f + 36.0f * g, 0.70f);
-        pickupLoad.setLowPass(sampleRate, 12000.0f - 1400.0f * pushed + 800.0f * treble, 0.64f);
-        preBody.setPeaking(sampleRate, 640.0f + 240.0f * mid, 0.80f, 0.6f + 1.6f * mid);   // Orange upper-mid push
-        interHp.setHighPass(sampleRate, 90.0f + 90.0f * pushed, 0.70f);
-        cathodeLp.setLowPass(sampleRate, 8800.0f + 1400.0f * treble - 1500.0f * pushed, 0.64f);
-
-        toneStack.update(treble, mid, bass);
-        // DEPTH = the bass-cap rotary: a swept low shelf (more depth = bigger lows).
-        depthShelf.setLowShelf(sampleRate, 95.0f + 25.0f * depth, 0.72f, eqDb(depth, 9.0f) + 1.0f);
-        // the thick Orange FAC midrange
-        midThick.setPeaking(sampleRate, 480.0f + 160.0f * mid, 0.60f, -0.6f + 4.4f * mid + 1.2f * pushed);
-        stackMakeupLow.setLowShelf(sampleRate, 120.0f, 0.72f, 1.0f - 1.0f * pushed);
-        phaseLp.setLowPass(sampleRate, 10500.0f + 1300.0f * treble - 2000.0f * pushed, 0.64f);
-        // fixed presence voicing (no presence knob on the OR100)
-        presenceShelf.setHighShelf(sampleRate, 2700.0f, 0.78f, 1.8f + 1.0f * treble);
-
-        // Orange PPC 4x12 (thick, midrange-forward, smooth top)
-        speakerHp.setHighPass(sampleRate, 78.0f, 0.72f);
-        speakerThump.setPeaking(sampleRate, 120.0f, 0.84f, 1.2f + 2.4f * bass + 1.2f * depth);
-        speakerLowMid.setPeaking(sampleRate, 440.0f + 90.0f * mid, 0.72f, 1.2f + 2.0f * mid);
-        speakerBite.setPeaking(sampleRate, 2400.0f + 480.0f * treble, 0.78f, 2.0f + 1.8f * treble - 0.5f * pushed);
-        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, 9.5f + 2.0f * treble - 4.5f * pushed);
-        speakerLp.setLowPass(sampleRate, 15000.0f + 1700.0f * treble - 3500.0f * pushed, 0.66f);
-    }
-
-public:
-    void reset()
-    {
-        inputHp.reset(); pickupLoad.reset(); preBody.reset(); interHp.reset(); cathodeLp.reset();
-        toneStack.reset(); depthShelf.reset(); midThick.reset(); stackMakeupLow.reset(); phaseLp.reset(); presenceShelf.reset();
-        speakerHp.reset(); speakerThump.reset(); speakerLowMid.reset(); speakerBite.reset(); speakerFizz.reset(); speakerLp.reset();
-        dcBlock.reset(); sag = 0.0f;
-        updateFilters();
-    }
-
-    void setSampleRate(float sr) { sampleRate = sr > 1000.0f ? sr : 48000.0f; toneStack.setSampleRate(sampleRate); reset(); }
-
-    void setParam(int idx, float v)
-    {
-        v = clamp01(v);
-        switch (idx)
-        {
-            case kGain:   gain = v; break;
-            case kBass:   bass = v; break;
-            case kMiddle: mid = v; break;
-            case kTreble: treble = v; break;
-            case kDepth:  depth = v; break;
-            case kVolume: volume = v; break;
-            case kHalf:   half = v; break;
-            default: break;
-        }
-        updateFilters();
-    }
-
-    void initDefaults() { for (int i = 0; i < kParamCount; ++i) setParam(i, kOr100Def[i]); }
-
-    float process(float in)
-    {
-        const float g = smoothstep(gain);
-        const float pushed = smoothstepRange(0.40f, 0.92f, gain);
-        const float mPush = smoothstep(volume);
-        const float halfP = (half >= 0.5f) ? 1.0f : 0.0f;   // HALF power -> earlier breakup
-
-        float x = inputHp.process(in);
-        x = pickupLoad.process(x);
-        x = softClip(x * (1.05f + 0.08f * pushed)) * (0.96f - 0.04f * pushed);
-
-        // ECC83 gain stages (GAIN = HF Drive) — Orange medium-high gain, thick.
-        float y = preBody.process(x);
-        y = asymTube(y, 1.05f + 3.2f * gain + 2.4f * g, 0.012f + 0.014f * gain);
-        y = interHp.process(y);
-        y = asymTube(y, 0.95f + 2.6f * gain + 2.6f * pushed, -0.008f - 0.010f * gain);
-        y = cathodeLp.process(y);
-
-        y = toneStack.process(y) * 1.70f;
-        y = depthShelf.process(y);
-        y = midThick.process(y);
-        y = stackMakeupLow.process(y);
-        y = phaseLp.process(y);
-
-        // VOLUME (master) into the power amp
-        y *= 0.22f + 1.28f * volume;
-
-        // 4x EL34 (~100W) + sag. HALF power -> less headroom, earlier/softer breakup.
-        const float env = std::fabs(y);
-        const float attack = 1.0f - std::exp(-1.0f / (0.0060f * sampleRate));
-        const float release = 1.0f - std::exp(-1.0f / (0.140f * sampleRate));
-        sag += (env - sag) * (env > sag ? attack : release);
-        const float sagDrop = 1.0f / (1.0f + sag * (0.30f + 0.55f * mPush + 0.35f * halfP));
-        const float powerDrive = (0.85f + 1.55f * mPush + 0.9f * pushed + 0.6f * halfP) * sagDrop;
-        y = asymTube(y, powerDrive, 0.006f + 0.010f * (treble - bass));
-        y = 0.86f * y + 0.14f * softClip(y * (1.5f + 1.1f * pushed + 0.5f * halfP));
-        y *= 0.97f - 0.07f * sag;
-
-        y = presenceShelf.process(y);
-        y = dcBlock.process(y);
-
-        y = speakerHp.process(y);
-        y = speakerThump.process(y);
-        y = speakerLowMid.process(y);
-        y = speakerBite.process(y);
-        y = speakerFizz.process(y);
-        y = speakerLp.process(y);
-
-        // Loudness normalization: cleanMakeup keeps RS Gain (-> GAIN) ~flat; VOLUME
-        // (master) gives a mild swing. ~-14 dBFS reference.
-        const float toneEnergy = 1.0f
-            + 0.011f * std::fabs((bass - 0.5f) * 15.0f)
-            + 0.013f * std::fabs((mid - 0.5f) * 18.0f)
-            + 0.012f * std::fabs((treble - 0.5f) * 17.0f)
-            + 0.009f * std::fabs((depth - 0.5f) * 14.0f);
-        const float cleanMakeup = 1.0f + 4.0f * std::exp(-gain / 0.24f);
-        const float level = (0.56f + 0.12f * (1.0f - gain)) * cleanMakeup /
-            ((1.0f + 0.42f * mPush + 0.28f * pushed) * toneEnergy);
-        return softClip(y * level) * 0.97f;
-    }
-};
-
-class Or100Plugin : public Plugin
-{
-    Or100Core left;
-    Or100Core right;
-    float params[kParamCount];
-
-    void applyAll() { for (int i = 0; i < kParamCount; ++i) { left.setParam(i, params[i]); right.setParam(i, params[i]); } }
-
-public:
-    Or100Plugin() : Plugin(kParamCount, 0, 0)
-    {
-        for (int i = 0; i < kParamCount; ++i) params[i] = kOr100Def[i];
-        left.setSampleRate((float)getSampleRate());
-        right.setSampleRate((float)getSampleRate());
-        applyAll();
-    }
-
+    Or100Plugin() : Plugin(kParamCount,0,0){ for(int i=0;i<kParamCount;++i)fP[i]=kOr100Def[i];
+        core.configure(250e3,470e3,25e3,33e3,250e-12,22e-9,22e-9, 0.30f,6.0f,13.0f,2500.0f,3.0f);
+        core.setSampleRate(kOS*(float)getSampleRate()); applyAll(); }
 protected:
     const char* getLabel() const override { return "CitrusOR100"; }
-    const char* getDescription() const override { return "Orange OR100 British EL34 style amp"; }
+    const char* getDescription() const override { return "Orange OR100 style amp — circuit-real model"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
-    int64_t getUniqueId() const override { return d_cconst('O', 'r', '1', '0'); }
-
-    void initParameter(uint32_t index, Parameter& parameter) override
-    {
-        if (index >= (uint32_t)kParamCount) return;
-        parameter.hints = kParameterIsAutomatable;
-        parameter.name = kOr100Names[index];
-        parameter.symbol = kOr100Symbols[index];
-        parameter.ranges.min = kOr100Min[index];
-        parameter.ranges.max = kOr100Max[index];
-        parameter.ranges.def = kOr100Def[index];
-    }
-
-    float getParameterValue(uint32_t index) const override { return index < (uint32_t)kParamCount ? params[index] : 0.0f; }
-
-    void setParameterValue(uint32_t index, float value) override
-    {
-        if (index >= (uint32_t)kParamCount) return;
-        params[index] = clamp01(value);
-        left.setParam((int)index, params[index]);
-        right.setParam((int)index, params[index]);
-    }
-
-    void sampleRateChanged(double newSampleRate) override
-    {
-        left.setSampleRate((float)newSampleRate);
-        right.setSampleRate((float)newSampleRate);
-        applyAll();
-    }
-
-    void run(const float** inputs, float** outputs, uint32_t frames) override
-    {
-        const float* inL = inputs[0];
-        const float* inR = inputs[1];
-        float* outL = outputs[0];
-        float* outR = outputs[1];
-        for (uint32_t i = 0; i < frames; ++i)
-        {
-            outL[i] = rbAmpLvl(0.560f * left.process(3.2f * inL[i]));
-            outR[i] = rbAmpLvl(0.560f * right.process(3.2f * inR[i]));
-        }
-    }
-
+    uint32_t getVersion() const override { return d_version(2,0,0); }
+    int64_t getUniqueId() const override { return d_cconst('O','r','1','0'); }
+    void initParameter(uint32_t i, Parameter& p) override { if(i>=(uint32_t)kParamCount)return; p.hints=kParameterIsAutomatable;
+        if(i==(uint32_t)kHalf||i==(uint32_t)kCabSim)p.hints|=kParameterIsBoolean;
+        p.name=kOr100Names[i]; p.symbol=kOr100Symbols[i]; p.ranges.min=kOr100Min[i]; p.ranges.max=kOr100Max[i]; p.ranges.def=kOr100Def[i]; }
+    float getParameterValue(uint32_t i) const override { return (i<(uint32_t)kParamCount)?fP[i]:0.f; }
+    void setParameterValue(uint32_t i, float val) override { if(i<(uint32_t)kParamCount){fP[i]=val; applyAll();} }
+    void sampleRateChanged(double r) override { core.setSampleRate(kOS*(float)r); os.reset(); applyAll(); }
+    void run(const float** in, float** out, uint32_t frames) override { const float* i0=in[0]; float* oL=out[0]; float* oR=out[1];
+        for(uint32_t i=0;i<frames;++i){ float ub[kOS]; os.upsample(i0[i],ub);
+            for(int k=0;k<kOS;++k) ub[k]=rbAmpLvl(0.50f*core.process(ub[k])); const float y=os.downsample(ub); oL[i]=y; oR[i]=y; } }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Or100Plugin)
 };
-
-Plugin* createPlugin() { return new Or100Plugin(); }
-
+Plugin* createPlugin(){ return new Or100Plugin(); }
 END_NAMESPACE_DISTRHO

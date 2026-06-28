@@ -24,6 +24,7 @@
  */
 
 #include "TW22Params.h"
+#include "../../_shared/tube_stage.hpp"   // real 12AX7 + 6V6 circuit models (Koren tables)
 #include <cmath>
 
 namespace tw22 {
@@ -150,15 +151,16 @@ class TW22Core {
     float burnVol  = kTW22Def[kBurnVol];
     float reverb   = kTW22Def[kReverb];
     float presenceK = kTW22Def[kPresence];
+    float cabSim   = kTW22Def[kCabSim];
 
     RcHighPass inputHp;
     Biquad inputBright;          // shared Fender bright cap; Norm(bright)/Fat(dark)
     // Vintage channel tone
-    Biquad vintBassShelf, vintTrebleShelf;
+    rbtube::ToneStackYeh vintTone;   // Vintage: real blackface tone stack (Twin values)
     // Burn channel
     RcHighPass burnTighten;
     RcLowPass interstageLp;
-    Biquad burnBassShelf, burnMidScoop, burnTrebleShelf;
+    rbtube::ToneStackYeh burnTone;   // Burn: real hot-rod TMB tone stack (DeVille values)
     // power amp / speaker
     Biquad presence;            // power-amp NFB presence (RS Pres)
     Biquad speakerHp, speakerBody, speakerBite, speakerFizz, speakerLp;
@@ -166,9 +168,61 @@ class TW22Core {
     SpringReverb spring;
     float sag = 0.0f;
 
+    // ── REAL tube stages (Koren circuit models) replacing the tanh approximations ──
+    rbtube::TubeStage vintTube;            // VINTAGE: 1x 12AX7
+    rbtube::TubeStage burn1, burn2, burn3; // BURN: 3x 12AX7 cascade
+    rbtube::Miller12AX7 vintMiller, burn1Miller, burn2Miller, burn3Miller;
+    rbtube::CouplingCapGridLeak burnCouple12, burnCouple23, coupleToPi;
+    rbtube::PhaseInverterLTP12AT7 phaseInverter; // real 12AT7 Fender LTP
+    rbtube::MultiNodeBPlus supply;               // stiff silicon B+ nodes
+    rbtube::PowerAmp6V6 power;             // 2x 6V6 push-pull (~22W)
+    float vDrv=1, b1g=1, b2g=1, b3g=1; // computed drives (audio->grid volts)
+    float vintVolPot=0, gain1Pot=0, gain2Pot=0, burnVolPot=0;
+    float lastPowerLoad=0, lastScreenLoad=0, lastPreampLoad=0;
+
     void updateFilters() {
-        const float wBurn = smoothstep(channel);    // 0=Vintage .. 1=Burn
-        const float hot   = smoothstepRange(0.45f, 1.0f, channel) * smoothstep(gain1);
+        // Remap the RS Gain (channel) so the Burn channel / crunch only arrives near
+        // Gain 6 (was ~5): clean below, crunch from ~0.6 up. channel^1.6 leaves the
+        // full-Burn end (1.0) untouched and just delays the low/mid onset.
+        const float ch = std::pow(channel, 1.6f);
+        const float wBurn = smoothstep(ch);    // 0=Vintage .. 1=Burn
+        vintVolPot = rbtube::PotTaper::audio(vintVol, 1.24f);
+        gain1Pot = rbtube::PotTaper::audio(gain1, 1.18f);
+        gain2Pot = rbtube::PotTaper::audio(gain2, 1.16f);
+        burnVolPot = rbtube::PotTaper::audio(burnVol, 1.20f);
+        const float hot = smoothstepRange(0.45f, 1.0f, ch) * smoothstep(gain1Pot);
+
+        // ── real 12AX7 / 6V6 circuit stages (cathode-biased, self-bias solved) ──
+        vintTube.set(sampleRate, 1, 250.0f, 40.0f, 30.0f, 1500.0f);   // Vintage 1x 12AX7
+        burn1.set(sampleRate, 1, 250.0f, 40.0f, 25.0f, 1500.0f);      // Burn cascade
+        burn2.set(sampleRate, 1, 250.0f, 40.0f, 40.0f, 1500.0f);
+        burn3.set(sampleRate, 1, 250.0f, 40.0f, 60.0f, 1500.0f);
+        vintMiller.set(sampleRate, 68000.0f, 55.0f, 8.0f);
+        burn1Miller.set(sampleRate, 68000.0f, 55.0f, 8.0f);
+        burn2Miller.set(sampleRate, 220000.0f, 52.0f, 8.0f);
+        burn3Miller.set(sampleRate, 180000.0f, 52.0f, 8.0f);
+        // Cascaded Burn coupling caps + grid leaks. Exact cap labels vary by
+        // schematic node; these follow the SS22 12AX7 cascade scale (22n/1M)
+        // so blocking/recovery happens in the right places instead of ideal HPFs.
+        burnCouple12.set(sampleRate, 1000000.0f, 22.0e-9f, 150000.0f, 0.12f, 0.50f, 1.55f);
+        burnCouple23.set(sampleRate, 1000000.0f, 22.0e-9f, 180000.0f, 0.12f, 0.56f, 1.75f);
+        coupleToPi.set(sampleRate, 1000000.0f, 47.0e-9f, 180000.0f, 0.13f, 0.48f, 1.35f);
+        phaseInverter.setFenderAB763(sampleRate, 0.90f + 1.20f * wBurn + 2.40f * hot, 0.86f);
+        // Super-Sonic 22 uses silicon rectification and larger modern filter caps:
+        // much stiffer than tweed, but screens/preamp still sag under Burn load.
+        supply.set(sampleRate, 35.0f, 47.0f, 470.0f, 22.0f, 10000.0f, 22.0f,
+                   0.095f + 0.035f * hot, 0.070f + 0.030f * hot,
+                   0.035f + 0.015f * hot, 0.12f);
+        // 2x 6V6 push-pull, solid-state rectifier (MILD sag), NFB approximated by presence
+        power.set(sampleRate, 1.7f + 4.6f * wBurn
+                  + 6.6f * wBurn * (0.5f * smoothstep(gain1Pot) + 0.5f * smoothstep(gain2Pot))
+                  + 3.0f * hot, -13.0f, 0.32f, 80.0f, 10000.0f);   // Burn drive scales with BOTH gains
+        power.out = 0.011f;
+        // drives (audio -> grid volts): Vintage stays clean-ish; Burn cascade driven by Gain1/Gain2
+        vDrv = 1.7f * (0.6f + 1.8f * vintVolPot);
+        b1g  = 2.0f * (0.40f + 3.0f * gain1Pot);
+        b2g  = 1.3f * (0.45f + 3.2f * gain2Pot);
+        b3g  = 0.85f + 0.65f * gain2Pot;
 
         // input grid HP (tightens a little more on the Burn channel) + shared
         // bright cap (Norm = sparkly, Fat = darker/fuller).
@@ -176,24 +230,27 @@ class TW22Core {
         inputBright.setHighShelf(sampleRate, 2150.0f, 0.70f, 4.0f - 5.5f * normFat);
 
         // --- VINTAGE tone (American clean: bright, tight, mild) ---
-        vintBassShelf.setLowShelf(sampleRate, 95.0f + 25.0f * vintBass, 0.74f, eqDb(vintBass, 10.0f) - 2.5f * normFat);
-        vintTrebleShelf.setHighShelf(sampleRate, 2000.0f + 1200.0f * vintTre, 0.62f, -6.0f + 15.0f * vintTre);
+        // EXACT Super-Sonic Vintage tone (schematic): Treble R9 250k, Bass R10 250k,
+        // Mid = R11 6.8k FIXED resistor (no pot), slope R8 100k; C4 250pF, C5 .1uF, C6 .047uF.
+        vintTone.setComponents(250e3, 250e3, 6.8e3, 100e3, 250e-12, 100e-9, 47e-9);
+        vintTone.update(sampleRate, vintTre, 1.0f, vintBass);     // mid fixed (full R3, no pot)
 
         // --- BURN cascade tone (scooped American hi-gain) ---
         burnTighten.setHz(sampleRate, 60.0f + 70.0f * gain1 + 55.0f * wBurn);
         interstageLp.setHz(sampleRate, 9200.0f - 2600.0f * gain2 + 1400.0f * burnTre);
         // low shelf with a body baseline so the Burn channel isn't thin (it was
         // ~12 dB light in the lows vs the Box/Deluxe; American-tight, not anaemic).
-        burnBassShelf.setLowShelf(sampleRate, 135.0f, 0.70f, eqDb(burnBass, 11.0f) + 3.5f);
-        burnMidScoop.setPeaking(sampleRate, 430.0f + 150.0f * burnMid, 0.64f, -8.0f + 14.0f * burnMid);
-        burnTrebleShelf.setHighShelf(sampleRate, 1900.0f + 1300.0f * burnTre, 0.62f, -7.0f + 17.0f * burnTre);
+        // EXACT Super-Sonic Burn TMB (schematic): Treble R47 250k, Bass R48 250k, Mid R49
+        // 25k, slope R46 120k; C22 150pF, C23 .15uF, C24 .022uF.
+        burnTone.setComponents(250e3, 250e3, 25e3, 120e3, 150e-12, 150e-9, 22e-9);
+        burnTone.update(sampleRate, burnTre, burnMid, burnBass);
 
         // --- power-amp presence (RS Pres) ---
         presence.setHighShelf(sampleRate, 2900.0f, 0.80f, -3.0f + 8.0f * presenceK);
 
         // --- Celestion V30 12" (bright / tight, modest body) ---
-        speakerHp.setHighPass(sampleRate, 84.0f, 0.72f);
-        speakerBody.setPeaking(sampleRate, 205.0f, 0.80f, 2.4f + 1.6f * (wBurn * burnBass + (1.0f - wBurn) * vintBass) - 0.4f * hot);
+        speakerHp.setHighPass(sampleRate, 135.0f, 0.72f);        // tighter low end to match the reference (was 84 = too much sub)
+        speakerBody.setPeaking(sampleRate, 205.0f, 0.80f, -1.0f + 1.6f * (wBurn * burnBass + (1.0f - wBurn) * vintBass) - 0.4f * hot);
         // Bite tracks gain too (more presence on crank, less at low gain).
         speakerBite.setPeaking(sampleRate, 2600.0f + 500.0f * burnTre, 0.72f, 2.5f + 2.4f * burnTre + 0.8f * wBurn + 1.3f * hot);
         // AIR high-shelf: lifts the V30 top. The AmpliTube SuperSonic gets
@@ -208,12 +265,18 @@ class TW22Core {
 public:
     void reset() {
         inputHp.reset(); inputBright.reset();
-        vintBassShelf.reset(); vintTrebleShelf.reset();
+        vintTone.reset();
         burnTighten.reset(); interstageLp.reset();
-        burnBassShelf.reset(); burnMidScoop.reset(); burnTrebleShelf.reset();
+        burnTone.reset();
         presence.reset();
         speakerHp.reset(); speakerBody.reset(); speakerBite.reset(); speakerFizz.reset(); speakerLp.reset();
-        dcBlock.reset(); spring.clear(); sag = 0.0f; updateFilters();
+        dcBlock.reset(); spring.clear(); sag = 0.0f;
+        vintMiller.reset(); burn1Miller.reset(); burn2Miller.reset(); burn3Miller.reset();
+        burnCouple12.reset(); burnCouple23.reset(); coupleToPi.reset();
+        phaseInverter.reset(); supply.reset();
+        vintTube.reset(); burn1.reset(); burn2.reset(); burn3.reset(); power.reset();
+        lastPowerLoad = lastScreenLoad = lastPreampLoad = 0.0f;
+        updateFilters();
     }
     void setSampleRate(float sr) { sampleRate = sr > 1000.0f ? sr : 48000.0f; spring.setSampleRate(sampleRate); reset(); }
 
@@ -230,75 +293,78 @@ public:
     void setBurnVol(float v)   { burnVol = clamp01(v);   updateFilters(); }
     void setReverb(float v)    { reverb = clamp01(v); }
     void setPresence(float v)  { presenceK = clamp01(v); updateFilters(); }
+    void setCabSim(float v)    { cabSim = clamp01(v); }
 
     float process(float in) {
-        const float wBurn = smoothstep(channel);     // crossfade weight
+        const float ch = std::pow(channel, 1.6f);   // crunch onset at ~Gain 6 (see updateFilters)
+        const float wBurn = smoothstep(ch);     // crossfade weight
         const float wVint = 1.0f - wBurn;
-        // upper-channel "keeps biting" boost (preserves the loved morph feel)
-        const float chBoost = smoothstepRange(0.45f, 1.0f, channel);
-        const float hot = chBoost * smoothstep(gain1);
-
+        const float hot = smoothstepRange(0.45f, 1.0f, ch) * smoothstep(gain1Pot);
+        const rbtube::SupplyScales bplus = supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
         float x = inputHp.process(in);
         x = inputBright.process(x);
         x = softClip(x * 1.04f) * 0.96f;
 
-        // --- VINTAGE channel: one 12AX7 stage, stays clean until pushed ---
-        float vt = x;
-        const float vintDrive = 0.85f + 1.9f * vintVol;
-        vt = triode12AX7(vt * vintDrive, 0.012f + 0.020f * vintVol);
-        const float cleanBlend = 0.55f * (1.0f - smoothstep(vintVol));
-        vt = vt * (1.0f - cleanBlend) + x * cleanBlend;
-        vt = vintBassShelf.process(vt);
-        vt = vintTrebleShelf.process(vt);
-        vt *= (0.45f + 1.10f * vintVol);
+        // --- VINTAGE channel: one REAL 12AX7 (clean until pushed by Volume) ---
+        float vt = vintTube.process(vintMiller.process(x) * vDrv * bplus.preamp);
+        vt = vintTone.process(vt) * 2.2f;                         // real blackface tone (+ makeup)
+        vt *= (0.55f + 0.90f * vintVolPot);
 
         // --- BURN channel: cascaded gain stages ---
+        // Drive is mostly GAIN-knob dependent (steep clean->crunch range) with a
+        // small fixed Burn-channel floor, so low gain stays clean and the knob
+        // sweeps a wide range like the AmpliTube reference.
+        // --- BURN channel: 3 REAL cascaded 12AX7 (Gain1 -> Gain2 -> recovery) ---
         float bn = burnTighten.process(x);
-        const float g1 = 1.7f + 6.0f * gain1 + 3.0f * chBoost;
-        bn = triode12AX7(bn * g1, 0.026f + 0.030f * gain1);
+        bn = burn1.process(burn1Miller.process(bn) * b1g * bplus.preamp);  // stage 1 (Gain 1)
         bn = interstageLp.process(bn);
-        const float g2 = 1.4f + 4.5f * gain2 + 2.5f * chBoost;
-        bn = triode12AX7(bn * g2, -0.018f - 0.026f * gain2);
-        bn = burnBassShelf.process(bn);
-        bn = burnMidScoop.process(bn);
-        bn = burnTrebleShelf.process(bn);
-        bn *= (0.40f + 0.95f * burnVol);
+        bn = burnCouple12.process(bn, b2g);
+        bn = burn2.process(burn2Miller.process(bn) * bplus.preamp);  // stage 2 (Gain 2)
+        bn = burnCouple23.process(bn, b3g);
+        bn = burn3.process(burn3Miller.process(bn) * bplus.preamp);  // stage 3 (lead recovery)
+        bn = burnTone.process(bn) * 4.0f;                         // real hot-rod TMB (+ makeup for insertion loss + scoop)
+        bn *= (0.40f + 0.95f * burnVolPot);
 
         float y = vt * wVint + bn * wBurn;
 
-        // --- 6V6 push-pull + mild solid-state-rectifier sag + presence ---
-        const float env = std::fabs(y);
-        const float atk = 1.0f - std::exp(-1.0f / (0.0040f * sampleRate));
-        const float rel = 1.0f - std::exp(-1.0f / (0.090f * sampleRate));
-        sag += (env - sag) * (env > sag ? atk : rel);
-        const float sagDrop = 1.0f / (1.0f + sag * (0.26f + 0.50f * wBurn));
-        const float powerDrive = (1.0f + 1.1f * wBurn + 1.6f * hot) * sagDrop;
-        y = sixV6Pair(y * powerDrive, 0.03f + 0.012f * (burnTre - burnBass));
-        y = 0.90f * y + 0.10f * softClip(y * (1.5f + 1.0f * wBurn));
-        y = presence.process(y);
+        y = coupleToPi.process(y, 1.0f + 0.70f * wBurn + 1.15f * hot);
+        lastPreampLoad = std::fabs(y) * (0.18f + 0.52f * wBurn + 0.70f * hot);
+        y = phaseInverter.process(y * bplus.screen);              // 12AT7 LTP
+        lastScreenLoad = std::fabs(y) * (0.25f + 0.55f * wBurn + 0.45f * hot);
+
+        // --- 2x 6V6 push-pull (REAL circuit: pentode table + B+ + OT) ---
+        y = power.process(y * bplus.power * bplus.screen);
+        lastPowerLoad = std::fabs(y) * (0.42f + 0.55f * wBurn + 0.60f * hot);
+        y = presence.process(y);            // power-amp presence (NFB-approx high shelf)
 
         y = dcBlock.process(y);
 
-        // --- Celestion V30 ---
-        y = speakerHp.process(y);
-        y = speakerBody.process(y);
-        y = speakerBite.process(y);
-        y = speakerFizz.process(y);
-        y = speakerLp.process(y);
+        // --- Celestion V30 fallback cab (bypassable for external cab/IR) ---
+        const float ampOnly = y;
+        float cab = speakerHp.process(ampOnly);
+        cab = speakerBody.process(cab);
+        cab = speakerBite.process(cab);
+        cab = speakerFizz.process(cab);
+        cab = speakerLp.process(cab);
+        y = ampOnly + cabSim * (cab - ampOnly);
 
         // --- shared spring reverb (parallel, mixed) ---
         if (reverb > 0.001f)
             y += spring.process(y) * (0.9f * reverb);
 
-        // --- output makeup: flat loudness at the BOX DC30 reference (~0.40) as
+        // --- output makeup: flat loudness at the BOX AC30 reference (~0.40) as
         //     the channel morphs clean -> cranked ---
         const float toneEnergy = 1.0f
             + 0.013f * std::fabs((burnBass - 0.5f) * 20.0f)
             + 0.012f * std::fabs((burnMid - 0.5f) * 22.0f)
             + 0.014f * std::fabs((burnTre - 0.5f) * 22.0f);
-        const float makeup = 0.47f + 1.10f / (1.0f + std::exp(11.0f * (channel - 0.30f)));
+        const float makeup = 0.47f + 1.10f / (1.0f + std::exp(11.0f * (ch - 0.30f)));
         const float level = makeup / toneEnergy;
-        return softClip(y * level) * 0.98f;
+        // loudness flattening vs the Vintage->Burn morph/gain (clean post-output makeup;
+        // ~0 dB at morph 0.5). Tracks the remapped channel so loudness follows the knob.
+        float gcDb = 8.317f - 20.537f * ch + 5.580f * ch * ch;
+        if (gcDb > 20.0f) gcDb = 20.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
+        return softClip(y * level * std::pow(10.0f, 0.05f * gcDb)) * 0.98f;
     }
 };
 

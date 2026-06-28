@@ -3,26 +3,29 @@
 
 enum ClassicFlangerParamId
 {
-    kRate = 0,
+    kManual = 0,
     kDepth,
-    kMix,
+    kRate,
+    kRes,
     kParamCount
 };
 
 static const char* const kClassicFlangerNames[kParamCount] = {
-    "Rate",
+    "Manual",
     "Depth",
-    "Mix",
+    "Rate",
+    "Res",
 };
 
 static const char* const kClassicFlangerSymbols[kParamCount] = {
-    "rate",
+    "manual",
     "depth",
-    "mix",
+    "rate",
+    "res",
 };
 
-static const float kClassicFlangerMin[kParamCount] = { 0.0f, 0.0f, 0.0f };
-static const float kClassicFlangerMax[kParamCount] = { 1.0f, 1.0f, 1.0f };
-static const float kClassicFlangerDef[kParamCount] = { 0.26f, 0.44f, 0.18f };
+static const float kClassicFlangerMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f };
+static const float kClassicFlangerMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f };
+static const float kClassicFlangerDef[kParamCount] = { 0.42f, 0.44f, 0.26f, 0.24f };
 
 #endif // CLASSIC_FLANGER_PARAMS_H

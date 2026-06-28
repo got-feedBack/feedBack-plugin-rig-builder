@@ -1,265 +1,153 @@
 /*
- * Chorus20 - stereo BBD chorus/flanger for the game's Pedal_Chorus20.
+ * Deja Chorus - Deja Vibe / Uni-Vibe style optical chorus.
  *
- * Local reference: pedals/chorus 2.0.jpg, labelled "Stereo Chorus Flanger".
- * It shows clocked BBD delay, companding/filtering around the delay line, and
- * stereo wet outputs. the game exposes Rate, Depth, and Mix only, so this
- * keeps regeneration, tone, and stereo offset as internal voicing.
+ * References: pedals/chorus 20/ElectroVibe-PedalPCB.pdf and the Pisotones
+ * UniVibe document. The model follows the transistor preamp, four LDR-driven
+ * all-pass stages, incandescent lamp driver and Chorus/Vibrato output switch.
  */
 #include "DistrhoPlugin.hpp"
 #include "Chorus20Params.h"
+#include "../_shared/ChorusComponents.h"
 #include <cmath>
-#include <vector>
 
 START_NAMESPACE_DISTRHO
 
-namespace {
-
-static constexpr float kPi = 3.14159265359f;
-static constexpr float kTwoPi = 6.28318530718f;
-
-static inline float clamp01(float v)
-{
-    return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
-}
-
-static inline float smoothstep(float v)
-{
-    v = clamp01(v);
-    return v * v * (3.0f - 2.0f * v);
-}
-
-static inline float softClip(float x)
-{
-    return std::tanh(x);
-}
-
-static inline float onePoleCoeffHz(float hz, float sr)
-{
-    hz = std::fmax(10.0f, std::fmin(hz, sr * 0.45f));
-    return 1.0f - std::exp(-2.0f * kPi * hz / sr);
-}
-
-class DelayBuffer
-{
-    std::vector<float> data;
-    int writeIndex = 0;
-
-public:
-    void resize(int samples)
-    {
-        if (samples < 8)
-            samples = 8;
-        data.assign((size_t)samples, 0.0f);
-        writeIndex = 0;
-    }
-
-    void reset()
-    {
-        for (size_t i = 0; i < data.size(); ++i)
-            data[i] = 0.0f;
-        writeIndex = 0;
-    }
-
-    float read(float delaySamples) const
-    {
-        const int size = (int)data.size();
-        if (size <= 4)
-            return 0.0f;
-
-        delaySamples = std::fmax(1.0f, std::fmin(delaySamples, (float)(size - 3)));
-        float pos = (float)writeIndex - delaySamples;
-        while (pos < 0.0f)
-            pos += (float)size;
-        while (pos >= (float)size)
-            pos -= (float)size;
-
-        const int i0 = (int)std::floor(pos);
-        const int i1 = (i0 + 1) % size;
-        const float frac = pos - (float)i0;
-        return data[(size_t)i0] + (data[(size_t)i1] - data[(size_t)i0]) * frac;
-    }
-
-    void write(float x)
-    {
-        if (data.empty())
-            return;
-        data[(size_t)writeIndex] = x;
-        ++writeIndex;
-        if (writeIndex >= (int)data.size())
-            writeIndex = 0;
-    }
-};
-
-} // namespace
-
-class Chorus20Core
+class VibeCore
 {
     float sampleRate = 48000.0f;
-    float rate = kChorus20Def[kRate];
-    float depth = kChorus20Def[kDepth];
-    float mix = kChorus20Def[kMix];
-    float phaseOffset = 0.0f;
+    float intensity = kChorus20Def[kIntensity];
+    float speed1 = kChorus20Def[kSpeed1];
+    float speed2 = kChorus20Def[kSpeed2];
+    float speedSelect = kChorus20Def[kSpeedSelect];
+    float volume = kChorus20Def[kVolume];
+    float mode = kChorus20Def[kMode];
 
-    DelayBuffer delay;
-    float lfoPhase = 0.0f;
-    float hpX1 = 0.0f;
-    float hpY1 = 0.0f;
-    float preY = 0.0f;
-    float bbdY = 0.0f;
-    float combY = 0.0f;
-    float compY = 0.0f;
-    float feedback = 0.0f;
+    float phase = 0.0f;
+    float dc = 0.0f;
+    float preBias = 0.0f;
 
-    float hpA = 0.0f;
-    float preA = 0.0f;
-    float bbdA = 0.0f;
-    float combA = 0.0f;
-    float compA = 0.0f;
+    rbmod::HighPass inputHp;
+    rbmod::LowPass inputLp;
+    rbmod::LowPass outputLp;
+    rbmod::LampLdrModel lamp;
+    rbmod::FirstOrderAllPass stages[4];
 
     float currentRateHz() const
     {
-        const float r = clamp01(rate);
-        return 0.055f + 5.20f * std::pow(r, 1.45f);
+        const float s = speedSelect >= 0.5f ? speed2 : speed1;
+        return 0.070f + 6.80f * std::pow(rbmod::clamp01(s), 2.05f);
+    }
+
+    void configureStages()
+    {
+        // ElectroVibe phase network values from the PedalPCB schematic/BOM.
+        stages[0].setCap(15.0e-9f);
+        stages[1].setCap(220.0e-9f);
+        stages[2].setCap(470.0e-12f);
+        stages[3].setCap(4.7e-9f);
+        for (int i = 0; i < 4; ++i)
+            stages[i].setSampleRate(sampleRate);
     }
 
     void updateFilters()
     {
-        const float dt = 1.0f / sampleRate;
-        const float hpHz = 32.0f;
-        const float hpRc = 1.0f / (2.0f * kPi * hpHz);
-        hpA = hpRc / (hpRc + dt);
-
-        const float d = smoothstep(depth);
-        preA = onePoleCoeffHz(7600.0f - 1500.0f * d, sampleRate);
-        bbdA = onePoleCoeffHz(4550.0f - 1250.0f * d, sampleRate);
-        combA = onePoleCoeffHz(5200.0f - 950.0f * d, sampleRate);
-        compA = onePoleCoeffHz(20.0f, sampleRate);
-    }
-
-    float highPass(float x)
-    {
-        const float y = hpA * (hpY1 + x - hpX1);
-        hpX1 = x;
-        hpY1 = y;
-        return y;
-    }
-
-    float lowPass(float x, float& z, float a)
-    {
-        z += a * (x - z);
-        return z;
-    }
-
-    float lfoAt(float phase) const
-    {
-        phase += phaseOffset;
-        phase -= std::floor(phase);
-        const float s = std::sin(kTwoPi * phase);
-        const float second = std::sin(kTwoPi * (phase * 2.0f + 0.17f));
-        return 0.86f * s + 0.14f * second;
+        inputHp.setHz(28.0f, sampleRate);
+        inputLp.setHz(9000.0f, sampleRate);
+        outputLp.setHz(7600.0f, sampleRate);
     }
 
 public:
-    void setPhaseOffset(float v)
+    void setSampleRate(float sr)
     {
-        phaseOffset = v - std::floor(v);
+        sampleRate = sr > 1000.0f ? sr : 48000.0f;
+        lamp.setSampleRate(sampleRate);
+        configureStages();
+        updateFilters();
+        reset();
     }
 
     void reset()
     {
-        delay.reset();
-        lfoPhase = phaseOffset;
-        hpX1 = hpY1 = preY = bbdY = combY = compY = feedback = 0.0f;
-        updateFilters();
+        inputHp.reset();
+        inputLp.reset();
+        outputLp.reset();
+        lamp.reset();
+        for (int i = 0; i < 4; ++i)
+            stages[i].reset();
+        phase = 0.0f;
+        dc = 0.0f;
+        preBias = 0.0f;
     }
 
-    void setSampleRate(float sr)
-    {
-        sampleRate = sr > 1000.0f ? sr : 48000.0f;
-        delay.resize((int)(sampleRate * 0.085f));
-        reset();
-    }
-
-    void setRate(float v)
-    {
-        rate = clamp01(v);
-    }
-
-    void setDepth(float v)
-    {
-        depth = clamp01(v);
-        updateFilters();
-    }
-
-    void setMix(float v)
-    {
-        mix = clamp01(v);
-    }
+    void setIntensity(float v) { intensity = rbmod::clamp01(v); }
+    void setSpeed1(float v) { speed1 = rbmod::clamp01(v); }
+    void setSpeed2(float v) { speed2 = rbmod::clamp01(v); }
+    void setSpeedSelect(float v) { speedSelect = v >= 0.5f ? 1.0f : 0.0f; }
+    void setVolume(float v) { volume = rbmod::clamp01(v); }
+    void setMode(float v) { mode = v >= 0.5f ? 1.0f : 0.0f; }
 
     float process(float in)
     {
-        lfoPhase += currentRateHz() / sampleRate;
-        if (lfoPhase >= 1.0f)
-            lfoPhase -= std::floor(lfoPhase);
+        phase += currentRateHz() / sampleRate;
+        if (phase >= 1.0f)
+            phase -= std::floor(phase);
 
-        const float d = 0.06f + 0.94f * smoothstep(depth);
-        const float m = mix <= 0.0001f ? 0.0f : clamp01(0.08f + 0.92f * mix);
+        // Analog LFO into lamp driver. The Q1/Q2 oscillator is close to sine
+        // but the lamp driver/bulb inertia makes the bright half wider.
+        const float lfo = 0.5f + 0.5f * std::sin(rbmod::kTwoPi * phase);
+        const float inten = std::pow(rbmod::clamp01(intensity), 1.20f);
+        const float drive = rbmod::clamp01(0.12f + (0.22f + 0.76f * inten) * lfo);
+        const float light = lamp.processLight(drive);
 
-        const float lfo = lfoAt(lfoPhase);
-        const float lfoSkew = 0.72f * lfo + 0.28f * std::sin(kTwoPi * (lfoPhase + phaseOffset + 0.25f));
+        float x = inputHp.process(in);
+        x = inputLp.process(x);
+        preBias += 0.00055f * (x - preBias);
+        x -= preBias;
+        x = rbmod::softClip(x * 1.16f) * 0.93f;
 
-        const float chorusBaseMs = 8.8f + 2.2f * (1.0f - d);
-        const float chorusWidthMs = 0.42f + 5.85f * d;
-        float chorusMs = chorusBaseMs + chorusWidthMs * lfoSkew;
-        chorusMs = std::fmax(2.6f, std::fmin(25.0f, chorusMs));
+        float wet = x;
+        const float ldrR = rbmod::LampLdrModel::nsl7530Resistance(light);
+        const float spread[4] = { 1.00f, 0.82f, 1.18f, 0.96f };
+        for (int i = 0; i < 4; ++i)
+        {
+            const float stageR = 4700.0f + ldrR * spread[i];
+            wet = stages[i].process(wet, stageR);
+            wet = rbmod::softClip(wet * 1.035f);
+        }
+        wet = outputLp.process(wet);
+        dc += 0.00035f * (wet - dc);
+        wet -= dc;
 
-        const float flangeBaseMs = 2.8f + 1.1f * (1.0f - d);
-        const float flangeWidthMs = 0.18f + 1.95f * d;
-        float flangeMs = flangeBaseMs + flangeWidthMs * (-0.55f * lfo);
-        flangeMs = std::fmax(1.1f, std::fmin(8.5f, flangeMs));
-
-        float x = highPass(in);
-        x = lowPass(x, preY, preA);
-        x = softClip(x * (1.04f + 0.10f * d)) * 0.96f;
-
-        const float fb = (0.030f + 0.145f * d) * m;
-        const float write = softClip(x + feedback * fb);
-
-        const float chorusTap = delay.read(chorusMs * 0.001f * sampleRate);
-        const float flangeTap = delay.read(flangeMs * 0.001f * sampleRate);
-        delay.write(write);
-
-        float chorusWet = lowPass(chorusTap, bbdY, bbdA);
-        float flangeWet = lowPass(flangeTap, combY, combA);
-        float wet = chorusWet * (0.93f + 0.16f * d) - flangeWet * (0.12f + 0.23f * d);
-
-        compY += compA * (std::fabs(wet) - compY);
-        const float comp = 1.0f / (1.0f + 0.80f * compY);
-        wet = softClip(wet * comp * (1.08f + 0.12f * d));
-        feedback = wet;
-
-        const float dryLevel = 1.0f - 0.30f * m;
-        const float wetLevel = (0.24f + 0.74f * m) * m;
-        const float y = in * dryLevel + wet * wetLevel;
-        return softClip(y * 0.98f) * 0.99f;
+        const float chorusMode = 1.0f - mode; // 0 = chorus, 1 = vibrato
+        const float dry = x * (0.78f * chorusMode);
+        const float wetLevel = mode >= 0.5f ? 0.96f : 0.86f;
+        const float mixed = mode >= 0.5f ? wet * wetLevel
+                                         : dry - wet * wetLevel;
+        const float outGain = 0.18f + 1.65f * rbmod::audioTaper(volume);
+        return rbmod::softClip(mixed * outGain) * 0.90f;
     }
 };
 
 class Chorus20Plugin : public Plugin
 {
-    Chorus20Core left;
-    Chorus20Core right;
+    VibeCore left;
+    VibeCore right;
     float params[kParamCount];
 
     void applyAll()
     {
-        left.setRate(params[kRate]);
-        right.setRate(params[kRate]);
-        left.setDepth(params[kDepth]);
-        right.setDepth(params[kDepth]);
-        left.setMix(params[kMix]);
-        right.setMix(params[kMix]);
+        left.setIntensity(params[kIntensity]);
+        right.setIntensity(params[kIntensity]);
+        left.setSpeed1(params[kSpeed1]);
+        right.setSpeed1(params[kSpeed1]);
+        left.setSpeed2(params[kSpeed2]);
+        right.setSpeed2(params[kSpeed2]);
+        left.setSpeedSelect(params[kSpeedSelect]);
+        right.setSpeedSelect(params[kSpeedSelect]);
+        left.setVolume(params[kVolume]);
+        right.setVolume(params[kVolume]);
+        left.setMode(params[kMode]);
+        right.setMode(params[kMode]);
     }
 
 public:
@@ -268,8 +156,6 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kChorus20Def[i];
-        left.setPhaseOffset(0.00f);
-        right.setPhaseOffset(0.42f);
         left.setSampleRate((float)getSampleRate());
         right.setSampleRate((float)getSampleRate());
         applyAll();
@@ -277,10 +163,10 @@ public:
 
 protected:
     const char* getLabel() const override { return "Chorus20"; }
-    const char* getDescription() const override { return "Stereo BBD chorus flanger"; }
+    const char* getDescription() const override { return "Deja Vibe style optical chorus"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('C', 'h', '2', '0'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -288,6 +174,8 @@ protected:
         if (index >= (uint32_t)kParamCount)
             return;
         parameter.hints = kParameterIsAutomatable;
+        if (index == (uint32_t)kSpeedSelect || index == (uint32_t)kMode)
+            parameter.hints |= kParameterIsBoolean | kParameterIsInteger;
         parameter.name = kChorus20Names[index];
         parameter.symbol = kChorus20Symbols[index];
         parameter.ranges.min = kChorus20Min[index];
@@ -304,7 +192,9 @@ protected:
     {
         if (index >= (uint32_t)kParamCount)
             return;
-        params[index] = clamp01(value);
+        params[index] = (index == (uint32_t)kSpeedSelect || index == (uint32_t)kMode)
+            ? (value >= 0.5f ? 1.0f : 0.0f)
+            : rbmod::clamp01(value);
         applyAll();
     }
 

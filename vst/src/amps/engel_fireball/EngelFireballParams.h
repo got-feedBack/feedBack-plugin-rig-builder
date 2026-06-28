@@ -34,21 +34,22 @@ enum EngelFireballParamId
     kBright,         // BRIGHT     treble-boost voicing switch  Off(0)/On(1)
     kBottom,         // BOTTOM     low-end-boost voicing switch  Off(0)/On(1)
     kMidBoost,       // MID BOOST  mid-push voicing switch       Off(0)/On(1)
+    kCabSim,         // fallback 4x12 speaker voice; host bypasses with external cab/IR
     kParamCount
 };
 
 static const char* const kEngelFireballNames[kParamCount] = {
     "Clean Gain", "Lead Gain", "Bass", "Middle", "Treble", "Lead Volume",
-    "Master", "Presence", "Channel", "Bright", "Bottom", "Mid Boost",
+    "Master", "Presence", "Channel", "Bright", "Bottom", "Mid Boost", "Cab Sim",
 };
 
 static const char* const kEngelFireballSymbols[kParamCount] = {
     "cleangain", "leadgain", "bass", "middle", "treble", "leadvolume",
-    "master", "presence", "channel", "bright", "bottom", "midboost",
+    "master", "presence", "channel", "bright", "bottom", "midboost", "cabsim",
 };
 
-static const float kEngelFireballMin[kParamCount] = { 0,0,0,0,0,0,0,0,0,0,0,0 };
-static const float kEngelFireballMax[kParamCount] = { 1,1,1,1,1,1,1,1,1,1,1,1 };
+static const float kEngelFireballMin[kParamCount] = { 0,0,0,0,0,0,0,0,0,0,0,0,0 };
+static const float kEngelFireballMax[kParamCount] = { 1,1,1,1,1,1,1,1,1,1,1,1,1 };
 // Manual-insert defaults: LEAD channel (the Fireball lead voice), the high-gain
 // cascade off Lead Gain, a usable clean set behind it, the tone stack centred-ish
 // (Middle slightly scooped), masters at musical defaults, Presence centred,
@@ -56,7 +57,7 @@ static const float kEngelFireballMax[kParamCount] = { 1,1,1,1,1,1,1,1,1,1,1,1 };
 // hand on the face.
 static const float kEngelFireballDef[kParamCount] = {
     0.50f, 0.65f, 0.50f, 0.45f, 0.60f, 0.50f,
-    0.60f, 0.50f, 1.00f, 0.00f, 0.00f, 0.00f,
+    0.60f, 0.50f, 1.00f, 0.00f, 0.00f, 0.00f, 1.00f,
 };
 
 #endif // ENGEL_FIREBALL_PARAMS_H

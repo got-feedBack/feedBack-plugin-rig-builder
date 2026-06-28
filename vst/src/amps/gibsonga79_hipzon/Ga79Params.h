@@ -11,14 +11,15 @@
 //    Stereo/Mono switch; RS exposes only Volume(Volume 1)/Bass/Treble.)
 enum Ga79ParamId {
     kVolume = 0, kBass, kTreble, kReverb, kSpeed, kDepth,
+    kCabSim,
     kParamCount
 };
 
-static const char* const kGa79Names[kParamCount]   = { "Volume", "Bass", "Treble", "Reverb", "Speed", "Depth" };
-static const char* const kGa79Symbols[kParamCount] = { "volume", "bass", "treble", "reverb", "speed", "depth" };
-static const float kGa79Min[kParamCount] = { 0,0,0,0,0,0 };
-static const float kGa79Max[kParamCount] = { 1,1,1,1,1,1 };
+static const char* const kGa79Names[kParamCount]   = { "Volume", "Bass", "Treble", "Reverb", "Speed", "Depth", "Cab Sim" };
+static const char* const kGa79Symbols[kParamCount] = { "volume", "bass", "treble", "reverb", "speed", "depth", "cabsim" };
+static const float kGa79Min[kParamCount] = { 0,0,0,0,0,0,0 };
+static const float kGa79Max[kParamCount] = { 1,1,1,1,1,1,1 };
 // Volume 0.6; tone flat; Reverb 0.25; Speed 0.4; Depth 0 (tremolo off by default).
-static const float kGa79Def[kParamCount] = { 0.60f, 0.50f, 0.50f, 0.25f, 0.40f, 0.00f };
+static const float kGa79Def[kParamCount] = { 0.60f, 0.50f, 0.50f, 0.25f, 0.40f, 0.00f, 1.00f };
 
 #endif // GA79_PARAMS_H

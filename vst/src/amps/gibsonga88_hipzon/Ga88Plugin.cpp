@@ -12,6 +12,7 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "Ga88Params.h"
+#include "../../_shared/tube_stage.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -137,15 +138,20 @@ class Ga88Channel {
     float fs = 48000.f;
     Triode v1, v2;
     Biquad hp, bass, treble, pwrLP;
-    float drive=1, level=1, pwrDrive=1;
-
-    // 4x 6BQ5 (EL84) push-pull: lots of clean PA headroom -> late knee.
-    static inline float pushPull(float x) { return std::tanh(x * 0.62f) / 0.62f; }
+    Biquad cabHp, cabLo, cabHi, cabLp;
+    rbtube::CouplingCapGridLeak coupleToV2;
+    rbtube::CouplingCapGridLeak coupleToPi;
+    rbtube::PhaseInverterLTP12AX7 phaseInverter;
+    rbtube::MultiNodeBPlus supply;
+    rbtube::PowerAmpPP power;
+    float drive=1, level=1, pwrDrive=1, cabSim=1;
 public:
     void setSampleRate(float s) { fs=(s>0.f)?s:48000.f; v1.setT(s); v2.setT(s); }
-    void reset() { v1.reset(); v2.reset(); hp.reset(); bass.reset(); treble.reset(); pwrLP.reset(); }
+    void reset() { v1.reset(); v2.reset(); hp.reset(); bass.reset(); treble.reset(); pwrLP.reset();
+        cabHp.reset(); cabLo.reset(); cabHi.reset(); cabLp.reset();
+        coupleToV2.reset(); coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset(); }
 
-    void setParams(float volume, float bassP, float trebleP) {
+    void setParams(float volume, float bassP, float trebleP, float cabSimP) {
         hp.setHighpassQ(60.f, 0.7f, fs);
         bass.setLowShelf  (120.f, (bassP   - 0.5f) * 15.f, fs);
         treble.setHighShelf(3200.f,(trebleP - 0.5f) * 15.f, fs);
@@ -153,16 +159,45 @@ public:
         level    = 0.5f + volume * 0.8f;
         pwrDrive = 0.4f + volume * 0.7f;
         pwrLP.setLowpassQ(12500.f, 0.7f, fs);   // miked-cab roll-off, vintage-bright
+        cabSim = cabSimP;
+        coupleToV2.set(fs, 1000000.0f, 22.0e-9f, 220000.0f,
+                       0.11f, 0.36f, 0.90f);
+        coupleToPi.set(fs, 1000000.0f, 22.0e-9f, 47000.0f, 0.10f, 0.50f, 1.5f);
+        phaseInverter.setComponents(fs, 0.54f + 0.82f * volume, 0.70f,
+                                    285.0f, 47000.0f, 47000.0f, 2200.0f, 20.0f, 0.030f);
+        supply.set(fs,
+                   105.0f, 32.0f,
+                   820.0f, 16.0f,
+                   10000.0f, 16.0f,
+                   0.16f, 0.10f, 0.055f, 0.18f);
+        power.set(fs, 0.68f + 1.02f * volume,
+                  -7.6f, 0.24f, 66.0f, 11200.0f + 900.0f * trebleP);
+        power.out = 0.018f;
+        cabHp.setHighpassQ(74.f, 0.72f, fs);
+        cabLo.setLowShelf(120.f, 1.0f + 1.8f * bassP, fs);
+        cabHi.setHighShelf(3600.f, -2.0f + 3.6f * trebleP, fs);
+        cabLp.setLowpassQ(11400.f + 1500.f * trebleP, 0.66f, fs);
     }
 
     inline float process(float x) {
         float s = hp.process(x);
         s = (float)v1.process((double)(2.2f * s));
         s = bass.process(s); s = treble.process(s);
-        s = (float)v2.process((double)(drive * s));
-        s = pushPull(s * pwrDrive) * level;
+        s = coupleToV2.process(s, drive);
+        s = (float)v2.process((double)s);
+        const float load = std::fabs(s) * (0.62f + 0.78f * level);
+        const rbtube::SupplyScales bplus = supply.process(load, load * 0.50f, load * 0.20f);
+        s *= 0.92f + 0.08f * bplus.preamp;
+        s = coupleToPi.process(s * pwrDrive * bplus.screen, 1.0f);
+        s = phaseInverter.process(s) * bplus.screen;
+        s = power.process(s * bplus.power) * level;
         s = pwrLP.process(s);
-        return s;
+        const float ampOnly = s;
+        float cab = cabHp.process(ampOnly);
+        cab = cabLo.process(cab);
+        cab = cabHi.process(cab);
+        cab = cabLp.process(cab);
+        return ampOnly + cabSim * (cab - ampOnly);
     }
 };
 
@@ -173,8 +208,8 @@ class Ga88Plugin : public Plugin {
     Ga88Channel L, R;
     float fParams[kParamCount];
     void recalc() {
-        L.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble]);
-        R.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble]);
+        L.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble], fParams[kCabSim]);
+        R.setParams(fParams[kVolume], fParams[kBass], fParams[kTreble], fParams[kCabSim]);
     }
 public:
     Ga88Plugin() : Plugin(kParamCount, 0, 0) {

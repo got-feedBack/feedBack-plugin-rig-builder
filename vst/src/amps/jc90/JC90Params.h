@@ -32,27 +32,28 @@ enum JC90ParamId
     kRate,           // CHORUS / Vibrato RATE (speed)
     kDepth,          // CHORUS / Vibrato DEPTH
     kChorusMode,     // Chorus/Fixed(0) / Off(0.5) / Vibrato/Manual(1) — matches the real knob (FIXED left, OFF top, MANUAL right)
+    kCabSim,         // fallback solid-state combo speaker voice
     kParamCount
 };
 
 static const char* const kJC90Names[kParamCount] = {
     "Distortion", "Volume", "Hi-Treble", "Treble", "Middle", "Bass",
-    "Reverb", "Rate", "Depth", "Chorus",
+    "Reverb", "Rate", "Depth", "Chorus", "Cab Sim",
 };
 
 static const char* const kJC90Symbols[kParamCount] = {
     "distortion", "volume", "hitreble", "treble", "middle", "bass",
-    "reverb", "rate", "depth", "chorus",
+    "reverb", "rate", "depth", "chorus", "cabsim",
 };
 
-static const float kJC90Min[kParamCount] = { 0,0,0,0,0,0,0,0,0,0 };
-static const float kJC90Max[kParamCount] = { 1,1,1,1,1,1,1,1,1,1 };
+static const float kJC90Min[kParamCount] = { 0,0,0,0,0,0,0,0,0,0,0 };
+static const float kJC90Max[kParamCount] = { 1,1,1,1,1,1,1,1,1,1,1 };
 // Defaults: the JC clean (Distortion off), Chorus OFF (0.5 = the 3-way midpoint)
 // so the game songs aren't chorused by default — RS adds chorus via its own
 // pedal; turn the Chorus knob to FIXED(0)/MANUAL(1) by hand for the iconic JC.
 static const float kJC90Def[kParamCount] = {
     0.00f, 0.60f, 0.50f, 0.60f, 0.50f, 0.50f,
-    0.20f, 0.40f, 0.55f, 0.50f,
+    0.20f, 0.40f, 0.55f, 0.50f, 1.00f,
 };
 
 #endif // JC90_PARAMS_H

@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/SharkeHB5000.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			H2e32yo2w6Debg4ir+IBbDi7XcbaXr5nxzYH107cd/4=
+			</data>
+		</dict>
+		<key>x86_64-win/SharkeHB5000.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			s0RUpgo1V/VjWbMiTWlFymY1lDl6wcUMr4vn91BC0fU=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

@@ -25,22 +25,23 @@ enum MiniBruteParamId
     kBass,       // BASS  (Baxandall bass shelf)                 [RS Bass]
     kTreble,     // TREBLE (Baxandall treble shelf)              [RS Treble]
     kBrite,      // BRITE switch (treble high-shelf boost)
+    kCabSim,     // fallback 1x12 speaker voice
     kParamCount
 };
 
 static const char* const kMiniBruteNames[kParamCount] = {
-    "Volume", "Bass", "Treble", "Brite",
+    "Volume", "Bass", "Treble", "Brite", "Cab Sim",
 };
 
 static const char* const kMiniBruteSymbols[kParamCount] = {
-    "volume", "bass", "treble", "brite",
+    "volume", "bass", "treble", "brite", "cabsim",
 };
 
-static const float kMiniBruteMin[kParamCount] = { 0, 0, 0, 0 };
-static const float kMiniBruteMax[kParamCount] = { 1, 1, 1, 1 };
+static const float kMiniBruteMin[kParamCount] = { 0, 0, 0, 0, 0 };
+static const float kMiniBruteMax[kParamCount] = { 1, 1, 1, 1, 1 };
 // Defaults: a warm clean jazz-box voice. VOLUME 0.55, tone flat (0.50), BRITE off.
 static const float kMiniBruteDef[kParamCount] = {
-    0.55f, 0.50f, 0.50f, 0.00f,
+    0.55f, 0.50f, 0.50f, 0.00f, 1.00f,
 };
 
 #endif // MINIBRUTE_PARAMS_H

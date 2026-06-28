@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/Lovolt100.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			DIuD1ZXowkyEP1A6ugpSKK/LOySLr5EfyQAj6Eppbv0=
+			</data>
+		</dict>
+		<key>x86_64-win/Lovolt100.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			t0duLftPQ4xtrg/4sEP0izSoXAFP1QXdbiqDmyL6AR0=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

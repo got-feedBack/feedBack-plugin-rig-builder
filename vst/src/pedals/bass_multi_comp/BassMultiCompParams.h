@@ -3,30 +3,29 @@
 
 enum BassMultiCompParamId
 {
-    kCompress = 0,
-    kFilter,
-    kRate,
+    kComp = 0,
+    kSens,
+    kGain,
+    kMode,
     kParamCount
 };
 
 static const char* const kBassMultiCompNames[kParamCount] = {
-    "Compress",
-    "Filter",
-    "Rate",
+    "Comp",
+    "Sens",
+    "Gain",
+    "Mode",
 };
 
 static const char* const kBassMultiCompSymbols[kParamCount] = {
-    "compress",
-    "filter",
-    "rate",
+    "comp",
+    "sens",
+    "gain",
+    "mode",
 };
 
-static const float kBassMultiCompMin[kParamCount] = { 0.0f, 0.0f, 0.0f };
-static const float kBassMultiCompMax[kParamCount] = { 1.0f, 1.0f, 1.0f };
-static const float kBassMultiCompDef[kParamCount] = {
-    0.50f,
-    (600.0f - 110.0f) / (1000.0f - 110.0f),
-    0.40f,
-};
+static const float kBassMultiCompMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f };
+static const float kBassMultiCompMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f };
+static const float kBassMultiCompDef[kParamCount] = { 0.46f, 0.45f, 0.56f, 0.50f };
 
 #endif // BASS_MULTI_COMP_PARAMS_H

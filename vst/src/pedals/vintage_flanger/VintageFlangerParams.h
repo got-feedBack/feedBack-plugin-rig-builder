@@ -4,25 +4,28 @@
 enum VintageFlangerParamId
 {
     kRate = 0,
-    kDepth,
-    kMix,
+    kRange,
+    kColor,
+    kMatrix,
     kParamCount
 };
 
 static const char* const kVintageFlangerNames[kParamCount] = {
     "Rate",
-    "Depth",
-    "Mix",
+    "Range",
+    "Color",
+    "Matrix",
 };
 
 static const char* const kVintageFlangerSymbols[kParamCount] = {
     "rate",
-    "depth",
-    "mix",
+    "range",
+    "color",
+    "matrix",
 };
 
-static const float kVintageFlangerMin[kParamCount] = { 0.0f, 0.0f, 0.0f };
-static const float kVintageFlangerMax[kParamCount] = { 1.0f, 1.0f, 1.0f };
-static const float kVintageFlangerDef[kParamCount] = { 0.25f, 0.45f, 0.18f };
+static const float kVintageFlangerMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f };
+static const float kVintageFlangerMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f };
+static const float kVintageFlangerDef[kParamCount] = { 0.25f, 0.46f, 0.22f, 0.0f };
 
 #endif // VINTAGE_FLANGER_PARAMS_H

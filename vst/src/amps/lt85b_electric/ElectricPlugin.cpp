@@ -1,25 +1,27 @@
 /*
- * Electric B600F — Acoustic B600H (600 W solid-state bass head), COMPONENT-LEVEL.
+ * Electric B600F — Acoustic B600H (600 W solid-state bass head), circuit-real.
  *
  * From the Acoustic B450/B600H schematic + front panel (all solid-state):
  *   • INPUT  — Passive / Active jacks + Mute
- *   • PREAMP — Gain (op-amp gain, soft-clips = the Clip LED) and Volume (master)
- *   • NOTCH  — a sweepable band-reject filter (Frequency + On/Off)
- *   • EQ     — a fixed 6-band tone EQ: 40/120/350/800/2k/5k Hz, +/-15 dB
- *   • POWER  — 600 W Class-D (clean; the only nonlinearity is the input soft-clip)
+ *   • PREAMP — Gain (NJM4558 op-amp gain that soft-clips at the rails = the Clip/
+ *              Peak-Detect LED, POST_GAIN) and Volume (master)
+ *   • NOTCH  — a sweepable band-reject filter (VR9 dual, Frequency + In/Out)
+ *   • EQ     — a 6-band tone EQ: 40/120/350/800/2k/5k Hz (gyrators), +/-15 dB
+ *   • POWER  — linear Class-AB output (2SC5200/2SA1943); clean, big headroom
  *
- * Pure solid-state: clean op-amp gain + RBJ EQ/notch + a soft ceiling. White-
- * boxed band frequencies from the panel.
+ * The ONLY nonlinearity is the op-amp Gain soft-clip (post-gain, pre-EQ, per the
+ * schematic's Peak Detect node); everything else is clean op-amp EQ. That clip
+ * runs at 2x oversampling. STEREO I/O, single mono core -> dual-mono out.
  */
 #include "DistrhoPlugin.hpp"
 #include "ElectricParams.h"
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
 
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
-static inline float softClip(float x) { return std::tanh(x); }
 
 // ── RBJ biquad — 6-band EQ peaks + sweepable notch ───────────────────────────
 class Biquad {
@@ -52,12 +54,12 @@ public:
     void setBypass() { b0 = 1; b1 = b2 = a1 = a2 = 0; }
 };
 
-class ElectricChannel {
-    float fs = 48000.f;
+class ElectricCore {
+    float fs = 96000.f;
     Biquad notch, eq[kNumEq];
     float gain=1, volume=1; bool notchOn=false, mute=false;
 public:
-    void setSampleRate(float s){ fs=(s>0.f)?s:48000.f; }
+    void setSampleRate(float s){ fs=(s>0.f)?s:96000.f; }
     void reset(){ notch.reset(); for(int i=0;i<kNumEq;++i) eq[i].reset(); }
 
     void setParams(const float* p) {
@@ -74,32 +76,35 @@ public:
 
     inline float process(float x) {
         if (mute) return 0.f;
-        float s = x * gain;                             // clean op-amp gain (Class-D, hi-fi)
-        s = notch.process(s);                           // sweepable notch
-        for (int i=0;i<kNumEq;++i) s = eq[i].process(s); // 6-band EQ
-        return s * volume;                              // Volume (master) into Class-D
+        // Gain op-amp with rail soft-clip (POST_GAIN / Peak Detect). K ~ the op-amp
+        // headroom: clean for normal levels, soft-clips only when Gain is pushed.
+        const float K = 3.5f;
+        float s = K * std::tanh((x * gain) / K);
+        s = notch.process(s);                            // sweepable notch
+        for (int i=0;i<kNumEq;++i) s = eq[i].process(s); // 6-band EQ (clean op-amps)
+        return s * volume;                               // Volume (master) into the power amp
     }
 };
 
-static constexpr float kElectricMakeup = 8.50f;   // tuned offline (~-14 dBFS @ noon)
-static constexpr float kElectricLvl    = 0.249f;
+// Family loudness makeup into the soft knee (tuned offline ~-14 dBFS @ noon).
+static constexpr float kElectricMakeup = 1.20f;
 
 class ElectricPlugin : public Plugin {
-    ElectricChannel L, R;
+    ElectricCore core;
     float fParams[kParamCount];
-    void recalc(){ L.setParams(fParams); R.setParams(fParams); }
+    rbshared::Oversampler4x os;
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
 public:
     ElectricPlugin() : Plugin(kParamCount, 0, 0) {
         for (int i=0;i<kParamCount;++i) fParams[i]=kElectricDef[i];
-        const float sr=(float)getSampleRate();
-        L.setSampleRate(sr); R.setSampleRate(sr); L.reset(); R.reset(); recalc();
+        core.setSampleRate(kOS * (float)getSampleRate()); core.reset(); core.setParams(fParams);
     }
 protected:
     const char* getLabel()       const override { return "ElectricB600F"; }
-    const char* getDescription() const override { return "Acoustic B600H 600W solid-state bass head — component-level model"; }
+    const char* getDescription() const override { return "Acoustic B600H 600W solid-state bass head — circuit-real model"; }
     const char* getMaker()       const override { return "RigBuilder"; }
     const char* getLicense()     const override { return "ISC"; }
-    uint32_t    getVersion()     const override { return d_version(1, 0, 0); }
+    uint32_t    getVersion()     const override { return d_version(2, 0, 0); }
     int64_t     getUniqueId()    const override { return d_cconst('R', 'B', 'E', 'B'); }
 
     void initParameter(uint32_t i, Parameter& p) override {
@@ -110,12 +115,19 @@ protected:
         p.ranges.min = kElectricMin[i]; p.ranges.max = kElectricMax[i]; p.ranges.def = kElectricDef[i];
     }
     float getParameterValue(uint32_t i) const override { return (i < (uint32_t)kParamCount) ? fParams[i] : 0.f; }
-    void  setParameterValue(uint32_t i, float v) override { if (i < (uint32_t)kParamCount) { fParams[i]=v; recalc(); } }
-    void  sampleRateChanged(double r) override { L.setSampleRate((float)r); R.setSampleRate((float)r); L.reset(); R.reset(); recalc(); }
+    void  setParameterValue(uint32_t i, float v) override { if (i < (uint32_t)kParamCount) { fParams[i]=v; core.setParams(fParams); } }
+    void  sampleRateChanged(double r) override { core.setSampleRate(kOS * (float)r); os.reset(); core.reset(); core.setParams(fParams); }
 
     void run(const float** in, float** out, uint32_t frames) override {
-        const float* iL=in[0]; const float* iR=in[1]; float* oL=out[0]; float* oR=out[1];
-        for (uint32_t i=0;i<frames;++i){ oL[i]=rbAmpLvl(kElectricLvl*softClip(kElectricMakeup*L.process(iL[i]))*0.98f); oR[i]=rbAmpLvl(kElectricLvl*softClip(kElectricMakeup*R.process(iR[i]))*0.98f); }
+        const float* i0=in[0]; float* oL=out[0]; float* oR=out[1];
+        for (uint32_t i=0;i<frames;++i){
+            float ub[kOS];
+            os.upsample(i0[i], ub);
+            for (int k=0;k<kOS;++k)
+                ub[k] = rbAmpLvl(kElectricMakeup * core.process(ub[k]));
+            const float y = os.downsample(ub);
+            oL[i] = y; oR[i] = y;
+        }
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ElectricPlugin)
 };

@@ -3,23 +3,26 @@
 
 enum StandardDistortionParamId
 {
-    kGain = 0,
+    kDist = 0,
     kTone,
+    kLevel,
     kParamCount
 };
 
 static const char* const kStandardDistortionNames[kParamCount] = {
-    "Gain",
+    "Dist",
     "Tone",
+    "Level",
 };
 
 static const char* const kStandardDistortionSymbols[kParamCount] = {
-    "gain",
+    "dist",
     "tone",
+    "level",
 };
 
-static const float kStandardDistortionMin[kParamCount] = { 0.0f, 0.0f };
-static const float kStandardDistortionMax[kParamCount] = { 1.0f, 1.0f };
-static const float kStandardDistortionDef[kParamCount] = { 0.45f, 0.50f };
+static const float kStandardDistortionMin[kParamCount] = { 0.0f, 0.0f, 0.0f };
+static const float kStandardDistortionMax[kParamCount] = { 1.0f, 1.0f, 1.0f };
+static const float kStandardDistortionDef[kParamCount] = { 0.45f, 0.50f, 0.62f };
 
 #endif // STANDARD_DISTORTION_PARAMS_H

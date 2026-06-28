@@ -173,18 +173,19 @@ _VST_PARAM_RANGES: dict[str, dict[str, tuple[str, float, float]]] = {
         "LoMidFreq":  ("log",  120.0,  2000.0),
         "HiMidFreq":  ("log",  400.0,  8000.0),
         "TrebleFreq": ("log", 1500.0, 16000.0),
-        "LoMidQ":     ("log",    0.3,     4.0),
-        "HiMidQ":     ("log",    0.3,     4.0),
+        "LoMidQ":     ("log",    0.4,     4.0),   # GML 8200 spec: Q 0.4 (broad) .. 4.0 (sharp)
+        "HiMidQ":     ("log",    0.4,     4.0),
     },
     "studiographiceq": {
-        # Bundled Studio Graphic EQ (API-550-style, proportional Q, no Q knob).
-        # Freq params display-Hz (kHz Mid/HiMid/Treble ×1000); ranges MUST match
-        # SGEqParams.h. Gains use scale 1/30 + offset 0.5 — no range here.
-        "BassFreq":   ("log",   40.0,   400.0),
-        "LoMidFreq":  ("log",  200.0,  2000.0),
-        "MidFreq":    ("log",  300.0,  3000.0),
-        "HiMidFreq":  ("log",  800.0,  8000.0),
-        "TrebleFreq": ("log", 2000.0, 16000.0),
+        # Bundled Studio Graphic EQ → API 550L (4 bands LF/LMF/HMF/HF). The 4 API
+        # bands reuse the RS knob names Bass/LoMid/HiMid/Treble; the game's 5th
+        # (Mid) band is unused (550L is 4-band). Freq ranges = the 550L per-band
+        # span and MUST match the snap arrays in SGEqParams.h (the DSP snaps to the
+        # nearest of 7 API points). Gains use scale 1/30 + offset 0.5 — no range.
+        "BassFreq":   ("log",   30.0,   400.0),   # LF
+        "LoMidFreq":  ("log",   75.0,  1000.0),   # LMF
+        "HiMidFreq":  ("log",  800.0, 12500.0),   # HMF
+        "TrebleFreq": ("log", 2500.0, 20000.0),   # HF
     },
     # No khs chorus entries — RS Rate maps directly via curator scale=0.01
     # (RS 0-100 → 0-1 normalized). User wants the slider POSITION to track

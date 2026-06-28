@@ -18,20 +18,6 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/MrYEMS.so</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			3naysBD0wA8byPtp/rvD9CL7Njk1kuI7/LFfBshTB7k=
-			</data>
-		</dict>
-		<key>x86_64-win/MrYEMS.vst3</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			m4PoTvVsGu0Qg0vaYOS/FvjIa01t3fskN3SB9gCzZC0=
-			</data>
-		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

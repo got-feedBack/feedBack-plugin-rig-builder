@@ -34,29 +34,30 @@ enum TW22ParamId
     kBurnVol,       // BURN Volume
     kReverb,        // shared Reverb level
     kPresence,      // power-amp presence (hidden)         [RS Pres]
+    kCabSim,        // fallback V30 combo speaker voice
     kParamCount
 };
 
 static const char* const kTW22Names[kParamCount] = {
     "Vint Vol", "Vint Treble", "Vint Bass", "Norm/Fat", "Channel",
     "Gain 1", "Gain 2", "Treble", "Bass", "Middle", "Burn Vol",
-    "Reverb", "Presence",
+    "Reverb", "Presence", "Cab Sim",
 };
 
 static const char* const kTW22Symbols[kParamCount] = {
     "vintvol", "vinttreble", "vintbass", "normfat", "channel",
     "gain1", "gain2", "treble", "bass", "middle", "burnvol",
-    "reverb", "presence",
+    "reverb", "presence", "cabsim",
 };
 
-static const float kTW22Min[kParamCount] = { 0,0,0,0,0, 0,0,0,0,0,0, 0,0 };
-static const float kTW22Max[kParamCount] = { 1,1,1,1,1, 1,1,1,1,1,1, 1,1 };
+static const float kTW22Min[kParamCount] = { 0,0,0,0,0, 0,0,0,0,0,0, 0,0,0 };
+static const float kTW22Max[kParamCount] = { 1,1,1,1,1, 1,1,1,1,1,1, 1,1,1 };
 // Manual-insert defaults: Burn channel selected (the Super-Sonic signature) at a
 // moderate rock gain, both channels' EQ centred-ish, reverb off, presence mid.
 static const float kTW22Def[kParamCount] = {
     0.50f, 0.60f, 0.50f, 0.00f, 1.00f,
     0.60f, 0.50f, 0.60f, 0.50f, 0.55f, 0.50f,
-    0.00f, 0.50f,
+    0.00f, 0.50f, 1.00f,
 };
 
 #endif // TW22_PARAMS_H

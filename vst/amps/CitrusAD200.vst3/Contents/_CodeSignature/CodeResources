@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/CitrusAD200.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			RT6Y+BrKEXTd1fva0L7XOdVf3KXduSN2U4wBUFhlmBE=
+			</data>
+		</dict>
+		<key>x86_64-win/CitrusAD200.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			tzgAo8nSaUot5K7tSKmvOxGpypMsqEWi405GwIfHSrQ=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

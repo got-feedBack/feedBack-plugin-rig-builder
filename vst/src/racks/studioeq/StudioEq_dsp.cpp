@@ -1,7 +1,20 @@
 /*
- * Studio EQ — clean 4-band parametric (GML-style), DPF VST3.
- * Cascade: low shelf (Bass) → peaking (LoMid) → peaking (HiMid) → high shelf
- * (Treble). RBJ biquads, mathematically transparent (the GML's signature).
+ * Studio EQ — GML 8200 Parametric Equalizer model, DPF VST3.
+ *
+ * Voiced from the GML 8200 Series II service/owner manual (specs + Audio
+ * Precision plots, Appendix A). The game's Studio EQ exposes 4 bands, voiced to
+ * the 8200's character:
+ *   • CONSTANT-Q RECIPROCAL bells (LoMid, HiMid): boost +X and cut −X are exact
+ *     mirror images — verified to sum to 0 dB at every frequency, matching the
+ *     8200's symmetric "Gain Steps" plot (App.A #6).
+ *   • Q range 0.4 (broad) .. 4.0 (sharp) — the 8200's stated range (App.A #7).
+ *   • ±15 dB continuous, accurate 0 dB (no detent) — 8200 spec.
+ *   • Low/High bands as shelves (the 8200's Low/High bands shelve at the Q-knob
+ *     CCW detent; the game's Bass/Treble have no Q knob, so fixed shelves).
+ *   • Mathematically TRANSPARENT — no added harmonics. The 8200's discrete GML
+ *     9202 op-amps measure <0.001% THD (App.A #4), so faithful = pure filtering.
+ * Cascade: low shelf (Bass) → peak (LoMid) → peak (HiMid) → high shelf (Treble),
+ * RBJ biquads (constant-Q reciprocal peaking matches the 8200's analog design).
  */
 #include "DistrhoPlugin.hpp"
 #include "StudioEqParams.h"
@@ -52,18 +65,27 @@ struct Biquad {
 };
 
 class StudioEqChannel {
-    Biquad bass, lomid, himid, treble;
+    Biquad bass, lomid, mid, himid, treble;
     float fs;
 public:
-    StudioEqChannel() { fs = 48000.f; bass.reset(); lomid.reset(); himid.reset(); treble.reset(); }
+    StudioEqChannel() { fs = 48000.f; bass.reset(); lomid.reset(); mid.reset(); himid.reset(); treble.reset(); }
     void setSampleRate(float s) { fs = (s > 0.f) ? s : 48000.f; }
     void update(const float* p) {
-        bass.set(LOWSHELF,   seqFBass(p[kBassFreq]),     seqDb(p[kBass]),   0.7f,            fs);
-        lomid.set(PEAK,      seqFLoMid(p[kLoMidFreq]),   seqDb(p[kLoMid]),  seqQ(p[kLoMidQ]), fs);
-        himid.set(PEAK,      seqFHiMid(p[kHiMidFreq]),   seqDb(p[kHiMid]),  seqQ(p[kHiMidQ]), fs);
-        treble.set(HIGHSHELF, seqFTreble(p[kTrebleFreq]), seqDb(p[kTreble]), 0.7f,            fs);
+        // Low band: shelf at the Q-knob CCW detent, else bell (8200 Low band).
+        if (seqIsShelf(p[kBassQ]))
+            bass.set(LOWSHELF, seqFBass(p[kBassFreq]), seqDb(p[kBass]), 0.707f,          fs);
+        else
+            bass.set(PEAK,     seqFBass(p[kBassFreq]), seqDb(p[kBass]), seqQ(p[kBassQ]), fs);
+        lomid.set(PEAK, seqFLoMid(p[kLoMidFreq]), seqDb(p[kLoMid]), seqQ(p[kLoMidQ]), fs);
+        mid.set(PEAK,   seqFMid(p[kMidFreq]),     seqDb(p[kMid]),   seqQ(p[kMidQ]),   fs);
+        himid.set(PEAK, seqFHiMid(p[kHiMidFreq]), seqDb(p[kHiMid]), seqQ(p[kHiMidQ]), fs);
+        // High band: shelf at the Q-knob CCW detent, else bell (8200 High band).
+        if (seqIsShelf(p[kTrebleQ]))
+            treble.set(HIGHSHELF, seqFTreble(p[kTrebleFreq]), seqDb(p[kTreble]), 0.707f,           fs);
+        else
+            treble.set(PEAK,      seqFTreble(p[kTrebleFreq]), seqDb(p[kTreble]), seqQ(p[kTrebleQ]), fs);
     }
-    inline float process(float x) { return treble.process(himid.process(lomid.process(bass.process(x)))); }
+    inline float process(float x) { return treble.process(himid.process(mid.process(lomid.process(bass.process(x))))); }
 };
 
 class StudioEqPlugin : public Plugin {
@@ -71,13 +93,13 @@ class StudioEqPlugin : public Plugin {
     float fParams[kNumParams];
 public:
     StudioEqPlugin() : Plugin(kNumParams, 0, 0) {
-        for (int i = 0; i < kNumParams; ++i) fParams[i] = 0.5f;   // flat (0 dB), mid freqs, Q~1.1
+        for (int i = 0; i < kNumParams; ++i) fParams[i] = kSeqDef[i];   // 0 dB, mid freqs; Low/High = shelf
         const float sr = (float)getSampleRate();
         L.setSampleRate(sr); R.setSampleRate(sr); L.update(fParams); R.update(fParams);
     }
 protected:
     const char* getLabel()       const override { return "StudioEQ"; }
-    const char* getDescription() const override { return "Clean 4-band parametric EQ (GML-style)"; }
+    const char* getDescription() const override { return "GML 8200 5-band parametric EQ"; }
     const char* getMaker()       const override { return "RigBuilder"; }
     const char* getLicense()     const override { return "ISC"; }
     uint32_t    getVersion()     const override { return d_version(1, 0, 0); }
@@ -87,7 +109,7 @@ protected:
         if (i >= (uint32_t)kNumParams) return;
         p.hints = kParameterIsAutomatable;
         p.name = kSeqNames[i]; p.symbol = kSeqNames[i];
-        p.ranges.min = 0.0f; p.ranges.max = 1.0f; p.ranges.def = 0.5f;
+        p.ranges.min = 0.0f; p.ranges.max = 1.0f; p.ranges.def = kSeqDef[i];
     }
     float getParameterValue(uint32_t i) const override { return (i < (uint32_t)kNumParams) ? fParams[i] : 0.5f; }
     void  setParameterValue(uint32_t i, float v) override {

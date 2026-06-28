@@ -13,27 +13,28 @@ enum RumbleverbParamId {
     kCleanVolume, kCleanBass, kCleanTreble,                 // CLEAN channel
     kReverb, kOutput,                                       // MASTER section
     kChannel,                                               // switch (0=Clean, 1=Dirty)
+    kCabSim,                                                // fallback PPC-style cab voice
     kParamCount
 };
 
 static const char* const kRumbleverbNames[kParamCount] = {
     "Gain", "Bass", "Middle", "Treble", "Volume",
     "Clean Volume", "Clean Bass", "Clean Treble",
-    "Reverb", "Output", "Channel"
+    "Reverb", "Output", "Channel", "Cab Sim"
 };
 static const char* const kRumbleverbSymbols[kParamCount] = {
     "gain", "bass", "middle", "treble", "volume",
     "cleanvol", "cleanbass", "cleantreble",
-    "reverb", "output", "channel"
+    "reverb", "output", "channel", "cabsim"
 };
-static const float kRumbleverbMin[kParamCount] = { 0,0,0,0,0, 0,0,0, 0,0, 0 };
-static const float kRumbleverbMax[kParamCount] = { 1,1,1,1,1, 1,1,1, 1,1, 1 };
+static const float kRumbleverbMin[kParamCount] = { 0,0,0,0,0, 0,0,0, 0,0, 0,0 };
+static const float kRumbleverbMax[kParamCount] = { 1,1,1,1,1, 1,1,1, 1,1, 1,1 };
 // Dirty: Gain 0.5, EQ 0.5 flat, Volume 0.6; Clean: Vol 0.5, EQ 0.5; Reverb 0.2;
 // Output 0.7; Channel = Dirty (1, the channel the game uses).
 static const float kRumbleverbDef[kParamCount] = {
     0.50f, 0.50f, 0.50f, 0.50f, 0.60f,
     0.50f, 0.50f, 0.50f,
-    0.20f, 0.70f, 1.00f
+    0.20f, 0.70f, 1.00f, 1.00f
 };
 
 #endif // RUMBLEVERB_PARAMS_H

@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/SinAmpBassDriver.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Bz0olOJtC08eLigKwzmJVsjeoBgRwmjDLxwOID3n0Kw=
+			</data>
+		</dict>
+		<key>x86_64-win/SinAmpBassDriver.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			syWrZD50R7pI8/PB3dTaemSbCN+Zp19HziQ1zWFlenI=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

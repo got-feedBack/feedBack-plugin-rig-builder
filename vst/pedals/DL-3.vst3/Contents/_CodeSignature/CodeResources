@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/BassFilterDelay.so</key>
+		<key>x86_64-linux/DL-3.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
 			d6/z6xhNIABXQuRUEoZYlRXv8dfOa+aPl2QuV4UuTGk=
 			</data>
 		</dict>
-		<key>x86_64-win/BassFilterDelay.vst3</key>
+		<key>x86_64-win/DL-3.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			T0ys+tlTyaCIE2bVuBklicx4XhZPtoSCz/SwOavNr1Y=
+			oBzjs8QRZL9unxJxJ0SA9oiJMrSiZtPMciEWqOeIrMQ=
 			</data>
 		</dict>
 	</dict>

@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/Limiter.so</key>
+		<key>x86_64-linux/LM-2.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			pD8fP3cM7xAQDX9YP8k3RdNUierEXJG9PP9UZzLtkIg=
+			5IIoV8ckJMJaZ7cWKBLLzmzq0QHhnzH4rA0RXa56tK4=
 			</data>
 		</dict>
-		<key>x86_64-win/Limiter.vst3</key>
+		<key>x86_64-win/LM-2.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			kcua6x2Urk/WlAKnFEB4iPSkdd56i/dV5ges3nfZqsI=
+			vktRP1eh54RUxedTUIv6wV/vB3AnbCyV0hK75KxZU+4=
 			</data>
 		</dict>
 	</dict>

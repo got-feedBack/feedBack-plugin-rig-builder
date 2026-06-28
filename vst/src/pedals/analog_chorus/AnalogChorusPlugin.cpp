@@ -1,195 +1,96 @@
 /*
- * AnalogChorus - warm stereo BBD chorus for the game's analog/vintage
- * chorus pedal. The local reference shows MN3009-style BBD delay, analog
- * filtering, companding, and dual outputs. the game exposes Rate, Depth,
- * and Mix only, so the multi-voice spread is fixed internally.
+ * 134 Stereo Chorus - MXR-style analog stereo chorus.
+ *
+ * Reference: pedals/analog chorus.jpg. The model follows the MN3009/CD4013
+ * clocked BBD path, 4558/1458 filtering, CA3080-style control behaviour and
+ * the real panel controls: Bass, Treble, Intensity, Width and Speed.
  */
 #include "DistrhoPlugin.hpp"
 #include "AnalogChorusParams.h"
+#include "../_shared/ChorusComponents.h"
 #include <cmath>
-#include <vector>
 
 START_NAMESPACE_DISTRHO
-
-namespace {
-
-static constexpr float kPi = 3.14159265359f;
-static constexpr float kTwoPi = 6.28318530718f;
-
-static inline float clamp01(float v)
-{
-    return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
-}
-
-static inline float smoothstep(float v)
-{
-    v = clamp01(v);
-    return v * v * (3.0f - 2.0f * v);
-}
-
-static inline float softClip(float x)
-{
-    return std::tanh(x);
-}
-
-static inline float onePoleCoeffHz(float hz, float sr)
-{
-    hz = std::fmax(10.0f, std::fmin(hz, sr * 0.45f));
-    return 1.0f - std::exp(-2.0f * kPi * hz / sr);
-}
-
-class DelayBuffer
-{
-    std::vector<float> data;
-    int writeIndex = 0;
-
-public:
-    void resize(int samples)
-    {
-        if (samples < 8)
-            samples = 8;
-        data.assign((size_t)samples, 0.0f);
-        writeIndex = 0;
-    }
-
-    void reset()
-    {
-        for (size_t i = 0; i < data.size(); ++i)
-            data[i] = 0.0f;
-        writeIndex = 0;
-    }
-
-    float read(float delaySamples) const
-    {
-        const int size = (int)data.size();
-        if (size <= 4)
-            return 0.0f;
-
-        delaySamples = std::fmax(1.0f, std::fmin(delaySamples, (float)(size - 3)));
-        float pos = (float)writeIndex - delaySamples;
-        while (pos < 0.0f)
-            pos += (float)size;
-        while (pos >= (float)size)
-            pos -= (float)size;
-
-        const int i0 = (int)std::floor(pos);
-        const int i1 = (i0 + 1) % size;
-        const float frac = pos - (float)i0;
-        return data[(size_t)i0] + (data[(size_t)i1] - data[(size_t)i0]) * frac;
-    }
-
-    void write(float x)
-    {
-        if (data.empty())
-            return;
-        data[(size_t)writeIndex] = x;
-        ++writeIndex;
-        if (writeIndex >= (int)data.size())
-            writeIndex = 0;
-    }
-};
-
-} // namespace
 
 class AnalogChorusCore
 {
     float sampleRate = 48000.0f;
-    float rate = kAnalogChorusDef[kRate];
-    float depth = kAnalogChorusDef[kDepth];
-    float mix = kAnalogChorusDef[kMix];
+    float bass = kAnalogChorusDef[kBass];
+    float treble = kAnalogChorusDef[kTreble];
+    float intensity = kAnalogChorusDef[kIntensity];
+    float width = kAnalogChorusDef[kWidth];
+    float speed = kAnalogChorusDef[kSpeed];
     float phaseOffset = 0.0f;
-
-    DelayBuffer delay;
     float lfoPhase = 0.0f;
-    float hpX1 = 0.0f;
-    float hpY1 = 0.0f;
-    float inputY = 0.0f;
-    float bbdY = 0.0f;
-    float compY = 0.0f;
-    float dc = 0.0f;
+    float feedback = 0.0f;
 
-    float hpA = 0.0f;
-    float inputA = 0.0f;
-    float bbdA = 0.0f;
-    float compA = 0.0f;
+    rbmod::DelayBuffer bbd;
+    rbmod::HighPass inputHp;
+    rbmod::LowPass inputLp;
+    rbmod::LowPass wetLp1;
+    rbmod::LowPass wetLp2;
+    rbmod::LowPass bassLp;
+    rbmod::LowPass trebleLp;
+    rbmod::BbdCompander compander;
+    rbmod::NoiseSource noise;
 
     float currentRateHz() const
     {
-        return 0.065f + 3.45f * std::pow(clamp01(rate), 1.28f);
+        return 0.045f + 4.60f * std::pow(rbmod::clamp01(speed), 2.05f);
     }
 
     void updateFilters()
     {
-        const float dt = 1.0f / sampleRate;
-        const float hpHz = 28.0f;
-        const float hpRc = 1.0f / (2.0f * kPi * hpHz);
-        hpA = hpRc / (hpRc + dt);
-
-        const float d = smoothstep(depth);
-        inputA = onePoleCoeffHz(6500.0f - 1250.0f * d, sampleRate);
-        bbdA = onePoleCoeffHz(4300.0f - 1150.0f * d, sampleRate);
-        compA = onePoleCoeffHz(18.0f, sampleRate);
+        const float w = std::pow(rbmod::clamp01(width), 1.75f);
+        inputHp.setHz(26.0f, sampleRate);
+        inputLp.setHz(6900.0f - 900.0f * w, sampleRate);
+        wetLp1.setHz(4600.0f - 1150.0f * w, sampleRate);
+        wetLp2.setHz(3300.0f - 550.0f * w, sampleRate);
+        bassLp.setHz(180.0f, sampleRate);
+        trebleLp.setHz(2600.0f, sampleRate);
     }
 
-    float highPass(float x)
+    float tone(float x)
     {
-        const float y = hpA * (hpY1 + x - hpX1);
-        hpX1 = x;
-        hpY1 = y;
-        return y;
-    }
-
-    float lowPass(float x, float& z, float a)
-    {
-        z += a * (x - z);
-        return z;
-    }
-
-    float lfoAt(float phase) const
-    {
-        phase += phaseOffset;
-        phase -= std::floor(phase);
-        const float s1 = std::sin(kTwoPi * phase);
-        const float s2 = std::sin(kTwoPi * (phase * 0.5f + 0.19f));
-        return 0.78f * s1 + 0.22f * s2;
+        const float low = bassLp.process(x);
+        const float high = x - trebleLp.process(x);
+        const float bassGain = 0.70f + 0.72f * bass;
+        const float trebleGain = 0.58f + 0.88f * treble;
+        return x + (bassGain - 1.0f) * low + (trebleGain - 1.0f) * high;
     }
 
 public:
-    void setPhaseOffset(float v)
-    {
-        phaseOffset = v - std::floor(v);
-    }
-
-    void reset()
-    {
-        delay.reset();
-        lfoPhase = phaseOffset;
-        hpX1 = hpY1 = inputY = bbdY = compY = dc = 0.0f;
-        updateFilters();
-    }
-
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
-        delay.resize((int)(sampleRate * 0.095f));
+        bbd.resizeForMs(sampleRate, 58.0f);
+        compander.setSampleRate(sampleRate, 28.0f);
+        updateFilters();
         reset();
     }
 
-    void setRate(float v)
+    void setSeed(unsigned int seed) { noise.seed(seed); }
+    void setPhaseOffset(float v) { phaseOffset = v - std::floor(v); }
+
+    void reset()
     {
-        rate = clamp01(v);
+        bbd.reset();
+        inputHp.reset();
+        inputLp.reset();
+        wetLp1.reset();
+        wetLp2.reset();
+        bassLp.reset();
+        trebleLp.reset();
+        compander.reset();
+        lfoPhase = phaseOffset;
+        feedback = 0.0f;
     }
 
-    void setDepth(float v)
-    {
-        depth = clamp01(v);
-        updateFilters();
-    }
-
-    void setMix(float v)
-    {
-        mix = clamp01(v);
-    }
+    void setBass(float v) { bass = rbmod::clamp01(v); }
+    void setTreble(float v) { treble = rbmod::clamp01(v); }
+    void setIntensity(float v) { intensity = rbmod::clamp01(v); }
+    void setWidth(float v) { width = rbmod::clamp01(v); updateFilters(); }
+    void setSpeed(float v) { speed = rbmod::clamp01(v); }
 
     float process(float in)
     {
@@ -197,43 +98,34 @@ public:
         if (lfoPhase >= 1.0f)
             lfoPhase -= std::floor(lfoPhase);
 
-        const float d = 0.08f + 0.92f * smoothstep(depth);
-        const float m = mix <= 0.0001f ? 0.0f : clamp01(0.08f + 0.96f * mix);
+        const float phase = lfoPhase + phaseOffset;
+        const float sine = std::sin(rbmod::kTwoPi * phase);
+        const float slow = std::sin(rbmod::kTwoPi * (phase * 0.5f + 0.18f));
+        const float wobble = 0.82f * sine + 0.18f * slow;
 
-        float x = highPass(in);
-        x = lowPass(x, inputY, inputA);
-        x = softClip(x * (1.05f + 0.10f * d)) * 0.95f;
+        const float w = std::pow(rbmod::clamp01(width), 1.75f);
+        const float baseMs = 12.0f + 3.8f * (1.0f - w);
+        const float widthMs = 0.10f + 8.55f * w;
+        float delayMs = baseMs + widthMs * wobble;
+        delayMs = rbmod::clamp(delayMs, 3.2f, 46.0f);
 
-        const float baseMs[3] = { 10.8f, 15.7f, 22.4f };
-        const float phaseStep[3] = { 0.00f, 0.34f, 0.68f };
-        const float weights[3] = { 0.92f, 0.74f, 0.54f };
-        const float widthMs = 0.35f + 6.8f * d;
+        float x = inputHp.process(in);
+        x = inputLp.process(x);
+        x = rbmod::softClip(x * 1.05f);
 
-        float wet = 0.0f;
-        float norm = 0.0001f;
-        for (int i = 0; i < 3; ++i)
-        {
-            const float wobble = lfoAt(lfoPhase + phaseStep[i]);
-            float delayMs = baseMs[i] + widthMs * (0.72f + 0.13f * (float)i) * wobble;
-            delayMs = std::fmax(3.5f, std::fmin(44.0f, delayMs));
-            wet += delay.read(delayMs * 0.001f * sampleRate) * weights[i];
-            norm += weights[i];
-        }
-        delay.write(x);
-        wet /= norm;
+        const float fb = 0.012f + 0.035f * intensity;
+        const float write = rbmod::softClip(x + feedback * fb);
+        float wet = bbd.read(delayMs * 0.001f * sampleRate);
+        bbd.write(write);
 
-        wet = lowPass(wet, bbdY, bbdA);
-        compY += compA * (std::fabs(wet) - compY);
-        const float comp = 1.0f / (1.0f + 0.72f * compY);
-        wet = softClip(wet * comp * (1.08f + 0.14f * d));
+        wet += noise.next() * (0.00022f + 0.0010f * rbmod::smoothstep(width));
+        wet = wetLp2.process(wetLp1.process(wet));
+        wet = compander.process(wet, 0.45f + 0.35f * width);
+        feedback = wet;
 
-        dc += 0.00045f * (wet - dc);
-        wet -= dc;
-
-        const float dryLevel = 1.0f - 0.30f * m;
-        const float wetLevel = (0.30f + 0.72f * m) * m;
-        const float y = in * dryLevel + wet * wetLevel;
-        return softClip(y * 0.94f) * 0.97f;
+        const float i = std::pow(rbmod::clamp01(intensity), 1.55f);
+        const float mixed = 0.82f * in + wet * (0.12f + 0.74f * i);
+        return rbmod::softClip(tone(mixed) * 0.92f) * 0.97f;
     }
 };
 
@@ -245,12 +137,16 @@ class AnalogChorusPlugin : public Plugin
 
     void applyAll()
     {
-        left.setRate(params[kRate]);
-        right.setRate(params[kRate]);
-        left.setDepth(params[kDepth]);
-        right.setDepth(params[kDepth]);
-        left.setMix(params[kMix]);
-        right.setMix(params[kMix]);
+        left.setBass(params[kBass]);
+        right.setBass(params[kBass]);
+        left.setTreble(params[kTreble]);
+        right.setTreble(params[kTreble]);
+        left.setIntensity(params[kIntensity]);
+        right.setIntensity(params[kIntensity]);
+        left.setWidth(params[kWidth]);
+        right.setWidth(params[kWidth]);
+        left.setSpeed(params[kSpeed]);
+        right.setSpeed(params[kSpeed]);
     }
 
 public:
@@ -259,8 +155,10 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kAnalogChorusDef[i];
+        left.setSeed(0x41313334u);
+        right.setSeed(0x41313335u);
         left.setPhaseOffset(0.00f);
-        right.setPhaseOffset(0.37f);
+        right.setPhaseOffset(0.47f);
         left.setSampleRate((float)getSampleRate());
         right.setSampleRate((float)getSampleRate());
         applyAll();
@@ -268,10 +166,10 @@ public:
 
 protected:
     const char* getLabel() const override { return "AnalogChorus"; }
-    const char* getDescription() const override { return "Warm stereo BBD analog chorus"; }
+    const char* getDescription() const override { return "MN3009-style stereo analog chorus"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('A', 'n', 'C', 'h'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -295,7 +193,7 @@ protected:
     {
         if (index >= (uint32_t)kParamCount)
             return;
-        params[index] = clamp01(value);
+        params[index] = rbmod::clamp01(value);
         applyAll();
     }
 
@@ -315,8 +213,9 @@ protected:
 
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = left.process(inL[i]);
-            outR[i] = right.process(inR[i]);
+            const rbmod::StereoInputPair feed = rbmod::stereoPedalFeeds(inL[i], inR[i]);
+            outL[i] = left.process(feed.left);
+            outR[i] = right.process(feed.right);
         }
     }
 

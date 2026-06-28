@@ -828,14 +828,16 @@
     .rb-adv-jack:hover{ box-shadow:0 0 10px rgba(140,180,250,.8); }
     .rb-adv-jack-in{ left:-9px; }
     .rb-adv-jack-out{ right:-9px; }
-    /* split L/R output jacks (St-2): L sits upper, R lower; tinted to match the
-       L/R cable colours. A small L/R glyph rides above each. */
-    .rb-adv-jack-l{ top:32%; background:radial-gradient(circle at 38% 32%, #bcd2ff, #4f78c8 60%, #22314e); }
-    .rb-adv-jack-r{ top:68%; background:radial-gradient(circle at 38% 32%, #ffd4bc, #c8784f 60%, #4e3122); }
-    .rb-adv-jack-l::before, .rb-adv-jack-r::before{ position:absolute; right:18px; top:50%; transform:translateY(-50%);
+    /* optional stereo source jacks: mono stays centred/default, L/R sit above
+       and below it so they can feed separate branches without replacing mono. */
+    .rb-adv-jack-l{ top:28%; background:radial-gradient(circle at 38% 32%, #bcd2ff, #4f78c8 60%, #22314e); }
+    .rb-adv-jack-r{ top:72%; background:radial-gradient(circle at 38% 32%, #ffd4bc, #c8784f 60%, #4e3122); }
+    .rb-adv-jack-mono{ background:radial-gradient(circle at 38% 32%, #d7e0ee, #748096 60%, #2a3142); }
+    .rb-adv-jack-l::before, .rb-adv-jack-r::before, .rb-adv-jack-mono::before{ position:absolute; right:18px; top:50%; transform:translateY(-50%);
         font-size:8px; font-weight:700; color:#9fb0c8; letter-spacing:.04em; }
     .rb-adv-jack-l::before{ content:"L"; }
     .rb-adv-jack-r::before{ content:"R"; }
+    .rb-adv-jack-mono::before{ content:"M"; }
     /* a cable path */
     /* solid stroke (NOT a url(#gradient) ref): an SVG gradient reference rebuilt
        via innerHTML doesn't repaint until a reflow, so gradient cables only
@@ -1068,7 +1070,7 @@
             </aside>
             <div class="rb-adv-main">
                 <div class="rb-adv-toolbar">
-                    <span class="rb-adv-hint">Drag gear in · drag a jack ● to wire · double-click a cable to disconnect</span>
+                    <span class="rb-adv-hint">Drag gear in · wire M by default · stereo pedals also expose L/R outs · double-click a cable to disconnect</span>
                     <div class="rb-adv-actions">
                         <button onclick="rbAdvZoom(-0.15)" class="rb-adv-btn rb-adv-btn-icon" title="Zoom out">−</button>
                         <span id="rb-adv-zoom-label" class="rb-adv-zoom-label">100%</span>
@@ -1131,37 +1133,6 @@
             </div>
         </div>
 
-        <!-- Quick start — the recommended workflow for a fresh install or
-             a library that's just been re-extracted. Kept at the top of
-             Setup so the user always sees the 3 ordered steps before the
-             individual section cards underneath. -->
-        <div class="bg-emerald-900/15 border border-emerald-800/40 rounded-xl p-5 mb-6">
-            <h3 class="text-emerald-200 font-semibold mb-2">🚀 Quick start — how this plugin works</h3>
-            <p class="text-gray-400 text-sm mb-3">
-                Two ordered steps. After you've done them once, the plugin
-                self-heals new songs as you open them.
-            </p>
-            <ol class="text-sm text-gray-300 space-y-2 list-decimal pl-5">
-                <li>
-                    <span class="font-medium">Scan library &amp; auto-assign</span>
-                    — walks every song and assigns captures from the curated
-                    1-to-1 mappings only. Anything uncurated lands in
-                    <span class="text-amber-300">pending</span> for you to
-                    pick later. Tick the <span class="text-amber-300">⚠ Allow tone3000
-                    fuzzy fallback</span> box below if you want the plugin to
-                    auto-search tone3000 for uncurated gears instead.
-                </li>
-                <li>
-                    <span class="font-medium">Refine in the Gear catalog</span>
-                    — for each amp set <span class="text-emerald-300">🎚 Variants</span>
-                    (clean / crunch / dist), or assign a NAM/VST via
-                    <span class="text-indigo-300">📚 Library</span>. The
-                    Songs editor lets you tweak per-song mic position +
-                    gain variant + swap gear.
-                </li>
-            </ol>
-        </div>
-
         <!-- Batch operations (was Dashboard) -->
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
             <h3 class="text-white font-semibold mb-2">Scan library &amp; auto-assign captures</h3>
@@ -1222,6 +1193,25 @@
                 </div>
                 <pre id="rb-batch-log" class="mt-3 text-xs text-gray-500 max-h-48 overflow-auto bg-dark-900/50 p-2 rounded"></pre>
             </div>
+        </div>
+
+        <!-- Play a specific tone — override the song's tone with a chosen user tone. -->
+        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+            <h3 class="text-white font-semibold mb-3">Play a specific tone</h3>
+            <p class="text-gray-500 text-sm mb-3">
+                Ignore each song's own tone and always play with one tone you choose
+                (your Default tone or a saved Studio tone). Turn this off to go back
+                to the song's tones.
+            </p>
+            <label class="flex items-center gap-2 mb-3 cursor-pointer select-none">
+                <input type="checkbox" id="rb-tone-override-enabled" class="accent-purple-500 w-4 h-4">
+                <span class="text-sm text-gray-200">Use a specific tone for all songs</span>
+            </label>
+            <select id="rb-tone-override-name"
+                    class="w-full bg-dark-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 disabled:opacity-40"
+                    disabled>
+                <option value="">Default tone</option>
+            </select>
         </div>
 
         <!-- Cabinets — bypass the cab IRs and use your own -->

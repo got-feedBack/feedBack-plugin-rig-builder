@@ -17,7 +17,8 @@
  * CHANNEL — low Gain = Classic clean, mid = Classic crunch, high = Ultra OD
  * (matching the gain_variants split). Treble/Mid/Bass -> tone stack,
  * Pres -> Presence, Res -> Resonance. The per-channel Gain/Vol + masters sit at
- * musical defaults (_static) and stay editable by hand.
+ * musical defaults (_static) and stay editable by hand. CAB SIM is a temporary
+ * bundled 4x12 voicing; the host can set it to 0 when an external cab/IR is present.
  */
 enum DSL100ParamId
 {
@@ -40,6 +41,7 @@ enum DSL100ParamId
     kMaster2,        // MASTER 2
     kMasterSelect,   // Master 1(0) / Master 2(1)
     kOutput,         // Output  Low/50W(0) / High/100W(1)
+    kCabSim,         // temporary internal 4x12 cab filter       [host]
     kParamCount
 };
 
@@ -48,7 +50,7 @@ static const char* const kDSL100Names[kParamCount] = {
     "Ultra Gain", "Ultra Vol", "Ultra Mode",
     "Bass", "Middle", "Treble", "Tone Shift",
     "Resonance", "Presence", "Rev Classic", "Rev Ultra",
-    "Master 1", "Master 2", "Master Sel", "Output",
+    "Master 1", "Master 2", "Master Sel", "Output", "Cab Sim",
 };
 
 static const char* const kDSL100Symbols[kParamCount] = {
@@ -56,13 +58,13 @@ static const char* const kDSL100Symbols[kParamCount] = {
     "ultragain", "ultravol", "ultramode",
     "bass", "middle", "treble", "toneshift",
     "resonance", "presence", "revclassic", "revultra",
-    "master1", "master2", "mastersel", "output",
+    "master1", "master2", "mastersel", "output", "cab_sim",
 };
 
 static const float kDSL100Min[kParamCount] = {
-    0,0,0,0, 0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0 };
+    0,0,0,0, 0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0,0 };
 static const float kDSL100Max[kParamCount] = {
-    1,1,1,1, 1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1 };
+    1,1,1,1, 1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1,1 };
 // Manual-insert defaults: Ultra channel (the DSL lead voice) at OD1, moderate
 // gain; Classic set to a usable crunch; tone stack centred-ish; reverb off;
 // masters at unity-ish; High (100W) output.
@@ -72,6 +74,7 @@ static const float kDSL100Def[kParamCount] = {
     0.55f, 0.50f, 0.62f, 0.00f,   // Bass, Middle, Treble, Tone Shift off
     0.50f, 0.45f, 0.00f, 0.00f,   // Resonance, Presence, Rev Classic/Ultra off
     0.50f, 0.50f, 0.00f, 1.00f,   // Master 1/2, Master Sel=1, Output=High
+    1.00f,                         // Cab Sim on until host external cab/IR bypass
 };
 
 #endif // DSL100_PARAMS_H

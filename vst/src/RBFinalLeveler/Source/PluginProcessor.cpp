@@ -39,7 +39,10 @@ public:
         levelInitialized = false;
         detectorSeeded = false;
         warmupSamples = 0;
+        gateHoldSamples = 0;
+        gateGain = 1.0f;
         msEnv = 0.0;
+        rawMsEnv = 0.0;
         designKWeighting(sr);
         for (int ch = 0; ch < 2; ++ch) { kPre[ch].reset(); kRlb[ch].reset(); }
     }
@@ -85,6 +88,8 @@ public:
         // perceived loudness instead of equal RMS (which sounded uneven). 30 ms
         // reacts quickly to a tone change; the gain follower below smooths any
         // residual per-cycle ripple on low bass notes.
+        // NB: preview/monitor path ALSO runs this leveler now, so what you hear
+        // in Rig Builder == the song. Cross-tone evenness (LUFS) is kept.
         const float rmsTauMs = 15.0f;   // faster loudness detector (was 30) — reacts ~2x quicker to a tone change
         const float rmsCoef = 1.0f - std::exp(-1.0f / std::max(1.0f, (rmsTauMs / 1000.0f) * float(sr)));
 
@@ -94,17 +99,24 @@ public:
             chData[ch] = buffer.getReadPointer(ch);
 
         double sumSq = 0.0;
+        double rawSumSq = 0.0;
         for (int i = 0; i < numSamples; ++i)
         {
             double sq = 0.0;
+            double rawSq = 0.0;
             for (int ch = 0; ch < chN; ++ch)
             {
-                const double w = kRlb[ch].process(kPre[ch].process(double(chData[ch][i])));
+                const double x = double(chData[ch][i]);
+                rawSq += x * x;                                // UNWEIGHTED power
+                const double w = kRlb[ch].process(kPre[ch].process(x));
                 sq += w * w;                                   // K-weighted power
             }
             sq /= double(std::max(1, chN));
+            rawSq /= double(std::max(1, chN));
             sumSq += sq;
+            rawSumSq += rawSq;
             msEnv += double(rmsCoef) * (sq - msEnv);
+            rawMsEnv += double(rmsCoef) * (rawSq - rawMsEnv);
         }
 
         // SEED the detector on the FIRST block that actually carries signal: jump
@@ -114,10 +126,12 @@ public:
         // dropped ("suena fuerte el bajo y luego se baja") on every song/tone
         // start. Seeding makes the very first gain decision use the real level.
         const double blockMs = sumSq / double(std::max(1, numSamples));
+        const double rawBlockMs = rawSumSq / double(std::max(1, numSamples));
         if (! detectorSeeded && blockMs > 1.0e-9
             && (-0.691 + 10.0 * std::log10(blockMs)) >= gateDb)
         {
             msEnv = blockMs;
+            rawMsEnv = rawBlockMs;
             detectorSeeded = true;
         }
 
@@ -125,9 +139,21 @@ public:
         const float loudnessLufs = (msEnv > 1.0e-12)
             ? float(-0.691 + 10.0 * std::log10(msEnv))
             : -120.0f;
+        // RAW (unweighted) RMS — used for the noise GATE and the sub-heavy cap.
+        const float rawRmsDb = (rawMsEnv > 1.0e-12)
+            ? float(10.0 * std::log10(rawMsEnv)) : -120.0f;
 
         float wantedGainDb = currentGainDb;
-        const bool hasSignal = loudnessLufs >= gateDb;
+        // GATE on the RAW level, NOT the K-weighted LUFS: white noise reads high
+        // in K-weighting (the +4 dB high-shelf), so an LUFS gate let the idle
+        // hiss through and the AGC then boosted it ("si no se toca nada, boostea
+        // el ruido blanco"). Raw RMS reflects the true level. The floor must sit
+        // BELOW real playing — a bass tone arrives QUIET at the leveler (the cab
+        // IR attenuates it; the leveler exists to boost it up), so a too-high gate
+        // ate the bass and it played "muy bajo". -44 dB clears the playing level
+        // while still catching the (lower) idle noise floor.
+        const float effGateDb = std::max(gateDb, -44.0f);
+        const bool hasSignal = rawRmsDb >= effGateDb;
 
         // Warm-up: for the first ~45 ms of signal the 30 ms detector hasn't fully
         // settled, so its loudness reads low and the AGC would snap to a big boost
@@ -152,20 +178,35 @@ public:
 
         if (!hasSignal || !warm)
         {
-            // Silence, OR still warming the detector — don't chase a level we
-            // can't trust yet. Hold the current correction.
+            // Silence OR still warming the detector — HOLD the gain. The idle
+            // noise floor is ducked by the separate OUTPUT GATE below (NOT by
+            // dropping the AGC gain), so when playing resumes the level is already
+            // correct and the note is never muted by a slow gain recovery.
             wantedGainDb = currentGainDb;
         }
         else
         {
-            // Drive purely by LOUDNESS to the target (param name kept for state
-            // compat). Crucially we do NOT clamp the boost by the instantaneous
-            // peak here — that starved the boost on quiet/dynamic high-crest
-            // tones, so they stayed quiet ("the comp must raise the low
-            // volumes") while compressed loud tones got cut. Transients are
-            // caught by the brickwall limiter on the output instead, so loudness
-            // is leveled and peaks are still safe.
+            // Drive purely by perceived LOUDNESS (LUFS) to the target (param
+            // name kept for state compat). We do NOT clamp the boost by the
+            // instantaneous PEAK — that starved the boost on quiet/dynamic
+            // high-crest tones ("the comp must raise the low volumes"); peaks
+            // are caught by the brickwall limiter on the output instead.
             wantedGainDb = targetRmsDb - loudnessLufs;
+
+            // SUB-HEAVY BOOST CAP (by mean RMS, NOT peak — so it doesn't starve
+            // dynamic tones). K-weighting attenuates lows ~10-15 dB, so a bass-
+            // only tone (fuzz-bass / synth bass) reads far quieter in LUFS than
+            // its true RMS; the LUFS drive above would then boost it ~10 dB and
+            // it DOMINATES over the backing ("synthbass suena MUY fuerte en la
+            // canción"). Cap the boost so the UNWEIGHTED output RMS can't exceed
+            // the target by more than RAW_MARGIN_DB. Full-range tones have raw
+            // RMS within a few dB of their LUFS so they never hit this cap and
+            // level by LUFS as before; only abnormally low-end-heavy tones (raw
+            // RMS ≫ LUFS) get reined in. Tunable: lower margin = tamer bass.
+            constexpr float RAW_MARGIN_DB = 6.0f;
+            const float rawCapGainDb = (targetRmsDb + RAW_MARGIN_DB) - rawRmsDb;
+            wantedGainDb = std::min(wantedGainDb, rawCapGainDb);
+
             wantedGainDb = juce::jlimit(-maxCutDb, maxBoostDb, wantedGainDb);
         }
 
@@ -203,6 +244,23 @@ public:
         currentGainDb += (wantedGainDb - currentGainDb) * juce::jlimit(0.0f, 1.0f, alpha);
         currentGainDb = juce::jlimit(-maxCutDb, maxBoostDb, currentGainDb);
 
+        // ── Idle-noise GATE (separate from the AGC) ──────────────────────────
+        // The AGC HOLDS its boost during silence (above), which alone would keep
+        // amplifying the idle noise floor. So duck the OUTPUT with a real noise
+        // gate that OPENS fast on the CURRENT block's level (a note attack passes
+        // un-muted) and CLOSES with a 300 ms hold + slow release on sustained
+        // silence. Being a separate output multiplier — not the AGC gain — note
+        // onsets are NEVER muted by a slow gain recovery (the bug with the old
+        // release-to-unity: "de repente el fuzz se mutea").
+        const float instRawDb = (rawBlockMs > 1.0e-12)
+            ? float(10.0 * std::log10(rawBlockMs)) : -120.0f;
+        const bool gateOpenNow = instRawDb >= effGateDb;
+        if (gateOpenNow) gateHoldSamples = int(0.30 * sr);             // 300 ms hold
+        else if (gateHoldSamples > 0) gateHoldSamples = std::max(0, gateHoldSamples - numSamples);
+        const float gateTarget = (gateOpenNow || gateHoldSamples > 0) ? 1.0f : 0.0f;
+        const float gateAtkCoef = 1.0f - std::exp(-1.0f / std::max(1.0f, 0.003f * float(sr)));  // ~3 ms open
+        const float gateRelCoef = 1.0f - std::exp(-1.0f / std::max(1.0f, 0.250f * float(sr)));  // ~250 ms close
+
         // Order matters: AGC (loudness normalize) -> brickwall limiter on the
         // NORMALIZED signal -> makeup (Output Trim, the user's loudness) LAST.
         // The limiter must sit BEFORE the makeup; if it sits after, it claws the
@@ -227,7 +285,9 @@ public:
             const float need = (pk > ceilLin && pk > 0.0f) ? (ceilLin / pk) : 1.0f;
             if (need < limGain) limGain = need;                       // instant attack: no overshoot
             else                limGain += relCoef * (need - limGain); // slow release
-            const float tot = gAgc * limGain * makeupGain * confidence;  // ...makeup + warm-up fade, last
+            const float gc = (gateTarget > gateGain) ? gateAtkCoef : gateRelCoef;
+            gateGain += gc * (gateTarget - gateGain);                  // fast-open / slow-close noise gate
+            const float tot = gAgc * limGain * makeupGain * confidence * gateGain;  // ...makeup, warm-up fade, gate, last
             for (int ch = 0; ch < numChannels; ++ch)
                 buffer.getWritePointer(ch)[i] *= tot;
         }
@@ -271,7 +331,10 @@ private:
     bool levelInitialized = false;
     bool detectorSeeded = false;   // jump msEnv to the real level on first signal
     int warmupSamples = 0;         // signal samples seen — gates the first gain decision
+    int gateHoldSamples = 0;       // output noise-gate hold counter
+    float gateGain = 1.0f;         // output noise-gate gain (fast attack / slow release)
     double msEnv = 0.0;   // running mean-square of the K-weighted signal (~30 ms)
+    double rawMsEnv = 0.0; // running mean-square of the UNWEIGHTED signal — caps sub-heavy boost
 
     // ── ITU-R BS.1770 K-weighting (perceptual loudness) ───────────────────
     // Two biquads per channel: a high-shelf pre-filter + an RLB high-pass.

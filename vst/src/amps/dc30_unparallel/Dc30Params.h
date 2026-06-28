@@ -33,23 +33,24 @@ enum Dc30ParamId
     kCut,           // CUT    — shared post/PI treble cut (higher = darker)
     kMaster,        // MASTER — shared output master (Class-A bloom/compression)
     kChannel,       // channel: Ch1 Brilliant(0) / Ch2 EF86(1)
+    kCabSim,        // fallback 2x12 speaker voice; host bypasses when using an external cab/IR
     kParamCount
 };
 
 static const char* const kDc30Names[kParamCount] = {
-    "Ch1 Volume", "Bass", "Treble", "Ch2 Volume", "Tone", "Cut", "Master", "Channel",
+    "Ch1 Volume", "Bass", "Treble", "Ch2 Volume", "Tone", "Cut", "Master", "Channel", "Cab Sim",
 };
 
 static const char* const kDc30Symbols[kParamCount] = {
-    "ch1volume", "bass", "treble", "ch2volume", "tone", "cut", "master", "channel",
+    "ch1volume", "bass", "treble", "ch2volume", "tone", "cut", "master", "channel", "cabsim",
 };
 
-static const float kDc30Min[kParamCount] = { 0,0,0,0,0,0,0,0 };
-static const float kDc30Max[kParamCount] = { 1,1,1,1,1,1,1,1 };
+static const float kDc30Min[kParamCount] = { 0,0,0,0,0,0,0,0,0 };
+static const float kDc30Max[kParamCount] = { 1,1,1,1,1,1,1,1,1 };
 // Defaults: Ch1 Brilliant selected, Volume up for that chimey breakup, top-boost
 // roughly flat, EF86 channel at musical defaults, Cut mild, Master open.
 static const float kDc30Def[kParamCount] = {
-    0.60f, 0.50f, 0.60f, 0.50f, 0.50f, 0.40f, 0.70f, 0.0f,
+    0.60f, 0.50f, 0.60f, 0.50f, 0.50f, 0.40f, 0.70f, 0.0f, 1.0f,
 };
 
 #endif // DC30_PARAMS_H

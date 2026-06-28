@@ -34,27 +34,28 @@ enum SuperdriveParamId
     kChannel,      // pull MASTER:  Rhythm(0) / Hi-gain(1)
     kModern,       // pull MID:     classic(0) / Modern(1)
     kBrite,        // pull RHYTHM:  off(0) / Brite(1)
+    kCabSim,       // fallback Budda-style speaker voice; host bypasses when using an external cab/IR
     kParamCount
 };
 
 static const char* const kSuperNames[kParamCount] = {
     "Master", "Bass", "Mid", "Treble", "Drive", "Rhythm",
-    "Channel", "Modern", "Brite",
+    "Channel", "Modern", "Brite", "Cab Sim",
 };
 
 static const char* const kSuperSymbols[kParamCount] = {
     "master", "bass", "mid", "treble", "drive", "rhythm",
-    "channel", "modern", "brite",
+    "channel", "modern", "brite", "cabsim",
 };
 
-static const float kSuperMin[kParamCount] = { 0,0,0,0,0,0,0,0,0 };
-static const float kSuperMax[kParamCount] = { 1,1,1,1,1,1,1,1,1 };
+static const float kSuperMin[kParamCount] = { 0,0,0,0,0,0,0,0,0,0 };
+static const float kSuperMax[kParamCount] = { 1,1,1,1,1,1,1,1,1,1 };
 // Manual-insert defaults: Hi-gain channel, a singing crunch off DRIVE, tone
 // stack centred-ish, Master ~9 o'clock, classic voicing. Pull MID for Modern,
 // pull MASTER in for the Rhythm channel, pull RHYTHM for Brite — by hand.
 static const float kSuperDef[kParamCount] = {
     0.42f, 0.50f, 0.50f, 0.55f, 0.48f, 0.40f,
-    1.0f, 0.0f, 0.0f,
+    1.0f, 0.0f, 0.0f, 1.0f,
 };
 
 #endif // SUPERDRIVE_PARAMS_H
