@@ -39,16 +39,23 @@ class PlateVerbPlugin : public Plugin
         const float mix = clamp01(params[kMix]);
         const float voice = params[kVoice] >= 0.5f ? 1.0f : 0.0f;
 
-        const float sizeScale = 0.58f + 0.13f * depth + 0.08f * voice;
-        const float dampBias = voice > 0.5f ? -0.08f : 0.015f;
-        const float apFeedback = 0.61f + 0.06f * depth + 0.04f * voice;
-        const float tone = voice > 0.5f ? 0.78f : 0.56f;
+        // Depth = plate SIZE/bloom (was a near-dead knob): a tight, bright small
+        // plate -> a big, dense, longer-blooming plate. A real EMT 140 has no LFO,
+        // so Depth is size + density, not modulation. Voice adds a bright/large
+        // tilt. Higher diffusion + lighter damping = a dense, bright PLATE rather
+        // than the previous generic hall wash.
+        const float sizeScale  = 0.50f + 0.40f * depth + 0.07f * voice;
+        const float dampBias   = (voice > 0.5f ? -0.05f : 0.02f);
+        const float apFeedback = 0.66f + 0.08f * depth + 0.04f * voice;
+        const float tone       = voice > 0.5f ? 0.80f : 0.60f;
 
         reverb.setVoicing(sizeScale, dampBias, apFeedback);
-        reverb.setParams(0.18f + 0.80f * time,
+        // Time is the main decay; a bigger plate (Depth) blooms a little longer.
+        // Modulation depth is 0 (no LFO on a real plate).
+        reverb.setParams(0.16f + 0.74f * time + 0.10f * depth,
                          tone,
-                         depth * (0.34f + 0.22f * voice),
-                         mix * (0.62f + 0.08f * depth));
+                         0.0f,
+                         std::pow(mix, 1.9f) * (0.66f + 0.10f * depth));
     }
 
 public:

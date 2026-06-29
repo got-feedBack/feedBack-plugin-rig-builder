@@ -124,7 +124,7 @@ public:
         const float mixed = mode >= 0.5f ? wet * wetLevel
                                          : dry - wet * wetLevel;
         const float outGain = 0.18f + 1.65f * rbmod::audioTaper(volume);
-        return rbmod::softClip(mixed * outGain) * 0.90f;
+        return rbmod::softClip(mixed * outGain) * 0.72f;   // -2 dB to level-match the chorus group
     }
 };
 

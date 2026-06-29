@@ -1,7 +1,8 @@
 /*
  * MultiTrem - Boss TR-2 style multi-wave tremolo for the game's
  * Pedal_MultiTrem. The local PDF is a TR-2 schematic: JFET input, LFO with a
- * Wave control, and a linear VCA. the game exposes Speed, Mix, and Waveform.
+ * Wave control, and an M5207L01 linear-control VCA. Real controls are Rate,
+ * Depth, and Wave. Rocksmith Speed/Mix/Waveform map to those controls.
  */
 #include "DistrhoPlugin.hpp"
 #include "MultiTremParams.h"
@@ -51,11 +52,12 @@ static inline float antiLogPot(float v)
 class MultiTremCore
 {
     float sampleRate = 48000.0f;
-    float speed = kMultiTremDef[kSpeed];
-    float mix = kMultiTremDef[kMix];
-    float waveform = kMultiTremDef[kWaveform];
+    float rate = kMultiTremDef[kRate];
+    float depth = kMultiTremDef[kDepth];
+    float wave = kMultiTremDef[kWave];
 
     float phase = 0.0f;
+    float controlVoltage = 0.0f;
     float gainSmooth = 1.0f;
     float hpX1 = 0.0f;
     float hpY1 = 0.0f;
@@ -68,20 +70,22 @@ class MultiTremCore
     float rateHz() const
     {
         // the game Multi Trem presets sit mostly around Speed 0.5-0.8. Make
-        // 0.6 already feel medium-fast while keeping the top end usable.
-        return 0.65f * std::pow(26.0f, speed);
+        // 0.6 already feel medium-fast while keeping the top end usable. The
+        // +0.08 shifts the curve up ~one clock-hour (13:00 now feels like the
+        // old 14:00) without changing the max speed (clamped at 1.0).
+        return 0.54f * std::pow(28.0f, std::fmin(1.0f, rate + 0.08f));
     }
 
     void updateCoeffs()
     {
-        gainA = onePoleCoeffMs(1.3f + 8.0f * (1.0f - waveform), sampleRate);
+        gainA = onePoleCoeffMs(1.1f + 7.5f * (1.0f - wave), sampleRate);
 
         const float dt = 1.0f / sampleRate;
         const float hpHz = 26.0f;
         const float hpRc = 1.0f / (2.0f * kPi * hpHz);
         hpA = hpRc / (hpRc + dt);
 
-        toneA = onePoleCoeffHz(7600.0f - 900.0f * antiLogPot(mix), sampleRate);
+        toneA = onePoleCoeffHz(7900.0f - 850.0f * antiLogPot(depth), sampleRate);
     }
 
     float highPass(float x)
@@ -104,18 +108,18 @@ class MultiTremCore
         const float tri = 1.0f - std::fabs(2.0f * p - 1.0f);
         const float sine = 0.5f + 0.5f * std::sin((p - 0.25f) * 2.0f * kPi);
 
-        const float edge = 0.030f + 0.090f * (1.0f - waveform);
+        const float edge = 0.030f + 0.090f * (1.0f - wave);
         const float rise = smoothstep(p / edge);
         const float fall = 1.0f - smoothstep((p - 0.50f) / edge);
         const float square = clamp01(rise * fall);
 
-        if (waveform < 0.5f)
+        if (wave < 0.5f)
         {
-            const float t = smoothstep(waveform * 2.0f);
+            const float t = smoothstep(wave * 2.0f);
             return tri * (1.0f - t) + sine * t;
         }
 
-        const float t = smoothstep((waveform - 0.5f) * 2.0f);
+        const float t = smoothstep((wave - 0.5f) * 2.0f);
         return sine * (1.0f - t) + square * t;
     }
 
@@ -123,6 +127,7 @@ public:
     void reset()
     {
         phase = 0.0f;
+        controlVoltage = 0.0f;
         gainSmooth = 1.0f;
         hpX1 = hpY1 = toneY = 0.0f;
         updateCoeffs();
@@ -136,19 +141,19 @@ public:
 
     void setSpeed(float v)
     {
-        speed = clamp01(v);
+        rate = clamp01(v);
         updateCoeffs();
     }
 
-    void setMix(float v)
+    void setDepth(float v)
     {
-        mix = clamp01(v);
+        depth = clamp01(v);
         updateCoeffs();
     }
 
-    void setWaveform(float v)
+    void setWave(float v)
     {
-        waveform = clamp01(v);
+        wave = clamp01(v);
         updateCoeffs();
     }
 
@@ -158,19 +163,26 @@ public:
         if (phase >= 1.0f)
             phase -= 1.0f;
 
-        const float depth = 0.05f + 0.95f * antiLogPot(mix);
+        const float amount = 0.05f + 0.95f * antiLogPot(depth);
         const float shape = lfoShape();
-        const float maxCut = 0.90f + 0.08f * waveform;
-        const float targetGain = 1.0f - maxCut * depth * shape;
+        const float maxCut = 0.88f + 0.09f * wave;
+
+        // IC1 M5207L01 is a linear-control dual VCA. The Boss circuit biases
+        // the LFO into a control bus instead of multiplying by a mathematically
+        // perfect oscillator, so smooth and slightly compress the CV.
+        const float targetCv = clamp01(shape * (0.90f + 0.22f * amount));
+        controlVoltage += gainA * (targetCv - controlVoltage);
+        const float vcaCv = controlVoltage / (1.0f + 0.16f * controlVoltage);
+        const float targetGain = 1.0f - maxCut * amount * vcaCv;
         gainSmooth += gainA * (targetGain - gainSmooth);
 
         float x = highPass(in);
         x = lowPass(x);
 
         // TR-2 input/output utility stages are clean, but not perfectly ideal.
-        x = 0.965f * x + 0.035f * softClip(x * (1.18f + 0.18f * depth));
+        x = 0.970f * x + 0.030f * softClip(x * (1.16f + 0.18f * amount));
 
-        const float makeup = 1.0f + 0.06f * depth;
+        const float makeup = 1.0f + 0.045f * amount;
         return softClip(x * gainSmooth * makeup * 1.02f) * 0.985f;
     }
 };
@@ -183,12 +195,12 @@ class MultiTremPlugin : public Plugin
 
     void applyAll()
     {
-        left.setSpeed(params[kSpeed]);
-        right.setSpeed(params[kSpeed]);
-        left.setMix(params[kMix]);
-        right.setMix(params[kMix]);
-        left.setWaveform(params[kWaveform]);
-        right.setWaveform(params[kWaveform]);
+        left.setSpeed(params[kRate]);
+        right.setSpeed(params[kRate]);
+        left.setDepth(params[kDepth]);
+        right.setDepth(params[kDepth]);
+        left.setWave(params[kWave]);
+        right.setWave(params[kWave]);
     }
 
 public:

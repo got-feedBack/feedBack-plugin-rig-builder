@@ -150,7 +150,10 @@ public:
         left.setSeed(0x43483531u);
         right.setSeed(0x43483532u);
         left.setPhaseOffset(0.00f);
-        right.setPhaseOffset(0.50f);
+        // 0.25 (not 0.50): the offset is applied twice (reset seeds lfoPhase AND
+        // process re-adds it), so 0.50 doubled to 1.0 == 0.0 and the two channels
+        // collapsed to MONO. 0.25 -> 0.50 effective = real L/R stereo width.
+        right.setPhaseOffset(0.25f);
         left.setSampleRate((float)getSampleRate());
         right.setSampleRate((float)getSampleRate());
         applyAll();

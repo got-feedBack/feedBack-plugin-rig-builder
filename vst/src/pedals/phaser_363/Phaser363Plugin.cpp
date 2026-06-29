@@ -97,7 +97,7 @@ public:
     {
         hz = clampFreq(hz, sr);
         const float t = std::tan(kPi * hz / sr);
-        const float a = (1.0f - t) / (1.0f + t);
+        const float a = (t - 1.0f) / (t + 1.0f);   // break at fc (the old (1-t)/(1+t) put the corner near Nyquist -> no audible phase shift)
         const float y = a * x + z;
         z = x - a * y;
         return y;
@@ -172,28 +172,33 @@ public:
         const float sine = std::sin(kTwoPi * phase);
         const float lfo = lfoLag.lowPass(std::pow(0.5f + 0.5f * sine, 1.22f));
 
+        // Clean signal path — a Phase 90 is transparent (no input clipping).
         float x = inputHp.highPass(in);
         x = toneLp.lowPass(x);
-        x = std::tanh(x * 1.04f) * 0.96f;
 
-        static const float baseHz[kStageCount] = { 93.0f, 235.0f, 610.0f, 1540.0f };
-        float shifted = x - feedback * 0.34f;
+        // Log-frequency sweep of the 4 all-pass corners THROUGH the guitar
+        // midrange (230 Hz -> ~1.8 kHz) so the notches stay in the audible range
+        // the whole sweep. The old per-stage sweep (0.30..10.2x with smoothstep)
+        // flung the notches 28 Hz..15 kHz and snapped between extremes -> a held
+        // tone barely moved (0.1 dB). Strong feedback adds the resonant peaks that
+        // sweep across the harmonics = the classic, obvious "whoosh".
+        const float fc = 230.0f * std::pow(8.0f, lfo);
+        static const float spread[kStageCount] = { 0.6f, 1.0f, 1.7f, 2.8f };
+        float shifted = x - feedback;
         for (int i = 0; i < kStageCount; ++i)
-        {
-            float stageLfo = lfo + 0.08f * (float)i;
-            if (stageLfo > 1.0f)
-                stageLfo -= 1.0f;
-            const float sweep = 0.30f + 9.90f * smoothstep(stageLfo);
-            shifted = stages[i].process(shifted, sampleRate, baseHz[i] * sweep);
-        }
+            shifted = stages[i].process(shifted, sampleRate, fc * spread[i]);
+        feedback = shifted * 0.70f;   // resonance regen -> audible
 
-        feedback = std::tanh(shifted) * 0.32f;
-        const float wet = std::tanh(shifted * 1.05f);
-        // The dry−wet mix nearly cancels (allpass residual), leaving the output
-        // ~20 dB below the rest of the pedals. Makeup brings it up to the house
-        // ~unity level without changing the phaser's voicing. See AMP_LOUDNESS.md.
-        const float y = (x * 0.70f - wet * 0.84f) * 8.5f;
-        return std::tanh(y * 0.94f) * 0.98f;
+        // Classic Phase 90 mixer: dry + 4-stage all-pass summed equally -> notches
+        // where the all-pass is anti-phase, ~unity broadband. The all-pass is
+        // unity-gain, so NO big makeup / output tanh is needed (the old 8.5x*tanh
+        // hack distorted to 4.4% THD and pushed peaks to -2.8 dBFS). A transparent
+        // soft knee only catches stray peaks.
+        float y = (x + shifted) * 0.5f * 1.05f;
+        const float ay = std::fabs(y);
+        if (ay > 0.80f)
+            y = (y < 0.0f ? -1.0f : 1.0f) * (0.80f + 0.16f * std::tanh((ay - 0.80f) / 0.16f));
+        return y;
     }
 };
 

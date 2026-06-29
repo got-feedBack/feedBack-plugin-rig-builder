@@ -1,9 +1,9 @@
 /*
- * ShaverPhaser - ET-25B style phaser for the game's Pedal_ShaverPhaser.
+ * ShaverPhaser - Boss PH-1R style phaser for Pedal_ShaverPhaser.
  *
- * Local reference: pedals/shaver phaser.jpeg. The schematic uses Rate and
- * Depth around a compact JFET/OTA phase network. the game exposes only those
- * two controls, so mix and feedback are voiced internally.
+ * Local reference: pedals/boss_ph-1r_phaser_pedal.png. The circuit is a
+ * four-stage uPC4558 all-pass phaser whose 2SK30A JFETs are swept by a TL022
+ * LFO/control network. Real controls are Rate, Depth, and Resonance.
  */
 #include "DistrhoPlugin.hpp"
 #include "ShaverPhaserParams.h"
@@ -28,6 +28,11 @@ static inline float smoothstep(float v)
     return v * v * (3.0f - 2.0f * v);
 }
 
+static inline float audioTaper(float v)
+{
+    return std::pow(clamp01(v), 1.65f);
+}
+
 static inline float clampFreq(float hz, float sr)
 {
     const float nyquist = sr * 0.45f;
@@ -42,43 +47,40 @@ static inline float onePoleCoeffHz(float hz, float sr)
     return 1.0f - std::exp(-2.0f * kPi * hz / sr);
 }
 
-class OnePoleFilter
+class OnePole
 {
-    float lp = 0.0f;
-    float hpX1 = 0.0f;
-    float hpY1 = 0.0f;
-    float lpA = 0.0f;
-    float hpA = 0.0f;
+    float z = 0.0f;
+    float a = 0.0f;
 
 public:
-    void reset()
+    void reset() { z = 0.0f; }
+    void setLowPass(float sr, float hz) { a = onePoleCoeffHz(hz, sr); }
+    float process(float x)
     {
-        lp = hpX1 = hpY1 = 0.0f;
+        z += a * (x - z);
+        return z;
     }
+};
 
-    void setLowPass(float sr, float hz)
-    {
-        lpA = onePoleCoeffHz(hz, sr);
-    }
+class HighPass
+{
+    float x1 = 0.0f;
+    float y1 = 0.0f;
+    float a = 0.0f;
 
-    void setHighPass(float sr, float hz)
+public:
+    void reset() { x1 = y1 = 0.0f; }
+    void set(float sr, float hz)
     {
         const float dt = 1.0f / sr;
         const float rc = 1.0f / (2.0f * kPi * clampFreq(hz, sr));
-        hpA = rc / (rc + dt);
+        a = rc / (rc + dt);
     }
-
-    float lowPass(float x)
+    float process(float x)
     {
-        lp += lpA * (x - lp);
-        return lp;
-    }
-
-    float highPass(float x)
-    {
-        const float y = hpA * (hpY1 + x - hpX1);
-        hpX1 = x;
-        hpY1 = y;
+        const float y = a * (y1 + x - x1);
+        x1 = x;
+        y1 = y;
         return y;
     }
 };
@@ -88,16 +90,12 @@ class FirstOrderAllpass
     float z = 0.0f;
 
 public:
-    void reset()
-    {
-        z = 0.0f;
-    }
-
+    void reset() { z = 0.0f; }
     float process(float x, float sr, float hz)
     {
         hz = clampFreq(hz, sr);
         const float t = std::tan(kPi * hz / sr);
-        const float a = (1.0f - t) / (1.0f + t);
+        const float a = (t - 1.0f) / (t + 1.0f);   // FIX: break at fc (was near-Nyquist -> no audible phaser)
         const float y = a * x + z;
         z = x - a * y;
         return y;
@@ -112,26 +110,33 @@ class ShaverPhaserCore
     float phaseOffset = 0.0f;
     float rate = kShaverPhaserDef[kRate];
     float depth = kShaverPhaserDef[kDepth];
+    float resonance = kShaverPhaserDef[kResonance];
 
     FirstOrderAllpass stages[kStageCount];
-    OnePoleFilter inputHp;
-    OnePoleFilter toneLp;
-    OnePoleFilter lfoLag;
+    HighPass inputHp;
+    OnePole inputTone;
+    OnePole lfoLag;
+    OnePole jfetLag;
+    OnePole outputTone;
 
     float lfoPhase = 0.0f;
     float feedback = 0.0f;
+    float jfetCv = 0.5f;
 
     void updateFilters()
     {
         const float d = smoothstep(depth);
-        inputHp.setHighPass(sampleRate, 30.0f);
-        toneLp.setLowPass(sampleRate, 6500.0f - 1450.0f * d);
-        lfoLag.setLowPass(sampleRate, 5.5f + 22.0f * rate);
+        const float r = smoothstep(resonance);
+        inputHp.set(sampleRate, 28.0f);
+        inputTone.setLowPass(sampleRate, 7600.0f - 900.0f * d - 450.0f * r);
+        outputTone.setLowPass(sampleRate, 8200.0f - 1050.0f * r);
+        lfoLag.setLowPass(sampleRate, 4.0f + 19.0f * rate);
+        jfetLag.setLowPass(sampleRate, 30.0f);
     }
 
     float currentRateHz() const
     {
-        return 0.075f + 6.40f * std::pow(clamp01(rate), 1.52f);
+        return 0.055f + 7.10f * audioTaper(rate);
     }
 
 public:
@@ -144,11 +149,14 @@ public:
     {
         lfoPhase = phaseOffset;
         feedback = 0.0f;
+        jfetCv = 0.5f;
         for (int i = 0; i < kStageCount; ++i)
             stages[i].reset();
         inputHp.reset();
-        toneLp.reset();
+        inputTone.reset();
         lfoLag.reset();
+        jfetLag.reset();
+        outputTone.reset();
         updateFilters();
     }
 
@@ -170,39 +178,58 @@ public:
         updateFilters();
     }
 
+    void setResonance(float v)
+    {
+        resonance = clamp01(v);
+        updateFilters();
+    }
+
     float process(float in)
     {
         lfoPhase += currentRateHz() / sampleRate;
         if (lfoPhase >= 1.0f)
             lfoPhase -= std::floor(lfoPhase);
 
-        const float d = 0.04f + 0.96f * smoothstep(depth);
+        const float d = 0.10f + 0.90f * smoothstep(depth);
+        const float r = smoothstep(resonance);
         const float phase = lfoPhase + phaseOffset;
+        const float tri = 1.0f - 4.0f * std::fabs((phase - std::floor(phase)) - 0.5f);
         const float sine = std::sin(kTwoPi * phase);
-        const float lfo = lfoLag.lowPass(0.5f + 0.5f * (0.74f * sine + 0.26f * std::sin(kTwoPi * (phase * 2.0f + 0.29f))));
+        const float rawLfo = 0.5f + 0.5f * (0.63f * sine + 0.37f * tri);
+        const float lfo = lfoLag.process(clamp01(rawLfo));
 
-        float x = inputHp.highPass(in);
-        x = toneLp.lowPass(x);
-        x = std::tanh(x * 1.04f) * 0.96f;
+        // PH-1R selected 2SK30A-GR/Y FETs act as voltage-controlled resistors.
+        // This maps the TL022 LFO voltage into a broad but bounded VCR range.
+        const float centre = 0.50f + (lfo - 0.5f) * d;
+        jfetCv = jfetLag.process(clamp01(centre));
+        const float fetShape = std::pow(jfetCv, 1.22f);
 
-        static const float baseHz[kStageCount] = { 95.0f, 235.0f, 620.0f, 1500.0f };
-        float shifted = x - feedback * (0.13f + 0.23f * d);
+        // Clean path — a PH-1R phaser is transparent (no input clipping).
+        float x = inputHp.process(in);
+        x = inputTone.process(x);
+
+        static const float baseHz[kStageCount] = { 105.0f, 245.0f, 565.0f, 1320.0f };
+        float shifted = x - feedback * (0.20f + 0.55f * r);   // Resonance -> notch depth
         for (int i = 0; i < kStageCount; ++i)
         {
-            float stageLfo = lfo + 0.10f * (float)i;
-            if (stageLfo > 1.0f)
-                stageLfo -= 1.0f;
-            const float sweep = 0.32f + (8.2f + 2.4f * d) * smoothstep(stageLfo);
+            float cv = fetShape + 0.075f * (float)i;
+            if (cv > 1.0f)
+                cv -= 1.0f;
+            const float sweep = 0.34f + (8.7f + 4.4f * d) * smoothstep(cv);
             shifted = stages[i].process(shifted, sampleRate, baseHz[i] * sweep);
         }
 
-        feedback = std::tanh(shifted) * (0.20f + 0.16f * d);
-        const float wet = std::tanh(shifted * (1.02f + 0.10f * d));
-        const float fixedMix = 0.50f + 0.32f * d;
-        // dry−wet allpass residual sits ~22 dB below the other pedals; makeup
-        // brings it to the house ~unity level without changing voicing.
-        const float y = (x * (0.86f - 0.20f * fixedMix) - wet * (0.56f + 0.34f * fixedMix)) * 13.0f;
-        return std::tanh(y * 0.94f) * 0.98f;
+        feedback = std::tanh(shifted);                 // regen only (bounded, not in the wet path)
+        const float wet = outputTone.process(shifted); // clean all-pass output
+
+        // Clean dry + all-pass mix (~unity). The old x*0.82 - wet*amt then
+        // tanh(y*5.10) ran a 5.1x makeup into a tanh -> 2.2% THD on hot signals
+        // and squashed peaks. A transparent soft knee only catches stray peaks.
+        float y = (x + wet) * 0.5f * 1.05f;
+        const float ay = std::fabs(y);
+        if (ay > 0.80f)
+            y = (y < 0.0f ? -1.0f : 1.0f) * (0.80f + 0.16f * std::tanh((ay - 0.80f) / 0.16f));
+        return y;
     }
 };
 
@@ -218,6 +245,8 @@ class ShaverPhaserPlugin : public Plugin
         right.setRate(params[kRate]);
         left.setDepth(params[kDepth]);
         right.setDepth(params[kDepth]);
+        left.setResonance(params[kResonance]);
+        right.setResonance(params[kResonance]);
     }
 
 public:
@@ -227,7 +256,7 @@ public:
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kShaverPhaserDef[i];
         left.setPhaseOffset(0.00f);
-        right.setPhaseOffset(0.02f);
+        right.setPhaseOffset(0.018f);
         left.setSampleRate((float)getSampleRate());
         right.setSampleRate((float)getSampleRate());
         applyAll();
@@ -235,10 +264,10 @@ public:
 
 protected:
     const char* getLabel() const override { return "ShaverPhaser"; }
-    const char* getDescription() const override { return "ET-25B style phaser"; }
+    const char* getDescription() const override { return "Boss PH-1R style JFET phaser"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('S', 'h', 'P', 'h'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

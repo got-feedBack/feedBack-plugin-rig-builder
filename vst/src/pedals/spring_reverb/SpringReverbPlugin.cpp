@@ -244,6 +244,7 @@ class SpringReverbCore
     Biquad dripB;
 
     AllpassDelay allpasses[kAllpassCount];
+    AllpassDelay dispersion[5];          // dispersive chain -> the spring "boing"/chirp
     DampedComb combs[kCombCount];
 
     float fastEnv = 0.0f;
@@ -259,6 +260,18 @@ class SpringReverbCore
         const float apFeedback = 0.58f + 0.16f * depth;
         for (int i = 0; i < kAllpassCount; ++i)
             allpasses[i].set(sampleRate, apMs[i] * stereoSkew, apFeedback);
+
+        // Dispersive allpass chain: HF travels faster than LF through a real
+        // spring, producing the signature "boing" chirp (frequency-dependent
+        // group delay). Depth widens the chirp. Feeds the comb tank so every
+        // reflection inherits the spring smear.
+        for (int i = 0; i < 5; ++i)
+        {
+            const float stage = (float)i + 1.0f;
+            const float dispMs = (1.6f + 1.15f * stage) * (1.0f + 0.45f * depth);
+            const float dispFb = 0.62f + 0.05f * (float)i;
+            dispersion[i].set(sampleRate, dispMs * stereoSkew, dispFb);
+        }
 
         for (int i = 0; i < kCombCount; ++i)
             combs[i].setDelay(sampleRate, combMs[i] * stereoSkew);
@@ -303,6 +316,8 @@ public:
         dripB.reset();
         for (int i = 0; i < kAllpassCount; ++i)
             allpasses[i].reset();
+        for (int i = 0; i < 5; ++i)
+            dispersion[i].reset();
         for (int i = 0; i < kCombCount; ++i)
             combs[i].reset();
     }
@@ -312,6 +327,8 @@ public:
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
         for (int i = 0; i < kAllpassCount; ++i)
             allpasses[i].prepare(sampleRate, 40.0f);
+        for (int i = 0; i < 5; ++i)
+            dispersion[i].prepare(sampleRate, 20.0f);
         for (int i = 0; i < kCombCount; ++i)
             combs[i].prepare(sampleRate, 120.0f);
         updateDelayTimes();
@@ -360,6 +377,10 @@ public:
         for (int i = 0; i < 2; ++i)
             tankIn = allpasses[i].process(tankIn);
 
+        // Spring dispersion ("boing"): chirp the excitation before the tank.
+        for (int i = 0; i < 5; ++i)
+            tankIn = dispersion[i].process(tankIn);
+
         float tank = 0.0f;
         tank += combs[0].process(tankIn) * 0.90f;
         tank += combs[1].process(tankIn) * -0.72f;
@@ -376,11 +397,18 @@ public:
         wet = tankLp.process(wet);
         wet += drip * (0.026f + 0.030f * depth);
 
-        // the game uses large Mix values on normal guitar tones, so this must
-        // behave like a pedal blend that keeps the dry guitar present.
-        const float dryLevel = 1.0f - 0.22f * mix;
-        const float wetLevel = mix * (0.54f + 0.48f * depth);
+        // Equal-power dry/wet crossfade keeps the dry guitar present at typical
+        // Mix and the loudness ~constant. The spring's raw wet is low-level, so
+        // boost it to be clearly audible; a soft limiter then only tames the
+        // wet-heavy (high-Mix) peaks. The dry guitar (peak ~0.2) sits well below
+        // the knee so it is never touched -> no dry squashing, no hot full-Mix.
+        const float a = std::pow(mix, 1.9f) * 1.5707963f;   // gentler Mix taper: 1/4 knob ~subtle, not near-full
+        const float dryLevel = std::cos(a);
+        const float wetLevel = std::sin(a) * (1.45f + 0.25f * depth);
         float y = dry * dryLevel + wet * wetLevel;
+        const float ay = std::fabs(y);
+        if (ay > 0.50f)
+            y = (y < 0.0f ? -1.0f : 1.0f) * (0.50f + 0.20f * std::tanh((ay - 0.50f) / 0.20f));
         return y * 0.96f;
     }
 };

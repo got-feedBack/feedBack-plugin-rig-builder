@@ -1,7 +1,8 @@
 /*
  * AmpTrem - Demeter Tremulator-style optical amp tremolo for the game's
- * Pedal_AmpTrem. The local schematic shows an op-amp LFO driving an LED/LDR
- * optocoupler into a TL061 audio stage. the game exposes Speed and Depth.
+ * Pedal_AmpTrem. The local schematic is a Demeter Tremulator: LF442/LF351
+ * oscillator stages drive a 1N5229-clamped LED into a VTL5C1 optocoupler, then
+ * a TL061 audio gain stage. Real controls are Speed and Depth.
  */
 #include "DistrhoPlugin.hpp"
 #include "AmpTremParams.h"
@@ -58,6 +59,7 @@ class AmpTremCore
 
     float phase = 0.0f;
     float lamp = 0.0f;
+    float ledCurrent = 0.0f;
     float gainSmooth = 1.0f;
     float hpX1 = 0.0f;
     float hpY1 = 0.0f;
@@ -114,6 +116,7 @@ public:
     {
         phase = phaseOffset;
         lamp = 0.0f;
+        ledCurrent = 0.0f;
         gainSmooth = 1.0f;
         hpX1 = hpY1 = toneY = 0.0f;
         updateCoeffs();
@@ -146,18 +149,28 @@ public:
         const float sine = std::sin((phase + phaseOffset) * 2.0f * kPi);
         const float tri = 1.0f - std::fabs(2.0f * (phase - std::floor(phase + 0.5f)));
         float led = 0.58f * (0.5f + 0.5f * sine) + 0.42f * tri;
-        led = smoothstep(std::pow(clamp01(led), 1.05f));
 
-        const float lampA = led > lamp ? lampRiseA : lampFallA;
-        lamp += lampA * (led - lamp);
+        // LF442/LF351 LFO is clipped by the 1N5229 zener path before the
+        // optocoupler LED. This gives the Tremulator its rounded top instead
+        // of a mathematically clean sine/triangle.
+        led = smoothstep(std::pow(clamp01(led), 1.05f));
+        led = led / (1.0f + 0.22f * led);
+        ledCurrent += onePoleCoeffMs(2.2f, sampleRate) * (led - ledCurrent);
+
+        const float lampA = ledCurrent > lamp ? lampRiseA : lampFallA;
+        lamp += lampA * (ledCurrent - lamp);
 
         // The schematic's Depth control sits after the opto stage. In
         // practice it behaves closer to an anti-log response than a linear
         // "percentage" knob: the middle of the travel should already pulse.
         const float d = 0.08f + 0.92f * antiLogPot(depth);
-        const float optoCurve = std::pow(clamp01(lamp * 1.16f), 0.50f);
-        const float floor = 0.94f - 0.91f * d;
-        const float targetGain = floor + (1.0f - floor) * (1.0f - optoCurve);
+
+        // VTL5C1 LDR conductance rises with the lamp light and dips the gain.
+        // Modulate directly: the old optoCurve = ldr/(0.10+ldr) sat in a
+        // saturated region and only produced ~1.7 dB even at full Depth ("no
+        // suena con tremolo"). This reaches a deep, audible tremolo.
+        const float ldrConductance = std::pow(clamp01(lamp * 1.30f), 0.62f);
+        const float targetGain = 1.0f - (0.92f * d) * ldrConductance;
         gainSmooth += gainA * (targetGain - gainSmooth);
 
         float x = highPass(in);

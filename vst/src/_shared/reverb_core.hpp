@@ -114,7 +114,11 @@ public:
         // per-rack subtlety cap (JF). Then an equal-power (cos/sin) crossfade keeps
         // the output loudness ~constant across Mix (no "wet way louder" / "19% =
         // full room", and Mix no longer changes the volume).
-        const float wetLevel = (1.0f - feedback) * 0.85f;
+        // Wet level-match with a floor: the old (1-feedback)*0.85 nearly muted the
+        // tail at long decay (feedback 0.975 -> 0.021), so Time changed LEVEL not
+        // just decay. Keep the same level at short/medium decay but add a floor so
+        // long decays stay audible (0.975 -> ~0.07 instead of 0.021).
+        const float wetLevel = (1.0f - feedback) * 0.41f + 0.06f;
         float m = ((mixP < 0.f) ? 0.f : (mixP > 1.f ? 1.f : mixP)) * wetMax;
         const float a = m * 1.5707963f;
         dryMix = std::cos(a);

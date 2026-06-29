@@ -112,7 +112,7 @@ public:
         const float dryLevel = 0.86f * (1.0f - 0.80f * vib);
         const float wetLevel = 0.20f + 0.82f * vib;
         const float y = dryLevel * in + wetLevel * wet;
-        return rbmod::softClip(y * 0.94f) * 0.97f;
+        return rbmod::softClip(y * 0.94f) * 1.22f;   // +2 dB to level-match the chorus group
     }
 };
 

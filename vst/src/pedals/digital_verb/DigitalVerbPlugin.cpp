@@ -430,11 +430,22 @@ public:
         wet = toneTilt + (wet - toneTilt) * (0.08f + 0.42f * bright);
         wet = airLp.process(wet);
 
-        const float density = 0.58f + 0.28f * d + 0.14f * t;
-        const float dryLevel = 1.0f - 0.46f * mix;
-        const float wetLevel = mix * density;
-        const float outTrim = 0.985f - 0.030f * mix;
-        return (dry * dryLevel + wet * wetLevel) * outTrim;
+        // Equal-power dry/wet crossfade (consistent with the other reverb pedals):
+        // keeps the loudness ~constant and allows a true 100% wet at full Mix (the
+        // old law floored the dry at 0.54). density tracks the tail richness.
+        // density tracks tail richness; the 2.6x lifts the intrinsically quiet
+        // digital tank to sit in the same ballpark as the other reverb pedals.
+        const float density = (0.58f + 0.28f * d + 0.14f * t) * 2.6f;
+        const float a = std::pow(mix, 1.9f) * 1.5707963f;   // gentler Mix taper: 1/4 knob ~subtle, not near-full
+        const float dryLevel = std::cos(a);
+        const float wetLevel = std::sin(a) * density;
+        float y = (dry * dryLevel + wet * wetLevel) * 0.985f;
+        // Safety soft limiter for long/dense (high Time/Depth) wet-heavy peaks; the
+        // dry guitar (peak ~0.2) stays below the knee, so it is never touched.
+        const float ay = std::fabs(y);
+        if (ay > 0.55f)
+            y = (y < 0.0f ? -1.0f : 1.0f) * (0.55f + 0.24f * std::tanh((ay - 0.55f) / 0.24f));
+        return y;
     }
 };
 

@@ -97,7 +97,7 @@ public:
     {
         hz = clampFreq(hz, sr);
         const float t = std::tan(kPi * hz / sr);
-        const float a = (1.0f - t) / (1.0f + t);
+        const float a = (t - 1.0f) / (t + 1.0f);   // FIX: break at fc (was near-Nyquist -> no audible phaser)
         const float y = a * x + z;
         z = x - a * y;
         return y;
@@ -221,8 +221,11 @@ public:
         const float jet = shifted - driven * (0.18f + 0.12f * d);
         const float wet = outputLp.lowPass(std::tanh(jet * (1.08f + 0.24f * m)));
 
-        const float dryLevel = 1.0f - 0.30f * m;
-        const float wetLevel = (0.34f + 1.05f * m) * m;
+        // Tamed Mix: the old wetLevel (0.34+1.05*m)*m hit 1.39 at full Mix, so the
+        // notch overwhelmed the dry and the effect pumped "seasick" past Mix ~0.6.
+        // Keep more dry and grow the wet gentler so high Mix is deep but musical.
+        const float dryLevel = 1.0f - 0.12f * m;
+        const float wetLevel = (0.26f + 0.44f * m) * m;
         const float y = driven * dryLevel - wet * wetLevel;
         return std::tanh(y * 0.93f) * 0.98f;
     }
