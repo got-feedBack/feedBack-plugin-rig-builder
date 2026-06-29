@@ -108,7 +108,7 @@ protected:
         const float* inR = inputs[1];
         float* outL = outputs[0];
         float* outR = outputs[1];
-        const float level = 1.62f * params[kLevel];
+        const float level = 1.15f * params[kLevel];
         float ubL[kOS];
         float ubR[kOS];
 

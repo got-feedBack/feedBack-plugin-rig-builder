@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/BLACKBRASS.so</key>
+		<key>x86_64-linux/BassOverdrive.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			cCH6A6Zjmi/lKGmsJcU6m9cVySJMDBkwkCBpqxX31S4=
+			C3rPInOb+ST/JbOt2Zp+Llt2KbrEUcWHH541XONQyhs=
 			</data>
 		</dict>
-		<key>x86_64-win/BLACKBRASS.vst3</key>
+		<key>x86_64-win/BassOverdrive.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			0K5bwmJiP1ColEAMDIo7TR16SuOln8t5f7KVZcH2KZw=
+			/EjXHOdvueyyAtk7YrZGl9/pNdSrMzSSHCCR6svFO5U=
 			</data>
 		</dict>
 	</dict>

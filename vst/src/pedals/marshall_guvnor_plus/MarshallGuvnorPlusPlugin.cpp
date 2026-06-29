@@ -111,7 +111,7 @@ protected:
         const float* inR = inputs[1];
         float* outL = outputs[0];
         float* outR = outputs[1];
-        const float volume = 1.62f * params[kVolume];
+        const float volume = 0.95f * params[kVolume];
         float ubL[kOS];
         float ubR[kOS];
 

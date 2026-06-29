@@ -9,6 +9,7 @@
 #include "BassDistortionParams.h"
 #include "../_shared/opamp.hpp"
 #include "../_shared/semiconductors.hpp"
+#include "../_shared/oversampler.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -77,7 +78,7 @@ public:
         const float dark = audioTaper(filter);
         const float cutoff = 6800.0f - 5850.0f * dark;
         cFilter = onePoleCoef(cutoff, fs);
-        outputGain = 2.25f * audioTaper(volume);
+        outputGain = 1.2f * audioTaper(volume);
     }
 
     float process(float x)
@@ -103,6 +104,8 @@ public:
 class BassDistortionPlugin : public Plugin
 {
     Rat L, R;
+    rbshared::Oversampler4x osL, osR;
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
     float fParams[kParamCount];
 
     void recalc()
@@ -118,8 +121,8 @@ public:
         for (int i = 0; i < kParamCount; ++i)
             fParams[i] = kBassDistortionDef[i];
         const float sr = (float)getSampleRate();
-        L.setSampleRate(sr);
-        R.setSampleRate(sr);
+        L.setSampleRate(kOS * sr);
+        R.setSampleRate(kOS * sr);
         recalc();
     }
 
@@ -159,8 +162,10 @@ protected:
 
     void sampleRateChanged(double r) override
     {
-        L.setSampleRate((float)r);
-        R.setSampleRate((float)r);
+        osL.reset();
+        osR.reset();
+        L.setSampleRate(kOS * (float)r);
+        R.setSampleRate(kOS * (float)r);
         recalc();
     }
 
@@ -170,10 +175,19 @@ protected:
         const float* iR = in[1];
         float* oL = out[0];
         float* oR = out[1];
+        float ubL[kOS];
+        float ubR[kOS];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            oL[i] = L.process(iL[i]);
-            oR[i] = R.process(iR[i]);
+            osL.upsample(iL[i], ubL);
+            osR.upsample(iR[i], ubR);
+            for (int k = 0; k < kOS; ++k)
+            {
+                ubL[k] = L.process(ubL[k]);
+                ubR[k] = R.process(ubR[k]);
+            }
+            oL[i] = osL.downsample(ubL);
+            oR[i] = osR.downsample(ubR);
         }
     }
 

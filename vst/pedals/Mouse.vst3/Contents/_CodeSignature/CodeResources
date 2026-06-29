@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/Mouse.so</key>
+		<key>x86_64-linux/BassDistortion.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			T2arNVbFkfmgtXqe33IDSslbEjeYpp6QXjjirUtVDY0=
+			K1zeuG61qGhkR9JyYC4bZBR67c02jNIVq0A8OPZYaqA=
 			</data>
 		</dict>
-		<key>x86_64-win/Mouse.vst3</key>
+		<key>x86_64-win/BassDistortion.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			8XRtkuFvtMCpVAi6+Yy9kxLXqWV/IvlKoZYbulv4oUw=
+			1oyYWjLrspwOfOaXTgyHs3az0ahFaV4ThuOgvIvInmo=
 			</data>
 		</dict>
 	</dict>

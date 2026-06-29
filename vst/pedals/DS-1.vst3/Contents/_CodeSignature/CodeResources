@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/DS-1.so</key>
+		<key>x86_64-linux/StandardDistortion.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			wxkuYzctVV8tR0omrMuYdPeKSHzsIzuUOmQ5RBp6TR4=
+			Nj6Vh6Pe7GzJ1OohkE/uUr2FiMUs0GuE6rge8McHaKo=
 			</data>
 		</dict>
-		<key>x86_64-win/DS-1.vst3</key>
+		<key>x86_64-win/StandardDistortion.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			phvLW5d6cmi9zffEtwVZtUTnZB5Dj85PrOQNoco05nc=
+			JIad89seOFx+BTZPGBC10c31p4e7VT7CGJ/Qnu0tEvs=
 			</data>
 		</dict>
 	</dict>
