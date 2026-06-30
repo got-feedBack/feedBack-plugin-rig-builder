@@ -306,16 +306,16 @@ participants at runtime when `rbInit()` runs:
   `song:loaded`/`song:unloaded` hooks remain as fallback while the backend is
   still filename-keyed.
 - `jobs`: `rig_builder.jobs` wraps batch mapping, curated preloads,
-  candidate downloads, extraction, export, purge, and similar long-running
+  candidate downloads, export, purge, and similar long-running
   backend work with safe job labels/progress/completion. The real work still
   lives in existing FastAPI routes.
 - `privileged-capabilities`: manifest + runtime participants inventory
   backend routes, tone3000 external-service access, media import/export, and
-  subprocess-backed the game extractors.
+  subprocess execution.
 
 Privacy rule: diagnostics must never include local paths, filenames, NAM/IR
 model names, preset names, VST paths/state, OAuth tokens, tone3000 URLs, raw
-route payloads, audio buffers, or user-entered PSARC paths. Use
+route payloads, or audio buffers. Use
 `rbChainCapabilitySummary()` and `rbShortSafeText()` for any new capability
 reporting; do not pass raw `native_preset`, route responses, `rs_gear`, file
 fields, or settings objects into capability hosts.
@@ -363,7 +363,7 @@ Migration gates still expected:
 - Long-running routes are attributed through `jobs` but not moved into a
   first-class job queue yet; removing `jobs.legacy-*` bridge hits requires the
   backend routes to accept job IDs / cancellation directly.
-- tone3000 OAuth/downloads and extractors are visible user-triggered flows;
+- tone3000 OAuth/downloads are visible user-triggered flows;
   keep any future background automation behind explicit approval or safe
   diagnostics-only bridge accounting.
 
@@ -384,8 +384,8 @@ may remain as the implementation behind native capability handlers.
 | Library | Manifest + runtime `library` requester/observer exists; Songs tab uses `/api/library?provider=...`; provider refresh/selection/sync go through the `library` owner command. | Keep all song search/sync flows on the library owner/provider contract; do not reintroduce a Rig Builder local song scanner. |
 | Playback | Manifest + runtime `playback` observer exists; playback v1 `ready`/`stopped`/`ended` events keep mega-chain lifecycle aligned when local filename fallback is available. Tone saves write the core audio-effects mapping index using the active playback `settingsKey` when known and filename otherwise. Legacy `tone_mappings` fallbacks are counted as `audio-effects.legacy-tone-db` bridge hits. | Complete the read-side migration so playback observers and the future host Amp UI select provider refs from core mappings first, with filename/legacy table rows only as import fallback. |
 | Audio effects | `rig_builder.effects` registers as an executable provider for the extracted audio-effects host and returns safe chain plans while keeping raw chain payloads provider-private. Saved mappings are indexed in core as `preset:<id>` refs. Direct Desktop `loadPreset` fallbacks are counted as `audio-effects.legacy-native-load` bridge hits. | NAM/player code asks the selected `audio-effects` provider for the active Rig Builder chain/route directly, keeps provider-private chain payloads out of diagnostics, and falls back to the existing 2-stage preset path; no fetch monkey-patch. |
-| Jobs | Long-running UI actions are wrapped with job labels/progress where possible; backend routes still execute the real work. | Batch, preload, extraction, export, purge, and downloads are dispatched through `jobs` provider handlers with job IDs, cancellation, and safe recovery refs. |
-| Privileged work | Backend routes, tone3000, media import/export, and extractors are inventoried in `privileged-capabilities`. | Privileged operations are authorized and audited through the host before route execution, then linked to `jobs` when long-running. |
+| Jobs | Long-running UI actions are wrapped with job labels/progress where possible; backend routes still execute the real work. | Batch, preload, export, purge, and downloads are dispatched through `jobs` provider handlers with job IDs, cancellation, and safe recovery refs. |
+| Privileged work | Backend routes, tone3000, and media import/export are inventoried in `privileged-capabilities`. | Privileged operations are authorized and audited through the host before route execution, then linked to `jobs` when long-running. |
 | Diagnostics | Safe summaries are emitted for chains/jobs/privileged outcomes; avoid paths, filenames, tokens, model names, route payloads. | Support snapshots explain all capability state and bridge hits without exposing provider-private data. |
 
 ### Migration phases
@@ -396,13 +396,13 @@ may remain as the implementation behind native capability handlers.
 
 3. **Replace the NAM fetch bridge.** Use the extracted core `audio-effects` host for provider selection, mapping lookup, and executable chain resolution during `nam_tone` playback. Rig Builder already exposes provider handlers that return safe chain plans for a preset or current song tone; `nam_tone` should request the selected provider ref instead of Rig Builder monkey-patching `window.fetch`. Core must store only mapping refs and safe summaries/outcomes, not raw returned chain payloads. Removal gate: normal song playback, Listen preview, mega-chain/preloader mode, bypass toggles, and fallback-to-2-stage all work with zero `audio-effects.legacy-nam-routing` bridge hits.
 
-4. **Move long-running work behind `jobs`.** Convert each expensive action into a job-capable backend entry point: batch map, curated preload, candidate download/audition, song auto-download, the game extraction, default export, library purge, and any future VST scan/import work. The UI should enqueue through `jobs`, receive a job ID, update progress through the host, and support cancellation where the backend can safely stop. Route responses should expose safe summaries only, never raw file paths, tone3000 URLs, model names, or subprocess command lines.
+4. **Move long-running work behind `jobs`.** Convert each expensive action into a job-capable backend entry point: batch map, curated preload, candidate download/audition, song auto-download, default export, library purge, and any future VST scan/import work. The UI should enqueue through `jobs`, receive a job ID, update progress through the host, and support cancellation where the backend can safely stop. Route responses should expose safe summaries only, never raw file paths, tone3000 URLs, model names, or subprocess command lines.
 
-5. **Put privileged actions behind policy.** tone3000 OAuth/request/download, native file pickers, PSARC/IR extraction, DB writes, media import/export, and subprocess execution should check the privileged host before they run. Long-running privileged actions must link the authorization record to the `jobs` job ID. Removal gate: background/unconfirmed execution is blocked, user-action flows are accepted, and diagnostics show authorized/blocked/degraded outcomes without raw payloads.
+5. **Put privileged actions behind policy.** tone3000 OAuth/request/download, native file pickers, DB writes, media import/export, and subprocess execution should check the privileged host before they run. Long-running privileged actions must link the authorization record to the `jobs` job ID. Removal gate: background/unconfirmed execution is blocked, user-action flows are accepted, and diagnostics show authorized/blocked/degraded outcomes without raw payloads.
 
 6. **Retire legacy UI compatibility.** When Slopsmith's UI hosts are the only supported path, remove reliance on legacy manifest `nav`/`screen` behavior and any direct DOM/global registrations that duplicate native contributions. Native records must continue to mount exactly once after reload, plugin screen navigation, and repeated plugin script hydration.
 
-7. **Tighten diagnostics and tests.** Add focused smoke tests or manual release checks for: provider selector local/remote search; remote sync to local filename; multi-NAM playback chain; bypass persistence; mega-chain mode; batch map progress/failure; tone3000 disconnected/offline; extraction failure; app restart/reload idempotency; and Capability Inspector output. Support snapshots must remain under the host caps and exclude local paths, filenames, tokens, URLs, model/IR names, VST paths/state, raw chain payloads, recordings, and subprocess details.
+7. **Tighten diagnostics and tests.** Add focused smoke tests or manual release checks for: provider selector local/remote search; remote sync to local filename; multi-NAM playback chain; bypass persistence; mega-chain mode; batch map progress/failure; tone3000 disconnected/offline; app restart/reload idempotency; and Capability Inspector output. Support snapshots must remain under the host caps and exclude local paths, filenames, tokens, URLs, model/IR names, VST paths/state, raw chain payloads, recordings, and subprocess details.
 
 ### Done definition
 
@@ -526,9 +526,9 @@ get by with just `clean` + `crunch`.
 
 ---
 
-## v1.1.0 (2026-05-26) — OAuth login + smart batch + file picker
+## v1.1.0 (2026-05-26) — OAuth login + smart batch
 
-Three changes since the 1.0.0 release. All plugin-only.
+Two changes since the 1.0.0 release. All plugin-only.
 
 ### tone3000 auth is now OAuth (no pasted secret)
 
@@ -598,13 +598,6 @@ piece (assigned_mode, tone3000_id, params, vst fields). `Map new` still skips
 already-mapped tones entirely; `Remap all` refreshes auto pieces but preserves
 all manual ones.
 
-### Native file picker
-
-`Browse…` buttons next to the two `gears.psarc` inputs (Regenerate gear map,
-Extract the game IRs) call `window.feedBackDesktop.pickFile([...])` (the
-host's `dialog:pickFile` IPC — same one `audio_engine` uses) →
-`rbBrowseForPsarc`. Degrades to manual entry if no desktop bridge.
-
 ---
 
 ## What the user wanted
@@ -624,8 +617,6 @@ Confirmed design decisions (in conversation, before code):
   when available (not one full-rig capture).
 - **Manual deep-link as default**, **automatic batch as opt-in** once an
   API key is configured.
-- **Extract the game's own IRs from the game** for cabs/pedals/racks
-  where possible (deferred — see "v2 work" below).
 - **Conservative auto policy**: CC0/CC-BY licenses only, ≥50 downloads,
   prefer standard-size captures.
 - **Batch over the whole library** (no setlist selector — just one
@@ -638,10 +629,10 @@ Confirmed design decisions (in conversation, before code):
 ```
 plugins/rig_builder/
 ├── plugin.json              # nav: "Rig Builder", screen, script, routes
-├── extract_gear_map.py      # standalone script: gears.psarc → rs_to_real.json
-├── extract_irs.py           # standalone script: gears.psarc → 444 cab IRs as .wav
-├── rs_to_real.json          # 613 entries: pseudonym/real RS gear → make/model + tone3000 search hints
-├── rs_cab_to_ir.json        # 444 entries: RS cab entity → list of extracted IR file paths
+├── data/                    # bundled, pre-generated lookup maps:
+│   ├── rs_to_real.json      #   RS gear → make/model + tone3000 search hints
+│   ├── rs_cab_to_ir.json    #   RS cab entity → cab-IR lookup
+│   └── rs_cab_mic_map.json  #   RS cab → mic-position IR map
 ├── tone3000_client.py       # REST client + deep-link builder, sqlite cache
 ├── routes.py                # FastAPI endpoints + DB migration + batch worker
 ├── screen.html              # 4-tab UI shell
@@ -649,12 +640,7 @@ plugins/rig_builder/
 └── HANDOFF.md               # this file
 ```
 
-Total ~50 KB of code + ~360 KB of generated JSON.
-
-The extracted IRs themselves live in
-`<config_dir>/nam_irs/rocksmith/*.wav` (~16 MB, 444 files, 48 kHz mono
-float32) — outside the plugin dir on purpose, so the nam_tone runtime
-finds them through its normal IR resolution path.
+Total ~50 KB of code + ~360 KB of pre-generated JSON.
 
 ---
 
@@ -747,38 +733,33 @@ When we save a preset, we pick the **amp slot's NAM** as `model_file`
 
 ## the game gear naming
 
-the game ships `gears.psarc` containing 613 gear entities. Each has:
+The shipped `rs_to_real.json` maps 613 game gear entities to real
+make/model, keyed by entity name. Each entity name is in one of two
+formats:
 
-- An entity name in one of two formats:
-  - **Real-brand** — e.g. `Amp_Marshall1962Bluesbreaker`,
-    `Amp_MarshallJVM410H`. ~32 of 60 amps are like this.
-  - **Pseudonym** — e.g. `Amp_AT120`, `Amp_BT45`, `Amp_CA100` —
-    licensed-but-anonymized; the in-game art is modeled on a real amp
-    the community has documented.
-- A `ThreeDArtAsset` URN whose slug often carries the real make/model
-  (`marshall-bluesbreaker`, `epiphone-zephyr-amp20`) — even when the
-  entity name is a pseudonym.
-- A `SoundBank` URN pointing at a Wwise `.bnk` file inside `gears.psarc`
-  (relevant for the v2 IR-extraction work below).
+- **Real-brand** — e.g. `Amp_Marshall1962Bluesbreaker`,
+  `Amp_MarshallJVM410H`. ~32 of 60 amps are like this.
+- **Pseudonym** — e.g. `Amp_AT120`, `Amp_BT45`, `Amp_CA100` —
+  licensed-but-anonymized; the in-game art is modeled on a real amp
+  the community has documented.
 
-`extract_gear_map.py` parses every `gamexblocks/ngears/*.xblock` file
-in `gears.psarc` and produces `rs_to_real.json` keyed by entity name.
-It uses three signal sources, in priority order:
+The map ships **pre-generated** with the plugin. Each mapping was
+derived from three signal sources, in priority order:
 
 1. A known brand prefix in the entity name (`Marshall`, `Fender`,
    `Vox`, `Mesa`, etc.).
-2. A hardcoded `_PSEUDONYM_OVERRIDES` dict for the AT/BT/CA/EN/HG/TW
+2. A hardcoded pseudonym-override table for the AT/BT/CA/EN/HG/TW
    amp series (community-documented best-guesses).
-3. The 3D art asset slug as a fallback.
+3. The 3D art asset slug as a fallback (the entity's `ThreeDArtAsset`
+   slug often carries the real make/model, e.g. `marshall-bluesbreaker`,
+   `epiphone-zephyr-amp20`, even when the entity name is a pseudonym).
 
 The output is **plain JSON** — editable by hand to fix any specific
-mapping. To regenerate after editing the script's overrides, use the
-"Regenerate gear map" button in the Settings tab (calls
-`/api/plugins/rig_builder/extract_gear_map`).
+mapping.
 
-**Query-tier strategy (v3.5).** `build_mapping` now separates `model`
+**Query-tier strategy (v3.5).** `rs_to_real.json` separates `model`
 (display only) from `tone3000_query` (what we search), and records which
-tier resolved each gear in a new `query_source` field. Tiers, in order:
+tier resolved each gear in a `query_source` field. Tiers, in order:
 
 1. `override` — exact `_PSEUDONYM_OVERRIDES` hit → specific query
    ("Marshall JCM 800"). The popular amps with many tone3000 captures.
@@ -808,14 +789,11 @@ both). A single `(category)` key mis-mapped the bass variants.
 
 Seeded: (guitar) AT→Marshall, BT→Vox, CA→Mesa Boogie, EN→ENGL,
 HG→Peavey, TW→Fender Tweed. **Unconfirmed / on the generic floor**
-(commented out, awaiting the user's domain knowledge): CS, GB (guitar);
-BT, CH, CS, HT, LT (bass). Filling one in + regenerating upgrades the
-whole family from `generic` to `series`. GT doesn't exist in the base
-game. Editing either dict requires regenerating the map (Settings →
-"Regenerate gear map").
+(awaiting the user's domain knowledge): CS, GB (guitar);
+BT, CH, CS, HT, LT (bass) — these fall back to a generic query. GT
+doesn't exist in the base game.
 
-**Known imperfect mappings** (extend `_PSEUDONYM_OVERRIDES` or
-`_SERIES_PREFIX_OVERRIDES` to fix):
+**Known imperfect mappings:**
 - `Amp_EN30`, `Amp_EN15`, `Amp_CA75`, `Amp_HG100` — not in the override
   dict, fall back to camel-split pseudonym ("En30", "Ca75").
 - Several `Bass_Amp_*` and `Bass_Cab_*` keep the "Bass" prefix in
@@ -823,8 +801,8 @@ game. Editing either dict requires regenerating the map (Settings →
 - `Cabinets` (literal) — appears in some legacy CDLC tones as a
   catch-all, no specific cab to map.
 
-None of these break anything — the deep-link search still opens, the
-user can edit the JSON, the override dict can be extended.
+None of these break anything — the deep-link search still opens, and
+the user can edit the JSON by hand.
 
 ---
 
@@ -895,26 +873,10 @@ Slopsmith bundles its own Python at:
 /Applications/Slopsmith.app/Contents/Resources/python/runtime/bin/python3.12
 ```
 
-This is the **only** interpreter on the system with `pycryptodome`,
-which is required to decrypt PSARC files (see
-`/Applications/Slopsmith.app/Contents/Resources/slopsmith/lib/psarc.py`).
-The user's system `python3` (especially conda envs) may fail with
-`_cffi_backend` version mismatches if it tries to import `Crypto`.
-
-When `extract_gear_map.py` is invoked from `routes.py` via
-`/api/plugins/rig_builder/extract_gear_map`, it uses `sys.executable`
-to inherit the host's interpreter — that's the bundled one when
-running inside Slopsmith, so it always works.
-
-When running `extract_gear_map.py` from a shell:
-
-```bash
-/Applications/Slopsmith.app/Contents/Resources/python/runtime/bin/python3.12 \
-    extract_gear_map.py /path/to/gears.psarc
-```
-
-The script's top of file adds `slopsmith/lib` to `sys.path` so the
-`psarc` import resolves.
+Any subprocess the plugin spawns should use the host's bundled Python
+(via `sys.executable` when running inside Slopsmith) rather than the
+user's system `python3`, which may differ in version or installed
+packages.
 
 ---
 
@@ -923,10 +885,8 @@ The script's top of file adds `slopsmith/lib` to `sys.path` so the
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/plugins/rig_builder/status` | Setup status + coverage stats + API-access state + rs_cab_to_ir state |
-| POST | `/api/plugins/rig_builder/extract_gear_map` | Runs `extract_gear_map.py` against a user-supplied `gears.psarc` |
-| POST | `/api/plugins/rig_builder/extract_irs` | Runs `extract_irs.py` against a user-supplied `gears.psarc` |
 | GET / POST | `/api/plugins/rig_builder/settings` | Get / update plugin settings (API key, policy) |
-| GET | `/api/plugins/rig_builder/song/{filename:path}` | Parse + enrich a PSARC/sloppak. Returns each tone with its chain plus per-piece deep-links and existing assignments. |
+| GET | `/api/plugins/rig_builder/song/{filename:path}` | Parse + enrich a sloppak. Returns each tone with its chain plus per-piece deep-links and existing assignments. |
 | GET | `/api/plugins/rig_builder/search?rs_gear=...` | Per-gear candidates (when API key) + deep-link |
 | POST | `/api/plugins/rig_builder/save_preset` | Persists preset + preset_pieces + legacy tone_mapping for a single tone; returns `preset_id` plus `mirrored_presets` for host mapping refs |
 | POST | `/api/plugins/rig_builder/download_for_gear` | (v3.3) Pull a specific tone3000 capture for one rs_gear, save into nam_models/ or normalize into nam_irs/. Body `{rs_gear, tone3000_id}`. After downloading it calls `_assign_file_to_gear` to stamp the file onto every `preset_pieces` row for that gear and recompute primaries. Returns `{kind, file, pieces_updated, presets_updated}`. |
@@ -939,7 +899,7 @@ The script's top of file adds `slopsmith/lib` to `sys.path` so the
 | GET | `/api/plugins/rig_builder/gear_catalog` | Gears grouped by category with parenting (real make/model + assigned capture/VST) + a tone3000 photo. Powers the Gear tab. |
 | POST | `/api/plugins/rig_builder/audition_candidate` | Body `{rs_gear, tone3000_id}`. Downloads a candidate (no assign) so the Suggest modal's ▶ can audition it. Returns `{kind, file}`. |
 | POST | `/api/plugins/rig_builder/export_default_captures` | Snapshots the current DB's gear→capture choices into `default_captures.json`. Returns `{count}`. (Settings → "Export defaults".) |
-| GET | `/api/plugins/rig_builder/local_files?kind=nam\|ir` | Lists locally-downloaded NAMs (`nam_models/*.nam`) or IRs (`nam_irs/**/*.wav` recursive, so the 888 the game-extracted cab IRs are included). Each entry has `use_count` + `used_for_gears` so the UI can sort by most-used. Powers the Library picker in both Songs and Gear tabs. |
+| GET | `/api/plugins/rig_builder/local_files?kind=nam\|ir` | Lists locally-downloaded NAMs (`nam_models/*.nam`) or IRs (`nam_irs/**/*.wav` recursive). Each entry has `use_count` + `used_for_gears` so the UI can sort by most-used. Powers the Library picker in both Songs and Gear tabs. |
 | POST | `/api/plugins/rig_builder/use_local_for_gear` | Bulk-assign an already-local file to every `preset_pieces` row for an rs_gear_type. Skips the tone3000 round-trip. Body `{rs_gear, local_file, local_kind}`. |
 | GET | `/api/plugins/rig_builder/vst/known` | Returns the cached list of installed VST3/AU plugins (populated by the frontend after a successful `scanPlugins()`). |
 | POST | `/api/plugins/rig_builder/vst/sync_known` | Frontend pushes the result of `getKnownPlugins()` so the dropdown survives a server restart. Body `{plugins: [...]}`. |
@@ -1053,59 +1013,6 @@ ready the NAM engine picks up the preset. For "instant on first play"
 the alternative would be hooking `cloud_loader/materialize` directly —
 not done (more invasive, couples the two plugins). See the trade-off
 discussion in the conversation that produced this.
-
----
-
-## Cab IR extraction (v2 — DONE)
-
-`extract_irs.py` pulls all 444 cab IRs out of the game's
-`gears.psarc` and writes them as 48 kHz mono float32 WAVs into
-`<config_dir>/nam_irs/rocksmith/`. The mapping from RS entity name to
-extracted IRs lives in `rs_cab_to_ir.json`. The batch worker prefers
-these over tone3000 for any cab piece, and the per-song UI shows a
-"the game IR" green strip on each cab piece with a dropdown for the
-mic-position variants (9 per cab typically).
-
-### the game cab IR binary format
-
-Discovered by reverse-engineering the cab `.bnk` files:
-
-- Container: standard Wwise SoundBank (`BKHD` / `DIDX` / `DATA` /
-  `HIRC` / `STID` chunks). `_parse_bnk()` in `extract_irs.py` walks
-  these.
-- Each `DIDX` entry's blob inside `DATA` is **NOT** a RIFF .wem.
-  Instead it's a custom 16-byte header followed by raw PCM:
-
-    bytes 0-3   : u32 LE  = 128         (constant; meaning unknown — maybe header_size or codec_id)
-    bytes 4-7   : u32 LE  = 256         (constant; meaning unknown — maybe flag set)
-    bytes 8-11  : u32 LE  = sample_rate (always 48000 in base game cabs)
-    bytes 12-15 : u32 LE  = channels    (always 1 in base game cabs)
-    bytes 16+   : float32 LE PCM samples
-
-- Empirically every cab IR in the base game's gears.psarc is mono
-  48 kHz float32, 55-280 ms long (mean 187 ms), with peak energy in
-  the first millisecond — textbook cab IR.
-- Peak amplitudes can exceed 1.0 — that's expected for IRs (the
-  impulse response is a scale factor, not normalized PCM).
-
-If a future the game version adds DLC cabs at a different sample
-rate or channel count, the extractor checks the header and skips
-unfamiliar configurations rather than producing garbage.
-
-### What other PSARCs don't add
-
-Verified by scanning the user's full set of base-game PSARCs:
-
-- `session.psarc` (359 MB, Session Mode): 476 `.bnk` of backing
-  tracks / band-mate audio loops. All standard Wwise RIFF .wem.
-- `etudes.psarc` (2.3 GB, lesson audio): 187 `.bnk` of guitar
-  exercises. All standard RIFF .wem.
-- `audio.psarc` (1.3 GB): 21 `.bnk` of UI sounds (boot, crowd noise).
-  All standard RIFF .wem.
-- `cache.psarc`, `static.psarc`, `guitars.psarc`: no `.bnk` files.
-
-None contain cab IRs in the custom format. The 444 cab IRs from
-`gears.psarc` are the complete set.
 
 ---
 
@@ -1480,24 +1387,10 @@ back to the old wrapper (they still only apply in preview).
    up" by stripping the auth header on the CDN call, downloads
    silently fail end-to-end with no preset files written.
 
-3. **Amp/pedal/rack IR extraction.** Investigated and **abandoned**.
-   The `.bnk` files for amps (avg 2.5 KB), pedals (1 KB), and racks
-   (1.2 KB) contain only `BKHD` + `HIRC` chunks — DSP graph metadata,
-   not embedded audio. the game's amp DSP is implemented as Wwise
-   DSP plugins, not convolution, so there's no IR to extract. Cabs
-   are the only category where this works.
-
-4. **Other the game PSARCs (session.psarc, etudes.psarc,
-   audio.psarc).** Checked — they hold `.bnk` files but they're
-   standard Wwise RIFF/.wem audio (Session Mode backing tracks,
-   lesson etudes, UI sounds), not gear IRs. The custom
-   16-byte-header float32 PCM format used by cab IRs only appears
-   in `gears.psarc`.
-
-5. **Expanded pseudonym overrides.** ~6 amp pseudonyms are still
+3. **Expanded pseudonym overrides.** ~6 amp pseudonyms are still
    unresolved (see "Known imperfect mappings"). Trivially extendable.
 
-6. **The "agresiva" toggle UI exists in Settings** but the batch flow
+4. **The "agresiva" toggle UI exists in Settings** but the batch flow
    currently only picks one top candidate; "aggressive" only relaxes
    the license/downloads filter inside `pick_top_candidate`. No
    second-pass to re-try gear left pending under conservative policy.
@@ -1511,7 +1404,6 @@ back to the old wrapper (they still only apply in preview).
 | App bundle | `/Applications/Slopsmith.app/` |
 | Bundled Python | `/Applications/Slopsmith.app/Contents/Resources/python/runtime/bin/python3.12` |
 | Host server code | `/Applications/Slopsmith.app/Contents/Resources/slopsmith/server.py` |
-| Host PSARC reader | `/Applications/Slopsmith.app/Contents/Resources/slopsmith/lib/psarc.py` |
 | Sister plugin | `/Applications/Slopsmith.app/Contents/Resources/slopsmith/plugins/nam_tone/` |
 | User config dir | `~/Library/Application Support/slopsmith-desktop/slopsmith-config/` |
 | User plugins dir | `~/Library/Application Support/slopsmith-desktop/plugins/` |
@@ -1531,10 +1423,8 @@ back to the old wrapper (they still only apply in preview).
 2. Quit Slopsmith.
 3. Unzip this plugin into
    `~/Library/Application Support/slopsmith-desktop/plugins/rig_builder/`.
-4. The included `rs_to_real.json` was generated from one specific
-   the game install; if the new Mac has DLC the first one didn't (or
-   vice-versa), regenerate via Settings → "Regenerate gear map" with
-   that machine's `gears.psarc`.
+4. The included `rs_to_real.json` ships pre-generated and covers the
+   base-game gear set — no per-machine regeneration is needed.
 5. Open Slopsmith. "Rig Builder" appears in the nav.
 
 Optional: tone3000 API key → Settings → paste → "Guardar". Without it,
