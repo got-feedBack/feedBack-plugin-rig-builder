@@ -6071,11 +6071,11 @@ async function rbMaterializeFromCloud(filename, statusEl) {
 //   └─────────────────────────────────────────────────────┘
 //
 // Photos come from RB_API/gear_photo/<rs_gear> served by routes.py
-// (the game art extracted via extract_gear_photos.py). Missing photos
+// (gear art, when present). Missing photos
 // fall back to a small text placeholder via onerror.
 //
 // Selection state lives on rbState.editor; it's cleared when a new
-// song is loaded so opening a different .psarc always starts on tone 0
+// song is loaded so opening a different song always starts on tone 0
 // piece 0.
 
 function rbEnsureEditorState() {
@@ -6329,8 +6329,7 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
     // Cab mic-position picker — clickable buttons per mic resolved
     // from rs_cab_mic_map (Dynamic Cone, Condenser Edge, Tube Off-axis,
     // …). Falls back to the legacy "the game IR (N):" filename dropdown
-    // for cabs whose mic_variants the extractor couldn't resolve
-    // (e.g. the user hasn't re-run extract_irs since we added the map).
+    // for cabs whose mic_variants couldn't be resolved from the map.
     let rsIrControl = '';
     const micVariants = p.cab_mic_variants || [];
     if (micVariants.length > 0) {
@@ -6340,7 +6339,7 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
         const btns = micVariants.map(v => {
             const active = v.ir_file === activeFile;
             if (!v.available || !v.ir_file) {
-                return `<button disabled title="IR not extracted"
+                return `<button disabled title="IR unavailable"
                                 class="px-2.5 py-0.5 rounded border text-[11px] bg-dark-800/40 text-gray-600 border-gray-800 cursor-not-allowed">${rbEsc(v.label || v.suffix)}</button>`;
             }
             const ours = !!v.our_synth;   // OUR own cab IR (rb_cab_overrides) — accent emerald, not RS sky
@@ -11030,8 +11029,8 @@ function rbRenderCatalogCard(g) {
     // Header (always visible): photo · full name · rs_gear · status pill
     //   ▸ The full name no longer truncates — it wraps over 2 lines so
     //     "Marshall JCM800 2203" et al. stay readable.
-    //   ▸ the game gear photo (/gear_photo/{rs_gear}) first; if the
-    //     RS extraction hasn't been run, fall back to the tone3000
+    //   ▸ the game gear photo (/gear_photo/{rs_gear}) first; if no
+    //     gear photo is present, fall back to the tone3000
     //     capture image when the curator has assigned one.
     //
     // Action panel (revealed on click): ▶ Listen · 🎚 Variants ·
@@ -11189,7 +11188,7 @@ function rbRenderCatalogCard(g) {
         const btns = g.mic_variants.map(v => {
             const vId = `rb-aud-${_rbCatalogSeq++}`;
             if (!v.available || !v.ir_file) {
-                return `<button disabled title="IR not extracted — re-run Setup → Extract everything"
+                return `<button disabled title="IR unavailable"
                                 class="text-[10px] px-2 py-0.5 rounded bg-dark-800/50 text-gray-600 cursor-not-allowed">▶ ${rbEsc(v.label || v.suffix)}</button>`;
             }
             const aud = v.our_synth ? 'bg-emerald-900/30 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/40'
@@ -11672,8 +11671,8 @@ async function rbCatLibTab(rsGear, tab) {
 }
 
 // Friendly labels for the subdir categories the v1.2 storage layout
-// uses. Anything not matching one of these (legacy flat files, RS-
-// extracted IRs under rocksmith/, etc.) lands in the appropriate
+// uses. Anything not matching one of these (legacy flat files, game
+// cab IRs under rocksmith/, etc.) lands in the appropriate
 // "other" bucket per kind.
 const _RB_LIB_CATEGORY_LABEL = {
     amps:      '🎚 Amps',

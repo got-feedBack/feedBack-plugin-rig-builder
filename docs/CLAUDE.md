@@ -8,8 +8,8 @@
 > slopsmith memory project for the full plan.
 
 Read this first, then read **`HANDOFF.md`** in this same folder for the full
-design (DB schema, tone3000 API quirks, cab-IR binary format, per-feature
-history). This file is the quick, self-contained orientation so a Claude
+design (DB schema, tone3000 API quirks, per-feature history). This file is
+the quick, self-contained orientation so a Claude
 session on a fresh machine — with none of the prior conversation or memory —
 can pick up safely.
 
@@ -40,8 +40,8 @@ Stack: Python (FastAPI) backend `routes.py` + browser JS UI `screen.js` /
    reopen Slopsmith** for changes to take effect. DB migrations in
    `_get_conn()` run automatically on first launch.
 
-3. **Use Slopsmith's bundled Python** for any verification — it's the only
-   interpreter with `pycryptodome` (needed to read PSARC files). On macOS:
+3. **Use Slopsmith's bundled Python** for any verification — it matches the
+   interpreter the plugin actually runs under. On macOS:
    ```bash
    PY=/Applications/Slopsmith.app/Contents/Resources/python/runtime/bin/python3.12
    cd <this folder>
@@ -125,14 +125,14 @@ Key paths:
 > **v1.1.0 (2026-05-26):** tone3000 auth is now **OAuth 2.0 + PKCE** ("Connect
 > with tone3000" — no pasted secret key; secret-key UI removed but backend
 > still accepts one). Batch mapping is now **"manual is sacred, auto inherits"**
-> (`_batch_worker`). Added native **Browse…** file pickers for `gears.psarc`.
+> (`_batch_worker`).
 > See the `HANDOFF.md` **v1.1.0** section (top) for the full detail + the
 > security rationale.
 
 All of the below is **plugin-only — no bundle edits**, so install is just
 "drop the folder + restart". See `HANDOFF.md` sections v3.5–v3.8 for detail.
 
-1. **Query-tier gear mapping (v3.5).** `extract_gear_map.py` separates
+1. **Query-tier gear mapping (v3.5).** `rs_to_real.json` separates
    display `model` from the `tone3000_query` and records `query_source`.
    Series codename families resolve to a **brand-only** query (the codename
    number is fake and tanks search). Series table is keyed by
@@ -212,11 +212,9 @@ See `HANDOFF.md` for the full detail and the route table.
    column migration runs automatically.
 4. Optional but needed for downloads: Settings → paste a tone3000 API key
    (`t3k_…`). Without it, deep-link mode works (manual `.nam` download).
-5. `rs_to_real.json` ships pre-generated; if this machine's the game DLC
-   differs, regenerate via Settings → "Regenerate gear map" with its
-   `gears.psarc`. `rs_cab_to_ir.json` references extracted RS cab IRs that
-   are NOT shipped — absent ones degrade gracefully to tone3000 deep-links;
-   run `extract_irs.py` with `gears.psarc` to populate them.
+5. `rs_to_real.json` and the cab-IR lookup tables (`rs_cab_to_ir.json` /
+   `rs_cab_mic_map.json`) ship pre-generated with the plugin — no
+   per-machine regeneration is needed.
 
 **Verify the chain plays:** open a multi-NAM song (e.g. Reptilia's dist
 tone has 2 pre-pedals + amp + rack + cab = 4 NAM + 1 IR), press ▶ Listen
@@ -241,8 +239,7 @@ audio buffer, use lighter captures for pedals/racks, or flip the kill-switch.
 - A **Settings toggle** for full-chain playback (instead of the console
   kill-switch) was offered but not yet built.
 - Unknown amp pseudonym families on the "generic" floor (guitar CS, GB;
-  bass BT, CH, CS, HT, LT) await the user's brand knowledge — fill in
-  `_SERIES_PREFIX_OVERRIDES` (keyed `(instrument, prefix)`) and regenerate.
+  bass BT, CH, CS, HT, LT) await the user's brand knowledge.
 - WASM-only installs stay single-NAM (worklet limit); the fetch redirect is
   harmless there but won't chain.
 - "Aggressive" batch second-pass for gear left pending under the
