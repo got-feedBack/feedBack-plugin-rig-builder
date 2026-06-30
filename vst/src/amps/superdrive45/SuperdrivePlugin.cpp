@@ -9,7 +9,14 @@ static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x
 class SuperdrivePlugin : public Plugin {
     rbgtr::AmpCore<rbtube::TubeKT66> core; float fP[kParamCount];
     rbshared::Oversampler4x os; static constexpr int kOS = rbshared::Oversampler4x::OS;
-    void applyAll(){ bool hi=fP[kChannel]>=0.5f; float g=hi?fP[kDrive]:fP[kRhythm];core.configure(500e3,500e3,50e3,56e3,220e-12,22e-9,22e-9, hi?0.40f:0.25f, hi?8.0f:3.0f,13.0f,3000.0f,4.0f);core.setGain(g);core.setBass(fP[kBass]);core.setMiddle(fP[kMid]);core.setTreble(fP[kTreble]);core.setPresence(0.5f);core.setVolume(fP[kMaster]); }
+    void applyAll(){ bool hi=fP[kChannel]>=0.5f; bool modern=fP[kModern]>=0.5f; bool brite=fP[kBrite]>=0.5f;
+        float g=hi?fP[kDrive]:fP[kRhythm];
+        // MODERN (pull MID, hi-gain only): scoop mids ~700Hz -> lifts bass+treble feel.
+        // BRITE (pull RHYTHM, clean channel only): brighter treble shelf (bright cap).
+        const float scDb  = (hi && modern) ? -6.0f : 0.0f;
+        const float brAmt = (!hi && brite) ? 9.0f : 4.0f;
+        core.configure(500e3,500e3,50e3,56e3,220e-12,22e-9,22e-9, hi?0.40f:0.25f, hi?8.0f:3.0f,13.0f,3000.0f,brAmt, 700.0f, scDb, 1.6f, -38.0f);
+        core.setGain(g);core.setBass(fP[kBass]);core.setMiddle(fP[kMid]);core.setTreble(fP[kTreble]);core.setPresence(0.5f);core.setVolume(fP[kMaster]); }
 public:
     SuperdrivePlugin() : Plugin(kParamCount,0,0){ for(int i=0;i<kParamCount;++i)fP[i]=kSuperDef[i]; core.setSampleRate(kOS*(float)getSampleRate()); applyAll(); }
 protected:

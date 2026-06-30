@@ -16,6 +16,7 @@
 #include "DistrhoPlugin.hpp"
 #include "CenturaParams.h"
 #include "../../_shared/tube_stage.hpp"
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -212,10 +213,12 @@ public:
 };
 
 static constexpr float kCenturaMakeup = 3.50f;   // tuned offline (-14 dBFS @ kDef)
-static constexpr float kCenturaLvl    = 0.3441f;
+static constexpr float kCenturaLvl    = 0.571f;
 
 class CenturaPlugin : public Plugin {
     CenturaChannel L, R;
+    rbshared::Oversampler4x osL, osR;
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
     float fParams[kParamCount];
     void recalc() {
         const bool boost = fParams[kBoost] > 0.5f;
@@ -226,7 +229,7 @@ public:
     CenturaPlugin() : Plugin(kParamCount, 0, 0) {
         for (int i = 0; i < kParamCount; ++i) fParams[i] = kCenturaDef[i];
         const float sr = (float)getSampleRate();
-        L.setSampleRate(sr); R.setSampleRate(sr); L.reset(); R.reset(); recalc();
+        L.setSampleRate(kOS * sr); R.setSampleRate(kOS * sr); L.reset(); R.reset(); recalc();
     }
 protected:
     const char* getLabel()       const override { return "EpicallCentura"; }
@@ -245,11 +248,16 @@ protected:
     }
     float getParameterValue(uint32_t i) const override { return (i < (uint32_t)kParamCount) ? fParams[i] : 0.f; }
     void  setParameterValue(uint32_t i, float v) override { if (i < (uint32_t)kParamCount) { fParams[i] = v; recalc(); } }
-    void  sampleRateChanged(double r) override { L.setSampleRate((float)r); R.setSampleRate((float)r); L.reset(); R.reset(); recalc(); }
+    void  sampleRateChanged(double r) override { osL.reset(); osR.reset(); L.setSampleRate(kOS * (float)r); R.setSampleRate(kOS * (float)r); L.reset(); R.reset(); recalc(); }
 
     void run(const float** in, float** out, uint32_t frames) override {
         const float* iL = in[0]; const float* iR = in[1]; float* oL = out[0]; float* oR = out[1];
-        for (uint32_t i = 0; i < frames; ++i) { oL[i] = rbAmpLvl(kCenturaLvl * softClip(kCenturaMakeup * L.process(3.2f * iL[i])) * 0.98f); oR[i] = rbAmpLvl(kCenturaLvl * softClip(kCenturaMakeup * R.process(3.2f * iR[i])) * 0.98f); }
+        float ubL[kOS]; float ubR[kOS];
+        for (uint32_t i = 0; i < frames; ++i) {
+            osL.upsample(3.2f * iL[i], ubL); osR.upsample(3.2f * iR[i], ubR);
+            for (int k = 0; k < kOS; ++k) { ubL[k] = softClip(kCenturaMakeup * L.process(ubL[k])); ubR[k] = softClip(kCenturaMakeup * R.process(ubR[k])); }
+            oL[i] = rbAmpLvl(kCenturaLvl * osL.downsample(ubL) * 0.98f); oR[i] = rbAmpLvl(kCenturaLvl * osR.downsample(ubR) * 0.98f);
+        }
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(CenturaPlugin)
 };

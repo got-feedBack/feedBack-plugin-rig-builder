@@ -418,7 +418,10 @@ public:
         const float gainMakeupDb = 8.5f * std::pow(1.0f - gain, 2.15f);
         y *= dbToGain(gainMakeupDb);
 
-        const float vol = dbToGain(-24.0f + 28.0f * audioTaper(volume));
+        // Volume range raised: the old -24..+4 dB span left the pinned Volume
+        // (0.62) ~11 dB below unity (output -39 dBFS = near-inaudible in a mix).
+        // Now 0.62 lands ~-16 dBFS, in line with the other pedals.
+        const float vol = dbToGain(7.0f + 11.0f * audioTaper(volume));
         const float fb = outputFeedbackC17.process(y);
         y = ic4a.process((y - 0.10f * fb) * vol, 1.0f + 3.2f * audioTaper(volume));
         y = outputLoad.process(y);

@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/SamplegVH140C.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			2fgH8W1KDjtESu5tQWYtL6ZHZsx4n56OWXR5LsK1BQQ=
+			</data>
+		</dict>
+		<key>x86_64-win/SamplegVH140C.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			MLIpd6adbTBalcb5wrvs60JEfm8O8BpFzp/5Qw0qOxE=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

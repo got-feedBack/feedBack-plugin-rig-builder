@@ -22,6 +22,7 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "MiniBruteParams.h"
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -219,6 +220,8 @@ class MiniBrutePlugin : public Plugin
 {
     MiniBruteCore left;
     MiniBruteCore right;
+    rbshared::Oversampler4x osL, osR;
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
     float params[kParamCount];
 
     void applyAll() { for (int i = 0; i < kParamCount; ++i) { left.setParam(i, params[i]); right.setParam(i, params[i]); } }
@@ -227,8 +230,8 @@ public:
     MiniBrutePlugin() : Plugin(kParamCount, 0, 0)
     {
         for (int i = 0; i < kParamCount; ++i) params[i] = kMiniBruteDef[i];
-        left.setSampleRate((float)getSampleRate());
-        right.setSampleRate((float)getSampleRate());
+        left.setSampleRate(kOS * (float)getSampleRate());
+        right.setSampleRate(kOS * (float)getSampleRate());
         applyAll();
     }
 
@@ -263,8 +266,9 @@ protected:
 
     void sampleRateChanged(double newSampleRate) override
     {
-        left.setSampleRate((float)newSampleRate);
-        right.setSampleRate((float)newSampleRate);
+        osL.reset(); osR.reset();
+        left.setSampleRate(kOS * (float)newSampleRate);
+        right.setSampleRate(kOS * (float)newSampleRate);
         applyAll();
     }
 
@@ -274,10 +278,13 @@ protected:
         const float* inR = inputs[1];
         float* outL = outputs[0];
         float* outR = outputs[1];
+        float ubL[kOS]; float ubR[kOS];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = rbAmpLvl(0.360f * left.process(3.2f * inL[i]));
-            outR[i] = rbAmpLvl(0.360f * right.process(3.2f * inR[i]));
+            osL.upsample(3.2f * inL[i], ubL); osR.upsample(3.2f * inR[i], ubR);
+            for (int k = 0; k < kOS; ++k) { ubL[k] = left.process(ubL[k]); ubR[k] = right.process(ubR[k]); }
+            outL[i] = rbAmpLvl(0.360f * osL.downsample(ubL));
+            outR[i] = rbAmpLvl(0.360f * osR.downsample(ubR));
         }
     }
 

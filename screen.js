@@ -2451,21 +2451,59 @@ const RbMegaChain = (function () {
 
     function _findToneByKey(toneKey) {
         if (!_mega || !Array.isArray(_mega.tones) || !toneKey) return null;
-        const exact = _mega.tones.find(t => t.tone_key === toneKey);
-        if (exact) return exact;
         const wanted = String(toneKey).trim().toLowerCase();
-        const ci = _mega.tones.find(t =>
-            String(t.tone_key || '').trim().toLowerCase() === wanted
-        );
-        if (ci) return ci;
-        // Last resort: strip case + separators/punctuation so the highway's tone
-        // NAME ("Reptilia Lead", "Reptilia-Lead") still matches the seeded RS Key
-        // ("Reptilia_lead"). Distinct tones (…_lead vs …_bass) normalise to
-        // different strings, so this can never cross-match the WRONG tone.
         const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
         const wn = norm(toneKey);
-        if (!wn) return null;
-        return _mega.tones.find(t => norm(t.tone_key) === wn) || null;
+        // A tone's candidate identifiers: its tone_key PLUS the backend-provided
+        // aliases (the RS Key AND Name). The highway publishes tone changes by
+        // the definition's Name while we seed by its Key, so we must accept a
+        // match on EITHER — otherwise a chart whose Name ≠ Key (e.g. Paradise
+        // City: highway "paradise_city_general" vs seeded "intro"/"acordes")
+        // never resolves and collapses to one default tone for the whole song.
+        const idsOf = t => {
+            const ids = [t.tone_key];
+            if (Array.isArray(t.aliases)) for (const a of t.aliases) ids.push(a);
+            return ids;
+        };
+        // 1) exact  2) case-insensitive  3) alnum-normalised — against any id.
+        // Normalising ("Reptilia Lead"/"Reptilia-Lead" → "reptilialead") lets the
+        // highway NAME match the seeded Key; distinct tones (…_lead vs …_bass)
+        // normalise differently, so this never cross-matches the WRONG tone.
+        let hit = _mega.tones.find(t => idsOf(t).some(id => id === toneKey));
+        if (hit) return hit;
+        hit = _mega.tones.find(t => idsOf(t).some(id => String(id || '').trim().toLowerCase() === wanted));
+        if (hit) return hit;
+        if (wn) {
+            hit = _mega.tones.find(t => idsOf(t).some(id => norm(id) === wn));
+            if (hit) return hit;
+        }
+        // 4) Last resort — POSITION map. Some hand-built / converted CDLC publish
+        // tone-change NAMES that match neither the seeded Key nor Name. Build the
+        // highway's distinct tone order (base first, then changes in time order)
+        // and map the wanted name's position to the seeded tone at the same
+        // index, so per-section switching still works instead of collapsing to a
+        // single default tone. Runs ONLY after every name-based match failed, so
+        // it can't disturb songs that already resolve correctly.
+        try {
+            const hw = window.highway;
+            if (hw && typeof hw.getToneChanges === 'function') {
+                const order = [];
+                const push = n => { n = String(n || '').trim(); if (n && order.indexOf(n) < 0) order.push(n); };
+                if (typeof hw.getToneBase === 'function') push(hw.getToneBase());
+                for (const c of (hw.getToneChanges() || [])) push(c && c.name);
+                const pos = order.indexOf(String(toneKey).trim());
+                if (pos >= 0 && pos < _mega.tones.length) {
+                    if (_mega && !_mega._loggedOrderMap) {
+                        _mega._loggedOrderMap = true;
+                        console.warn(`[rig_builder mega-chain] tone "${toneKey}" matched by POSITION `
+                            + `#${pos} → seeded "${_mega.tones[pos].tone_key}" — the chart's published `
+                            + `tone names match no seeded Key/Name; using order as a fallback.`);
+                    }
+                    return _mega.tones[pos];
+                }
+            }
+        } catch (_) {}
+        return null;
     }
 
     // Mute the song's "guitar" stem so the original DI doesn't double up
@@ -2882,7 +2920,7 @@ const RbMegaChain = (function () {
                 const key = _resolveActiveToneKey({
                     useFirstChangeIfNoBase: allowFirstChange,
                 });
-                if (!key || key === _activeToneKey) return;
+                if (!key) return;
                 const tone = _findToneByKey(key);
                 if (!tone) {
                     // The highway published a tone but NONE of this song's seeded
@@ -2900,6 +2938,14 @@ const RbMegaChain = (function () {
                     }
                     return;
                 }
+                // Dedup on the RESOLVED seeded tone, not the raw highway key:
+                // when the chart's published name (e.g. "paradise_city_general")
+                // differs from the seeded key it maps to ("intro"), comparing the
+                // highway key against _activeToneKey never matched → the tone was
+                // re-applied on every recheck tick. Compare tone_key↔tone_key so a
+                // tone already active is left alone (also collapses two highway
+                // names that alias to the same seeded tone).
+                if (tone.tone_key === _activeToneKey) return;
                 _applyActiveTone(tone.tone_key).then(() => {
                     rbSignalChainLoaded().catch(() => {});   // un-mute on the first real tone
                     const src = allowFirstChange ? 'first-change-or-base' : 'base';
@@ -3070,7 +3116,7 @@ const RbMegaChain = (function () {
 
     function _startPolling() {
         _stopPolling();
-        let lastKey = _activeToneKey;
+        let lastHwKey = null;   // raw highway key last seen — fast steady-state early-out
         _pollHandle = setInterval(async () => {
             if (!_active || !_mega) return;
             // Relaxed resolver: accepts first scheduled tone-change as
@@ -3081,10 +3127,13 @@ const RbMegaChain = (function () {
             // tone). After that, the regular "last change <= t" branch
             // gives the right answer regardless.
             const key = _resolveActiveToneKey({ useFirstChangeIfNoBase: true });
-            if (!key || key === lastKey) return;
+            if (!key || key === lastHwKey) return;   // highway key unchanged → cheap exit
+            lastHwKey = key;
             const tone = _findToneByKey(key);
-            if (!tone) return;
-            lastKey = key;
+            // Dedup on the resolved seeded tone, not the highway key, so a name
+            // that maps (by alias/position) to the already-active tone doesn't
+            // re-apply the whole chain mid-song.
+            if (!tone || tone.tone_key === _activeToneKey) return;
             await _applyActiveTone(tone.tone_key);
             const slots = Array.isArray(tone.slots) ? tone.slots : [];
             console.log(`[rig_builder mega-chain] switch → "${tone.tone_key}" (${slots.length} slots)`);

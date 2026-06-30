@@ -19,6 +19,7 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "Vh140Params.h"
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
 #include <cstring>
 
@@ -286,6 +287,8 @@ public:
 class Vh140Plugin : public Plugin
 {
     Vh140Core core;
+    rbshared::Oversampler4x osL, osR;
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
     float params[kParamCount];
 
     void applyAll() { for (int i = 0; i < kParamCount; ++i) core.setParam(i, params[i]); }
@@ -294,7 +297,7 @@ public:
     Vh140Plugin() : Plugin(kParamCount, 0, 0)
     {
         for (int i = 0; i < kParamCount; ++i) params[i] = kVh140Def[i];
-        core.setSampleRate((float)getSampleRate());
+        core.setSampleRate(kOS * (float)getSampleRate());
         applyAll();
     }
 
@@ -328,7 +331,7 @@ protected:
 
     void sampleRateChanged(double newSampleRate) override
     {
-        core.setSampleRate((float)newSampleRate);
+        osL.reset(); osR.reset(); core.setSampleRate(kOS * (float)newSampleRate);
         applyAll();
     }
 
@@ -338,12 +341,13 @@ protected:
         const float* inR = inputs[1];
         float* outL = outputs[0];
         float* outR = outputs[1];
+        float ubL[kOS]; float ubR[kOS];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            float oL, oR;
-            core.process(3.2f * inL[i], 3.2f * inR[i], oL, oR);
-            outL[i] = rbAmpLvl(0.560f * oL);
-            outR[i] = rbAmpLvl(0.560f * oR);
+            osL.upsample(3.2f * inL[i], ubL); osR.upsample(3.2f * inR[i], ubR);
+            for (int k = 0; k < kOS; ++k) { float a, b; core.process(ubL[k], ubR[k], a, b); ubL[k] = a; ubR[k] = b; }
+            outL[i] = rbAmpLvl(0.435f * osL.downsample(ubL));
+            outR[i] = rbAmpLvl(0.435f * osR.downsample(ubR));
         }
     }
 

@@ -7900,6 +7900,25 @@ def setup(app, context):
         # bypassed instead of getting forced on. Indices NOT in this
         # tone's list are always force-bypassed on tone switch (signal
         # passes through them).
+        # Map each seeded tone_key to its alias set {Key, Name} from the
+        # sloppak tone definitions. The highway publishes tone CHANGES by the
+        # definition's *Name* (e.g. "paradise_city_general") while we seed by
+        # its *Key* (e.g. "intro"); without the Name alias the front-end can't
+        # match the two and collapses to a single default tone for the whole
+        # song. Best-effort: any read failure just yields no extra aliases.
+        tone_alias_map: dict[str, list[str]] = {}
+        try:
+            _defs = _read_tones_from_sloppak(decoded, _get_dlc_dir()) if _get_dlc_dir else []
+            for _t in _defs:
+                if not isinstance(_t, dict):
+                    continue
+                _al = [a for a in ((_t.get("Key") or "").strip(),
+                                   (_t.get("Name") or "").strip()) if a]
+                for a in _al:
+                    tone_alias_map[a] = _al
+        except Exception:
+            log.warning("tone alias map build failed for %r", decoded, exc_info=True)
+
         tone_index: list[dict] = []
         for i, (tone_key, preset_id, _name, _in_gain, _out_gain, _gate) in enumerate(mappings):
             tone_stages = per_tone_stages[i]
@@ -7927,8 +7946,13 @@ def setup(app, context):
                         entry["rs_gain"] = stage.get("rs_gain")
                     seen[idx] = entry
             slots_list = sorted(seen.values(), key=lambda e: e["idx"])
+            _aliases: list[str] = []
+            for a in [tone_key] + tone_alias_map.get(tone_key, []):
+                if a and a not in _aliases:
+                    _aliases.append(a)
             tone_index.append({
                 "tone_key": tone_key,
+                "aliases": _aliases,
                 "preset_id": int(preset_id),
                 "slots": slots_list,
                 "stage_count": len(slots_list),
