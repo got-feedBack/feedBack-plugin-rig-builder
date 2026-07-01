@@ -819,14 +819,19 @@ def _migrate_rehome_bundled_vst_paths() -> None:
         if not vp:
             continue
         norm = vp.replace("\\", "/")
-        if norm.startswith(root_norm + "/"):
-            continue  # already anchored at the live plugin dir
         rel = None
-        for mk in markers:
-            idx = norm.find(mk)
-            if idx != -1:
-                rel = norm[idx + len(mk):]
-                break
+        if norm.startswith(root_norm + "/"):
+            # Already anchored at the live plugin dir — but if the STORED value
+            # still uses '\' (a Windows-authored row), fall through so we rewrite
+            # it to forward slashes; otherwise the slash-only rename/subdir
+            # migrations below still can't match its flat/renamed tail.
+            rel = norm[len(root_norm) + 1:]
+        else:
+            for mk in markers:
+                idx = norm.find(mk)
+                if idx != -1:
+                    rel = norm[idx + len(mk):]
+                    break
         if not rel:
             continue  # not a bundled path (external/user VST) — leave alone
         # Emit a forward-slash path (not str(vst_root / rel), which would use

@@ -35,6 +35,12 @@ def _path_of(conn, piece_id):
     return conn.execute("SELECT vst_path FROM preset_pieces WHERE id = ?", (piece_id,)).fetchone()[0]
 
 
+def _expect(plugin_dir, *parts):
+    # The migration intentionally emits forward slashes on every OS, so build the
+    # expected value the same way (str(Path) is '\'-separated on Windows).
+    return str(plugin_dir.joinpath("vst", *parts)).replace("\\", "/")
+
+
 def test_rehome_repoints_stale_appimage_mount_to_current_plugin_dir(tmp_path):
     routes = _routes_module()
     plugin_dir = tmp_path / "opt" / "feedback" / "resources" / "slopsmith" / "plugins" / "rig_builder"
@@ -48,7 +54,7 @@ def test_rehome_repoints_stale_appimage_mount_to_current_plugin_dir(tmp_path):
 
     routes._migrate_rehome_bundled_vst_paths()
 
-    assert _path_of(conn, pid) == str(plugin_dir / "vst" / "amps" / "SamplegSBTCL.vst3")
+    assert _path_of(conn, pid) == _expect(plugin_dir, "amps", "SamplegSBTCL.vst3")
 
 
 def test_rehome_covers_legacy_nam_rig_builder_marker(tmp_path):
@@ -62,7 +68,7 @@ def test_rehome_covers_legacy_nam_rig_builder_marker(tmp_path):
 
     routes._migrate_rehome_bundled_vst_paths()
 
-    assert _path_of(conn, pid) == str(plugin_dir / "vst" / "racks" / "RB Final Leveler.vst3")
+    assert _path_of(conn, pid) == _expect(plugin_dir, "racks", "RB Final Leveler.vst3")
 
 
 def test_rehome_handles_backslash_windows_style_paths(tmp_path):
@@ -77,7 +83,7 @@ def test_rehome_handles_backslash_windows_style_paths(tmp_path):
 
     routes._migrate_rehome_bundled_vst_paths()
 
-    assert _path_of(conn, pid) == str(plugin_dir / "vst" / "amps" / "DSL100.vst3")
+    assert _path_of(conn, pid) == _expect(plugin_dir, "amps", "DSL100.vst3")
 
 
 def test_rehome_emits_forward_slashes_for_flat_backslash_path(tmp_path):
@@ -96,7 +102,24 @@ def test_rehome_emits_forward_slashes_for_flat_backslash_path(tmp_path):
 
     out = _path_of(conn, pid)
     assert "\\" not in out
-    assert out == str(plugin_dir / "vst").replace("\\", "/") + "/DSL100.vst3"
+    assert out == _expect(plugin_dir, "DSL100.vst3")
+
+
+def test_rehome_normalizes_already_live_backslash_path(tmp_path):
+    # A row already pointing at the current plugin dir but with '\' separators
+    # (Windows) must still be forward-slashed, or the later slash-only subdir/
+    # rename migrations can't match it to repair a flat/renamed tail.
+    routes = _routes_module()
+    plugin_dir = tmp_path / "rig_builder"
+    routes._plugin_dir = plugin_dir
+    conn = _make_conn()
+    routes._conn = conn
+    live_backslash = str(plugin_dir.joinpath("vst", "amps", "DSL100.vst3")).replace("/", "\\")
+    pid = _insert(conn, live_backslash)
+
+    routes._migrate_rehome_bundled_vst_paths()
+
+    assert _path_of(conn, pid) == _expect(plugin_dir, "amps", "DSL100.vst3")
 
 
 def test_rehome_leaves_external_and_correct_paths_untouched(tmp_path):
@@ -107,7 +130,7 @@ def test_rehome_leaves_external_and_correct_paths_untouched(tmp_path):
     routes._conn = conn
 
     external = "/home/byron/.vst3/MyFavouriteAmp.vst3"          # user VST, no bundled marker
-    already = str(plugin_dir / "vst" / "amps" / "DSL100.vst3")  # already anchored at live dir
+    already = _expect(plugin_dir, "amps", "DSL100.vst3")  # already anchored (forward-slash) at live dir
     ext_id = _insert(conn, external)
     ok_id = _insert(conn, already)
 
