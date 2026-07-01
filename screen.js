@@ -2340,6 +2340,7 @@ const RbMegaChain = (function () {
                                // loop bail if a newer song load superseded it
     let _seedTried = null;     // filename we already kicked an on-demand seed for
     let _activeToneKey = null; // tone_key currently un-bypassed
+    let _defaultFallback = false; // true when the active chain is the default tone (song had no per-song mapping — e.g. feedpak)
     let _pollHandle = null;    // setInterval handle watching highway tone changes
     let _duckedStems = null;   // saved gain nodes to restore on teardown
     // Map from chain-array INDEX (what the backend gives us in
@@ -2375,6 +2376,7 @@ const RbMegaChain = (function () {
             error: _lastError && _lastError.reason || '',
             enabled: _settingOn(),
             activeToneKey: _activeToneKey || '',
+            defaultFallback: _defaultFallback,
             filename: _activeFilename || _pendingFilename || (_lastError && _lastError.filename) || _currentSongFilename(),
         };
     }
@@ -2394,6 +2396,7 @@ const RbMegaChain = (function () {
         _pending = true;
         _pendingFilename = filename || _currentSongFilename() || null;
         _lastError = null;
+        _defaultFallback = false;
         rbSelectAudioEffectsRoute('mega-chain-pending');
         _emitState();
     }
@@ -2404,6 +2407,7 @@ const RbMegaChain = (function () {
         _active = false;
         _activeFilename = null;
         _activeToneKey = null;
+        _defaultFallback = false;
         _lastError = {
             filename: filename || _currentSongFilename() || '',
             reason: rbShortSafeText(reason || 'Rig Builder could not load this song\'s tone chain', 'Rig Builder could not load this song\'s tone chain'),
@@ -2702,6 +2706,9 @@ const RbMegaChain = (function () {
             return false;
         }
         _mega = mega;
+        // Backend served the default tone because this song has no per-song
+        // mapping (every feedpak song). The player button labels it accordingly.
+        _defaultFallback = !!(mega && mega.default_fallback);
 
         // 1. Force the bundle's AMP off so it stops fighting us.
         _forceBundleAmpOff();
@@ -3244,6 +3251,13 @@ function rbUpdatePlayerToneButton() {
         const reason = state.error ? ` ${state.error}` : '';
         btn.title = `Rig Builder could not load this song\'s tone chain.${reason} Click to retry.`;
         btn.className = 'px-3 py-1.5 bg-red-700/50 hover:bg-red-700/70 rounded-lg text-xs text-red-100 transition';
+    } else if (state.active && state.defaultFallback) {
+        // Song had no per-song tone mapping (e.g. a feedpak, which carries no
+        // gear metadata) — we're playing the user's default tone instead.
+        btn.textContent = 'Rig Tones On · Default';
+        btn.title = 'This song has no mapped Rig Builder tones, so your default tone is playing. '
+            + 'Click to turn tones off for this session. (Set the default in Rig Builder → Studio.)';
+        btn.className = 'px-3 py-1.5 bg-emerald-700/40 hover:bg-emerald-700/60 rounded-lg text-xs text-emerald-200 transition';
     } else if (state.active) {
         btn.textContent = 'Rig Tones On';
         const active = state.activeToneKey ? ` Active tone: ${state.activeToneKey}.` : '';
