@@ -3899,6 +3899,11 @@ def _amp_trim_stage(trim_mult: float, *, tone_key=None) -> dict | None:
     st = _ir_stage(ir, bypassed=False, gain=trim_mult,
                    slot="amp", rs_gear=_AMP_TRIM_RS_GEAR, tone_key=tone_key)
     st["amp_trim"] = round(trim_mult, 4)
+    # Engines with per-slot postGain support (loadPreset reads this optional
+    # field) apply the trim ON THIS SLOT — which is what makes it work inside a
+    # parallel amp branch. Older engines ignore both this and `gain` (the trim
+    # was historically folded/absorbed by the final leveler in serial chains).
+    st["postGain"] = round(trim_mult, 4)
     return st
 
 

@@ -13426,7 +13426,50 @@ function rbAdvPanHtml(n) {
                        value="${pan}" data-adv-pan="${n.id}"
                        oninput="rbAdvOnPanInput(${n.id}, this.value)">
                 <span class="rb-adv-pan-val" data-adv-pan-val="${n.id}">${rbAdvPanLabel(pan)}</span>
+            </div>${rbAdvLevelHtml(n)}`;
+}
+
+// Per-amp mix LEVEL (dB) slider, shown on amp nodes. This is the right control
+// for balancing parallel amps: the amp's own Gain/Master knobs get re-leveled
+// to the loudness target on every chain load (the per-amp trim compensates
+// them by design — "I turned Master down and it came back"), while this level
+// rides the amp slot's engine postGain, which nothing re-normalizes.
+function rbAdvLevelLabel(db) { return (db > 0 ? '+' : '') + (Math.round(db * 10) / 10) + ' dB'; }
+function rbAdvLevelHtml(n) {
+    if ((n.kindLabel || '').toLowerCase().indexOf('amp') !== 0) return '';
+    const audio = rbAudioApi();
+    if (!audio || typeof audio.setPostGain !== 'function') return '';   // engine without per-slot gain
+    const db = (typeof n.gainDb === 'number') ? n.gainDb : 0;
+    return `<div class="rb-adv-node-pan" title="Mix level (this amp only)">
+                <input type="range" class="rb-adv-pan-slider" min="-12" max="12" step="0.5"
+                       value="${db}" data-adv-level="${n.id}"
+                       oninput="rbAdvOnLevelInput(${n.id}, this.value)">
+                <span class="rb-adv-pan-val" data-adv-level-val="${n.id}">${rbAdvLevelLabel(db)}</span>
             </div>`;
+}
+
+// Level slider handler: persist on the node + the durable piece, push live to
+// the amp slot's postGain (independent of the loudness-trim slot).
+async function rbAdvOnLevelInput(id, val) {
+    const adv = rbAdvState();
+    const n = adv.nodes.find(x => x.id === id);
+    if (!n) return;
+    const db = Math.max(-12, Math.min(12, parseFloat(val) || 0));
+    n.gainDb = db;
+    const chain = rbStudioCurrentChain();
+    if (typeof n.pieceIdx === 'number' && n.pieceIdx >= 0 && chain[n.pieceIdx])
+        chain[n.pieceIdx]._gain_db = db;
+    const lbl = document.querySelector(`[data-adv-level-val="${id}"]`);
+    if (lbl) lbl.textContent = rbAdvLevelLabel(db);
+    rbAdvPersist();
+    const audio = rbAudioApi();
+    if (audio && typeof audio.setPostGain === 'function'
+        && typeof n.pieceIdx === 'number' && n.pieceIdx >= 0) {
+        try {
+            const slotId = await rbStudioChainSlotIdForPiece(audio, n.pieceIdx);
+            if (slotId != null) audio.setPostGain(slotId, Math.pow(10, db / 20));
+        } catch (_) {}
+    }
 }
 
 function rbAdvNodeHtml(n) {
@@ -14097,12 +14140,18 @@ async function rbStudioApplyStereoToEngine() {
     // a rebuilt chain piece can lose its _pan). Restore _pan from the node so a
     // gear add/reload doesn't wipe the OTHER gear's pan.
     const panByIdx = new Map();
+    const gainByIdx = new Map();
     const adv = rbState._adv;
     if (adv && Array.isArray(adv.nodes)) {
         for (const n of adv.nodes) {
-            if (n.kind === 'gear' && typeof n.pieceIdx === 'number' && n.pieceIdx >= 0 && typeof n.pan === 'number') {
+            if (n.kind !== 'gear' || typeof n.pieceIdx !== 'number' || n.pieceIdx < 0) continue;
+            if (typeof n.pan === 'number') {
                 panByIdx.set(n.pieceIdx, n.pan);
                 if (chain[n.pieceIdx]) chain[n.pieceIdx]._pan = n.pan;
+            }
+            if (typeof n.gainDb === 'number') {
+                gainByIdx.set(n.pieceIdx, n.gainDb);
+                if (chain[n.pieceIdx]) chain[n.pieceIdx]._gain_db = n.gainDb;
             }
         }
     }
@@ -14149,13 +14198,20 @@ async function rbStudioApplyStereoToEngine() {
         const pan = panByIdx.has(i) ? panByIdx.get(i) : (typeof chain[i]._pan === 'number' ? chain[i]._pan : 0);
         if (hasPan)       { try { audio.setPan(slotId, pan); } catch (_) {} }
         if (hasBranchSrc) { try { audio.setBranchSrc(slotId, srcByIdx.get(i) || 0); } catch (_) {} }
+        // Per-amp mix level (dB) → the gear slot's own postGain (the loudness
+        // trim rides a separate unit-impulse slot, so no collision).
+        if (typeof audio.setPostGain === 'function') {
+            const db = gainByIdx.has(i) ? gainByIdx.get(i) : (typeof chain[i]._gain_db === 'number' ? chain[i]._gain_db : 0);
+            if (db) { try { audio.setPostGain(slotId, Math.pow(10, db / 20)); } catch (_) {} }
+        }
     }
     // TEMP DIAG (parallel debug): read back what the engine actually holds now.
     try {
         const st = (await audio.getChainState()) || [];
         const summary = st.map((s, k) => {
             const nm = String(s.path || s.name || '?').split('/').pop().slice(0, 30);
-            return `#${k} id=${s.id} ${nm} b=${s.branch | 0} pan=${Number(s.pan || 0).toFixed(2)}${s.bypassed ? ' BYP' : ''}`;
+            const g = (typeof s.postGain === 'number' && s.postGain !== 1) ? ` g=${s.postGain.toFixed(3)}` : '';
+            return `#${k} id=${s.id} ${nm} b=${s.branch | 0} pan=${Number(s.pan || 0).toFixed(2)}${g}${s.bypassed ? ' BYP' : ''}`;
         }).join('  |  ');
         rbDebugLog(`amps@${JSON.stringify(ampIdxs)} claims=${JSON.stringify([...branchOfSlot.entries()])} engine: ${summary}`);
     } catch (e) { rbDebugLog('readback failed: ' + e); }
