@@ -18,6 +18,7 @@ only consumes the primary amp/cab pair encoded in `presets`.
 """
 
 import base64
+import html
 import json
 import logging
 import math
@@ -157,10 +158,17 @@ _get_sloppak_cache_dir = None
 _db_path: str | None = None
 _conn: sqlite3.Connection | None = None
 _lock = threading.Lock()
+# Guards the one-time connection creation + schema migrations in
+# _get_conn(). Separate from `_lock` because the migrations themselves
+# take `_lock` (via _get_master_preset_id) — see _get_conn.
+_conn_init_lock = threading.Lock()
 
 # rs_to_real / default_captures / rs_cab_to_ir / rs_cab_mic_map are now
 # cached by filename in `_json_cache` via `_load_cached_json` (see below).
 _settings: dict | None = None  # tone3000_api_key, min_downloads, aggressive
+# Serializes the load-merge-write cycle on the settings file so a
+# concurrent _save_settings / _persist_tokens pair can't drop updates.
+_settings_lock = threading.Lock()
 
 # tone3000 client is recreated when the user updates settings, so we
 # wrap construction in a lock to avoid two threads racing during a
@@ -193,6 +201,10 @@ _batch_state: dict = {
 _batch_lock = threading.Lock()
 _batch_thread: threading.Thread | None = None
 
+# Serializes read-modify-write cycles on rs_to_real.json (amp_variants
+# CRUD, override_query) so concurrent writes can't corrupt the file.
+_rs_map_lock = threading.Lock()
+
 # Live state for the curated-variants preload. Lives outside the batch
 # worker because it runs against rs_to_real.json directly, not the
 # library's songs. Mutated only by the preload thread (under
@@ -204,6 +216,7 @@ _preload_state: dict = {
     "current": "",          # human label of the variant being fetched
     "downloaded": 0,
     "already_present": 0,
+    "wired": 0,
     "failed": [],
     "errors": [],
     "started_at": None,
@@ -587,6 +600,14 @@ def _require_db_path() -> str:
     return _db_path
 
 
+def _chunked(seq: list, size: int = 400):
+    """Yield `seq` in slices of at most `size` items. SQLite caps host
+    parameters per statement (999 in older builds), so IN (...) lists
+    built from arbitrary file inventories must be chunked."""
+    for i in range(0, len(seq), size):
+        yield seq[i:i + size]
+
+
 def _get_conn() -> sqlite3.Connection:
     """Open (and migrate, if needed) the shared nam_tone.db.
 
@@ -594,6 +615,19 @@ def _get_conn() -> sqlite3.Connection:
     we additionally ensure `preset_pieces` exists. CREATE TABLE IF NOT
     EXISTS is idempotent, so running this every cold start is safe.
     """
+    if _conn is not None:
+        return _conn
+    # Double-checked locking: concurrent first requests must not race the
+    # connection creation + migrations. A DEDICATED init lock (not `_lock`)
+    # — the migrations inside call _get_master_preset_id(), which takes
+    # `_lock` itself, so holding `_lock` across init would deadlock.
+    # Nested _get_conn() calls during the migrations hit the fast path
+    # above because `_conn` is assigned before they run.
+    with _conn_init_lock:
+        return _get_conn_locked()
+
+
+def _get_conn_locked() -> sqlite3.Connection:
     global _conn
     if _conn is None:
         _conn = sqlite3.connect(_require_db_path(), check_same_thread=False)
@@ -778,10 +812,11 @@ def _migrate_output_gain_to_unity() -> None:
     # (idempotency on a fresh install where everything is already unity).
     pid = _get_master_preset_id("pre")
     if pid is not None:
-        merged = {"master_role": "pre", "output_gain_unity_migrated": True}
+        marker["master_role"] = "pre"
+        marker["output_gain_unity_migrated"] = True
         conn.execute(
             "UPDATE presets SET settings_json = ? WHERE id = ?",
-            (json.dumps(merged), pid),
+            (json.dumps(marker), pid),
         )
     conn.commit()
     if bumped:
@@ -919,7 +954,7 @@ def _load_settings() -> dict:
                 log.warning("legacy settings copy failed; using defaults", exc_info=True)
     if path.exists():
         try:
-            loaded = json.loads(path.read_text())
+            loaded = json.loads(path.read_text(encoding="utf-8"))
             _settings = {**_DEFAULT_SETTINGS, **loaded}
         except (json.JSONDecodeError, OSError):
             log.warning("settings file unreadable, resetting to defaults")
@@ -937,7 +972,7 @@ def _write_settings_file(data: dict) -> None:
     machine can't read it. Best-effort: chmod is a no-op on some platforms
     (e.g. Windows), which is fine since the profile dir is already per-user."""
     path = _config_dir / _SETTINGS_FILENAME
-    path.write_text(json.dumps(data, indent=2))
+    _atomic_write_json(path, data)
     try:
         path.chmod(0o600)
     except OSError:
@@ -948,10 +983,11 @@ def _save_settings(new_settings: dict) -> dict:
     global _settings, _t3k_client
     if _config_dir is None:
         raise RuntimeError("config_dir not available")
-    current = _load_settings()
-    merged = {**current, **new_settings}
-    _write_settings_file(merged)
-    _settings = merged
+    with _settings_lock:
+        current = _load_settings()
+        merged = {**current, **new_settings}
+        _write_settings_file(merged)
+        _settings = merged
     # Reset the cached client so a new key takes effect immediately.
     with _t3k_lock:
         _t3k_client = None
@@ -967,13 +1003,14 @@ def _persist_tokens(updates: dict) -> None:
     global _settings
     if _config_dir is None:
         return
-    current = _load_settings()
-    current.update(updates)
-    try:
-        _write_settings_file(current)
-    except OSError:
-        log.warning("failed to persist tone3000 tokens", exc_info=True)
-    _settings = current
+    with _settings_lock:
+        current = _load_settings()
+        current.update(updates)
+        try:
+            _write_settings_file(current)
+        except OSError:
+            log.warning("failed to persist tone3000 tokens", exc_info=True)
+        _settings = current
 
 
 def _safe_loopback_redirect(origin: str) -> str:
@@ -1013,7 +1050,7 @@ def _oauth_result_page(message: str, ok: bool) -> str:
         f"h1{{color:{color};font-size:1.1rem;margin:0 0 .5rem}}"
         "p{color:#9ca3af;font-size:.9rem;line-height:1.5;margin:0}</style></head>"
         f"<body><div class='card'><h1>{'Connected' if ok else 'Could not connect'}</h1>"
-        f"<p>{message}</p></div></body></html>"
+        f"<p>{html.escape(message)}</p></div></body></html>"
     )
 
 
@@ -1025,7 +1062,8 @@ def _get_t3k_client():
         if _t3k_client is None:
             # Import here so that a missing client module doesn't break
             # the plugin's main routes — search just degrades.
-            sys.path.insert(0, str(_plugin_dir))
+            if str(_plugin_dir) not in sys.path:
+                sys.path.insert(0, str(_plugin_dir))
             from rb_core.tone3000_client import Tone3000Client
             settings = _load_settings()
             # Cache db lives next to the settings. Migrate the legacy name
@@ -1082,6 +1120,19 @@ def _data_path(filename: str) -> Path:
     return legacy if legacy.exists() else in_data
 
 
+def _atomic_write_json(path: Path, obj, indent: int = 2, **dumps_kwargs) -> None:
+    """Persist `obj` as JSON atomically: serialize to a sibling `.tmp` file,
+    then os.replace() it over `path`. A crash / full disk mid-write can then
+    never leave a truncated JSON behind — the previous file survives intact.
+    Extra keyword args (e.g. sort_keys) pass through to json.dumps."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(
+        json.dumps(obj, indent=indent, ensure_ascii=False, **dumps_kwargs),
+        encoding="utf-8",
+    )
+    os.replace(tmp, path)
+
+
 def _load_cached_json(filename: str, *, post=None, empty=None):
     """Load the generated data file `<plugin>/data/<filename>` as JSON once,
     cached by filename (legacy flat location as fallback — see `_data_path`).
@@ -1098,9 +1149,9 @@ def _load_cached_json(filename: str, *, post=None, empty=None):
     path = _data_path(filename)
     if path.exists():
         try:
-            raw = json.loads(path.read_text())
+            raw = json.loads(path.read_text(encoding="utf-8"))
             val = post(raw) if post else raw
-        except json.JSONDecodeError:
+        except (ValueError, OSError):
             log.error("%s is corrupt", filename, exc_info=True)
             val = empty() if empty else {}
     _json_cache[filename] = val
@@ -1624,7 +1675,7 @@ def _build_known_vst_lookup() -> dict:
     if not path.exists():
         return out
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (ValueError, OSError):
         log.warning("known_vsts file unreadable", exc_info=True)
         return out
@@ -1802,14 +1853,9 @@ def _compute_vst_state_for_piece(rs_gear: str, vst_path: str,
         import apply_vst_state as _avs
     except ImportError:
         return None
-    knob_path = _data_path("rs_knob_to_vst_param.json")
-    if not knob_path.exists():
+    knob_table = _load_knob_to_vst_table()
+    if not knob_table:
         return None
-    try:
-        full = json.loads(knob_path.read_text())
-    except (ValueError, OSError):
-        return None
-    knob_table = {k: v for k, v in full.items() if not k.startswith("_")}
     try:
         result = _avs._build_params_for_piece(
             rs_gear, vst_path,
@@ -2252,7 +2298,8 @@ def _migrate_nam_storage_to_subdirs() -> dict:
     if not summary["errors"]:
         try:
             sentinel.write_text(
-                json.dumps({"migrated_at": time.time(), **summary}, indent=2)
+                json.dumps({"migrated_at": time.time(), **summary}, indent=2),
+                encoding="utf-8",
             )
             log.info("nam storage migrated to subdir layout: %s", summary)
         except OSError:
@@ -3211,21 +3258,35 @@ def _ffmpeg_normalize_ir(src: Path, dest: Path) -> bool:
 
     Returns True on success. On failure (ffmpeg missing, decode error,
     timeout) the caller falls back to a raw byte copy.
+
+    Writes to a sibling temp file and os.replace()s it into `dest` on
+    success, so a killed/failed ffmpeg run can never leave a partial
+    file at the final path (which would poison the exists() dedupe on
+    the next download).
     """
+    tmp = dest.with_suffix(".tmp.wav")
     try:
         result = subprocess.run(
             [
                 "ffmpeg", "-y", "-i", str(src),
                 "-ar", "48000", "-ac", "1",
                 "-c:a", "pcm_f32le",
-                str(dest),
+                str(tmp),
             ],
             capture_output=True,
             timeout=60,
         )
-        return result.returncode == 0
+        if result.returncode == 0:
+            os.replace(tmp, dest)
+            return True
+        return False
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
+    finally:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 # Tracks how many bytes the current batch has pulled. Reset at the
@@ -3373,11 +3434,13 @@ def _download_candidate(
             # better than dropping the assignment (which left the cab
             # unchanged on re-download).
             log.warning("ffmpeg normalization failed for %s — using raw copy", rs_gear)
+            copy_tmp = final_path.with_suffix(".tmp.wav")
             try:
-                shutil.copyfile(tmp_path, final_path)
+                shutil.copyfile(tmp_path, copy_tmp)
+                os.replace(copy_tmp, final_path)
             except Exception:
                 log.warning("raw IR copy also failed for %s — IR not assigned", rs_gear)
-                for p in (tmp_path, final_path):
+                for p in (tmp_path, copy_tmp):
                     try:
                         p.unlink(missing_ok=True)
                     except Exception:
@@ -3857,26 +3920,33 @@ def _read_ir_l2(path: Path) -> float | None:
         return None
     if blob[:4] != b"RIFF" or blob[8:12] != b"WAVE":
         return None
-    pos = 12
-    fmt_tag = ch = bps = None
-    data_off = data_size = None
-    while pos < len(blob) - 8:
-        cid = blob[pos:pos + 4]
-        csize = struct.unpack("<I", blob[pos + 4:pos + 8])[0]
-        if cid == b"fmt ":
-            fmt_tag, ch, _sr, _, _, bps = struct.unpack(
-                "<HHIIHH", blob[pos + 8:pos + 8 + 16])
-        elif cid == b"data":
-            data_off, data_size = pos + 8, csize
-        pos += 8 + csize + (csize & 1)
-    if (fmt_tag, bps) != (3, 32) or data_off is None or ch != 1:
+    # A truncated/corrupt WAV makes an unpack see a short buffer and
+    # raise struct.error — treat it like any other unreadable IR.
+    try:
+        pos = 12
+        fmt_tag = ch = bps = None
+        data_off = data_size = None
+        while pos < len(blob) - 8:
+            cid = blob[pos:pos + 4]
+            csize = struct.unpack("<I", blob[pos + 4:pos + 8])[0]
+            if cid == b"fmt ":
+                fmt_tag, ch, _sr, _, _, bps = struct.unpack(
+                    "<HHIIHH", blob[pos + 8:pos + 8 + 16])
+            elif cid == b"data":
+                data_off, data_size = pos + 8, csize
+            pos += 8 + csize + (csize & 1)
+        if (fmt_tag, bps) != (3, 32) or data_off is None or ch != 1:
+            return None
+        if data_off + data_size > len(blob):
+            return None   # declared data chunk runs past the file
+        n = data_size // 4
+        if n == 0:
+            return None
+        total = sum(v * v for v in struct.unpack(
+            "<%df" % n, blob[data_off:data_off + data_size]))
+        return total ** 0.5
+    except struct.error:
         return None
-    n = data_size // 4
-    if n == 0:
-        return None
-    total = sum(v * v for v in struct.unpack(
-        "<%df" % n, blob[data_off:data_off + data_size]))
-    return total ** 0.5
 
 
 def _ir_l2_for_path(path: Path) -> float | None:
@@ -3938,7 +4008,7 @@ def _load_di_cab_makeup() -> dict:
     if _di_cab_makeup_tbl is None:
         try:
             p = _data_path("di_cab_makeup.json")
-            _di_cab_makeup_tbl = (json.loads(p.read_text()).get("makeup", {})
+            _di_cab_makeup_tbl = (json.loads(p.read_text(encoding="utf-8")).get("makeup", {})
                                   if p.exists() else {})
         except (OSError, ValueError):
             _di_cab_makeup_tbl = {}
@@ -3953,24 +4023,30 @@ def _read_ir_samples(path: Path):
         return None
     if blob[:4] != b"RIFF" or blob[8:12] != b"WAVE":
         return None
-    pos = 12
-    fmt_tag = ch = sr = bps = None
-    data_off = data_size = None
-    while pos < len(blob) - 8:
-        cid = blob[pos:pos + 4]
-        csize = struct.unpack("<I", blob[pos + 4:pos + 8])[0]
-        if cid == b"fmt ":
-            fmt_tag, ch, sr, _, _, bps = struct.unpack(
-                "<HHIIHH", blob[pos + 8:pos + 8 + 16])
-        elif cid == b"data":
-            data_off, data_size = pos + 8, csize
-        pos += 8 + csize + (csize & 1)
-    if (fmt_tag, bps) != (3, 32) or data_off is None or ch != 1 or not data_size:
+    # Same truncated-file guard as _read_ir_l2.
+    try:
+        pos = 12
+        fmt_tag = ch = sr = bps = None
+        data_off = data_size = None
+        while pos < len(blob) - 8:
+            cid = blob[pos:pos + 4]
+            csize = struct.unpack("<I", blob[pos + 4:pos + 8])[0]
+            if cid == b"fmt ":
+                fmt_tag, ch, sr, _, _, bps = struct.unpack(
+                    "<HHIIHH", blob[pos + 8:pos + 8 + 16])
+            elif cid == b"data":
+                data_off, data_size = pos + 8, csize
+            pos += 8 + csize + (csize & 1)
+        if (fmt_tag, bps) != (3, 32) or data_off is None or ch != 1 or not data_size:
+            return None
+        if data_off + data_size > len(blob):
+            return None   # declared data chunk runs past the file
+        n = data_size // 4
+        if n == 0:
+            return None
+        return list(struct.unpack("<%df" % n, blob[data_off:data_off + data_size])), sr
+    except struct.error:
         return None
-    n = data_size // 4
-    if n == 0:
-        return None
-    return list(struct.unpack("<%df" % n, blob[data_off:data_off + data_size])), sr
 
 
 def _write_ir_f32(path: Path, samples, sr: int) -> None:
@@ -4799,8 +4875,11 @@ def _rename_legacy_filenames_to_readable() -> dict:
                 continue
             new_name = f"{_safe_filename_human(title)}.{ext}"
             new_path = f.parent / new_name
-            old_rel = f"{f.parent.name}/{f.name}"
-            new_rel = f"{f.parent.name}/{new_name}"
+            # DB `file` values are relative to the nam_models/nam_irs root
+            # (POSIX separators) — parent.name alone breaks for files at
+            # the root or nested more than one level deep.
+            old_rel = f.relative_to(root).as_posix()
+            new_rel = f.relative_to(root).with_name(new_name).as_posix()
             if new_path.exists() and new_path != f:
                 # Same-size collision = duplicate copy of the same
                 # NAM (legacy scheme suffixed each download with the
@@ -4835,7 +4914,7 @@ def _rename_legacy_filenames_to_readable() -> dict:
                 new_name = (f"{_safe_filename_human(title)} "
                             f"(m{mid}).{ext}")
                 new_path = f.parent / new_name
-                new_rel = f"{f.parent.name}/{new_name}"
+                new_rel = f.relative_to(root).with_name(new_name).as_posix()
             try:
                 f.rename(new_path)
             except OSError as e:
@@ -5042,9 +5121,11 @@ def _wire_curated_variants_to_presets() -> dict:
     errors = []
     nam_root = _config_dir / "nam_models"
     for rs_gear, info in rs_map.items():
-        if info.get("category") != "amp":
+        if not isinstance(info, dict) or info.get("category") != "amp":
             continue
         for level, spec in (info.get("gain_variants") or {}).items():
+            if not isinstance(spec, dict):
+                continue
             tone3000_id = spec.get("tone3000_id")
             model_id = spec.get("model_id")
             rng = spec.get("rs_gain_range") or [0.0, 100.0]
@@ -5659,10 +5740,10 @@ def _batch_worker(mode: str = "all"):
                 rs_map_for_preload = _load_rs_to_real() or {}
                 preload_jobs = []
                 for rs_gear, info in rs_map_for_preload.items():
-                    if (info or {}).get("category") != "amp":
+                    if not isinstance(info, dict) or info.get("category") != "amp":
                         continue
                     for level, spec in (info.get("gain_variants") or {}).items():
-                        if spec and spec.get("tone3000_id"):
+                        if isinstance(spec, dict) and spec.get("tone3000_id"):
                             preload_jobs.append((rs_gear, level, spec))
                 if preload_jobs:
                     _batch_log(
@@ -5873,6 +5954,15 @@ def _auto_download_for_song(filename: str, path: Path) -> dict:
                         "ORDER BY id DESC LIMIT 1",
                         (rs_type,),
                     ).fetchone()
+                if existing:
+                    # Trust the reused row only if the file still exists on
+                    # disk (mirrors _existing_assignment_for_gear) — a purged
+                    # or renamed capture must fall through to a fresh download.
+                    _ex_kind, _ex_file = existing
+                    _ex_root = _config_dir / ("nam_models" if _ex_kind == "nam"
+                                              else "nam_irs")
+                    if not (_ex_root / _ex_file).exists():
+                        existing = None
                 if existing:
                     pieces.append({
                         "slot": piece["slot"],
@@ -7267,18 +7357,28 @@ def setup(app, context):
         new_gears = (data.get("gears") or "").strip()
         if not rs_gear or not new_query:
             return JSONResponse({"error": "rs_gear and query required"}, 400)
-        rs_map = _load_rs_to_real()
-        if rs_gear not in rs_map:
-            return JSONResponse(
-                {"error": f"rs_gear {rs_gear} not present in rs_to_real.json"},
-                404,
-            )
-        rs_map[rs_gear]["tone3000_query"] = new_query
-        if new_gears:
-            rs_map[rs_gear]["tone3000_gears"] = new_gears
-        path = _data_path("rs_to_real.json")
-        path.write_text(json.dumps(rs_map, indent=2, sort_keys=True))
-        _invalidate_rs_to_real()
+        # Work on a FRESH read under the shared lock — never mutate the
+        # dict `_load_rs_to_real()` caches (other threads read it live),
+        # and only invalidate the cache after a successful write.
+        with _rs_map_lock:
+            path = _data_path("rs_to_real.json")
+            try:
+                rs_map = json.loads(path.read_text(encoding="utf-8"))
+            except (FileNotFoundError, json.JSONDecodeError, OSError,
+                    UnicodeDecodeError):
+                log.exception("override_query: rs_to_real.json unreadable")
+                return JSONResponse(
+                    {"error": "rs_to_real.json is missing or unreadable"}, 500)
+            if not isinstance(rs_map.get(rs_gear), dict):
+                return JSONResponse(
+                    {"error": f"rs_gear {rs_gear} not present in rs_to_real.json"},
+                    404,
+                )
+            rs_map[rs_gear]["tone3000_query"] = new_query
+            if new_gears:
+                rs_map[rs_gear]["tone3000_gears"] = new_gears
+            _atomic_write_json(path, rs_map, sort_keys=True)
+            _invalidate_rs_to_real()
         # The tone3000 client caches each search URL for 7 days. Our
         # override changes the URL so the new query naturally misses
         # the cache — no explicit invalidation needed.
@@ -7346,6 +7446,10 @@ def setup(app, context):
         tone3000_id = data.get("tone3000_id")
         if not rs_gear or not tone3000_id:
             return JSONResponse({"error": "rs_gear and tone3000_id required"}, 400)
+        try:
+            tone3000_id = int(tone3000_id)
+        except (TypeError, ValueError):
+            return JSONResponse({"error": "tone3000_id must be an integer"}, 400)
         settings = _load_settings()
         info = _load_rs_to_real().get(rs_gear) or {}
         category = _gear_category(rs_gear)
@@ -7356,7 +7460,7 @@ def setup(app, context):
         _batch_disk_bytes = 0
         try:
             result = _download_candidate(
-                tone3000_id=int(tone3000_id),
+                tone3000_id=tone3000_id,
                 is_ir=(category == "cab"),
                 rs_gear=rs_gear,
                 settings=settings,
@@ -7373,7 +7477,7 @@ def setup(app, context):
         # and the song actually plays through the downloaded capture.
         # Without this, the file sat on disk unreferenced and coverage
         # kept reporting the gear as pending.
-        assigned = _assign_file_to_gear(rs_gear, kind, fname, int(tone3000_id))
+        assigned = _assign_file_to_gear(rs_gear, kind, fname, tone3000_id)
         return {"ok": True, "kind": kind, "file": fname, **assigned}
 
     # ── Auto-download for a single song (triggered on UI open) ──────
@@ -7490,7 +7594,7 @@ def setup(app, context):
         try:
             captures = _build_default_captures()
             path = _data_path("default_captures.json")
-            path.write_text(json.dumps(captures, indent=2, sort_keys=True))
+            _atomic_write_json(path, captures, sort_keys=True)
             _invalidate_default_captures()
         except Exception as e:
             log.exception("export_default_captures failed")
@@ -7770,10 +7874,16 @@ def setup(app, context):
                     state_obj = {"pluginPath": str(vp), "format": vst_format}
                     if effective_vst_state:
                         state_obj["pluginState"] = effective_vst_state
-                    tone_stages.append(_vst_stage(
+                    _vs = _vst_stage(
                         vp, vst_format, bypassed=persisted_bypassed,
                         state=_state_b64(state_obj),
-                        slot=slot, rs_gear=gear, tone_key=tone_key))
+                        slot=slot, rs_gear=gear, tone_key=tone_key)
+                    # Slot identity for the mega-chain dedupe key: two
+                    # instances of the SAME VST inside one tone (e.g. a
+                    # doubled pedal) must keep separate chain slots.
+                    # Stripped from the flattened chain copy below.
+                    _vs["slot_order"] = _o
+                    tone_stages.append(_vs)
                     # Per-amp loudness trim (clean gain after the amp). Tagged
                     # tone_key + amp_trim so the dedupe below keeps per-tone
                     # trims distinct. Gain itself is untouched (still saturates).
@@ -7830,7 +7940,9 @@ def setup(app, context):
         # Dedupe key:
         #   - NAM (type 1): ("nam", file_path)
         #   - IR  (type 2): ("ir",  file_path)
-        #   - VST (type 0): ("vst", tone_key, name) — unique per tone
+        #   - VST (type 0): ("vst", tone_key, slot_order, name) — unique
+        #     per tone AND per piece slot (a tone can hold two instances
+        #     of the same VST with different states)
         per_tone_stages = []      # parallel to mappings: list of stage lists
         slots_by_type: dict[str, dict] = {}   # slot_type → { dedupe_key: stage_dict }
         slot_order_by_type: dict[str, list] = {}   # slot_type → ordered list of dedupe_keys
@@ -7848,8 +7960,9 @@ def setup(app, context):
                     # after its own amp (never shared/reordered before another).
                     dkey = (("amp_trim", tone_key) if stage.get("amp_trim") is not None
                             else ("ir", stage.get("path")))
-                else:                  # VST — always unique per tone
-                    dkey = ("vst", tone_key, stage.get("name") or stage.get("path"))
+                else:                  # VST — always unique per tone + slot
+                    dkey = ("vst", tone_key, stage.get("slot_order"),
+                            stage.get("name") or stage.get("path"))
                 bucket = slots_by_type.setdefault(slot_type, {})
                 order  = slot_order_by_type.setdefault(slot_type, [])
                 if dkey not in bucket:
@@ -7866,6 +7979,7 @@ def setup(app, context):
                     # behaviour we accept to cut memory ~3-4×.
                     s = dict(stage)
                     s.pop("tone_key", None)
+                    s.pop("slot_order", None)
                     bucket[dkey] = s
                     order.append(dkey)
 
@@ -7932,7 +8046,8 @@ def setup(app, context):
                     dkey = (("amp_trim", tone_key) if stage.get("amp_trim") is not None
                             else ("ir", stage.get("path")))
                 else:
-                    dkey = ("vst", tone_key, stage.get("name") or stage.get("path"))
+                    dkey = ("vst", tone_key, stage.get("slot_order"),
+                            stage.get("name") or stage.get("path"))
                 idx = index_of_dkey.get((slot_type, dkey))
                 if idx is not None and idx not in seen:
                     entry = {"idx": idx, "bypassed": bool(stage.get("bypassed", False))}
@@ -8078,7 +8193,7 @@ def setup(app, context):
         if not path.exists():
             return {"plugins": bundled}
         try:
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
             by_path = {p["path"]: p for p in bundled if p.get("path")}
             if isinstance(data, list):
                 for p in data:
@@ -8120,7 +8235,7 @@ def setup(app, context):
         merged_by_path: dict = {}
         if mode != "replace" and path.exists():
             try:
-                existing = json.loads(path.read_text())
+                existing = json.loads(path.read_text(encoding="utf-8"))
                 for p in existing.get("plugins", []) or []:
                     if isinstance(p, dict) and p.get("path"):
                         merged_by_path[p["path"]] = p
@@ -8134,9 +8249,8 @@ def setup(app, context):
         final = sorted(merged_by_path.values(),
                        key=lambda x: (x.get("name") or "").lower())
         try:
-            path.write_text(json.dumps({"plugins": final,
-                                        "synced_at": int(time.time())},
-                                       indent=2))
+            _atomic_write_json(path, {"plugins": final,
+                                      "synced_at": int(time.time())})
         except OSError as e:
             return JSONResponse({"error": f"write failed: {e}"}, 500)
         return {"ok": True, "count": len(final),
@@ -8145,10 +8259,8 @@ def setup(app, context):
     # ── Amp gain variants — CRUD endpoints used by the Gear-catalog UI ──
     #
     # Variants are persisted into rs_to_real.json (the same file the
-    # auto-download / batch worker reads). Writing is atomic-ish:
-    # rs_to_real.json.bak is updated before the new file is renamed in.
-
-    _rs_map_lock = threading.Lock()
+    # auto-download / batch worker reads). Writing is atomic:
+    # rs_to_real.json.bak is updated before the new file is replaced in.
 
     def _rs_map_write_atomic(rs_map: dict) -> None:
         """Save rs_to_real.json with a one-deep backup. Caller holds the
@@ -8158,7 +8270,7 @@ def setup(app, context):
         backup = path.with_suffix(".json.bak")
         if path.exists():
             backup.write_bytes(path.read_bytes())
-        path.write_text(json.dumps(rs_map, indent=2, ensure_ascii=False) + "\n")
+        _atomic_write_json(path, rs_map)
 
     @app.get("/api/plugins/rig_builder/amp_variants/{rs_gear}")
     def amp_variants_list(rs_gear: str):
@@ -8212,7 +8324,13 @@ def setup(app, context):
 
         with _rs_map_lock:
             path = _data_path("rs_to_real.json")
-            rs_map = json.loads(path.read_text())
+            try:
+                rs_map = json.loads(path.read_text(encoding="utf-8"))
+            except (FileNotFoundError, json.JSONDecodeError, OSError,
+                    UnicodeDecodeError):
+                log.exception("amp_variants: rs_to_real.json unreadable")
+                return JSONResponse(
+                    {"error": "rs_to_real.json is missing or unreadable"}, 500)
             info = rs_map.get(rs_gear)
             if not info:
                 return JSONResponse({"error": f"rs_gear {rs_gear} not in rs_to_real.json"}, 404)
@@ -8236,7 +8354,13 @@ def setup(app, context):
     def amp_variants_delete(rs_gear: str, level: str):
         with _rs_map_lock:
             path = _data_path("rs_to_real.json")
-            rs_map = json.loads(path.read_text())
+            try:
+                rs_map = json.loads(path.read_text(encoding="utf-8"))
+            except (FileNotFoundError, json.JSONDecodeError, OSError,
+                    UnicodeDecodeError):
+                log.exception("amp_variants: rs_to_real.json unreadable")
+                return JSONResponse(
+                    {"error": "rs_to_real.json is missing or unreadable"}, 500)
             info = rs_map.get(rs_gear)
             if not info:
                 return JSONResponse({"error": f"rs_gear {rs_gear} not in rs_to_real.json"}, 404)
@@ -8305,11 +8429,6 @@ def setup(app, context):
             "title": (payload or {}).get("title") or "",
             "captures": out,
         }
-
-    def _invalidate_rs_to_real():
-        """Clear the in-process rs_to_real cache so the next read picks
-        up the file we just wrote. Mirrors _invalidate_default_captures."""
-        _invalidate_cached_json("rs_to_real.json")
 
     @app.post("/api/plugins/rig_builder/vst/assign")
     def vst_assign(data: dict = Body(...)):
@@ -8462,14 +8581,14 @@ def setup(app, context):
         # For NAM models the file column stores the bare basename; for IRs
         # under nam_irs/rocksmith/foo.wav it stores "rocksmith/foo.wav"
         # (see _assign_file_to_gear and friends — same relative convention).
-        rel_names = [str(p.relative_to(root)) for p in paths]
+        rel_names = [p.relative_to(root).as_posix() for p in paths]
         usage: dict[str, dict] = {n: {"count": 0, "gears": []} for n in rel_names}
-        if rel_names:
-            placeholders = ",".join("?" for _ in rel_names)
+        for chunk in _chunked(rel_names):
+            placeholders = ",".join("?" for _ in chunk)
             rows = conn.execute(
                 f"SELECT file, COUNT(*), GROUP_CONCAT(DISTINCT rs_gear_type) "
                 f"FROM preset_pieces WHERE file IN ({placeholders}) GROUP BY file",
-                tuple(rel_names),
+                tuple(chunk),
             ).fetchall()
             for fname, n, gears in rows:
                 usage[fname] = {
@@ -8540,7 +8659,9 @@ def setup(app, context):
         suggestions. Falls back to whatever is in the known list whose
         category matches the gear's family (rough heuristic)."""
         seeds = _load_vst_seed_catalog()
-        suggestions = seeds.get(rs_gear_type, [])
+        # Copy before annotating — the seed catalog is a shared cache and
+        # mutating its dicts would leak `installed*` keys across requests.
+        suggestions = [dict(s) for s in seeds.get(rs_gear_type, [])]
         # Cross-reference suggestions with what's actually installed so the
         # UI can disambiguate "you have it" vs "you'd need to install".
         known = vst_known().get("plugins", [])
@@ -9105,10 +9226,10 @@ def setup(app, context):
                 return JSONResponse({"error": "tone3000 not connected"}, 400)
             jobs = []
             for rs_gear, info in rs_map.items():
-                if info.get("category") != "amp":
+                if not isinstance(info, dict) or info.get("category") != "amp":
                     continue
                 for level, spec in (info.get("gain_variants") or {}).items():
-                    if spec.get("tone3000_id"):
+                    if isinstance(spec, dict) and spec.get("tone3000_id"):
                         jobs.append((rs_gear, level, spec))
             _preload_state.update({
                 "running": True,
@@ -9580,24 +9701,26 @@ def setup(app, context):
                     except OSError as e:
                         errors.append(f"{entry.name}: {e}")
 
-        # DB cleanup — null any reference to a deleted file.
+        # DB cleanup — null any reference to a deleted file. Chunked so a
+        # big purge can't blow SQLite's per-statement parameter limit.
         if deleted:
             conn = _get_conn()
-            placeholders = ",".join("?" for _ in deleted)
-            conn.execute(
-                "UPDATE preset_pieces SET file = NULL, kind = 'none', "
-                "       tone3000_id = NULL, assigned_mode = NULL "
-                f"WHERE file IN ({placeholders})",
-                tuple(deleted),
-            )
-            conn.execute(
-                f"UPDATE presets SET model_file = '' WHERE model_file IN ({placeholders})",
-                tuple(deleted),
-            )
-            conn.execute(
-                f"UPDATE presets SET ir_file = '' WHERE ir_file IN ({placeholders})",
-                tuple(deleted),
-            )
+            for chunk in _chunked(deleted):
+                placeholders = ",".join("?" for _ in chunk)
+                conn.execute(
+                    "UPDATE preset_pieces SET file = NULL, kind = 'none', "
+                    "       tone3000_id = NULL, assigned_mode = NULL "
+                    f"WHERE file IN ({placeholders})",
+                    tuple(chunk),
+                )
+                conn.execute(
+                    f"UPDATE presets SET model_file = '' WHERE model_file IN ({placeholders})",
+                    tuple(chunk),
+                )
+                conn.execute(
+                    f"UPDATE presets SET ir_file = '' WHERE ir_file IN ({placeholders})",
+                    tuple(chunk),
+                )
             conn.commit()
 
         return {
