@@ -3852,16 +3852,22 @@ def _amp_params_from_state(effective_vst_state) -> dict | None:
 def _amp_trim_mult_for_state(vst_path, effective_vst_state) -> float:
     """Linear post-amp gain that levels this amp VST. 1.0 (no-op) for any VST
     that isn't a modeled amp, or whose state is opaque."""
+    stem = Path(vst_path).stem
     model = _load_amp_loudness_model()
     if not model:
+        print(f"[rb-debug] amp_trim {stem}: NO loudness model file -> x1.0", flush=True)
         return 1.0
-    entry = model.get(Path(vst_path).stem.lower())
+    entry = model.get(stem.lower())
     if not isinstance(entry, dict):
+        print(f"[rb-debug] amp_trim {stem}: not in loudness model -> x1.0", flush=True)
         return 1.0
     params = _amp_params_from_state(effective_vst_state)
     if params is None:
+        print(f"[rb-debug] amp_trim {stem}: state opaque/unreadable -> x1.0 (UNTRIMMED)", flush=True)
         return 1.0
-    return 10.0 ** (_amp_loudness_trim_db(entry, params) / 20.0)
+    mult = 10.0 ** (_amp_loudness_trim_db(entry, params) / 20.0)
+    print(f"[rb-debug] amp_trim {stem}: params={params} -> x{mult:.3f} ({20*math.log10(mult):+.1f} dB)", flush=True)
+    return mult
 
 
 def _unit_impulse_ir_path() -> Path | None:
