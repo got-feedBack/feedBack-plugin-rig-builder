@@ -2735,6 +2735,44 @@ def _get_default_tone_preset_id() -> int | None:
         return pid
 
 
+def _default_tone_fallback_mapping(conn: sqlite3.Connection):
+    """Return a single synthetic mega-chain mapping for the user's default tone,
+    or None when there is no usable default tone.
+
+    Used by `/mega_chain/{song}` when a song has no per-song tone mappings —
+    which is EVERY feedpak song, since the feedpak format carries no Rocksmith
+    gear/tone descriptors to map (see feedpak-spec FEP-0001). Falling back to
+    the default tone lets the highway "Rig Tones" button apply a rig to any song
+    instead of failing. Gated on `default_tone_enabled` so a user who turned the
+    default tone off still gets an honest "no tones" 404.
+
+    The tuple shape matches `_lookup()` rows so the caller can drop it straight
+    into the mega-chain builder:
+        (tone_key, preset_id, name, input_gain, output_gain, gate_threshold)
+    """
+    if not _load_settings().get("default_tone_enabled", True):
+        return None
+    default_pid = _get_default_tone_preset_id()
+    if default_pid is None:
+        return None
+    drow = conn.execute(
+        "SELECT name, input_gain, output_gain, gate_threshold "
+        "FROM presets WHERE id = ?", (default_pid,),
+    ).fetchone()
+    has_pieces = conn.execute(
+        "SELECT 1 FROM preset_pieces WHERE preset_id = ? LIMIT 1",
+        (default_pid,),
+    ).fetchone()
+    if not (drow and has_pieces):
+        return None
+    return [(
+        "__default__", default_pid, drow[0],
+        drow[1] if drow[1] is not None else 1.0,
+        drow[2] if drow[2] is not None else 1.0,
+        drow[3],
+    )]
+
+
 def _load_default_tone_chain() -> list[dict]:
     """Return the default tone's chain as enriched pieces (same shape as
     _load_master_chain). Empty list if nothing configured yet."""
@@ -7797,6 +7835,20 @@ def setup(app, context):
                         decoded, exc_info=True)
 
         mappings = _lookup(decoded)
+        # No per-song tone mappings. This is the norm for songs that carry no
+        # gear metadata at all — notably feedpak-format songs, which store chart
+        # + stems but NO Rocksmith amp/cab/pedal descriptors (see feedpak-spec
+        # FEP-0001), so per-song gear→VST mapping is impossible for them. Rather
+        # than fail the highway "Rig Tones" button on every feedpak, fall back to
+        # the user's default tone. The default tone becomes a single synthetic
+        # "tone" run through the same mega-chain builder below, so the response
+        # shape is unchanged (one tone) apart from the `default_fallback` marker.
+        default_fallback = False
+        if not mappings:
+            fallback = _default_tone_fallback_mapping(conn)
+            if fallback:
+                mappings = fallback
+                default_fallback = True
         if not mappings:
             return JSONResponse(
                 {"error": f"no tone mappings for {decoded}",
@@ -8052,6 +8104,11 @@ def setup(app, context):
             "active_tone_key":   tone_index[0]["tone_key"] if tone_index else None,
             "missing": missing,
             "total_stages": len(chain),
+            # True when this song had no per-song mappings and we served the
+            # user's default tone instead (feedpak fallback). The front-end uses
+            # it to label the player button "default rig" rather than a per-song
+            # tone key.
+            "default_fallback": default_fallback,
         }
 
     # ── Single-stage audition (catalog "Escuchar") ────────────────────
