@@ -728,7 +728,7 @@
     .rb-adv-pal-item:active{ cursor:grabbing; }
     .rb-adv-pal-thumb{ flex:0 0 auto; width:52px; height:34px; border-radius:6px; overflow:hidden; background:#0b0d12;
         display:flex; align-items:center; justify-content:center; }
-    .rb-adv-pal-thumb img{ width:100%; height:100%; object-fit:contain; }
+    .rb-adv-pal-thumb img{ width:100%; height:100%; object-fit:contain; -webkit-user-drag:none; user-select:none; }
     .rb-adv-pal-ph{ font-size:11px; font-weight:600; letter-spacing:.06em; color:#6f7a88; }
     .rb-adv-pal-name{ flex:1 1 auto; min-width:0; font-size:12px; color:#dbe4f2; line-height:1.2;
         overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -803,7 +803,7 @@
     .rb-adv-editor-empty{ padding:22px 16px; text-align:center; color:#8893a5; font-size:12px; }
     .rb-adv-node-thumb{ height:56px; border-radius:11px 11px 0 0; overflow:hidden; background:#0b0d12;
         display:flex; align-items:center; justify-content:center; border-bottom:1px solid rgba(255,255,255,.06); }
-    .rb-adv-node-thumb img{ width:100%; height:100%; object-fit:contain; }
+    .rb-adv-node-thumb img{ width:100%; height:100%; object-fit:contain; -webkit-user-drag:none; user-select:none; }
     .rb-adv-node-label{ padding:6px 8px; font-size:11px; color:#dbe4f2; text-align:center; line-height:1.2;
         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .rb-adv-node-kind{ font-size:9px; letter-spacing:.08em; text-transform:uppercase; color:#7e8aa3; text-align:center; padding:0 0 6px; }
@@ -1091,7 +1091,7 @@
 
     <!-- Setup (was Dashboard + Settings merged). Top half = library-
          wide batch ops + coverage stats; bottom half = tone3000 + VST
-         scan + preferences + extract tools + export defaults. Same
+         scan + preferences + export defaults. Same
          DOM ids used by JS — only the layout was reorganised. -->
     <div id="rb-tab-settings" class="rb-tab-panel rb-overlay hidden">
 

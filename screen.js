@@ -1,4 +1,16 @@
 // NAM Rig Builder plugin — the game tone → NAM preset mapping UI.
+
+// ── Desktop-bridge back-compat ──────────────────────────────────────────────
+// The host renamed window.slopsmithDesktop → window.feedBackDesktop
+// (got-feedback/feedBack-desktop#40). On desktop builds that still expose only
+// the legacy name, alias it so the feedBackDesktop reads below work on every
+// desktop in any release order. No-op in the browser and on the new bridge.
+try {
+    if (typeof window !== 'undefined' && !window.feedBackDesktop && window.slopsmithDesktop) {
+        window.feedBackDesktop = window.slopsmithDesktop;
+    }
+} catch (_) { /* frozen window — ignore */ }
+
 window.RB_API = window.RB_API || '/api/plugins/rig_builder';
 
 window.NAM_API = window.NAM_API || '/api/plugins/nam_tone';
@@ -182,7 +194,7 @@ function rbSetImmersiveTopbar(on) {
                     + (data.missing && data.missing.length ? ` · missing files: ${data.missing.join(', ')}` : ''));
                 // PROACTIVE TRANSIENT KILL: the bundle calls loadPreset ~1ms
                 // after we return this response. We can't monkey-patch
-                // `slopsmithDesktop.audio.loadPreset` directly because the
+                // `feedBackDesktop.audio.loadPreset` directly because the
                 // object is frozen by Electron's contextBridge (we verified
                 // this: assignments silently no-op). But the exposed methods
                 // *are* callable from here, so we mute right now — before
@@ -618,7 +630,10 @@ function rbDbToGain(db) {
 // mode). Presence-only check — use rbNativeAudio() when the caller needs the
 // engine methods (loadPreset/startAudio) verified too.
 function rbAudioApi() {
-    return (window.slopsmithDesktop && window.slopsmithDesktop.audio) || null;
+    // feedBackDesktop is the host's current bridge name; slopsmithDesktop is
+    // the pre-rename fallback (older hosts; the shim at the top also aliases).
+    return (window.feedBackDesktop && window.feedBackDesktop.audio)
+        || (window.slopsmithDesktop && window.slopsmithDesktop.audio) || null;
 }
 
 function rbGainToDb(gain) {
@@ -1151,9 +1166,9 @@ async function rbPreLoadMute(chainLen, targetGain, opts) {
 }
 
 // NOTE: an earlier version of this file tried to monkey-patch
-// `window.slopsmithDesktop.audio.loadPreset` to mute monitor + zero the
+// `window.feedBackDesktop.audio.loadPreset` to mute monitor + zero the
 // chain gain during load. That approach is dead: Electron's
-// contextBridge exposes `slopsmithDesktop.audio` as a frozen object —
+// contextBridge exposes `feedBackDesktop.audio` as a frozen object —
 // you can call its methods, but `api.loadPreset = function` silently
 // no-ops, so the wrap was never actually installed. We confirmed this
 // in DevTools (api.__rbWrapped stayed undefined). The transient-kill
@@ -1986,7 +2001,7 @@ function rbRecordLegacyNativeLoadBridge(reason, status) {
         routeKey: RB_EFFECTS_ROUTE_KEY,
         bridgeId: 'audio-effects.legacy-native-load',
         pluginId: RB_PLUGIN_ID,
-        legacySurface: 'window.slopsmithDesktop.audio.loadPreset',
+        legacySurface: 'window.feedBackDesktop.audio.loadPreset',
         status: status || 'used',
         reason: rbShortSafeText(reason || 'Rig Builder direct Desktop loadPreset used'),
     });
@@ -2339,6 +2354,7 @@ const RbMegaChain = (function () {
                                // loop bail if a newer song load superseded it
     let _seedTried = null;     // filename we already kicked an on-demand seed for
     let _activeToneKey = null; // tone_key currently un-bypassed
+    let _defaultFallback = false; // true when the active chain is the default tone (song had no per-song mapping — e.g. feedpak)
     let _pollHandle = null;    // setInterval handle watching highway tone changes
     let _duckedStems = null;   // saved gain nodes to restore on teardown
     // Map from chain-array INDEX (what the backend gives us in
@@ -2374,6 +2390,7 @@ const RbMegaChain = (function () {
             error: _lastError && _lastError.reason || '',
             enabled: _settingOn(),
             activeToneKey: _activeToneKey || '',
+            defaultFallback: _defaultFallback,
             filename: _activeFilename || _pendingFilename || (_lastError && _lastError.filename) || _currentSongFilename(),
         };
     }
@@ -2393,6 +2410,7 @@ const RbMegaChain = (function () {
         _pending = true;
         _pendingFilename = filename || _currentSongFilename() || null;
         _lastError = null;
+        _defaultFallback = false;
         rbSelectAudioEffectsRoute('mega-chain-pending');
         _emitState();
     }
@@ -2403,6 +2421,7 @@ const RbMegaChain = (function () {
         _active = false;
         _activeFilename = null;
         _activeToneKey = null;
+        _defaultFallback = false;
         _lastError = {
             filename: filename || _currentSongFilename() || '',
             reason: rbShortSafeText(reason || 'Rig Builder could not load this song\'s tone chain', 'Rig Builder could not load this song\'s tone chain'),
@@ -2419,7 +2438,7 @@ const RbMegaChain = (function () {
     }
 
     function _api() {
-        const a = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const a = window.feedBackDesktop && window.feedBackDesktop.audio;
         return (a && typeof a.loadPreset === 'function') ? a : null;
     }
 
@@ -2739,6 +2758,9 @@ const RbMegaChain = (function () {
             return false;
         }
         _mega = mega;
+        // Backend served the default tone because this song has no per-song
+        // mapping (every feedpak song). The player button labels it accordingly.
+        _defaultFallback = !!(mega && mega.default_fallback);
 
         // 1. Force the bundle's AMP off so it stops fighting us.
         _forceBundleAmpOff();
@@ -3292,6 +3314,13 @@ function rbUpdatePlayerToneButton() {
         const reason = state.error ? ` ${state.error}` : '';
         btn.title = `Rig Builder could not load this song\'s tone chain.${reason} Click to retry.`;
         btn.className = 'px-3 py-1.5 bg-red-700/50 hover:bg-red-700/70 rounded-lg text-xs text-red-100 transition';
+    } else if (state.active && state.defaultFallback) {
+        // Song had no per-song tone mapping (e.g. a feedpak, which carries no
+        // gear metadata) — we're playing the user's default tone instead.
+        btn.textContent = 'Rig Tones On · Default';
+        btn.title = 'This song has no mapped Rig Builder tones, so your default tone is playing. '
+            + 'Click to turn tones off for this session. (Set the default in Rig Builder → Studio.)';
+        btn.className = 'px-3 py-1.5 bg-emerald-700/40 hover:bg-emerald-700/60 rounded-lg text-xs text-emerald-200 transition';
     } else if (state.active) {
         btn.textContent = 'Rig Tones On';
         const active = state.activeToneKey ? ` Active tone: ${state.activeToneKey}.` : '';
@@ -6188,11 +6217,11 @@ async function rbMaterializeFromCloud(filename, statusEl) {
 //   └─────────────────────────────────────────────────────┘
 //
 // Photos come from RB_API/gear_photo/<rs_gear> served by routes.py
-// (the game art extracted via extract_gear_photos.py). Missing photos
+// (gear art, when present). Missing photos
 // fall back to a small text placeholder via onerror.
 //
 // Selection state lives on rbState.editor; it's cleared when a new
-// song is loaded so opening a different .psarc always starts on tone 0
+// song is loaded so opening a different song always starts on tone 0
 // piece 0.
 
 function rbEnsureEditorState() {
@@ -6446,8 +6475,7 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
     // Cab mic-position picker — clickable buttons per mic resolved
     // from rs_cab_mic_map (Dynamic Cone, Condenser Edge, Tube Off-axis,
     // …). Falls back to the legacy "the game IR (N):" filename dropdown
-    // for cabs whose mic_variants the extractor couldn't resolve
-    // (e.g. the user hasn't re-run extract_irs since we added the map).
+    // for cabs whose mic_variants couldn't be resolved from the map.
     let rsIrControl = '';
     const micVariants = p.cab_mic_variants || [];
     if (micVariants.length > 0) {
@@ -6457,7 +6485,7 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
         const btns = micVariants.map(v => {
             const active = v.ir_file === activeFile;
             if (!v.available || !v.ir_file) {
-                return `<button disabled title="IR not extracted"
+                return `<button disabled title="IR unavailable"
                                 class="px-2.5 py-0.5 rounded border text-[11px] bg-dark-800/40 text-gray-600 border-gray-800 cursor-not-allowed">${rbEsc(v.label || v.suffix)}</button>`;
             }
             const ours = !!v.our_synth;   // OUR own cab IR (rb_cab_overrides) — accent emerald, not RS sky
@@ -8530,7 +8558,7 @@ function rbMasterApplyLibrary(role, idx, fileName, kind) {
 }
 
 async function rbMasterAssignVstPick(role, idx) {
-    const host = window.slopsmithDesktop;
+    const host = window.feedBackDesktop;
     if (!host || typeof host.pickFile !== 'function') {
         return alert('File picker not available — paste the path manually instead.');
     }
@@ -9315,7 +9343,7 @@ function rbUpdatePathFromInput(toneIdx, pIdx, path) {
 // by path. Sidesteps scanPlugins entirely — engine just loads what we
 // hand it, no introspection of the install dirs required.
 async function rbPickVstFile(toneIdx, pIdx) {
-    const host = window.slopsmithDesktop;
+    const host = window.feedBackDesktop;
     const statusEl = document.getElementById(`rb-vst-status-${toneIdx}-${pIdx}`);
     const setStatus = (m) => { if (statusEl) statusEl.textContent = m; };
     if (!host || typeof host.pickFile !== 'function') {
@@ -10200,7 +10228,7 @@ async function rbSaveTonePreset(toneIdx, filename) {
 
 // Native desktop audio engine, or null (e.g. browser/WASM-only mode).
 function rbNativeAudio() {
-    const a = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const a = window.feedBackDesktop && window.feedBackDesktop.audio;
     return (a && typeof a.loadPreset === 'function' && typeof a.startAudio === 'function') ? a : null;
 }
 
@@ -11155,8 +11183,8 @@ function rbRenderCatalogCard(g) {
     // Header (always visible): photo · full name · rs_gear · status pill
     //   ▸ The full name no longer truncates — it wraps over 2 lines so
     //     "Marshall JCM800 2203" et al. stay readable.
-    //   ▸ the game gear photo (/gear_photo/{rs_gear}) first; if the
-    //     RS extraction hasn't been run, fall back to the tone3000
+    //   ▸ the game gear photo (/gear_photo/{rs_gear}) first; if no
+    //     gear photo is present, fall back to the tone3000
     //     capture image when the curator has assigned one.
     //
     // Action panel (revealed on click): ▶ Listen · 🎚 Variants ·
@@ -11314,7 +11342,7 @@ function rbRenderCatalogCard(g) {
         const btns = g.mic_variants.map(v => {
             const vId = `rb-aud-${_rbCatalogSeq++}`;
             if (!v.available || !v.ir_file) {
-                return `<button disabled title="IR not extracted — re-run Setup → Extract everything"
+                return `<button disabled title="IR unavailable"
                                 class="text-[10px] px-2 py-0.5 rounded bg-dark-800/50 text-gray-600 cursor-not-allowed">▶ ${rbEsc(v.label || v.suffix)}</button>`;
             }
             const aud = v.our_synth ? 'bg-emerald-900/30 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/40'
@@ -11797,8 +11825,8 @@ async function rbCatLibTab(rsGear, tab) {
 }
 
 // Friendly labels for the subdir categories the v1.2 storage layout
-// uses. Anything not matching one of these (legacy flat files, RS-
-// extracted IRs under rocksmith/, etc.) lands in the appropriate
+// uses. Anything not matching one of these (legacy flat files, game
+// cab IRs under rocksmith/, etc.) lands in the appropriate
 // "other" bucket per kind.
 const _RB_LIB_CATEGORY_LABEL = {
     amps:      '🎚 Amps',
@@ -12096,7 +12124,7 @@ async function rbCatalogUpdatePathFromInput(panelId, rsGear, path) {
 }
 
 async function rbCatalogPickFile(panelId, rsGear, currentFormat) {
-    const host = window.slopsmithDesktop;
+    const host = window.feedBackDesktop;
     const statusEl = document.getElementById(`${panelId}-status`);
     const setStatus = (m) => { if (statusEl) statusEl.textContent = m; };
     if (!host || typeof host.pickFile !== 'function') {
@@ -13080,7 +13108,7 @@ async function rbExportDefaults() {
 // (same translucent-blue panel as Gear/Master) where the rig is shown as
 // draggable nodes wired with guitar cables. Multiple inputs into a node = a
 // parallel merge (the engine SUMS them); multiple outputs = a split. Live audio
-// wiring (window.slopsmithDesktop.audio.setNodeInputs) is feature-detected so it
+// wiring (window.feedBackDesktop.audio.setNodeInputs) is feature-detected so it
 // no-ops on engines without graph support; the graph is the source for the v2
 // native_preset (Phase 4 persists it).
 // ════════════════════════════════════════════════════════════════════════
@@ -13391,7 +13419,7 @@ function rbAdvPaletteRender() {
         const name = rbEsc(g.name || g.real_name || g.rs_gear || 'Gear');
         const img = rbAdvGearImg(g);   // VST face only — never the RS gear photo
         const thumb = img
-            ? `<img src="${img}" alt="" onerror="this.style.display='none'">`
+            ? `<img src="${img}" alt="" draggable="false" onerror="this.style.display='none'">`
             : `<span class="rb-adv-pal-ph">${rbAdvGearInitials(g)}</span>`;
         return `<div class="rb-adv-pal-item" draggable="true"
                      data-adv-gear="${rbEsc(g.rs_gear)}" data-adv-cat="${cat}" data-adv-name="${name}">
@@ -13401,10 +13429,15 @@ function rbAdvPaletteRender() {
     }).join('');
     host.querySelectorAll('.rb-adv-pal-item').forEach(el => {
         el.addEventListener('dragstart', ev => {
-            ev.dataTransfer.setData('text/rb-adv-gear', JSON.stringify({
+            const payload = JSON.stringify({
                 rs_gear: el.dataset.advGear, cat: el.dataset.advCat, name: el.dataset.advName,
-            }));
+            });
+            ev.dataTransfer.setData('text/rb-adv-gear', payload);
+            // Windows/Chromium can drop custom MIME types mid-drag; text/plain is
+            // always preserved, so carry the same payload there as a fallback.
+            ev.dataTransfer.setData('text/plain', payload);
             ev.dataTransfer.effectAllowed = 'copy';
+            console.log('[rb-adv] palette dragstart:', el.dataset.advName);
         });
     });
 }
@@ -13483,7 +13516,7 @@ function rbAdvNodeHtml(n) {
                 </div>`;
     }
     const thumb = n.img
-        ? `<div class="rb-adv-node-thumb"><img src="${rbEsc(n.img)}" alt="" onerror="this.style.display='none'"></div>`
+        ? `<div class="rb-adv-node-thumb"><img src="${rbEsc(n.img)}" alt="" draggable="false" onerror="this.style.display='none'"></div>`
         : `<div class="rb-adv-node-thumb"></div>`;
     const stereoOut = rbAdvNodeCanStereoOut(n);
     return `<div class="rb-adv-node ${n.bypassed ? 'rb-adv-node-bypassed' : ''} ${n._inactive ? 'rb-adv-node-inactive' : ''}" data-adv-node="${n.id}"
@@ -13810,6 +13843,8 @@ function rbAdvStartNodeDrag(ev, nodeId) {
     const adv = rbAdvState();
     const n = adv.nodes.find(x => x.id === nodeId);
     if (!n) return;
+    console.log('[rb-adv] node mousedown → drag start:', nodeId);
+    let _movedOnce = false;
     const p0 = rbAdvLayerPoint(ev), ox = p0.x - n.x, oy = p0.y - n.y;
     const el = document.querySelector(`#rb-adv-nodes [data-adv-node="${nodeId}"]`);
     const canvas = document.getElementById('rb-adv-canvas');
@@ -13823,6 +13858,7 @@ function rbAdvStartNodeDrag(ev, nodeId) {
         return e.clientX < r.left - m || e.clientX > r.right + m || e.clientY < r.top - m || e.clientY > r.bottom + m;
     };
     const move = e => {
+        if (!_movedOnce) { _movedOnce = true; console.log('[rb-adv] node drag: first mousemove OK (drag not hijacked)'); }
         const p = rbAdvLayerPoint(e);
         n.x = Math.max(0, p.x - ox); n.y = Math.max(0, p.y - oy);
         if (el) { el.style.left = n.x + 'px'; el.style.top = n.y + 'px'; }
@@ -13982,8 +14018,12 @@ function rbAdvBindCanvasOnce() {
     canvas.addEventListener('dragover', ev => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy'; });
     canvas.addEventListener('drop', ev => {
         ev.preventDefault();
-        let data; try { data = JSON.parse(ev.dataTransfer.getData('text/rb-adv-gear')); } catch (_) { return; }
-        if (!data) return;
+        const custom = ev.dataTransfer.getData('text/rb-adv-gear');
+        const plain = ev.dataTransfer.getData('text/plain');
+        console.log('[rb-adv] canvas drop: types=', Array.from(ev.dataTransfer.types || []),
+                    'custom?', !!custom, 'plain?', !!plain);
+        let data; try { data = JSON.parse(custom || plain); } catch (_) { return; }
+        if (!data) { console.warn('[rb-adv] canvas drop: no usable payload — ADD failed (DnD payload lost)'); return; }
         const adv = rbAdvState();
         const p = rbAdvLayerPoint(ev);
         const id = Math.max(0, ...adv.nodes.map(n => n.id)) + 1;
