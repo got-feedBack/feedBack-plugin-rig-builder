@@ -97,7 +97,7 @@ function rbEnsureScopedCss() {
 
             try {
                 if (id === 'plugin-rig_builder') {
-                    rbInit();
+                    rbInit().catch(e => console.warn('[rig_builder] init failed:', e));
                 } else if (typeof rbOnLeaveRigBuilder === 'function') {
                     rbOnLeaveRigBuilder();
                 }
@@ -387,7 +387,7 @@ function rbApplyChainInputDrive(opts) {
     }
     return rbSetRouteGainsWithHost({ input: drive }, 'chain-input-drive').then((handled) => {
         if (handled) return;
-        const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const audio = rbAudioApi();
         if (!audio || typeof audio.setGain !== 'function') return;
         return audio.setGain('input', drive).catch((e) => {
             console.warn('[rig_builder] setGain(input,', drive, ') failed:', e);
@@ -557,7 +557,7 @@ async function rbApplyChainOutputGain(opts) {
     const target = rbClampChainGainTarget(rbChainGainTargetFor(chain));
     window.__rbPendingChainGainTarget = target;
     if (await rbSetRouteGainsWithHost({ chain: target }, 'chain-output-gain')) return;
-    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const audio = rbAudioApi();
     if (!audio || typeof audio.setGain !== 'function') return;
     return audio.setGain('chain', target).catch((e) => {
         console.warn('[rig_builder] setGain(chain,', target, ') failed:', e);
@@ -612,6 +612,13 @@ let _rbFinalNormWarnedNoMeter = false;
 
 function rbDbToGain(db) {
     return Math.pow(10, db / 20);
+}
+
+// The host's audio bridge, or null when it isn't exposed (e.g. browser/WASM
+// mode). Presence-only check — use rbNativeAudio() when the caller needs the
+// engine methods (loadPreset/startAudio) verified too.
+function rbAudioApi() {
+    return (window.slopsmithDesktop && window.slopsmithDesktop.audio) || null;
 }
 
 function rbGainToDb(gain) {
@@ -725,7 +732,7 @@ async function rbStartFinalChainNormalizer(chainSpec, opts) {
     rbStopFinalChainNormalizer();
 
     const chain = Array.isArray(chainSpec) ? chainSpec : [];
-    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const audio = rbAudioApi();
     if (!audio || typeof audio.setGain !== 'function') return;
 
     if (rbChainHasFinalLeveler(chain)) {
@@ -780,6 +787,10 @@ async function rbStartFinalChainNormalizer(chainSpec, opts) {
     _rbFinalNormCorrectionDb = 0;
 
     const tickMs = 100;
+
+    // A concurrent start may have installed a timer while we were awaiting
+    // above — clear it so overlapping starts can't leak an extra interval.
+    if (_rbFinalNormTimer) clearInterval(_rbFinalNormTimer);
 
     _rbFinalNormTimer = setInterval(async () => {
         if (runId !== _rbFinalNormRunId) return;
@@ -881,22 +892,22 @@ function rbAttachKnob(containerId, opts) {
 // Range is deliberately tight (−24..+12 dB) so small trims are easy — the old
 // −60..+12 range made nudging −3 dB almost impossible.
 const RB_LEVEL_DB_MIN = -24, RB_LEVEL_DB_MAX = 12;
-function rbClampDb(db) {
+function rbClampLevelDb(db) {
     const d = Number(db);
     return Number.isFinite(d) ? Math.max(RB_LEVEL_DB_MIN, Math.min(RB_LEVEL_DB_MAX, d)) : 0;
 }
-function rbDbToLin(db) { return Math.pow(10, rbClampDb(db) / 20); }
+function rbDbToLin(db) { return Math.pow(10, rbClampLevelDb(db) / 20); }
 function rbLinToDb(lin) {
     const x = Number(lin);
-    return (x > 1.0e-4) ? rbClampDb(20 * Math.log10(x)) : RB_LEVEL_DB_MIN;
+    return (x > 1.0e-4) ? rbClampLevelDb(20 * Math.log10(x)) : RB_LEVEL_DB_MIN;
 }
-function rbFmtDb(db) { const v = rbClampDb(db); return (v > 0 ? '+' : '') + v.toFixed(1) + ' dB'; }
+function rbFmtDb(db) { const v = rbClampLevelDb(db); return (v > 0 ? '+' : '') + v.toFixed(1) + ' dB'; }
 
 // "AMP" output trim. Persists to /settings (chain_makeup, a linear ×) and applies
 // LIVE post-leveler (Output Trim) or via setGain('chain', base × trim). The fader
 // VALUE is in dB; we convert to the linear × the engine/backend expect.
 async function rbSetChainMakeup(dbIn) {
-    const d = rbClampDb(dbIn);
+    const d = rbClampLevelDb(dbIn);
     const val = rbDbToLin(d);   // linear × for the engine + persisted setting
     window.__rbChainMakeup = val;
     const cmVal = document.getElementById('rb-chain-makeup-val');
@@ -918,7 +929,7 @@ async function rbSetChainMakeup(dbIn) {
     }
     const base = (typeof window.__rbChainBaseTarget === 'number') ? window.__rbChainBaseTarget : 1.0;
     if (!appliedPostLeveler && !(await rbSetRouteGainsWithHost({ chain: base * val }, 'chain-makeup'))) {
-        const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const audio = rbAudioApi();
         if (audio && typeof audio.setGain === 'function') audio.setGain('chain', base * val).catch(() => {});
     }
     fetch(`${window.RB_API}/settings`, {
@@ -936,7 +947,7 @@ async function rbSetChainMakeup(dbIn) {
 // /settings (nam_input_calibration) and re-applies live via rbApplyChainInputDrive.
 // (The amp-DRIVE baseline lives in nam_chain_input_drive — internal/auto now.)
 async function rbSetDesktopInput(dbIn) {
-    const d = rbClampDb(dbIn);
+    const d = rbClampLevelDb(dbIn);
     const val = rbDbToLin(d);   // linear × for the engine + persisted setting
     window.__rbInputCalibration = val;
     const el = document.getElementById('rb-amp-drive-val');
@@ -1071,7 +1082,7 @@ async function rbPreLoadMute(chainLen, targetGain, opts) {
         return;                            // coalesce rapid tone changes
     }
     _rbMuteInFlight = true;
-    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const audio = rbAudioApi();
     if (!audio) { _rbMuteInFlight = false; return; }
     const target = pendingTarget;   // was 4 — chains can need ~20×
     // Hold the chain muted until the WHOLE chain has loaded AND the post-load
@@ -1230,7 +1241,7 @@ async function rbPreLoadMute(chainLen, targetGain, opts) {
                 && window.slopsmith.currentSong
                 && window.slopsmith.currentSong.filename;
             if (!filename) return;
-            const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+            const api = rbAudioApi();
             if (!api || typeof api.loadPreset !== 'function') return;
 
             const r = await rbFetchLegacyNamToneMappings(filename);
@@ -3513,6 +3524,10 @@ function rbEsc(s) {
     }[c]));
 }
 
+// Quote a string as a JS string literal that is safe to interpolate inside a
+// double-quoted inline onclick="..." attribute (rbEsc handles the HTML side).
+function rbJsStr(s) { return "'" + rbEsc(String(s ?? '')).replace(/'/g, "\\'") + "'"; }
+
 // ── Init / status ───────────────────────────────────────────────────
 
 async function rbInit() {
@@ -3523,9 +3538,12 @@ async function rbInit() {
         const r = await fetch(`${window.RB_API}/status`);
         rbState.status = await r.json();
     } catch (e) {
-        document.getElementById('rb-status').innerHTML = rbBanner(
-            'red', 'Error', `Couldn't load /status: ${rbEsc(e.message)}`
-        );
+        const statusEl = document.getElementById('rb-status');
+        if (statusEl) {
+            statusEl.innerHTML = rbBanner(
+                'red', 'Error', `Couldn't load /status: ${rbEsc(e.message)}`
+            );
+        }
         return;
     }
     rbRenderStatus();
@@ -3535,12 +3553,16 @@ async function rbInit() {
     // Close the tone dropdown when clicking outside it. Use mousedown (fires
     // before click handlers mutate the DOM) so the target is still attached —
     // a 'click' listener saw the replaced Save button as "outside" and closed
-    // the menu the instant you pressed Save.
-    document.addEventListener('mousedown', e => {
-        const sel = document.querySelector('.rb-toneselect');
-        const menu = document.getElementById('rb-tone-menu');
-        if (menu && !menu.classList.contains('hidden') && sel && !sel.contains(e.target)) menu.classList.add('hidden');
-    });
+    // the menu the instant you pressed Save. Hook once: rbInit can re-run
+    // (screen remounts) and document-level listeners would pile up.
+    if (!window.__rbMousedownHooked) {
+        window.__rbMousedownHooked = true;
+        document.addEventListener('mousedown', e => {
+            const sel = document.querySelector('.rb-toneselect');
+            const menu = document.getElementById('rb-tone-menu');
+            if (menu && !menu.classList.contains('hidden') && sel && !sel.contains(e.target)) menu.classList.add('hidden');
+        });
+    }
     // Best-effort load known VSTs at init so the per-piece dropdown is
     // populated as soon as the user opens a song. Failure is non-fatal
     // (they'll see "no VSTs scanned yet" hint and can Scan from the panel).
@@ -3557,7 +3579,14 @@ function rbScheduleDefaultToneIdleLoad() {
     let tries = 0;
     const attempt = async () => {
         tries++;
-        await rbReloadDefaultTone().catch(() => {});
+        // Never clobber audio the user is actively listening to (a Listen
+        // preview, an audition or a mega-chain), and don't re-load a default
+        // tone that is already the active idle monitor.
+        const engineBusy = rbState.listeningTone != null || rbState._auditionId
+            || (typeof RbMegaChain !== 'undefined' && RbMegaChain.isActive && RbMegaChain.isActive());
+        if (!engineBusy && !rbState._defaultToneActive) {
+            await rbReloadDefaultTone().catch(() => {});
+        }
         if (!rbState._defaultToneActive && tries < 4
             && window.__rbDefaultToneSetting !== false && rbDefaultToneHasContent()) {
             setTimeout(attempt, 7000);
@@ -3741,6 +3770,14 @@ function rbStudioPersist() {
             p = fetch(`${window.RB_API}/saved_tone/save`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: v.name, pieces: rbStudioChainToPayload(rbStudioCurrentChain()) }),
+            }).then(async (r) => {
+                // Surface backend rejections (mirrors rbPersistTone) — a silent
+                // 4xx/5xx here looked like a successful save.
+                if (!r.ok) {
+                    const err = await r.json().catch(() => ({}));
+                    throw new Error(`${err.error || r.status}`);
+                }
+                return r;
             });
         } catch (_) { p = null; }
     } else {
@@ -3748,8 +3785,14 @@ function rbStudioPersist() {
     }
     // Expose the latest save so a monitor reload can wait for the backend to
     // reflect a structural change (e.g. a just-added pedal) before re-fetching
-    // the tone's native preset.
-    rbState._studioPersistPromise = (p && typeof p.then === 'function') ? p.catch(() => {}) : null;
+    // the tone's native preset. Report failures instead of swallowing them
+    // (rbPersistTone already alerts + resolves null, so it won't double-report).
+    rbState._studioPersistPromise = (p && typeof p.then === 'function')
+        ? p.catch((e) => {
+            console.warn('[rig_builder] studio persist failed:', e);
+            alert(`Save failed: ${e && e.message ? e.message : e}`);
+        })
+        : null;
     return p;
 }
 
@@ -3785,7 +3828,7 @@ function rbRenderStudioRoom() {
     if (el.classList.contains('rb-focus-active') || el.classList.contains('rb-pfocus')) {
         el.classList.remove('rb-focus-active', 'rb-pfocus', 'rb-gfocus-pedal', 'rb-gfocus-rack', 'rb-swap-active');
         rbState._studioPedalAddMode = false;
-        try { rbTeardownVstEditor(window.slopsmithDesktop && window.slopsmithDesktop.audio); } catch (_) {}
+        try { rbTeardownVstEditor(rbAudioApi()); } catch (_) {}
     }
     const g = rbStudioGroupDefault();
     const amp = g.amp[0];
@@ -4001,7 +4044,7 @@ async function rbStudioFocusAmp(idx) {
     rbState._studioFocusIdx = idx;
     rbState._studioFocusKind = 'amp';
     const _focusStart = Date.now();   // so the canvas swap waits out the grow animation
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     const vstPath = rbEffVstPath(piece);
     const name = piece.real_name || piece.type || 'Amp';
 
@@ -4055,7 +4098,7 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
     const piece = (rbStudioCurrentChain())[idx];
     const face = faceEl;
     if (!piece || !face) return;
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     const stem = rbCanvasStem(piece);
     if (!(window.RBPedalCanvas && (window.RBPedalCanvas.has(stem) || (piece._vst_param_meta || []).length))) return;
     face.innerHTML = `<canvas class="rb-amp-face-canvas" style="width:100%;display:block;cursor:ns-resize;touch-action:none"></canvas>`;
@@ -4115,7 +4158,7 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
 async function rbStudioCloseFocus() {
     try { rbStopGrMeterPoll(); } catch (_) {}   // stop the dbx GR-meter poll
     const room = document.getElementById('rb-studio-room');
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     const bar = document.getElementById('rb-studio-focus-bar');
     const idx = rbState._studioFocusIdx;
     const kind = rbState._studioFocusKind || 'amp';
@@ -4391,7 +4434,7 @@ function rbStudioRemovePedal() {
     const idx = rbState._studioFocusIdx;
     const arr = rbStudioCurrentChain();
     if (idx == null || idx < 0 || !arr[idx]) return;
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     try { rbTeardownVstEditor(api); } catch (_) {}
     const prevPos = rbState._studioPedalPos || 0;
     arr.splice(idx, 1);
@@ -4474,7 +4517,7 @@ function rbStopGrMeterPoll() { if (_rbGrPoll) { clearInterval(_rbGrPoll); _rbGrP
 function rbStartGrMeterPoll(canvas, piece, idx, stem) {
     rbStopGrMeterPoll();
     if (stem !== 'hzx') return;
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     if (!api || typeof api.getParameters !== 'function' || !window.RBPedalCanvas) return;
     let slotId = null, grIdx = -1, misses = 0;
     _rbGrPoll = setInterval(async () => {
@@ -4542,7 +4585,7 @@ async function rbStudioChainSlotIdForPiece(api, pieceIdx) {
 //      the param two slots to the left. We re-fetch the meta live and map by
 //      filtered position instead of ever using the raw logical id.
 async function rbStudioApplyKnobToEngine(piece, idx, logicalId, val) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     if (!api || typeof api.setParameter !== 'function') return;
     // 1. Resolve the engine slot (re-resolve if missing/stale).
     let slotId = piece._vst_slot_id;
@@ -4571,7 +4614,7 @@ async function rbStudioLoadFocusVst(idx, faceEl, growMs) {
     const room = document.getElementById('rb-studio-room');
     const piece = (rbStudioCurrentChain())[idx];
     if (!room || !piece || !faceEl) return;
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     const vstPath = rbEffVstPath(piece);
     if (!vstPath || !api) return;            // static face stays; nothing to load
     if (rbState._vstEditorBusy) return;
@@ -4788,7 +4831,7 @@ async function rbStudioReloadLiveChainAfterSwap() {
     // _vst_slot_id is now stale. Re-resolve it so its knobs drive the engine
     // immediately (otherwise the first knob move after a swap hits a dead slot).
     try {
-        const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const api = rbAudioApi();
         const fidx = rbState._studioFocusIdx;
         if (api && typeof fidx === 'number' && fidx >= 0) {
             const fpiece = (rbStudioCurrentChain())[fidx];
@@ -5045,35 +5088,39 @@ function rbToneOverrideActive() { return !!rbToneOverride.enabled; }
 function rbResetOverrideLoaded() { _rbOverrideLoadedKey = null; }
 
 // Load the chosen override tone NOW. name '' = Default tone; otherwise a saved
-// Studio tone by name (falls back to Default if it's gone).
+// Studio tone by name (falls back to Default if it's gone). Returns true only
+// when a tone actually loaded, so callers can retry on failure.
 async function rbLoadOverrideTone() {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
-    if (!api) return;
+    const api = rbAudioApi();
+    if (!api) return false;
     const name = rbToneOverride.name || '';
-    if (!name) { try { await rbReloadDefaultTone(); } catch (_) {} return; }
+    if (!name) { try { return !!(await rbReloadDefaultTone()); } catch (_) { return false; } }
     const t = (rbState.savedTones || []).find(x => x.name === name);
-    if (!t || t.id == null) { try { await rbReloadDefaultTone(); } catch (_) {} return; }
-    if (typeof rbLoadNativePresetPayload !== 'function') return;
+    if (!t || t.id == null) { try { return !!(await rbReloadDefaultTone()); } catch (_) { return false; } }
+    if (typeof rbLoadNativePresetPayload !== 'function') return false;
     try {
         const r = await fetch(`${window.RB_API}/native_preset_full/${t.id}`);
-        if (!r.ok) return;
+        if (!r.ok) return false;
         const payload = await r.json();
-        if (!payload || !payload.native_preset) return;
+        if (!payload || !payload.native_preset) return false;
         try { if (typeof rbCloseActiveVstEditor === 'function') await rbCloseActiveVstEditor(); } catch (_) {}
         delete payload.id;   // force the legacy monitor path (executor route is silent at idle)
         await rbLoadNativePresetPayload(api, payload, { mode: 'preview', authorization: 'user-action' });
         try { await rbStudioFinishMonitorLoad(api, payload.native_preset.chain); } catch (_) {}
         rbState._defaultToneActive = true;
-    } catch (e) { console.warn('[rig_builder] tone override load failed:', e); }
+        return true;
+    } catch (e) { console.warn('[rig_builder] tone override load failed:', e); return false; }
 }
 
 // Load the override tone for a song, ONCE per (song, tone) — idempotent so the
 // bundle's per-tone-change re-apply doesn't cause an audible reload every section.
+// The key is stamped only AFTER a successful load, so a failed load retries on
+// the next tone-change re-apply instead of being marked done.
 async function rbLoadOverrideToneForSong(filename) {
     const key = (filename || '') + '|' + (rbToneOverride.name || '');
     if (_rbOverrideLoadedKey === key) return;
-    _rbOverrideLoadedKey = key;
-    await rbLoadOverrideTone();
+    const ok = await rbLoadOverrideTone();
+    if (ok) _rbOverrideLoadedKey = key;
 }
 
 // Fill the Setup dropdown with Default + the user's saved Studio tones.
@@ -5100,8 +5147,8 @@ async function rbApplyToneOverrideNow() {
     const filename = cur && cur.filename;
     if (rbToneOverride.enabled) {
         try { if (typeof RbMegaChain !== 'undefined' && (RbMegaChain.isActive() || RbMegaChain.isPending())) await RbMegaChain.teardown(false); } catch (_) {}
-        _rbOverrideLoadedKey = (filename || '') + '|' + (rbToneOverride.name || '');
-        await rbLoadOverrideTone();
+        const ok = await rbLoadOverrideTone();
+        _rbOverrideLoadedKey = ok ? ((filename || '') + '|' + (rbToneOverride.name || '')) : null;
     } else {
         // Restore the song's own tone: rebuild the mega-chain if on; otherwise the
         // next tone change / song reload re-applies it.
@@ -5145,10 +5192,13 @@ function rbInitToneOverrideUI(s) {
 }
 
 async function rbStudioLoadMonitor() {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     if (!api || typeof rbLoadNativePresetPayload !== 'function') return;
     if (rbState.listeningTone != null || rbState._auditionId) return;   // a song preview/playback owns the engine
-    if (rbState._studioMonitorBusy) return;                             // own flag — independent of _vstEditorBusy
+    if (rbState._studioMonitorBusy) {                                   // own flag — independent of _vstEditorBusy
+        rbState._studioMonitorPending = true;                           // don't drop the newest request — replay it below
+        return;
+    }
     const view = rbState.studioView || { source: 'default' };
     rbState._studioMonitorBusy = true;
     try {
@@ -5196,6 +5246,13 @@ async function rbStudioLoadMonitor() {
         console.warn('[rig_builder] studio monitor load failed:', e);
     } finally {
         rbState._studioMonitorBusy = false;
+        // A newer request arrived while we were loading — run once more for the
+        // latest view. Single follow-up (flag cleared first) + view compare, so
+        // this can't loop.
+        if (rbState._studioMonitorPending) {
+            rbState._studioMonitorPending = false;
+            if (rbState.studioView && rbState.studioView !== view) rbStudioLoadMonitor();
+        }
     }
 }
 window.rbStudioLoadMonitor = rbStudioLoadMonitor;
@@ -5360,7 +5417,7 @@ function rbRenderManageBucket(bucket, b) {
                     </div>
                 </div>
             </div>
-            <button onclick="rbPurgeNams({bucket: ${JSON.stringify(bucket)}}, ${JSON.stringify(meta.label + ' (' + b.count + ' files)')})"
+            <button onclick="rbPurgeNams({bucket: ${rbJsStr(bucket)}}, ${rbJsStr(meta.label + ' (' + b.count + ' files)')})"
                     class="bg-red-900/20 hover:bg-red-900/50 text-red-300 border border-red-800/30 px-2.5 py-1 rounded text-xs transition">
                 🗑 Delete all
             </button>
@@ -5391,7 +5448,7 @@ function rbRenderManageFile(f) {
                 ${tone3000}
             </div>
         </div>
-        <button onclick="rbDeleteNamFile(${JSON.stringify(f.name)})"
+        <button onclick="rbDeleteNamFile(${rbJsStr(f.name)})"
                 class="bg-red-900/20 hover:bg-red-900/50 text-red-300 border border-red-800/30 px-2.5 py-1 rounded text-xs transition shrink-0">
             🗑
         </button>
@@ -5612,24 +5669,41 @@ async function rbPollBatch() {
     try {
         const r = await fetch(`${window.RB_API}/batch_status`);
         st = await r.json();
+        rbState._batchPollFails = 0;
     } catch (e) {
+        // Backend unreachable — stop after ~30 consecutive misses instead of
+        // polling forever (e.g. the server restarted mid-batch).
+        rbState._batchPollFails = (rbState._batchPollFails || 0) + 1;
+        if (rbState._batchPollFails >= 30 && rbState.batchPoll) {
+            clearInterval(rbState.batchPoll);
+            rbState.batchPoll = null;
+            rbFinishCapabilityJob(rbState._batchJobId, false, 'Lost contact with the backend while polling batch status', 'provider-failure');
+            rbState._batchJobId = null;
+        }
         return;
     }
     const pct = st.total ? Math.round(100 * st.progress / st.total) : 0;
     rbUpdateCapabilityJob(rbState._batchJobId, { mode: st.total ? 'determinate' : 'indeterminate', percent: pct, step: 'mapping', message: `${st.progress || 0} / ${st.total || 0}` });
-    document.getElementById('rb-batch-pct').textContent = `${pct}%`;
-    document.getElementById('rb-batch-count').textContent = `${st.progress} / ${st.total}`;
-    document.getElementById('rb-batch-bar').style.width = `${pct}%`;
+    // The user may have navigated away from the batch panel — the poll keeps
+    // running for the capability job, so every DOM write is optional.
+    const pctEl = document.getElementById('rb-batch-pct');
+    if (pctEl) pctEl.textContent = `${pct}%`;
+    const countEl = document.getElementById('rb-batch-count');
+    if (countEl) countEl.textContent = `${st.progress} / ${st.total}`;
+    const barEl = document.getElementById('rb-batch-bar');
+    if (barEl) barEl.style.width = `${pct}%`;
 
     const assignedEl = document.getElementById('rb-batch-assigned');
-    if (st.assigned) {
+    if (assignedEl && st.assigned) {
         assignedEl.textContent = `${st.assigned} tones persisted`;
         assignedEl.classList.remove('hidden');
     }
 
     const log = document.getElementById('rb-batch-log');
-    log.textContent = (st.log || []).join('\n');
-    log.scrollTop = log.scrollHeight;
+    if (log) {
+        log.textContent = (st.log || []).join('\n');
+        log.scrollTop = log.scrollHeight;
+    }
 
     if (!st.running && rbState.batchPoll) {
         clearInterval(rbState.batchPoll);
@@ -5944,11 +6018,14 @@ async function rbLoadSongTones(filename) {
     // Try once. If the server signals cloud_only, fire cloud_loader's
     // materialize endpoint and retry once the download finishes.
     let data = await rbFetchSong(filename);
+    if (rbState.currentSongFile !== filename) return;   // user switched songs mid-load
     if (data && data.error === 'cloud_only') {
         el.innerHTML = `<p class="text-blue-400">☁ Downloading "${rbEsc(filename)}" from Google Drive…</p>`;
         const ok = await rbMaterializeFromCloud(filename, el);
+        if (rbState.currentSongFile !== filename) return;   // user switched songs mid-load
         if (!ok) return;
         data = await rbFetchSong(filename);
+        if (rbState.currentSongFile !== filename) return;   // user switched songs mid-load
     }
     if (!data) {
         el.innerHTML = '<p class="text-red-400">Network error loading the song</p>';
@@ -6030,8 +6107,11 @@ async function rbAutoDownloadSong(filename, unmappedCount, container) {
         if (result.failed) parts.push(`${result.failed} failed`);
         banner.innerHTML = `<p class="text-green-400">✓ Auto-download done — ${parts.join(' · ') || 'nothing to do'}</p>`;
 
-        // Refresh chain so the new file assignments are visible.
+        // Refresh chain so the new file assignments are visible — unless the
+        // user already switched to another song while we were downloading.
+        if (rbState.currentSongFile !== filename) return;
         const refreshed = await rbFetchSong(filename);
+        if (rbState.currentSongFile !== filename) return;
         if (refreshed && !refreshed.error) {
             rbState.songTones = refreshed;
             rbSeedBypass(refreshed);   // re-seed bypass after the re-fetch (was the bug)
@@ -6735,7 +6815,7 @@ async function rbCloseActiveVstEditor() {
     if (slot == null) return;
     rbState._vstEditorSlot = null;
     rbState._vstEditorInChain = false;
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     if (api && api.closePluginEditor) {
         try { await api.closePluginEditor(slot); } catch (_) {}
     }
@@ -6766,7 +6846,7 @@ async function rbOnLeaveRigBuilder() {
         } else if (hadEditor) {
             // The inline editor left its VST loaded in the engine; clear it so
             // it doesn't linger or get torn down under a half-closed window.
-            const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+            const api = rbAudioApi();
             if (api && api.clearChain) await api.clearChain().catch(() => {});
         }
     } finally {
@@ -6861,7 +6941,7 @@ async function rbToneEditVst(toneIdx, pIdx) {
     if (!piece) return;
     const editor = document.getElementById(`rb-tone-vst-editor-${toneIdx}-${pIdx}`);
     if (!editor) return;
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     // Toggle close if already open — tear the editor VST down cleanly.
     if (!editor.classList.contains('hidden')) {
         editor.classList.add('hidden');
@@ -7138,7 +7218,7 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
             </div>
             <div class="text-[10px] text-gray-500 text-center mt-1">Drag a knob up/down to adjust</div>`;
         const canvas = document.getElementById(`rb-tone-vst-canvas-${toneIdx}-${pIdx}`);
-        const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const api = rbAudioApi();
         const draw = () => {
             const model = rbCanvasParamModel(piece);   // values keyed by logical idx + name; idMap logical→real
             window.RBPedalCanvas.attach(canvas, stem, {
@@ -7210,7 +7290,7 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
 }
 
 async function rbToneSetVstParam(toneIdx, pIdx, paramId, value, valueDisplayEl) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
     if (!piece || piece._vst_slot_id == null) return;
     const v = parseFloat(value);
@@ -7260,7 +7340,7 @@ function rbDebouncedToneSave(toneIdx, pIdx) {
         const piece = rbState.songTones && rbState.songTones.tones[toneIdx]
             && rbState.songTones.tones[toneIdx].chain[pIdx];
         if (piece && piece._vst_slot_id != null) {
-            const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+            const api = rbAudioApi();
             const opaque = await rbCaptureVstOpaqueState(api,
                 piece._vst_path || (piece.assigned && piece.assigned.vst_path));
             rbStampVstState(piece, opaque);
@@ -7273,7 +7353,7 @@ function rbDebouncedToneSave(toneIdx, pIdx) {
 }
 
 async function rbToneCaptureVstState(toneIdx, pIdx) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
     if (!piece) return;
     const editor = document.getElementById(`rb-tone-vst-editor-${toneIdx}-${pIdx}`);
@@ -7661,7 +7741,7 @@ function rbDefaultToneHasContent() {
 // SYNC the audio-effects capability so the host actually routes input through
 // it (without that select-chain dispatch the plan loads but stays silent).
 async function rbLoadDefaultTone(options) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     if (!api) return false;
     const r = await fetch(`${window.RB_API}/default_tone/native`);
     if (!r.ok) return false;
@@ -7939,7 +8019,7 @@ async function rbMasterEditVst(role, idx) {
     if (!piece) return;
     const editor = document.getElementById(`rb-master-${role}-editor-${idx}`);
     if (!editor) return;
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     // Toggle close if already open — tear the editor VST down cleanly.
     if (!editor.classList.contains('hidden')) {
         editor.classList.add('hidden');
@@ -8041,7 +8121,7 @@ function rbMasterRenderInlineVstParams(role, idx) {
             </div>
             <div class="text-[10px] text-gray-500 text-center mt-1">Drag a knob up/down to adjust</div>`;
         const canvas = document.getElementById(`rb-master-${role}-canvas-${idx}`);
-        const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const api = rbAudioApi();
         const draw = () => {
             const model = rbCanvasParamModel(piece);
             window.RBPedalCanvas.attach(canvas, stem, {
@@ -8107,7 +8187,7 @@ function rbMasterRenderInlineVstParams(role, idx) {
 }
 
 async function rbMasterSetVstParam(role, idx, paramId, value, valueDisplayEl) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     const piece = rbState.master[role][idx];
     if (!piece || piece._vst_slot_id == null) return;
     const v = parseFloat(value);
@@ -8153,7 +8233,7 @@ function rbDebouncedMasterSave(role) {
         const piece = arr.find(p => p && p._vst_slot_id != null
             && p._vst_slot_id === rbState._vstEditorSlot);
         if (piece) {
-            const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+            const api = rbAudioApi();
             const opaque = await rbCaptureVstOpaqueState(api,
                 piece._vst_path || (piece.assigned && piece.assigned.vst_path));
             rbStampVstState(piece, opaque);
@@ -8164,7 +8244,7 @@ function rbDebouncedMasterSave(role) {
 }
 
 async function rbMasterCaptureVstState(role, idx) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     const piece = rbState.master[role][idx];
     if (!piece) return;
     const editor = document.getElementById(`rb-master-${role}-editor-${idx}`);
@@ -9096,7 +9176,7 @@ async function rbComputeRsMappedParams(rsGearType, rsKnobs, vstStem, paramsList)
 // message when no mapping exists for the (rs_gear, vst) pair so the user
 // knows whether to curate the table or replicate manually.
 async function rbApplyRsSettingsToVst(toneIdx, pIdx) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
     const statusEl = document.getElementById(`rb-vst-status-${toneIdx}-${pIdx}`);
     const setStatus = (m) => { if (statusEl) statusEl.textContent = m; };
@@ -9272,7 +9352,7 @@ async function rbLoadKnownVsts() {
     //      user who already scanned there gets plugins for free.
     //   2. Our backend filesystem cache /vst/known — persisted on our side.
     //   3. Empty list, user must click Scan.
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     const mergeByPath = (a, b) => {
         const byPath = new Map();
         for (const p of (a || [])) if (p && p.path) byPath.set(p.path, p);
@@ -9328,7 +9408,7 @@ async function rbLoadKnownVsts() {
 // separately from VST3 if available — AU scanning is the more crash-prone
 // of the two formats on macOS.
 async function rbDoVstScan(statusSetter) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     if (!api || typeof api.scanPlugins !== 'function' || typeof api.getKnownPlugins !== 'function') {
         throw new Error('Native VST hosting not available (running in WASM-only mode?)');
     }
@@ -9616,7 +9696,7 @@ async function rbRestoreSavedParamsToSlot(api, slotId, savedParams, vstPath = ''
 }
 
 async function rbLoadAndEditVst(toneIdx, pIdx) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     if (!api) return alert('Native VST hosting not available');
     const path = rbResolveStagedPath(toneIdx, pIdx);
     if (!path) return alert('Pick a plugin first (Pick file or dropdown)');
@@ -9784,7 +9864,7 @@ function rbReapplyVstParamsAfterLoad(chainSpec, delayMs) {
     const hasVst = chainSpec.some(s => s && s.type === 0);
     if (!hasVst) return;        // no point scheduling work
     setTimeout(() => {
-        const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const api = rbAudioApi();
         if (!api) return;
         rbReapplyVstParamsToChain(api, chainSpec).catch((e) =>
             console.warn('[rig_builder] re-apply VST params (deferred):', e));
@@ -9858,7 +9938,7 @@ function rbRenderInlineVstParams(toneIdx, pIdx) {
 // "current value" display next to the slider. Also stages the new value in
 // the piece's pending params dict so Capture/Assign read it.
 async function rbSetVstParam(toneIdx, pIdx, paramId, value, valueDisplayEl) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
     if (piece._vst_slot_id == null) return;
     const v = parseFloat(value);
@@ -9898,7 +9978,7 @@ async function rbSetVstParam(toneIdx, pIdx, paramId, value, valueDisplayEl) {
 }
 
 async function rbCaptureVstState(toneIdx, pIdx) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
     const statusEl = document.getElementById(`rb-vst-status-${toneIdx}-${pIdx}`);
     if (statusEl) statusEl.textContent = 'capturing…';
@@ -10263,11 +10343,16 @@ function rbApplyBypassToChain(payload, toneIdx) {
     const tone = rbState.songTones && rbState.songTones.tones[toneIdx];
     const chain = (payload && payload.native_preset && payload.native_preset.chain) || [];
     if (!tone) return;
+    const seen = {};   // rs_gear → stages of this type already matched
     for (const stage of chain) {
         if (stage.slot && typeof stage.slot === 'string' && stage.slot.startsWith('master_')) {
             continue;   // belongs to the master chain; backend already set bypass
         }
-        const piece = tone.chain.find(p => p.type === stage.rs_gear);
+        // Duplicate identical gear: pair the Nth stage of a type with the Nth
+        // UI piece of that type (same dup-skip idea as rbChainSlotIdForPiece),
+        // so bypassing one copy doesn't toggle the first copy instead.
+        const nth = seen[stage.rs_gear] = (seen[stage.rs_gear] || 0) + 1;
+        const piece = tone.chain.filter(p => p.type === stage.rs_gear)[nth - 1];
         stage.bypassed = !!(piece && piece._bypassed);
     }
 }
@@ -10444,7 +10529,10 @@ function rbAuditionGainForVariantLevel(level) {
 
 async function rbAuditionFile(file, kind, btnId, gain, rsGear) {
     const btn = btnId ? document.getElementById(btnId) : null;
-    if (rbState._auditionId === btnId) { await rbStopPreview(); return; }
+    // btnId may be null (buttons without an id) — null === null would wrongly
+    // toggle off, so use a per-file sentinel key instead.
+    const auditionKey = btnId || ('rb-null-audition:' + file);
+    if (rbState._auditionId === auditionKey) { await rbStopPreview(); return; }
     await rbStopPreview();   // stop any other preview/audition first
     const api = rbNativeAudio();
     if (!api) { alert('Audio engine unavailable. Open the “NAM” plugin once to initialize it.'); return; }
@@ -10484,7 +10572,7 @@ async function rbAuditionFile(file, kind, btnId, gain, rsGear) {
         await api.startAudio();
         rbState._previewStartedAudio = !wasRunning;
         rbState._previewMode = 'native';
-        rbState._auditionId = btnId;
+        rbState._auditionId = auditionKey;
         // "⏸ <label>" lets the user see what they're listening to AND
         // know how to pause. Falls back to a bare ⏸ when no original
         // label was captured (legacy button, no dataset.origLabel).
@@ -11056,7 +11144,7 @@ function rbRenderCatalogCardCompact(g) {
             <div class="text-gray-200 truncate text-xs"><strong>${rbEsc(g.real_name)}</strong></div>
             ${file}
         </div>
-        ${g.file ? `<button id="${btnId}" onclick="rbAuditionFile(${JSON.stringify(g.file)},${JSON.stringify(g.kind || 'nam')},'${btnId}',undefined,${JSON.stringify(g.rs_gear || '')})"
+        ${g.file ? `<button id="${btnId}" onclick="rbAuditionFile(${rbJsStr(g.file)},${rbJsStr(g.kind || 'nam')},'${btnId}',undefined,${rbJsStr(g.rs_gear || '')})"
                             class="text-gray-400 hover:text-emerald-300 px-1.5 py-0.5 text-xs">▶</button>` : ''}
     </div>`;
 }
@@ -12050,7 +12138,7 @@ async function rbCatalogScanVsts(panelId, rsGear, curPath, curFormat) {
 }
 
 async function rbCatalogLoadAndEdit(panelId) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     if (!api) return alert('Native VST hosting not available');
     const path = rbCatalogResolveStagedPath(panelId);
     if (!path) return alert('Pick a plugin first (📁 Pick file or dropdown)');
@@ -12072,7 +12160,7 @@ async function rbCatalogLoadAndEdit(panelId) {
 }
 
 async function rbCatalogCaptureState(panelId) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     if (!api || typeof api.savePreset !== 'function') {
         return alert('savePreset() not available');
     }
@@ -12159,7 +12247,7 @@ async function rbLoadCatalogVstSuggestions(rsGearType, panelId) {
 // Use after a freshly-loaded VST so you know the slot id (returned by
 // loadVST, also visible in [rig_builder restore] logs).
 window.rbSweepParam = async function (slotId, paramName, steps) {
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     if (!api || typeof api.setParameter !== 'function' || typeof api.getParameters !== 'function') {
         console.error('[rb-sweep] No audio API or missing setParameter / getParameters'); return;
     }
@@ -12821,7 +12909,7 @@ async function rbOauthPoll(n) {
         const d = await r.json();
         if (d.connected) {
             rbLoadSettings();
-            rbInit();  // refresh status banner
+            rbInit().catch(e => console.warn('[rig_builder] init failed:', e));  // refresh status banner
             return;
         }
     } catch (e) { /* keep polling */ }
@@ -12832,7 +12920,7 @@ async function rbOauthDisconnect() {
     await fetch(`${RB_API}/oauth/disconnect`, { method: 'POST' });
     rbRecordPrivilegedOutcome('service.request', 'completed', 'Disconnected tone3000 account');
     rbLoadSettings();
-    rbInit();
+    rbInit().catch(e => console.warn('[rig_builder] init failed:', e));
 }
 
 async function rbSaveSettings() {
@@ -13502,7 +13590,7 @@ async function rbAdvToggleBypass(id) {
     rbAdvPersist();
     // Live bypass on the engine slot (best effort — only if the monitor is loaded).
     try {
-        const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+        const api = rbAudioApi();
         if (api && piece && typeof api.setBypass === 'function') {
             const slotId = await rbStudioChainSlotIdForPiece(api, n.pieceIdx);
             if (slotId != null) await api.setBypass(slotId, n.bypassed);
@@ -13545,7 +13633,7 @@ async function rbAdvEditNode(id) {
     // two editors). So ensure the meta is present, but DON'T clobber the piece's
     // already-edited _vst_params with engine reads (the amp's live slot can read
     // back at defaults, which wiped the saved knob values + lagged the image).
-    const api = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const api = rbAudioApi();
     try {
         const slotId = await rbStudioChainSlotIdForPiece(api, n.pieceIdx);
         piece._vst_slot_id = slotId;
@@ -13934,7 +14022,7 @@ async function rbAdvOnPanInput(id, val) {
     const lbl = document.querySelector(`[data-adv-pan-val="${id}"]`);
     if (lbl) lbl.textContent = rbAdvPanLabel(pan);
     rbAdvPersist();
-    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const audio = rbAudioApi();
     if (audio && typeof audio.setPan === 'function'
         && typeof n.pieceIdx === 'number' && n.pieceIdx >= 0) {
         try {
@@ -13951,7 +14039,7 @@ async function rbAdvOnPanInput(id, val) {
 // the chain behaves exactly as before. Feature-detected: a no-op on an engine
 // without setPan/setBranch (the currently shipped build), so nothing breaks there.
 async function rbStudioApplyStereoToEngine() {
-    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const audio = rbAudioApi();
     if (!audio) return;
     const hasPan = typeof audio.setPan === 'function';
     const hasBranch = typeof audio.setBranch === 'function';
@@ -14026,7 +14114,7 @@ async function rbStudioApplyStereoToEngine() {
 // there. Engine bypass = the user's own bypass OR graph-inactive; the user's
 // _bypassed flag is left intact so reconnecting restores it.
 async function rbAdvApplyConnectivity() {
-    const audio = window.slopsmithDesktop && window.slopsmithDesktop.audio;
+    const audio = rbAudioApi();
     if (!audio) return;
     const adv = rbState._adv;
     if (!adv || !Array.isArray(adv.nodes) || !adv.nodes.length) return;
