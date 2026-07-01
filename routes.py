@@ -710,6 +710,18 @@ def _get_conn() -> sqlite3.Connection:
         except Exception:
             log.exception("vst subdir path migration failed")
         _conn.commit()
+        # Re-home bundled-VST absolute paths to the CURRENT plugin dir. Must run
+        # BEFORE any migration that checks a stored path's existence on disk —
+        # notably _migrate_assign_bundled_primary_once(), which treats a stale
+        # AppImage mount path as "broken" (Path.exists() is false) and would
+        # overwrite a user's manual bundled pick with the gear's primary before
+        # this repair runs. Unlike the migrations here this is NOT one-shot: the
+        # AppImage plugin dir is a per-launch mount that moves each start, so we
+        # re-home on every connection open (once per process) — see the docstring.
+        try:
+            _migrate_rehome_bundled_vst_paths()
+        except Exception:
+            log.exception("bundled-VST path re-home failed")
         # v1.2 storage migration. Idempotent — guarded by sentinel file
         # so re-running on subsequent restarts is a no-op. Done here
         # (after the schema migrations) so the migration can join on
@@ -747,14 +759,6 @@ def _get_conn() -> sqlite3.Connection:
         # a distortion plugin). Correct per-gear defaults ship via
         # rs_gear_to_vst.json instead. `_consolidate_gear_assignments` is kept
         # for reference / a possible safer reimplementation but is not run.
-        # Re-home bundled-VST absolute paths to the CURRENT plugin dir. Unlike
-        # the migrations above this runs on EVERY connection open (once per
-        # process), because an AppImage's plugin dir is a per-launch mount that
-        # moves each start — see the docstring.
-        try:
-            _migrate_rehome_bundled_vst_paths()
-        except Exception:
-            log.exception("bundled-VST path re-home failed")
     return _conn
 
 
@@ -792,9 +796,14 @@ def _migrate_rehome_bundled_vst_paths() -> None:
             "SELECT id, vst_path FROM preset_pieces "
             "WHERE vst_path IS NOT NULL AND vst_path != ''"
         ).fetchall()
-    except sqlite3.OperationalError:
-        # vst_path column not yet added on a brand-new DB — nothing to re-home.
-        return
+    except sqlite3.OperationalError as e:
+        # Only swallow the expected "no vst_path column yet" case (brand-new DB
+        # before the ALTER); re-raise anything else (locked/corrupt DB, missing
+        # table) so the outer _get_conn() handler logs it instead of a silent
+        # no-op.
+        if "vst_path" in str(e).lower():
+            return
+        raise
     fixed = 0
     for piece_id, vp in rows:
         if not vp:

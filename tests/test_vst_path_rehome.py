@@ -65,6 +65,21 @@ def test_rehome_covers_legacy_nam_rig_builder_marker(tmp_path):
     assert _path_of(conn, pid) == str(plugin_dir / "vst" / "racks" / "RB Final Leveler.vst3")
 
 
+def test_rehome_handles_backslash_windows_style_paths(tmp_path):
+    routes = _routes_module()
+    plugin_dir = tmp_path / "rig_builder"
+    routes._plugin_dir = plugin_dir
+    conn = _make_conn()
+    routes._conn = conn
+    # A tone saved on Windows: backslash separators, win-unpacked prefix.
+    stale = r"C:\Users\me\FeedBack Test\win-unpacked\resources\slopsmith\plugins\rig_builder\vst\amps\DSL100.vst3"
+    pid = _insert(conn, stale)
+
+    routes._migrate_rehome_bundled_vst_paths()
+
+    assert _path_of(conn, pid) == str(plugin_dir / "vst" / "amps" / "DSL100.vst3")
+
+
 def test_rehome_leaves_external_and_correct_paths_untouched(tmp_path):
     routes = _routes_module()
     plugin_dir = tmp_path / "rig_builder"
