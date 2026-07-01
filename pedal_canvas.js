@@ -7290,7 +7290,7 @@
     citrusrumbleverb50:1.15, sinampbassdriver:1.18, lovolt100:1.25,
     lovoltdr504:1.45, lovoltdr103:1.45, samplegvh140c:1.78,
     // British / boutique heads
-    boxdc30:1.22, bendersupernova22:1.45, dualrect:1.45, dsl100:1.45, plexi:1.55,
+    boxac30:1.22, bendersupernova22:1.45, dualrect:1.45, dsl100:1.45, plexi:1.55,
     marstenvs100:1.45, marstenjcm800:1.60, marstenjtm45:1.55, marstenbluesbreaker:1.60,
     marstendsl15:1.60, marstenjvm410:1.60, aor50:1.38, jc90:1.15, engelfireball:1.45,
     polystoneminibrute:1.28, ronaldjc120:1.22, tw40:1.28, superdrive45:1.45,
@@ -7357,7 +7357,7 @@
     let drag = -1, sdrag = -1, fdrag = -1, lastY = 0, dv = 0;
     const faderVal = (fd, py) => clamp(1 - (py - fd.y0*spec.h) / ((fd.y1-fd.y0)*spec.h), 0, 1);
     const toSpec = (clientX, clientY) => { const rect = canvas.getBoundingClientRect();
-      const sx = spec.w / canvas.clientWidth, sy = spec.h / (canvas.clientHeight || 1);
+      const sx = spec.w / (canvas.clientWidth || spec.w), sy = spec.h / (canvas.clientHeight || 1);
       return { x: (clientX - rect.left) * sx, y: (clientY - rect.top) * sy }; };
     // Pick the SMALLEST-radius knob under the cursor. For concentric pairs (two
     // knobs sharing a centre — inner + outer ring) this routes a centre click to
@@ -7371,7 +7371,7 @@
       return best; };
     const hitFader = (x, y) => { if (y < G.plateY - 8 || y > G.plateY + G.plateH + 8) return -1;
       const i = Math.floor((x - G.faderL) / G.colW); return (i >= 0 && i < G.n) ? i : -1; };
-    canvas.addEventListener('mousedown', e => {
+    const onDown = e => {
       // The editor can attach twice (immediate draw + a redraw after fonts load),
       // leaving two mousedown listeners on the same canvas. They receive the *same*
       // event object, so a single physical click would be processed twice. That's
@@ -7427,6 +7427,13 @@
       }
       const k = hitKnob(p.x, p.y); if (k < 0) return;
       const kn = spec.knobs[k];
+      // Bat-lever entries declared in `knobs` are 2-position toggles: flip on
+      // click (a relative drag would need ~85 px before the lever moves).
+      if (kn.style === 'bat') {
+        const nv = (values[kn.id] > 0.5) ? 0 : 1; values[kn.id] = nv;
+        drawSpec(canvas, spec, values); if (opts.onChange) opts.onChange(kn.id, nv);
+        e.preventDefault(); return;
+      }
       // Selector knob (e.g. MODE): a click steps through `select` discrete
       // positions (0 … 1) instead of dragging continuously.
       if (kn.select) {
@@ -7438,8 +7445,16 @@
       }
       drag = k; lastY = e.clientY;
       dv = (values[kn.id] != null) ? values[kn.id] : 0.5; e.preventDefault();
-    });
-    window.addEventListener('mousemove', e => {
+    };
+    const onMove = e => {
+      // Self-clean once our canvas left the DOM (editor closed without detach).
+      if (!canvas.isConnected) {
+        window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp);
+        if (canvas.__rbWire && canvas.__rbWire.move === onMove) canvas.__rbWire = null;
+        return;
+      }
+      // Button released outside the window: mouseup never fired — drop the drag.
+      if (!(e.buttons & 1)) { drag = sdrag = fdrag = -1; return; }
       if (fdrag >= 0) { const p = toSpec(e.clientX, e.clientY); const fd = spec.faders[fdrag];
         const v = faderVal(fd, p.y); values[fd.id] = v; drawSpec(canvas, spec, values); if (opts.onChange) opts.onChange(fd.id, v); return; }
       if (sdrag >= 0) { const p = toSpec(e.clientX, e.clientY); const sl = spec.sliders[sdrag];
@@ -7451,8 +7466,20 @@
       const dy = lastY - e.clientY; lastY = e.clientY; dv = clamp(dv + dy / 170, 0, 1);
       const id = spec.knobs[drag].id; values[id] = dv;
       drawSpec(canvas, spec, values); if (opts.onChange) opts.onChange(id, dv);
-    });
-    window.addEventListener('mouseup', () => { drag = -1; sdrag = -1; fdrag = -1; });
+    };
+    const onUp = () => { drag = -1; sdrag = -1; fdrag = -1; };
+    // Re-attach replaces the previous wiring: the editor attaches twice per open
+    // (immediate draw + after fonts load), and each open used to add a permanent
+    // window mousemove/mouseup pair whose closure pinned the old values object.
+    if (canvas.__rbWire) {
+      canvas.removeEventListener('mousedown', canvas.__rbWire.down);
+      window.removeEventListener('mousemove', canvas.__rbWire.move);
+      window.removeEventListener('mouseup', canvas.__rbWire.up);
+    }
+    canvas.__rbWire = { down: onDown, move: onMove, up: onUp };
+    canvas.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
     return true;
   }
   function dataURL(stem, values) {
