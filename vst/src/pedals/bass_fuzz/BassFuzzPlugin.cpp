@@ -128,7 +128,7 @@ protected:
         // Volume pot applied AFTER makeup. 1.35 (was 1.6) seats the pedal ~1.5 dB
         // under the DI at the default so the synth-bass fuzz sits just below the
         // mix instead of right at it.
-        const float volume = 1.35f * fParams[kVolume];
+        const float volume = 1.0f * fParams[kVolume];
         float ubL[kOS];
         float ubR[kOS];
 
