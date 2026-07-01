@@ -644,6 +644,21 @@ def _get_conn() -> sqlite3.Connection:
             "CREATE INDEX IF NOT EXISTS idx_preset_pieces_rs_gear "
             "ON preset_pieces(rs_gear_type)"
         )
+        # Re-home bundled-VST absolute paths to the CURRENT plugin dir FIRST —
+        # before the slash-only segment rewrites below and before any
+        # existence-checking migration (e.g. _migrate_assign_bundled_primary_
+        # once, which would otherwise treat a stale AppImage mount path as
+        # "broken" and clobber a manual pick). Re-home also normalizes '\'→'/'
+        # and emits forward-slash paths, so the segment rewrites (which match
+        # only '/vst/<name>' style segments) can still fix flat→subdir and
+        # renamed-bundle tails on Windows-authored/cross-platform DBs. Unlike the
+        # other migrations this is NOT one-shot: the AppImage plugin dir is a
+        # per-launch mount that moves each start, so it runs on every open — see
+        # the docstring.
+        try:
+            _migrate_rehome_bundled_vst_paths()
+        except Exception:
+            log.exception("bundled-VST path re-home failed")
         # Plugin rename: old installs stored bundled VST absolute paths under
         # plugins/nam_rig_builder/. The active plugin dir is rig_builder, and
         # the old directory may no longer exist, so normalize those paths before
@@ -748,6 +763,90 @@ def _get_conn() -> sqlite3.Connection:
         # rs_gear_to_vst.json instead. `_consolidate_gear_assignments` is kept
         # for reference / a possible safer reimplementation but is not run.
     return _conn
+
+
+def _migrate_rehome_bundled_vst_paths() -> None:
+    """Re-home stored bundled-VST absolute paths to the CURRENT plugin dir.
+
+    Bundled effect VST3s live under `<_plugin_dir>/vst/<subdir>/<name>.vst3`,
+    but `preset_pieces.vst_path` persists that location as an ABSOLUTE string.
+    That breaks under the AppImage: the plugin dir is a per-launch FUSE mount
+    (`/tmp/.mount_feedbaXXXXXX/resources/.../plugins/rig_builder`) that is
+    deleted on quit and remounted at a *different* random path next launch. A
+    tone saved in one session then points at a mount that no longer exists, so
+    the amp/rack VST3 cannot be found and the rig "tries to load but fails" on
+    the highway (#46).
+
+    Fix: on every open, rewrite any stored path carrying a bundled-plugin
+    marker (`plugins/rig_builder/vst/`, or the legacy `nam_rig_builder`) so its
+    prefix points at the live `_plugin_dir`, preserving the relative tail
+    (`amps/DSL100.vst3`). This is deliberately NOT sentinel-guarded — the mount
+    moves every launch, so it must re-run each start. The user's own external
+    VST3s live at stable paths without the marker and are left untouched. The
+    engine locates each stage from `vst_path` (the type-0 stage `path`, and the
+    legacy `pluginPath` wrapper that native_preset_full rebuilds from it — see
+    `_vst_stage_state`), so repairing this column fixes both the path and the
+    emitted state blob.
+
+    Runs FIRST in `_get_conn` — before the slash-only segment rewrites (nam→rig,
+    renamed bundles, flat→subdir) and before existence-checking migrations. We
+    emit forward-slash paths (even from a Windows `\\`-separated original) so
+    those downstream rewrites, which match only `/vst/<name>`-style segments,
+    can still repair a flat or renamed tail on Windows-authored/cross-platform
+    DBs. Forward slashes are valid paths on every OS the engine runs on.
+    """
+    conn = _conn
+    if conn is None:
+        return
+    vst_root = _plugin_dir / "vst"
+    root_norm = str(vst_root).replace("\\", "/")
+    markers = ("/plugins/rig_builder/vst/", "/plugins/nam_rig_builder/vst/")
+    try:
+        rows = conn.execute(
+            "SELECT id, vst_path FROM preset_pieces "
+            "WHERE vst_path IS NOT NULL AND vst_path != ''"
+        ).fetchall()
+    except sqlite3.OperationalError as e:
+        # Only swallow the expected "no vst_path column yet" case (brand-new DB
+        # before the ALTER); re-raise anything else (locked/corrupt DB, missing
+        # table) so the outer _get_conn() handler logs it instead of a silent
+        # no-op.
+        if "vst_path" in str(e).lower():
+            return
+        raise
+    fixed = 0
+    for piece_id, vp in rows:
+        if not vp:
+            continue
+        norm = vp.replace("\\", "/")
+        rel = None
+        if norm.startswith(root_norm + "/"):
+            # Already anchored at the live plugin dir — but if the STORED value
+            # still uses '\' (a Windows-authored row), fall through so we rewrite
+            # it to forward slashes; otherwise the slash-only rename/subdir
+            # migrations below still can't match its flat/renamed tail.
+            rel = norm[len(root_norm) + 1:]
+        else:
+            for mk in markers:
+                idx = norm.find(mk)
+                if idx != -1:
+                    rel = norm[idx + len(mk):]
+                    break
+        if not rel:
+            continue  # not a bundled path (external/user VST) — leave alone
+        # Emit a forward-slash path (not str(vst_root / rel), which would use
+        # '\' on Windows) so the slash-only segment rewrites that run after this
+        # can still match and repair a flat/renamed tail.
+        new_path = root_norm + "/" + rel
+        if new_path != vp:
+            conn.execute(
+                "UPDATE preset_pieces SET vst_path = ? WHERE id = ?",
+                (new_path, piece_id),
+            )
+            fixed += 1
+    if fixed:
+        conn.commit()
+        log.info("re-homed %d bundled VST path(s) to %s", fixed, str(vst_root))
 
 
 def _migrate_output_gain_to_unity() -> None:
