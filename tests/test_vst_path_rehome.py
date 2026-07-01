@@ -80,6 +80,25 @@ def test_rehome_handles_backslash_windows_style_paths(tmp_path):
     assert _path_of(conn, pid) == str(plugin_dir / "vst" / "amps" / "DSL100.vst3")
 
 
+def test_rehome_emits_forward_slashes_for_flat_backslash_path(tmp_path):
+    # A flat (pre-subdir-reorg) Windows path must come out prefix-repaired AND
+    # forward-slashed, so the slash-only subdir/rename migrations that run after
+    # re-home can then match '/vst/<name>' and fix the flat tail.
+    routes = _routes_module()
+    plugin_dir = tmp_path / "rig_builder"
+    routes._plugin_dir = plugin_dir
+    conn = _make_conn()
+    routes._conn = conn
+    stale = r"C:\win-unpacked\resources\slopsmith\plugins\rig_builder\vst\DSL100.vst3"
+    pid = _insert(conn, stale)
+
+    routes._migrate_rehome_bundled_vst_paths()
+
+    out = _path_of(conn, pid)
+    assert "\\" not in out
+    assert out == str(plugin_dir / "vst").replace("\\", "/") + "/DSL100.vst3"
+
+
 def test_rehome_leaves_external_and_correct_paths_untouched(tmp_path):
     routes = _routes_module()
     plugin_dir = tmp_path / "rig_builder"

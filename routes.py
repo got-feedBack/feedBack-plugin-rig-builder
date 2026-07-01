@@ -644,6 +644,21 @@ def _get_conn() -> sqlite3.Connection:
             "CREATE INDEX IF NOT EXISTS idx_preset_pieces_rs_gear "
             "ON preset_pieces(rs_gear_type)"
         )
+        # Re-home bundled-VST absolute paths to the CURRENT plugin dir FIRST —
+        # before the slash-only segment rewrites below and before any
+        # existence-checking migration (e.g. _migrate_assign_bundled_primary_
+        # once, which would otherwise treat a stale AppImage mount path as
+        # "broken" and clobber a manual pick). Re-home also normalizes '\'→'/'
+        # and emits forward-slash paths, so the segment rewrites (which match
+        # only '/vst/<name>' style segments) can still fix flat→subdir and
+        # renamed-bundle tails on Windows-authored/cross-platform DBs. Unlike the
+        # other migrations this is NOT one-shot: the AppImage plugin dir is a
+        # per-launch mount that moves each start, so it runs on every open — see
+        # the docstring.
+        try:
+            _migrate_rehome_bundled_vst_paths()
+        except Exception:
+            log.exception("bundled-VST path re-home failed")
         # Plugin rename: old installs stored bundled VST absolute paths under
         # plugins/nam_rig_builder/. The active plugin dir is rig_builder, and
         # the old directory may no longer exist, so normalize those paths before
@@ -710,18 +725,6 @@ def _get_conn() -> sqlite3.Connection:
         except Exception:
             log.exception("vst subdir path migration failed")
         _conn.commit()
-        # Re-home bundled-VST absolute paths to the CURRENT plugin dir. Must run
-        # BEFORE any migration that checks a stored path's existence on disk —
-        # notably _migrate_assign_bundled_primary_once(), which treats a stale
-        # AppImage mount path as "broken" (Path.exists() is false) and would
-        # overwrite a user's manual bundled pick with the gear's primary before
-        # this repair runs. Unlike the migrations here this is NOT one-shot: the
-        # AppImage plugin dir is a per-launch mount that moves each start, so we
-        # re-home on every connection open (once per process) — see the docstring.
-        try:
-            _migrate_rehome_bundled_vst_paths()
-        except Exception:
-            log.exception("bundled-VST path re-home failed")
         # v1.2 storage migration. Idempotent — guarded by sentinel file
         # so re-running on subsequent restarts is a no-op. Done here
         # (after the schema migrations) so the migration can join on
@@ -784,6 +787,13 @@ def _migrate_rehome_bundled_vst_paths() -> None:
     legacy `pluginPath` wrapper that native_preset_full rebuilds from it — see
     `_vst_stage_state`), so repairing this column fixes both the path and the
     emitted state blob.
+
+    Runs FIRST in `_get_conn` — before the slash-only segment rewrites (nam→rig,
+    renamed bundles, flat→subdir) and before existence-checking migrations. We
+    emit forward-slash paths (even from a Windows `\\`-separated original) so
+    those downstream rewrites, which match only `/vst/<name>`-style segments,
+    can still repair a flat or renamed tail on Windows-authored/cross-platform
+    DBs. Forward slashes are valid paths on every OS the engine runs on.
     """
     conn = _conn
     if conn is None:
@@ -819,7 +829,10 @@ def _migrate_rehome_bundled_vst_paths() -> None:
                 break
         if not rel:
             continue  # not a bundled path (external/user VST) — leave alone
-        new_path = str(vst_root / rel)
+        # Emit a forward-slash path (not str(vst_root / rel), which would use
+        # '\' on Windows) so the slash-only segment rewrites that run after this
+        # can still match and repair a flat/renamed tail.
+        new_path = root_norm + "/" + rel
         if new_path != vp:
             conn.execute(
                 "UPDATE preset_pieces SET vst_path = ? WHERE id = ?",
