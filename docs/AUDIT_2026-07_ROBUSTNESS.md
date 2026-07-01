@@ -154,18 +154,37 @@ same envelopes/gates/limiter — scratchpad `leveler_sim.py`), 4 scenarios at de
 | T3 noise floor −40 dB (ABOVE the fixed −44 gate) | ❌ hiss treated as signal: AGC rides to +18, gate never closes → hiss amplified −40→−22 dB. Noisy high-gain/fuzz chains defeat the anti-noise design |
 | T4 resume after 1 s pause | ~OK: loudness detector decays during silence → AGC overshoots +14.3 vs steady +10.2 for <200 ms; audible impact small (out −15.3 vs −14.8 RMS) because the limiter+integration masks it |
 
-Conclusions: mission 1 (equal loudness) verified good. Mission 2 works ONLY if the
-chain's idle floor is below −44 dB raw RMS. Proposed improvements (not applied):
-1. Noise-floor tracker: slow-rising minimum of rawMsEnv = floor estimate; gate/AGC
-   require signal > floor + ~10 dB instead of the fixed −44. Fixes T3 for any chain.
-2. Freeze msEnv/rawMsEnv integration while the gate is closed (keep a separate fast
-   raw env for gate-open detection) → kills the T4 overshoot and makes resume exact.
-3. Shorten gate hold (300→150 ms) or scale gate release with the AGC boost so a
-   +18 dB chain doesn't exhale hiss for 0.5 s (T2 note).
-Alternative architectures considered: static per-tone offline normalization is
-already layered in (amp_loudness_model + tone target −15.5) — the leveler is the
-right adaptive layer on top; a smaller default max_boost (e.g. 12) would also bound
-the worst-case noise amplification. Recommendation = keep design, add 1+2.
+Conclusions: mission 1 (equal loudness) verified good. Mission 2 worked ONLY if the
+chain's idle floor was below −44 dB raw RMS.
+
+### Improvements IMPLEMENTED (2026-07-01, commit "RBFinalLeveler: adaptive noise gate...")
+1. **Noise-floor tracker + adaptive gate.** Tracks the chain's own idle floor:
+   falls fast (τ 0.2 s) toward quieter blocks; rises (τ 1.5 s) only toward blocks
+   that are NOISE-like = very stationary (block-level variance < 0.5 dB², i.e.
+   sd < 0.7 dB — white/fuzz hiss ≈ 0.1, a steady musical pad ≈ 2.4, a decaying
+   note tail far more) AND quiet (< −34 dB). On a step drop > 8 dB (playing just
+   stopped) the stationarity stats re-seed at the new level so learning starts
+   immediately. Gate = clamp(floor + 10 dB, [−44, −32]), still raisable by the
+   gate_db param. Old fixed behavior (−44) is the exact fallback until a floor
+   is learned.
+2. **Loudness detector frozen during silence.** K-filters keep running; msEnv/
+   rawMsEnv integrate only while the block carries signal (instantaneous raw
+   level ≥ gate, computed in a cheap pre-pass so attacks have no 1-block lag).
+   Resume-after-pause gain is now exact.
+
+Sim results after (same scenarios): T1 −14.1/−14.6 unchanged; T2 idle noise
+−60→−103 dB out (was −97) and the hold-window "breath" −50 dB (was −45); T3 hiss
+at −40 dB now gets gated ~3–4 s after playing stops (was: boosted +18 forever),
+then stays learned for the instance; T4 resume overshoot +14.3→+10.3 (= steady,
+i.e. eliminated); regressions checked: steady −36 dB lp-pad and a 6 s decaying
+note tail are NOT gated; a normal tone still levels to −14.1 after the gate
+adapted on a noisy chain. Known residual (accepted): a perfectly stationary
+white-noise-like "note" below −34 dB would be learned as noise — musically
+unrealistic; and hiss in the −44..−32 window is audible for the first ~3 s
+after the first pause while the floor is learned.
+Deferred: shorten gate hold (300→150 ms) if the ~0.5 s post-note "breath" on
+high-boost chains bothers in practice.
+Rebuilt + deployed: `vst/racks/RB Final Leveler.vst3` (arm64, ad-hoc signed).
 
 ## Verification status
 - [x] Headers compile: studio_verb, marshall_guvnor_plus, sharke_hb5000 (arm64)

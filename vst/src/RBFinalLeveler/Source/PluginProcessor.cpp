@@ -43,6 +43,9 @@ public:
         gateGain = 1.0f;
         msEnv = 0.0;
         rawMsEnv = 0.0;
+        noiseFloorMs = 1.0e-12;
+        floorDbMean = -60.0f;
+        floorDbVar = 9.0f;     // start "not stationary" so nothing is learned as noise yet
         designKWeighting(sr);
         for (int ch = 0; ch < 2; ++ch) { kPre[ch].reset(); kRlb[ch].reset(); }
     }
@@ -98,6 +101,67 @@ public:
         for (int ch = 0; ch < chN; ++ch)
             chData[ch] = buffer.getReadPointer(ch);
 
+        // PRE-PASS: this block's raw (unweighted) power. Cheap, and needed UP
+        // FRONT so the gate decision and the detector freeze below have no
+        // one-block lag on note attacks.
+        double preRawSum = 0.0;
+        for (int i = 0; i < numSamples; ++i)
+            for (int ch = 0; ch < chN; ++ch)
+            {
+                const double x = double(chData[ch][i]);
+                preRawSum += x * x;
+            }
+        const double rawBlockMs = preRawSum / double(std::max(1, numSamples) * std::max(1, chN));
+        const float instRawDb = (rawBlockMs > 1.0e-12)
+            ? float(10.0 * std::log10(rawBlockMs)) : -120.0f;
+
+        // ── NOISE-FLOOR TRACKER ──────────────────────────────────────────────
+        // The gate used to be a FIXED -44 dB: chains whose idle hiss sits above
+        // that (stacked fuzz / high-gain) were treated as signal — the AGC rode
+        // the hiss to max boost and the gate never closed. Track the chain's own
+        // floor instead: FALL fast toward any quieter block; RISE only toward
+        // blocks that look like NOISE — VERY stationary level AND quiet.
+        // Thresholds validated by simulation: white/fuzz hiss has a block-level
+        // variance ~0.1 dB², a steady quiet musical pad ~2.4, a decaying note
+        // tail far more — so sd < ~0.7 dB (var < 0.5) learns only hiss/hum.
+        // The < -34 dB guard keeps louder sustained sounds out entirely.
+        const float blockSec = float(numSamples) / float(sr);
+        {
+            // Step drop > 8 dB (playing just stopped): re-seed the stats at the
+            // new level so the stationarity verdict doesn't take extra seconds
+            // to shake off the playing→silence transition.
+            if (instRawDb < floorDbMean - 8.0f)
+            {
+                floorDbMean = instRawDb;
+                floorDbVar = 4.0f;
+            }
+            const float cStat = 1.0f - std::exp(-blockSec / 1.0f);
+            floorDbMean += cStat * (instRawDb - floorDbMean);
+            const float dev = instRawDb - floorDbMean;
+            floorDbVar += cStat * (dev * dev - floorDbVar);
+        }
+        const bool noiseLike = floorDbVar < 0.5f && instRawDb < -34.0f;
+        if (rawBlockMs < noiseFloorMs)
+            noiseFloorMs += double(1.0f - std::exp(-blockSec / 0.20f)) * (rawBlockMs - noiseFloorMs);
+        else if (noiseLike)
+            noiseFloorMs += double(1.0f - std::exp(-blockSec / 1.5f)) * (rawBlockMs - noiseFloorMs);
+        const float floorDb = (noiseFloorMs > 1.0e-12)
+            ? float(10.0 * std::log10(noiseFloorMs)) : -120.0f;
+
+        // Adaptive gate: 10 dB above the tracked floor, bounded to [-44, -32]:
+        // never higher than -32 (so quiet playing can't be eaten) and never
+        // lower than the old fixed -44 (which already cleared quiet bass while
+        // catching a normal idle floor). The user param can still raise it.
+        const float effGateDb = std::max(juce::jlimit(-44.0f, -32.0f, floorDb + 10.0f), gateDb);
+
+        // ── DETECTOR (freeze during silence) ─────────────────────────────────
+        // The K-filters run on every sample (they must stay warm), but the
+        // loudness envelopes only INTEGRATE while this block carries signal.
+        // Previously they kept integrating through silence, decayed to the
+        // noise floor, and the AGC briefly over-boosted the first note after a
+        // pause (~+4 dB for <200 ms). Frozen, the gain on resume is already
+        // exact for the tone that was playing.
+        const bool integrating = instRawDb >= effGateDb;
         double sumSq = 0.0;
         double rawSumSq = 0.0;
         for (int i = 0; i < numSamples; ++i)
@@ -115,8 +179,11 @@ public:
             rawSq /= double(std::max(1, chN));
             sumSq += sq;
             rawSumSq += rawSq;
-            msEnv += double(rmsCoef) * (sq - msEnv);
-            rawMsEnv += double(rmsCoef) * (rawSq - rawMsEnv);
+            if (integrating)
+            {
+                msEnv += double(rmsCoef) * (sq - msEnv);
+                rawMsEnv += double(rmsCoef) * (rawSq - rawMsEnv);
+            }
         }
 
         // SEED the detector on the FIRST block that actually carries signal: jump
@@ -126,7 +193,6 @@ public:
         // dropped ("suena fuerte el bajo y luego se baja") on every song/tone
         // start. Seeding makes the very first gain decision use the real level.
         const double blockMs = sumSq / double(std::max(1, numSamples));
-        const double rawBlockMs = rawSumSq / double(std::max(1, numSamples));
         if (! detectorSeeded && blockMs > 1.0e-9
             && (-0.691 + 10.0 * std::log10(blockMs)) >= gateDb)
         {
@@ -147,13 +213,10 @@ public:
         // GATE on the RAW level, NOT the K-weighted LUFS: white noise reads high
         // in K-weighting (the +4 dB high-shelf), so an LUFS gate let the idle
         // hiss through and the AGC then boosted it ("si no se toca nada, boostea
-        // el ruido blanco"). Raw RMS reflects the true level. The floor must sit
-        // BELOW real playing — a bass tone arrives QUIET at the leveler (the cab
-        // IR attenuates it; the leveler exists to boost it up), so a too-high gate
-        // ate the bass and it played "muy bajo". -44 dB clears the playing level
-        // while still catching the (lower) idle noise floor.
-        const float effGateDb = std::max(gateDb, -44.0f);
-        const bool hasSignal = rawRmsDb >= effGateDb;
+        // el ruido blanco"). Raw RMS reflects the true level. The threshold is
+        // the ADAPTIVE effGateDb computed above (10 dB over the tracked noise
+        // floor, bounded [-44, -32]); `integrating` is this block's signal test.
+        const bool hasSignal = integrating;
 
         // Warm-up: for the first ~45 ms of signal the 30 ms detector hasn't fully
         // settled, so its loudness reads low and the AGC would snap to a big boost
@@ -252,9 +315,7 @@ public:
         // silence. Being a separate output multiplier — not the AGC gain — note
         // onsets are NEVER muted by a slow gain recovery (the bug with the old
         // release-to-unity: "de repente el fuzz se mutea").
-        const float instRawDb = (rawBlockMs > 1.0e-12)
-            ? float(10.0 * std::log10(rawBlockMs)) : -120.0f;
-        const bool gateOpenNow = instRawDb >= effGateDb;
+        const bool gateOpenNow = integrating;   // same instantaneous raw-level test
         if (gateOpenNow) gateHoldSamples = int(0.30 * sr);             // 300 ms hold
         else if (gateHoldSamples > 0) gateHoldSamples = std::max(0, gateHoldSamples - numSamples);
         const float gateTarget = (gateOpenNow || gateHoldSamples > 0) ? 1.0f : 0.0f;
@@ -333,8 +394,11 @@ private:
     int warmupSamples = 0;         // signal samples seen — gates the first gain decision
     int gateHoldSamples = 0;       // output noise-gate hold counter
     float gateGain = 1.0f;         // output noise-gate gain (fast attack / slow release)
-    double msEnv = 0.0;   // running mean-square of the K-weighted signal (~30 ms)
+    double msEnv = 0.0;   // running mean-square of the K-weighted signal (~15 ms; frozen in silence)
     double rawMsEnv = 0.0; // running mean-square of the UNWEIGHTED signal — caps sub-heavy boost
+    double noiseFloorMs = 1.0e-12;  // tracked idle-noise power (mean-square)
+    float floorDbMean = -60.0f;     // stationarity stats of the block level (dB):
+    float floorDbVar = 9.0f;        // hiss is stationary, playing is not
 
     // ── ITU-R BS.1770 K-weighting (perceptual loudness) ───────────────────
     // Two biquads per channel: a high-shelf pre-filter + an RLB high-pass.
