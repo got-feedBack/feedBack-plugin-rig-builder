@@ -12,7 +12,7 @@
 START_NAMESPACE_DISTRHO
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
-static constexpr float kMakeup = 0.50f;
+static constexpr float kMakeup = 0.436f;
 class Jtm45Plugin : public Plugin {
     jtm45::Jtm45Core core; float fParams[kParamCount];
     rbshared::Oversampler4x os; static constexpr int kOS = rbshared::Oversampler4x::OS;

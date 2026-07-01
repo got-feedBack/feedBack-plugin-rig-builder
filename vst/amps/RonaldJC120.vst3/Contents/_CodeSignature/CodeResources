@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/RonaldJC120.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Wd1Jm/KiuCX4oAzLUFRrr2uxzESIac7QeTKmTdVl/fY=
+			</data>
+		</dict>
+		<key>x86_64-win/RonaldJC120.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Md5R4aXcm3DYYUMDzEbJOY3oth1zm3bAuDNIfD59Eo8=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

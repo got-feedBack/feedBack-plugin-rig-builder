@@ -17,6 +17,7 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "JC120Params.h"
+#include "../../_shared/oversampler.hpp"
 #include <cmath>
 #include <cstring>
 
@@ -133,6 +134,7 @@ public:
     {
         const float s = (sr > 1000.0f ? sr : 48000.0f) / 48000.0f;
         n0 = (int)(225 * s); n1 = (int)(341 * s); n2 = (int)(441 * s);
+        if (n0 > 1023) n0 = 1023; if (n1 > 1023) n1 = 1023; if (n2 > 1023) n2 = 1023;  // ap[1024] bound (192k)
         nc0 = (int)(1617 * s); nc1 = (int)(1991 * s);
         if (nc0 > 3599) nc0 = 3599; if (nc1 > 3599) nc1 = 3599;
         inHp.setHighPass(sr, 240.0f, 0.7f); inLp.setLowPass(sr, 3800.0f, 0.7f);
@@ -210,6 +212,8 @@ class JC120Core
     SpringReverb spring;
     Chorus chorus;
     DiodeClipper diode;             // real Shockley diode-pair distortion clipper
+    rbshared::Oversampler4x osDiode;   // 4x OS around the only nonlinearity (the diode)
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
 
     void updateFilters()
     {
@@ -244,7 +248,7 @@ public:
     {
         inputHp.reset(); inputLp.reset(); distPre.reset(); distPost.reset();
         toneBass.reset(); toneMid.reset(); toneTreble.reset(); brightShelf.reset();
-        speakerLp.reset(); speakerThump.reset(); speakerBite.reset(); dcBlock.reset(); diode.reset();
+        speakerLp.reset(); speakerThump.reset(); speakerBite.reset(); dcBlock.reset(); diode.reset(); osDiode.reset();
         spring.clear(); chorus.clear();
         updateFilters();
     }
@@ -299,7 +303,12 @@ public:
         // DISTORTION pot is a reverse-log (C) 10k — most of the gain is in the top of the sweep.
         const float distC = distortion * distortion;
         const float drive = 1.0f + 60.0f * distC;
-        d = diode.process(d * drive) * 1.9f;          // diodes clamp ~±0.5V -> makeup ~unity
+        // 4x-oversample ONLY the diode clip (the alias source) — the tone stack,
+        // reverb and chorus stay at base rate so their delay lines keep timing.
+        float ubd[kOS];
+        osDiode.upsample(d * drive, ubd);
+        for (int k = 0; k < kOS; ++k) ubd[k] = diode.process(ubd[k]);
+        d = osDiode.downsample(ubd) * 1.9f;          // diodes clamp ~±0.5V -> makeup ~unity
         d = distPost.process(d);
         // clean->distorted blend with makeup so the distorted level ~tracks clean
         const float w = distortion;
@@ -422,8 +431,8 @@ protected:
         {
             float oL, oR;
             core.process(3.2f * inL[i], 3.2f * inR[i], oL, oR);
-            outL[i] = rbAmpLvl(0.300f * oL);
-            outR[i] = rbAmpLvl(0.300f * oR);
+            outL[i] = rbAmpLvl(0.205f * oL);
+            outR[i] = rbAmpLvl(0.205f * oR);
         }
     }
 
