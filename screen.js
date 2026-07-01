@@ -13313,9 +13313,24 @@ function rbAdvResetToChain() {
     const mid = [...pre, ...amp, ...post, ...cab, ...rack];
     const output = { id: nid++, kind: 'output', label: 'Output', x: 0, y: 0 };
     adv.nodes = [input, ...mid, output];
-    const seq = [input, ...mid, output];
     adv.edges = [];
-    for (let k = 1; k < seq.length; k++) adv.edges.push({ from: seq[k - 1].id, to: seq[k].id, gain: 1.0 });
+    if (amp.length >= 2) {
+        // Seed 2+ amps in PARALLEL, mirroring the audio routing (each amp is
+        // its own engine branch; cab/post gear runs on the merged bus). The old
+        // serial seed drew amp→amp, contradicting what the engine plays.
+        const preSeq = [input, ...pre];
+        for (let k = 1; k < preSeq.length; k++) adv.edges.push({ from: preSeq[k - 1].id, to: preSeq[k].id, gain: 1.0 });
+        const split = preSeq[preSeq.length - 1];
+        const postSeq = [...post, ...cab, ...rack, output];
+        for (const a of amp) {
+            adv.edges.push({ from: split.id, to: a.id, gain: 1.0 });
+            adv.edges.push({ from: a.id, to: postSeq[0].id, gain: 1.0 });
+        }
+        for (let k = 1; k < postSeq.length; k++) adv.edges.push({ from: postSeq[k - 1].id, to: postSeq[k].id, gain: 1.0 });
+    } else {
+        const seq = [input, ...mid, output];
+        for (let k = 1; k < seq.length; k++) adv.edges.push({ from: seq[k - 1].id, to: seq[k].id, gain: 1.0 });
+    }
     adv.seeded = true;
     rbAdvAutoLayout();
     rbAdvPersist();
@@ -14038,15 +14053,27 @@ async function rbAdvOnPanInput(id, val) {
 // so they run in parallel and pan independently; 1 amp (or none) → all trunk, so
 // the chain behaves exactly as before. Feature-detected: a no-op on an engine
 // without setPan/setBranch (the currently shipped build), so nothing breaks there.
+// Diagnostics relay: renderer console isn't visible from a terminal run, so
+// mirror routing decisions to the backend (prints as [python:stdout] [rb-debug]).
+function rbDebugLog(msg) {
+    try { console.log('[rb-stereo]', msg); } catch (_) {}
+    try {
+        fetch('/api/plugins/rig_builder/debug_log', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ msg })
+        }).catch(() => {});
+    } catch (_) {}
+}
+
 async function rbStudioApplyStereoToEngine() {
     const audio = rbAudioApi();
     if (!audio) return;
     const hasPan = typeof audio.setPan === 'function';
     const hasBranch = typeof audio.setBranch === 'function';
     const hasBranchSrc = typeof audio.setBranchSrc === 'function';
-    if (!hasPan && !hasBranch) return;
+    if (!hasPan && !hasBranch) { rbDebugLog('stereo: engine has NO setPan/setBranch API'); return; }
     const chain = rbStudioCurrentChain();
-    if (!Array.isArray(chain) || !chain.length) return;
+    if (!Array.isArray(chain) || !chain.length) { rbDebugLog('stereo: empty chain, nothing to route'); return; }
     let ampIdxs = [];
     try { ampIdxs = (rbStudioGroupDefault().amp || []).map(e => e.idx); } catch (_) { ampIdxs = []; }
     // Branch rule: ONLY the amps split (n-th amp → branch n). The shared cab,
@@ -14123,6 +14150,15 @@ async function rbStudioApplyStereoToEngine() {
         if (hasPan)       { try { audio.setPan(slotId, pan); } catch (_) {} }
         if (hasBranchSrc) { try { audio.setBranchSrc(slotId, srcByIdx.get(i) || 0); } catch (_) {} }
     }
+    // TEMP DIAG (parallel debug): read back what the engine actually holds now.
+    try {
+        const st = (await audio.getChainState()) || [];
+        const summary = st.map((s, k) => {
+            const nm = String(s.path || s.name || '?').split('/').pop().slice(0, 30);
+            return `#${k} id=${s.id} ${nm} b=${s.branch | 0} pan=${Number(s.pan || 0).toFixed(2)}${s.bypassed ? ' BYP' : ''}`;
+        }).join('  |  ');
+        rbDebugLog(`amps@${JSON.stringify(ampIdxs)} claims=${JSON.stringify([...branchOfSlot.entries()])} engine: ${summary}`);
+    } catch (e) { rbDebugLog('readback failed: ' + e); }
 }
 
 // Make the node GRAPH actually gate the audio:

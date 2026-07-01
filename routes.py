@@ -37,7 +37,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import Body, UploadFile, File
+from fastapi import Body, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 log = logging.getLogger("slopsmith.plugin.rig_builder")
@@ -6605,6 +6605,18 @@ def setup(app, context):
     _start_watcher()
 
     # ── Status / setup ────────────────────────────────────────────────
+
+    @app.post("/api/plugins/rig_builder/debug_log")
+    async def debug_log(request: Request):
+        # Frontend diagnostics relay: the renderer's console isn't visible when
+        # the app runs from a terminal, but this server's stdout is (the main
+        # process echoes it as [python:stdout]). Print-and-forget.
+        try:
+            body = await request.json()
+            print(f"[rb-debug] {str(body.get('msg', ''))[:2000]}", flush=True)
+        except Exception:
+            pass
+        return {"ok": True}
 
     @app.get("/api/plugins/rig_builder/status")
     def status():
