@@ -157,6 +157,23 @@ _db_path: str | None = None
 _conn: sqlite3.Connection | None = None
 _lock = threading.Lock()
 
+# Rig Builder reads open song packs — `.sloppak` (original) and `.feedpak`
+# (newer name for the same on-disk layout: a zip / directory holding
+# manifest.yaml + arrangements/*.json). The host `sloppak` module loads both
+# identically (it resolves a pack by structure, not by extension), so every
+# song-reading path here accepts either extension. Per-song gear→tone mapping
+# then works for feedpak songs once the format carries the tone descriptors
+# (until then the default-tone fallback still applies). See issue #48.
+_SONG_PACK_SUFFIXES = frozenset((".sloppak", ".feedpak"))
+
+
+def _is_song_pack(path) -> bool:
+    """True when `path` is a readable song pack (sloppak or feedpak)."""
+    try:
+        return path.suffix.lower() in _SONG_PACK_SUFFIXES
+    except AttributeError:
+        return False
+
 # rs_to_real / default_captures / rs_cab_to_ir / rs_cab_mic_map are now
 # cached by filename in `_json_cache` via `_load_cached_json` (see below).
 _settings: dict | None = None  # tone3000_api_key, min_downloads, aggressive
@@ -3229,7 +3246,7 @@ def _resolve_song_file(filename: str) -> Path | None:
     if "/" not in filename and "\\" not in filename:
         try:
             for p in dlc.rglob(filename):
-                if p.is_file() and p.suffix.lower() == ".sloppak":
+                if p.is_file() and _is_song_pack(p):
                     return p
         except OSError:
             return None
@@ -4747,7 +4764,7 @@ def _list_library_songs() -> tuple[list[Path], int]:
         for p in dlc.rglob("*"):
             if not p.is_file():
                 continue
-            if p.suffix.lower() != ".sloppak":
+            if not _is_song_pack(p):
                 continue
             candidates.append(p)
     except OSError:
@@ -5486,9 +5503,9 @@ def _batch_worker(mode: str = "all"):
                 _batch_state["progress"] = idx + 1
             filename = _db_song_key(song_path.name, song_path)
 
-            if song_path.suffix.lower() != ".sloppak":
-                # Sloppak-only: skip raw .psarc songs (convert them first).
-                _batch_log(f"skip {filename}: not a .sloppak")
+            if not _is_song_pack(song_path):
+                # Song-pack only: skip raw .psarc songs (convert them first).
+                _batch_log(f"skip {filename}: not a .sloppak/.feedpak")
                 with _batch_lock:
                     _batch_state["skipped"] += 1
                 continue
@@ -5881,9 +5898,9 @@ def _auto_download_for_song(filename: str, path: Path) -> dict:
         known_vst_lookup = _build_known_vst_lookup()
         song_key = _db_song_key(filename, path)
 
-        # Sloppak-only: a raw .psarc yields no tones (convert it first).
+        # Song-pack only: a raw .psarc yields no tones (convert it first).
         raw_tones = (_read_tones_from_sloppak(song_key, _get_dlc_dir())
-                     if path.suffix.lower() == ".sloppak" else [])
+                     if _is_song_pack(path) else [])
 
         # Dedupe gear across the song's tones — the same JCM800 appears
         # in clean + lead + bass, but we only hit tone3000 once. Reset
@@ -6166,7 +6183,7 @@ def _resync_stale_song_seed(song_key: str, path: Path) -> list[str]:
     """
     if song_key in _resynced_songs:
         return []
-    if path.suffix.lower() != ".sloppak":
+    if not _is_song_pack(path):
         _resynced_songs.add(song_key)
         return []
     try:
@@ -6262,7 +6279,7 @@ def _watch_scan_dlc() -> dict[str, int] | None:
         for p in dlc.rglob("*"):
             if not p.is_file():
                 continue
-            if p.suffix.lower() != ".sloppak":
+            if not _is_song_pack(p):
                 continue
             try:
                 key = _dlc_relative_song_key(p)
@@ -6378,9 +6395,9 @@ def _watch_fire(name: str) -> None:
         # user doesn't need to open the song in the editor for the fix
         # to land. Idempotent: already-correct rows are no-ops.
         try:
-            # Sloppak-only: a raw .psarc yields no tones (convert it first).
+            # Song-pack only: a raw .psarc yields no tones (convert it first).
             raw_tones = (_read_tones_from_sloppak(song_key, _get_dlc_dir())
-                         if path.suffix.lower() == ".sloppak" else [])
+                         if _is_song_pack(path) else [])
             _auto_fix_cab_mics_for_song_module(song_key, raw_tones)
             _promote_generic_gear_for_song_module(song_key, raw_tones)
         except Exception:
@@ -7233,13 +7250,13 @@ def setup(app, context):
             )
 
         try:
-            if path.suffix.lower() == ".sloppak":
+            if _is_song_pack(path):
                 raw_tones = _read_tones_from_sloppak(song_key, _get_dlc_dir())
             elif path.suffix.lower() == ".psarc":
                 return JSONResponse(
                     {"error": "psarc_unsupported", "filename": filename,
-                     "hint": "Rig Builder reads .sloppak songs only. Convert this "
-                             ".psarc to .sloppak first, then reopen it."},
+                     "hint": "Rig Builder reads .sloppak / .feedpak songs only. "
+                             "Convert this .psarc first, then reopen it."},
                     400,
                 )
             else:
