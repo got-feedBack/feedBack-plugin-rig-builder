@@ -2,17 +2,19 @@
 #include <cmath>
 #include <cstring>
 
-// Shared 4x polyphase-FIR oversampler for the amps' nonlinear chains.
+// Shared polyphase-FIR oversampler for the amps' nonlinear chains.
+// NOTE: despite the class name, OS = 2 (2x). Always size buffers and set core
+// sample rates from Oversampler4x::OS, never from a literal 4.
 //
 // Why: cascaded tanh/triode stages generate harmonics above Nyquist; at the base
 // rate those fold back as aliasing — the "transistor / clinical / fizzy" character
-// and the high-gain artifacts. Running the nonlinear core at 4x and band-limiting
+// and the high-gain artifacts. Running the nonlinear core at OS x and band-limiting
 // on the way in/out removes that. One instance PER AUDIO CHANNEL (holds filter
 // state). Real-time safe after construction; not thread-safe.
 //
 // Usage:
 //   os.upsample(x, buf);          // 1 base-rate sample -> OS oversampled samples
-//   for (k=0;k<OS;k++) buf[k]=core.process(buf[k]);   // core was set to 4*sr
+//   for (k=0;k<OS;k++) buf[k]=core.process(buf[k]);   // core was set to OS*sr
 //   float y = os.downsample(buf); // OS samples -> 1 base-rate sample
 namespace rbshared {
 

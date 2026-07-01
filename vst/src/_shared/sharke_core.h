@@ -162,17 +162,20 @@ struct SharkeCore {
     int nEq=10;         bool eqIn=true;
     OnePole hpf, lpf;   bool hpfOn=false, lpfOn=false;
     SsPowerAmp power;
+    // Remembered so a sample-rate change can't revert the per-model power
+    // headroom set once at construction (setParams doesn't re-send it).
+    float pwrHeadroom=2.0f, pwrSag=0.04f;
 
     // HA3500 350W has slightly more headroom than the HA5000's 250W/ch.
     void setSampleRate(float s){ fs=(s>0)?s:48000.f; atk=msC(4.f,fs); rel=msC(120.f,fs);
         tube.setT(s);
         hpf.set(fs,30.f,true); lpf.set(fs,8000.f,false);
         for (int i=0;i<kMaxEq;++i){ eq[i].bypass(); }
-        power.set(fs, 2.0f, 0.04f); }
+        power.set(fs, pwrHeadroom, pwrSag); }
     // The plugin sets the per-model EQ band table (HA3500 ...4k/8k/16k vs
     // HA5000 ...3k/5k/8k) and the power-amp headroom once at construction.
     void setEqFreqs(const float* f, int n){ nEq = (n<kMaxEq)?n:kMaxEq; for (int i=0;i<nEq;++i) eqFreq[i]=f[i]; }
-    void setPowerHeadroom(float h, float sag){ power.set(fs, h, sag); }
+    void setPowerHeadroom(float h, float sag){ pwrHeadroom=h; pwrSag=sag; power.set(fs, h, sag); }
 
     void reset(){ tube.reset(); for (int i=0;i<kMaxEq;++i) eq[i].reset();
         hpf.reset(); lpf.reset(); power.reset(); env=0; }

@@ -350,7 +350,7 @@ public:
         setGeometryConstraints(w * 3 / 4, h * 3 / 4, true, false);
     }
 protected:
-    void parameterChanged(uint32_t i, float v) override { if (i < (uint32_t)nParams_) { fValues[i] = v; repaint(); } }
+    void parameterChanged(uint32_t i, float v) override { if (i < (uint32_t)nParams_ && i < (uint32_t)kMaxCtl) { fValues[i] = v; repaint(); } }
 
     void onNanoDisplay() override {
         fontFace(NANOVG_DEJAVU_SANS_TTF);

@@ -15,6 +15,11 @@ static inline float rbDenormal(float v)
     return std::fabs(v) < 1.0e-15f ? 0.0f : v;
 }
 
+// Diode exponent cap: must exceed maxAbsV/nVt for every spec (LEDs need ~40,
+// BC547 junctions ~26) or the knee becomes unreachable and the stage degenerates
+// to a hard clip at maxAbsV. 60 keeps exp/sinh finite in float for all specs.
+static const float kDiodeExpMax = 60.0f;
+
 struct DiodeSpec
 {
     float isAmp;
@@ -201,7 +206,7 @@ public:
         const float vt = nVt();
         for (int i = 0; i < 8; ++i)
         {
-            const float e = rbClamp(v / vt, -20.0f, 20.0f);
+            const float e = rbClamp(v / vt, -kDiodeExpMax, kDiodeExpMax);
             const float sh = std::sinh(e);
             const float ch = std::cosh(e);
             const float f = (v - vin) / sourceR + 2.0f * spec.isAmp * sh;
@@ -224,14 +229,14 @@ class AsymDiodeStringClipper
     float branchCurrent(float nodeV, int series) const
     {
         const float vt = spec.ideality * 0.02585f * static_cast<float>(series < 1 ? 1 : series);
-        const float e = rbClamp(nodeV / vt, -20.0f, 20.0f);
+        const float e = rbClamp(nodeV / vt, -kDiodeExpMax, kDiodeExpMax);
         return spec.isAmp * (std::exp(e) - 1.0f);
     }
 
     float branchConductance(float nodeV, int series) const
     {
         const float vt = spec.ideality * 0.02585f * static_cast<float>(series < 1 ? 1 : series);
-        const float e = rbClamp(nodeV / vt, -20.0f, 20.0f);
+        const float e = rbClamp(nodeV / vt, -kDiodeExpMax, kDiodeExpMax);
         return spec.isAmp * std::exp(e) / vt;
     }
 
@@ -301,14 +306,14 @@ class OcdMosfetGeClipper
     float geCurrent(float nodeV) const
     {
         const float vt = ge.ideality * 0.02585f;
-        const float e = rbClamp(nodeV / vt, -20.0f, 20.0f);
+        const float e = rbClamp(nodeV / vt, -kDiodeExpMax, kDiodeExpMax);
         return ge.isAmp * (std::exp(e) - 1.0f);
     }
 
     float geConductance(float nodeV) const
     {
         const float vt = ge.ideality * 0.02585f;
-        const float e = rbClamp(nodeV / vt, -20.0f, 20.0f);
+        const float e = rbClamp(nodeV / vt, -kDiodeExpMax, kDiodeExpMax);
         return ge.isAmp * std::exp(e) / vt;
     }
 

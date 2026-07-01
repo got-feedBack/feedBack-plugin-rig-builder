@@ -48,6 +48,9 @@ protected:
     float getParameterValue(uint32_t i) const override { return (i < (uint32_t)kParamCount) ? fParams[i] : 0.f; }
     void  setParameterValue(uint32_t i, float v) override { if (i < (uint32_t)kParamCount) { fParams[i] = v; recalc(); } }
     void  sampleRateChanged(double r) override { rv.setSampleRate((float)r); recalc(); }
+    // Drop the stored tail on host deactivate/reactivate (bypass toggle,
+    // transport suspend) — otherwise up to seconds of old reverb replay.
+    void  activate() override { rv.clear(); }
 
     void run(const float** in, float** out, uint32_t frames) override {
         const float* iL = in[0]; const float* iR = in[1];

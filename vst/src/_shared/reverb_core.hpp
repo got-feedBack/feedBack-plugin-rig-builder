@@ -24,8 +24,13 @@
 static const int kCombTune[8]    = { 1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617 };
 static const int kAllpassTune[4] = { 556, 441, 341, 225 };
 static const int kStereoSpread   = 23;
-static const int kCombMax        = 4000;   // headroom for 96 kHz + sizeScale
-static const int kApMax          = 1500;
+static const int kCombMax        = 8500;   // fits 192 kHz + stereo spread + sizeScale 1.10
+static const int kApMax          = 3100;   // same headroom for the all-pass diffusers
+
+// Flush denormals in the feedback paths: after input stops, 24 recursive
+// comb/all-pass states decay into denormal range and burn CPU on hosts
+// without FTZ/DAZ.
+static inline float rvDn(float v) { return (std::fabs(v) < 1.0e-15f) ? 0.0f : v; }
 
 struct RvComb {
     float buf[kCombMax]; int size = 1116, p = 0; float store = 0.f, fb = 0.8f, d1 = 0.2f, d2 = 0.8f;
@@ -36,7 +41,7 @@ struct RvComb {
     }
     inline float process(float in) {
         float y = buf[p];
-        store = y * d2 + store * d1;
+        store = rvDn(y * d2 + store * d1);
         buf[p] = in + store * fb;
         if (++p >= size) p = 0;
         return y;
@@ -49,7 +54,7 @@ struct RvAllpass {
     void set(int s, float feedback) { size = (s < 1) ? 1 : (s > kApMax ? kApMax : s); fb = feedback; }
     inline float process(float in) {
         float bufout = buf[p];
-        buf[p] = in + bufout * fb;
+        buf[p] = rvDn(in + bufout * fb);
         if (++p >= size) p = 0;
         return bufout - in;
     }
