@@ -13250,7 +13250,7 @@ function rbAdvPaletteRender() {
         const name = rbEsc(g.name || g.real_name || g.rs_gear || 'Gear');
         const img = rbAdvGearImg(g);   // VST face only — never the RS gear photo
         const thumb = img
-            ? `<img src="${img}" alt="" onerror="this.style.display='none'">`
+            ? `<img src="${img}" alt="" draggable="false" onerror="this.style.display='none'">`
             : `<span class="rb-adv-pal-ph">${rbAdvGearInitials(g)}</span>`;
         return `<div class="rb-adv-pal-item" draggable="true"
                      data-adv-gear="${rbEsc(g.rs_gear)}" data-adv-cat="${cat}" data-adv-name="${name}">
@@ -13260,10 +13260,15 @@ function rbAdvPaletteRender() {
     }).join('');
     host.querySelectorAll('.rb-adv-pal-item').forEach(el => {
         el.addEventListener('dragstart', ev => {
-            ev.dataTransfer.setData('text/rb-adv-gear', JSON.stringify({
+            const payload = JSON.stringify({
                 rs_gear: el.dataset.advGear, cat: el.dataset.advCat, name: el.dataset.advName,
-            }));
+            });
+            ev.dataTransfer.setData('text/rb-adv-gear', payload);
+            // Windows/Chromium can drop custom MIME types mid-drag; text/plain is
+            // always preserved, so carry the same payload there as a fallback.
+            ev.dataTransfer.setData('text/plain', payload);
             ev.dataTransfer.effectAllowed = 'copy';
+            console.log('[rb-adv] palette dragstart:', el.dataset.advName);
         });
     });
 }
@@ -13299,7 +13304,7 @@ function rbAdvNodeHtml(n) {
                 </div>`;
     }
     const thumb = n.img
-        ? `<div class="rb-adv-node-thumb"><img src="${rbEsc(n.img)}" alt="" onerror="this.style.display='none'"></div>`
+        ? `<div class="rb-adv-node-thumb"><img src="${rbEsc(n.img)}" alt="" draggable="false" onerror="this.style.display='none'"></div>`
         : `<div class="rb-adv-node-thumb"></div>`;
     const stereoOut = rbAdvNodeCanStereoOut(n);
     return `<div class="rb-adv-node ${n.bypassed ? 'rb-adv-node-bypassed' : ''} ${n._inactive ? 'rb-adv-node-inactive' : ''}" data-adv-node="${n.id}"
@@ -13626,6 +13631,8 @@ function rbAdvStartNodeDrag(ev, nodeId) {
     const adv = rbAdvState();
     const n = adv.nodes.find(x => x.id === nodeId);
     if (!n) return;
+    console.log('[rb-adv] node mousedown → drag start:', nodeId);
+    let _movedOnce = false;
     const p0 = rbAdvLayerPoint(ev), ox = p0.x - n.x, oy = p0.y - n.y;
     const el = document.querySelector(`#rb-adv-nodes [data-adv-node="${nodeId}"]`);
     const canvas = document.getElementById('rb-adv-canvas');
@@ -13639,6 +13646,7 @@ function rbAdvStartNodeDrag(ev, nodeId) {
         return e.clientX < r.left - m || e.clientX > r.right + m || e.clientY < r.top - m || e.clientY > r.bottom + m;
     };
     const move = e => {
+        if (!_movedOnce) { _movedOnce = true; console.log('[rb-adv] node drag: first mousemove OK (drag not hijacked)'); }
         const p = rbAdvLayerPoint(e);
         n.x = Math.max(0, p.x - ox); n.y = Math.max(0, p.y - oy);
         if (el) { el.style.left = n.x + 'px'; el.style.top = n.y + 'px'; }
@@ -13798,8 +13806,12 @@ function rbAdvBindCanvasOnce() {
     canvas.addEventListener('dragover', ev => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy'; });
     canvas.addEventListener('drop', ev => {
         ev.preventDefault();
-        let data; try { data = JSON.parse(ev.dataTransfer.getData('text/rb-adv-gear')); } catch (_) { return; }
-        if (!data) return;
+        const custom = ev.dataTransfer.getData('text/rb-adv-gear');
+        const plain = ev.dataTransfer.getData('text/plain');
+        console.log('[rb-adv] canvas drop: types=', Array.from(ev.dataTransfer.types || []),
+                    'custom?', !!custom, 'plain?', !!plain);
+        let data; try { data = JSON.parse(custom || plain); } catch (_) { return; }
+        if (!data) { console.warn('[rb-adv] canvas drop: no usable payload — ADD failed (DnD payload lost)'); return; }
         const adv = rbAdvState();
         const p = rbAdvLayerPoint(ev);
         const id = Math.max(0, ...adv.nodes.map(n => n.id)) + 1;
