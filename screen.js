@@ -14049,20 +14049,18 @@ async function rbStudioApplyStereoToEngine() {
     if (!Array.isArray(chain) || !chain.length) return;
     let ampIdxs = [];
     try { ampIdxs = (rbStudioGroupDefault().amp || []).map(e => e.idx); } catch (_) { ampIdxs = []; }
+    // Branch rule: ONLY the amps split (n-th amp → branch n). The shared cab,
+    // post pedals and the final leveler stay on the trunk and run on the MERGED
+    // bus, so every amp plays through the same cab at its own trimmed level.
+    // (The old rule pushed the cab + downstream gear into an amp's branch: the
+    // other amp played cab-less, and the per-amp loudness-trim stages the
+    // backend inserts right after each amp VST — which are NOT chain pieces and
+    // so never got a branch — were left at trunk 0 INSIDE the branch region.
+    // SignalChain's well-formedness guard treats that as a malformed layout and
+    // silently falls back to a fully SERIAL chain: "parallel amps but one
+    // sounds wrong/way too quiet".)
     const branchOfIdx = new Map();
-    if (ampIdxs.length >= 2) {
-        // Each amp gets its own parallel branch, and every gear FROM that amp
-        // onward (its cab/post-pedals) inherits the same branch — otherwise the
-        // engine, which expects each branch contiguous, would skip the trunk-0
-        // gear sitting between two amp slots (e.g. the cab → no attenuation →
-        // everything jumps louder). Gear before the first amp stays trunk (0).
-        const ampSet = new Set(ampIdxs);
-        let cur = 0, n = 0;
-        for (let i = 0; i < chain.length; i++) {
-            if (ampSet.has(i)) { n++; cur = n; }
-            if (cur > 0) branchOfIdx.set(i, cur);
-        }
-    }
+    if (ampIdxs.length >= 2) ampIdxs.forEach((idx, n) => branchOfIdx.set(idx, n + 1));
     // St-2 read-channel: a branch fed by a stereo-out gear's L/R port reads only
     // that channel of the split (for a true stereo source). This does NOT touch
     // pan — wiring an L/R port sets the gear's pan ONCE on connect (rbAdvConnect),
@@ -14093,13 +14091,36 @@ async function rbStudioApplyStereoToEngine() {
                 srcByIdx.set(to.pieceIdx, port === 'L' ? 1 : 2);
         }
     }
+    // Claim engine slots: each branched amp claims its own slot AND the
+    // loudness-trim stage right after it (the _rb_unit_impulse.wav IR the
+    // backend appends per amp) so the trim rides its amp's branch. Every other
+    // engine slot — cab IR, post pedals, leveler, master stages — is explicitly
+    // reset to trunk 0 (also clears stale branches from a previous layout).
+    let engineSlots = [];
+    if (hasBranch) { try { engineSlots = (await audio.getChainState()) || []; } catch (_) { engineSlots = []; } }
+    const branchOfSlot = new Map();
+    for (const [i, b] of branchOfIdx) {
+        let sid = null;
+        try { sid = await rbStudioChainSlotIdForPiece(audio, i); } catch (_) {}
+        if (sid == null) continue;
+        branchOfSlot.set(sid, b);
+        const k = engineSlots.findIndex(s => s && s.id === sid);
+        const nxt = (k >= 0) ? engineSlots[k + 1] : null;
+        if (nxt && nxt.id != null && String(nxt.path || '').indexOf('_rb_unit_impulse') !== -1)
+            branchOfSlot.set(nxt.id, b);
+    }
+    if (hasBranch) {
+        for (const s of engineSlots) {
+            if (!s || s.id == null) continue;
+            try { audio.setBranch(s.id, branchOfSlot.get(s.id) || 0); } catch (_) {}
+        }
+    }
     for (let i = 0; i < chain.length; i++) {
         let slotId = null;
         try { slotId = await rbStudioChainSlotIdForPiece(audio, i); } catch (_) {}
         if (slotId == null) continue;
         const pan = panByIdx.has(i) ? panByIdx.get(i) : (typeof chain[i]._pan === 'number' ? chain[i]._pan : 0);
         if (hasPan)       { try { audio.setPan(slotId, pan); } catch (_) {} }
-        if (hasBranch)    { try { audio.setBranch(slotId, branchOfIdx.get(i) || 0); } catch (_) {} }
         if (hasBranchSrc) { try { audio.setBranchSrc(slotId, srcByIdx.get(i) || 0); } catch (_) {} }
     }
 }
