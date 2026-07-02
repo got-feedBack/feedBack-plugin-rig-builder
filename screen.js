@@ -6875,7 +6875,14 @@ async function rbOnLeaveRigBuilder() {
             // The inline editor left its VST loaded in the engine; clear it so
             // it doesn't linger or get torn down under a half-closed window.
             const api = rbAudioApi();
-            if (api && api.clearChain) await api.clearChain().catch(() => {});
+            if (api && api.clearChain) {
+                // Mute around the teardown: clearing the slot mid-stream passes a
+                // broadband transient (part of the menu-switch noise burst). The
+                // mute's own fallback timer restores the gain (~370 ms), and any
+                // preset load the next screen triggers coalesces with it.
+                try { await rbPreLoadMute(1, window.__rbPendingChainGainTarget); } catch (_) {}
+                await api.clearChain().catch(() => {});
+            }
         }
     } finally {
         _rbLeaving = false;
