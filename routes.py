@@ -408,7 +408,7 @@ def _final_leveler_vst_path() -> Path | None:
     return p if p.exists() else None
 
 
-def _final_leveler_params_state() -> str:
+def _final_leveler_params_state(gate_db_override: float | None = None) -> str:
     """State envelope consumed by both the native restore and the JS reapply.
 
     CRITICAL: the params dict MUST be keyed by the VST's parameter DISPLAY
@@ -440,6 +440,11 @@ def _final_leveler_params_state() -> str:
     max_boost = float(s.get("final_chain_max_gain_db", 20.0))
     max_cut = abs(float(s.get("final_chain_min_gain_db", -20.0)))
     gate = float(s.get("final_chain_gate_db", -45.0))
+    # Bare-cab chains (no amp) run much quieter than amp chains even after the
+    # pre-leveler boost stage — the caller lowers the gate so their playing
+    # still opens it (the leveler's NAC pitch test keeps noise out regardless).
+    if gate_db_override is not None:
+        gate = float(gate_db_override)
     # Older settings shipped with 800/2500 ms here, which made the final
     # leveler behave like a slow auto-volume fade-in. Clamp the effective
     # leveler times to musical limiter values so stale local settings do not
@@ -467,7 +472,8 @@ def _final_leveler_params_state() -> str:
 
     return json.dumps({"params": params})
 
-def _final_leveler_stage(missing: list | None = None) -> dict | None:
+def _final_leveler_stage(missing: list | None = None,
+                         gate_db_override: float | None = None) -> dict | None:
     """Build the final VST stage, or None if disabled/missing."""
     s = _load_settings()
 
@@ -487,17 +493,61 @@ def _final_leveler_stage(missing: list | None = None) -> dict | None:
         p,
         "VST3",
         bypassed=False,
-        state=_vst_stage_state(str(p), "VST3", _final_leveler_params_state()),
+        state=_vst_stage_state(str(p), "VST3",
+                               _final_leveler_params_state(gate_db_override)),
         slot="master_post",
         rs_gear=_FINAL_LEVELER_RS_GEAR,
     )
 
 
+# Bare game-cab chains (RS cab IR, no amp in front — acoustic/DI songs) run far
+# quieter than amp chains. This lift used to live POST-leveler on the engine
+# 'chain' bus (rbBareCabBoostFor, 2.5x) — but anything after the leveler defeats
+# the leveling (bare-cab tones played ~+8 dB over every other tone once the AGC
+# had already normalized them). It now goes IN FRONT of the leveler as a clean
+# unit-impulse gain stage, plus a lower baked gate, so the AGC both hears the
+# signal and owns the final level like for every other tone.
+_BARE_CAB_BOOST = 2.5              # ~+8 dB, same lift the bus-side fix used
+_BARE_CAB_GATE_DB = -58.0          # baked leveler gate for these quiet chains
+_BARE_CAB_RS_GEAR = "__rb_bare_cab_boost"
+
+
+def _chain_is_bare_rs_cab(chain: list[dict]) -> bool:
+    """True when the chain has an active game-cab IR and NO active amp stage
+    (mirrors screen.js rbBareCabBoostFor's detection)."""
+    has_rs_cab = has_amp = False
+    for st in chain:
+        if not st or st.get("bypassed"):
+            continue
+        if st.get("slot") == "amp" and st.get("type") in (0, 1):
+            has_amp = True
+        if st.get("type") == 2 and _is_rocksmith_ir_file(st.get("path")):
+            has_rs_cab = True
+    return has_rs_cab and not has_amp
+
+
+def _bare_cab_boost_stage() -> dict | None:
+    ir = _unit_impulse_ir_path()
+    if not ir:
+        return None
+    st = _ir_stage(ir, bypassed=False, gain=_BARE_CAB_BOOST,
+                   rs_gear=_BARE_CAB_RS_GEAR)
+    st["postGain"] = round(_BARE_CAB_BOOST, 4)
+    return st
+
+
 def _append_final_leveler(chain: list[dict], missing: list | None = None) -> None:
-    """Append RB Final Leveler as the very last stage."""
+    """Append RB Final Leveler as the very last stage (with the pre-leveler
+    bare-cab lift when the chain needs it)."""
     if any((s or {}).get("rs_gear") == _FINAL_LEVELER_RS_GEAR for s in chain):
         return
-    stage = _final_leveler_stage(missing)
+    gate_override = None
+    if _chain_is_bare_rs_cab(chain):
+        boost = _bare_cab_boost_stage()
+        if boost:
+            chain.append(boost)
+        gate_override = _BARE_CAB_GATE_DB
+    stage = _final_leveler_stage(missing, gate_db_override=gate_override)
     if stage:
         chain.append(stage)
 

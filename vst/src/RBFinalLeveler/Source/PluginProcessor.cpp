@@ -199,8 +199,11 @@ public:
         // 300 ms hold + slow release WAS the audible "oscilando"). Upper clamp
         // -20 (was -32): a stacked-dist chain can idle at -30 and the gate must
         // be allowed to sit above that; playing quieter than a -30 dB hiss is
-        // masked by the hiss anyway. The user param can still raise the gate.
-        const float openDb  = std::max(juce::jlimit(-44.0f, -20.0f, floorDb + 8.0f), gateDb);
+        // masked by the hiss anyway. LOWER bound = the gate PARAM (not a fixed
+        // -44): quiet chains (bare game-cab, no amp) sit below -44 and the host
+        // bakes a lower Gate dB for them; the NAC pitch test keeps noise from
+        // opening the gate at any level.
+        const float openDb  = juce::jlimit(gateDb, -20.0f, floorDb + 8.0f);
         const float closeDb = openDb - 4.0f;
         const bool levelOpen = instRawDb >= (gateOpenState ? closeDb : openDb);
         gateOpenState = levelOpen;
@@ -582,15 +585,18 @@ private:
 
     void designKWeighting(double fs)
     {
-        // Stage 1 — high-shelf pre-filter.
-        // BASS-FAITHFUL TWEAK (was the standard BS.1770 +4 dB shelf): reduced to
-        // +1.5 dB so the loudness measure depends much less on brightness. With
-        // the full +4 dB, two bass tones through differently-voiced cabs measured
-        // differently (the brighter one read louder → got boosted less → its bass
-        // ended up quieter), so bass tones normalized to INCONSISTENT perceived
-        // loudness. A flatter measure levels them by their (bass-dominated) energy.
+        // Stage 1 — high-shelf pre-filter, STANDARD BS.1770 (+4 dB).
+        // A "bass-faithful" flattened variant (+1.5 dB shelf, 22 Hz corner) was
+        // tried here to keep two differently-voiced bass tones at equal bass
+        // energy — but it made the drive measure diverge from TRUE perceived
+        // loudness: sim archetype check showed bright tones landing ~-13.8
+        // real LUFS and sub-heavy tones ~-17.1 (≈4 dB spread → "unos tonos
+        // suenan más fuerte y otros más bajo"). With the standard weighting the
+        // same archetypes land within 0.5 dB of each other. Equal true LUFS is
+        // what "same volume" means across tones; the sub-dominance guard stays
+        // in the RAW_MARGIN_DB cap in processBlock.
         {
-            const double f0 = 1681.974450955533, G = 1.5, Q = 0.7071752369554196;
+            const double f0 = 1681.974450955533, G = 3.999843853973347, Q = 0.7071752369554196;
             const double K = std::tan(juce::MathConstants<double>::pi * f0 / fs);
             const double Vh = std::pow(10.0, G / 20.0), Vb = std::pow(Vh, 0.4996667741545416);
             const double a0 = 1.0 + K / Q + K * K;
@@ -602,12 +608,11 @@ private:
             b.a2 = (1.0 - K / Q + K * K) / a0;
             kPre[0] = b; kPre[1] = b;
         }
-        // Stage 2 — RLB high-pass (numerator 1, -2, 1).
-        // Corner lowered 38 → 22 Hz so the measure captures the bass fundamentals
-        // (low E ≈ 41 Hz, low B ≈ 31 Hz) instead of attenuating them — another
-        // source of bass-tone loudness inconsistency. Still cleans sub-22 Hz rumble.
+        // Stage 2 — RLB high-pass (numerator 1, -2, 1), standard 38 Hz corner
+        // (see the stage-1 note: the 22 Hz "bass-faithful" corner skewed the
+        // measure away from real perceived loudness).
         {
-            const double f0 = 22.0, Q = 0.5003270373238773;
+            const double f0 = 38.13547087602444, Q = 0.5003270373238773;
             const double K = std::tan(juce::MathConstants<double>::pi * f0 / fs);
             const double a0 = 1.0 + K / Q + K * K;
             Biquad b;

@@ -451,7 +451,12 @@ function rbChainGainTargetFor(chainSpec) {
     // Trim at build time + live via RbMegaChain.setOutputTrimDb), so the
     // pre-leveler chain bus must NOT also apply `makeup` — the AGC would just
     // cancel it (that was the "x5 does nothing / everything quiet" bug).
-    return rbBareCabBoostFor(chainSpec);
+    // NOTHING chain-dependent may sit on this bus either: the bare-cab lift
+    // that used to live here (rbBareCabBoostFor, 2.5x post-leveler) made
+    // bare-cab tones play ~+8 dB over every leveled tone. routes.py now adds
+    // that lift as a pre-leveler impulse-gain stage + lower baked gate, so the
+    // leveler owns the final level for every chain shape → bus stays at 1.0.
+    return 1.0;
     }
 
     let base = 1.0;
@@ -751,16 +756,18 @@ async function rbStartFinalChainNormalizer(chainSpec, opts) {
     if (!audio || typeof audio.setGain !== 'function') return;
 
     if (rbChainHasFinalLeveler(chain)) {
-        const userTrim = (typeof window.__rbChainMakeup === 'number')
-            ? window.__rbChainMakeup
-            : 1.0;
-        // Lift bare/acoustic RS cabs (no amp) that the leveler can't bring up
-        // from under its gate — same boost the song-playback path applies.
-        const target = userTrim * rbBareCabBoostFor(chain);
+        // Leveler chains: the bus stays at UNITY. Chain Volume (chain_makeup)
+        // is already BAKED into the leveler's Output Trim at build time —
+        // multiplying it here again made every path that runs this normalizer
+        // (song load, studio monitor, chain re-apply) play chain_makeup dB
+        // HOTTER than paths that only run rbApplyChainOutputGain, i.e. the
+        // same tone at different volumes depending on how it was loaded. The
+        // bare-cab lift also moved pre-leveler (routes.py) for the same
+        // reason. Keep this identical to rbChainGainTargetFor's leveler branch.
         window.__rbChainBaseTarget = 1.0;
-        window.__rbPendingChainGainTarget = target;
+        window.__rbPendingChainGainTarget = 1.0;
         try {
-            await audio.setGain('chain', rbClampChainGainTarget(target));
+            await audio.setGain('chain', 1.0);
         } catch (e) {
             console.warn('[rig_builder final-leveler] setGain(chain) failed:', e);
         }
