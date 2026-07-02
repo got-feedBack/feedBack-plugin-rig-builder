@@ -77,10 +77,13 @@ class B3K
         railMemory += 0.0009f * (std::fabs(x) - railMemory);
         const float rail = 1.02f - 0.12f * rbcomponents::rbClamp(railMemory / supply.maxAbsV, 0.0f, 1.0f);
 
+        // Two CMOS stages (was three) with gentler inter-stage gain. Three near-
+        // saturated tanh stages compounded into a permanent square wave (crest ~1.01
+        // at ANY drive = fuzz, no overdrive range). Two softer stages + a lighter
+        // silicon clamp let the Drive knob sweep clean -> OD -> heavy distortion.
         float s = cmosInverter(x, 0.040f, rail);
-        s = cmosInverter(s * 1.35f, -0.026f, rail);
-        s = cmosInverter(s * 1.20f, 0.018f, rail);
-        return siliconClamp.process(s * 1.18f);
+        s = cmosInverter(s * 1.08f, -0.026f, rail);
+        return siliconClamp.process(s * 0.82f);
     }
 
 public:
@@ -89,7 +92,7 @@ public:
         preamp.setSpec(rbshared::tl072Spec());
         recovery.setSpec(rbshared::tl072Spec());
         siliconClamp.setSpec(rbcomponents::diode1N4148());
-        siliconClamp.setSourceR(1800.0f);
+        siliconClamp.setSourceR(3000.0f);
     }
 
     void setSampleRate(float s)
@@ -109,7 +112,7 @@ public:
     void setParams(float blendP, float drive, float level, float attack, float grunt)
     {
         blend = clamp01(blendP);
-        driveGain = 4.5f + 118.0f * audioTaper(drive);
+        driveGain = 0.7f + 22.0f * audioTaper(drive);
         levelGain = 2.05f * audioTaper(level);
         attackMode = quantize3(attack);
         gruntMode = quantize3(grunt);

@@ -74,7 +74,11 @@ public:
     void setParams(float distortion, float filter, float volume)
     {
         const float d = audioTaper(distortion);
-        driveGain = 38.0f + 1850.0f * d;
+        // The old 38..1888 range slammed the LM308 into full clip even at the
+        // Distortion knob's minimum, so the control was dead (identical RMS/tone
+        // across its whole travel). 1.5..261 keeps the bottom of the pot near-clean
+        // and reaches full RAT saturation by ~noon, so the knob actually sweeps.
+        driveGain = 1.5f + 260.0f * d;
         const float dark = audioTaper(filter);
         const float cutoff = 6800.0f - 5850.0f * dark;
         cFilter = onePoleCoef(cutoff, fs);
