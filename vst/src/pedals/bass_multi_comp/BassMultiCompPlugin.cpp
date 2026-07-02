@@ -228,7 +228,10 @@ class BassMultiCompCore
         maxLowReduction = 5.0f + 18.0f * c;
         maxHighReduction = 4.0f + 15.0f * c;
         maxFullReduction = 5.0f + 18.0f * c;
-        outputGain = dbToGain(-18.0f + 32.0f * clamp01(gain));
+        // Real panel Gain is an output/makeup control, not a mute. The previous
+        // -18..+14 dB span made low settings drop below a usable compressor
+        // level; keep the bottom audible and reserve the top for makeup.
+        outputGain = dbToGain(-6.0f + 18.0f * audioTaper(gain));
 
         bas28Pair.setSpec(rbcomponents::diodeBAS28());
         bas28Pair.setSourceR(15000.0f - 6000.0f * s);

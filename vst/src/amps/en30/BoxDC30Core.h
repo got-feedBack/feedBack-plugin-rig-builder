@@ -17,6 +17,29 @@ namespace boxdc30 {
 static constexpr float kPi = 3.14159265358979f;
 static inline float clamp01(float v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
 
+static inline float gainLoudnessMakeupDb(float gain)
+{
+    // Measured against tools/measure_amp_loudness.py after the AC30C2 A500K pot
+    // taper and 0.45x preGain calibration.  RS Gain is distortion amount in
+    // Slopsmith, not output volume, so this post-circuit makeup keeps clean,
+    // edge-of-breakup and cranked settings close in perceived loudness.  The
+    // smooth high-gain trim compensates the extra guitar-density loudness that
+    // appears when the Top Boost path starts compressing hard.
+    static const float kDb[11] = {
+        31.0f, 23.0f, 13.8f, 6.65f, 1.25f, -2.50f,
+        -4.70f, -5.40f, -5.35f, -5.00f, -4.45f
+    };
+    const float p = 10.0f * clamp01(gain);
+    int i = (int)p;
+    if (i >= 10)
+        i = 10;
+    const float f = p - (float)i;
+    const float makeup = (i >= 10) ? kDb[10] : kDb[i] + (kDb[i + 1] - kDb[i]) * f;
+    const float density = clamp01((clamp01(gain) - 0.32f) / 0.68f);
+    const float smooth = density * density * (3.0f - 2.0f * density);
+    return makeup - 3.2f * smooth;
+}
+
 namespace ac30pot {
 static constexpr float kAudio15Exp = 2.73696559f; // A taper, approx 15% electrical at half rotation
 static constexpr float kVr1NormalVol = 500000.0f; // AC30C2 VR1 A500K
@@ -266,14 +289,8 @@ struct BoxDC30Core {
         }
         // Loudness flattening is plugin-level normalization, not part of the AC30
         // circuit. Keep it tied to panel position; tying it to the A500K electrical
-        // taper over-boosts mid knob settings and can turn distortion onset into
-        // audible spikes.
-        // Re-fit for the 0.45x preGain. Brings the cranked end to ~-16 dBFS but
-        // deliberately leaves low TB Vol quieter (clean), so the makeup never boosts
-        // the clean signal into the output soft-knee (which would re-add early
-        // breakup). The app's final leveler equalises tone-to-tone loudness.
-        float gcDb = 34.86f - 97.05f * pTBVol + 57.68f * pTBVol * pTBVol;
-        if (gcDb > 24.0f) gcDb = 24.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
+        // taper over-boosts mid knob settings and makes Gain act like a volume pot.
+        const float gcDb = gainLoudnessMakeupDb(pTBVol);
         return x * outLevel * std::pow(10.0f, 0.05f * gcDb);
     }
 };

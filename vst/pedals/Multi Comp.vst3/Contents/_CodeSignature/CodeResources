@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/Multi Comp.so</key>
+		<key>x86_64-linux/BassMultiComp.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			RJC+/XnDC4eGmcczpDkgEs9Ji6s9l2xOhlVrmkCgato=
+			DpCl5cbmtwXiyqYIBKDFQfj/16NmDHJnxRTBvEQffi0=
 			</data>
 		</dict>
-		<key>x86_64-win/Multi Comp.vst3</key>
+		<key>x86_64-win/BassMultiComp.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			I9E9SuxKnmmK16FI08aeOD8NdKnoVVDfnapY6NTpFyY=
+			fBlQ6RjID7vGSUXGkezCRMS+3cT3NywrD3b01KbxfTc=
 			</data>
 		</dict>
 	</dict>
