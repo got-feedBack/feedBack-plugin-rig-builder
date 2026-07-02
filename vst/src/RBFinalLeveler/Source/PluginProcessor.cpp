@@ -44,14 +44,21 @@ public:
         msEnv = 0.0;
         rawMsEnv = 0.0;
         noiseFloorMs = 1.0e-12;
-        floorDbMean = -60.0f;
-        floorDbVar = 9.0f;     // start "not stationary" so nothing is learned as noise yet
-        for (int i = 0; i < kFftN; ++i)
-            flatWin[(size_t) i] = 0.5f - 0.5f * std::cos(2.0f * juce::MathConstants<float>::pi
-                                                          * float(i) / float(kFftN - 1));
-        flatRing.fill(0.0f);
-        flatRingPos = 0;
-        flatReady = false;
+        frameSum = 0.0;
+        frameN = 0;
+        frameDbMean = -60.0f;
+        frameDbVar = 9.0f;     // start "not stationary" so nothing is learned as noise yet
+        periodicBlocksInFrame = 0;
+        blocksInFrame = 0;
+        frameDbHist.fill(0.0f);
+        frameHistPos = 0;
+        frameHistCount = 0;
+        gateOpenState = false;
+        prevBlockDb = -120.0f;
+        pitchVotes = 0;
+        nacRing.fill(0.0f);
+        nacPos = 0;
+        nacReady = false;
         designKWeighting(sr);
         for (int ch = 0; ch < 2; ++ch) { kPre[ch].reset(); kRlb[ch].reset(); }
     }
@@ -121,58 +128,95 @@ public:
         const float instRawDb = (rawBlockMs > 1.0e-12)
             ? float(10.0 * std::log10(rawBlockMs)) : -120.0f;
 
-        // Feed this block's mono into the flatness window, then classify the
-        // current ~21 ms as PITCHED (a note) or NOISE. Used below so the gate/
-        // detector ignore a loud idle hiss floor. Until the ring has filled once,
-        // assume pitched (don't wrongly mute the very first note).
+        // Feed this block's mono into the periodicity window, then classify the
+        // current ~43 ms as PITCHED (a note) or NOISE via the normalized
+        // autocorrelation peak (NAC). Spectral flatness was tried first and
+        // FAILED: post-cab idle hiss is heavily COLORED (energy packed into the
+        // low bins) and reads exactly like a bass note's spectrum at this FFT
+        // resolution, so a flatness gate either boosted dist-pedal hiss forever
+        // ("se mantiene el ruido... suena como oscilando") or muted real notes.
+        // Periodicity is the robust discriminator: any note — clean, distorted,
+        // cab-colored, dense low harmonics, chords — repeats at its fundamental
+        // lag; hiss of ANY color does not. Validated offline (sim, per-block
+        // NAC): white noise ≤0.16, colored dist hiss ≤0.33, chords ≥0.34,
+        // single notes ≥0.9 → threshold 0.35 + 2-of-3 vote below.
         for (int i = 0; i < numSamples; ++i)
         {
             float mono = 0.0f;
             for (int ch = 0; ch < chN; ++ch) mono += chData[ch][i];
-            flatRing[(size_t) flatRingPos] = (chN > 0) ? mono / float(chN) : 0.0f;
-            flatRingPos = (flatRingPos + 1) & (kFftN - 1);
-            if (flatRingPos == 0) flatReady = true;
+            nacRing[(size_t) nacPos] = (chN > 0) ? mono / float(chN) : 0.0f;
+            nacPos = (nacPos + 1) & (kNacN - 1);
+            if (nacPos == 0) nacReady = true;
         }
-        const bool pitched = (! flatReady) || (computeFlatness() < kFlatThresh);
+        const bool pitched = nacReady && (computeNac() > kNacThresh);
 
         // ── NOISE-FLOOR TRACKER ──────────────────────────────────────────────
-        // The gate used to be a FIXED -44 dB: chains whose idle hiss sits above
-        // that (stacked fuzz / high-gain) were treated as signal — the AGC rode
-        // the hiss to max boost and the gate never closed. Track the chain's own
-        // floor instead: FALL fast toward any quieter block; RISE only toward
-        // blocks that look like NOISE — VERY stationary level AND quiet.
-        // Thresholds validated by simulation: white/fuzz hiss has a block-level
-        // variance ~0.1 dB², a steady quiet musical pad ~2.4, a decaying note
-        // tail far more — so sd < ~0.7 dB (var < 0.5) learns only hiss/hum.
-        // The < -34 dB guard keeps louder sustained sounds out entirely.
-        const float blockSec = float(numSamples) / float(sr);
+        // The chain's idle floor (hiss/hum, any level — stacked fuzz can idle at
+        // -30 dB) is learned by STATIONARITY over 100 ms frames: FALL fast
+        // toward any quieter frame; RISE toward frames that look like NOISE.
+        // 100 ms frames (not 5 ms blocks): block-level dB variance is bandwidth-
+        // dependent — narrowband post-cab hiss has few independent samples per
+        // block and looks "unstable" at block scale; frames average that out
+        // for every noise color while playing still swings frame-to-frame.
+        // Rise paths: (a) NON-periodic + fairly stationary → normal hiss learn;
+        // (b) PERIODIC but dead-steady over 4 s NET drift → hum/drone, learn it
+        // too. The NET drift check (vs 4 s ago, not frame-to-frame deltas) is
+        // what protects long sustained notes: a slow decay moves ~0.3 dB per
+        // frame ("steady") but >2 dB over 4 s.
+        frameSum += rawBlockMs * double(numSamples);
+        frameN += numSamples;
+        ++blocksInFrame;
+        if (pitched) ++periodicBlocksInFrame;
+        if (frameN >= int(0.100 * sr))
         {
-            // Step drop > 8 dB (playing just stopped): re-seed the stats at the
-            // new level so the stationarity verdict doesn't take extra seconds
-            // to shake off the playing→silence transition.
-            if (instRawDb < floorDbMean - 8.0f)
-            {
-                floorDbMean = instRawDb;
-                floorDbVar = 4.0f;
-            }
-            const float cStat = 1.0f - std::exp(-blockSec / 1.0f);
-            floorDbMean += cStat * (instRawDb - floorDbMean);
-            const float dev = instRawDb - floorDbMean;
-            floorDbVar += cStat * (dev * dev - floorDbVar);
+            const double frameMs = frameSum / double(frameN);
+            const float frameDb = (frameMs > 1.0e-12) ? float(10.0 * std::log10(frameMs)) : -120.0f;
+            const bool framePeriodic = periodicBlocksInFrame * 3 > blocksInFrame;   // >1/3 of blocks
+            const float oldFrameDb = frameDbHist[(size_t) frameHistPos];
+            const bool histFull = frameHistCount >= (int) frameDbHist.size();
+            frameDbHist[(size_t) frameHistPos] = frameDb;
+            frameHistPos = (frameHistPos + 1) % (int) frameDbHist.size();
+            if (frameHistCount < (int) frameDbHist.size()) ++frameHistCount;
+            const bool steady4s = histFull && std::abs(frameDb - oldFrameDb) < 2.0f;
+            if (frameDb < frameDbMean - 8.0f) { frameDbMean = frameDb; frameDbVar = 4.0f; }
+            const float cStat = 1.0f - std::exp(-0.100f / 1.0f);   // ~1 s stats horizon
+            frameDbMean += cStat * (frameDb - frameDbMean);
+            const float dev = frameDb - frameDbMean;
+            frameDbVar += cStat * (dev * dev - frameDbVar);
+            const bool noiseLike = (!framePeriodic && frameDbVar < 1.0f)
+                                || (framePeriodic && steady4s && frameDbVar < 1.0f);
+            if (frameMs < noiseFloorMs)
+                noiseFloorMs += double(1.0f - std::exp(-0.100f / 0.20f)) * (frameMs - noiseFloorMs);
+            else if (noiseLike)
+                noiseFloorMs += double(1.0f - std::exp(-0.100f / 1.5f)) * (frameMs - noiseFloorMs);
+            frameSum = 0.0; frameN = 0; blocksInFrame = 0; periodicBlocksInFrame = 0;
         }
-        const bool noiseLike = floorDbVar < 0.5f && instRawDb < -34.0f;
-        if (rawBlockMs < noiseFloorMs)
-            noiseFloorMs += double(1.0f - std::exp(-blockSec / 0.20f)) * (rawBlockMs - noiseFloorMs);
-        else if (noiseLike)
-            noiseFloorMs += double(1.0f - std::exp(-blockSec / 1.5f)) * (rawBlockMs - noiseFloorMs);
         const float floorDb = (noiseFloorMs > 1.0e-12)
             ? float(10.0 * std::log10(noiseFloorMs)) : -120.0f;
 
-        // Adaptive gate: 10 dB above the tracked floor, bounded to [-44, -32]:
-        // never higher than -32 (so quiet playing can't be eaten) and never
-        // lower than the old fixed -44 (which already cleared quiet bass while
-        // catching a normal idle floor). The user param can still raise it.
-        const float effGateDb = std::max(juce::jlimit(-44.0f, -32.0f, floorDb + 10.0f), gateDb);
+        // Adaptive gate with HYSTERESIS: open at floor+8, close at floor+4, so
+        // hiss riding near one threshold can't flap the gate (the flapping +
+        // 300 ms hold + slow release WAS the audible "oscilando"). Upper clamp
+        // -20 (was -32): a stacked-dist chain can idle at -30 and the gate must
+        // be allowed to sit above that; playing quieter than a -30 dB hiss is
+        // masked by the hiss anyway. The user param can still raise the gate.
+        const float openDb  = std::max(juce::jlimit(-44.0f, -20.0f, floorDb + 8.0f), gateDb);
+        const float closeDb = openDb - 4.0f;
+        const bool levelOpen = instRawDb >= (gateOpenState ? closeDb : openDb);
+        gateOpenState = levelOpen;
+
+        // 2-of-3-block pitch vote: a single-block NAC fluke on noise can't open
+        // the gate; a single-block dip on a chord can't close it.
+        pitchVotes = ((pitchVotes << 1) | (pitched ? 1 : 0)) & 0x7;
+        const int nVotes = (pitchVotes & 1) + ((pitchVotes >> 1) & 1) + ((pitchVotes >> 2) & 1);
+        const bool votedPitch = nVotes >= 2;
+
+        // ATTACK-TRANSIENT override: a sudden level jump is a note onset (noise
+        // floors don't step up 9 dB block-to-block) — open immediately, before
+        // the 43 ms periodicity window has locked onto the new note, so attacks
+        // and palm-muted chugs are never softened by NAC/vote lag.
+        const bool transient = levelOpen && (instRawDb >= prevBlockDb + 9.0f);
+        prevBlockDb = instRawDb;
 
         // ── DETECTOR (freeze during silence) ─────────────────────────────────
         // The K-filters run on every sample (they must stay warm), but the
@@ -184,7 +228,7 @@ public:
         // Gate/detector open only on a signal that is BOTH loud enough AND
         // pitched (a real note) — a loud but aperiodic idle hiss no longer opens
         // the gate or drives the AGC, so the noise floor stops "subiendo".
-        const bool integrating = (instRawDb >= effGateDb) && pitched;
+        const bool integrating = (levelOpen && votedPitch) || transient;
         double sumSq = 0.0;
         double rawSumSq = 0.0;
         for (int i = 0; i < numSamples; ++i)
@@ -237,8 +281,8 @@ public:
         // in K-weighting (the +4 dB high-shelf), so an LUFS gate let the idle
         // hiss through and the AGC then boosted it ("si no se toca nada, boostea
         // el ruido blanco"). Raw RMS reflects the true level. The threshold is
-        // the ADAPTIVE effGateDb computed above (10 dB over the tracked noise
-        // floor, bounded [-44, -32]); `integrating` is this block's signal test.
+        // the ADAPTIVE hysteresis gate computed above (open floor+8 / close
+        // floor+4, clamped [-44, -20]); `integrating` is this block's signal test.
         const bool hasSignal = integrating;
 
         // Warm-up: for the first ~45 ms of signal the 30 ms detector hasn't fully
@@ -420,23 +464,35 @@ private:
     double msEnv = 0.0;   // running mean-square of the K-weighted signal (~15 ms; frozen in silence)
     double rawMsEnv = 0.0; // running mean-square of the UNWEIGHTED signal — caps sub-heavy boost
     double noiseFloorMs = 1.0e-12;  // tracked idle-noise power (mean-square)
-    float floorDbMean = -60.0f;     // stationarity stats of the block level (dB):
-    float floorDbVar = 9.0f;        // hiss is stationary, playing is not
 
-    // ── Note-vs-noise gate (spectral flatness) ────────────────────────────────
-    // A level gate can't tell a LOUD idle hiss from a real note, so a high noise
-    // floor "subía el ruido blanco". But a note (bass/guitar, even distorted) is
-    // PITCHED → peaky spectrum → flatness ~0; white/idle hiss is APERIODIC → flat
-    // spectrum → flatness ~1. Gating on flatness (not level) ducks even a loud
-    // idle floor without touching notes. Validated offline: white noise ~0.59,
-    // any note incl. a quiet note buried in hiss <= 0.15 → threshold 0.35.
-    static constexpr int kFftN = 1024;                 // ~21 ms @ 48k (resolves low bass)
-    static constexpr float kFlatThresh = 0.35f;
-    std::array<float, kFftN> flatRing {};              // rolling mono window
-    std::array<float, kFftN> flatWin {};               // Hann (built in prepareToPlay)
-    std::array<float, kFftN> fftRe {}, fftIm {};
-    int  flatRingPos = 0;
-    bool flatReady = false;                            // ring filled at least once
+    // 100 ms frame accumulator + stats for the stationarity floor learner
+    double frameSum = 0.0;
+    int    frameN = 0;
+    float  frameDbMean = -60.0f;    // EMA of frame level (dB), ~1 s horizon
+    float  frameDbVar = 9.0f;       // EMA variance: hiss is stationary, playing is not
+    int    periodicBlocksInFrame = 0, blocksInFrame = 0;
+    std::array<float, 40> frameDbHist {};   // last 4 s of frame levels (net-drift check)
+    int    frameHistPos = 0, frameHistCount = 0;
+    bool   gateOpenState = false;   // gate level-hysteresis state
+    float  prevBlockDb = -120.0f;   // attack-transient detector
+    int    pitchVotes = 0;          // last-3-blocks pitched bitmask (2-of-3 vote)
+
+    // ── Note-vs-noise gate (periodicity / NAC) ────────────────────────────────
+    // A level gate can't tell a LOUD idle hiss from a real note. A note — even
+    // distorted, cab-colored, dense low harmonics — is PERIODIC at its
+    // fundamental lag; hiss of ANY color is not. (Spectral flatness was tried
+    // and failed: post-cab hiss is colored into the low bins and reads like a
+    // bass note at 1024-bin resolution.) NAC = peak normalized autocorrelation
+    // over 30 Hz..1.2 kHz fundamental lags, computed by FFT on a ~43 ms mono
+    // window. Validated offline: white ≤0.16, colored dist hiss ≤0.33, chords
+    // ≥0.34, notes ≥0.9 → threshold 0.35 (+ 2-of-3 vote in processBlock).
+    static constexpr int kNacN = 2048;                 // ~43 ms @ 48k (reaches 30 Hz lags)
+    static constexpr int kNacFft = 4096;               // zero-padded → linear autocorr
+    static constexpr float kNacThresh = 0.35f;
+    std::array<float, kNacN> nacRing {};               // rolling mono window
+    std::array<float, kNacFft> acRe {}, acIm {};       // FFT work buffers
+    int  nacPos = 0;
+    bool nacReady = false;                             // ring filled at least once
 
     // In-place iterative radix-2 FFT (N a power of two); real input via re[], im[]=0.
     static void radix2Fft(float* re, float* im, int n)
@@ -464,24 +520,45 @@ private:
             }
         }
     }
-    // Spectral flatness of the rolling window: geomean / arithmean of the power
-    // spectrum. ~1 = white noise, ~0 = a pitched tone.
-    float computeFlatness()
+    // Peak normalized autocorrelation (NAC) of the rolling mono window over
+    // musical fundamental lags. Autocorr via Wiener–Khinchin: FFT → |X|² → FFT
+    // again (the power spectrum is real+even, so a forward FFT equals the
+    // inverse up to a scale that cancels in the r[lag]/r[0] ratio). The window
+    // is zero-padded 2× so the circular autocorr is the LINEAR one.
+    float computeNac()
     {
-        for (int i = 0; i < kFftN; ++i) {
-            const int idx = (flatRingPos + i) & (kFftN - 1);   // oldest → newest
-            fftRe[i] = flatRing[(size_t) idx] * flatWin[(size_t) i];
-            fftIm[i] = 0.0f;
+        double mean = 0.0;
+        for (int i = 0; i < kNacN; ++i) mean += nacRing[(size_t) i];
+        mean /= double(kNacN);
+        for (int i = 0; i < kNacN; ++i) {
+            const int idx = (nacPos + i) & (kNacN - 1);        // oldest → newest
+            acRe[(size_t) i] = nacRing[(size_t) idx] - float(mean);
         }
-        radix2Fft(fftRe.data(), fftIm.data(), kFftN);
-        double logSum = 0.0, linSum = 0.0; int cnt = 0;
-        for (int k = 1; k < kFftN / 2; ++k) {                  // skip DC
-            const double p = double(fftRe[(size_t) k]) * fftRe[(size_t) k]
-                           + double(fftIm[(size_t) k]) * fftIm[(size_t) k] + 1.0e-20;
-            logSum += std::log(p); linSum += p; ++cnt;
+        std::fill(acRe.begin() + kNacN, acRe.end(), 0.0f);
+        std::fill(acIm.begin(), acIm.end(), 0.0f);
+        radix2Fft(acRe.data(), acIm.data(), kNacFft);
+        for (int k = 0; k < kNacFft; ++k) {
+            const double p = double(acRe[(size_t) k]) * acRe[(size_t) k]
+                           + double(acIm[(size_t) k]) * acIm[(size_t) k];
+            acRe[(size_t) k] = float(p);
+            acIm[(size_t) k] = 0.0f;
         }
-        const double geo = std::exp(logSum / cnt), ari = linSum / cnt + 1.0e-30;
-        return float(geo / ari);
+        radix2Fft(acRe.data(), acIm.data(), kNacFft);
+        const double r0 = double(acRe[0]);
+        if (r0 <= 1.0e-9)
+            return 0.0f;
+        const int minLag = std::max(24, int(sr / 1200.0));        // ≤1.2 kHz fundamental
+        const int maxLag = std::min(kNacN - 256, int(sr / 30.0)); // ≥30 Hz fundamental
+        float best = 0.0f;
+        for (int lag = minLag; lag <= maxLag; ++lag) {
+            // Unbiased normalization for the shrinking overlap, CAPPED at 1.5:
+            // far-lag estimates are noisy and an uncapped correction inflates
+            // random noise peaks above the pitch threshold.
+            const float unb = float(kNacN) / float(kNacN - lag);
+            const float v = float(double(acRe[(size_t) lag]) / r0) * std::min(unb, 1.5f);
+            if (v > best) best = v;
+        }
+        return best;
     }
 
     // ── ITU-R BS.1770 K-weighting (perceptual loudness) ───────────────────
