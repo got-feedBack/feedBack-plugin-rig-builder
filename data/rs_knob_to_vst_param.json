@@ -5389,19 +5389,19 @@
     "_hint": "RS Depth 0-100 \u2192 mod depth 0..1."
    },
    "Mix": {
-    "param": "Mix",
+    "param": "Effect Level",
     "scale": 0.01,
-    "_hint": "RS Mix 0-100 \u2192 wet/dry 0..1."
+    "_hint": "RS Mix 0-100 \u2192 RCE-10 wet/effect level 0..1."
    },
    "LoFilter": {
-    "param": "Lo Filter",
+    "param": "Low Cut",
     "scale": 0.01,
-    "_hint": "RS LoFilter 0-100 \u2192 wet high-pass 0..1."
+    "_hint": "RS LoFilter 0-100 \u2192 extra wet low-cut before the RCE-10 effect EQ."
    },
    "HiFilter": {
-    "param": "Hi Filter",
+    "param": "Effect EQ",
     "scale": 0.01,
-    "_hint": "RS HiFilter 0-100 \u2192 wet low-pass 0..1."
+    "_hint": "RS HiFilter 0-100 \u2192 RCE-10 effect EQ/brightness 0..1."
    },
    "Stereo": {
     "param": "Stereo",
@@ -5409,9 +5409,9 @@
     "_hint": "RS Stereo 0-100 \u2192 L/R spread 0..1."
    },
    "Delay": {
-    "param": "Delay",
+    "param": "Pre Delay",
     "scale": 0.01,
-    "_hint": "RS Delay 0-100 \u2192 base delay 0..1."
+    "_hint": "RS Delay 0-100 \u2192 RCE-10 pre-delay time 0..1."
    }
   },
   "khs chorus": {

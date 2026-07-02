@@ -4176,16 +4176,16 @@
   // blue wireframe CHIEF logo + circuit traces up top, 3 sections (PRE DELAY /
   // MODULATION / EFFECT) of colour-capped knobs, right logo block + POWER.
   // Parody CHIEF / "DIGITAL CHORUS ENSEMBLE RCE-12".
-  // RS params (7 knobs): Rate0 Depth1 Mix2 LoFilter3 HiFilter4 Stereo5 Delay6.
+  // RS params (7 knobs): Rate0 Depth1 EffectLevel2 LowCut3 EffectEQ4 Stereo5 PreDelay6.
   P.studiochorus = { w:960, h:300,
     knobs:[
       {id:6,cx:.120,cy:.66,r:.032,style:'pointer',cap:[42,182,120]},  // Delay  (PRE DELAY / TIME, green)
       {id:0,cx:.230,cy:.66,r:.032,style:'pointer',cap:[68,150,212]},  // Rate   (blue)
       {id:1,cx:.310,cy:.66,r:.032,style:'pointer',cap:[68,150,212]},  // Depth  (blue)
-      {id:3,cx:.420,cy:.66,r:.032,style:'pointer',cap:[232,200,44]},  // Lo Filter (yellow)
-      {id:4,cx:.500,cy:.66,r:.032,style:'pointer',cap:[232,200,44]},  // Hi Filter (yellow)
-      {id:5,cx:.580,cy:.66,r:.032,style:'pointer',cap:[235,140,42]},  // Stereo (orange)
-      {id:2,cx:.660,cy:.66,r:.032,style:'pointer',cap:[235,140,42]}], // Mix    (orange)
+      {id:3,cx:.420,cy:.66,r:.032,style:'pointer',cap:[232,200,44]},  // Low Cut (yellow)
+      {id:4,cx:.500,cy:.66,r:.032,style:'pointer',cap:[232,200,44]},  // Effect EQ (yellow)
+      {id:5,cx:.580,cy:.66,r:.032,style:'pointer',cap:[235,140,42]},  // Stereo width (orange)
+      {id:2,cx:.660,cy:.66,r:.032,style:'pointer',cap:[235,140,42]}], // Effect Level (orange)
     tick:rgb(150,154,160), ptr:rgb(236,238,240),
     draw(d){ const {ctx:c,W,H}=d, m=7;
       c.fillStyle=rgb(14,15,16); c.fillRect(0,0,W,H);
@@ -4211,7 +4211,7 @@
         c.beginPath(); c.moveTo(cx*W-hw,.560*H); c.lineTo(cx*W+hw,.560*H); c.stroke(); };
       sec(.120,'PRE DELAY'); sec(.270,'MODULATION'); sec(.540,'EFFECT');
       // knob sub-labels
-      [[.120,'TIME'],[.230,'RATE'],[.310,'DEPTH'],[.420,'LO FILTER'],[.500,'HI FILTER'],[.580,'STEREO'],[.660,'MIX']]
+      [[.120,'TIME'],[.230,'RATE'],[.310,'DEPTH'],[.420,'LOW CUT'],[.500,'EQ'],[.580,'WIDTH'],[.660,'LEVEL']]
         .forEach(p=> textC(d,p[0]*W,.820*H,F.barlow,12,wt,p[1]));
       // slide switch helper
       const slide=(cx,cy)=>{ rr(c,cx-.011*W,cy-.05*H,.022*W,.10*H,3); c.fillStyle=rgb(26,27,29); c.fill();
