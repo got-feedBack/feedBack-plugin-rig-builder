@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/dyna comp.so</key>
+		<key>x86_64-linux/DynamicsCompression.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			OLqLvcFSt/RsqBvNMQwwXNSJcaV1SSp3irw24SsnQgU=
+			smFxSIi4G/we1sxVxbAB9E7MuYakDGHbiGqH1xmn3yg=
 			</data>
 		</dict>
-		<key>x86_64-win/dyna comp.vst3</key>
+		<key>x86_64-win/DynamicsCompression.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			e7nxZ8/J15G7OLQ4tgJKHJZkulncGG9fV/WU9XkIf/w=
+			CkC174fmqS7YJIvCQy5I1RULEiBSuPdfB45qK0wjCPA=
 			</data>
 		</dict>
 	</dict>

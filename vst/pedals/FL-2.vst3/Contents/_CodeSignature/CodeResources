@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/FL-2.so</key>
+		<key>x86_64-linux/ClassicFlanger.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			1qy0kg51jwa1FWeRpIIWRAB56V5C1kCU7toKTsY35jw=
+			kMQVMBXwd8hCs/Agk1RzEPpMUbtoqlTbmhYdZCRYjoQ=
 			</data>
 		</dict>
-		<key>x86_64-win/FL-2.vst3</key>
+		<key>x86_64-win/ClassicFlanger.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			MSbYXHfSY38H3TnJekQ9rqenhAAPUUXQ03R5c6KUV/8=
+			cKzKFjCvZ2C2hSPEfVMDtyeoLpPD67cq1SiHBvVXEb0=
 			</data>
 		</dict>
 	</dict>

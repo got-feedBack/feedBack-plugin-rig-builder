@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/DSL100.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			vcWPQ/Ngzg73f7wB8WyZiIRaUYNrG0LSKV/byNELwcg=
+			</data>
+		</dict>
+		<key>x86_64-win/DSL100.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			M+WY/1n4yesnBTqYwUmMSuuZFMRehs2P2O3OD+TnHek=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

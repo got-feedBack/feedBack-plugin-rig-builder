@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/TW26.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			NOx3VHpdvQPqrfwE9jXdMmRFHQuEk7mgZx5opeye738=
+			</data>
+		</dict>
+		<key>x86_64-win/TW26.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			wg9AzItw3XDc5OpQkP4JOpiekp1uRFrt0ZBils54xJg=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

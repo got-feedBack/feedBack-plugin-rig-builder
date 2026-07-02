@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/TW22.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			BNfJJnrMcgvhq6f+PwsbxPHQo85tqOgt7i6mrUA6HP0=
+			</data>
+		</dict>
+		<key>x86_64-win/TW22.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			KF2Aql/xP9ZvIwGVlc85wg4eAGGI1Gj8+UN4ix83eZ0=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

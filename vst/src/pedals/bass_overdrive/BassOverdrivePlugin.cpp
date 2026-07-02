@@ -113,7 +113,10 @@ public:
     {
         blend = clamp01(blendP);
         driveGain = 0.7f + 22.0f * audioTaper(drive);
-        levelGain = 2.05f * audioTaper(level);
+        // Output trim −3 dB (user request 2026-07-02): the B3K read too hot in
+        // the mix. 2.05 × 10^(−3/20) = 1.451, scaling the whole Level range down
+        // uniformly so the knob response is unchanged, just 3 dB quieter.
+        levelGain = 1.451f * audioTaper(level);
         attackMode = quantize3(attack);
         gruntMode = quantize3(grunt);
 

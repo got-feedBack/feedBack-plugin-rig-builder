@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/AOR50.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			lbKHjwRMjidABs7hSYqSSxVccKW0Z1CwC927k3mqbvg=
+			</data>
+		</dict>
+		<key>x86_64-win/AOR50.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			6DEOSYvmPmZR8AZTKxhVp2kHwcl+J1u86/dcIicT+/Q=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

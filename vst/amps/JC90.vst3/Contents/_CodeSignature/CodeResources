@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/JC90.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			6vLdB0p3lJMV6fpC7HOyK4JPqKST92WW8iNgywWvEH0=
+			</data>
+		</dict>
+		<key>x86_64-win/JC90.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			MfNcj52/L+OtyEVVRvkzVF0crZ+AaayZdsZDTJWBA0o=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

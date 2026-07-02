@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/BigBuzz.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			ZYHHjPuUSENWyDi4nqQ0Wjv1M1sA2WPEiEx11BMqA1U=
+			</data>
+		</dict>
+		<key>x86_64-win/BigBuzz.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			w7e5DS+whziN4zGOtgLqZqBP7b7xULPAWsN2e/2jyWo=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

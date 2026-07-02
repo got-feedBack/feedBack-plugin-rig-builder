@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/BuzzTone.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			t3dTiWBDR/gxpNb+//nl8u/hAgHAYgs7AFQZWbCw6Rs=
+			</data>
+		</dict>
+		<key>x86_64-win/BuzzTone.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			H5unigOX5MZGvE6xsfBxB1V3NhJBrEeC+uKHmee5FrM=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>
