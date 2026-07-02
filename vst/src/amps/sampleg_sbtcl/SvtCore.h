@@ -105,9 +105,18 @@ struct SvtCore {
                                                       // 4.6→3.4 (2026-06-23): a HOT real bass DI over-drove V1
                                                       // into too much growl at default; trimmed for a cleaner DI.
         preGain = 0.85f + 0.55f * gAud;               // V1 → V2 inter-stage
-        // post-V2 into the power amp: the real driver/PI swings the 6550 grids by
-        // ±tens of volts around the −48 V bias, so this is a large voltage gain.
-        gainOut = 120.0f;
+        // post-V2 into the power amp. Re-tuned 120 → 15 (2026-07-02): at 120 the
+        // 6550 grids swung ±125 V around the −48 V bias for a −12 dBFS-peak DI —
+        // the power stage ran as a permanent hard clipper (even the −32 dB
+        // multitone pinned the rbAmpLvl ceiling, THD −9 dB) and the ~40 dB of
+        // clipped-away linear gain became IDLE HISS (+36 dB small-signal noise
+        // gain vs +9/+3 on the GK/V-4B: "el sampleg tiene mucho ruido de fondo").
+        // The real SVT's GLOBAL NFB linearizes the power stage below clipping, so
+        // small-signal gain ≈ signal gain; 15 reproduces that: grid peaks ≈ ±30 V
+        // at the calibrated DI (compression only on real peaks). Validated
+        // (tune harness, default knobs): DI pk 0.54 crest 12, MT −25.8 dB
+        // THD −55 dB (GK-league), idle noise gain −1.9 dB.
+        gainOut = 15.0f;
 
         // ── Ultra Lo (S2A): fixed loudness contour — deep-low + top lift, low-mid scoop.
         if (pUltraLo){ ulLow.lowShelf(sr,50.f,6.0f); ulMid.peaking(sr,500.f,0.8f,-9.0f); ulHigh.highShelf(sr,8000.f,4.0f); }
@@ -129,12 +138,14 @@ struct SvtCore {
         // Gentle pre-cab output voicing (the cab IR adds the speaker; keep this soft).
         otVoice.lowpass(sr, 7500.0f, 0.7f);
 
-        // Loudness makeup — gain-dependent flattening, designed from the harness
-        // level-vs-gain sweep (natural RMS fell ≈ −30 dB→−41 dB across Gain). Maps to
-        // family target ~−14 LUFS (the rig trim finishes the leveling). Re-tuned 2026-06-24
-        // DOWN ~7 dB: the old 17+15·Gain pinned the rbAmpLvl ceiling (peak 0.99 = "hot"
-        // & "loud", needed the −15 pad to tame). 10+12·Gain keeps it CLEAN at default.
-        outLevel = std::pow(10.0f, 0.05f * (13.0f + 12.0f * pGain));
+        // Loudness makeup. The old gain-dependent RISE (13+12·Gain) compensated a
+        // natural RMS that FELL with Gain — an artifact of the slammed power stage
+        // (more V1 drive just squared the wave harder). With the linear power
+        // stage (gainOut 15) the natural level RISES with Gain like the GK/V-4B,
+        // so the makeup is a flat −1 dB anchored to the family contract at
+        // default knobs (DI pk ~0.54, MT −25.8 dB ≈ GK's −26). The rig's leveler
+        // finishes the loudness like for every other amp.
+        outLevel = std::pow(10.0f, 0.05f * -1.0f);
         // Pad-aware makeup: the −15 dB pad cuts pre-NAM drive (cleaner, less
         // compression), so the gain-staged makeup above over-drives the now-cleaner
         // signal into the ceiling. Trim it back when padded → the padded input stays
