@@ -46,6 +46,12 @@ public:
         noiseFloorMs = 1.0e-12;
         floorDbMean = -60.0f;
         floorDbVar = 9.0f;     // start "not stationary" so nothing is learned as noise yet
+        for (int i = 0; i < kFftN; ++i)
+            flatWin[(size_t) i] = 0.5f - 0.5f * std::cos(2.0f * juce::MathConstants<float>::pi
+                                                          * float(i) / float(kFftN - 1));
+        flatRing.fill(0.0f);
+        flatRingPos = 0;
+        flatReady = false;
         designKWeighting(sr);
         for (int ch = 0; ch < 2; ++ch) { kPre[ch].reset(); kRlb[ch].reset(); }
     }
@@ -115,6 +121,20 @@ public:
         const float instRawDb = (rawBlockMs > 1.0e-12)
             ? float(10.0 * std::log10(rawBlockMs)) : -120.0f;
 
+        // Feed this block's mono into the flatness window, then classify the
+        // current ~21 ms as PITCHED (a note) or NOISE. Used below so the gate/
+        // detector ignore a loud idle hiss floor. Until the ring has filled once,
+        // assume pitched (don't wrongly mute the very first note).
+        for (int i = 0; i < numSamples; ++i)
+        {
+            float mono = 0.0f;
+            for (int ch = 0; ch < chN; ++ch) mono += chData[ch][i];
+            flatRing[(size_t) flatRingPos] = (chN > 0) ? mono / float(chN) : 0.0f;
+            flatRingPos = (flatRingPos + 1) & (kFftN - 1);
+            if (flatRingPos == 0) flatReady = true;
+        }
+        const bool pitched = (! flatReady) || (computeFlatness() < kFlatThresh);
+
         // ── NOISE-FLOOR TRACKER ──────────────────────────────────────────────
         // The gate used to be a FIXED -44 dB: chains whose idle hiss sits above
         // that (stacked fuzz / high-gain) were treated as signal — the AGC rode
@@ -161,7 +181,10 @@ public:
         // noise floor, and the AGC briefly over-boosted the first note after a
         // pause (~+4 dB for <200 ms). Frozen, the gain on resume is already
         // exact for the tone that was playing.
-        const bool integrating = instRawDb >= effGateDb;
+        // Gate/detector open only on a signal that is BOTH loud enough AND
+        // pitched (a real note) — a loud but aperiodic idle hiss no longer opens
+        // the gate or drives the AGC, so the noise floor stops "subiendo".
+        const bool integrating = (instRawDb >= effGateDb) && pitched;
         double sumSq = 0.0;
         double rawSumSq = 0.0;
         for (int i = 0; i < numSamples; ++i)
@@ -399,6 +422,67 @@ private:
     double noiseFloorMs = 1.0e-12;  // tracked idle-noise power (mean-square)
     float floorDbMean = -60.0f;     // stationarity stats of the block level (dB):
     float floorDbVar = 9.0f;        // hiss is stationary, playing is not
+
+    // ── Note-vs-noise gate (spectral flatness) ────────────────────────────────
+    // A level gate can't tell a LOUD idle hiss from a real note, so a high noise
+    // floor "subía el ruido blanco". But a note (bass/guitar, even distorted) is
+    // PITCHED → peaky spectrum → flatness ~0; white/idle hiss is APERIODIC → flat
+    // spectrum → flatness ~1. Gating on flatness (not level) ducks even a loud
+    // idle floor without touching notes. Validated offline: white noise ~0.59,
+    // any note incl. a quiet note buried in hiss <= 0.15 → threshold 0.35.
+    static constexpr int kFftN = 1024;                 // ~21 ms @ 48k (resolves low bass)
+    static constexpr float kFlatThresh = 0.35f;
+    std::array<float, kFftN> flatRing {};              // rolling mono window
+    std::array<float, kFftN> flatWin {};               // Hann (built in prepareToPlay)
+    std::array<float, kFftN> fftRe {}, fftIm {};
+    int  flatRingPos = 0;
+    bool flatReady = false;                            // ring filled at least once
+
+    // In-place iterative radix-2 FFT (N a power of two); real input via re[], im[]=0.
+    static void radix2Fft(float* re, float* im, int n)
+    {
+        for (int i = 1, j = 0; i < n; ++i) {
+            int bit = n >> 1;
+            for (; j & bit; bit >>= 1) j ^= bit;
+            j ^= bit;
+            if (i < j) { std::swap(re[i], re[j]); std::swap(im[i], im[j]); }
+        }
+        for (int len = 2; len <= n; len <<= 1) {
+            const float ang = -2.0f * juce::MathConstants<float>::pi / float(len);
+            const float wr = std::cos(ang), wi = std::sin(ang);
+            for (int i = 0; i < n; i += len) {
+                float cr = 1.0f, ci = 0.0f;
+                for (int k = 0; k < len / 2; ++k) {
+                    const int a = i + k, b = a + len / 2;
+                    const float xr = re[b] * cr - im[b] * ci;
+                    const float xi = re[b] * ci + im[b] * cr;
+                    re[b] = re[a] - xr; im[b] = im[a] - xi;
+                    re[a] += xr;        im[a] += xi;
+                    const float ncr = cr * wr - ci * wi;
+                    ci = cr * wi + ci * wr; cr = ncr;
+                }
+            }
+        }
+    }
+    // Spectral flatness of the rolling window: geomean / arithmean of the power
+    // spectrum. ~1 = white noise, ~0 = a pitched tone.
+    float computeFlatness()
+    {
+        for (int i = 0; i < kFftN; ++i) {
+            const int idx = (flatRingPos + i) & (kFftN - 1);   // oldest → newest
+            fftRe[i] = flatRing[(size_t) idx] * flatWin[(size_t) i];
+            fftIm[i] = 0.0f;
+        }
+        radix2Fft(fftRe.data(), fftIm.data(), kFftN);
+        double logSum = 0.0, linSum = 0.0; int cnt = 0;
+        for (int k = 1; k < kFftN / 2; ++k) {                  // skip DC
+            const double p = double(fftRe[(size_t) k]) * fftRe[(size_t) k]
+                           + double(fftIm[(size_t) k]) * fftIm[(size_t) k] + 1.0e-20;
+            logSum += std::log(p); linSum += p; ++cnt;
+        }
+        const double geo = std::exp(logSum / cnt), ari = linSum / cnt + 1.0e-30;
+        return float(geo / ari);
+    }
 
     // ── ITU-R BS.1770 K-weighting (perceptual loudness) ───────────────────
     // Two biquads per channel: a high-shelf pre-filter + an RLB high-pass.
