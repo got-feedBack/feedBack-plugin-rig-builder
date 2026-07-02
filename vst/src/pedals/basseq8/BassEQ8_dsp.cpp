@@ -1,2 +1,2 @@
 #include "BassEQ8Bands.h"
-#include "../graphic_eq_dsp.hpp"
+#include "../../graphic_eq_dsp.hpp"

@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/Valve Echo.so</key>
+		<key>x86_64-linux/ValveEcho.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			HiirRhmaW+UhcQ87oXPu68x/VEytg/qRjCo3eLBHqEI=
+			tbJpXWFaQlCqB98QNxitOk1IyOM2ATbmINlXTYYf3t8=
 			</data>
 		</dict>
-		<key>x86_64-win/Valve Echo.vst3</key>
+		<key>x86_64-win/ValveEcho.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			S/gKHPTcVLB3HEtORc/YlBSID/H/uEJhah3zLtYDr80=
+			Tt5BjUnr5T8Gaygt9z0Dte/I6TOxnBr2/J9KJbDJWwk=
 			</data>
 		</dict>
 	</dict>

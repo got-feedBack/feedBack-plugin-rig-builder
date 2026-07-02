@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/NYRBS103.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			bNt07wWT6VE44wPt0Y+sVDkYlmw1ZOuxXf9TjrH1wRE=
+			</data>
+		</dict>
+		<key>x86_64-win/NYRBS103.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			qj1nfnXJueXS/KUFTiQQIOeao0jaJYoPRhkcDvlL370=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

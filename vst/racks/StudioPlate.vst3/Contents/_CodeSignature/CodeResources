@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/StudioPlate.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			hHStkLmBtVuvvy4GlJmFtJZn3uawf9GV5KEcft37S4I=
+			</data>
+		</dict>
+		<key>x86_64-win/StudioPlate.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			KI1YSK1HpMQZyx0uOSy9cwfCBQQzYjiIlEJzuFk1/xo=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

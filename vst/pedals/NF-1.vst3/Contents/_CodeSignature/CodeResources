@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/NF-1.so</key>
+		<key>x86_64-linux/NoiseGate.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			/xqmXQnfKqxzEi55WuJc1mIDonLQwYP+LFsl9W9rPJ8=
+			uNyN+7FTUKNyIQ6e/2OPcM5PIe/Xohovw13WOW8ApWw=
 			</data>
 		</dict>
-		<key>x86_64-win/NF-1.vst3</key>
+		<key>x86_64-win/NoiseGate.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			TyqMWB7+7MyDAr/GB0AePdjiosER04WaDBh8Cgs4ta4=
+			+9P0/JImoqDTaTu3+TB0VCME+5K5wZPjaDp6IbQPgAg=
 			</data>
 		</dict>
 	</dict>

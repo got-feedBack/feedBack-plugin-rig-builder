@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/StereoAnalogVibe.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			zNBmPSLhFSttOPf8ixX8LCJpy3II4BGOfYSnOf4qFbk=
+			</data>
+		</dict>
+		<key>x86_64-win/StereoAnalogVibe.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			tDUVLaVbT1iGG8tMCKkwsdzLU/XJud8sJ8EjjC1Hjsg=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

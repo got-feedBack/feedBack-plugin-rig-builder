@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/RV-2.so</key>
+		<key>x86_64-linux/DigitalVerb.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			dTxyPKRjnPym/ddZSgvcCnRcybRFI+wjFMO6Gb9hYeM=
+			4lBk1lnnX9jQWSDnahdgA4FDPFSYZGxEimUwVejFIcU=
 			</data>
 		</dict>
-		<key>x86_64-win/RV-2.vst3</key>
+		<key>x86_64-win/DigitalVerb.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			LEcMZfqBaGwI7KllU9Wa3XssUrWbylcac+4Yi4/9Kk0=
+			Oxq65UEHgTJ5FADZQpYVfpQ+2ucA8fi58X0VoIW8rws=
 			</data>
 		</dict>
 	</dict>

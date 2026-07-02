@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/StudioEQ.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			rci6h441w/ZJa/stkMVuX+eFAy7IgySXTYCrHkyp3UQ=
+			</data>
+		</dict>
+		<key>x86_64-win/StudioEQ.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			lIOpdSgJdKm0x/VUHpEGX0lig80Vxzx1n0eGNJIJEaA=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

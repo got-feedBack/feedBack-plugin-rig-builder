@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/FM104.so</key>
+		<key>x86_64-linux/AnalogDelay.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			ImiRCoM0uaJ8k33ttF7Em1Yg4qVyb/54oavpE6He6ik=
+			J0WcGkl4EA2BpFVw/5rwttSmCI64tIko6X+lxF3pb2o=
 			</data>
 		</dict>
-		<key>x86_64-win/FM104.vst3</key>
+		<key>x86_64-win/AnalogDelay.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			1wRoTgy4yph9nHnz1tOu5Hco+f83s+QGhlLHym8yvlw=
+			znmWsXwfZ78fSHxNfA6edlxxz7KLigW5GKDw5BZgKTs=
 			</data>
 		</dict>
 	</dict>
