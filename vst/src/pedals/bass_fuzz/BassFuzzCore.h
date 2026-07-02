@@ -68,6 +68,7 @@ class BassBigMuffCore
     float cToneHigh = 0.0f;
     float cOutDc = 0.0f;
     float sustainGain = 55.0f;
+    float stage2Gain = 12.0f;
     float tone = 0.52f;
     float mode = 0.0f;
     rbshared::OpAmpStage inputBuffer;
@@ -114,7 +115,15 @@ public:
     // Volume is NOT set here — the wrapper applies it AFTER RBAutoMakeup.
     void setParams(float sustain, float toneP, float bassDry)
     {
-        sustainGain = 18.0f + 145.0f * audioTaper(sustain);
+        // Both gain stages sweep with Sustain. The old floors (18 into stage 1, a
+        // fixed 5.0 into stage 2) slammed BOTH stages even at Sustain=0, so the
+        // knob was dead: a held note stayed fully sustained/compressed at every
+        // setting (tail/head ~0 dB across the whole travel). Low floors let the
+        // bottom of the pot decay naturally (~-17 dB tail) and sweep up to full
+        // sustain by noon; the default 0.78 stays fully saturated as before.
+        const float t = audioTaper(sustain);
+        sustainGain = 3.0f + 150.0f * t;
+        stage2Gain = 1.6f + 16.0f * t;
         tone = clamp01(toneP);
         mode = quantize3(bassDry);
     }
@@ -134,7 +143,7 @@ public:
         zStage1 += cStage1 * (s - zStage1);
         s = zStage1;
 
-        s = bjtCommonEmitter(s * (5.0f + 14.0f * audioTaper(sustainGain / 163.0f)), -0.09f);
+        s = bjtCommonEmitter(s * stage2Gain, -0.09f);
         s = clip2.process(s);
         zStage2 += cStage2 * (s - zStage2);
         s = zStage2;

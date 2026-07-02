@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/Bass Big Buzz.so</key>
+		<key>x86_64-linux/BassFuzz.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			9zXoV3XWCaxUBRFYQO7qfeJzT0l/uz4iXoswFxDkbJQ=
+			uHzf9e8y7yaoZxnOeWVVNOuegfk/M8XJ5fBVTbbaVHk=
 			</data>
 		</dict>
-		<key>x86_64-win/Bass Big Buzz.vst3</key>
+		<key>x86_64-win/BassFuzz.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			mxgY4c0a91keUi4VFwe1srZF7MMQnTi3HYzVLlB9Ce8=
+			14C9bdYyjO3cgkPUJ/hL7xMFQpKMma4rW23Ojd+xXPk=
 			</data>
 		</dict>
 	</dict>
