@@ -12870,9 +12870,6 @@ async function rbLoadSettings() {
     // it POSTs to /settings which bulk-flips preset_pieces.bypassed for cabs.
     const bypassCabs = document.getElementById('rb-bypass-all-cabs');
     if (bypassCabs) bypassCabs.checked = !!s.bypass_all_cabs;
-    // "Enable RB Final Leveler" — default ON (missing/true → checked).
-    const levelerCb = document.getElementById('rb-final-leveler-enabled');
-    if (levelerCb) levelerCb.checked = s.final_leveler_enabled !== false;
     // Mirror the persisted flag onto the runtime mirror so RbMegaChain
     // sees it even if the user never opens Settings. rbLoadSettings is
     // called from rbInit so this runs at page-load.
@@ -12999,28 +12996,6 @@ async function rbSetAllowTone3000Fallback(checked) {
 // "Bypass all the game cabs" toggle. Posting bypass_all_cabs to /settings
 // bulk-flips preset_pieces.bypassed for every cabinet stage (backend side-
 // effect), so every tone skips its RS cab and the user can add their own.
-// Setup toggle for the RB Final Leveler (the final AGC stage). Persists
-// `final_leveler_enabled`; routes.py's _final_leveler_stage() consults it on
-// every chain build, so the change applies on the NEXT tone/song load — no
-// live chain surgery here (yanking the last stage mid-stream would pop).
-async function rbSetFinalLevelerEnabled(checked) {
-    const status = document.getElementById('rb-final-leveler-status');
-    if (status) status.textContent = 'Saving…';
-    try {
-        const r = await fetch(`${window.RB_API}/settings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ final_leveler_enabled: !!checked }),
-        });
-        if (!r.ok) throw new Error('save failed');
-        if (status) status.textContent = checked
-            ? '✓ Leveler on — applies on the next tone/song load.'
-            : '✓ Leveler off — tones play at their raw level from the next load. Watch your volume.';
-    } catch (e) {
-        if (status) status.textContent = '⚠ Could not save — try again.';
-    }
-}
-
 async function rbSetBypassAllCabs(checked) {
     const status = document.getElementById('rb-bypass-all-cabs-status');
     if (status) status.textContent = checked ? 'Bypassing every cab…' : 'Re-enabling cabs…';
