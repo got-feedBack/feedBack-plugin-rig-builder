@@ -39,6 +39,7 @@ public:
         levelInitialized = false;
         detectorSeeded = false;
         warmupSamples = 0;
+        sigSamples = 0;
         gateHoldSamples = 0;
         gateGain = 1.0f;
         msEnv = 0.0;
@@ -96,17 +97,29 @@ public:
         const float ceilingDb = *apvts.getRawParameterValue("ceiling_db");
         const float trimDb = *apvts.getRawParameterValue("trim_db");
 
-        // Loudness detector: a FIXED-TIME (~30 ms) running mean-square of the
-        // K-WEIGHTED signal (ITU-R BS.1770), integrated per sample so it is
-        // independent of host block size. K-weighting makes this measure
-        // PERCEIVED loudness (LUFS), not raw RMS — so spectrally/dynamically
-        // different tones (bass vs guitar, clean vs fuzz) are leveled to equal
-        // perceived loudness instead of equal RMS (which sounded uneven). 30 ms
-        // reacts quickly to a tone change; the gain follower below smooths any
-        // residual per-cycle ripple on low bass notes.
+        // Loudness detector: a running mean-square of the K-WEIGHTED signal
+        // (ITU-R BS.1770), integrated per sample so it is independent of host
+        // block size. K-weighting makes this measure PERCEIVED loudness (LUFS),
+        // not raw RMS — so spectrally different tones level to equal perceived
+        // loudness.
+        // TIME CONSTANT = 400 ms (≈ BS.1770 "momentary"), NOT the old 15 ms:
+        // a 15 ms detector drives the SHORT-TERM level to target, which makes
+        // dense sustained material (fuzz/synth-bass walls) sit AT target
+        // continuously while sparse material (fingerpicked acoustic) only
+        // touches target at each pluck and decays in between — integrated, the
+        // sparse tone plays several dB quieter ("Dust in the Wind muy bajo,
+        // el synth-fuzz muy fuerte"). A 400 ms window spans pluck+decay cycles
+        // so the AVERAGE loudness is driven to target for both. Tone-switch
+        // reactivity is preserved by the SEED below (first-signal jump) and the
+        // urgency snap in the gain follower (big gap → 8 ms convergence).
         // NB: preview/monitor path ALSO runs this leveler now, so what you hear
         // in Rig Builder == the song. Cross-tone evenness (LUFS) is kept.
-        const float rmsTauMs = 15.0f;   // faster loudness detector (was 30) — reacts ~2x quicker to a tone change
+        // TWO-SPEED: the first ~0.5 s of signal keeps the old fast 15 ms tau so
+        // the level decision converges quickly from the block-sized seed (a
+        // seed landing on a pluck attack would otherwise take ~1 s to correct
+        // at 400 ms); after that the detector slows to the momentary window.
+        const bool detectorSettling = sigSamples < int(0.5 * sr);
+        const float rmsTauMs = detectorSettling ? 15.0f : 400.0f;
         const float rmsCoef = 1.0f - std::exp(-1.0f / std::max(1.0f, (rmsTauMs / 1000.0f) * float(sr)));
 
         const float* chData[2] = { nullptr, nullptr };
@@ -307,6 +320,8 @@ public:
         const int kWarmupTotal = kWarmupHold + kWarmupFade;
         if (hasSignal && warmupSamples < kWarmupTotal)
             warmupSamples += numSamples;
+        if (hasSignal && sigSamples < int(0.5 * sr) + numSamples)
+            sigSamples += numSamples;   // total signal seen — switches detector speed
         const bool warm = warmupSamples >= kWarmupHold;
 
         if (!hasSignal || !warm)
@@ -336,7 +351,12 @@ public:
             // RMS within a few dB of their LUFS so they never hit this cap and
             // level by LUFS as before; only abnormally low-end-heavy tones (raw
             // RMS ≫ LUFS) get reined in. Tunable: lower margin = tamer bass.
-            constexpr float RAW_MARGIN_DB = 6.0f;
+            // Tightened 6 → 3 dB: with the standard K-weighting the LUFS drive
+            // gives sub-heavy tones more boost than the flattened measure did,
+            // and at raw = target+6 a fuzz synth-bass audibly dominated the mix
+            // again ("el basssynth suena muy fuerte"). +3 still never binds for
+            // full-range tones (their raw sits within ~2 dB of LUFS).
+            constexpr float RAW_MARGIN_DB = 3.0f;
             const float rawCapGainDb = (targetRmsDb + RAW_MARGIN_DB) - rawRmsDb;
             wantedGainDb = std::min(wantedGainDb, rawCapGainDb);
 
@@ -462,6 +482,7 @@ private:
     bool levelInitialized = false;
     bool detectorSeeded = false;   // jump msEnv to the real level on first signal
     int warmupSamples = 0;         // signal samples seen — gates the first gain decision
+    int sigSamples = 0;            // total signal seen — two-speed detector switch
     int gateHoldSamples = 0;       // output noise-gate hold counter
     float gateGain = 1.0f;         // output noise-gate gain (fast attack / slow release)
     double msEnv = 0.0;   // running mean-square of the K-weighted signal (~15 ms; frozen in silence)
