@@ -40,6 +40,8 @@ public:
         detectorSeeded = false;
         warmupSamples = 0;
         sigSamples = 0;
+        sustainSamples = 0;
+        fastLatch = false;
         gateHoldSamples = 0;
         gateGain = 1.0f;
         msEnv = 0.0;
@@ -375,21 +377,43 @@ public:
         const float confidence = juce::jlimit(0.0f, 1.0f,
             float(warmupSamples - kWarmupHold) / float(kWarmupFade));
 
-        // Cutting reacts fast, boosting is slower (avoids audible fade-in).
-        const bool cutting = wantedGainDb < currentGainDb;
-        const float baseMs = cutting ? attackMs : releaseMs;
-
-        // Adaptive convergence: snap fast on a BIG sustained level change — a
-        // tone switch (e.g. drive -> clean), where the old fixed 120 ms boost
-        // made the new tone fade in quietly over ~half a second. Small drift
-        // keeps the slow time so musical dynamics aren't flattened (no
-        // pumping). urgency: 0 at <=3 dB gap, ramps to 1 at >=12 dB.
-        const float gapDb = std::abs(wantedGainDb - currentGainDb);
-        // Reach full-speed sooner (urgency hits 1 by ~6 dB instead of 12) and snap
-        // harder on a change, so a tone switch lands at level almost immediately.
-        const float urgency = juce::jlimit(0.0f, 1.0f, (gapDb - 1.0f) / 5.0f);
-        const float fastMs = 8.0f;
-        const float timeMs = baseMs * (1.0f - urgency) + fastMs * urgency;
+        // ── Gain scheduler: the per-tone gain is (almost) STATIC ────────────
+        // The old follower (attack/release + urgency snap from a 1 dB gap)
+        // TRACKED the loudness measure — with any detector window that means
+        // riding musical dynamics: plucks/riff rests moved the measure a few
+        // dB at note rate and the gain followed ("se baja y sube el volumen
+        // todo el rato"). A tone's normalization gain should be decided once
+        // and then barely move:
+        //   gap ≤ 1.5 dB  → tau 8 s   (center on target imperceptibly)
+        //   gap ~ 4.5 dB  → tau 2.5 s (gentle correction, still inaudible)
+        //   gap > 4.5 dB SUSTAINED (0.3 s cutting / 0.75 s boosting) → LATCH
+        //     fast (40 ms) until within 1.5 dB — a real level regime change
+        //     (pickup/volume-knob change, drastic section), not one loud chord
+        //     or one quiet bar. Cutting arms faster than boosting: too-loud is
+        //     the worse artifact. (attackMs/releaseMs params kept for state
+        //     compat; the schedule above replaces them.)
+        juce::ignoreUnused(attackMs, releaseMs);
+        const float gapSigned = wantedGainDb - currentGainDb;
+        const float aGap = std::abs(gapSigned);
+        if (hasSignal && warm && aGap > 4.5f)
+            sustainSamples += numSamples;
+        else
+            sustainSamples = std::max(0, sustainSamples - 2 * numSamples);
+        const int needSustain = int((gapSigned < 0.0f ? 0.30 : 0.75) * sr);
+        if (!fastLatch && sustainSamples >= needSustain) fastLatch = true;
+        if (fastLatch && aGap < 1.5f) { fastLatch = false; sustainSamples = 0; }
+        float timeMs;
+        if (fastLatch) {
+            timeMs = 40.0f;
+        } else {
+            const float t = juce::jlimit(0.0f, 1.0f, (aGap - 1.5f) / 3.0f);
+            timeMs = 8000.0f * (1.0f - t) + 2500.0f * t;
+        }
+        // First ~1 s of signal: the seed + fast detector are still locking the
+        // tone's level — keep the follower quick so the song starts at the
+        // right gain, THEN freeze into the slow schedule above.
+        if (sigSamples < int(1.0 * sr))
+            timeMs = std::min(timeMs, 150.0f);
 
         const float blockSeconds = float(numSamples / sr);
         const float alpha = 1.0f - std::exp(-blockSeconds / std::max(0.001f, timeMs / 1000.0f));
@@ -483,6 +507,8 @@ private:
     bool detectorSeeded = false;   // jump msEnv to the real level on first signal
     int warmupSamples = 0;         // signal samples seen — gates the first gain decision
     int sigSamples = 0;            // total signal seen — two-speed detector switch
+    int sustainSamples = 0;        // how long the gain gap has stayed large
+    bool fastLatch = false;        // latched fast re-convergence (regime change)
     int gateHoldSamples = 0;       // output noise-gate hold counter
     float gateGain = 1.0f;         // output noise-gate gain (fast attack / slow release)
     double msEnv = 0.0;   // running mean-square of the K-weighted signal (~15 ms; frozen in silence)
