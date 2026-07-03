@@ -4775,9 +4775,39 @@ async function rbStudioFinalizeFocusEdit(api, idx) {
     const piece = (rbStudioCurrentChain())[idx];
     try {
         if (piece && piece._vst_slot_id != null) {
-            const opaque = await rbCaptureVstOpaqueState(api,
-                piece._vst_path || (piece.assigned && piece.assigned.vst_path));
-            if (opaque) { rbStampVstState(piece, opaque); await rbStudioPersist().catch(() => null); }
+            // Snapshot the LIVE plugin params and make THEM the saved state.
+            // The opaque blob that playback consumes could lag behind the live
+            // edits — an amp's Lead switch stayed ON in the saved opaque even
+            // after the user turned it off, so the song replayed the distorted
+            // tone while the Studio monitor sounded correct. Read every param's
+            // current value straight from the plugin under BOTH its numeric id
+            // AND its name (the stored envelope carries both, and the backend
+            // applies whichever it finds), then DROP the stale opaque so these
+            // fresh params are authoritative at playback.
+            let gotLive = false;
+            try {
+                if (typeof api.getParameters === 'function') {
+                    const live = await api.getParameters(piece._vst_slot_id);
+                    if (Array.isArray(live) && live.length) {
+                        const params = {};
+                        live.forEach((p, i) => {
+                            const id = p.id ?? p.paramId ?? p.index ?? i;
+                            const nm = p.name ?? p.label;
+                            const v = p.value ?? p.current;
+                            if (typeof v === 'number') {
+                                if (id != null) params[id] = v;
+                                if (nm) params[nm] = v;
+                            }
+                        });
+                        if (Object.keys(params).length) { piece._vst_params = params; gotLive = true; }
+                    }
+                }
+            } catch (_) {}
+            // Only discard the opaque when we secured a fresh full param snapshot
+            // to stand in for it; otherwise keep it as a fallback.
+            if (gotLive) piece._vst_opaque = null;
+            rbStampVstState(piece, null);
+            await rbStudioPersist().catch(() => null);
         }
     } catch (_) {}
     try { await rbTeardownVstEditor(api); } catch (_) {}
@@ -5050,6 +5080,10 @@ function rbStudioRenderSongBar() {
         const on = v.source === 'song' && v.toneIdx === i;
         html += `<button class="rb-tone-chip ${on ? 'rb-tone-chip-on' : ''}" onclick="rbStudioShowSongTone(${i})">${bass ? '🎚' : '🎸'} ${rbEsc(t.name || ('Tone ' + (i + 1)))}</button>`;
     });
+    if (v.source === 'song') {
+        html += `<button class="rb-tone-chip rb-song-reset-btn" onclick="rbStudioResetSongTone()" `
+            + `title="Reset this tone to the song's original gear (discards your edits to it)">↺ Reset to original</button>`;
+    }
     html += `<button class="rb-song-tonebar-x" onclick="rbStudioCloseSong()" title="Close this song">✕</button>`;
     bar.innerHTML = html;
     bar.classList.remove('hidden');
@@ -5107,10 +5141,61 @@ window.rbStudioRenderToneMenu = function rbStudioRenderToneMenu(filter) {
     const menu = document.getElementById('rb-tone-menu');
     if (!menu) return;
     rbState._toneMenuFilter = filter || '';
+    // When a SONG tone is loaded, offer "Reset to song tone" — discards the
+    // user's edits to this tone and reverts it to the song's original gear.
+    const v = rbState.studioView || {};
+    const resetBtn = v.source === 'song'
+        ? `<button class="rb-tone-save rb-tone-reset" onclick="rbStudioResetSongTone()" title="Discard your edits to this song tone and revert it to the song's original gear">↺ Reset to song tone</button>`
+        : '';
     menu.innerHTML = `
         <div class="rb-tone-search"><input type="text" placeholder="Search tones…" value="${rbEsc(filter || '')}" oninput="rbStudioFilterToneList(this.value)"></div>
         <div class="rb-tone-list" id="rb-tone-list">${rbStudioToneListHtml(filter)}</div>
-        <div class="rb-tone-foot"><button class="rb-tone-save" onclick="rbStudioSaveTone()">💾 Save current tone</button></div>`;
+        <div class="rb-tone-foot"><button class="rb-tone-save" onclick="rbStudioSaveTone()">💾 Save current tone</button>${resetBtn}</div>`;
+};
+
+// Revert the currently-loaded SONG tone to the song's original bundled gear
+// (deletes the user's saved preset for it). The next open/play re-seeds it.
+window.rbStudioResetSongTone = async function rbStudioResetSongTone() {
+    const v = rbState.studioView || {};
+    if (v.source !== 'song') return;
+    const filename = rbState.currentSongFile;
+    const t = rbState.songTones && rbState.songTones.tones && rbState.songTones.tones[v.toneIdx];
+    const toneKey = t && (t.key || t.name);
+    if (!filename || !toneKey) return;
+    if (!confirm(`Reset "${t.name || toneKey}" to the song's original tone?\n\n`
+        + `Your edits to this tone will be discarded and it reverts to the song's `
+        + `original/bundled gear. This can't be undone.`)) return;
+    try {
+        const r = await fetch(`${window.RB_API}/reset_tone`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename, tone_key: toneKey }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) { alert(`Reset failed: ${d.error || r.status}`); return; }
+    } catch (e) { alert('Reset failed: ' + (e.message || e)); return; }
+    // Refresh the song's tones (now reverted to the original gear) and re-show
+    // this one in the Studio. Deliberately a LIGHT re-fetch + re-show that
+    // mirrors clicking a tone chip — NOT the heavy rbLoadSongTones, whose
+    // song-editor-panel re-render + editor-state reset raced with the Studio
+    // room and left the reverted amp with no canvas face and unswappable.
+    document.getElementById('rb-tone-menu')?.classList.add('hidden');
+    const idx = v.toneIdx;
+    try { await rbCloseActiveVstEditor(); } catch (_) {}
+    // The reset runs mid-edit with the amp editor focused. Clear the editor-busy
+    // lock + focus index so they aren't left stuck — that lock gates BOTH the
+    // focus-VST (canvas) load and the amp swap, so a stuck lock is exactly what
+    // "blocked" the amp / left it with no canvas until the user switched tones.
+    rbState._vstEditorBusy = false;
+    rbState._studioFocusIdx = -1;
+    try {
+        const fresh = await rbFetchSong(filename);
+        if (fresh && !fresh.error && Array.isArray(fresh.tones)) {
+            rbState.songTones = fresh;
+            try { rbSeedBypass(fresh); } catch (_) {}
+        }
+    } catch (_) {}
+    const tones = (rbState.songTones && rbState.songTones.tones) || [];
+    try { rbStudioShowSongTone(Math.max(0, Math.min(idx, tones.length - 1))); } catch (_) {}
 };
 // oninput from the search box: update ONLY the list (keeps the input focused).
 window.rbStudioFilterToneList = function rbStudioFilterToneList(filter) {

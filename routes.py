@@ -6366,22 +6366,30 @@ def _resync_stale_song_seed(song_key: str, path: Path) -> list[str]:
     conn = _get_conn()
     _filt, _args = _tone_mapping_filename_filter(song_key, path)
     seeded_amp: dict[str, str] = {}
+    seeded_mode: dict[str, str] = {}
     preset_by_tone: dict[str, int] = {}
-    for tk, pid, gear in conn.execute(
-        f"SELECT tm.tone_key, tm.preset_id, pp.rs_gear_type "
+    for tk, pid, gear, amode in conn.execute(
+        f"SELECT tm.tone_key, tm.preset_id, pp.rs_gear_type, pp.assigned_mode "
         f"FROM tone_mappings tm JOIN preset_pieces pp ON pp.preset_id = tm.preset_id "
         f"WHERE {_filt} AND pp.slot = 'amp'",
         _args,
     ).fetchall():
         seeded_amp[tk] = gear
+        seeded_mode[tk] = str(amode or "")
         preset_by_tone[tk] = pid
 
     # Mark handled now: even if the read/parse above was fine but nothing is
     # stale, we don't want to re-read the sloppak on every open of this song.
     _resynced_songs.add(song_key)
 
+    # A DIFFERENT amp key means EITHER the sloppak was rewritten under a stable
+    # filename (a genuine stale seed → re-seed) OR the user deliberately swapped
+    # the amp gear in the editor to fix a bad tone (assigned_mode 'manual'/'manual_vst').
+    # NEVER re-seed a user's manual amp swap — doing so silently deleted the edited
+    # preset and reverted the song to its original tone on the next play.
     stale = [tk for tk, amp in current_amp.items()
-             if tk in seeded_amp and amp and amp != seeded_amp[tk]]
+             if tk in seeded_amp and amp and amp != seeded_amp[tk]
+             and not seeded_mode.get(tk, "").startswith("manual")]
     if not stale:
         return []
 
@@ -7815,6 +7823,105 @@ def setup(app, context):
         except Exception:
             log.warning("save_preset: mirror to sibling format failed", exc_info=True)
         return {"ok": True, "preset_id": preset_id, "mirrored": mirrored, "mirrored_presets": mirrored_presets}
+
+    @app.post("/api/plugins/rig_builder/reset_tone")
+    def reset_tone(data: dict = Body(...)):
+        """Reload ONE song tone EXACTLY as it ships in the sloppak.
+
+        Deletes the user's edited preset for (song, tone_key) and re-seeds every
+        piece (amp, pedals, rack, cab) from the ORIGINAL GearList via
+        ``_auto_download_for_song`` — the SAME resolver the first seed used — so
+        ALL edits are discarded (params AND gear swaps) and the tone returns to
+        its bundled gear + resolved VST + RS-knob params. The re-seed is what
+        restores the VSTs: a plain delete alone makes get_song fall back to the
+        raw GearList and the amp comes back with NO VST (blank face), so re-seed
+        is mandatory. The current preset is snapshotted first and rolled back if
+        the re-seed fails to produce a resolved chain, so a reset can never leave
+        the tone half-built. Applies across BOTH containers (.psarc / .sloppak)."""
+        filename = data.get("filename")
+        tone_key = (data.get("tone_key") or "").strip()
+        if not filename or not tone_key:
+            return JSONResponse({"error": "filename and tone_key required"}, 400)
+        filename = _db_song_key(filename)
+        conn = _get_conn()
+
+        def _dump(table, where, arg):
+            cur = conn.execute(f"SELECT * FROM {table} WHERE {where}", (arg,))
+            cols = [c[0] for c in cur.description]
+            return cols, [dict(zip(cols, r)) for r in cur.fetchall()]
+
+        def _reinsert(table, cols, rows):
+            if not rows:
+                return
+            collist = ", ".join(cols)
+            placeholders = ", ".join("?" for _ in cols)
+            for row in rows:
+                conn.execute(
+                    f"INSERT OR REPLACE INTO {table} ({collist}) VALUES ({placeholders})",
+                    [row[c] for c in cols],
+                )
+
+        snap = []   # [(fn, pid, presets_cols, presets_rows, pieces_cols, pieces_rows)]
+        try:
+            ckey = _canonical_song_key(filename)
+            with _lock:
+                targets = [(fn, pid) for fn, pid in conn.execute(
+                    "SELECT filename, preset_id FROM tone_mappings WHERE tone_key = ?",
+                    (tone_key,)).fetchall() if _canonical_song_key(fn) == ckey]
+                for fn, pid in targets:
+                    pc, pr = _dump("presets", "id = ?", pid)
+                    ic, ir = _dump("preset_pieces", "preset_id = ?", pid)
+                    snap.append((fn, pid, pc, pr, ic, ir))
+                for fn, pid in targets:
+                    conn.execute("DELETE FROM tone_mappings WHERE preset_id = ?", (pid,))
+                    conn.execute("DELETE FROM preset_pieces WHERE preset_id = ?", (pid,))
+                    conn.execute("DELETE FROM presets WHERE id = ?", (pid,))
+                conn.commit()
+        except Exception as e:
+            log.exception("reset_tone: snapshot/delete failed")
+            return JSONResponse({"error": f"{type(e).__name__}: {e}"}, 500)
+
+        # Re-seed from the ORIGINAL GearList (resolves the VSTs).
+        try:
+            _song_path = _resolve_song_file(filename)
+            if _song_path is not None and _song_path.exists():
+                _auto_download_for_song(filename, _song_path)
+        except Exception:
+            log.warning("reset_tone: re-seed failed for %r", filename, exc_info=True)
+
+        # Did the tone come back with a resolved amp? If not, roll the snapshot
+        # back so we never leave the tone broken (VST-less amp / blank face).
+        got = conn.execute(
+            "SELECT COUNT(*) FROM tone_mappings tm JOIN preset_pieces pp "
+            "ON pp.preset_id = tm.preset_id "
+            "WHERE tm.tone_key = ? AND pp.slot = 'amp' AND pp.kind = 'vst' "
+            "AND COALESCE(pp.vst_path,'') != ''",
+            (tone_key,)).fetchone()
+        reseeded = bool(got and got[0])
+        if not reseeded and snap:
+            try:
+                with _lock:
+                    # Drop whatever the failed re-seed produced for this tone.
+                    for fn, pid in [(fn, pid) for fn, pid in conn.execute(
+                        "SELECT filename, preset_id FROM tone_mappings WHERE tone_key = ?",
+                        (tone_key,)).fetchall() if _canonical_song_key(fn) == ckey]:
+                        conn.execute("DELETE FROM tone_mappings WHERE preset_id = ?", (pid,))
+                        conn.execute("DELETE FROM preset_pieces WHERE preset_id = ?", (pid,))
+                        conn.execute("DELETE FROM presets WHERE id = ?", (pid,))
+                    for fn, pid, pc, pr, ic, ir in snap:
+                        _reinsert("presets", pc, pr)
+                        _reinsert("preset_pieces", ic, ir)
+                        conn.execute(
+                            "INSERT OR REPLACE INTO tone_mappings (filename, tone_key, preset_id) "
+                            "VALUES (?, ?, ?)", (fn, tone_key, pid))
+                    conn.commit()
+                log.warning("reset_tone: re-seed produced no resolved amp; rolled back "
+                            "to the prior preset for %r/%r", filename, tone_key)
+                return JSONResponse(
+                    {"error": "reseed_failed", "detail": "reverted to previous tone"}, 500)
+            except Exception:
+                log.exception("reset_tone: rollback failed")
+        return {"ok": True, "reseeded": reseeded}
 
     # ── Export current gear→capture assignments as shipped defaults ───
     @app.post("/api/plugins/rig_builder/export_default_captures")
