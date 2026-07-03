@@ -1,13 +1,12 @@
 #ifndef TAPE_ECHO_PARAMS_H
 #define TAPE_ECHO_PARAMS_H
 
-// the game "Tape Echo" rack -> Roland RE-201 Space Echo. A stereo tape echo:
-// dark, saturated repeats with wow & flutter, the two channels spread by Stereo.
-//   Time     = echo time (RS stores ms, ~110 .. 120 in the test songs)
-//   Feedback = repeats
-//   Filter   = tone of the repeats (low-pass; dark .. bright)
-//   Stereo   = L/R spread / ping-pong width
-//   Mix      = wet/dry blend
+// the game "Tape Echo" rack -> Roland RE-201 Space Echo style tape machine.
+//   Time     = repeat-rate / tape speed. RS stores ms as ms/700.
+//   Feedback = RE-201 Intensity/regeneration into the record amp
+//   Filter   = combined echo Tone/Bass/Treble coloration
+//   Stereo   = artificial spread of the three mono playback heads
+//   Mix      = Echo Volume / wet-dry blend
 enum TapeEchoParamId { kTime = 0, kFeedback, kFilter, kStereo, kMix, kParamCount };
 
 static const char* const kTapeEchoNames[kParamCount]   = { "Time", "Feedback", "Filter", "Stereo", "Mix" };

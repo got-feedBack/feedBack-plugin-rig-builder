@@ -1,5 +1,5 @@
 /* StudioChorus rack UI - shared rack_ui template. Boss RCE-10 Chorus Ensemble:
- * Pre Delay, Rate/Depth, Effect EQ/Level plus RS-compatible Low Cut/Stereo. */
+ * the 5 real front-panel pots only — Rate, Depth, Effect Level, Effect EQ, Pre Delay. */
 #include "StudioChorusParams.h"
 #define RACK_COUNT   kParamCount
 #define RACK_TITLE   "STUDIO CHORUS"
@@ -8,8 +8,8 @@
 #define RACK_ACR 120
 #define RACK_ACG 165
 #define RACK_ACB 205
-// enum order: Rate, Depth, Effect Level, Low Cut | Effect EQ, Stereo, Pre Delay
+// enum order: Rate, Depth, Effect Level, Effect EQ, Pre Delay
 #define RACK_KNOBS { \
-    {0.160f,0.40f,0.023f}, {0.265f,0.40f,0.023f}, {0.370f,0.40f,0.023f}, {0.475f,0.40f,0.023f}, \
-    {0.215f,0.72f,0.023f}, {0.320f,0.72f,0.023f}, {0.425f,0.72f,0.023f} }
+    {0.180f,0.55f,0.026f}, {0.320f,0.55f,0.026f}, {0.460f,0.55f,0.026f}, \
+    {0.600f,0.55f,0.026f}, {0.740f,0.55f,0.026f} }
 #include "../_shared/rack_ui.hpp"

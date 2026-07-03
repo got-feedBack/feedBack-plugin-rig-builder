@@ -51,9 +51,7 @@ class Rce10Core
     float rate = kStudioChorusDef[kRate];
     float depth = kStudioChorusDef[kDepth];
     float effectLevel = kStudioChorusDef[kMix];
-    float lowCut = kStudioChorusDef[kLoFilter];
-    float effectEq = kStudioChorusDef[kHiFilter];
-    float stereoWidth = kStudioChorusDef[kStereo];
+    float effectEq = kStudioChorusDef[kEq];
     float preDelay = kStudioChorusDef[kDelay];
     float lfoPhase = 0.0f;
     float compEnv = 0.0f;
@@ -86,7 +84,6 @@ class Rce10Core
 
     void updateFilters()
     {
-        const float lo = rbmod::smoothstep(lowCut);
         const float eq = rbmod::smoothstep(effectEq);
 
         inputHp.setHz(16.0f, sampleRate);
@@ -95,8 +92,9 @@ class Rce10Core
 
         wetPreLpL.setHz(12400.0f, sampleRate);
         wetPreLpR.setHz(12400.0f, sampleRate);
-        wetHpL.setHz(24.0f + 540.0f * lo, sampleRate);
-        wetHpR.setHz(24.0f + 540.0f * lo, sampleRate);
+        // Fixed de-emphasis high-pass (the RCE-10 has no low-cut pot).
+        wetHpL.setHz(45.0f, sampleRate);
+        wetHpR.setHz(45.0f, sampleRate);
         wetLpL.setHz(5200.0f + 8800.0f * eq, sampleRate);
         wetLpR.setHz(5200.0f + 8800.0f * eq, sampleRate);
         eqTiltLpL.setHz(960.0f + 1900.0f * eq, sampleRate);
@@ -179,15 +177,12 @@ public:
     }
 
     void setParams(float newRate, float newDepth, float newEffectLevel,
-                   float newLowCut, float newEffectEq, float newStereoWidth,
-                   float newPreDelay)
+                   float newEffectEq, float newPreDelay)
     {
         rate = rbmod::clamp01(newRate);
         depth = rbmod::clamp01(newDepth);
         effectLevel = rbmod::clamp01(newEffectLevel);
-        lowCut = rbmod::clamp01(newLowCut);
         effectEq = rbmod::clamp01(newEffectEq);
-        stereoWidth = rbmod::clamp01(newStereoWidth);
         preDelay = rbmod::clamp01(newPreDelay);
         updateFilters();
     }
@@ -215,7 +210,7 @@ public:
         if (sweepMs > baseMs - 3.0f)
             sweepMs = baseMs - 3.0f;
 
-        const float width = rbmod::smoothstep(stereoWidth);
+        const float width = 0.60f;   // RCE-10 A/B stereo image is fixed (no width pot)
         const float phaseSpread = 0.07f + 0.43f * width;
         const float lfoL = shapedRceLfo(lfoPhase);
         const float lfoR = shapedRceLfo(lfoPhase + phaseSpread);
@@ -256,8 +251,8 @@ class StudioChorusPlugin : public Plugin
 
     void recalc()
     {
-        core.setParams(fParams[kRate], fParams[kDepth], fParams[kMix], fParams[kLoFilter],
-                       fParams[kHiFilter], fParams[kStereo], fParams[kDelay]);
+        core.setParams(fParams[kRate], fParams[kDepth], fParams[kMix],
+                       fParams[kEq], fParams[kDelay]);
     }
 
 public:

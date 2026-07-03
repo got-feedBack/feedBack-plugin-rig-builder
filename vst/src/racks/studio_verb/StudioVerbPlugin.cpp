@@ -1,10 +1,9 @@
-/* StudioVerb — the game reverb rack (Studio hall reverb). Shared Freeverb-style core; this file
- * only sets the voicing + identity. */
+/* StudioVerb - Lexicon 224-style digital hall. Same Time/Tone/Depth/Mix surface
+ * as the game, but the DSP now uses input diffusion, an eight-line modulated
+ * FDN, bandwidth limiting and slow wander instead of the generic Freeverb core. */
 #define REVERB_LABEL "StudioVerb"
 #define REVERB_DESC  "Studio hall reverb"
 #define REVERB_UID   d_cconst('R','V','b','1')
-#define REVERB_SIZE   1.10f   // long combs → smooth hall tail (0.50 was short/metallic = "phasey")
-#define REVERB_DAMP   0.15f   // a touch of damping so the tail isn't ringy/bright
-#define REVERB_APFB   0.50f   // more diffusion → denser, less fluttery
-#define REVERB_WETMAX 0.10f   // Mix knob tops out at 10% wet so the verb stays subtle
-#include "../../_shared/reverb_plugin.hpp"
+#define REVERB_MODEL_CLASS Lexicon224VerbCore
+#define REVERB_WETMAX 0.55f
+#include "../../_shared/reverb_model_plugin.hpp"

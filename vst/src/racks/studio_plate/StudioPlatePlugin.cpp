@@ -1,13 +1,9 @@
-/* StudioPlate — the game reverb rack (Studio plate reverb). Shared Freeverb-style core; this file
- * only sets the voicing + identity. */
+/* StudioPlate - EMT 140-style plate model. Same Time/Tone/Depth/Mix surface as
+ * the game, but the DSP is now a plate-specific modal/FDN tank instead of the
+ * generic Freeverb rack core. */
 #define REVERB_LABEL "StudioPlate"
 #define REVERB_DESC  "Studio plate reverb"
 #define REVERB_UID   d_cconst('R','P','l','1')
-#define REVERB_SIZE  0.68f
-#define REVERB_DAMP  -0.05f
-#define REVERB_APFB  0.62f
-#define REVERB_WETMAX 0.14f  // Mix tops out at 14% wet — plate was UNCAPPED (default 1.0),
-                             // i.e. up to 100% wet = the "too exaggerated" tail. 0.14 keeps it a
-                             // subtle, musical plate (tail ~-34..-38 dB vs the note), just a touch
-                             // more present than the 0.10 hall verb. (2026-06)
-#include "../../_shared/reverb_plugin.hpp"
+#define REVERB_MODEL_CLASS Emt140PlateCore
+#define REVERB_WETMAX 0.55f
+#include "../../_shared/reverb_model_plugin.hpp"

@@ -18,20 +18,6 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/StudioChamber.so</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			SwMYYIfot+IHbZ3yJ7nuvey603AMkxAQNfbCf6PAzBg=
-			</data>
-		</dict>
-		<key>x86_64-win/StudioChamber.vst3</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			6tsfQrR5BfGZkN8c3Pc3rhalo621FDkgpdsbzI62tp0=
-			</data>
-		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

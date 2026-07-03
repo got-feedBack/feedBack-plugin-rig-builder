@@ -1,29 +1,26 @@
 #ifndef STUDIO_CHORUS_PARAMS_H
 #define STUDIO_CHORUS_PARAMS_H
 
-// Rocksmith "Studio Chorus" rack -> Boss RCE-10 Chorus Ensemble.  The real unit
-// is a 12-bit digital chorus with NE572 companding, pre/de-emphasis, R-2R
-// conversion and stereo output expanders.  We keep the seven RS automation slots,
-// but name them after the closest RCE-10 controls:
-//   Rate         = modulation rate
-//   Depth        = modulation depth
-//   Effect Level = dual wet/output effect level
-//   Low Cut      = extra RS low-cut before the real effect EQ
-//   Effect EQ    = RCE-10 effect EQ/brightness
-//   Stereo       = output A/B spread
-//   Pre Delay    = RCE-10 pre-delay time
+// the game "Studio Chorus" rack -> Boss RCE-10 Chorus Ensemble.  ONLY the REAL
+// RCE-10 front-panel pots are exposed (service notes 1986): RATE, DEPTH,
+// EFFECT LEVEL, EQ, PRE DELAY.  The RCE-10 has NO low-cut pot and its A/B stereo
+// image is fixed (not a knob), so the old RS-only "Low Cut" and "Stereo" params
+// were removed.  RS knobs are remapped to these five in rs_knob_to_vst_param.json
+// (Mix->Effect Level, HiFilter->Effect EQ, Delay->Pre Delay; RS LoFilter/Stereo
+// are dropped).  Params apply BY NAME, so keeping these names means already-seeded
+// tones keep working with NO re-seed.
 enum StudioChorusParamId {
-    kRate = 0, kDepth, kMix, kLoFilter, kHiFilter, kStereo, kDelay, kParamCount
+    kRate = 0, kDepth, kMix, kEq, kDelay, kParamCount
 };
 
 static const char* const kStudioChorusNames[kParamCount]   =
-    { "Rate", "Depth", "Effect Level", "Low Cut", "Effect EQ", "Stereo", "Pre Delay" };
+    { "Rate", "Depth", "Effect Level", "Effect EQ", "Pre Delay" };
 static const char* const kStudioChorusSymbols[kParamCount] =
-    { "rate", "depth", "mix", "lofilter", "hifilter", "stereo", "delay" };
+    { "rate", "depth", "mix", "hifilter", "delay" };
 
-static const float kStudioChorusMin[kParamCount] = { 0,0,0,0,0,0,0 };
-static const float kStudioChorusMax[kParamCount] = { 1,1,1,1,1,1,1 };
+static const float kStudioChorusMin[kParamCount] = { 0,0,0,0,0 };
+static const float kStudioChorusMax[kParamCount] = { 1,1,1,1,1 };
 static const float kStudioChorusDef[kParamCount] =
-    { 0.24f, 0.46f, 0.30f, 0.18f, 0.68f, 0.72f, 0.42f };
+    { 0.24f, 0.46f, 0.30f, 0.68f, 0.42f };
 
 #endif // STUDIO_CHORUS_PARAMS_H

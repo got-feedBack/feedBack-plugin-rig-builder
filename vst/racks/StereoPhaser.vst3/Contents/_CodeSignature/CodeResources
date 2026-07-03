@@ -18,20 +18,6 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/StereoPhaser.so</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			dZomC2okum64Dqme5GKYnbe9eQyMAz7LU0O3Yx0/oNE=
-			</data>
-		</dict>
-		<key>x86_64-win/StereoPhaser.vst3</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			MTSIiUTGHm1aPiiemcNK5Fx8ca8p1K4juPACahUKu44=
-			</data>
-		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

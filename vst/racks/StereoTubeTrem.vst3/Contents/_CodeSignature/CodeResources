@@ -18,20 +18,6 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/StereoTubeTrem.so</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			pnWuY5Je8iwvDrPodUzhQ4xiMCuLIx2fJ57jQz9qCc8=
-			</data>
-		</dict>
-		<key>x86_64-win/StereoTubeTrem.vst3</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			hlXDsqTJKgUDvMS/mC9WE82B6l3zYmlUdv/gKioKWlg=
-			</data>
-		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>
