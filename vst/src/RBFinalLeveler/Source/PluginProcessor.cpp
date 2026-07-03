@@ -45,8 +45,6 @@ public:
         gateHoldSamples = 0;
         gateGain = 1.0f;
         msEnv = 0.0;
-        msEnvFast = 0.0;
-        noteEnvDb = -120.0f;
         rawMsEnv = 0.0;
         noiseFloorMs = 1.0e-12;
         frameSum = 0.0;
@@ -124,7 +122,6 @@ public:
         // at 400 ms); after that the detector slows to the momentary window.
         const bool detectorSettling = sigSamples < int(0.5 * sr);
         const float rmsTauMs = detectorSettling ? 15.0f : 400.0f;
-        const float rmsCoefFast = 1.0f - std::exp(-1.0f / std::max(1.0f, (15.0f / 1000.0f) * float(sr)));
         const float rmsCoef = 1.0f - std::exp(-1.0f / std::max(1.0f, (rmsTauMs / 1000.0f) * float(sr)));
 
         const float* chData[2] = { nullptr, nullptr };
@@ -271,7 +268,6 @@ public:
             {
                 msEnv += double(rmsCoef) * (sq - msEnv);
                 rawMsEnv += double(rmsCoef) * (rawSq - rawMsEnv);
-                msEnvFast += double(rmsCoefFast) * (sq - msEnvFast);
             }
         }
 
@@ -286,7 +282,6 @@ public:
             && (-0.691 + 10.0 * std::log10(blockMs)) >= gateDb)
         {
             msEnv = blockMs;
-            msEnvFast = blockMs;
             rawMsEnv = rawBlockMs;
             detectorSeeded = true;
         }
@@ -341,35 +336,18 @@ public:
         }
         else
         {
-            // ── DENSITY COMPENSATION ────────────────────────────────────────
-            // Equal integrated LUFS does NOT sound equal across material
-            // density: a sustained fuzz/synth wall (100% duty) fills the mix
-            // and reads loud, while sparse fingerpicking (notes with gaps)
-            // gets swallowed by the backing — even when its note attacks are
-            // momentarily HOTTER ("el fuzz muy fuerte, Dust demasiado
-            // despacio"). Measure sparseness as note-level minus average
-            // level: noteEnvDb peak-follows the FAST (15 ms) loudness with a
-            // ~1.2 s release (= the level of the recent notes), msEnv is the
-            // gap-diluted 400 ms average. Dense wall → difference ~0-1 dB;
-            // fingerpicking → ~4-7 dB. Shift the effective target by
-            // 0.8·(density − 2 dB), bounded [−2, +3.5]: dense sits ~1.5 dB
-            // under the nominal target, sparse up to ~3 dB over.
-            {
-                const float fastDb = (msEnvFast > 1.0e-12)
-                    ? float(-0.691 + 10.0 * std::log10(msEnvFast)) : -120.0f;
-                if (fastDb > noteEnvDb) noteEnvDb = fastDb;   // instant attack
-                else noteEnvDb += (1.0f - std::exp(-float(numSamples) / (1.2f * float(sr))))
-                                  * (fastDb - noteEnvDb);     // ~1.2 s release
-            }
-            const float densityDb = juce::jlimit(0.0f, 8.0f, noteEnvDb - loudnessLufs);
-            const float densityComp = juce::jlimit(-2.0f, 3.5f, 0.8f * (densityDb - 2.0f));
-
-            // Drive by perceived LOUDNESS (LUFS) to the density-compensated
-            // target (param name kept for state compat). We do NOT clamp the
-            // boost by the instantaneous PEAK — that starved the boost on
-            // quiet/dynamic high-crest tones; peaks are caught by the
-            // brickwall limiter on the output instead.
-            wantedGainDb = (targetRmsDb + densityComp) - loudnessLufs;
+            // Drive by perceived LOUDNESS (LUFS) to the target (param name
+            // kept for state compat). We do NOT clamp the boost by the
+            // instantaneous PEAK — that starved the boost on quiet/dynamic
+            // high-crest tones; peaks are caught by the brickwall limiter on
+            // the output instead.
+            // NB: a density-compensated target (sparse material up, sustained
+            // walls down) was tried here and REMOVED: song sections alternate
+            // staccato/sustained, so the density measure moved DURING a song
+            // and the gain audibly drifted ("se sigue bajando el volumen").
+            // Any future per-material bias must be decided ONCE per tone (at
+            // lock time), never tracked live.
+            wantedGainDb = targetRmsDb - loudnessLufs;
 
             // SUB-HEAVY BOOST CAP (by mean RMS, NOT peak — so it doesn't starve
             // dynamic tones). K-weighting attenuates lows ~10-15 dB, so a bass-
@@ -540,8 +518,6 @@ private:
     int gateHoldSamples = 0;       // output noise-gate hold counter
     float gateGain = 1.0f;         // output noise-gate gain (fast attack / slow release)
     double msEnv = 0.0;   // running mean-square of the K-weighted signal (400 ms; frozen in silence)
-    double msEnvFast = 0.0;  // fast (15 ms) K-weighted env — feeds the density measure
-    float  noteEnvDb = -120.0f;  // peak-follower of the fast env = recent note level
     double rawMsEnv = 0.0; // running mean-square of the UNWEIGHTED signal — caps sub-heavy boost
     double noiseFloorMs = 1.0e-12;  // tracked idle-noise power (mean-square)
 
