@@ -1,0 +1,54 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+*.part
+*.raw
+
+# Locally-generated amp/gear artwork (not redistributed).
+# Photos now live under assets/; legacy flat paths kept for old checkouts.
+assets/amp_photos/
+assets/guitar_amp_photos/
+assets/bass_amp_photos/
+assets/pedal_photos/
+assets/rack_photos/
+assets/cab_photos/
+assets/gear_photos/
+guitar_amp_photos/
+bass_amp_photos/
+amp_photos/
+pedal_photos/
+rack_photos/
+cab_photos/
+gear_photos/
+
+# JSON backups created by migration helpers.
+*.json.bak
+
+# External build framework (fetched locally, not part of the plugin)
+vst/src/DPF/
+
+AMP_BUILD_GUIDE.md
+AMP_LOUDNESS.md
+AMP_MODELING_GUIDE.md
+PEDAL_DSP_GUIDE.md
+PEDAL_UI_GUIDE.md
+pedal_inspirations.csv
+
+# Internal dev docs — kept locally, not distributed in the repo.
+docs/schematics/
+docs/HOST_VST_SANDBOX_CRASH_0.2.9.md
+vst/src/README.md
+vst/src/**/README.md
+
+# Local VST build outputs (CMake/JUCE + DPF). Binaries ship inside the
+# committed .vst3 bundles under vst/<cat>/; the source build trees do not.
+vst/src/**/build/
+vst/src/**/build_local/
+vst/src/**/bin/
+vst/src/**/cibuild/
+vst/src/amps/DPF/
+vst/src/amps/tw22/SuperNova22-TW22ns/
+vst/src/amps/tw40/rig_builder/
+*.bak-*
+

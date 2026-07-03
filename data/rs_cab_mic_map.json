@@ -1,0 +1,3620 @@
+{
+  "Bass_Cab_AT1150BC": {
+    "5c": {
+      "effect_name": "Bass_Cab_AT1150BC_57_Cone",
+      "ir_file": "rocksmith/bass_cab_at1150bc_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_AT1150BC_57_Edge",
+      "ir_file": "rocksmith/bass_cab_at1150bc_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_AT1150BC_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_at1150bc_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_AT1150BC_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_at1150bc_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_AT1150BC_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_at1150bc_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_AT1150BC_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_at1150bc_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_AT1150BC_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_at1150bc_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_AT1150BC_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_at1150bc_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_AT1150BC_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_at1150bc_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_AT810BC": {
+    "5c": {
+      "effect_name": "Bass_Cab_AT810BC_57_Cone",
+      "ir_file": "rocksmith/bass_cab_at810bc_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_AT810BC_57_Edge",
+      "ir_file": "rocksmith/bass_cab_at810bc_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_AT810BC_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_at810bc_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_AT810BC_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_at810bc_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_AT810BC_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_at810bc_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_AT810BC_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_at810bc_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_AT810BC_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_at810bc_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_AT810BC_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_at810bc_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_AT810BC_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_at810bc_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_BT115BC": {
+    "5c": {
+      "effect_name": "Bass_Cab_BT115BC_57_Cone",
+      "ir_file": "rocksmith/bass_cab_bt115bc_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_BT115BC_57_Edge",
+      "ir_file": "rocksmith/bass_cab_bt115bc_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_BT115BC_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_bt115bc_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_BT115BC_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_bt115bc_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_BT115BC_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_bt115bc_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_BT115BC_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_bt115bc_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_BT115BC_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_bt115bc_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_BT115BC_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_bt115bc_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_BT115BC_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_bt115bc_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_BT212BC": {
+    "5c": {
+      "effect_name": "Bass_Cab_BT212BC_57_Cone",
+      "ir_file": "rocksmith/bass_cab_bt212bc_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_BT212BC_57_Edge",
+      "ir_file": "rocksmith/bass_cab_bt212bc_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_BT212BC_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_bt212bc_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_BT212BC_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_bt212bc_02.wav",
+      "ir_index": 2,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_BT212BC_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_bt212bc_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_BT212BC_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_bt212bc_04.wav",
+      "ir_index": 4,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_BT212BC_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_bt212bc_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_BT212BC_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_bt212bc_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_BT212BC_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_bt212bc_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_BT410BC": {
+    "5c": {
+      "effect_name": "Bass_Cab_BT410BC_57_Cone",
+      "ir_file": "rocksmith/bass_cab_bt410bc_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_BT410BC_57_Edge",
+      "ir_file": "rocksmith/bass_cab_bt410bc_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_BT410BC_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_bt410bc_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_BT410BC_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_bt410bc_02.wav",
+      "ir_index": 2,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_BT410BC_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_bt410bc_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_BT410BC_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_bt410bc_04.wav",
+      "ir_index": 4,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_BT410BC_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_bt410bc_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_BT410BC_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_bt410bc_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_BT410BC_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_bt410bc_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_CA1510BC": {
+    "5c": {
+      "effect_name": "Bass_Cab_CA1510BC_57_Cone",
+      "ir_file": "rocksmith/bass_cab_ca1510bc_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_CA1510BC_57_Edge",
+      "ir_file": "rocksmith/bass_cab_ca1510bc_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_CA1510BC_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_ca1510bc_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_CA1510BC_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_ca1510bc_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_CA1510BC_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_ca1510bc_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_CA1510BC_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_ca1510bc_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_CA1510BC_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_ca1510bc_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_CA1510BC_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_ca1510bc_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_CA1510BC_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_ca1510bc_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_CH210BC": {
+    "5c": {
+      "effect_name": "Bass_Cab_CH210BC_57_Cone",
+      "ir_file": "rocksmith/bass_cab_ch210bc_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_CH210BC_57_Edge",
+      "ir_file": "rocksmith/bass_cab_ch210bc_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_CH210BC_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_ch210bc_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_CH210BC_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_ch210bc_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_CH210BC_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_ch210bc_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_CH210BC_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_ch210bc_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_CH210BC_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_ch210bc_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_CH210BC_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_ch210bc_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_CH210BC_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_ch210bc_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_CH310BC": {
+    "5c": {
+      "effect_name": "Bass_Cab_CH310BC_57_Cone",
+      "ir_file": "rocksmith/bass_cab_ch310bc_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_CH310BC_57_Edge",
+      "ir_file": "rocksmith/bass_cab_ch310bc_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_CH310BC_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_ch310bc_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_CH310BC_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_ch310bc_02.wav",
+      "ir_index": 2,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_CH310BC_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_ch310bc_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_CH310BC_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_ch310bc_04.wav",
+      "ir_index": 4,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_CH310BC_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_ch310bc_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_CH310BC_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_ch310bc_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_CH310BC_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_ch310bc_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_CH410BC": {
+    "5c": {
+      "effect_name": "Bass_Cab_CH410BC_57_Cone",
+      "ir_file": "rocksmith/bass_cab_ch410bc_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_CH410BC_57_Edge",
+      "ir_file": "rocksmith/bass_cab_ch410bc_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_CH410BC_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_ch410bc_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_CH410BC_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_ch410bc_02.wav",
+      "ir_index": 2,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_CH410BC_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_ch410bc_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_CH410BC_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_ch410bc_04.wav",
+      "ir_index": 4,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_CH410BC_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_ch410bc_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_CH410BC_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_ch410bc_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_CH410BC_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_ch410bc_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_CS112BC": {
+    "5c": {
+      "effect_name": "Bass_Cab_CS112BC_57_Cone",
+      "ir_file": "rocksmith/bass_cab_cs112bc_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_CS112BC_57_Edge",
+      "ir_file": "rocksmith/bass_cab_cs112bc_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_CS112BC_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_cs112bc_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_CS112BC_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_cs112bc_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_CS112BC_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_cs112bc_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_CS112BC_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_cs112bc_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_CS112BC_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_cs112bc_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_CS112BC_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_cs112bc_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_CS15BC": {
+    "5c": {
+      "effect_name": "Bass_Cab_CS15BC_57_Cone",
+      "ir_file": "rocksmith/bass_cab_cs15bc_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_CS15BC_57_Edge",
+      "ir_file": "rocksmith/bass_cab_cs15bc_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_CS15BC_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_cs15bc_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_CS15BC_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_cs15bc_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_CS15BC_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_cs15bc_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_CS15BC_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_cs15bc_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_CS15BC_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_cs15bc_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_CS15BC_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_cs15bc_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_CS15BC_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_cs15bc_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_CS410BC": {
+    "5c": {
+      "effect_name": "Bass_Cab_CS410BC_57_Cone",
+      "ir_file": "rocksmith/bass_cab_cs410bc_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_CS410BC_57_Edge",
+      "ir_file": "rocksmith/bass_cab_cs410bc_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_CS410BC_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_cs410bc_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_CS410BC_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_cs410bc_02.wav",
+      "ir_index": 2,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_CS410BC_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_cs410bc_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_CS410BC_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_cs410bc_04.wav",
+      "ir_index": 4,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_CS410BC_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_cs410bc_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_CS410BC_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_cs410bc_08.wav",
+      "ir_index": 8,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_CS410BC_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_cs410bc_09.wav",
+      "ir_index": 9,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_EDEND115XLT": {
+    "5c": {
+      "effect_name": "Bass_Cab_EdenD115XLT_57_Cone",
+      "ir_file": "rocksmith/bass_cab_edend115xlt_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_EdenD115XLT_57_Edge",
+      "ir_file": "rocksmith/bass_cab_edend115xlt_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_EdenD115XLT_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_edend115xlt_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_EdenD115XLT_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_edend115xlt_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_EdenD115XLT_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_edend115xlt_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_EdenD115XLT_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_edend115xlt_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_EdenD115XLT_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_edend115xlt_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_EdenD115XLT_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_edend115xlt_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_EdenD115XLT_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_edend115xlt_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_EDEND212XLT": {
+    "5c": {
+      "effect_name": "Bass_Cab_EdenD212XLT_57_Cone",
+      "ir_file": "rocksmith/bass_cab_edend212xlt_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_EdenD212XLT_57_Edge",
+      "ir_file": "rocksmith/bass_cab_edend212xlt_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_EdenD212XLT_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_edend212xlt_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_EdenD212XLT_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_edend212xlt_02.wav",
+      "ir_index": 2,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_EdenD212XLT_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_edend212xlt_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_EdenD212XLT_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_edend212xlt_04.wav",
+      "ir_index": 4,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_EdenD212XLT_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_edend212xlt_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_EdenD212XLT_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_edend212xlt_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_EdenD212XLT_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_edend212xlt_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_EDEND410XST": {
+    "5c": {
+      "effect_name": "Bass_Cab_EdenD410XST_57_Cone",
+      "ir_file": "rocksmith/bass_cab_edend410xst_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_EdenD410XST_57_Edge",
+      "ir_file": "rocksmith/bass_cab_edend410xst_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_EdenD410XST_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_edend410xst_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_EdenD410XST_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_edend410xst_02.wav",
+      "ir_index": 2,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_EdenD410XST_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_edend410xst_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_EdenD410XST_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_edend410xst_04.wav",
+      "ir_index": 4,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_EdenD410XST_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_edend410xst_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_EdenD410XST_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_edend410xst_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_EdenD410XST_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_edend410xst_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_EDEND610XST": {
+    "5c": {
+      "effect_name": "Bass_Cab_EdenD610XST_57_Cone",
+      "ir_file": "rocksmith/bass_cab_edend610xst_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_EdenD610XST_57_Edge",
+      "ir_file": "rocksmith/bass_cab_edend610xst_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_EdenD610XST_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_edend610xst_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_EdenD610XST_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_edend610xst_02.wav",
+      "ir_index": 2,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_EdenD610XST_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_edend610xst_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_EdenD610XST_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_edend610xst_04.wav",
+      "ir_index": 4,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_EdenD610XST_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_edend610xst_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_EdenD610XST_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_edend610xst_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_EdenD610XST_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_edend610xst_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_GB415BC": {
+    "5c": {
+      "effect_name": "Bass_Cab_GB415BC_57_Cone",
+      "ir_file": "rocksmith/bass_cab_gb415bc_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_GB415BC_57_Edge",
+      "ir_file": "rocksmith/bass_cab_gb415bc_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_GB415BC_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_gb415bc_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_GB415BC_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_gb415bc_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_GB415BC_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_gb415bc_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_GB415BC_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_gb415bc_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_GB415BC_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_gb415bc_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_GB415BC_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_gb415bc_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_GB415BC_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_gb415bc_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_ORANGEOBC115": {
+    "5c": {
+      "effect_name": "Bass_Cab_OrangeOBC115_57_Cone",
+      "ir_file": "rocksmith/bass_cab_orangeobc115_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_OrangeOBC115_57_Edge",
+      "ir_file": "rocksmith/bass_cab_orangeobc115_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_OrangeOBC115_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_orangeobc115_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_OrangeOBC115_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_orangeobc115_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_OrangeOBC115_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_orangeobc115_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_OrangeOBC115_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_orangeobc115_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_OrangeOBC115_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_orangeobc115_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_OrangeOBC115_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_orangeobc115_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_OrangeOBC115_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_orangeobc115_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_ORANGEOBC810": {
+    "5c": {
+      "effect_name": "Bass_Cab_OrangeOBC810_57_Cone",
+      "ir_file": "rocksmith/bass_cab_orangeobc810_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_OrangeOBC810_57_Edge",
+      "ir_file": "rocksmith/bass_cab_orangeobc810_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_OrangeOBC810_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_orangeobc810_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_OrangeOBC810_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_orangeobc810_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_OrangeOBC810_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_orangeobc810_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_OrangeOBC810_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_orangeobc810_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_OrangeOBC810_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_orangeobc810_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_OrangeOBC810_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_orangeobc810_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_OrangeOBC810_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_orangeobc810_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Bass_Cab_TW215BC": {
+    "5c": {
+      "effect_name": "Bass_Cab_TW215BC_57_Cone",
+      "ir_file": "rocksmith/bass_cab_tw215bc_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Bass_Cab_TW215BC_57_Edge",
+      "ir_file": "rocksmith/bass_cab_tw215bc_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Bass_Cab_TW215BC_57_OffAxis",
+      "ir_file": "rocksmith/bass_cab_tw215bc_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Bass_Cab_TW215BC_Condenser_Cone",
+      "ir_file": "rocksmith/bass_cab_tw215bc_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Bass_Cab_TW215BC_Condenser_Edge",
+      "ir_file": "rocksmith/bass_cab_tw215bc_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Bass_Cab_TW215BC_Condenser_OffAxis",
+      "ir_file": "rocksmith/bass_cab_tw215bc_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "tc": {
+      "effect_name": "Bass_Cab_TW215BC_Tube_Cone",
+      "ir_file": "rocksmith/bass_cab_tw215bc_06.wav",
+      "ir_index": 6,
+      "label": "Tube Cone",
+      "mic_type": "Tube",
+      "position": "Cone (close)"
+    },
+    "te": {
+      "effect_name": "Bass_Cab_TW215BC_Tube_Edge",
+      "ir_file": "rocksmith/bass_cab_tw215bc_07.wav",
+      "ir_index": 7,
+      "label": "Tube Edge",
+      "mic_type": "Tube",
+      "position": "Edge"
+    },
+    "to": {
+      "effect_name": "Bass_Cab_TW215BC_Tube_OffAxis",
+      "ir_file": "rocksmith/bass_cab_tw215bc_08.wav",
+      "ir_index": 8,
+      "label": "Tube OffAxis",
+      "mic_type": "Tube",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_AT0112C": {
+    "5c": {
+      "effect_name": "Cab_AT0112C_57_Cone",
+      "ir_file": "rocksmith/cab_at0112c_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_AT0112C_57_Edge",
+      "ir_file": "rocksmith/cab_at0112c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_AT0112C_57_OffAxis",
+      "ir_file": "rocksmith/cab_at0112c_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_AT0112C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_at0112c_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_AT0112C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_at0112c_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_AT0112C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_at0112c_05.wav",
+      "ir_index": 5,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_AT0112C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_at0112c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_AT0112C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_at0112c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_AT0112C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_at0112c_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_AT1121C": {
+    "5c": {
+      "effect_name": "Cab_AT1121C_57_Cone",
+      "ir_file": "rocksmith/cab_at1121c_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_AT1121C_57_Edge",
+      "ir_file": "rocksmith/cab_at1121c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_AT1121C_57_OffAxis",
+      "ir_file": "rocksmith/cab_at1121c_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_AT1121C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_at1121c_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_AT1121C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_at1121c_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_AT1121C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_at1121c_05.wav",
+      "ir_index": 5,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_AT1121C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_at1121c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_AT1121C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_at1121c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_AT1121C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_at1121c_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_BT1120C": {
+    "5c": {
+      "effect_name": "Cab_BT1120C_57_Cone",
+      "ir_file": "rocksmith/cab_bt1120c_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_BT1120C_57_Edge",
+      "ir_file": "rocksmith/cab_bt1120c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_BT1120C_57_OffAxis",
+      "ir_file": "rocksmith/cab_bt1120c_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_BT1120C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_bt1120c_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_BT1120C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_bt1120c_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_BT1120C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_bt1120c_05.wav",
+      "ir_index": 5,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_BT1120C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_bt1120c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_BT1120C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_bt1120c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_BT1120C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_bt1120c_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_BT1121C": {
+    "5c": {
+      "effect_name": "Cab_BT1121C_57_Cone",
+      "ir_file": "rocksmith/cab_bt1121c_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_BT1121C_57_Edge",
+      "ir_file": "rocksmith/cab_bt1121c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_BT1121C_57_OffAxis",
+      "ir_file": "rocksmith/cab_bt1121c_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_BT1121C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_bt1121c_07.wav",
+      "ir_index": 7,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_BT1121C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_bt1121c_08.wav",
+      "ir_index": 8,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_BT1121C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_bt1121c_03.wav",
+      "ir_index": 3,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_BT1121C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_bt1121c_04.wav",
+      "ir_index": 4,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_BT1121C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_bt1121c_05.wav",
+      "ir_index": 5,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_BT1121C_Ribbon_OffAXis",
+      "ir_file": "rocksmith/cab_bt1121c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_BT410C": {
+    "5c": {
+      "effect_name": "Cab_BT410C_57_Cone",
+      "ir_file": "rocksmith/cab_bt410c_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_BT410C_57_Edge",
+      "ir_file": "rocksmith/cab_bt410c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_BT410C_57_OffAxis",
+      "ir_file": "rocksmith/cab_bt410c_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_BT410C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_bt410c_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_BT410C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_bt410c_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_BT410C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_bt410c_05.wav",
+      "ir_index": 5,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_BT410C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_bt410c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_BT410C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_bt410c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_BT410C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_bt410c_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_CA112C": {
+    "5c": {
+      "effect_name": "Cab_CA112C_57_Cone",
+      "ir_file": "rocksmith/cab_ca112c_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_CA112C_57_Edge",
+      "ir_file": "rocksmith/cab_ca112c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_CA112C_57_OffAxis",
+      "ir_file": "rocksmith/cab_ca112c_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_CA112C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_ca112c_08.wav",
+      "ir_index": 8,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_CA112C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_ca112c_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_CA112C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_ca112c_03.wav",
+      "ir_index": 3,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_CA112C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_ca112c_05.wav",
+      "ir_index": 5,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_CA112C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_ca112c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_CA112C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_ca112c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_CA215C": {
+    "5c": {
+      "effect_name": "Cab_CA215C_57_Cone",
+      "ir_file": "rocksmith/cab_ca215c_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_CA215C_57_Edge",
+      "ir_file": "rocksmith/cab_ca215c_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_CA215C_57_OffAxis",
+      "ir_file": "rocksmith/cab_ca215c_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_CA215C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_ca215c_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_CA215C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_ca215c_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_CA215C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_ca215c_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_CA215C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_ca215c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_CA215C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_ca215c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_CA215C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_ca215c_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_CA412C": {
+    "5c": {
+      "effect_name": "Cab_CA412C_57_Cone",
+      "ir_file": "rocksmith/cab_ca412c_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_CA412C_57_Edge",
+      "ir_file": "rocksmith/cab_ca412c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_CA412C_57_OffAxis",
+      "ir_file": "rocksmith/cab_ca412c_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_CA412C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_ca412c_08.wav",
+      "ir_index": 8,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_CA412C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_ca412c_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_CA412C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_ca412c_04.wav",
+      "ir_index": 4,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_CA412C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_ca412c_05.wav",
+      "ir_index": 5,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_CA412C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_ca412c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_CA412C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_ca412c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_CS1120C": {
+    "5c": {
+      "effect_name": "Cab_CS1120C_57_Cone",
+      "ir_file": "rocksmith/cab_cs1120c_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_CS1120C_57_Edge",
+      "ir_file": "rocksmith/cab_cs1120c_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_CS1120C_57_OffAxis",
+      "ir_file": "rocksmith/cab_cs1120c_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_CS1120C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_cs1120c_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_CS1120C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_cs1120c_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_CS1120C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_cs1120c_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_CS1120C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_cs1120c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_CS1120C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_cs1120c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_CS1120C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_cs1120c_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_CS1515C": {
+    "5c": {
+      "effect_name": "Cab_CS1515C_57_Cone",
+      "ir_file": "rocksmith/cab_cs1515c_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_CS1515C_57_Edge",
+      "ir_file": "rocksmith/cab_cs1515c_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_CS1515C_57_OffAxis",
+      "ir_file": "rocksmith/cab_cs1515c_05.wav",
+      "ir_index": 5,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_CS1515C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_cs1515c_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_CS1515C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_cs1515c_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_CS1515C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_cs1515c_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_CS1515C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_cs1515c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_CS1515C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_cs1515c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_CS1515C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_cs1515c_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_CS212C": {
+    "5c": {
+      "effect_name": "Cab_CS212C_57_Cone",
+      "ir_file": "rocksmith/cab_cs212c_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_CS212C_57_Edge",
+      "ir_file": "rocksmith/cab_cs212c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_CS212C_57_OffAxis",
+      "ir_file": "rocksmith/cab_cs212c_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_CS212C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_cs212c_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_CS212C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_cs212c_05.wav",
+      "ir_index": 5,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_CS212C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_cs212c_03.wav",
+      "ir_index": 3,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_CS212C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_cs212c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_CS212C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_cs212c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_CS212C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_cs212c_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_EN212C": {
+    "5c": {
+      "effect_name": "Cab_EN212C_57_Cone",
+      "ir_file": "rocksmith/cab_en212c_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_EN212C_57_Edge",
+      "ir_file": "rocksmith/cab_en212c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_EN212C_57_OffAxis",
+      "ir_file": "rocksmith/cab_en212c_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_EN212C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_en212c_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_EN212C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_en212c_05.wav",
+      "ir_index": 5,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_EN212C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_en212c_03.wav",
+      "ir_index": 3,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_EN212C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_en212c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_EN212C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_en212c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_EN212C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_en212c_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_EN4120C": {
+    "5c": {
+      "effect_name": "Cab_EN4120C_57_Cone",
+      "ir_file": "rocksmith/cab_en4120c_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_EN4120C_57_Edge",
+      "ir_file": "rocksmith/cab_en4120c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_EN4120C_57_OffAxis",
+      "ir_file": "rocksmith/cab_en4120c_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_EN4120C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_en4120c_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_EN4120C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_en4120c_05.wav",
+      "ir_index": 5,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_EN4120C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_en4120c_03.wav",
+      "ir_index": 3,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_EN4120C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_en4120c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_EN4120C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_en4120c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_EN4120C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_en4120c_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_GB412CMKI": {
+    "5c": {
+      "effect_name": "Cab_GB412CMKI_57_Cone",
+      "ir_file": "rocksmith/cab_gb412cmki_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_GB412CMKI_57_Edge",
+      "ir_file": "rocksmith/cab_gb412cmki_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_GB412CMKI_57_OffAxis",
+      "ir_file": "rocksmith/cab_gb412cmki_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_GB412CMKI_Condenser_Cone",
+      "ir_file": "rocksmith/cab_gb412cmki_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_GB412CMKI_Condenser_Edge",
+      "ir_file": "rocksmith/cab_gb412cmki_05.wav",
+      "ir_index": 5,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_GB412CMKI_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_gb412cmki_03.wav",
+      "ir_index": 3,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_GB412CMKI_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_gb412cmki_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_GB412CMKI_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_gb412cmki_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_GB412CMKI_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_gb412cmki_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_GB412CMKII": {
+    "5c": {
+      "effect_name": "Cab_GB412CMKII_57_Cone",
+      "ir_file": "rocksmith/cab_gb412cmkii_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_GB412CMKII_57_Edge",
+      "ir_file": "rocksmith/cab_gb412cmkii_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_GB412CMKII_57_OffAxis",
+      "ir_file": "rocksmith/cab_gb412cmkii_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_GB412CMKII_Condenser_Cone",
+      "ir_file": "rocksmith/cab_gb412cmkii_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_GB412CMKII_Condenser_Edge",
+      "ir_file": "rocksmith/cab_gb412cmkii_05.wav",
+      "ir_index": 5,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_GB412CMKII_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_gb412cmkii_03.wav",
+      "ir_index": 3,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_GB412CMKII_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_gb412cmkii_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_GB412CMKII_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_gb412cmkii_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_GB412CMKII_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_gb412cmkii_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_GB412CMKIII": {
+    "5c": {
+      "effect_name": "Cab_GB412CMKIII_57_Cone",
+      "ir_file": "rocksmith/cab_gb412cmkiii_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_GB412CMKIII_57_Edge",
+      "ir_file": "rocksmith/cab_gb412cmkiii_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_GB412CMKIII_57_OffAxis",
+      "ir_file": "rocksmith/cab_gb412cmkiii_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_GB412CMKIII_Condenser_Cone",
+      "ir_file": "rocksmith/cab_gb412cmkiii_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_GB412CMKIII_Condenser_Edge",
+      "ir_file": "rocksmith/cab_gb412cmkiii_05.wav",
+      "ir_index": 5,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_GB412CMKIII_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_gb412cmkiii_03.wav",
+      "ir_index": 3,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_GB412CMKIII_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_gb412cmkiii_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_GB412CMKIII_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_gb412cmkiii_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_GB412CMKIII_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_gb412cmkiii_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_HG2120C": {
+    "5c": {
+      "effect_name": "Cab_HG2120C_57_Cone",
+      "ir_file": "rocksmith/cab_hg2120c_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_HG2120C_57_Edge",
+      "ir_file": "rocksmith/cab_hg2120c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_HG2120C_57_OffAxis",
+      "ir_file": "rocksmith/cab_hg2120c_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_HG2120C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_hg2120c_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_HG2120C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_hg2120c_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_HG2120C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_hg2120c_05.wav",
+      "ir_index": 5,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_HG2120C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_hg2120c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_HG2120C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_hg2120c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_HG2120C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_hg2120c_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_HG212C": {
+    "5c": {
+      "effect_name": "Cab_HG212C_57_Cone",
+      "ir_file": "rocksmith/cab_hg212c_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_HG212C_57_Edge",
+      "ir_file": "rocksmith/cab_hg212c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_HG212C_57_OffAxis",
+      "ir_file": "rocksmith/cab_hg212c_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_HG212C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_hg212c_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_HG212C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_hg212c_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_HG212C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_hg212c_05.wav",
+      "ir_index": 5,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_HG212C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_hg212c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_HG212C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_hg212c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_HG212C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_hg212c_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_HG215C": {
+    "5c": {
+      "effect_name": "Cab_HG215C_57_Cone",
+      "ir_file": "rocksmith/cab_hg215c_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_HG215C_57_Edge",
+      "ir_file": "rocksmith/cab_hg215c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_HG215C_57_OffAxis",
+      "ir_file": "rocksmith/cab_hg215c_04.wav",
+      "ir_index": 4,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_HG215C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_hg215c_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_HG215C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_hg215c_01.wav",
+      "ir_index": 1,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_HG215C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_hg215c_02.wav",
+      "ir_index": 2,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_HG215C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_hg215c_05.wav",
+      "ir_index": 5,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_HG215C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_hg215c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_HG215C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_hg215c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_MARSHALL1936": {
+    "5c": {
+      "effect_name": "Cab_Marshall1936_57_Cone",
+      "ir_file": "rocksmith/cab_marshall1936_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_Marshall1936_57_Edge",
+      "ir_file": "rocksmith/cab_marshall1936_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_Marshall1936_57_OffAxis",
+      "ir_file": "rocksmith/cab_marshall1936_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_Marshall1936_Condenser_Cone",
+      "ir_file": "rocksmith/cab_marshall1936_07.wav",
+      "ir_index": 7,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_Marshall1936_Condenser_Edge",
+      "ir_file": "rocksmith/cab_marshall1936_08.wav",
+      "ir_index": 8,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_Marshall1936_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_marshall1936_03.wav",
+      "ir_index": 3,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_Marshall1936_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_marshall1936_04.wav",
+      "ir_index": 4,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_Marshall1936_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_marshall1936_05.wav",
+      "ir_index": 5,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_Marshall1936_Ribbon_OffAXis",
+      "ir_file": "rocksmith/cab_marshall1936_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_MARSHALL1960A": {
+    "5c": {
+      "effect_name": "Cab_Marshall1960a_57_Cone",
+      "ir_file": "rocksmith/cab_marshall1960a_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_Marshall1960a_57_Edge",
+      "ir_file": "rocksmith/cab_marshall1960a_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_Marshall1960a_57_OffAxis",
+      "ir_file": "rocksmith/cab_marshall1960a_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_Marshall1960a_Condenser_Edge",
+      "ir_file": "rocksmith/cab_marshall1960a_05.wav",
+      "ir_index": 5,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_Marshall1960a_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_marshall1960a_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_Marshall1960a_Condenser_Cone",
+      "ir_file": "rocksmith/cab_marshall1960a_04.wav",
+      "ir_index": 4,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_Marshall1960a_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_marshall1960a_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_Marshall1960a_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_marshall1960a_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_Marshall1960a_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_marshall1960a_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_MARSHALL1960AX": {
+    "5c": {
+      "effect_name": "Cab_Marshall1960AX_57_Cone",
+      "ir_file": "rocksmith/cab_marshall1960ax_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_Marshall1960AX_57_Edge",
+      "ir_file": "rocksmith/cab_marshall1960ax_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_Marshall1960AX_57_OffAxis",
+      "ir_file": "rocksmith/cab_marshall1960ax_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_Marshall1960AX_Condenser_Cone",
+      "ir_file": "rocksmith/cab_marshall1960ax_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_Marshall1960AX_Condenser_Edge",
+      "ir_file": "rocksmith/cab_marshall1960ax_05.wav",
+      "ir_index": 5,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_Marshall1960AX_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_marshall1960ax_03.wav",
+      "ir_index": 3,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_Marshall1960AX_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_marshall1960ax_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_Marshall1960AX_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_marshall1960ax_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_Marshall1960AX_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_marshall1960ax_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_MARSHALL1960TV": {
+    "5c": {
+      "effect_name": "Cab_Marshall1960TV_57_Cone",
+      "ir_file": "rocksmith/cab_marshall1960tv_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_Marshall1960TV_57_Edge",
+      "ir_file": "rocksmith/cab_marshall1960tv_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_Marshall1960TV_57_OffAxis",
+      "ir_file": "rocksmith/cab_marshall1960tv_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_Marshall1960TV_Condenser_Cone",
+      "ir_file": "rocksmith/cab_marshall1960tv_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_Marshall1960TV_Condenser_Edge",
+      "ir_file": "rocksmith/cab_marshall1960tv_05.wav",
+      "ir_index": 5,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_Marshall1960TV_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_marshall1960tv_03.wav",
+      "ir_index": 3,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_Marshall1960TV_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_marshall1960tv_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_Marshall1960TV_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_marshall1960tv_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_Marshall1960TV_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_marshall1960tv_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_ORANGEJIMMYBEAN": {
+    "5c": {
+      "effect_name": "Cab_OrangeJimmyBean_57_Cone",
+      "ir_file": "rocksmith/cab_orangejimmybean_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_OrangeJimmyBean_57_Edge",
+      "ir_file": "rocksmith/cab_orangejimmybean_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_OrangeJimmyBean_57_OffAxis",
+      "ir_file": "rocksmith/cab_orangejimmybean_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_OrangeJimmyBean_Condenser_Cone",
+      "ir_file": "rocksmith/cab_orangejimmybean_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_OrangeJimmyBean_Condenser_Edge",
+      "ir_file": "rocksmith/cab_orangejimmybean_05.wav",
+      "ir_index": 5,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_OrangeJimmyBean_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_orangejimmybean_03.wav",
+      "ir_index": 3,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_OrangeJimmyBean_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_orangejimmybean_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_OrangeJimmyBean_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_orangejimmybean_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_OrangeJimmyBean_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_orangejimmybean_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_ORANGEPPC212OB": {
+    "5c": {
+      "effect_name": "Cab_OrangePPC212OB_57_Cone",
+      "ir_file": "rocksmith/cab_orangeppc212ob_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_OrangePPC212OB_57_Edge",
+      "ir_file": "rocksmith/cab_orangeppc212ob_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_OrangePPC212OB_57_OffAxis",
+      "ir_file": "rocksmith/cab_orangeppc212ob_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_OrangePPC212OB_Condenser_Cone",
+      "ir_file": "rocksmith/cab_orangeppc212ob_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_OrangePPC212OB_Condenser_Edge",
+      "ir_file": "rocksmith/cab_orangeppc212ob_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_OrangePPC212OB_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_orangeppc212ob_05.wav",
+      "ir_index": 5,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_OrangePPC212OB_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_orangeppc212ob_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_OrangePPC212OB_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_orangeppc212ob_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_OrangePPC212OB_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_orangeppc212ob_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_ORANGEPPC412": {
+    "5c": {
+      "effect_name": "Cab_OrangePPC412_57_Cone",
+      "ir_file": "rocksmith/cab_orangeppc412_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_OrangePPC412_57_Edge",
+      "ir_file": "rocksmith/cab_orangeppc412_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_OrangePPC412_57_OffAxis",
+      "ir_file": "rocksmith/cab_orangeppc412_03.wav",
+      "ir_index": 3,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_OrangePPC412_Condenser_Cone",
+      "ir_file": "rocksmith/cab_orangeppc412_05.wav",
+      "ir_index": 5,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_OrangePPC412_Condenser_Edge",
+      "ir_file": "rocksmith/cab_orangeppc412_00.wav",
+      "ir_index": 0,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_OrangePPC412_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_orangeppc412_04.wav",
+      "ir_index": 4,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_OrangePPC412_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_orangeppc412_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_OrangePPC412_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_orangeppc412_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_OrangePPC412_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_orangeppc412_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_TW110C": {
+    "5c": {
+      "effect_name": "Cab_TW110C_57_Cone",
+      "ir_file": "rocksmith/cab_tw110c_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_TW110C_57_Edge",
+      "ir_file": "rocksmith/cab_tw110c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_TW110C_57_OffAxis",
+      "ir_file": "rocksmith/cab_tw110c_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_TW110C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_tw110c_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_TW110C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_tw110c_05.wav",
+      "ir_index": 5,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_TW110C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_tw110c_03.wav",
+      "ir_index": 3,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_TW110C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_tw110c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_TW110C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_tw110c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_TW110C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_tw110c_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_TW112C": {
+    "5c": {
+      "effect_name": "Cab_TW112C_57_Cone",
+      "ir_file": "rocksmith/cab_tw112c_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_TW112C_57_Edge",
+      "ir_file": "rocksmith/cab_tw112c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_TW112C_57_OffAxis",
+      "ir_file": "rocksmith/cab_tw112c_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_TW112C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_tw112c_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_TW112C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_tw112c_05.wav",
+      "ir_index": 5,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_TW112C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_tw112c_03.wav",
+      "ir_index": 3,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_TW112C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_tw112c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_TW112C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_tw112c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_TW112C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_tw112c_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  },
+  "Cab_TW410C": {
+    "5c": {
+      "effect_name": "Cab_TW410C_57_Cone",
+      "ir_file": "rocksmith/cab_tw410c_00.wav",
+      "ir_index": 0,
+      "label": "Dynamic Cone",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Cone (close)"
+    },
+    "5e": {
+      "effect_name": "Cab_TW410C_57_Edge",
+      "ir_file": "rocksmith/cab_tw410c_01.wav",
+      "ir_index": 1,
+      "label": "Dynamic Edge",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Edge"
+    },
+    "5o": {
+      "effect_name": "Cab_TW410C_57_OffAxis",
+      "ir_file": "rocksmith/cab_tw410c_02.wav",
+      "ir_index": 2,
+      "label": "Dynamic OffAxis",
+      "mic_type": "Dynamic (SM57)",
+      "position": "Off-axis"
+    },
+    "cc": {
+      "effect_name": "Cab_TW410C_Condenser_Cone",
+      "ir_file": "rocksmith/cab_tw410c_03.wav",
+      "ir_index": 3,
+      "label": "Condenser Cone",
+      "mic_type": "Condenser",
+      "position": "Cone (close)"
+    },
+    "ce": {
+      "effect_name": "Cab_TW410C_Condenser_Edge",
+      "ir_file": "rocksmith/cab_tw410c_04.wav",
+      "ir_index": 4,
+      "label": "Condenser Edge",
+      "mic_type": "Condenser",
+      "position": "Edge"
+    },
+    "co": {
+      "effect_name": "Cab_TW410C_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_tw410c_05.wav",
+      "ir_index": 5,
+      "label": "Condenser OffAxis",
+      "mic_type": "Condenser",
+      "position": "Off-axis"
+    },
+    "rc": {
+      "effect_name": "Cab_TW410C_Ribbon_Cone",
+      "ir_file": "rocksmith/cab_tw410c_06.wav",
+      "ir_index": 6,
+      "label": "Ribbon Cone",
+      "mic_type": "Ribbon",
+      "position": "Cone (close)"
+    },
+    "re": {
+      "effect_name": "Cab_TW410C_Ribbon_Edge",
+      "ir_file": "rocksmith/cab_tw410c_07.wav",
+      "ir_index": 7,
+      "label": "Ribbon Edge",
+      "mic_type": "Ribbon",
+      "position": "Edge"
+    },
+    "ro": {
+      "effect_name": "Cab_TW410C_Ribbon_OffAxis",
+      "ir_file": "rocksmith/cab_tw410c_08.wav",
+      "ir_index": 8,
+      "label": "Ribbon OffAxis",
+      "mic_type": "Ribbon",
+      "position": "Off-axis"
+    }
+  }
+}

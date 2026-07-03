@@ -1,0 +1,12 @@
+/* DynamicsCompression stompbox UI — shared pedal_ui template. */
+#include "DynamicsCompressionParams.h"
+#define PEDAL_TITLE  "COMPRESSION"
+#define PEDAL_NAMES  kDynamicsCompressionNames
+#define PEDAL_DEFS   kDynamicsCompressionDef
+#define PEDAL_ACR 165
+#define PEDAL_ACG 24
+#define PEDAL_ACB 18
+#define PEDAL_W 320
+#define PEDAL_H 440
+#define PEDAL_KNOBS { {0.32f,0.22f,0.115f}, {0.68f,0.22f,0.115f} }
+#include "../_shared/pedal_ui.hpp"

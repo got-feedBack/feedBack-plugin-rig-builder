@@ -1,0 +1,236 @@
+name: Build Linux VST3 binaries
+
+# Why: the bundled effects in vst/*.vst3 ship with macOS (Contents/MacOS/<Name>)
+# and Windows (Contents/x86_64-win/<Name>.vst3) binaries, but no Linux build.
+# On Linux the host (Slopsmith Desktop's JUCE VST3 sandbox) resolves the binary
+# at Contents/<machine>-linux/<Name>.so, where <machine> comes from `uname -m`
+# (so x86_64-linux on a normal box). With no such folder the bundles can't load
+# and the plugin has no Linux support.
+#
+# This workflow cross-builds every DPF plugin for Linux and injects the
+# x86_64-linux binary into each committed bundle, mirroring build-windows-vst3.yml
+# so the bundles become fully cross-platform (macOS + Windows + Linux).
+#
+# Run it manually from the Actions tab (workflow_dispatch). It commits the new
+# Linux binaries back to the branch it ran on.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dpf_ref:
+        description: "DISTRHO/DPF git ref to build against"
+        default: "main"
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    # ubuntu-22.04 matches the slopsmith-desktop build/sandbox runners, so the
+    # glibc the .so links against is no newer than what the shipped AppImage/deb
+    # target.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        # DPF's default UI is its OpenGL backend (DGL), so the effects with a
+        # FILES_UI need the X11 + GL dev headers, not just a compiler. libdbus
+        # is required too: DGL's pugl file-browser links libdbus-1 on Linux, and
+        # without the -dev package the final link fails with undefined
+        # dbus_* references.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            libgl1-mesa-dev libdbus-1-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxinerama-dev
+
+      - name: Clone DPF (with submodules — pugl is needed for the DGL UI)
+        run: |
+          git clone --depth 1 --branch "${{ github.event.inputs.dpf_ref }}" \
+            https://github.com/DISTRHO/DPF.git "$GITHUB_WORKSPACE/dpf"
+          git -C "$GITHUB_WORKSPACE/dpf" submodule update --init --recursive
+
+      - name: Build every VST3 for Linux
+        run: |
+          set +e
+          DPF="$GITHUB_WORKSPACE/dpf"
+          # Seven effect Makefiles hardcode `include ../../DPF/...` (ignoring
+          # DPF_PATH), so expose DPF at the relative path they expect: vst/DPF.
+          ln -sfn "$DPF" "$GITHUB_WORKSPACE/vst/DPF"
+          cd "$GITHUB_WORKSPACE/vst/src"
+          # Post-reorg the effects moved to <cat>/<name>/ and 110+ of them include
+          # "../_shared/...". After the split that must resolve to <cat>/_shared,
+          # so symlink _shared into each category dir.
+          for cat in amps pedals racks; do
+            [ -d "$cat" ] && [ -d _shared ] && ln -sfn ../_shared "$cat/_shared"
+          done
+          fail=""
+          # Set DPF_BUILD_DIR/DPF_TARGET_DIR explicitly: with an absolute
+          # DPF_PATH, DPF's BASE_PATH heuristic mis-resolves the default output
+          # dir, so pin both to a writable per-effect location (bin/<Name>.vst3).
+          build() {
+            ( cd "$1" && rm -rf build bin \
+                && make -j2 DPF_PATH="$DPF" DPF_BUILD_DIR="$PWD/build" DPF_TARGET_DIR="$PWD/bin" vst3 ) \
+              || fail="$fail $1"
+          }
+          # root Makefile builds AutoSweep (the QTron envelope filter)
+          [ -f Makefile ] && build .
+          # Effects are now TWO levels deep: <cat>/<name>/Makefile (was */Makefile,
+          # which matched nothing post-reorg -> "FAILED DIRS: *").
+          for mk in */*/Makefile; do
+            d=$(dirname "$mk")
+            case "$d" in DPF/*|*/DPF|*/_shared|*/mark_shared|RBFinalLeveler/*|*/build) continue;; esac
+            echo "==== building $d ===="
+            build "$d"
+          done
+          for cat in amps pedals racks; do rm -f "$cat/_shared"; done
+          rm -f "$GITHUB_WORKSPACE/vst/DPF"
+          echo "FAILED DIRS:$fail"
+
+      - name: Inject x86_64-linux binaries into the committed bundles
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          # A few committed bundle folders use hyphens/spaces while the DPF
+          # NAME (and built bundle) does not — map built name -> committed dir.
+          alias_of() {
+            case "$1" in
+              SuperBuzz.vst3) echo "Super-Buzz.vst3";;
+              BigBuzz.vst3)   echo "Big Buzz.vst3";;
+              BuzzTone.vst3)  echo "Buzz-Tone.vst3";;
+              BZ1.vst3)       echo "BZ-1.vst3";;
+              StandardDistortion.vst3) echo "DS-1.vst3";;
+              AlloyDistortion.vst3)    echo "HM-2.vst3";;
+              ShredZone.vst3)          echo "MT-2.vst3";;
+              VintageDistortion.vst3)  echo "Vintage Distortion.vst3";;
+              BassDistortion.vst3)     echo "Mouse.vst3";;
+              BassFuzz.vst3)           echo "Bass Big Buzz.vst3";;
+              CustomDrive.vst3)        echo "CDO.vst3";;
+              GermaniumDrive.vst3)     echo "Germanium Drive.vst3";;
+              RangeBooster.vst3)       echo "Range Booster.vst3";;
+              LineDrive.vst3)          echo "OS-2.vst3";;
+              SuperDrive.vst3)         echo "SD-1.vst3";;
+              MarshallGuvnorPlus.vst3) echo "GM-2.vst3";;
+              BassOverdrive.vst3)      echo "BLACKBRASS.vst3";;
+              Chorus.vst3)             echo "CH-2.vst3";;
+              DigitalChorus.vst3)      echo "CH-5.vst3";;
+              Chorus20.vst3)           echo "Deja Chorus.vst3";;
+              AnalogChorus.vst3)       echo "134 Stereo Chorus.vst3";;
+              BassChorus.vst3)         echo "CB-3.vst3";;
+              SendInTheClones.vst3)    echo "Attack of the Clones.vst3";;
+              ClassicFlanger.vst3)     echo "FL-2.vst3";;
+              BassFlanger.vst3)        echo "FL-3.vst3";;
+              ModernFlanger.vst3)      echo "FM107.vst3";;
+              VintageFlanger.vst3)     echo "Deluxe Servant.vst3";;
+              EightiesFlanger.vst3)    echo "N117R Flanger.vst3";;
+              ShaverPhaser.vst3)       echo "PH-1.vst3";;
+              Phaser363.vst3)          echo "phase 90.vst3";;
+              BassPhase.vst3)          echo "phase 99.vst3";;
+              PlanePhase.vst3)         echo "Rocket Phase.vst3";;
+              MultiTrem.vst3)          echo "TR-2.vst3";;
+              AmpTrem.vst3)            echo "Mega-Trem.vst3";;
+              TremOle.vst3)            echo "Dyna-Trem.vst3";;
+              MultiVibe.vst3)          echo "VB-2.vst3";;
+              MarshallSupervibe.vst3)  echo "UV-1.vst3";;
+              OmniMod.vst3)            echo "UniMod.vst3";;
+              AmpVibe.vst3)            echo "Multi-Vibe.vst3";;
+              AutoVibe.vst3)           echo "Oceanduct.vst3";;
+              BakedRotatoe.vst3)       echo "RT-2.vst3";;
+              BassFilterDelay.vst3)    echo "DL-3.vst3";;
+              BassFilterEcho.vst3)     echo "SE-3.vst3";;
+              AnalogDelay.vst3)        echo "FM104.vst3";;
+              CosmicEcho.vst3)         echo "Galaxy Echo.vst3";;
+              ModDelay.vst3)           echo "DL9.vst3";;
+              NpnDelay.vst3)           echo "DM-2.vst3";;
+              NoFiEcho.vst3)           echo "No Fi Echo.vst3";;
+              OilCanEcho.vst3)         echo "Oil Can Echo.vst3";;
+              ValveEcho.vst3)          echo "Valve Echo.vst3";;
+              DigitalVerb.vst3)        echo "RV-2.vst3";;
+              PlateVerb.vst3)          echo "VOODOO.vst3";;
+              SpringReverb.vst3)       echo "Holy Spring.vst3";;
+              TubeSpring.vst3)         echo "Real Spring.vst3";;
+              Limiter.vst3)            echo "LM-2.vst3";;
+              NoiseGate.vst3)          echo "NF-1.vst3";;
+              DynamicsCompression.vst3) echo "dyna comp.vst3";;
+              BassMultiComp.vst3)      echo "Multi Comp.vst3";;
+              StudioComp.vst3)         echo "HZX.vst3";;
+              Swole.vst3)              echo "Beta Fist.vst3";;
+              USWah.vst3)              echo "Cry Man.vst3";;
+              UKWah.vst3)              echo "BOX B847.vst3";;
+              ModernWah.vst3)          echo "Jockey Bad.vst3";;
+              BassWah.vst3)            echo "Bass Wah.vst3";;
+              AutoSweep.vst3)          echo "Qtrix.vst3";;
+              AutoFilter.vst3)         echo "BU-TRON III.vst3";;
+              BobFilter.vst3)          echo "FM105.vst3";;
+              LoFiFilter.vst3)         echo "Lo Fi Filter.vst3";;
+              BassEQ8.vst3)            echo "GEB-8.vst3";;
+              AmpEQ.vst3)              echo "FBM-1.vst3";;
+              EQ8.vst3)                echo "GE-8.vst3";;
+              StudioEQ.vst3)           echo "LNG.vst3";;
+              StudioGraphicEQ.vst3)    echo "G-550.vst3";;
+              OctaveUp.vst3)           echo "OCTUP.vst3";;
+              Octavius.vst3)           echo "OC-5.vst3";;
+              MultiPitch.vst3)         echo "Multi Pitch.vst3";;
+              BassSubOctave.vst3)      echo "SO-2.vst3";;
+              AcousticSimulator.vst3)  echo "Acoustic Emulator.vst3";;
+              BassEmulator.vst3)       echo "Bass Emulator.vst3";;
+              Enbiggenator.vst3)       echo "MIME.vst3";;
+              BassEnbig.vst3)          echo "ENBIGGEN.vst3";;
+              EdenWTDI.vst3)           echo "WT-DX.vst3";;
+              EN30.vst3)               echo "BOX DC30.vst3";;
+              TW22.vst3)               echo "BENDER SUPERNOVA 22.vst3";;
+              TW26.vst3)               echo "BENDER DELUXE.vst3";;
+              *)              echo "$1";;
+            esac
+          }
+          count=0
+          # DPF writes the built bundle under each plugin dir (bin/<Name>.vst3).
+          while IFS= read -r lin; do
+            built=$(basename "$(dirname "$(dirname "$lin")")")   # <Name>.vst3
+            bundle=$(alias_of "$built")
+            # Committed bundles moved into vst/{amps,pedals,racks}/ (the reorg),
+            # so search those subdirs, not the old flat vst/<bundle>.
+            dst=""
+            for cat in amps pedals racks; do
+              [ -d "vst/$cat/$bundle" ] && dst="vst/$cat/$bundle" && break
+            done
+            if [ -n "$dst" ]; then
+              dest="$dst/Contents/x86_64-linux"
+              rm -rf "$dest"; mkdir -p "$dest"
+              cp -R "$lin/." "$dest/"
+              echo "injected: $built -> $dst"
+              count=$((count+1))
+            else
+              echo "WARNING: built $built but no committed bundle vst/{amps,pedals,racks}/$bundle"
+            fi
+          done < <(find vst/src -type d -path '*/Contents/x86_64-linux')
+          echo "injected $count bundles"
+
+      - name: Commit the Linux binaries
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          git config user.name  "linux-vst-bot"
+          git config user.email "linux-vst-bot@users.noreply.github.com"
+          git add vst/*/*/Contents/x86_64-linux || true
+          if git diff --cached --quiet; then
+            echo "No Linux binaries to commit (check the build log for failures)."
+          else
+            git commit -m "Add Linux (x86_64-linux) VST3 binaries to bundled effects"
+            # The Windows workflow can push to this same branch concurrently —
+            # rebase onto the remote before pushing, with retries, to avoid a
+            # non-fast-forward (git exit 128).
+            for i in 1 2 3 4 5; do
+              git pull --rebase origin "${{ github.ref_name }}" || true
+              git push && break
+              echo "push attempt $i failed (remote moved?) — retrying"; sleep 5
+            done
+          fi
+
+      - name: Upload as artifact too
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-vst3
+          path: vst/src/**/Contents/x86_64-linux/**
+          if-no-files-found: warn

@@ -1,0 +1,175 @@
+{
+  "id": "rig_builder",
+  "name": "Rig Builder",
+  "version": "2.10.1",
+  "private": false,
+  "description": "Build guitar & bass rigs — amps, cabs, pedals and cab IRs — for the songs in your Slopsmith library.",
+  "category": "audio",
+  "icon": "assets/thumb.svg",
+  "nav": { "label": "Rig Builder", "screen": "plugin-rig_builder" },
+  "screen": "screen.html",
+  "script": "screen.js",
+  "routes": "routes.py",
+  "standards": ["capability-pipelines.v1", "plugin-runtime-idempotent.v1"],
+  "ui": [
+    {
+      "id": "rig-builder-nav",
+      "surface": "navigation",
+      "region": "primary-nav.plugins",
+      "label": "Rig Builder",
+      "targetScreenId": "plugin-rig_builder"
+    },
+    {
+      "id": "rig-builder-screen",
+      "surface": "plugin-screen",
+      "region": "screens.plugins",
+      "label": "Rig Builder",
+      "screenId": "plugin-rig_builder"
+    }
+  ],
+  "capabilities": {
+    "ui.navigation": {
+      "roles": ["provider", "observer"],
+      "operations": ["register-entry", "register-screen"],
+      "events": ["ui-navigation:screen-registered", "ui-navigation:bridge-hit"],
+      "mode": "active",
+      "compatibility": "shim-allowed",
+      "ownership": "multi-provider",
+      "safety": "safe",
+      "version": 1,
+      "description": "Registers the Rig Builder navigation entry and plugin screen through the current UI capability hosts."
+    },
+    "ui.plugin-screens": {
+      "roles": ["provider", "observer"],
+      "operations": ["register-screen", "lifecycle"],
+      "events": ["ui-navigation:screen-registered", "ui-navigation:screen-lifecycle"],
+      "mode": "active",
+      "compatibility": "shim-allowed",
+      "ownership": "multi-provider",
+      "safety": "safe",
+      "version": 1,
+      "description": "Contributes the mounted Rig Builder plugin screen."
+    },
+    "library": {
+      "roles": ["requester", "observer"],
+      "requests": ["list-providers", "refresh-providers", "get-current", "select-provider", "sync-song", "inspect"],
+      "observes": ["providers-refreshed", "source-changed", "song-sync-started", "song-sync-succeeded", "song-sync-failed"],
+      "mode": "active",
+      "compatibility": "none",
+      "ownership": "requester-only",
+      "safety": "safe",
+      "version": 1,
+      "description": "Uses Slopsmith library providers for Rig Builder song search and remote song sync without registering its own browsable library source."
+    },
+    "audio-effects": {
+      "roles": ["provider", "requester", "observer"],
+      "commands": ["select-chain", "bypass", "restore", "fallback", "inspect-route"],
+      "requests": ["select-chain", "bypass", "restore", "fallback", "inspect-route", "upsert-mapping"],
+      "operations": ["chain.resolve", "chain.inspect", "segment.activate", "stage.set-bypass", "stage.set-parameter", "fallback"],
+      "events": ["audio-effects:provider-registered", "audio-effects:route-selected", "audio-effects:plan-resolved", "audio-effects:changed", "audio-effects:fallback", "audio-effects:bridge-hit"],
+      "mode": "active",
+      "compatibility": "shim-allowed",
+      "ownership": "multi-provider",
+      "safety": "sensitive",
+      "version": 1,
+      "description": "Coordinates song tone chains into native NAM/VST/IR audio-effects routes while keeping model, IR, preset, and path internals private."
+    },
+    "playback": {
+      "roles": ["observer"],
+      "kind": "lifecycle",
+      "observes": ["ready", "stopped", "ended"],
+      "mode": "active",
+      "compatibility": "shim-allowed",
+      "ownership": "observer-only",
+      "safety": "safe",
+      "version": 1,
+      "description": "Observes playback readiness to keep Rig Builder full-chain and mega-chain state aligned with playback v1 while retaining legacy song-event fallbacks."
+    },
+    "jobs": {
+      "roles": ["provider", "observer"],
+      "operations": ["job.enqueue", "job.status", "job.cancel"],
+      "events": ["queued", "started", "progress", "completed", "failed", "bridge-hit"],
+      "mode": "active",
+      "compatibility": "shim-allowed",
+      "ownership": "multi-provider",
+      "safety": "privileged",
+      "version": 1,
+      "description": "Surfaces Rig Builder batch mapping, curated downloads, and capture import workflows as safe long-running job summaries."
+    },
+    "privileged-capabilities": {
+      "roles": ["provider", "requester", "observer"],
+      "requests": ["inspect", "check-approval-boundary", "record-outcome", "record-bridge-hit", "link-job"],
+      "observes": ["operation-authorized", "operation-blocked", "job-linked", "bridge-hit"],
+      "mode": "active",
+      "compatibility": "shim-allowed",
+      "ownership": "privileged",
+      "safety": "privileged",
+      "version": 1,
+      "description": "Inventories Rig Builder backend routes, media import/export, tone3000 service access, and subprocess-backed media tools for privileged diagnostics."
+    }
+  },
+  "privileged_capabilities": [
+    {
+      "participantId": "rig_builder.backend_routes",
+      "surface": "backend-route",
+      "roles": ["provider", "observer"],
+      "operationClasses": ["route.inspect", "route.mutate", "status"],
+      "riskClasses": ["local-data", "external-service", "subprocess"],
+      "label": "Rig Builder backend routes",
+      "confirmationRequirement": "not-required-for-inspection",
+      "compatibilityMode": "native"
+    },
+    {
+      "participantId": "rig_builder.tone3000_service",
+      "surface": "external-service",
+      "roles": ["provider", "observer"],
+      "operationClasses": ["service.request", "service.download", "status"],
+      "riskClasses": ["external-service"],
+      "label": "tone3000 search and download",
+      "confirmationRequirement": "required",
+      "compatibilityMode": "native"
+    },
+    {
+      "participantId": "rig_builder.media_import_export",
+      "surface": "media-import-export",
+      "roles": ["provider", "observer"],
+      "operationClasses": ["media.import", "media.export", "status"],
+      "riskClasses": ["local-data", "subprocess"],
+      "label": "Gear capture and IR import/export",
+      "confirmationRequirement": "required",
+      "compatibilityMode": "native"
+    }
+  ],
+  "privileged_compatibility_bridges": [
+    {
+      "surface": "backend-route",
+      "bridgeId": "privileged.legacy-backend-route",
+      "operationClass": "route.mutate",
+      "safeReason": "Legacy Rig Builder UI still reaches plugin backend routes directly while runtime capability migration lands."
+    },
+    {
+      "surface": "external-service",
+      "bridgeId": "privileged.legacy-external-service",
+      "operationClass": "service.download",
+      "safeReason": "tone3000 search/download flows remain implemented by plugin routes and are now attributed in privileged diagnostics."
+    },
+    {
+      "surface": "external-service",
+      "bridgeId": "privileged.legacy-external-service-request",
+      "operationClass": "service.request",
+      "safeReason": "tone3000 search flows remain implemented by plugin routes and are now attributed in privileged diagnostics."
+    },
+    {
+      "surface": "media-import-export",
+      "bridgeId": "privileged.legacy-media-import-export",
+      "operationClass": "media.import",
+      "safeReason": "Gear capture import/export (tone3000 downloads) are visible user-triggered media import workflows."
+    },
+    {
+      "surface": "subprocess",
+      "bridgeId": "privileged.legacy-subprocess",
+      "operationClass": "subprocess.run",
+      "safeReason": "ffmpeg runs as a subprocess to normalize downloaded tone3000 IRs; inventoried by the privileged host."
+    }
+  ]
+}

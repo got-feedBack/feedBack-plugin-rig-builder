@@ -1,0 +1,73 @@
+// dpf_pipe_harness.cpp.in — process mono float32 (stdin -> stdout) through ONE
+// DPF plugin with given params. Used by measure_tone_loudness.py to chain a
+// tone's pedal -> amp -> rack offline (each plugin is a separate process so
+// their conflicting DistrhoPluginInfo macros never collide). @PLUGIN_CPP@ and
+// @CLASS@ are substituted by the driver; compiled inside the plugin's src dir.
+//
+// argv[1] = path to a params file, one "index value" pair per line (0..1).
+// stdin   = raw float32 mono samples (the chain signal so far).
+// stdout  = raw float32 mono (output channel 0). The plugin is fed the same
+//           sample on both input channels; we read output channel 0.
+
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <vector>
+#include <string>
+
+#include "@PLUGIN_CPP@"
+
+START_NAMESPACE_DISTRHO
+struct Probe : public @CLASS@ {
+    void setP(uint32_t i, float v) { setParameterValue(i, v); }
+    void  sr(double s)             { sampleRateChanged(s); }
+    void  act()                    { activate(); }
+    void  go(const float** in, float** out, uint32_t n) { run(in, out, n); }
+};
+END_NAMESPACE_DISTRHO
+using DISTRHO::Probe;
+
+static const double SR = 48000.0;
+static const uint32_t CHUNK = 512;
+
+int main(int argc, char** argv) {
+    Probe p;
+    p.sr(SR);
+    p.act();
+    // Apply param overrides (index value) from the file.
+    if (argc >= 2 && argv[1] && std::strlen(argv[1]) > 0) {
+        if (FILE* f = std::fopen(argv[1], "r")) {
+            int idx; double val;
+            while (std::fscanf(f, "%d %lf", &idx, &val) == 2)
+                if (idx >= 0) p.setP((uint32_t)idx, (float)val);
+            std::fclose(f);
+        }
+    }
+    // Read all stdin float32.
+    std::vector<float> in;
+    {
+        float buf[4096];
+        size_t got;
+        while ((got = std::fread(buf, sizeof(float), 4096, stdin)) > 0)
+            in.insert(in.end(), buf, buf + got);
+    }
+    std::vector<float> out; out.reserve(in.size());
+
+    float inL[CHUNK], inR[CHUNK], outL[CHUNK], outR[CHUNK];
+    const float* ins[2]  = { inL, inR };
+    float*       outs[2] = { outL, outR };
+
+    size_t pos = 0, n = in.size();
+    while (pos < n) {
+        uint32_t f = (uint32_t)std::min((size_t)CHUNK, n - pos);
+        for (uint32_t i = 0; i < f; ++i) { inL[i] = inR[i] = in[pos + i]; }
+        std::memset(outL, 0, sizeof(outL));
+        std::memset(outR, 0, sizeof(outR));
+        p.go(ins, outs, f);
+        out.insert(out.end(), outL, outL + f);
+        pos += f;
+    }
+    std::fwrite(out.data(), sizeof(float), out.size(), stdout);
+    return 0;
+}

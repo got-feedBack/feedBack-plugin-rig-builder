@@ -1,0 +1,7692 @@
+{
+ "_meta": {
+  "description": "Translation table: the game gear knob \u2192 VST parameter. Curated around Kilohearts Essentials (free) \u2014 consistent param names across the entire bundle.",
+  "version": 6,
+  "updated": "2026-06-23",
+  "schema": {
+   "<rs_gear_type>": {
+    "<vst_name_stem_lowercased>": {
+     "<rs_knob_name>": {
+      "param": "<exact VST param name as shown in the in-app editor>",
+      "scale": "<float, multiply RS value by this. 0.01 for 0-100 \u2192 0-1; 0.0005 for ms 0-2000; 1.0 for direct dB / semitones>",
+      "offset": "<optional float, added after scale>",
+      "invert": "<optional bool, replaces v with (1-v) after scale>"
+     }
+    }
+   }
+  },
+  "kilohearts_param_naming_convention": {
+   "_note": "KHS modules use consistent param names across the entire Essentials bundle. Common params you'll see in every module:",
+   "rate": "Rate (Hz, 0-1 internal)",
+   "depth": "Depth (0-1)",
+   "feedback": "Feedback (0-1)",
+   "mix": "Dry/Wet (0-1) \u2014 some older docs show 'Mix'; the in-app editor will show the real name",
+   "cutoff": "Cutoff (0-1, log freq)",
+   "drive": "Drive (0-1)",
+   "threshold": "Threshold (dB)",
+   "ratio": "Ratio (1:N)",
+   "time": "Time (s or 0-1 normalised)",
+   "pitch": "Pitch (semitones)"
+  },
+  "notes": [
+   "If a param name doesn't match, open the in-app VST editor for that gear, copy the exact label from a slider, and paste here. The lookup is case-insensitive but otherwise exact.",
+   "VST name stems below are lowercased to match the case-insensitive lookup. Plugin files on disk are 'kHs Chorus.vst3' etc. \u2014 the matcher strips '.vst3' and lowercases automatically.",
+   "EQ pedals (EQ5/EQ8/BassEQ8): knobs are absolute frequencies (e.g. '5700': 5 = +5 dB at 5700 Hz). Verified band layouts (from inspect_rs_knobs.py against a real library): EQ5 = 63/250/750/2200/5700 Hz; EQ8 = 50/100/200/400/800/1600/3200/6400 Hz; BassEQ8 = 30/75/185/460/1100/2700/6800/16000 Hz. kHs 3-Band EQ absorbs three of those \u2014 the entries below pick the most musical bands per pedal. The other RS frequencies are silently dropped (lossy). For lossless mapping, switch the gear to Voxengo Marvel GEQ (16-band) and add a per-pedal entry under 'voxengo marvel geq'.",
+   "Rack_StudioEQ (4-band parametric: Bass/LoMid/HiMid/Treble with Q + Freq knobs) is the highest-coverage EQ in the library. Currently lossy-mapped to kHs 3-Band (gain bands only \u2014 Q/Freq dropped). For full fidelity switch the gear to TDR Nova (4-band parametric, free) and add a 'tdr nova' entry mapping <Band>+<BandFreq>+<BandQ> per band.",
+   "Melda free (MFreeFXBundle): MTremolo, MVibrato, MFlanger, MPhaser, MRingModulator, MEqualizer, MCompressor are now PRIMARY for those categories alongside the existing KHS entries. Melda paramId convention is consistent across the family \u2014 verifying one editor (e.g. MTremolo) validates all 7 Melda mappings.",
+   "_static block: a VST entry may include `\"_static\": {\"<vst_param_name>\": <normalized_value>, ...}` to apply UNCONDITIONAL params regardless of RS knobs. Used to pin curated character knobs (e.g. kHs Distortion Type + Dynamics) so every fuzz pedal sounds like a fuzz, every overdrive sounds like an overdrive. Values are normalized [0,1]. For stepped/enum params, verify the dropdown order via `await window.rbSweepParam(slotId, paramName)` from DevTools \u2014 names + numeric ranges differ across plugins.",
+   "kHs Distortion subtype convention (user-curated, verified via rbSweepParam): the `Type` param has 6 discrete modes \u2014 Overdrive (0.0), Saturate (0.2), Foldback (0.4), Sine (0.6), Hard Clip (0.8), Quantize (1.0). Fuzz pedals \u2192 Type=0.2 (Saturate); overdrive pedals \u2192 Type=0.0 (Overdrive); distortion pedals \u2192 Type=0.8 (Hard Clip). All three pin Dynamics=1.0 so the pedal's response tracks the player's pick attack."
+  ],
+  "stem_alias_note": "Bundled VST files were renamed for the no-copyright UI (e.g. EQ8->GE-8, StudioComp->HZX, MultiPitch->'Multi Pitch'). Added lowercased real-filename-stem aliases so _build_params_for_piece resolves the same param block. 2 gears (Bass_Pedal_BassWah, Bass_Pedal_BassSubOctave) still lack an authored bundled mapping."
+ },
+ "Pedal_AcousticEmulator": {
+  "acousticsimulator": {
+   "_static": {
+    "Volume": 0.62
+   },
+   "Tone": {
+    "param": "Top",
+    "scale": 0.01,
+    "_hint": "RS Tone drives the real Top control."
+   },
+   "Body": {
+    "param": "Body",
+    "scale": 0.01,
+    "_hint": "RS Body drives the real Body control."
+   },
+   "Mid": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Mid is reused as the real Gain control. MidShift is skipped because the real pedal has no MidShift knob."
+   }
+  },
+  "acoustic emulator": {
+   "_static": {
+    "Volume": 0.62
+   },
+   "Tone": {
+    "param": "Top",
+    "scale": 0.01,
+    "_hint": "RS Tone drives the real Top control."
+   },
+   "Body": {
+    "param": "Body",
+    "scale": 0.01,
+    "_hint": "RS Body drives the real Body control."
+   },
+   "Mid": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Mid is reused as the real Gain control. MidShift is skipped because the real pedal has no MidShift knob."
+   }
+  }
+ },
+ "Pedal_Chorus": {
+  "chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.1666666667,
+    "_hint": "the game base Chorus Rate is stored around 0..6; normalize that to the CE-2 style LFO range."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   }
+  },
+  "khs chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 \u2192 slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "ch-2": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.1666666667,
+    "_hint": "the game base Chorus Rate is stored around 0..6; normalize that to the CE-2 style LFO range."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_Chorus20": {
+  "chorus20": {
+   "_static": {
+    "Speed2": 0.44,
+    "SpeedSel": 0.0,
+    "Mode": 0.0
+   },
+   "Rate": {
+    "param": "Speed1",
+    "scale": 0.1,
+    "_hint": "the game Chorus 2 Rate is stored as 0..10; map it to the Deja Vibe Speed1 control. Speed2 is static unless edited in the VST."
+   },
+   "Depth": {
+    "param": "Intensity",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Volume",
+    "scale": 0.01
+   }
+  },
+  "khs chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 \u2192 slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "deja chorus": {
+   "_static": {
+    "Speed2": 0.44,
+    "SpeedSel": 0.0,
+    "Mode": 0.0
+   },
+   "Rate": {
+    "param": "Speed1",
+    "scale": 0.1,
+    "_hint": "the game Chorus 2 Rate is stored as 0..10; map it to the Deja Vibe Speed1 control. Mode is pinned to Chorus via _static."
+   },
+   "Depth": {
+    "param": "Intensity",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Volume",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_DigitalChorus": {
+  "digitalchorus": {
+   "Mix": {
+    "param": "E.Level",
+    "scale": 0.01
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.1,
+    "_hint": "the game Digital Chorus Rate is stored as a small 0..10-ish value, so the bundled plugin receives Rate/10 and applies its digital LFO curve internally."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "LoFilter": {
+    "param": "LoFilter",
+    "scale": 0.01,
+    "_hint": "Higher RS LoFilter moves the digital chorus high-pass cutoff up, matching the schematic's low-filter cut control."
+   },
+   "HiFilter": {
+    "param": "HiFilter",
+    "scale": 0.01,
+    "_hint": "Higher RS HiFilter lowers the wet-path low-pass cutoff, matching the schematic's high-filter cut control."
+   }
+  },
+  "khs chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 \u2192 slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "ch-5": {
+   "Mix": {
+    "param": "E.Level",
+    "scale": 0.01
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.1,
+    "_hint": "the game Digital Chorus Rate is stored as a small 0..10-ish value, so the bundled plugin receives Rate/10 and applies its digital LFO curve internally."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "LoFilter": {
+    "param": "LoFilter",
+    "scale": 0.01,
+    "_hint": "Higher RS LoFilter moves the digital chorus high-pass cutoff up, matching the schematic's low-filter cut control."
+   },
+   "HiFilter": {
+    "param": "HiFilter",
+    "scale": 0.01,
+    "_hint": "Higher RS HiFilter lowers the wet-path low-pass cutoff, matching the schematic's high-filter cut control."
+   }
+  }
+ },
+ "Pedal_VintageChorus": {
+  "analogchorus": {
+   "_static": {
+    "Bass": 0.5,
+    "Treble": 0.52
+   },
+   "Rate": {
+    "param": "Speed",
+    "scale": 0.1,
+    "_hint": "the game Vintage/Analog Chorus Rate is stored around 1..2, so the bundled plugin receives Rate/10 and keeps the LFO in a slow analog range."
+   },
+   "Depth": {
+    "param": "Width",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Intensity",
+    "scale": 0.01
+   }
+  },
+  "khs chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 \u2192 slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "134 stereo chorus": {
+   "_static": {
+    "Bass": 0.5,
+    "Treble": 0.52
+   },
+   "Rate": {
+    "param": "Speed",
+    "scale": 0.1,
+    "_hint": "the game Vintage/Analog Chorus Rate is stored around 1..2, so the bundled plugin receives Rate/10 and keeps the LFO in a slow analog range."
+   },
+   "Depth": {
+    "param": "Width",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Intensity",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_StereoChorus": {
+  "analogchorus": {
+   "_static": {
+    "Bass": 0.5,
+    "Treble": 0.52
+   },
+   "Rate": {
+    "param": "Speed",
+    "scale": 0.1,
+    "_hint": "Stereo Chorus shares the bundled analog stereo chorus; map RS Rate to the real Speed knob."
+   },
+   "Depth": {
+    "param": "Width",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Intensity",
+    "scale": 0.01
+   }
+  },
+  "134 stereo chorus": {
+   "_static": {
+    "Bass": 0.5,
+    "Treble": 0.52
+   },
+   "Rate": {
+    "param": "Speed",
+    "scale": 0.1,
+    "_hint": "Stereo Chorus shares the bundled analog stereo chorus; map RS Rate to the real Speed knob."
+   },
+   "Depth": {
+    "param": "Width",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Intensity",
+    "scale": 0.01
+   }
+  }
+ },
+ "Bass_Pedal_BassChorus": {
+  "basschorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS Rate \u2192 LFO speed 0..1 (0.1..8 Hz)."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth \u2192 LFO mod depth 0..1."
+   },
+   "LoFilter": {
+    "param": "Low Filter",
+    "scale": 0.01,
+    "_hint": "RS LoFilter -> real CEB-3 Low Filter; higher settings remove more bass from the wet ES56028 chorus path."
+   },
+   "Mix": {
+    "param": "E.Level",
+    "scale": 0.01,
+    "_hint": "RS Mix -> real CEB-3 E.Level, the wet effect-level control."
+   }
+  },
+  "khs chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 \u2192 slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "cb-3": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS Rate \u2192 LFO speed 0..1 (0.1..8 Hz)."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth \u2192 LFO mod depth 0..1."
+   },
+   "LoFilter": {
+    "param": "Low Filter",
+    "scale": 0.01,
+    "_hint": "RS LoFilter -> real CEB-3 Low Filter; higher settings remove more bass from the wet ES56028 chorus path."
+   },
+   "Mix": {
+    "param": "E.Level",
+    "scale": 0.01,
+    "_hint": "RS Mix -> real CEB-3 E.Level, the wet effect-level control."
+   }
+  }
+ },
+ "Pedal_SendInTheClones": {
+  "sendintheclones": {
+   "_static": {
+    "Flange": 0.0
+   },
+   "Clones": {
+    "param": "Rate",
+    "scale": 0.01,
+    "offset": 0.08,
+    "_hint": "RS Clones has no direct Clone Theory control; use it as the Rate driver so song presets still vary the modulation."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "ChVib",
+    "scale": 0.01
+   }
+  },
+  "attack of the clones": {
+   "_static": {
+    "Flange": 0.0
+   },
+   "Clones": {
+    "param": "Rate",
+    "scale": 0.01,
+    "offset": 0.08,
+    "_hint": "RS Clones has no direct Clone Theory control; use it as the Rate driver so song presets still vary the modulation."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "ChVib",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_Flanger": {
+  "classicflanger": {
+   "_static": {
+    "Manual": 0.42
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Res",
+    "scale": 0.01,
+    "_hint": "The BF-2 has no Mix control; RS Mix is reused as the real Resonance knob."
+   },
+   "Feedback": {
+    "param": "Res",
+    "scale": 0.01
+   }
+  },
+  "khs flanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   }
+  },
+  "mflanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_80sFlanger": {
+  "eightiesflanger": {
+   "_static": {
+    "Manual": 0.48
+   },
+   "Rate": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Width",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Regen",
+    "scale": 0.01,
+    "_hint": "The MXR M117 has no Mix control; RS Mix is reused as the real Regen knob."
+   }
+  },
+  "khs flanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mflanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  },
+  "n117r flanger": {
+   "_static": {
+    "Manual": 0.48
+   },
+   "Rate": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Width",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Regen",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_ClassicFlanger": {
+  "classicflanger": {
+   "_static": {
+    "Manual": 0.42
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Res",
+    "scale": 0.01,
+    "_hint": "The BF-2 has no Mix control; RS Mix is reused as the real Resonance knob."
+   }
+  },
+  "khs flanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mflanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  },
+  "fl-2": {
+   "_static": {
+    "Manual": 0.42
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Res",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_ModernFlanger": {
+  "modernflanger": {
+   "_static": {
+    "Drive": 0.38,
+    "Output Level": 0.88,
+    "Time": 0.54,
+    "Range": 0.0,
+    "LFO Shape": 0.08
+   },
+   "Rate": {
+    "param": "LFO Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "LFO Amount",
+    "scale": 0.01
+   },
+   "Regen": {
+    "param": "Feedback",
+    "scale": 0.01,
+    "_hint": "The game calls the feedback control Regen; the bundled MF-108M style flanger uses the real Feedback knob."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01,
+    "_hint": "Alias for any extracted rows that use Feedback instead of Regen."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "khs flanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Regen": {
+    "param": "Feedback",
+    "scale": 0.01
+   }
+  },
+  "mflanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Regen": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  },
+  "fm108": {
+   "_static": {
+    "Drive": 0.38,
+    "Output Level": 0.88,
+    "Time": 0.54,
+    "Range": 0.0,
+    "LFO Shape": 0.08
+   },
+   "Rate": {
+    "param": "LFO Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "LFO Amount",
+    "scale": 0.01
+   },
+   "Regen": {
+    "param": "Feedback",
+    "scale": 0.01,
+    "_hint": "The game calls the feedback control Regen; the bundled MF-108M style flanger uses the real Feedback knob."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01,
+    "_hint": "Alias for any extracted rows that use Feedback instead of Regen."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "fm107": {
+   "_static": {
+    "Drive": 0.38,
+    "Output Level": 0.88,
+    "Time": 0.54,
+    "Range": 0.0,
+    "LFO Shape": 0.08
+   },
+   "Rate": {
+    "param": "LFO Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "LFO Amount",
+    "scale": 0.01
+   },
+   "Regen": {
+    "param": "Feedback",
+    "scale": 0.01,
+    "_hint": "Legacy FM107 bundle alias; the actual pedal is MF-108M/FM108."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_VintageFlanger": {
+  "vintageflanger": {
+   "_static": {
+    "Matrix": 0.0
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Range",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Color",
+    "scale": 0.01,
+    "_hint": "The Deluxe Electric Mistress has no Mix control; RS Mix is reused as the real Color feedback knob."
+   }
+  },
+  "khs flanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mflanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  },
+  "deluxe servant": {
+   "_static": {
+    "Matrix": 0.0
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Range",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Color",
+    "scale": 0.01
+   }
+  }
+ },
+ "Bass_Pedal_BassFlanger": {
+  "bassflanger": {
+   "_static": {
+    "Manual": 0.45
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS Rate maps to the BF-2B Rate control."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth maps to the BF-2B Depth control."
+   },
+   "Filter": {
+    "param": "Res",
+    "scale": 0.01,
+    "_hint": "RS Filter is reused as the BF-2B Resonance control."
+   },
+   "Mix": {
+    "param": "Res",
+    "scale": 0.01,
+    "_hint": "The BF-2B has no Mix control; RS Mix is reused as the real Resonance knob."
+   }
+  },
+  "khs flanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mflanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  },
+  "fl-3": {
+   "_static": {
+    "Manual": 0.45
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS Rate maps to the BF-2B Rate control."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth maps to the BF-2B Depth control."
+   },
+   "Filter": {
+    "param": "Res",
+    "scale": 0.01,
+    "_hint": "RS Filter is reused as the BF-2B Resonance control."
+   },
+   "Mix": {
+    "param": "Res",
+    "scale": 0.01,
+    "_hint": "The BF-2B has no Mix control; RS Mix is reused as the real Resonance knob."
+   }
+  },
+  "fl3": {
+   "_static": {
+    "Manual": 0.45
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS Rate maps to the BF-2B Rate control."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth maps to the BF-2B Depth control."
+   },
+   "Filter": {
+    "param": "Res",
+    "scale": 0.01,
+    "_hint": "RS Filter is reused as the BF-2B Resonance control."
+   },
+   "Mix": {
+    "param": "Res",
+    "scale": 0.01,
+    "_hint": "The BF-2B has no Mix control; RS Mix is reused as the real Resonance knob."
+   }
+  }
+ },
+ "Pedal_Phaser": {
+  "phaser363": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "0": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "Alias for extracted rows that carried the single Phaser 363 knob as index 0."
+   }
+  },
+  "khs phaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mphaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  },
+  "phase 90": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "0": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "Alias for extracted rows that carried the single Phaser 363 knob as index 0."
+   }
+  }
+ },
+ "Pedal_ShaverPhaser": {
+  "shaverphaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   }
+  },
+  "khs phaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mphaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  },
+  "ph-1": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_PlanePhase": {
+  "planephase": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "khs phaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mphaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  },
+  "rocket phase": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Bass_Pedal_BassPhase": {
+  "bassphase": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS Rate 0-100 \u2192 LFO speed 0..1."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth 0-100 \u2192 sweep depth + regeneration 0..1."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Mix 0-100 \u2192 dry/wet notch blend 0..1."
+   },
+   "Filter": {
+    "param": "Filter",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 sweep centre frequency 0..1."
+   }
+  },
+  "phase 99": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS Rate 0-100 \u2192 LFO speed 0..1."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth 0-100 \u2192 sweep depth + regeneration 0..1."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Mix 0-100 \u2192 dry/wet notch blend 0..1."
+   },
+   "Filter": {
+    "param": "Filter",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 sweep centre frequency 0..1."
+   }
+  }
+ },
+ "Pedal_Tremolo": {
+  "tremolo": {
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "the game Tremolo Mix is the depth/intensity control for the bundled Colorsound-style tremolo."
+   }
+  },
+  "bertom_freetremolo": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS 'Mix' on a tremolo is effectively depth"
+   }
+  },
+  "mtremolo": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.09,
+    "offset": 1.0,
+    "_hint": "RS Speed 0-100 \u2192 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
+   }
+  }
+ },
+ "Pedal_AmpTrem": {
+  "amptrem": {
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "the game Amp Trem Depth maps directly to the optical gain-reduction depth."
+   }
+  },
+  "bertom_freetremolo": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   }
+  },
+  "mtremolo": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.09,
+    "offset": 1.0,
+    "_hint": "RS Speed 0-100 \u2192 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
+   }
+  },
+  "mega-trem": {
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "the game Amp Trem Depth maps directly to the optical gain-reduction depth."
+   }
+  }
+ },
+ "Pedal_MultiTrem": {
+  "multitrem": {
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "the game Multi Trem Mix is tremolo depth."
+   },
+   "Waveform": {
+    "param": "Waveform",
+    "scale": 0.5,
+    "_hint": "RS Waveform 0/1/2 maps to triangle/rounded/square."
+   }
+  },
+  "bertom_freetremolo": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   }
+  },
+  "mtremolo": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.09,
+    "offset": 1.0,
+    "_hint": "RS Speed 0-100 \u2192 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
+   }
+  },
+  "tr-2": {
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "the game Multi Trem Mix is tremolo depth."
+   },
+   "Waveform": {
+    "param": "Waveform",
+    "scale": 0.5,
+    "_hint": "RS Waveform 0/1/2 maps to triangle/rounded/square."
+   }
+  }
+ },
+ "Pedal_SpringReverb": {
+  "springreverb": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.01,
+    "_hint": "RS Time controls the spring tank decay."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth controls dwell, transient drip, and resonant spring intensity."
+   }
+  },
+  "khs reverb": {
+   "Time": {
+    "param": "Decay",
+    "scale": 0.0065,
+    "_hint": "RS Time \u2192 Decay (0.5-30s log). Time 0\u22480.5s, 78\u22484s, 100\u22487s."
+   },
+   "Depth": {
+    "param": "Size",
+    "scale": 0.01,
+    "_hint": "RS Depth \u2192 Size (50-200%). 0\u219250%, 100\u2192200%."
+   },
+   "Tone": {
+    "param": "Dampen",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "RS Tone (brightness) \u2192 less Dampen. Inverted."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "holy spring": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.01,
+    "_hint": "RS Time controls the spring tank decay."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth controls dwell, transient drip, and resonant spring intensity."
+   }
+  }
+ },
+ "Pedal_DigitalVerb": {
+  "digitalverb": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.01,
+    "_hint": "the game Time controls the digital reverb decay."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "the game Depth controls digital room depth, pre-delay and tail density."
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "the game Tone controls brightness/damping."
+   }
+  },
+  "khs reverb": {
+   "Time": {
+    "param": "Decay",
+    "scale": 0.0065,
+    "_hint": "RS Time \u2192 Decay (0.5-30s log). Time 0\u22480.5s, 78\u22484s, 100\u22487s."
+   },
+   "Depth": {
+    "param": "Size",
+    "scale": 0.01,
+    "_hint": "RS Depth \u2192 Size (50-200%). 0\u219250%, 100\u2192200%."
+   },
+   "Tone": {
+    "param": "Dampen",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "RS Tone (brightness) \u2192 less Dampen. Inverted."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "rv-2": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.01,
+    "_hint": "the game Time controls the digital reverb decay."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "the game Depth controls digital room depth, pre-delay and tail density."
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "the game Tone controls brightness/damping."
+   }
+  }
+ },
+ "Pedal_PlateVerb": {
+  "plateverb": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.01,
+    "_hint": "the game Time controls plate decay."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "the game Depth controls plate size, diffusion, and wet modulation."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Voice": {
+    "param": "Voice",
+    "scale": 1.0,
+    "_hint": "the game Voice is a 0/1 normal/bright plate voicing switch."
+   }
+  },
+  "khs reverb": {
+   "Time": {
+    "param": "Decay",
+    "scale": 0.0065,
+    "_hint": "RS Time \u2192 Decay (0.5-30s log). Time 0\u22480.5s, 78\u22484s, 100\u22487s."
+   },
+   "Depth": {
+    "param": "Size",
+    "scale": 0.01,
+    "_hint": "RS Depth \u2192 Size (50-200%). 0\u219250%, 100\u2192200%."
+   },
+   "Tone": {
+    "param": "Dampen",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "RS Tone (brightness) \u2192 less Dampen. Inverted."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "voodoo": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.01,
+    "_hint": "the game Time controls plate decay."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "the game Depth controls plate size, diffusion, and wet modulation."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Voice": {
+    "param": "Voice",
+    "scale": 1.0,
+    "_hint": "the game Voice is a 0/1 normal/bright plate voicing switch."
+   }
+  }
+ },
+ "Pedal_TubeSpring": {
+  "tubespring": {
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "the game Tube Spring Depth controls dwell, tank decay, and spring drip intensity."
+   }
+  },
+  "khs reverb": {
+   "Time": {
+    "param": "Size",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "real spring": {
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "the game Tube Spring Depth controls dwell, tank decay, and spring drip intensity."
+   }
+  }
+ },
+ "Pedal_OmniMod": {
+  "omnimod": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "khs chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "unimod": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_AnalogueDelay": {
+  "analogdelay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005,
+    "_hint": "RS Time is milliseconds. AnalogDelay stores it as ms / 2000 and reconstructs the actual delay time internally."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "fm104": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005,
+    "_hint": "RS Time is milliseconds. AnalogDelay stores it as ms / 2000 and reconstructs the actual delay time internally."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_ValveEcho": {
+  "valveecho": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005,
+    "_hint": "RS Time is milliseconds. ValveEcho stores it as ms / 2000 and reconstructs a Binson-style multi-head delay internally."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "valve echo": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005,
+    "_hint": "RS Time is milliseconds. ValveEcho stores it as ms / 2000 and reconstructs a Binson-style multi-head delay internally."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_NPNDelay": {
+  "npndelay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005,
+    "_hint": "RS Time is milliseconds. NpnDelay stores it as ms / 2000 and clamps internally to a DM-2 style 20-420 ms range so the game presets around 396 ms survive."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "dm-2": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005,
+    "_hint": "RS Time is milliseconds. NpnDelay stores it as ms / 2000 and clamps internally to a DM-2 style 20-420 ms range so the game presets around 396 ms survive."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_NoFiEcho": {
+  "nofiecho": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005,
+    "_hint": "RS Time is milliseconds. NoFiEcho stores it as ms / 2000 and reconstructs the actual echo time internally."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "no fi echo": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005,
+    "_hint": "RS Time is milliseconds. NoFiEcho stores it as ms / 2000 and reconstructs the actual echo time internally."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_OilCanEcho": {
+  "oilcanecho": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "khs delay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "oil can echo": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_CosmicEcho": {
+  "cosmicecho": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "khs delay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "galaxy echo": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_ModDelay": {
+  "moddelay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0011363636363636363,
+    "offset": -0.022727272727272728,
+    "_hint": "RS Time is observed 20-900 ms. ModDelay stores it normalized: (ms - 20) / 880."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.2857142857142857,
+    "_hint": "RS Rate is observed 0-3.5 Hz. ModDelay stores it normalized: Hz / 3.5."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   }
+  },
+  "khs delay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0005
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "dl9": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0011363636363636363,
+    "offset": -0.022727272727272728,
+    "_hint": "RS Time is observed 20-900 ms. ModDelay stores it normalized: (ms - 20) / 880."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.2857142857142857,
+    "_hint": "RS Rate is observed 0-3.5 Hz. ModDelay stores it normalized: Hz / 3.5."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   }
+  }
+ },
+ "Bass_Pedal_BassFilterDelay": {
+  "bassfilterdelay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.01,
+    "_hint": "RS Time 0-100 \u2192 30..700 ms."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01,
+    "_hint": "RS Feedback 0-100 \u2192 regeneration 0..1."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Mix 0-100 \u2192 wet/dry 0..1."
+   },
+   "Filter": {
+    "param": "Filter",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 repeat tone 0..1 (dark\u2194bright)."
+   }
+  },
+  "dl-3": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.01,
+    "_hint": "RS Time 0-100 \u2192 30..700 ms."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01,
+    "_hint": "RS Feedback 0-100 \u2192 regeneration 0..1."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Mix 0-100 \u2192 wet/dry 0..1."
+   },
+   "Filter": {
+    "param": "Filter",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 repeat tone 0..1 (dark\u2194bright)."
+   }
+  }
+ },
+ "Pedal_GermaniumDrive": {
+  "germaniumdrive": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "LowCut",
+    "scale": 0.01,
+    "_hint": "The Skywave/Broadcast has no treble tone knob; RS Tone maps to the real LowCut control: lower = fuller, higher = tighter."
+   },
+   "_static": {
+    "Level": 0.55,
+    "GainMode": 0.5,
+    "Voltage": 0.5
+   }
+  },
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.0
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 \u2192 kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  },
+  "germanium drive": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "LowCut",
+    "scale": 0.01,
+    "_hint": "The Skywave/Broadcast has no treble tone knob; RS Tone maps to the real LowCut control: lower = fuller, higher = tighter."
+   },
+   "_static": {
+    "Level": 0.55,
+    "GainMode": 0.5,
+    "Voltage": 0.5
+   }
+  }
+ },
+ "Pedal_CustomDrive": {
+  "customdrive": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01
+   },
+   "Voice": {
+    "param": "Voice",
+    "scale": 1.0,
+    "_hint": "the game Voice is a binary 0/1 switch. CustomDrive treats <0.5 as the smoother voice and >=0.5 as the tighter/brighter voice."
+   },
+   "_static": {
+    "Volume": 0.62
+   }
+  },
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.0
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 \u2192 kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  },
+  "cdo": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01
+   },
+   "Voice": {
+    "param": "Voice",
+    "scale": 1.0,
+    "_hint": "the game Voice is a binary 0/1 switch. CustomDrive treats <0.5 as the smoother voice and >=0.5 as the tighter/brighter voice."
+   },
+   "_static": {
+    "Volume": 0.62
+   }
+  }
+ },
+ "Pedal_LineDrive": {
+  "linedrive": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 -> LineDrive Tone 0-1. Lower values are darker and thicker; higher values open the OS-2 style post-clipping tone network."
+   },
+   "_static": {
+    "Color": 0.58,
+    "Level": 0.62
+   }
+  },
+  "os-2": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 -> LineDrive Tone 0-1. Lower values are darker and thicker; higher values open the OS-2 style post-clipping tone network."
+   },
+   "_static": {
+    "Color": 0.58,
+    "Level": 0.62
+   }
+  }
+ },
+ "Pedal_MarshallGuvnorPlus": {
+  "marshallguvnorplus": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.01
+   },
+   "Middle": {
+    "param": "Mid",
+    "scale": 0.01,
+    "_hint": "Alias for the game exports that spell the GV-2 middle control as Middle."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01
+   },
+   "Deep": {
+    "param": "Deep",
+    "scale": 0.01
+   },
+   "_static": {
+    "Volume": 0.62
+   }
+  },
+  "gm-2": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.01
+   },
+   "Middle": {
+    "param": "Mid",
+    "scale": 0.01,
+    "_hint": "Alias for the game exports that spell the GV-2 middle control as Middle."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01
+   },
+   "Deep": {
+    "param": "Deep",
+    "scale": 0.01
+   },
+   "_static": {
+    "Volume": 0.62
+   }
+  }
+ },
+ "Bass_Pedal_BassOverdrive": {
+  "bassoverdrive": {
+   "_static": {
+    "Level": 0.62
+   },
+   "Blend": {
+    "param": "Blend",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 \u2192 clean/dist mix 0..1."
+   },
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 \u2192 B3K Drive 0..1."
+   },
+   "Filter": {
+    "param": "Grunt",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 B3K Grunt 3-way switch (tight/normal/fat), quantized by the VST."
+   },
+   "Tone": {
+    "param": "Attack",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 B3K Attack 3-way switch (dark/normal/bright), quantized by the VST."
+   }
+  },
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.0
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 \u2192 kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  },
+  "blackbrass": {
+   "Blend": {
+    "param": "Blend",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 \u2192 clean/dist mix 0..1."
+   },
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 \u2192 B3K Drive 0..1."
+   },
+   "Filter": {
+    "param": "Filter",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 B3K Grunt 0..1 (low end into the clipper)."
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 B3K Attack 0..1 (treble of the distortion)."
+   }
+  }
+ },
+ "Pedal_RangeBooster": {
+  "rangebooster": {
+   "Boost": {
+    "param": "Boost",
+    "scale": 0.01
+   }
+  },
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.005,
+    "_hint": "Halve scale \u2014 booster shouldn't fully saturate"
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.0
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 \u2192 kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  },
+  "range booster": {
+   "Boost": {
+    "param": "Boost",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_SuperDrive": {
+  "superdrive": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 -> SuperDrive Tone 0-1. Lower values keep the SD-1 darker and mid-forward; higher values open the top end after clipping."
+   },
+   "_static": {
+    "Level": 0.62
+   }
+  },
+  "sd-1": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 -> SuperDrive Tone 0-1. Lower values keep the SD-1 darker and mid-forward; higher values open the top end after clipping."
+   },
+   "_static": {
+    "Level": 0.62
+   }
+  }
+ },
+ "Pedal_Distortion": {
+  "standarddistortion": {
+   "Gain": {
+    "param": "Dist",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 -> StandardDistortion Tone 0-1. Lower values are darker/thicker; higher values open the DS-1 style cutting top end."
+   },
+   "_static": {
+    "Level": 0.62
+   }
+  },
+  "ds-1": {
+   "Gain": {
+    "param": "Dist",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 -> StandardDistortion Tone 0-1. Lower values are darker/thicker; higher values open the DS-1 style cutting top end."
+   },
+   "_static": {
+    "Level": 0.62
+   }
+  }
+ },
+ "Pedal_VintageDistortion": {
+  "vintagedistortion": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01
+   },
+   "_static": {
+    "Volume": 0.62
+   }
+  },
+  "vintage distortion": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01
+   },
+   "_static": {
+    "Volume": 0.62
+   }
+  }
+ },
+ "Pedal_MetalDistortion": {
+  "alloydistortion": {
+   "Gain": {
+    "param": "Dist",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "ColorHigh",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 -> HM-2 ColorHigh 0-1. ColorLow is pinned high to keep the classic low-color chainsaw voice."
+   },
+   "_static": {
+    "ColorLow": 0.82,
+    "Level": 0.62
+   }
+  },
+  "hm-2": {
+   "Gain": {
+    "param": "Dist",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "ColorHigh",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 -> HM-2 ColorHigh 0-1. ColorLow is pinned high to keep the classic low-color chainsaw voice."
+   },
+   "_static": {
+    "ColorLow": 0.82,
+    "Level": 0.62
+   }
+  }
+ },
+ "Rack_StereoPhaser": {
+  "stereophaser": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.16949,
+    "offset": -0.01695
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_StudioWahFilter": {
+  "studiowahfilter": {
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.01
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.01
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.01
+   },
+   "Pedal": {
+    "param": "Pedal",
+    "scale": 0.01
+   },
+   "Auto": {
+    "param": "Auto",
+    "scale": 1.0
+   }
+  }
+ },
+ "Rack_SynthFilter": {
+  "synthfilter": {
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.01
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.01
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.01
+   },
+   "FilterType": {
+    "param": "Type",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_RotaVibe": {
+  "rotavibe": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Balance": {
+    "param": "Balance",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_StereoTubeTrem": {
+  "stereotubetrem": {
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Waveform": {
+    "param": "Waveform",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_StudioPitch": {
+  "studiopitch": {
+   "Pitch": {
+    "param": "Pitch",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Pan": {
+    "param": "Pan",
+    "scale": 0.01
+   }
+  }
+ },
+ "Bass_Pedal_BassEnbig": {
+  "bassenbig": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS Rate 0-100 \u2192 LFO wobble speed 0..1."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth 0-100 \u2192 sweep range 0..1."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Mix 0-100 \u2192 wet/dry 0..1."
+   },
+   "Filter": {
+    "param": "Filter",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 base centre frequency 0..1."
+   }
+  },
+  "enbiggen": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS Rate 0-100 \u2192 LFO wobble speed 0..1."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth 0-100 \u2192 sweep range 0..1."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Mix 0-100 \u2192 wet/dry 0..1."
+   },
+   "Filter": {
+    "param": "Filter",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 base centre frequency 0..1."
+   }
+  }
+ },
+ "Bass_Pedal_BassFilterEcho": {
+  "bassfilterecho": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.01,
+    "_hint": "RS Time 0-100 \u2192 40..700 ms."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01,
+    "_hint": "RS Feedback 0-100 \u2192 regeneration 0..1."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Mix 0-100 \u2192 wet/dry 0..1."
+   },
+   "Filter": {
+    "param": "Filter",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 repeat tone 0..1 (dark\u2194bright)."
+   }
+  },
+  "se-3": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.01,
+    "_hint": "RS Time 0-100 \u2192 40..700 ms."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01,
+    "_hint": "RS Feedback 0-100 \u2192 regeneration 0..1."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Mix 0-100 \u2192 wet/dry 0..1."
+   },
+   "Filter": {
+    "param": "Filter",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 repeat tone 0..1 (dark\u2194bright)."
+   }
+  }
+ },
+ "Bass_Pedal_BassWah": {
+  "basswah": {
+   "Auto": {
+    "param": "Auto",
+    "scale": 1.0
+   },
+   "Pedal": {
+    "param": "Pedal",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   }
+  },
+  "bass wah": {
+   "Auto": {
+    "param": "Auto",
+    "scale": 1.0
+   },
+   "Pedal": {
+    "param": "Pedal",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   }
+  },
+  "khs filter": {
+   "Pedal": {
+    "param": "Cutoff",
+    "scale": 0.005
+   },
+   "Sens": {
+    "param": "Resonance",
+    "scale": 0.01
+   }
+  }
+ },
+ "Bass_Pedal_BassSubOctave": {
+  "basssuboctave": {
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01
+   }
+  },
+  "so-2": {
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01
+   }
+  },
+  "khs pitch shifter": {
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "Set Pitch manually to -12 in the VST editor for sub-octave"
+   }
+  }
+ },
+ "Bass_Pedal_EdenWTDI": {
+  "edenwtdi": {
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.033333,
+    "offset": 0.5,
+    "_hint": "RS Bass \u00b115 dB \u2192 low-shelf gain 0..1 (0.5 = flat)."
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.033333,
+    "offset": 0.5,
+    "_hint": "RS Mid \u00b115 dB \u2192 mid-peak gain 0..1 (0.5 = flat)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.033333,
+    "offset": 0.5,
+    "_hint": "RS Treble \u00b115 dB \u2192 high-shelf gain 0..1 (0.5 = flat)."
+   },
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.033,
+    "_hint": "RS Gain (e.g. 18) \u2192 preamp drive 0..1 (clamped)."
+   },
+   "Enhance": {
+    "param": "Enhance",
+    "scale": 0.1,
+    "_hint": "RS Enhance 0-10 \u2192 contour amount 0..1."
+   },
+   "Compression": {
+    "param": "Comp",
+    "scale": 0.1,
+    "_hint": "RS Compression 0-10 \u2192 compressor amount 0..1."
+   },
+   "LoShift": {
+    "param": "Bass Boost",
+    "scale": 1.0,
+    "_hint": "RS LoShift switch 0/1 \u2192 Bass Boost toggle (drops low corner + adds bottom)."
+   },
+   "MidShift": {
+    "param": "Mid Shift",
+    "scale": 1.0,
+    "_hint": "RS MidShift switch 0/1 \u2192 Mid Shift toggle (600 Hz \u2192 1.2 kHz)."
+   }
+  },
+  "wt-dx": {
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.033333,
+    "offset": 0.5,
+    "_hint": "RS Bass \u00b115 dB \u2192 low-shelf gain 0..1 (0.5 = flat)."
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.033333,
+    "offset": 0.5,
+    "_hint": "RS Mid \u00b115 dB \u2192 mid-peak gain 0..1 (0.5 = flat)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.033333,
+    "offset": 0.5,
+    "_hint": "RS Treble \u00b115 dB \u2192 high-shelf gain 0..1 (0.5 = flat)."
+   },
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.033,
+    "_hint": "RS Gain (e.g. 18) \u2192 preamp drive 0..1 (clamped)."
+   },
+   "Enhance": {
+    "param": "Enhance",
+    "scale": 0.1,
+    "_hint": "RS Enhance 0-10 \u2192 contour amount 0..1."
+   },
+   "Compression": {
+    "param": "Comp",
+    "scale": 0.1,
+    "_hint": "RS Compression 0-10 \u2192 compressor amount 0..1."
+   },
+   "LoShift": {
+    "param": "Bass Boost",
+    "scale": 1.0,
+    "_hint": "RS LoShift switch 0/1 \u2192 Bass Boost toggle (drops low corner + adds bottom)."
+   },
+   "MidShift": {
+    "param": "Mid Shift",
+    "scale": 1.0,
+    "_hint": "RS MidShift switch 0/1 \u2192 Mid Shift toggle (600 Hz \u2192 1.2 kHz)."
+   }
+  }
+ },
+ "Bass_Pedal_BassDistortion": {
+  "bassdistortion": {
+   "_static": {
+    "Volume": 0.62
+   },
+   "Gain": {
+    "param": "Distortion",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 \u2192 RAT Distortion (drive) 0..1."
+   },
+   "Tone": {
+    "param": "Filter",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "Legacy RS Tone alias \u2192 RAT Filter. Real RAT has no Tone knob; higher RS brightness maps to a lower real Filter value."
+   },
+   "Filter": {
+    "param": "Filter",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "RS Filter 0-100 \u2192 RAT Filter. The real RAT Filter darkens clockwise, so this is inverted to preserve RS bright-at-high values."
+   }
+  },
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.8
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 \u2192 kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  },
+  "mouse": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 \u2192 RAT Distortion (drive) 0..1."
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 pre-clip brightness 0..1 (grit character)."
+   },
+   "Filter": {
+    "param": "Filter",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 RAT Filter low-pass 0..1 (dark\u2194bright)."
+   }
+  }
+ },
+ "Pedal_FuzzWasHe": {
+  "bz-1": {
+   "Gain": {
+    "param": "Fuzz",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01
+   },
+   "_static": {
+    "Volume": 0.62
+   }
+  },
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.2
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 \u2192 kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Pedal_CaptFuzzle": {
+  "buzz-tone": {
+   "Gain": {
+    "param": "Fuzz",
+    "scale": 0.01
+   },
+   "_static": {
+    "Volume": 0.6
+   }
+  },
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.2
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 \u2192 kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Pedal_BuzzOne": {
+  "super-buzz": {
+   "Gain": {
+    "param": "Expander",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone SW",
+    "scale": 0.01,
+    "_hint": "RS Tone selects the real Super-Fuzz tone switch: values below 50 choose the darker/nasal mode, values 50+ choose the brighter/scooped mode."
+   },
+   "_static": {
+    "Balance": 0.62
+   }
+  },
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 \u2192 kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Pedal_BuzzToo": {
+  "big buzz": {
+   "Gain": {
+    "param": "Sustain",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "Big Muff Tone control (the real third pot): lower is darker/thicker, higher is brighter and more scooped (the classic mid-scoop)."
+   },
+   "_static": {
+    "Volume": 0.62
+   }
+  },
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.2
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 \u2192 kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  }
+ },
+ "Bass_Pedal_BassFuzz": {
+  "bassfuzz": {
+   "_static": {
+    "Volume": 0.62
+   },
+   "Gain": {
+    "param": "Sustain",
+    "scale": 0.01,
+    "_hint": "RS Gain (sustain) 0-100 \u2192 Big Muff drive 0..1."
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 Big Muff tone stack 0..1 (LP\u2194HP, mid scoop at 0.5)."
+   },
+   "Filter": {
+    "param": "Bass/Dry",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 Bass Big Muff 3-way Bass/Dry switch: normal/bass-boost/dry, quantized by the VST."
+   }
+  },
+  "khs distortion": {
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "_static": {
+    "Dynamics": 1.0,
+    "Type": 0.2
+   },
+   "Tone": {
+    "param": "Bias",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 kHs Distortion Bias 0-1. Bias=0.5 (RS Tone 50) is symmetric clipping; <0.5 darker, >0.5 brighter character via asymmetric harmonics."
+   },
+   "Filter": {
+    "param": "Dynamics",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 kHs Dynamics 0-1. Overrides the _static Dynamics=1.0 pin when this gear exposes a Filter knob."
+   },
+   "Blend": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 \u2192 kHs Dry/Wet 0-1. Most distortion pedals don't expose Blend; Bass_Pedal_BassOverdrive does."
+   }
+  },
+  "bass big buzz": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Gain (sustain) 0-100 \u2192 Big Muff drive 0..1."
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 Big Muff tone stack 0..1 (LP\u2194HP, mid scoop at 0.5)."
+   },
+   "Filter": {
+    "param": "Filter",
+    "scale": 0.01,
+    "_hint": "RS Filter 0-100 \u2192 clean low-end blend 0..1 (the bass-specific dry/bass mix)."
+   }
+  }
+ },
+ "Pedal_Compression": {
+  "dynamicscompression": {
+   "_static": {
+    "Output": 0.62
+   },
+   "Comp": {
+    "param": "Sensitivity",
+    "scale": 0.01,
+    "_hint": "RS Comp drives the real Dyna Comp Sensitivity pot. Output is pinned because the real pedal has no Attack/Release controls."
+   }
+  },
+  "khs compressor": {
+   "Comp": {
+    "param": "Threshold",
+    "scale": -0.46,
+    "offset": 6.0,
+    "_hint": "RS Compress amount 0-100 \u2192 Threshold full range: 0\u2192+6dB (no comp), 100\u2192-40dB (max)."
+   }
+  },
+  "mcompressor": {
+   "Comp": {
+    "param": "Threshold",
+    "scale": -1.0,
+    "offset": 0,
+    "_hint": "RS 'Comp' 0-100 \u2192 MCompressor Threshold roughly -100 to 0 dB. Higher RS Comp = lower threshold = more compression"
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.01
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.01
+   }
+  },
+  "dyna comp": {
+   "_static": {
+    "Output": 0.62
+   },
+   "Comp": {
+    "param": "Sensitivity",
+    "scale": 0.01,
+    "_hint": "RS Comp drives the real Dyna Comp Sensitivity pot. Output is pinned because the real pedal has no Attack/Release controls."
+   }
+  }
+ },
+ "Pedal_Compressor": {
+  "dynamicscompression": {
+   "_static": {
+    "Output": 0.62
+   },
+   "Comp": {
+    "param": "Sensitivity",
+    "scale": 0.01
+   }
+  },
+  "dyna comp": {
+   "_static": {
+    "Output": 0.62
+   },
+   "Comp": {
+    "param": "Sensitivity",
+    "scale": 0.01
+   }
+  },
+  "khs compressor": {
+   "Comp": {
+    "param": "Threshold",
+    "scale": -1.0,
+    "offset": 0
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.01
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.01
+   }
+  },
+  "mcompressor": {
+   "Comp": {
+    "param": "Threshold",
+    "scale": -1.0,
+    "offset": 0,
+    "_hint": "RS 'Comp' 0-100 \u2192 MCompressor Threshold roughly -100 to 0 dB. Higher RS Comp = lower threshold = more compression"
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.01
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.01
+   }
+  }
+ },
+ "Bass_Pedal_MBComp": {
+  "bassmulticomp": {
+   "_static": {
+    "Gain": 0.56,
+    "Mode": 0.50
+   },
+   "Compress": {
+    "param": "Comp",
+    "scale": 0.01,
+    "_hint": "RS Compress drives the real EBS Comp control."
+   },
+   "Filter": {
+    "param": "Sens",
+    "scale": 0.01,
+    "_hint": "RS Filter is reused as the real EBS Sens control. Gain and Mode are pinned by _static."
+   }
+  },
+  "khs compressor": {
+   "Compress": {
+    "param": "Threshold",
+    "scale": -0.46,
+    "offset": 6.0,
+    "_hint": "RS Compress amount 0-100 \u2192 Threshold full range: 0\u2192+6dB (no comp), 100\u2192-40dB (max)."
+   }
+  },
+  "mcompressor": {
+   "Compress": {
+    "param": "Threshold",
+    "scale": -1.0,
+    "offset": 0,
+    "_hint": "Single-band fallback \u2014 RS MBComp's multiband info is lost (Melda free has no MDynamicsMB)"
+   }
+  },
+  "multi comp": {
+   "_static": {
+    "Gain": 0.56,
+    "Mode": 0.50
+   },
+   "Compress": {
+    "param": "Comp",
+    "scale": 0.01,
+    "_hint": "RS Compress drives the real EBS Comp control."
+   },
+   "Filter": {
+    "param": "Sens",
+    "scale": 0.01,
+    "_hint": "RS Filter is reused as the real EBS Sens control. Gain and Mode are pinned by _static."
+   }
+  }
+ },
+ "Pedal_USWah": {
+  "uswah": {
+   "Auto": {
+    "param": "Auto",
+    "scale": 1.0
+   },
+   "Pedal": {
+    "param": "Pedal",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   }
+  },
+  "khs filter": {
+   "Pedal": {
+    "param": "Cutoff",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Resonance",
+    "scale": 0.01,
+    "_hint": "Wah sensitivity \u2192 resonance peak"
+   }
+  },
+  "cry man": {
+   "Auto": {
+    "param": "Auto",
+    "scale": 1.0
+   },
+   "Pedal": {
+    "param": "Pedal",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_UKWah": {
+  "ukwah": {
+   "Auto": {
+    "param": "Auto",
+    "scale": 1.0
+   },
+   "Pedal": {
+    "param": "Pedal",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   }
+  },
+  "khs filter": {
+   "Pedal": {
+    "param": "Cutoff",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Resonance",
+    "scale": 0.01
+   }
+  },
+  "box b847": {
+   "Auto": {
+    "param": "Auto",
+    "scale": 1.0
+   },
+   "Pedal": {
+    "param": "Pedal",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_ModernWah": {
+  "modernwah": {
+   "Auto": {
+    "param": "Auto",
+    "scale": 1.0
+   },
+   "Pedal": {
+    "param": "Pedal",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   }
+  },
+  "khs filter": {
+   "Pedal": {
+    "param": "Cutoff",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Resonance",
+    "scale": 0.01
+   }
+  },
+  "jockey bad": {
+   "Auto": {
+    "param": "Auto",
+    "scale": 1.0
+   },
+   "Pedal": {
+    "param": "Pedal",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_LoFiFilter": {
+  "lofifilter": {
+   "_static": {
+    "Level": 0.66,
+    "Lo": 0.2
+   },
+   "FilterType": {
+    "param": "Hi",
+    "scale": 0.01,
+    "_hint": "RS FilterType drives the real Hi cut/lo-fi window control."
+   },
+   "Mix": {
+    "param": "Drive",
+    "scale": 0.01,
+    "_hint": "RS Mix drives the real Drive control; Level and Lo are pinned in _static."
+   }
+  },
+  "khs filter": {
+   "FilterType": {
+    "param": "Cutoff",
+    "scale": 0.01,
+    "_hint": "RS FilterType sweeps the low-pass cutoff (low=darker/lo-fi)"
+   },
+   "Mix": {
+    "param": "Q",
+    "scale": 0.01,
+    "_hint": "RS Mix \u2192 resonance/Q for lo-fi colour (kHs Filter has no dry/wet)"
+   }
+  },
+  "lo fi filter": {
+   "_static": {
+    "Level": 0.66,
+    "Lo": 0.2
+   },
+   "FilterType": {
+    "param": "Hi",
+    "scale": 0.01,
+    "_hint": "RS FilterType drives the real Hi cut/lo-fi window control."
+   },
+   "Mix": {
+    "param": "Drive",
+    "scale": 0.01,
+    "_hint": "RS Mix drives the real Drive control; Level and Lo are pinned in _static."
+   }
+  }
+ },
+ "Pedal_BobFilter": {
+  "bobfilter": {
+   "_static": {
+    "Output": 0.68,
+    "Pattern": 0.28
+   },
+   "Sens": {
+    "param": "Drive",
+    "scale": 0.008,
+    "offset": 0.18,
+    "_hint": "RS Sens drives the real Drive/input amount with a floor so the filter keeps moving."
+   },
+   "Attack": {
+    "param": "Envelope",
+    "scale": 0.004016064257028112,
+    "offset": -0.004016064257028112,
+    "invert": true,
+    "_hint": "RS Attack is observed 1-250 ms; smaller attack means faster MF-105 envelope response."
+   },
+   "Release": {
+    "param": "Rate",
+    "scale": 0.00072,
+    "offset": -0.0072,
+    "invert": true,
+    "_hint": "RS Release has no direct MF-105 panel equivalent, so it biases the pattern rate slower at larger values."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Filter": {
+    "param": "Mode",
+    "scale": 1.0,
+    "_hint": "the game Filter is a binary 0/1 voicing switch mapped to Mids/Bass Mode."
+   }
+  },
+  "khs filter": {
+   "Cutoff": {
+    "param": "Cutoff",
+    "scale": 0.01
+   },
+   "Resonance": {
+    "param": "Resonance",
+    "scale": 0.01
+   }
+  },
+  "fm105": {
+   "_static": {
+    "Output": 0.68,
+    "Pattern": 0.28
+   },
+   "Sens": {
+    "param": "Drive",
+    "scale": 0.008,
+    "offset": 0.18,
+    "_hint": "RS Sens drives the real Drive/input amount with a floor so the filter keeps moving."
+   },
+   "Attack": {
+    "param": "Envelope",
+    "scale": 0.004016064257028112,
+    "offset": -0.004016064257028112,
+    "invert": true,
+    "_hint": "RS Attack is observed 1-250 ms; smaller attack means faster MF-105 envelope response."
+   },
+   "Release": {
+    "param": "Rate",
+    "scale": 0.00072,
+    "offset": -0.0072,
+    "invert": true,
+    "_hint": "RS Release has no direct MF-105 panel equivalent, so it biases the pattern rate slower at larger values."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Filter": {
+    "param": "Mode",
+    "scale": 1.0,
+    "_hint": "the game Filter is a binary 0/1 voicing switch mapped to Mids/Bass Mode."
+   }
+  }
+ },
+ "Pedal_AutoFilter": {
+  "autofilter": {
+   "FilterType": {
+    "param": "Mode",
+    "scale": 0.5,
+    "_hint": "0/1/2 maps to Mu-Tron style low-pass / band-pass / high-pass."
+   },
+   "Res": {
+    "param": "Peak",
+    "scale": 0.01,
+    "_hint": "Peak/resonance amount."
+   },
+   "Sens": {
+    "param": "Gain",
+    "scale": 0.008,
+    "offset": 0.18,
+    "_hint": "Input detector sensitivity and sweep range. The mapping keeps a floor so low RS values still sweep."
+   },
+   "_static": {
+    "Mode": 0.5,
+    "Peak": 0.56,
+    "Gain": 0.46,
+    "Range": 1.0,
+    "Direction": 1.0
+   }
+  },
+  "autosweep": {
+   "FilterType": {
+    "param": "FilterType",
+    "scale": 0.5,
+    "_hint": "0/1/2 \u2192 LP/BP/HP"
+   },
+   "Res": {
+    "param": "Res",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.006,
+    "offset": 0.3,
+    "_hint": "floored so low Sens isn't inaudible"
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.001,
+    "_hint": "RS Attack /1000 (RS 128 \u2192 0.128 \u2248 2ms)"
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.001
+   },
+   "_static": {
+    "Range": 0.9,
+    "Mix": 0.5,
+    "Boost": 0.2
+   }
+  },
+  "khs filter": {
+   "FilterType": {
+    "param": "Cutoff",
+    "scale": 0.01
+   },
+   "Res": {
+    "param": "Q",
+    "scale": 0.01
+   }
+  },
+  "bu-tron iii": {
+   "FilterType": {
+    "param": "Mode",
+    "scale": 0.5,
+    "_hint": "0/1/2 maps to Mu-Tron style low-pass / band-pass / high-pass."
+   },
+   "Res": {
+    "param": "Peak",
+    "scale": 0.01,
+    "_hint": "Peak/resonance amount."
+   },
+   "Sens": {
+    "param": "Gain",
+    "scale": 0.008,
+    "offset": 0.18,
+    "_hint": "Input detector sensitivity and sweep range. The mapping keeps a floor so low RS values still sweep."
+   },
+   "_static": {
+    "Mode": 0.5,
+    "Peak": 0.56,
+    "Gain": 0.46,
+    "Range": 1.0,
+    "Direction": 1.0
+   }
+  }
+ },
+ "Bass_Pedal_BassAutoFilter": {
+  "autosweep": {
+   "FilterType": {
+    "param": "FilterType",
+    "scale": 0.5,
+    "_hint": "0/1/2 maps to AutoSweep low-pass / band-pass / high-pass convention."
+   },
+   "Res": {
+    "param": "Res",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.006,
+    "offset": 0.3,
+    "_hint": "Same AutoSweep sensitivity floor as guitar Auto Tone so low bass values still sweep."
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.001,
+    "_hint": "RS Attack /1000 (RS 128 \u2192 0.128 \u2248 2ms)"
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.001
+   },
+   "_static": {
+    "Range": 0.0,
+    "Mix": 0.55,
+    "Boost": 0.15
+   },
+   "Speed": {
+    "param": "Release",
+    "scale": 0.001,
+    "_hint": "RS Bass-AutoFilter Speed (if present) \u2192 envelope release."
+   }
+  },
+  "khs filter": {
+   "Speed": {
+    "param": "Cutoff",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Resonance",
+    "scale": 0.01
+   }
+  },
+  "qtrix": {
+   "FilterType": {
+    "param": "FilterType",
+    "scale": 0.5,
+    "_hint": "0/1/2 maps to AutoSweep low-pass / band-pass / high-pass convention."
+   },
+   "Res": {
+    "param": "Res",
+    "scale": 0.01
+   },
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.006,
+    "offset": 0.3,
+    "_hint": "Same AutoSweep sensitivity floor as guitar Auto Tone so low bass values still sweep."
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.001,
+    "_hint": "RS Attack /1000 (RS 128 \u2192 0.128 \u2248 2ms)"
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.001
+   },
+   "_static": {
+    "Range": 0.0,
+    "Mix": 0.55,
+    "Boost": 0.15
+   },
+   "Speed": {
+    "param": "Release",
+    "scale": 0.001,
+    "_hint": "RS Bass-AutoFilter Speed (if present) \u2192 envelope release."
+   }
+  }
+ },
+ "Pedal_EQ5": {
+  "eq5": {
+   "63": {
+    "param": "63",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "250": {
+    "param": "250",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "750": {
+    "param": "750",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "2200": {
+    "param": "2200",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "5700": {
+    "param": "5700",
+    "scale": 0.033333,
+    "offset": 0.5
+   }
+  },
+  "khs 3-band eq": {
+   "63": {
+    "param": "Low Gain",
+    "scale": 1.0,
+    "_hint": "RS EQ5 63Hz \u2192 KHS Low band. Value is dB direct. Verify paramId in inline editor \u2014 may be 'Low Gain', 'Low', or similar. Lossy: bands 250, 2200 are dropped."
+   },
+   "750": {
+    "param": "Mid Gain",
+    "scale": 1.0,
+    "_hint": "RS EQ5 750Hz \u2192 KHS Mid band."
+   },
+   "5700": {
+    "param": "High Gain",
+    "scale": 1.0,
+    "_hint": "RS EQ5 5700Hz \u2192 KHS High band."
+   }
+  },
+  "mequalizer": {
+   "_graphic_eq": [
+    {
+     "freq": 63,
+     "rs": [
+      "63"
+     ]
+    },
+    {
+     "freq": 250,
+     "rs": [
+      "250"
+     ]
+    },
+    {
+     "freq": 750,
+     "rs": [
+      "750"
+     ]
+    },
+    {
+     "freq": 2200,
+     "rs": [
+      "2200"
+     ]
+    },
+    {
+     "freq": 5700,
+     "rs": [
+      "5700"
+     ]
+    }
+   ]
+  }
+ },
+ "Pedal_EQ8": {
+  "eq8": {
+   "50": {
+    "param": "50",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "100": {
+    "param": "100",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "200": {
+    "param": "200",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "400": {
+    "param": "400",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "800": {
+    "param": "800",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "1600": {
+    "param": "1600",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "3200": {
+    "param": "3200",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "6400": {
+    "param": "6400",
+    "scale": 0.033333,
+    "offset": 0.5
+   }
+  },
+  "khs 3-band eq": {
+   "100": {
+    "param": "Low Gain",
+    "scale": 1.0,
+    "_hint": "RS EQ8 100Hz \u2192 KHS Low band. dB direct. Lossy: bands 50, 200, 400, 1600, 6400 are dropped \u2014 install Voxengo Marvel GEQ for full 8-band fidelity."
+   },
+   "800": {
+    "param": "Mid Gain",
+    "scale": 1.0,
+    "_hint": "RS EQ8 800Hz \u2192 KHS Mid band."
+   },
+   "3200": {
+    "param": "High Gain",
+    "scale": 1.0,
+    "_hint": "RS EQ8 3200Hz \u2192 KHS High band."
+   }
+  },
+  "mequalizer": {
+   "_graphic_eq": [
+    {
+     "freq": 71,
+     "rs": [
+      "50",
+      "100"
+     ]
+    },
+    {
+     "freq": 283,
+     "rs": [
+      "200",
+      "400"
+     ]
+    },
+    {
+     "freq": 800,
+     "rs": [
+      "800"
+     ]
+    },
+    {
+     "freq": 1600,
+     "rs": [
+      "1600"
+     ]
+    },
+    {
+     "freq": 3200,
+     "rs": [
+      "3200"
+     ]
+    },
+    {
+     "freq": 6400,
+     "rs": [
+      "6400"
+     ]
+    }
+   ]
+  },
+  "ge-8": {
+   "50": {
+    "param": "50",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "100": {
+    "param": "100",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "200": {
+    "param": "200",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "400": {
+    "param": "400",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "800": {
+    "param": "800",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "1600": {
+    "param": "1600",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "3200": {
+    "param": "3200",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "6400": {
+    "param": "6400",
+    "scale": 0.033333,
+    "offset": 0.5
+   }
+  }
+ },
+ "Bass_Pedal_BassEQ8": {
+  "basseq8": {
+   "30": {
+    "param": "30",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "75": {
+    "param": "75",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "185": {
+    "param": "185",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "460": {
+    "param": "460",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "1100": {
+    "param": "1100",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "2700": {
+    "param": "2700",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "6800": {
+    "param": "6800",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "16000": {
+    "param": "16000",
+    "scale": 0.033333,
+    "offset": 0.5
+   }
+  },
+  "khs 3-band eq": {
+   "75": {
+    "param": "Low Gain",
+    "scale": 1.0,
+    "_hint": "Bass EQ8 75Hz \u2192 KHS Low band. dB direct. Lossy: bands 30, 185, 1100, 6800, 16000 dropped."
+   },
+   "460": {
+    "param": "Mid Gain",
+    "scale": 1.0,
+    "_hint": "Bass EQ8 460Hz \u2192 KHS Mid band."
+   },
+   "2700": {
+    "param": "High Gain",
+    "scale": 1.0,
+    "_hint": "Bass EQ8 2700Hz \u2192 KHS High band."
+   }
+  },
+  "mequalizer": {
+   "_graphic_eq": [
+    {
+     "freq": 30,
+     "rs": [
+      "30"
+     ]
+    },
+    {
+     "freq": 75,
+     "rs": [
+      "75"
+     ]
+    },
+    {
+     "freq": 185,
+     "rs": [
+      "185"
+     ]
+    },
+    {
+     "freq": 460,
+     "rs": [
+      "460"
+     ]
+    },
+    {
+     "freq": 1723,
+     "rs": [
+      "1100",
+      "2700"
+     ]
+    },
+    {
+     "freq": 10431,
+     "rs": [
+      "6800",
+      "16000"
+     ]
+    }
+   ]
+  },
+  "geb-8": {
+   "30": {
+    "param": "30",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "75": {
+    "param": "75",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "185": {
+    "param": "185",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "460": {
+    "param": "460",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "1100": {
+    "param": "1100",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "2700": {
+    "param": "2700",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "6800": {
+    "param": "6800",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "16000": {
+    "param": "16000",
+    "scale": 0.033333,
+    "offset": 0.5
+   }
+  }
+ },
+ "Rack_StudioEQ": {
+  "studioeq": {
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "BassFreq": {
+    "param": "BassFreq",
+    "scale": 1.0,
+    "_hint": "Hz, log[30,300]"
+   },
+   "LoMid": {
+    "param": "LoMid",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "LoMidFreq": {
+    "param": "LoMidFreq",
+    "scale": 1.0,
+    "_hint": "Hz, log[120,2000]"
+   },
+   "LoMidQ": {
+    "param": "LoMidQ",
+    "scale": 1.0,
+    "_hint": "Q, log[0.3,4]"
+   },
+   "HiMid": {
+    "param": "HiMid",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "HiMidFreq": {
+    "param": "HiMidFreq",
+    "scale": 1000.0,
+    "_hint": "RS kHz\u2192Hz, log[400,8000]"
+   },
+   "HiMidQ": {
+    "param": "HiMidQ",
+    "scale": 1.0
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "TrebleFreq": {
+    "param": "TrebleFreq",
+    "scale": 1000.0,
+    "_hint": "RS kHz\u2192Hz, log[1500,16000]"
+   }
+  },
+  "khs 3-band eq": {
+   "Bass": {
+    "param": "Low Gain",
+    "scale": 1.0,
+    "_hint": "4-band parametric \u2014 value is dB direct. Q + Freq knobs (BassFreq, LoMidFreq, HiMidFreq, TrebleFreq, LoMidQ, HiMidQ) are ignored. Lossy 4\u21923 (HiMid combined out). For lossless, switch the gear to TDR Nova (free 4-band parametric)."
+   },
+   "LoMid": {
+    "param": "Mid Gain",
+    "scale": 1.0,
+    "_hint": "Mapped as the single mid; HiMid silently dropped."
+   },
+   "Treble": {
+    "param": "High Gain",
+    "scale": 1.0
+   }
+  },
+  "mequalizer": {
+   "Bass": {
+    "param": "Gain 1 (EQ 1)",
+    "scale": 1.0,
+    "_hint": "Set Band 1 On = true. dB direct."
+   },
+   "BassFreq": {
+    "param": "Frequency 1 (EQ 1)",
+    "scale": 1.0,
+    "_hint": "RS BassFreq is Hz direct (e.g. 65-485)"
+   },
+   "LoMid": {
+    "param": "Gain 2 (EQ 2)",
+    "scale": 1.0
+   },
+   "LoMidFreq": {
+    "param": "Frequency 2 (EQ 2)",
+    "scale": 1.0,
+    "_hint": "RS LoMidFreq is Hz direct (120-2000)"
+   },
+   "LoMidQ": {
+    "param": "Q 2 (EQ 2)",
+    "scale": 1.0,
+    "_hint": "RS LoMidQ ~0-4 \u2014 verify Melda Q range matches"
+   },
+   "HiMid": {
+    "param": "Gain 3 (EQ 3)",
+    "scale": 1.0
+   },
+   "HiMidFreq": {
+    "param": "Frequency 3 (EQ 3)",
+    "scale": 1000.0,
+    "_hint": "RS HiMidFreq is in kHz (0.3-8) \u2014 multiply by 1000 to land in Hz"
+   },
+   "HiMidQ": {
+    "param": "Q 3 (EQ 3)",
+    "scale": 1.0,
+    "_hint": "RS HiMidQ ~0-1"
+   },
+   "Treble": {
+    "param": "Gain 4 (EQ 4)",
+    "scale": 1.0
+   },
+   "TrebleFreq": {
+    "param": "Frequency 4 (EQ 4)",
+    "scale": 1000.0,
+    "_hint": "RS TrebleFreq is in kHz (2-13) \u2014 multiply by 1000"
+   },
+   "_static": {
+    "Enable 1 (EQ 1)": 1.0,
+    "Enable 2 (EQ 2)": 1.0,
+    "Enable 3 (EQ 3)": 1.0,
+    "Enable 4 (EQ 4)": 1.0
+   }
+  },
+  "lng": {
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "BassFreq": {
+    "param": "BassFreq",
+    "scale": 1.0,
+    "_hint": "Hz, log[30,300]"
+   },
+   "LoMid": {
+    "param": "LoMid",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "LoMidFreq": {
+    "param": "LoMidFreq",
+    "scale": 1.0,
+    "_hint": "Hz, log[120,2000]"
+   },
+   "LoMidQ": {
+    "param": "LoMidQ",
+    "scale": 1.0,
+    "_hint": "Q, log[0.3,4]"
+   },
+   "HiMid": {
+    "param": "HiMid",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "HiMidFreq": {
+    "param": "HiMidFreq",
+    "scale": 1000.0,
+    "_hint": "RS kHz\u2192Hz, log[400,8000]"
+   },
+   "HiMidQ": {
+    "param": "HiMidQ",
+    "scale": 1.0
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "TrebleFreq": {
+    "param": "TrebleFreq",
+    "scale": 1000.0,
+    "_hint": "RS kHz\u2192Hz, log[1500,16000]"
+   }
+  }
+ },
+ "Pedal_NoiseGate": {
+  "noisegate": {
+   "Thresh": {
+    "param": "Thresh",
+    "scale": 0.02,
+    "offset": 2.0,
+    "_hint": "RS Thresh is stored in dB. Map roughly -100..-50 dB into the bundled gate's normalized threshold."
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "Higher RS Rate tightens the gate decay and increases attenuation range."
+   }
+  },
+  "khs gate": {
+   "Thresh": {
+    "param": "Threshold",
+    "scale": 1.0,
+    "_hint": "RS Thresh in dB (-66 typical) maps direct to KHS Threshold"
+   },
+   "Rate": {
+    "param": "Range",
+    "scale": 0.01,
+    "_hint": "Higher RS Rate = more aggressive gating = larger range"
+   }
+  },
+  "nf-1": {
+   "Thresh": {
+    "param": "Thresh",
+    "scale": 0.02,
+    "offset": 2.0,
+    "_hint": "RS Thresh is stored in dB. Map roughly -100..-50 dB into the bundled gate's normalized threshold."
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "Higher RS Rate tightens the gate decay and increases attenuation range."
+   }
+  }
+ },
+ "Pedal_OctaveUp": {
+  "octaveup": {
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "khs pitch shifter": {
+   "Tone": {
+    "param": "Pitch",
+    "scale": 0.12,
+    "_hint": "Scale 0.12 lands roughly at +12 semitones (one octave up) for full Tone=100"
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "octup": {
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_Octavius": {
+  "octavius": {
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "khs pitch shifter": {
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "oc-5": {
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_MultiPitch": {
+  "multipitch": {
+   "Pitch1": {
+    "param": "Pitch1",
+    "scale": 0.020833333333333332,
+    "offset": 0.5,
+    "_hint": "RS semitone Pitch1 normalized from -24..+24; -12 maps to 0.25 for a low MF-102 carrier."
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "khs pitch shifter": {
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "multi pitch": {
+   "Pitch1": {
+    "param": "Pitch1",
+    "scale": 0.020833333333333332,
+    "offset": 0.5,
+    "_hint": "RS semitone Pitch1 normalized from -24..+24; -12 maps to 0.25 for a low MF-102 carrier."
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_BitCruncher": {
+  "bitcruncher": {
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.01,
+    "_hint": "the game Attack controls the envelope rise time for dynamic crushing."
+   },
+   "FilterType": {
+    "param": "FilterType",
+    "scale": 0.125,
+    "_hint": "the game stores FilterType as selector values 3/4/8; /8 preserves the mode positions."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.01,
+    "_hint": "the game Release controls the envelope fall time for dynamic crushing."
+   },
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.01,
+    "_hint": "the game Sens controls how hard the input drives the bit depth and sample-rate reduction."
+   }
+  },
+  "khs bitcrush": {
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_RingMod": {
+  "ringmod": {
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth controls ring-mod wet amount and carrier injection."
+   },
+   "Waveform": {
+    "param": "Waveform",
+    "scale": 1.0,
+    "_hint": "RS Waveform values are selector-like. 0 is rounded sine/triangle, 1 is sharper square."
+   },
+   "Sensitivity": {
+    "param": "Sensitivity",
+    "scale": 0.01,
+    "_hint": "RS Sensitivity controls squelch/envelope sensitivity and carrier range."
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.01,
+    "_hint": "RS Attack controls envelope and carrier slew time."
+   }
+  },
+  "khs ring mod": {
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mringmodulator": {
+   "Freq": {
+    "param": "Frequency",
+    "scale": 0.01,
+    "_hint": "RS RingMod Freq \u2192 Melda Frequency. Both likely 0-1 normalized; verify range"
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_Swole": {
+  "swole": {
+   "Smash": {
+    "param": "Sensitivity",
+    "scale": 0.01,
+    "_hint": "RS Smash drives the real Lazy Sprocket/SG-1 Sensitivity control."
+   },
+   "Rate": {
+    "param": "Attack",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "RS Rate is perceived speed, so it maps inverted to the real Attack pot."
+   }
+  },
+  "khs filter": {
+   "Rate": {
+    "param": "Cutoff",
+    "scale": 0.01
+   },
+   "Smash": {
+    "param": "Q",
+    "scale": 0.01
+   }
+  },
+  "beta fist": {
+   "Smash": {
+    "param": "Sensitivity",
+    "scale": 0.01,
+    "_hint": "RS Smash drives the real Lazy Sprocket/SG-1 Sensitivity control."
+   },
+   "Rate": {
+    "param": "Attack",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "RS Rate is perceived speed, so it maps inverted to the real Attack pot."
+   }
+  }
+ },
+ "Pedal_Enbiggenator": {
+  "enbiggenator": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "khs distortion": {
+   "Depth": {
+    "param": "Drive",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "mime": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Pedal_Limiter": {
+  "limiter": {
+   "_static": {
+    "Level": 0.58,
+    "Tone": 0.52
+   },
+   "Limit": {
+    "param": "Threshold",
+    "scale": 0.01,
+    "_hint": "RS Limit drives the real LM-2 Threshold pot."
+   },
+   "Rate": {
+    "param": "Release",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "RS Rate is recovery speed, so it maps inverted to the real Release pot."
+   }
+  },
+  "lm-2": {
+   "_static": {
+    "Level": 0.58,
+    "Tone": 0.52
+   },
+   "Limit": {
+    "param": "Threshold",
+    "scale": 0.01,
+    "_hint": "RS Limit drives the real LM-2 Threshold pot."
+   },
+   "Rate": {
+    "param": "Release",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "RS Rate is recovery speed, so it maps inverted to the real Release pot."
+   }
+  }
+ },
+ "Pedal_TremOle": {
+  "tremole": {
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.01,
+    "_hint": "the game Sens controls detector drive for the envelope tremolo."
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.01
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "the game Mix controls tremolo depth."
+   }
+  },
+  "mtremolo": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.09,
+    "offset": 1.0,
+    "_hint": "RS Speed 0-100 \u2192 1-10 Hz (display Hz; range log[0.01,20] in apply_vst_state)"
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Mix on a tremolo = depth (MTremolo has no Dry/Wet param)"
+   }
+  },
+  "dyna-trem": {
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.01,
+    "_hint": "the game Sens controls detector drive for the envelope tremolo."
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.01
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "the game Mix controls tremolo depth."
+   }
+  }
+ },
+ "Pedal_AmpVibe": {
+  "ampvibe": {
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Mix controls the chorus/vibe dry-phase blend and modulation depth."
+   }
+  },
+  "mvibrato": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  },
+  "multi-vibe": {
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Mix controls the chorus/vibe dry-phase blend and modulation depth."
+   }
+  }
+ },
+ "Pedal_MultiVibe": {
+  "multivibe": {
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Rate": {
+    "param": "Speed",
+    "scale": 0.01,
+    "_hint": "Alias for any extracted rows that use Rate instead of Speed."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "the game Multi Vib Mix controls wet/depth intensity."
+   },
+   "Waveform": {
+    "param": "Waveform",
+    "scale": 1.0,
+    "_hint": "the game Waveform is selector-like here; value 1 selects the stronger VB-2 LFO/rise character."
+   },
+   "Wave": {
+    "param": "Waveform",
+    "scale": 1.0,
+    "_hint": "Alias for any extracted rows that use Wave instead of Waveform."
+   }
+  },
+  "mvibrato": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  },
+  "vb-2": {
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Rate": {
+    "param": "Speed",
+    "scale": 0.01,
+    "_hint": "Alias for any extracted rows that use Rate instead of Speed."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "the game Multi Vib Mix controls wet/depth intensity."
+   },
+   "Waveform": {
+    "param": "Waveform",
+    "scale": 1.0,
+    "_hint": "the game Waveform is selector-like here; value 1 selects the stronger VB-2 LFO/rise character."
+   },
+   "Wave": {
+    "param": "Waveform",
+    "scale": 1.0,
+    "_hint": "Alias for any extracted rows that use Wave instead of Waveform."
+   }
+  }
+ },
+ "Pedal_MarshallSupervibe": {
+  "marshallsupervibe": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "Alias for any extracted rows that use Speed instead of Rate."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Wave": {
+    "param": "Wave",
+    "scale": 0.01,
+    "_hint": "the game Wave shapes the Supervibe LFO and sharper rotary/vibe character."
+   }
+  },
+  "mvibrato": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  },
+  "uv-1": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "Alias for any extracted rows that use Speed instead of Rate."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Wave": {
+    "param": "Wave",
+    "scale": 0.01,
+    "_hint": "the game Wave shapes the Supervibe LFO and sharper rotary/vibe character."
+   }
+  }
+ },
+ "Pedal_AutoVibe": {
+  "autovibe": {
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.01,
+    "_hint": "the game Sens controls envelope sensitivity."
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.01
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "the game Mix controls wet vibrato amount."
+   }
+  },
+  "mvibrato": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  },
+  "oceanduct": {
+   "Sens": {
+    "param": "Sens",
+    "scale": 0.01,
+    "_hint": "the game Sens controls envelope sensitivity."
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 0.01
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "the game Mix controls wet vibrato amount."
+   }
+  }
+ },
+ "Pedal_BassEmulator": {
+  "bassemulator": {
+   "Body": {
+    "param": "Body",
+    "scale": 0.01,
+    "_hint": "the game Body controls the octave-down body and low-end weight."
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "the game Tone controls the bass-emulator brightness."
+   }
+  },
+  "bass emulator": {
+   "Body": {
+    "param": "Body",
+    "scale": 0.01,
+    "_hint": "the game Body controls the octave-down body and low-end weight."
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "the game Tone controls the bass-emulator brightness."
+   }
+  }
+ },
+ "Pedal_BakedRotatoe": {
+  "bakedrotatoe": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "Target rotary speed. The plugin applies Leslie/LERA-style acceleration and braking internally."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "Doppler, tremolo and cabinet motion intensity."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Balance": {
+    "param": "Balance",
+    "scale": 0.01,
+    "_hint": "Drum/horn balance: lower favors the low drum, higher favors the horn."
+   }
+  },
+  "khs chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Dry/Wet",
+    "scale": 0.01
+   }
+  },
+  "rt-2": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "Target rotary speed. The plugin applies Leslie/LERA-style acceleration and braking internally."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "Doppler, tremolo and cabinet motion intensity."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Balance": {
+    "param": "Balance",
+    "scale": 0.01,
+    "_hint": "Drum/horn balance: lower favors the low drum, higher favors the horn."
+   }
+  }
+ },
+ "Pedal_AmpEQ": {
+  "ampeq": {
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass pot 0-100 \u2192 tone-stack bass pot 0..1 (l). 50 = noon."
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.01,
+    "_hint": "RS Mid pot 0-100 \u2192 tone-stack mid pot 0..1 (m). 50 = noon."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble pot 0-100 \u2192 tone-stack treble pot 0..1 (t). 50 = noon."
+   },
+   "BassFreq": {
+    "param": "BassFreq",
+    "scale": 0.5,
+    "_hint": "RS BassFreq (nominal 1.0) \u2192 VST 0.5 = stock bass cap. Scales C2 \u00b11 octave."
+   },
+   "MidShift": {
+    "param": "MidShift",
+    "scale": 0.5,
+    "_hint": "RS MidShift (nominal 1.0) \u2192 VST 0.5 = stock mid cap. Scales C3 to move the scoop \u00b11 octave."
+   },
+   "TrebleFreq": {
+    "param": "TrebleFreq",
+    "scale": 0.5,
+    "_hint": "RS TrebleFreq (nominal 1.0) \u2192 VST 0.5 = stock treble cap. Scales C1 \u00b11 octave."
+   }
+  },
+  "mequalizer": {
+   "Bass": {
+    "param": "Gain 1 (EQ 1)",
+    "scale": 1.0,
+    "_hint": "RS Bass knob \u2192 MEqualizer Band 1. Curator: set Band 1 Frequency \u2248 80 Hz, On = true. dB direct."
+   },
+   "Mid": {
+    "param": "Gain 2 (EQ 2)",
+    "scale": 1.0,
+    "_hint": "RS Mid \u2192 Band 2. Frequency \u2248 800 Hz."
+   },
+   "Treble": {
+    "param": "Gain 3 (EQ 3)",
+    "scale": 1.0,
+    "_hint": "RS Treble \u2192 Band 3. Frequency \u2248 6 kHz."
+   },
+   "_static": {
+    "Enable 1 (EQ 1)": 1.0,
+    "Enable 2 (EQ 2)": 1.0,
+    "Enable 3 (EQ 3)": 1.0
+   }
+  },
+  "fbm-1": {
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass pot 0-100 \u2192 tone-stack bass pot 0..1 (l). 50 = noon."
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.01,
+    "_hint": "RS Mid pot 0-100 \u2192 tone-stack mid pot 0..1 (m). 50 = noon."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble pot 0-100 \u2192 tone-stack treble pot 0..1 (t). 50 = noon."
+   },
+   "BassFreq": {
+    "param": "BassFreq",
+    "scale": 0.5,
+    "_hint": "RS BassFreq (nominal 1.0) \u2192 VST 0.5 = stock bass cap. Scales C2 \u00b11 octave."
+   },
+   "MidShift": {
+    "param": "MidShift",
+    "scale": 0.5,
+    "_hint": "RS MidShift (nominal 1.0) \u2192 VST 0.5 = stock mid cap. Scales C3 to move the scoop \u00b11 octave."
+   },
+   "TrebleFreq": {
+    "param": "TrebleFreq",
+    "scale": 0.5,
+    "_hint": "RS TrebleFreq (nominal 1.0) \u2192 VST 0.5 = stock treble cap. Scales C1 \u00b11 octave."
+   }
+  }
+ },
+ "Rack_StudioGraphicEQ": {
+  "studiographiceq": {
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "BassFreq": {
+    "param": "BassFreq",
+    "scale": 1.0
+   },
+   "LoMid": {
+    "param": "LoMid",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "LoMidFreq": {
+    "param": "LoMidFreq",
+    "scale": 1.0
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "MidFreq": {
+    "param": "MidFreq",
+    "scale": 1000.0,
+    "_hint": "RS kHz\u2192Hz"
+   },
+   "HiMid": {
+    "param": "HiMid",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "HiMidFreq": {
+    "param": "HiMidFreq",
+    "scale": 1000.0,
+    "_hint": "RS kHz\u2192Hz"
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "TrebleFreq": {
+    "param": "TrebleFreq",
+    "scale": 1000.0,
+    "_hint": "RS kHz\u2192Hz"
+   }
+  },
+  "mequalizer": {
+   "Bass": {
+    "param": "Gain 1 (EQ 1)",
+    "scale": 1.0
+   },
+   "BassFreq": {
+    "param": "Frequency 1 (EQ 1)",
+    "scale": 1.0
+   },
+   "LoMid": {
+    "param": "Gain 2 (EQ 2)",
+    "scale": 1.0
+   },
+   "LoMidFreq": {
+    "param": "Frequency 2 (EQ 2)",
+    "scale": 1.0
+   },
+   "Mid": {
+    "param": "Gain 3 (EQ 3)",
+    "scale": 1.0
+   },
+   "MidFreq": {
+    "param": "Frequency 3 (EQ 3)",
+    "scale": 1000.0,
+    "_hint": "RS MidFreq is kHz"
+   },
+   "HiMid": {
+    "param": "Gain 4 (EQ 4)",
+    "scale": 1.0
+   },
+   "HiMidFreq": {
+    "param": "Frequency 4 (EQ 4)",
+    "scale": 1000.0,
+    "_hint": "kHz"
+   },
+   "Treble": {
+    "param": "Gain 5 (EQ 5)",
+    "scale": 1.0
+   },
+   "TrebleFreq": {
+    "param": "Frequency 5 (EQ 5)",
+    "scale": 1000.0,
+    "_hint": "kHz"
+   },
+   "_static": {
+    "Enable 1 (EQ 1)": 1.0,
+    "Enable 2 (EQ 2)": 1.0,
+    "Enable 3 (EQ 3)": 1.0,
+    "Enable 4 (EQ 4)": 1.0,
+    "Enable 5 (EQ 5)": 1.0
+   }
+  },
+  "g-550": {
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "BassFreq": {
+    "param": "BassFreq",
+    "scale": 1.0
+   },
+   "LoMid": {
+    "param": "LoMid",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "LoMidFreq": {
+    "param": "LoMidFreq",
+    "scale": 1.0
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "MidFreq": {
+    "param": "MidFreq",
+    "scale": 1000.0,
+    "_hint": "RS kHz\u2192Hz"
+   },
+   "HiMid": {
+    "param": "HiMid",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "HiMidFreq": {
+    "param": "HiMidFreq",
+    "scale": 1000.0,
+    "_hint": "RS kHz\u2192Hz"
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.033333,
+    "offset": 0.5
+   },
+   "TrebleFreq": {
+    "param": "TrebleFreq",
+    "scale": 1000.0,
+    "_hint": "RS kHz\u2192Hz"
+   }
+  }
+ },
+ "Rack_StudioCompressor": {
+  "studiocomp": {
+   "Threshold": {
+    "param": "Threshold",
+    "scale": 1.0,
+    "_hint": "RS Threshold dB (-27.5..-0.5) \u2192 normalized via studiocomp range [-40,0]."
+   },
+   "Ratio": {
+    "param": "Ratio",
+    "scale": 1.0,
+    "_hint": "RS Ratio 1..4 literal \u2192 normalized via range [1,12]."
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 1.0,
+    "_hint": "RS Attack 0..92 ms \u2192 normalized via range [0,150]."
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 1.0,
+    "_hint": "RS Release 50..260 ms \u2192 normalized via range [20,500]."
+   }
+  },
+  "mcompressor": {
+   "Threshold": {
+    "param": "Threshold",
+    "scale": 1.0,
+    "_hint": "RS Threshold is dB direct (-27.5..-0.5). Maps 1:1."
+   },
+   "Ratio": {
+    "param": "Ratio",
+    "scale": 1.0,
+    "_hint": "RS Ratio 1..4 = literal ratio. MCompressor Ratio is the same."
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 1.0,
+    "_hint": "RS Attack 0..92 \u2248 ms direct (Melda Attack is ms). Verify range \u2014 may need 0.01 scale if Melda normalizes."
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 1.0,
+    "_hint": "RS Release 50..260 ms direct. MCompressor Release is ms."
+   }
+  },
+  "khs compressor": {
+   "Threshold": {
+    "param": "Threshold",
+    "scale": 1.0
+   },
+   "Ratio": {
+    "param": "Ratio",
+    "scale": 1.0
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 1.0,
+    "_hint": "Literal ms; kHs Attack range is log [1,500] ms (see _VST_PARAM_RANGES)."
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 1.0
+   }
+  },
+  "hzx": {
+   "Threshold": {
+    "param": "Threshold",
+    "scale": 1.0,
+    "_hint": "RS Threshold dB (-27.5..-0.5) \u2192 normalized via studiocomp range [-40,0]."
+   },
+   "Ratio": {
+    "param": "Ratio",
+    "scale": 1.0,
+    "_hint": "RS Ratio 1..4 literal \u2192 normalized via range [1,12]."
+   },
+   "Attack": {
+    "param": "Attack",
+    "scale": 1.0,
+    "_hint": "RS Attack 0..92 ms \u2192 normalized via range [0,150]."
+   },
+   "Release": {
+    "param": "Release",
+    "scale": 1.0,
+    "_hint": "RS Release 50..260 ms \u2192 normalized via range [20,500]."
+   }
+  }
+ },
+ "Pedal_ShredZone": {
+  "shredzone": {
+   "Gain": {
+    "param": "Dist",
+    "scale": 0.01
+   },
+   "Bass": {
+    "param": "Low",
+    "scale": 0.0714285714,
+    "offset": 0.5,
+    "_hint": "RS Bass uses roughly -7..+7. Map 0 to the MT-2 Low control's neutral 0.5."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.0714285714,
+    "offset": 0.5,
+    "_hint": "RS Mid uses roughly -7..+7. Map 0 to the MT-2 Middle control's neutral 0.5; MiddleFreq is pinned."
+   },
+   "Treble": {
+    "param": "High",
+    "scale": 0.0714285714,
+    "offset": 0.5,
+    "_hint": "RS Treble uses roughly -7..+7. Map 0 to the MT-2 High control's neutral 0.5."
+   },
+   "_static": {
+    "MiddleFreq": 0.48,
+    "Level": 0.62
+   }
+  },
+  "mt-2": {
+   "Gain": {
+    "param": "Dist",
+    "scale": 0.01
+   },
+   "Bass": {
+    "param": "Low",
+    "scale": 0.0714285714,
+    "offset": 0.5,
+    "_hint": "RS Bass uses roughly -7..+7. Map 0 to the MT-2 Low control's neutral 0.5."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.0714285714,
+    "offset": 0.5,
+    "_hint": "RS Mid uses roughly -7..+7. Map 0 to the MT-2 Middle control's neutral 0.5; MiddleFreq is pinned."
+   },
+   "Treble": {
+    "param": "High",
+    "scale": 0.0714285714,
+    "offset": 0.5,
+    "_hint": "RS Treble uses roughly -7..+7. Map 0 to the MT-2 High control's neutral 0.5."
+   },
+   "_static": {
+    "MiddleFreq": 0.48,
+    "Level": 0.62
+   }
+  }
+ },
+ "Rack_StereoAnalogVibe": {
+  "stereoanalogvibe": {
+   "Speed": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Waveform": {
+    "param": "Waveform",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "khs chorus": {
+   "Speed": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_StudioChamber": {
+  "studiochamber": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.01,
+    "_hint": "RS Time 0-100 \u2192 decay 0..1."
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 damping (dark\u2194bright)."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth 0-100 \u2192 wet tail modulation 0..1."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Mix 0-100 \u2192 wet/dry 0..1."
+   }
+  },
+  "khs reverb": {
+   "Time": {
+    "param": "Decay",
+    "scale": 0.0065,
+    "_hint": "RS Time \u2192 Decay (0.5-30s log). Time 0\u22480.5s, 78\u22484s, 100\u22487s."
+   },
+   "Depth": {
+    "param": "Size",
+    "scale": 0.01,
+    "_hint": "RS Depth \u2192 Size (50-200%). 0\u219250%, 100\u2192200%."
+   },
+   "Tone": {
+    "param": "Dampen",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "RS Tone (brightness) \u2192 less Dampen. Inverted."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_StudioChorus": {
+  "studiochorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.16949,
+    "offset": -0.01695,
+    "_hint": "RS Rate in Hz (0.2..2.5) \u2192 normalized (plugin 0.1..6 Hz)."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth 0-100 \u2192 mod depth 0..1."
+   },
+   "Mix": {
+    "param": "Effect Level",
+    "scale": 0.01,
+    "_hint": "RS Mix 0-100 \u2192 RCE-10 wet/effect level 0..1."
+   },
+   "LoFilter": {
+    "param": "Low Cut",
+    "scale": 0.01,
+    "_hint": "RS LoFilter 0-100 \u2192 extra wet low-cut before the RCE-10 effect EQ."
+   },
+   "HiFilter": {
+    "param": "Effect EQ",
+    "scale": 0.01,
+    "_hint": "RS HiFilter 0-100 \u2192 RCE-10 effect EQ/brightness 0..1."
+   },
+   "Stereo": {
+    "param": "Stereo",
+    "scale": 0.01,
+    "_hint": "RS Stereo 0-100 \u2192 L/R spread 0..1."
+   },
+   "Delay": {
+    "param": "Pre Delay",
+    "scale": 0.01,
+    "_hint": "RS Delay 0-100 \u2192 RCE-10 pre-delay time 0..1."
+   }
+  },
+  "khs chorus": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01,
+    "_hint": "RS chorus Rate maps to kHs Chorus Rate slider POSITION directly: RS=4 \u2192 slider at 4%. Plugin's internal Rate-display conversion (log 0.05..10 Hz) does the rest. User-verified intent."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   },
+   "Delay": {
+    "param": "Delay",
+    "scale": 0.01,
+    "_hint": "Both kHs Chorus and RS use 'Delay' for the base offset"
+   },
+   "Stereo": {
+    "param": "Stereo",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_StudioDelay": {
+  "studiodelay": {
+   "TimeL": {
+    "param": "Time L",
+    "scale": 0.0014286,
+    "_hint": "RS TimeL in ms (40..360) \u2192 0..700 ms normalized."
+   },
+   "TimeR": {
+    "param": "Time R",
+    "scale": 0.0014286,
+    "_hint": "RS TimeR in ms \u2192 0..700 ms normalized."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Filter": {
+    "param": "Filter",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "khs delay": {
+   "TimeL": {
+    "param": "Time",
+    "scale": 0.005,
+    "_hint": "RS TimeL+TimeR are in ms (0-1000); use TimeL alone, scaled 0-500ms\u21920-1"
+   },
+   "Filter": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Filter on a delay is a feedback tone control"
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_StudioFlanger": {
+  "studioflanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.16949,
+    "offset": -0.01695,
+    "_hint": "RS Rate in Hz (0.3..0.6) \u2192 normalized (plugin 0.1..6 Hz)."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Regen": {
+    "param": "Regen",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "khs flanger": {
+   "Rate": {
+    "param": "Rate",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01
+   },
+   "Regen": {
+    "param": "Feedback",
+    "scale": 0.01,
+    "_hint": "RS Regen IS feedback in kHs vocabulary"
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_StudioPlate": {
+  "studioplate": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.01,
+    "_hint": "RS Time 0-100 \u2192 decay 0..1."
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 damping (dark\u2194bright)."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth 0-100 \u2192 wet tail modulation 0..1."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Mix 0-100 \u2192 wet/dry 0..1."
+   }
+  },
+  "khs reverb": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.01
+   },
+   "Tone": {
+    "param": "Damping",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Predelay",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_StudioVerb": {
+  "studioverb": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.01,
+    "_hint": "RS Time 0-100 \u2192 decay 0..1."
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 \u2192 damping (dark\u2194bright)."
+   },
+   "Depth": {
+    "param": "Depth",
+    "scale": 0.01,
+    "_hint": "RS Depth 0-100 \u2192 wet tail modulation 0..1."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01,
+    "_hint": "RS Mix 0-100 \u2192 wet/dry 0..1."
+   }
+  },
+  "khs reverb": {
+   "Time": {
+    "param": "Decay",
+    "scale": 0.0065,
+    "_hint": "RS Time \u2192 Decay (0.5-30s log). Time 0\u22480.5s, 78\u22484s, 100\u22487s."
+   },
+   "Depth": {
+    "param": "Size",
+    "scale": 0.01,
+    "_hint": "RS Depth \u2192 Size (50-200%). 0\u219250%, 100\u2192200%."
+   },
+   "Tone": {
+    "param": "Dampen",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "RS Tone (brightness) \u2192 less Dampen. Inverted."
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Rack_TapeEcho": {
+  "tapeecho": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.0014286,
+    "_hint": "RS Time in ms (~110..120) \u2192 0..700 ms normalized."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Filter": {
+    "param": "Filter",
+    "scale": 0.01
+   },
+   "Stereo": {
+    "param": "Stereo",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  },
+  "khs delay": {
+   "Time": {
+    "param": "Time",
+    "scale": 0.005,
+    "_hint": "RS Time in ms (~110..120) -> 0..700 ms normalized."
+   },
+   "Feedback": {
+    "param": "Feedback",
+    "scale": 0.01
+   },
+   "Filter": {
+    "param": "Tone",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Mix",
+    "scale": 0.01
+   }
+  }
+ },
+ "Amp_CA100": {
+  "dualrect": {
+   "_hint": "Silla Boogie Duo Rectifier = the FULL 3-channel Dual Rectifier panel. The 5 RS knobs map 1:1 onto the RED channel (the signature high-gain voice); the channel is pinned to RED in MODERN mode with a BOLD (tight silicon) rectifier and Cab Sim via _static. Green/Orange channels sit at their defaults and stay editable by hand.",
+   "Gain": {
+    "param": "Red Gain",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> Red channel Gain (the cascaded high-gain preamp). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Treble": {
+    "param": "Red Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> Red channel Treble (Recto tone stack)."
+   },
+   "Mid": {
+    "param": "Red Mid",
+    "scale": 0.01,
+    "_hint": "RS Mid -> Red channel Mid; low Mid deepens the signature Recto scoop (more so in Modern)."
+   },
+   "Bass": {
+    "param": "Red Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Red channel Bass (the big Recto low end)."
+   },
+   "Pres": {
+    "param": "Red Presence",
+    "scale": 0.01,
+    "_hint": "RS Pres -> Red channel Presence (power-amp feedback top end)."
+   },
+   "_static": {
+    "Channel": 1.0,
+    "Red Mode": 1.0,
+    "Rectifier": 1.0,
+    "Output": 0.6,
+    "Red Master": 0.55,
+    "Cab Sim": 1.0,
+    "_note": "Pinned for the game: Channel = RED, Red Mode = MODERN (the metal voice), Rectifier = BOLD (tight silicon), Output + Red Master at the loudness reference. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Green/Orange knobs keep their plugin defaults."
+   }
+  }
+ },
+ "Amp_CA38": {
+  "markii": {
+   "_hint": "Silla Boogie Mark IIB = the FULL Mesa/Boogie Mark IIB panel (8 knobs + 5 pull-switches, NO graphic EQ). The CA_38 folder/schematic/photos are the Mark II (the gear-map name wrongly said 'Mark IV'). RS exposes only Gain/Bass/Mid/Treble: Gain -> LEAD DRIVE (the cascaded lead distortion), Bass/Mid/Treble -> the scooped Boogie tone stack placed before the gain. _static pins the LEAD channel, masters/volume at musical defaults, reverb + all pulls off, FULL (100W) power and Cab Sim.",
+   "Gain": {
+    "param": "Lead Drive",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> LEAD DRIVE (the cascaded Mark II lead gain). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Mark tone-stack bass (1M)."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> Mark tone-stack middle (10K, the scooped Boogie mid)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> Mark tone-stack treble (250K)."
+   },
+   "_static": {
+    "Lead": 1.0,
+    "Volume 1": 0.5,
+    "Master 1": 0.5,
+    "Lead Master": 0.5,
+    "Reverb": 0.0,
+    "Bright 1": 0.0,
+    "Shift": 0.0,
+    "Gain Boost": 0.0,
+    "Bright Lead": 0.0,
+    "Half Power": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "LEAD channel. Volume 1 / Master 1 / Lead Master at noon, reverb off, all pull-switches out, FULL 100W. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Switch to Rhythm / pull Shift / Gain Boost / Bright on the face by hand."
+   }
+  }
+ },
+ "Amp_CA85": {
+  "markiii": {
+   "_hint": "Silla Boogie Mark III = the FULL Mesa/Boogie Mark III panel (7 knobs + 5-band graphic EQ + Lead/Bright/EQ-In). RS exposes only Gain/Bass/Mid/Treble: Gain -> LEAD DRIVE (the cascaded lead distortion), Bass/Mid/Treble -> the scooped Boogie tone stack. _static pins the LEAD channel, the GEQ 'V' smile (80/6600 up, 750 down), EQ engaged, Bright off, masters/volume and Cab Sim at musical defaults. The pulls + GEQ faders stay editable on the face.",
+   "Gain": {
+    "param": "Lead Drive",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> LEAD DRIVE (cascaded lead distortion). Higher = more singing Boogie lead gain. Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Mark tone-stack bass (1M)."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> Mark tone-stack middle (10K, the scooped Boogie mid)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> Mark tone-stack treble (250K)."
+   },
+   "_static": {
+    "Lead": 1.0,
+    "Bright": 0.0,
+    "EQ In": 1.0,
+    "Volume": 0.5,
+    "Master": 0.5,
+    "Lead Master": 0.5,
+    "EQ 80": 0.6,
+    "EQ 240": 0.5,
+    "EQ 750": 0.38,
+    "EQ 2200": 0.5,
+    "EQ 6600": 0.58,
+    "Cab Sim": 1.0,
+    "_note": "LEAD channel, EQ engaged with the classic Boogie 'V' (lows + highs up, 750 down). Volume/Masters at noon. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Switch to Rhythm / pull Bright / reshape the GEQ on the face by hand."
+   }
+  }
+ },
+ "Amp_CS90": {
+  "jc90": {
+   "_hint": "Ronald JC-90 = the full Roland JC-90 'Jazz Chorus' panel (solid-state). RS Gain drives DISTORTION (clean at 0 -> gritty diode drive). Treble/Mid/Bass -> tone stack, Pres -> Hi-Treble. Reverb + Chorus are pinned OFF for songs (the game adds those via its own pedals/racks) and stay editable by hand.",
+   "Gain": {
+    "param": "Distortion",
+    "scale": 0.01,
+    "_hint": "RS Gain -> Distortion (the JC diode-clip drive). 0 = the famous JC clean; higher = the gritty solid-state distortion (Ch1 Hi / Ch2 Hi captures)."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> tone-stack bass."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> tone-stack middle."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> tone-stack treble."
+   },
+   "Pres": {
+    "param": "Hi-Treble",
+    "scale": 0.01,
+    "_hint": "RS Pres -> Hi-Treble (the JC's extra top-end brightness)."
+   },
+   "_static": {
+    "Volume": 0.6,
+    "Reverb": 0.0,
+    "Chorus": 0.5,
+    "Rate": 0.4,
+    "Depth": 0.5,
+    "Cab Sim": 1.0,
+    "_note": "Volume at the loudness reference; Reverb off and Chorus = OFF (the 3-way midpoint) for songs \u2014 the game brings its own reverb/chorus. Cab Sim stays on until the host bypasses it for an external cabinet/IR. All editable by hand (Chorus 1.0 = the iconic stereo chorus, 0.0 = vibrato)."
+   }
+  }
+ },
+ "Amp_EN30": {
+  "box ac30": {
+   "_hint": "BOX AC30 = the FULL Vox AC30C2 panel (modelled from Vox_ac30c2.pdf). The AC30 has no Mid or Bright pot, so those RS knobs are mapped to REAL circuit behaviour: Mid -> Normal-channel Volume with the input jumpered to Both (the classic AC30 channel-jumper fills the Vox mid-scoop), and Bright -> the Top Boost brilliance bright-cap. Gain/Treble/Bass/Pres map straight onto the panel.",
+   "Gain": {
+    "param": "TB Vol",
+    "scale": 0.0076,
+    "_hint": "RS Gain drives the Top-Boost (Brilliant) channel Volume \u2014 the AC30C2's real gain control. Output loudness is held flat across the range by the model's makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble maps to the Top-Boost tone-stack Treble (VR3 A1M)."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass maps to the Top-Boost tone-stack Bass (VR4 A1M)."
+   },
+   "Mid": {
+    "param": "Normal Vol",
+    "scale": 0.01,
+    "_hint": "The AC30 has no Mid pot. With the input jumpered to Both (_static Input=0.5), RS Mid turns up the Normal channel \u2014 its mid-forward voicing fills the Top Boost mid-scoop, exactly like jumpering the two channels on a real AC30. Loudness stays ~flat (model compensates)."
+   },
+   "Pres": {
+    "param": "Tone Cut",
+    "scale": 0.01,
+    "invert": true,
+    "_hint": "Pres is the inverse of the AC30 Tone Cut (VR9 + C80 4n7): higher RS Pres -> less cut -> more EL84/OT bite. Cab Sim is a fallback speaker voice until Slopsmith routes an external cabinet/IR."
+   },
+   "Bright": {
+    "param": "Bright",
+    "scale": 1.0,
+    "_hint": "RS Bright (0/1) sets the Top Boost brilliance bright-cap (preamp treble sparkle, distinct from the power-amp Tone Cut so it doesn't fight Pres)."
+   },
+   "_static": {
+    "Input": 0.5,
+    "Rev Tone": 0.5,
+    "Rev Level": 0.0,
+    "Speed": 0.3,
+    "Depth": 0.0,
+    "Master": 0.72,
+    "Cab Sim": 1.0,
+    "_note": "Controls the game songs don't set, pinned to the reference: Input jumpered to Both so RS Mid (-> Normal Vol) can blend the Normal channel in, reverb level off (tone centred), tremolo off (speed parked), Master at the calibrated ~0.40 RMS loudness reference, fallback Cab Sim on until the host bypasses it when an external cabinet/IR is present."
+   }
+  }
+ },
+ "Amp_GB100": {
+  "aor50": {
+   "_hint": "Raney AOR50 = the FULL Laney AOR 50 'Pro Tube Lead' panel (Channel One clean + AOR cascaded lead). The Gain knob DRIVES THE CHANNEL morph \u2014 low Gain = Channel One clean, high Gain = AOR lead \u2014 matching the gain_variants clean/crunch/dist split. Bass/Mid/Treble -> tone stack, Pres -> Presence. Per-channel preamp/master volumes + pull switches + Cab Sim sit at musical defaults (_static).",
+   "Gain": {
+    "param": "Channel",
+    "scale": 0.01,
+    "_hint": "RS Gain -> Channel morph (Channel One clean -> AOR cascaded lead). One knob spans the whole range; per-channel preamp gains pinned in _static (Ch1 lower, AOR higher) so the morph is clean at 0 and hot at 100."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> British tone-stack bass."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> tone-stack middle."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> tone-stack treble and high-gain bite."
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01,
+    "_hint": "RS Pres -> Presence (power-amp NFB) and upper speaker bite."
+   },
+   "_static": {
+    "AOR Preamp": 0.78,
+    "AOR Master": 0.5,
+    "AOR Bright": 0.0,
+    "Ch1 Preamp": 0.45,
+    "Ch1 Master": 0.5,
+    "Ch1 Bright": 0.0,
+    "Deep": 0.0,
+    "Mid Boost": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Gain->Channel sweeps the morph: Ch1 Preamp lower (clean at Channel=0) + AOR Preamp higher (lead at Channel=1) so one knob covers clean->crunch->lead. Masters at the loudness reference, brights and pull switches off. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Per-channel volumes + pulls stay editable by hand."
+   }
+  }
+ },
+ "Amp_MarshallDSL100H": {
+  "dsl100": {
+   "_hint": "Marsten DSL100 = the FULL JCM2000 DSL100 panel (CLASSIC Clean/Crunch + ULTRA OD1/OD2). The Gain knob DRIVES THE CHANNEL morph \u2014 low Gain = Classic clean, mid = Classic crunch, high = Ultra OD \u2014 matching the gain_variants split. Tone stack + Presence/Resonance map 1:1; per-channel Gain/Vol, modes, masters and Cab Sim sit at musical defaults (_static).",
+   "Gain": {
+    "param": "Channel",
+    "scale": 0.01,
+    "_hint": "RS Gain -> Channel morph (Classic clean -> Crunch -> Ultra OD). One knob spans the whole gain range; per-channel gains pinned in _static so the morph is clean at 0 and hot at 100."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Marshall TMB tone-stack bass (+ low-end tightening at high gain)."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> tone-stack middle; low Mid (and the Tone Shift switch) deepen the mid scoop."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> tone-stack treble and high-gain bite."
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01,
+    "_hint": "RS Pres -> power-amp presence (high-frequency NFB) and speaker bite."
+   },
+   "Res": {
+    "param": "Resonance",
+    "scale": 0.01,
+    "_hint": "RS Res -> power-amp resonance / deep (low-frequency NFB). Falls back to the _static default if the game exposes no Res knob."
+   },
+   "_static": {
+    "Classic Gain": 0.12,
+    "Classic Vol": 0.5,
+    "Classic Mode": 0.0,
+    "Ultra Gain": 0.82,
+    "Ultra Vol": 0.5,
+    "Ultra Mode": 0.0,
+    "Tone Shift": 1.0,
+    "Resonance": 0.45,
+    "Presence": 0.45,
+    "Rev Classic": 0.0,
+    "Rev Ultra": 0.0,
+    "Master 1": 0.5,
+    "Master 2": 0.5,
+    "Master Sel": 0.0,
+    "Output": 1.0,
+    "Cab Sim": 1.0,
+    "_note": "Gain->Channel sweeps the morph: Classic Gain low (clean at Channel=0) + Ultra Gain high (hot at Channel=1) so one knob covers clean->crunch->ultra. Modes = Clean / OD1, Tone Shift ON by default (the scooped DSL voicing the game tones are built around), reverb off, masters at the loudness reference, High (100W) output. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Per-channel Vol + masters stay editable by hand."
+   }
+  }
+ },
+ "Amp_TW22": {
+  "bender supernova 22": {
+   "_hint": "BENDER SUPERNOVA 22 = the FULL Fender Super-Sonic 22 panel (2 channels, modelled from the schematic). RS Gain DRIVES THE CHANNEL: low Gain = Vintage clean, high Gain = the cascaded Burn lead. Treble/Bass/Mid map to the Burn tone stack; Bright -> Norm/Fat; Pres -> the power-amp presence. The Vintage knobs + Burn Gain/Vol sit at musical defaults (_static) and stay editable by hand.",
+   "Gain": {
+    "param": "Channel",
+    "scale": 0.01,
+    "_hint": "RS Gain morphs the channel select Vintage(0) -> Burn(1). The two channels' inherent gain (clean vs cascaded) gives the clean -> cranked sweep."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble maps to the Burn channel Treble (the main RS voice)."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass maps to the Burn channel Bass."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid maps to the Burn channel Middle (the Burn channel HAS a Mid pot, unlike the AC30)."
+   },
+   "Bright": {
+    "param": "Norm/Fat",
+    "scale": 1.0,
+    "invert": true,
+    "_hint": "RS Bright -> the shared Norm/Fat voicing (Norm = bright, Fat = darker/fuller). Bright on = Norm (inverted), Bright off = Fat."
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01,
+    "_hint": "The Super-Sonic 22 has no front presence pot; Pres maps to the modelled power-amp NFB presence (upper-treble bite)."
+   },
+   "_static": {
+    "Vint Vol": 0.5,
+    "Vint Treble": 0.6,
+    "Vint Bass": 0.5,
+    "Gain 1": 0.6,
+    "Gain 2": 0.5,
+    "Burn Vol": 0.5,
+    "Reverb": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Controls the game songs don't set: the Vintage channel EQ + Burn Gain/Volume sit at musical defaults so the Gain-driven channel morph and the Burn tone stack do the work. Reverb off. Cab Sim stays on until the host bypasses it for an external cabinet/IR."
+   }
+  }
+ },
+ "Amp_TW26": {
+  "bender deluxe": {
+   "_hint": "BENDER DELUXE = the FULL Fender '57 Deluxe 5E3 panel (Tone, Inst Vol, Mic Vol only). On a 5E3 the VOLUME is the gain and there is one Tone control; the famous trick is jumpering the Mic channel for body. So RS Gain -> Inst Vol, Treble -> Tone, Mid -> Mic Vol (jumper). Bright picks the Instrument bright/normal input; Bass + Pres have no 5E3 pot so they drive hidden shelves.",
+   "Gain": {
+    "param": "Inst Vol",
+    "scale": 0.0084,
+    "_hint": "On a 5E3 the Instrument Volume IS the gain \u2014 it cleans up / breaks up as you turn it. RS Gain drives it; loudness is held flat by the makeup. RS 0 maps to a low-but-audible real pot position; the curve is trimmed so the Deluxe does not break up too early.",
+    "offset": 0.16
+   },
+   "Treble": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Treble maps to the single tweed Tone control (treble bleed: up = bright, down = dark)."
+   },
+   "Mid": {
+    "param": "Mic Vol",
+    "scale": 0.01,
+    "_hint": "The 5E3 has no Mid pot. RS Mid turns up the jumpered Mic channel \u2014 its darker, low-mid-forward voice fills body underneath the Instrument channel (the classic 5E3 jumper)."
+   },
+   "Bright": {
+    "param": "Bright",
+    "scale": 1.0,
+    "_hint": "RS Bright picks the Instrument bright input 1 (bright cap) vs the normal/darker input 2."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "The 5E3 has no Bass pot; RS Bass drives a hidden low shelf (tweed thump / tightening)."
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01,
+    "_hint": "The 5E3 has no presence pot; RS Pres drives a hidden power-amp top lift."
+   },
+   "_static": {
+    "Cab Sim": 1.0,
+    "_note": "Cab Sim stays on until the host bypasses it for an external cabinet/IR."
+   }
+  }
+ },
+ "Amp_TW40": {
+  "tw40": {
+   "_hint": "Bender Bassman = the FULL Fender Bassman 5F6-A tweed panel (2 jumperable channels + 6 knobs). The 5F6-A has no gain knob \u2014 the volumes ARE the gain \u2014 so RS Gain drives the Bright Volume into breakup. Treble/Bass/Mid -> the real FMV tone stack, Pres -> Presence. Input pinned to BOTH (jumpered, the signature tone) with Normal Vol as the blend via _static; all editable by hand.",
+   "Gain": {
+    "param": "Bright Vol",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> Bright channel Volume (the 5F6-A breaks up via volume, not a gain knob). Higher = more 5881 power-amp drive / grind. Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Bassman FMV tone-stack bass (1M)."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> Bassman FMV tone-stack middle (25K)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> Bassman FMV tone-stack treble (250K) and bright-channel sparkle."
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01,
+    "_hint": "RS Pres -> Presence (5K, power-amp NFB) and upper speaker bite."
+   },
+   "_static": {
+    "Input": 0.5,
+    "Normal Vol": 0.4,
+    "Cab Sim": 1.0,
+    "_note": "Input pinned to BOTH (jumpered Bright+Normal \u2014 the classic 5F6-A tone). Normal Vol at a musical blend so RS Gain (-> Bright Vol) sweeps the breakup over a full summed signal. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Both volumes + the cable stay editable by hand."
+   }
+  }
+ },
+ "Amp_MarshallPlexi": {
+  "plexi": {
+   "_hint": "Marsten Plexi = the FULL Marshall 1959 Super Lead panel. The RS amp exposes the two Loudness pots directly (gain_proxy_knobs = Loudness1/Loudness2), NOT a generic Gain \u2014 so they map 1:1: Loudness1 -> HIGH TREBLE/bright channel (Loudness I), Loudness2 -> NORMAL channel (Loudness II). The Loudness pots ARE the gain (non-master amp), so cranking them drives the EL34 grind. Bass/Mid/Treble -> Marshall tone stack (33K slope, 220pF treble cap), Pres -> Presence. Aliases (Middle/Presence/HighTreble/Normal/Gain) are tolerated for whatever the tone actually carries; absent keys are ignored.",
+   "Loudness1": {
+    "param": "Loudness I",
+    "scale": 0.0076,
+    "_hint": "RS Loudness1 -> Loudness I (HIGH TREBLE / bright channel). The plexi breaks up via loudness; higher = more EL34 power-amp grind. Held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Loudness2": {
+    "param": "Loudness II",
+    "scale": 0.0076,
+    "_hint": "RS Loudness2 -> Loudness II (NORMAL channel). Up = the fuller jumpered plexi voice. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Marshall tone-stack bass (1M)."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> Marshall tone-stack middle (22K)."
+   },
+   "Middle": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "alias: some tones spell the mid knob 'Middle'."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> Marshall tone-stack treble (220K, 220pF) + bright-channel sparkle."
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01,
+    "_hint": "RS Pres -> Presence (power-amp NFB) + upper speaker bite."
+   },
+   "Presence": {
+    "param": "Presence",
+    "scale": 0.01,
+    "_hint": "alias: some tones spell it 'Presence'."
+   },
+   "Gain": {
+    "param": "Loudness I",
+    "scale": 0.0076,
+    "_hint": "fallback: if a tone exposes a generic Gain instead of Loudness1, drive Loudness I. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "_static": {
+    "Input": 0.5,
+    "Cab Sim": 1.0,
+    "_note": "Input pinned to BOTH (jumpered) so both RS Loudness pots feed the amp \u2014 the classic fat plexi tone. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Click the input cable on the face to switch to Bright-only / Normal-only."
+   }
+  }
+ },
+ "Amp_BT45": {
+  "superdrive45": {
+   "_hint": "Ganddi Superdrive 45 = the Budda Superdrive 45 Series II (the gear map's generic name is 'Vox AC50' but the curated gain_variants are 'Budda Super Drive Clean/Crunch/Lead Modern'). RS Gain -> DRIVE (the hi-gain channel distortion), Bass/Mid/Treble -> Budda tone stack. _static pins Channel = Hi-gain and Modern = ON (the variants were captured Modern); Master/Rhythm/Cab Sim sit at musical defaults. The three pull-pots (Channel/Modern/Brite) stay editable on the face.",
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> DRIVE (hi-gain channel distortion). Higher = more cascaded 12AX7 grind into the KT66s. Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Budda tone-stack bass (500K)."
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.01,
+    "_hint": "RS Mid -> Budda tone-stack middle (50K)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> Budda tone-stack treble (500K, 220pF)."
+   },
+   "_static": {
+    "Channel": 1.0,
+    "Modern": 1.0,
+    "Brite": 0.0,
+    "Master": 0.5,
+    "Rhythm": 0.4,
+    "Cab Sim": 1.0,
+    "_note": "Channel pulled to Hi-gain + Modern ON (matches the captured 'Modern' variants). Master ~noon, Rhythm at a musical clean-channel default. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Pull the pots on the face to change channel / voicing by hand."
+   }
+  }
+ },
+ "Amp_HG500": {
+  "lovoltdr504": {
+   "_hint": "Lovolt DR504 = the Hiwatt DR504 'Custom 50' (the gear map's generic name is 'Peavey 5150' but the folder + schematic are the Hiwatt DR504). No gain knob, so RS Gain -> BRILLIANT VOL (the brilliant channel volume = the breakup driver). Bass/Mid/Treble -> tone stack, Pres -> Presence. _static pins the input to BOTH (jumpered), Normal Vol, Master Vol and Cab Sim at musical defaults. Switch the input cable / volumes on the face by hand.",
+   "Gain": {
+    "param": "Brilliant Vol",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> BRILLIANT VOL (the bright channel volume; the Hiwatt has no gain knob). Higher = more breakup. Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Hiwatt tone-stack bass (500K)."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> Hiwatt tone-stack middle (100K, the strong Hiwatt mids)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> Hiwatt tone-stack treble (250K)."
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01,
+    "_hint": "RS Pres -> Presence (100K, power-amp NFB)."
+   },
+   "_static": {
+    "Input": 0.5,
+    "Normal Vol": 0.4,
+    "Master Vol": 0.55,
+    "Cab Sim": 1.0,
+    "_note": "Input pinned to BOTH (jumpered Normal+Brilliant). Normal Vol as the blend, Master past noon for the clean-loud Hiwatt punch. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Volumes + the input cable stay editable by hand."
+   }
+  }
+ },
+ "Amp_HG100": {
+  "lovoltdr103": {
+   "_hint": "Lovolt DR103 = the Hiwatt DR103 'Custom 100' (the 100W sibling of the DR504). No gain knob, so RS Gain -> BRILLIANT VOL (the breakup driver). Bass/Mid/Treble -> tone stack, Pres -> Presence. _static pins the input to BOTH (jumpered = the bridged DR103 voice), Normal Vol, Master Vol and Cab Sim at musical defaults.",
+   "Gain": {
+    "param": "Brilliant Vol",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> BRILLIANT VOL (the bright channel volume; the Hiwatt has no gain knob). Higher = more breakup (the 100W stays clean even longer). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Hiwatt tone-stack bass (500K)."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> Hiwatt tone-stack middle (100K, the strong Hiwatt mids)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> Hiwatt tone-stack treble (250K)."
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01,
+    "_hint": "RS Pres -> Presence (100K, power-amp NFB)."
+   },
+   "_static": {
+    "Input": 0.5,
+    "Normal Vol": 0.4,
+    "Master Vol": 0.55,
+    "Cab Sim": 1.0,
+    "_note": "Input pinned to BOTH (the bridged jumpered DR103 voice). Normal Vol as the blend, Master past noon for the big clean-loud Hiwatt punch. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Volumes + the input cable stay editable by hand."
+   }
+  }
+ },
+ "Amp_HG180": {
+  "marstenvs100": {
+   "_hint": "Marsten VS100 = the Marshall Valvestate VS100RH hybrid head. Three modes (Clean / OD1 crunch / OD2 lead); the OD2 lead is the voice for songs, so RS Gain -> OD2 GAIN (the Valvestate diode-clip lead distortion), Bass/Mid/Treble -> the OD2 tone stack. _static pins the CHANNEL to OD2, OD2 Volume + Contour at musical defaults, reverb/FX off, Cab Sim on, and the Clean/OD1 controls at sensible idles. Switch channel, dial reverb/FX, or reshape Clean/OD1 on the face by hand.",
+   "Gain": {
+    "param": "OD2 Gain",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> OD2 GAIN (the high-gain Valvestate lead). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "OD2 Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> OD2 tone-stack bass."
+   },
+   "Mid": {
+    "param": "OD2 Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> OD2 tone-stack middle."
+   },
+   "Treble": {
+    "param": "OD2 Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> OD2 tone-stack treble."
+   },
+   "_static": {
+    "Channel": 1.0,
+    "OD2 Contour": 0.4,
+    "OD2 Volume": 0.5,
+    "Cl Volume": 0.5,
+    "Cl Bass": 0.5,
+    "Cl Middle": 0.5,
+    "Cl Treble": 0.55,
+    "OD1 Gain": 0.5,
+    "OD1 Volume": 0.5,
+    "FX Mix": 0.0,
+    "Clean Reverb": 0.0,
+    "OD Reverb": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "CHANNEL pinned to OD2 (the lead). OD2 Volume at noon, Contour with a gentle scoop. Reverb + FX loop off. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Clean/OD1 sit at idle clean/crunch defaults \u2014 switch channel or add reverb/FX on the face by hand."
+   }
+  }
+ },
+ "Amp_BT30": {
+  "unparalleldc30": {
+   "_hint": "Unparallel DC30 = the Matchless DC30 (a hand-wired AC30-class amp, NOT a Vox AC30 \u2014 the gear-map name was a wrong placeholder). No gain knob: the channel Volume drives the EL84 breakup. RS Gain -> CH1 VOLUME (the Brilliant channel), Bass/Treble -> the Ch1 VOX top-boost stack. Channel 1 has NO mid control, so RS Mid is not mapped. _static pins the Brilliant channel, the EF86 channel + Tone, Cut, Master and Cab Sim at musical defaults.",
+   "Gain": {
+    "param": "Ch1 Volume",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> CH1 VOLUME (the Brilliant channel volume = the class-A EL84 breakup driver). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Ch1 top-boost bass."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> Ch1 top-boost treble."
+   },
+   "_static": {
+    "Channel": 0.0,
+    "Ch2 Volume": 0.5,
+    "Tone": 0.5,
+    "Cut": 0.4,
+    "Master": 0.7,
+    "Cab Sim": 1.0,
+    "_note": "CH1 Brilliant channel selected. EF86 channel + its Tone at noon, Cut just below noon, Master past noon for the class-A bloom. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Switch to the EF86 channel / dial Cut on the face by hand."
+   }
+  }
+ },
+ "Amp_BT15": {
+  "unparallelchieftain": {
+   "_hint": "Unparallel Chieftain = the Matchless Chieftain Reverb (a clean/crunch boutique EL34 head, NOT a Vox AC15 \u2014 the gear-map name was a wrong placeholder). No gain knob: the Volume drives the preamp into the EL34s. RS Gain -> VOLUME, Bass/Mid/Treble -> the Marshall-style tone stack. _static pins Brilliance (presence), Master, Reverb and Cab Sim.",
+   "Gain": {
+    "param": "Volume",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> VOLUME (drives the preamp into the EL34 power amp). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Chieftain tone-stack bass (1M)."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> Chieftain tone-stack middle (250K)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> Chieftain tone-stack treble (1M, warm 5.1nF cap)."
+   },
+   "_static": {
+    "Brilliance": 0.4,
+    "Master": 0.7,
+    "Reverb": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Brilliance (presence) just below noon, Master past noon for headroom, Reverb off. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Add Brilliance / Reverb on the face by hand."
+   }
+  }
+ },
+ "Amp_GB38": {
+  "mrymaz38": {
+   "_hint": "Mr. Y MAZ 38 = Dr. Z Maz 38 (Senior NR). RS Gain -> VOLUME (the preamp/drive), Bass/Mid/Treble -> the Vox-meets-Fender TMB tone stack. _static pins Cut, Master and Cab Sim. No reverb (Senior NR).",
+   "Gain": {
+    "param": "Volume",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> VOLUME (the only preamp/drive control). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Maz tone-stack bass."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> Maz tone-stack middle (10k)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> Maz tone-stack treble (250k, 250pF)."
+   },
+   "_static": {
+    "Cut": 0.4,
+    "Master": 0.7,
+    "Cab Sim": 1.0,
+    "_note": "Cut just below noon (higher = darker), Master up (the 38 has headroom). Cab Sim stays on until the host bypasses it for an external cabinet/IR. Dial on the face by hand."
+   }
+  }
+ },
+ "Amp_GB50": {
+  "mryems": {
+   "_hint": "Mr. Y EMS = Dr. Z EMS, a Marshall JCM800 2204-style master-volume head with a HI/LO gain switch. RS Gain -> GAIN (the JCM800 preamp drive), Bass/Mid/Treble -> Marshall tone stack, Pres -> Presence. _static pins the master Volume, HI gain mode and Cab Sim.",
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> GAIN (the cascaded JCM800 preamp drive). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Marshall tone-stack bass (1M)."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> Marshall tone-stack middle (25K)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> Marshall tone-stack treble (220K, 470pF)."
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01,
+    "_hint": "RS Pres -> Presence (power-amp NFB)."
+   },
+   "_static": {
+    "Volume": 0.6,
+    "Hi Lo": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Master Volume past noon, HI gain mode (full JCM800). Cab Sim stays on until the host bypasses it for an external cabinet/IR. Switch to LO / dial the master on the face by hand."
+   }
+  }
+ },
+ "Bass_Amp_BT880B": {
+  "freddykrueger800br": {
+   "Gain": {
+    "param": "Volume",
+    "scale": 0.033,
+    "_hint": "RS Gain -> preamp Volume/drive 0..1 (the GK input/growl stage)."
+   },
+   "Bass": {
+    "param": "Bass",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Bass +/-15 dB -> 60 Hz low-shelf 0..1 (0.5 = flat)."
+   },
+   "Mid": {
+    "param": "Hi-Mid",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS single Mid -> the 1 kHz Hi-Mid band (the GK growl/punch); Lo-Mid 250 Hz stays flat."
+   },
+   "Treble": {
+    "param": "Treble",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Treble +/-15 dB -> 4 kHz high-shelf 0..1 (0.5 = flat)."
+   }
+  }
+ },
+ "Amp_AT20": {
+  "samplegsbtcl": {
+   "_hint": "Amp_AT20 is the Ampeg SVT-CL (gear map's generic name 'Marshall JCM 1'). It reuses the SAME bundled amp as Bass_Amp_BT975B \u2014 the Sampleg SBT-CL \u2014 with the identical knob mapping.",
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.02508,
+    "_hint": "RS Gain -> preamp Gain/drive 0..1 (the 12AX7 SVT growl). RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Bass +/-15 dB -> ~70 Hz low-shelf 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "Midrange",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Mid +/-15 dB -> Midrange peak 0..1 (0.5 flat) at the Frequency-selected centre (default 800 Hz)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Treble +/-15 dB -> ~5 kHz high-shelf 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Amp_AT120": {
+  "samplegvh140c": {
+   "_hint": "Sampleg VH-140C = the Ampeg VH-140C (gear map's generic name 'Marshall JCM 800'). The lead voice is CHANNEL B, so RS Gain -> Channel B Gain (the diode-clip drive), Bass/Mid/Treble -> Channel B Low/Mid/High. _static pins the LEAD channel (B), reverb + chorus OFF (RS adds those), and Channel A at a clean default. All editable on the face.",
+   "Gain": {
+    "param": "B Gain",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> CHANNEL B Gain (the 1N914 diode distortion drive). Higher = tighter, more aggressive. Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "B Low",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Channel B Low (active EQ)."
+   },
+   "Mid": {
+    "param": "B Mid",
+    "scale": 0.01,
+    "_hint": "RS Mid -> Channel B Mid (active EQ)."
+   },
+   "Treble": {
+    "param": "B High",
+    "scale": 0.01,
+    "_hint": "RS Treble -> Channel B High (active EQ)."
+   },
+   "_static": {
+    "Channel": 1.0,
+    "B Level": 0.55,
+    "Reverb B": 0.0,
+    "Reverb A": 0.0,
+    "Depth B": 0.0,
+    "Depth A": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "LEAD channel (B), Level at noon, onboard reverb + chorus OFF for songs (the game adds its own). Cab Sim stays on until the host bypasses it for an external cabinet/IR. Switch to Channel A / dial reverb + chorus on the face by hand."
+   }
+  }
+ },
+ "Amp_OrangeOR100": {
+  "citrusor100": {
+   "_hint": "Citrus OR100 = the Orange OR100 (vintage Graphic head). RS Gain -> GAIN (the HF Drive), Bass/Mid/Treble -> the tone stack (Middle = the FAC). _static pins Volume (master), Depth, FULL power and Cab Sim. Dial Volume/Depth/HALF on the face by hand.",
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> GAIN (HF Drive). Higher = more EL34 grind (the Orange doom chunk). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> tone-stack bass."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> tone-stack middle (the Orange FAC)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> tone-stack treble."
+   },
+   "_static": {
+    "Volume": 0.55,
+    "Depth": 0.5,
+    "Half Power": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Volume (master) at noon, Depth centred, FULL power. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Tweak Volume/Depth + the FULL/HALF switch on the face by hand."
+   }
+  }
+ },
+ "Amp_OrangeOR50H": {
+  "citrusor50": {
+   "_hint": "Citrus OR50 = the Orange OR50H (the 50W sibling of the OR100, reconstructed from the OR100 schematic). RS Gain -> GAIN, Bass/Mid/Treble -> tone stack (Middle = the FAC). _static pins Volume, Depth, FULL power and Cab Sim.",
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> GAIN (HF Drive). The 50W breaks up a touch earlier than the OR100. Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> tone-stack bass."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> tone-stack middle (the Orange FAC)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> tone-stack treble."
+   },
+   "_static": {
+    "Volume": 0.55,
+    "Depth": 0.5,
+    "Half Power": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Volume (master) at noon, Depth centred, FULL power. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Tweak Volume/Depth + the FULL/HALF switch on the face by hand."
+   }
+  }
+ },
+ "Bass_Amp_BT975B": {
+  "samplegsbtcl": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.033,
+    "_hint": "RS Gain -> preamp Gain/drive 0..1 (the 12AX7 SVT growl)."
+   },
+   "Bass": {
+    "param": "Bass",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Bass +/-15 dB -> ~70 Hz low-shelf 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "Midrange",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Mid +/-15 dB -> Midrange peak 0..1 (0.5 flat) at the Frequency-selected centre (default 800 Hz)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Treble +/-15 dB -> ~5 kHz high-shelf 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_CH300B": {
+  "sharkehb3500": {
+   "Gain": {
+    "param": "Solid State",
+    "scale": 0.033,
+    "_hint": "RS Gain -> Solid State preamp level 0..1 (the HA3500's punchy SS path)."
+   },
+   "Bass": {
+    "param": "125 Hz",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Bass +/-15 dB -> graphic-EQ 125 Hz band 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "500 Hz",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Mid +/-15 dB -> graphic-EQ 500 Hz band 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "4 kHz",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Treble +/-15 dB -> graphic-EQ 4 kHz band 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_CH600B": {
+  "sharkehb5000": {
+   "Gain": {
+    "param": "Solid State",
+    "scale": 0.033,
+    "_hint": "RS Gain -> Solid State preamp level 0..1 (the HA5000's punchy SS path)."
+   },
+   "Bass": {
+    "param": "125 Hz",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Bass +/-15 dB -> graphic-EQ 125 Hz band 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "500 Hz",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Mid +/-15 dB -> graphic-EQ 500 Hz band 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "3 kHz",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Treble +/-15 dB -> graphic-EQ 3 kHz band 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_BT600B": {
+  "peebeetminus": {
+   "Gain": {
+    "param": "Tube Pre",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> 12AX7 Tube Pre drive 0..1 (the T-Max's warm grit channel)."
+   },
+   "Bass": {
+    "param": "100 Hz",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Bass +/-15 dB -> graphic-EQ 100 Hz band 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "625 Hz",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Mid +/-15 dB -> graphic-EQ 625 Hz band 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "4 kHz",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS Treble +/-15 dB -> graphic-EQ 4 kHz band 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_CS300B": {
+  "benderfumble800": {
+   "Gain": {
+    "param": "B Volume",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> Rumble Bass channel-B Volume (preamp drive) 0..1."
+   },
+   "Bass": {
+    "param": "B Bass",
+    "scale": 0.1,
+    "_hint": "RS Bass 0-10 (5=flat) -> channel-B Fender TMB Bass 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "B Middle",
+    "scale": 0.1,
+    "_hint": "RS Mid 0-10 (5=flat) -> channel-B Fender TMB Middle 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "B Treble",
+    "scale": 0.1,
+    "_hint": "RS Treble 0-10 (5=flat) -> channel-B Fender TMB Treble 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_EdenE300": {
+  "aidengt300": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> 12AX7 input drive + Eden Comp 0..1."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.1,
+    "_hint": "RS Bass 0-10 (5=flat) -> ~50 Hz low shelf 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "EQ2 Level",
+    "scale": 0.1,
+    "_hint": "RS Mid 0-10 (5=flat) -> semi-parametric mid band level 0..1 (0.5 flat, ~632 Hz)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.1,
+    "_hint": "RS Treble 0-10 (5=flat) -> ~5 kHz high shelf 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_EdenWT550": {
+  "aidengt550": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> 12AX7 input drive + Eden Comp 0..1."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.1,
+    "_hint": "RS Bass 0-10 (5=flat) -> ~50 Hz low shelf 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "EQ2 Level",
+    "scale": 0.1,
+    "_hint": "RS Mid 0-10 (5=flat) -> semi-parametric mid band level 0..1 (0.5 flat, ~632 Hz)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.1,
+    "_hint": "RS Treble 0-10 (5=flat) -> ~5 kHz high shelf 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_EdenWT800": {
+  "aidengt880": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> 12AX7 input drive + Eden Comp 0..1."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.1,
+    "_hint": "RS Bass 0-10 (5=flat) -> ~50 Hz low shelf 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "Mid Level",
+    "scale": 0.1,
+    "_hint": "RS Mid 0-10 (5=flat) -> semi-parametric Mid band level 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.1,
+    "_hint": "RS Treble 0-10 (5=flat) -> ~5 kHz high shelf 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_HT100B": {
+  "lovolt100": {
+   "Gain": {
+    "param": "Normal Vol",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> Normal channel volume / 12AX7 drive 0..1."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.1,
+    "_hint": "RS Bass 0-10 (5=flat) -> British tone-stack ~80 Hz low shelf 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.1,
+    "_hint": "RS Mid 0-10 (5=flat) -> British tone-stack ~500 Hz mid 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.1,
+    "_hint": "RS Treble 0-10 (5=flat) -> British tone-stack ~3 kHz high shelf 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_HT400B": {
+  "sillaboogiebass400": {
+   "Gain": {
+    "param": "Volume 1",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> Volume 1 channel / 12AX7 drive 0..1."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.1,
+    "_hint": "RS Bass 0-10 (5=flat) -> tone-stack ~90 Hz low shelf 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.1,
+    "_hint": "RS Mid 0-10 (5=flat) -> tone-stack ~500 Hz mid 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.1,
+    "_hint": "RS Treble 0-10 (5=flat) -> tone-stack ~3 kHz high shelf 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_OrangeAD200B": {
+  "citrusad200": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> 12AX7 input drive 0..1."
+   },
+   "Bass": {
+    "param": "Bass",
+    "offset": 0.5,
+    "scale": 0.1,
+    "_hint": "RS Bass 0-10 -> Orange subtractive Bass; RS 5 (flat) -> 1.0 flat, below cuts."
+   },
+   "Mid": {
+    "param": "Middle",
+    "offset": 0.5,
+    "scale": 0.1,
+    "_hint": "RS Mid 0-10 -> Orange subtractive Middle; RS 5 (flat) -> 1.0 flat, below cuts."
+   },
+   "Treble": {
+    "param": "Treble",
+    "offset": 0.5,
+    "scale": 0.1,
+    "_hint": "RS Treble 0-10 -> Orange subtractive Treble; RS 5 (flat) -> 1.0 flat, below cuts."
+   }
+  }
+ },
+ "Bass_Amp_CS240B": {
+  "tracerv8": {
+   "Gain": {
+    "param": "Gain I",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> Gain I (first ECC83 stage) 0..1."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.1,
+    "_hint": "RS Bass 0-10 (5=flat) -> Trace tone-stack Bass 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.1,
+    "_hint": "RS Mid 0-10 (5=flat) -> Trace tone-stack Middle 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.1,
+    "_hint": "RS Treble 0-10 (5=flat) -> Trace tone-stack Treble 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_HT300B": {
+  "sbrredhead": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> 12AX7 input drive 0..1."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.1,
+    "_hint": "RS Bass 0-10 (5=flat) -> ~80 Hz low shelf 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "Mid Level",
+    "scale": 0.1,
+    "_hint": "RS Mid 0-10 (5=flat) -> semi-parametric Mid Level 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.1,
+    "_hint": "RS Treble 0-10 (5=flat) -> ~5 kHz high shelf 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_LT25B": {
+  "dustupcdn": {
+   "Gain": {
+    "param": "Input",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> Input gain / ECC83 drive 0..1."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.1,
+    "_hint": "RS Bass 0-10 (5=flat) -> ~60 Hz low shelf 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.1,
+    "_hint": "RS Mid 0-10 (5=flat) -> ~660 Hz mid 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.1,
+    "_hint": "RS Treble 0-10 (5=flat) -> ~5 kHz high shelf 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_LT85B": {
+  "electricb600f": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> preamp Gain 0..1."
+   },
+   "Bass": {
+    "param": "120 Hz",
+    "scale": 0.01,
+    "_hint": "RS Bass 0-100 (50=flat) -> EQ 120 Hz band 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "800 Hz",
+    "scale": 0.01,
+    "_hint": "RS Mid 0-100 (50=flat) -> EQ 800 Hz band 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "5 kHz",
+    "scale": 0.01,
+    "_hint": "RS Treble 0-100 (50=flat) -> EQ 5 kHz band 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_CS75B": {
+  "samplegv4b": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> preamp Gain/drive 0..1 (linear taper, 12AX7 + 7027A grit)."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.1,
+    "_hint": "RS Bass 0-10 (5=flat) -> ~70 Hz low-shelf 0..1 (0.5 flat)."
+   },
+   "Mid": {
+    "param": "Midrange",
+    "scale": 0.1,
+    "_hint": "RS Mid 0-10 (5=flat) -> LC midrange resonance 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.1,
+    "_hint": "RS Treble 0-10 (5=flat) -> ~5 kHz high-shelf 0..1 (0.5 flat)."
+   }
+  }
+ },
+ "Bass_Amp_CH350B": {
+  "marstendbs7400": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> clean op-amp gain 0..1."
+   },
+   "Bass": {
+    "param": "Lo",
+    "scale": 0.01,
+    "_hint": "RS Bass 0-100 (50=flat) -> Primary EQ Lo low shelf 0..1 (0.5 flat)."
+   },
+   "Treble": {
+    "param": "Hi",
+    "scale": 0.01,
+    "_hint": "RS Treble 0-100 (50=flat) -> Primary EQ Hi high shelf 0..1 (0.5 flat)."
+   },
+   "30": {
+    "param": "50 Hz",
+    "offset": 0.5,
+    "scale": 0.033333,
+    "_hint": "RS graphic band remapped to nearest real 7400 band. RS +/-15 dB -> 0..1 (0.5 flat). Real bands 160 Hz + 1.25 kHz have no RS control (stay flat)."
+   },
+   "90": {
+    "param": "80 Hz",
+    "offset": 0.5,
+    "scale": 0.033333
+   },
+   "250": {
+    "param": "320 Hz",
+    "offset": 0.5,
+    "scale": 0.033333
+   },
+   "800": {
+    "param": "640 Hz",
+    "offset": 0.5,
+    "scale": 0.033333
+   },
+   "2500": {
+    "param": "2.5 kHz",
+    "offset": 0.5,
+    "scale": 0.033333
+   },
+   "7500": {
+    "param": "5 kHz",
+    "offset": 0.5,
+    "scale": 0.033333
+   },
+   "15000": {
+    "param": "8 kHz",
+    "offset": 0.5,
+    "scale": 0.033333
+   }
+  }
+ },
+ "Amp_OrangeTinyTerror": {
+  "citrusbigtremor": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.0076,
+    "_hint": "RS Gain 0-100 -> preamp drive 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Tone": {
+    "param": "Tone",
+    "scale": 0.01,
+    "_hint": "RS Tone 0-100 -> passive tone tilt 0..1 (0.5 flat)."
+   },
+   "_static": {
+    "Volume": 0.6,
+    "Half Power": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "15 W full-power default. Cab Sim stays on until the host bypasses it for an external cabinet/IR."
+   }
+  }
+ },
+ "Amp_OrangeRockerverb": {
+  "citrusrumbleverb50": {
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.0076,
+    "_hint": "RS Gain 0-100 -> Dirty channel gain 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass 0-100 (50=flat) -> Dirty Bass 0..1."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid 0-100 (50=flat) -> Dirty Middle 0..1."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble 0-100 (50=flat) -> Dirty Treble 0..1."
+   },
+   "_static": {
+    "Volume": 0.6,
+    "Clean Volume": 0.5,
+    "Clean Bass": 0.5,
+    "Clean Treble": 0.5,
+    "Reverb": 0.2,
+    "Output": 0.7,
+    "Channel": 1.0,
+    "Cab Sim": 1.0,
+    "_note": "Dirty channel default, modest reverb. Cab Sim stays on until the host bypasses it for an external cabinet/IR."
+   }
+  }
+ },
+ "Amp_EpiphoneElectarCentury": {
+  "epicallcentura": {
+   "Gain": {
+    "param": "Volume",
+    "scale": 0.0076,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "_static": {
+    "Tone": 0.5,
+    "Voice": 0.6,
+    "Boost": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Normal/slightly bright input, boost off. Cab Sim stays on until the host bypasses it for an external cabinet/IR."
+   }
+  }
+ },
+ "Amp_EpiphoneElectarM": {
+  "epicallcentura": {
+   "Gain": {
+    "param": "Volume",
+    "scale": 0.0076,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "_static": {
+    "Tone": 0.5,
+    "Voice": 0.6,
+    "Boost": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Alias del Electar/Valve Jr local: mismo mapping que Amp_EpiphoneElectarCentury."
+   }
+  }
+ },
+ "Amp_EpiphoneElectricHawaiian": {
+  "epicallcentura": {
+   "Gain": {
+    "param": "Volume",
+    "scale": 0.0076,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "_static": {
+    "Tone": 0.5,
+    "Voice": 0.6,
+    "Boost": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Alias del Electar/Valve Jr local: mismo mapping que Amp_EpiphoneElectarCentury."
+   }
+  }
+ },
+ "Amp_EpiphoneZephyr": {
+  "epicallruby": {
+   "Gain": {
+    "param": "Volume",
+    "scale": 0.0076,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass 0-100 (50=flat) -> Bass 0..1."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble 0-100 (50=flat) -> Treble 0..1."
+   },
+   "_static": {
+    "Cab Sim": 1.0,
+    "_note": "Cab Sim stays on until the host bypasses it for an external cabinet/IR."
+   }
+  }
+ },
+ "Amp_GibsonGA8": {
+  "hipzonga8": {
+   "Gain": {
+    "param": "Volume",
+    "scale": 0.0076,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass 0-100 (50=flat) -> Bass 0..1."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble 0-100 (50=flat) -> Treble 0..1."
+   },
+   "_static": {
+    "Speed": 0.4,
+    "Depth": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Tremolo off by default. Cab Sim stays on until the host bypasses it for an external cabinet/IR."
+   }
+  }
+ },
+ "Amp_GibsonGA79": {
+  "hipzonga79rvt": {
+   "Gain": {
+    "param": "Volume",
+    "scale": 0.0076,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass 0-100 (50=flat) -> Bass 0..1."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble 0-100 (50=flat) -> Treble 0..1."
+   },
+   "_static": {
+    "Reverb": 0.25,
+    "Speed": 0.4,
+    "Depth": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Reverb modest, tremolo off by default. Cab Sim stays on until the host bypasses it for an external cabinet/IR."
+   }
+  }
+ },
+ "Amp_GibsonGA88": {
+  "hipzonga88": {
+   "Gain": {
+    "param": "Volume",
+    "scale": 0.0076,
+    "_hint": "RS Volume(Gain) 0-100 -> Volume 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass 0-100 (50=flat) -> Bass 0..1."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble 0-100 (50=flat) -> Treble 0..1."
+   },
+   "_static": {
+    "Cab Sim": 1.0,
+    "_note": "Cab Sim stays on until the host bypasses it for an external cabinet/IR."
+   }
+  }
+ },
+ "Amp_MarshallJCM800": {
+  "marstenjcm800": {
+   "_hint": "Marsten JCM800 = Marshall JCM800 2204 (50W master-volume). RS Gain -> PREAMP VOL (the 2204 cascaded drive), Bass/Mid/Treble -> Marshall tone stack, Pres -> Presence. _static pins the master Volume.",
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> PREAMP VOL (the 2204 drive). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Marshall tone-stack bass (1M)."
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01,
+    "_hint": "RS Mid -> Marshall tone-stack middle (22k)."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> Marshall tone-stack treble (220k, 470pF)."
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01,
+    "_hint": "RS Pres -> Presence (power-amp NFB)."
+   },
+   "_static": {
+    "Volume": 0.6,
+    "Cab Sim": 1.0,
+    "_note": "Master Volume past noon. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Dial on the face by hand."
+   }
+  }
+ },
+ "Amp_MarshallJTM45": {
+  "marstenjtm45": {
+   "_hint": "Marsten JTM45 = Marshall JTM45 (non-master, like the Plexi). RS Gain -> LOUDNESS 1 (High-Treble channel volume = breakup driver); Bass/Mid/Treble -> Marshall tone stack, Pres -> Presence. _static: Loudness 2 + Input (jumpered).",
+   "Gain": {
+    "param": "Loudness 1",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> LOUDNESS 1 (the breakup driver). RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01,
+    "_hint": "RS Pres -> Presence (NFB)."
+   },
+   "_static": {
+    "Loudness 2": 0.3,
+    "Input": 0.5,
+    "Cab Sim": 1.0,
+    "_note": "Loudness 2 low, Input jumpered (Both). Cab Sim stays on until the host bypasses it for an external cabinet/IR. Adjust on the face."
+   }
+  }
+ },
+ "Amp_Marshall1962Bluesbreaker": {
+  "marstenbluesbreaker": {
+   "_hint": "Marsten Bluesbreaker = Marshall 1962 (JTM45 + tremolo). RS Gain -> LOUDNESS 1; Bass/Mid/Treble -> stack, Pres -> Presence. _static: Loudness 2, Input jumpered, tremolo OFF (Intensity 0), Cab Sim on until host cab/IR bypass.",
+   "Gain": {
+    "param": "Loudness 1",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> LOUDNESS 1 (breakup driver). RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01
+   },
+   "_static": {
+    "Loudness 2": 0.3,
+    "Input": 0.5,
+    "Speed": 0.5,
+    "Intensity": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Tremolo off by default (Intensity 0); Cab Sim stays on until the host bypasses it for an external cabinet/IR."
+   }
+  }
+ },
+ "Amp_MarshallDSL15H": {
+  "marstendsl15": {
+   "_hint": "Marsten DSL15 = Marshall DSL15H (Classic/Ultra). RS Gain -> ULTRA GAIN (channel pinned Ultra); Bass/Mid/Treble -> EQ, Pres -> Presence. _static pins the channel, volumes, Deep/Tone Shift and Cab Sim.",
+   "Gain": {
+    "param": "Ultra Gain",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> ULTRA GAIN (the OD channel drive). RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01
+   },
+   "_static": {
+    "Channel": 1.0,
+    "Ultra Volume": 0.5,
+    "Classic Gain": 0.5,
+    "Classic Volume": 0.5,
+    "Deep": 0.0,
+    "Tone Shift": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "ULTRA channel. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Switch to Classic / pull Deep / Tone Shift on the face."
+   }
+  }
+ },
+ "Amp_MarshallJVM410H": {
+  "marstenjvm410": {
+   "_hint": "Marsten JVM410 = Marshall JVM410H (4-channel). RS Gain -> GAIN; Bass/Mid/Treble -> stack, Pres -> Presence. _static pins Channel=OD1, Mode=orange, Volume/Resonance/Master, Reverb off and Cab Sim on.",
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> GAIN (the selected channel's drive). RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01
+   },
+   "_static": {
+    "Channel": 0.66,
+    "Mode": 0.5,
+    "Volume": 0.5,
+    "Resonance": 0.5,
+    "Master": 0.6,
+    "Reverb": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "OD1 channel, orange mode. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Switch channel/mode, add reverb on the face."
+   }
+  }
+ },
+ "Amp_EN50": {
+  "engelfireball": {
+   "_hint": "Engel Fireball = ENGL Fireball 100 (high-gain metal). RS Gain -> LEAD GAIN (channel pinned Lead); Bass/Mid/Treble -> stack, Pres -> Presence. _static pins the Lead channel, masters, switches.",
+   "Gain": {
+    "param": "Lead Gain",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> LEAD GAIN (the high-gain lead drive). RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01
+   },
+   "_static": {
+    "Channel": 1.0,
+    "Clean Gain": 0.5,
+    "Lead Volume": 0.5,
+    "Master": 0.6,
+    "Bright": 0.0,
+    "Bottom": 0.0,
+    "Mid Boost": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "LEAD channel. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Switch to Clean / Bright / Bottom / Mid Boost on the face."
+   }
+  }
+ },
+ "Amp_CS100": {
+  "polystoneminibrute": {
+   "_hint": "Polystone MiniBrute = Polytone Mini-Brute (solid-state clean jazz combo). RS Gain -> VOLUME (clean level), Bass/Treble -> tone. No Mid control (RS Mid unmapped). _static pins Brite.",
+   "Gain": {
+    "param": "Volume",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> VOLUME (the clean level; this amp stays clean). RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01
+   },
+   "_static": {
+    "Brite": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Brite off. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Flip Brite on the face for more sparkle."
+   }
+  }
+ },
+ "Amp_CS120": {
+  "ronaldjc120": {
+   "_hint": "Ronald JC-120 = Roland JC-120 Jazz Chorus. RS Gain -> DISTORTION (clean at 0, like the JC-90); Bass/Mid/Treble -> stack. _static pins Volume, Reverb off, Chorus off.",
+   "Gain": {
+    "param": "Distortion",
+    "scale": 0.01,
+    "_hint": "RS Gain -> DISTORTION (clean at 0)."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01
+   },
+   "Mid": {
+    "param": "Middle",
+    "scale": 0.01
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01
+   },
+   "_static": {
+    "Volume": 0.5,
+    "Reverb": 0.0,
+    "Speed": 0.4,
+    "Depth": 0.5,
+    "Chorus": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Volume at noon, reverb + chorus off. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Dial Chorus/Reverb on the face."
+   }
+  }
+ },
+ "Amp_OrangeAD50": {
+  "citrusad50": {
+   "_hint": "Citrus AD50 = the Orange AD50 Custom Shop (50W AB / 30W A). RS Gain -> GAIN, Bass/Treble -> 2-band shelving EQ, Pres -> Presence (power-amp NFB). _static pins Master, Sustain boost OFF and Class AB.",
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> preamp drive (extra-hot 12AX7 stage). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> bass shelf."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> treble shelf."
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01,
+    "_hint": "RS Presence -> power-amp NFB presence."
+   },
+   "Presence": {
+    "param": "Presence",
+    "scale": 0.01,
+    "_hint": "RS Presence -> power-amp NFB presence."
+   },
+   "_static": {
+    "Master": 0.6,
+    "Sustain": 0.0,
+    "Class A": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Master at noon, Sustain boost OFF, Class AB. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Toggle Sustain/Class A on the face by hand."
+   }
+  }
+ },
+ "Amp_OrangeJimmyBean": {
+  "citrusjimmybean": {
+   "_hint": "Citrus Jimmy Bean = the Orange Jimmy Bean JB150 (1975 solid-state twin-channel + tremolo + sustain). RS Gain -> SUSTAIN (solid-state sustain/compressor), Bass/Treble -> Baxandall EQ. _static pins Volume, tremolo OFF, CH1, Bright off.",
+   "Gain": {
+    "param": "Sustain",
+    "scale": 0.0076,
+    "_hint": "RS Gain -> SUSTAIN (solid-state compression/soft-clip). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass -> Baxandall bass."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble -> Baxandall treble."
+   },
+   "_static": {
+    "Volume": 0.55,
+    "Speed": 0.4,
+    "Depth": 0.0,
+    "Channel": 0.0,
+    "Bright": 0.0,
+    "Cab Sim": 1.0,
+    "_note": "Volume at noon, tremolo OFF (Depth 0), CH1, Bright off. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Dial Speed/Depth/Channel/Bright on the face by hand."
+   }
+  }
+ },
+ "DI_Amp_TubePre": {
+  "multiversal610": {
+   "_hint": "Multiversal 610 = the UA 610-A tube DI/preamp. RS Gain -> Gain (V1 drive); Bass -> Low EQ; Treble -> High EQ. The real 610 has NO mid control, so RS Mid/MidFreq are dropped. _static pins Level, Lo gain, Line input.",
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.0076,
+    "_hint": "RS Gain 0-100 -> V1 12AX7 drive 0..1. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
+    "offset": 0.24
+   },
+   "Bass": {
+    "param": "Low EQ",
+    "scale": 0.01,
+    "_hint": "RS Bass 0-100 (50=flat) -> LF stepped shelf -6..+6 dB."
+   },
+   "Treble": {
+    "param": "High EQ",
+    "scale": 0.01,
+    "_hint": "RS Treble 0-100 (50=flat) -> HF stepped shelf -6..+6 dB."
+   },
+   "_static": {
+    "Level": 0.6,
+    "Hi Gain": 0.0,
+    "Mic": 0.0,
+    "_note": "Output at the loudness reference, Lo gain, Line (instrument DI). Tweak on the face by hand."
+   }
+  }
+ },
+ "DI_Amp_BassDriver": {
+  "sinampbassdriver": {
+   "_hint": "SinAmp Bass Driver = the Tech 21 SansAmp BDDI. RS Gain -> Drive; Bass/Treble -> active tone; Blend -> Blend; Pres -> Presence. _static pins Mid flat, Level, shifts off.",
+   "Gain": {
+    "param": "Drive",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> DRIVE into the zener clippers 0..1."
+   },
+   "Bass": {
+    "param": "Bass",
+    "scale": 0.01,
+    "_hint": "RS Bass 0-100 (50=flat) -> BASS +/-12 dB."
+   },
+   "Treble": {
+    "param": "Treble",
+    "scale": 0.01,
+    "_hint": "RS Treble 0-100 (50=flat) -> TREBLE +/-12 dB."
+   },
+   "Blend": {
+    "param": "Blend",
+    "scale": 0.01,
+    "_hint": "RS Blend 0-100 -> dry-buffer vs amp-emulation mix."
+   },
+   "Pres": {
+    "param": "Presence",
+    "scale": 0.01,
+    "_hint": "RS Pres 0-100 -> PRESENCE pre-clip HF boost."
+   },
+   "_static": {
+    "Mid": 0.5,
+    "Level": 0.6,
+    "Bass Shift": 0.0,
+    "Mid Shift": 0.0,
+    "_note": "Mid flat, Level at reference, shifts off. Tweak on the face."
+   }
+  }
+ },
+ "DI_Amp_MixerPre": {
+  "meve1073": {
+   "_hint": "Meve 1073 = the Neve 1073 console pre/EQ as a DI. RS Gain -> Gain; Bass -> Low; Mid -> Mid (PRESENCE); Treble -> High. _static pins the freq selectors, HPF off and Output.",
+   "Gain": {
+    "param": "Gain",
+    "scale": 0.01,
+    "_hint": "RS Gain 0-100 -> EK20033 sensitivity / class-A drive 0..1."
+   },
+   "Bass": {
+    "param": "Low",
+    "scale": 0.01,
+    "_hint": "RS Bass 0-100 (50=flat) -> LOW shelf +/-16 dB."
+   },
+   "Mid": {
+    "param": "Mid",
+    "scale": 0.01,
+    "_hint": "RS Mid 0-100 (50=flat) -> PRESENCE peak +/-18 dB."
+   },
+   "Treble": {
+    "param": "High",
+    "scale": 0.01,
+    "_hint": "RS Treble 0-100 (50=flat) -> HIGH shelf +/-16 dB @ 12 kHz."
+   },
+   "_static": {
+    "Low Freq": 0.67,
+    "Mid Freq": 0.4,
+    "HPF": 0.0,
+    "Output": 0.6,
+    "_note": "LOW @ 110 Hz, PRESENCE @ 1.6 kHz, HPF off, Output at reference. Pick freqs/HPF on the face."
+   }
+  }
+ }
+}

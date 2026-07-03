@@ -1,0 +1,196 @@
+// amp_lufs_harness.cpp.in — offline integrated-loudness probe for a single amp VST.
+//
+// The orchestrator (measure_amp_loudness.py) substitutes @PLUGIN_CPP@ (the amp's
+// *Plugin.cpp path, relative to the amp dir) and @CLASS@ (the concrete DPF plugin
+// class, e.g. DSL100Plugin) and compiles it inside the amp's source dir with the
+// DPF include paths. See AMP_LOUDNESS.md for the original harness recipe.
+//
+// It feeds a 110 Hz–1.8 kHz multitone at RMS 0.1 (the same operating point the
+// `kLvl` calibration uses) and measures the ITU-R BS.1770-4 integrated loudness
+// (K-weighting + 400 ms blocks + absolute/relative gating) of the LEFT output.
+//
+// CLI:  harness <gain_idx[,idx2,...]> <vol_idx[,idx2,...]|-> <steps>
+// Out:  JSON on stdout:
+//   {"n": <paramCount>, "default": <LUFS>,
+//    "sweeps": {"<idx>": [[v,LUFS], ...], ...}}
+// A param listed in BOTH gain and vol lists is swept once; gain indices are also
+// swept *together* as a single group under the key "gain" so a multi-pot gain
+// (e.g. Plexi Loudness I+II) moves as one.
+
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <string>
+#include <vector>
+
+#include "@PLUGIN_CPP@"
+
+START_NAMESPACE_DISTRHO
+// Probe exposes the protected DPF entry points the host normally drives.
+struct Probe : public @CLASS@ {
+    void setP(uint32_t i, float v) { setParameterValue(i, v); }
+    float getP(uint32_t i) const   { return getParameterValue(i); }
+    void  sr(double s)             { sampleRateChanged(s); }
+    void  act()                    { activate(); }
+    void  go(const float** in, float** out, uint32_t n) { run(in, out, n); }
+};
+END_NAMESPACE_DISTRHO
+
+using DISTRHO::Probe;
+
+static const double SR        = 48000.0;
+static const int    WARMUP    = 24000;   // 0.5 s settle, discarded
+static const int    MEASURE   = 120000;  // 2.5 s measured
+static const int    BLOCK     = 19200;   // 400 ms gating block
+static const int    HOP       = 4800;    // 100 ms (75% overlap)
+static const uint32_t CHUNK   = 512;
+
+// ── Test signal: 5 equal incommensurate sines, normalized to RMS 0.10 ──────────
+static std::vector<float> makeMultitone(int n) {
+    const double f[5] = {110.0, 220.0, 440.0, 880.0, 1760.0};
+    std::vector<float> s(n);
+    double sumsq = 0.0;
+    for (int i = 0; i < n; ++i) {
+        double v = 0.0;
+        for (int k = 0; k < 5; ++k) v += std::sin(2.0 * M_PI * f[k] * i / SR);
+        s[i] = (float)v;
+        sumsq += v * v;
+    }
+    double rms = std::sqrt(sumsq / n);
+    double g   = (rms > 0.0) ? (0.10 / rms) : 0.0;
+    for (int i = 0; i < n; ++i) s[i] = (float)(s[i] * g);
+    return s;
+}
+
+// ── K-weighting biquad (Direct Form II transposed) ────────────────────────────
+struct BQ {
+    double b0, b1, b2, a1, a2, z1, z2;
+    void reset() { z1 = z2 = 0.0; }
+    double process(double x) {
+        double y = b0 * x + z1;
+        z1 = b1 * x - a1 * y + z2;
+        z2 = b2 * x - a2 * y;
+        return y;
+    }
+};
+
+// BS.1770-4 K-weighting coefficients @ 48 kHz.
+static BQ kStage1() { return { 1.53512485958697, -2.69169618940638, 1.19839281085285,
+                               -1.69065929318241, 0.73248077421585, 0, 0 }; }
+static BQ kStage2() { return { 1.0, -2.0, 1.0,
+                               -1.99004745483398, 0.99007225036621, 0, 0 }; }
+
+// Integrated loudness (LUFS) of a single-channel signal, gated per BS.1770-4.
+static double integratedLUFS(const std::vector<float>& x) {
+    BQ s1 = kStage1(), s2 = kStage2();
+    std::vector<double> w(x.size());
+    for (size_t i = 0; i < x.size(); ++i)
+        w[i] = s2.process(s1.process((double)x[i]));
+
+    std::vector<double> z;  // per-block mean square
+    for (size_t start = 0; start + BLOCK <= w.size(); start += HOP) {
+        double ms = 0.0;
+        for (int j = 0; j < BLOCK; ++j) ms += w[start + j] * w[start + j];
+        z.push_back(ms / BLOCK);
+    }
+    if (z.empty()) return -120.0;
+
+    auto loud = [](double ms) { return ms > 0.0 ? -0.691 + 10.0 * std::log10(ms) : -120.0; };
+
+    // Absolute gate at -70 LUFS.
+    double accum = 0.0; int cnt = 0;
+    for (double ms : z) if (loud(ms) >= -70.0) { accum += ms; ++cnt; }
+    if (cnt == 0) return -120.0;
+    // Relative gate at (gated mean - 10 LU).
+    double relThresh = loud(accum / cnt) - 10.0;
+    accum = 0.0; cnt = 0;
+    for (double ms : z) if (loud(ms) >= -70.0 && loud(ms) >= relThresh) { accum += ms; ++cnt; }
+    if (cnt == 0) return -120.0;
+    return loud(accum / cnt);
+}
+
+// ── One measurement: fresh plugin, set params, run, measure LEFT output ────────
+static double measure(const std::vector<float>& def,
+                      const std::vector<std::pair<int, float>>& overrides) {
+    Probe p;
+    p.sr(SR);
+    p.act();
+    for (size_t i = 0; i < def.size(); ++i) p.setP((uint32_t)i, def[i]);
+    for (auto& o : overrides) p.setP((uint32_t)o.first, o.second);
+
+    static std::vector<float> tone = makeMultitone(WARMUP + MEASURE);
+    std::vector<float> outL; outL.reserve(MEASURE);
+
+    float inBufL[CHUNK], inBufR[CHUNK], outBufL[CHUNK], outBufR[CHUNK];
+    const float* ins[2]  = { inBufL, inBufR };
+    float*       outs[2] = { outBufL, outBufR };
+
+    int n = WARMUP + MEASURE, pos = 0;
+    while (pos < n) {
+        uint32_t f = (uint32_t)std::min((int)CHUNK, n - pos);
+        for (uint32_t i = 0; i < f; ++i) { inBufL[i] = inBufR[i] = tone[pos + i]; }
+        p.go(ins, outs, f);
+        for (uint32_t i = 0; i < f; ++i)
+            if (pos + (int)i >= WARMUP) outL.push_back(outBufL[i]);
+        pos += f;
+    }
+    return integratedLUFS(outL);
+}
+
+static std::vector<int> parseIdx(const char* s) {
+    std::vector<int> v;
+    if (!s || std::strcmp(s, "-") == 0) return v;
+    std::string t(s);
+    size_t i = 0;
+    while (i < t.size()) {
+        size_t c = t.find(',', i);
+        if (c == std::string::npos) c = t.size();
+        v.push_back(std::atoi(t.substr(i, c - i).c_str()));
+        i = c + 1;
+    }
+    return v;
+}
+
+int main(int argc, char** argv) {
+    if (argc < 4) { std::fprintf(stderr, "usage: harness <gain_idx> <vol_idx|-> <steps>\n"); return 2; }
+    std::vector<int> gainIdx = parseIdx(argv[1]);
+    std::vector<int> volIdx  = parseIdx(argv[2]);
+    int steps = std::atoi(argv[3]); if (steps < 2) steps = 11;
+
+    // Defaults straight from the plugin (its ctor seeds kXxxDef).
+    int N;
+    { Probe q; q.sr(SR); N = (int)kParamCount; }
+    std::vector<float> def(N);
+    { Probe q; q.sr(SR); for (int i = 0; i < N; ++i) def[i] = q.getP((uint32_t)i); }
+
+    std::printf("{\"n\": %d, \"def\": [", N);
+    for (int i = 0; i < N; ++i) std::printf("%s%.4f", i ? ", " : "", def[i]);
+    std::printf("], \"default\": %.4f, \"sweeps\": {", measure(def, {}));
+
+    bool first = true;
+    // Grouped gain sweep: move all gain pots together.
+    if (!gainIdx.empty()) {
+        std::printf("\"gain\": [");
+        for (int s = 0; s < steps; ++s) {
+            float v = (float)s / (float)(steps - 1);
+            std::vector<std::pair<int, float>> ov;
+            for (int gi : gainIdx) ov.push_back({gi, v});
+            std::printf("%s[%.4f, %.4f]", s ? ", " : "", v, measure(def, ov));
+        }
+        std::printf("]");
+        first = false;
+    }
+    // Per-vol-param sweeps.
+    for (int vi : volIdx) {
+        std::printf("%s\"%d\": [", first ? "" : ", ", vi);
+        first = false;
+        for (int s = 0; s < steps; ++s) {
+            float v = (float)s / (float)(steps - 1);
+            std::printf("%s[%.4f, %.4f]", s ? ", " : "", v, measure(def, {{vi, v}}));
+        }
+        std::printf("]");
+    }
+    std::printf("}}\n");
+    return 0;
+}

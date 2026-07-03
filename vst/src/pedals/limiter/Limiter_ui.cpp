@@ -1,0 +1,16 @@
+/* Limiter stompbox UI — shared pedal_ui template. Colour sampled from the
+ * the game art (Pedal_Limiter); knob count + labels from the plugin params. */
+#include "LimiterParams.h"
+#define PEDAL_TITLE  "LIMITER"
+#define PEDAL_NAMES  kLimiterNames
+#define PEDAL_DEFS   kLimiterDef
+#define PEDAL_ACR 51
+#define PEDAL_ACG 88
+#define PEDAL_ACB 105
+#define PEDAL_ARCR 225
+#define PEDAL_ARCG 230
+#define PEDAL_ARCB 238
+#define PEDAL_W 360
+#define PEDAL_H 440
+#define PEDAL_KNOBS { {0.22f,0.20f,0.092f}, {0.42f,0.20f,0.092f}, {0.62f,0.20f,0.092f}, {0.82f,0.20f,0.092f} }
+#include "../_shared/pedal_ui.hpp"

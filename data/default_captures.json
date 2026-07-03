@@ -1,0 +1,222 @@
+{
+ "Amp_BT30": {
+  "kind": "nam",
+  "model_id": 141805,
+  "tone3000_id": 31267
+ },
+ "Amp_CA38": {
+  "kind": "nam",
+  "model_id": 53162,
+  "tone3000_id": 6298
+ },
+ "Amp_CA85": {
+  "kind": "nam",
+  "model_id": 53162,
+  "tone3000_id": 6298
+ },
+ "Amp_EN30": {
+  "kind": "nam",
+  "model_id": 136303,
+  "tone3000_id": 30522
+ },
+ "Amp_GB100": {
+  "kind": "nam",
+  "model_id": 72995,
+  "tone3000_id": 2608
+ },
+ "Amp_HG500": {
+  "kind": "nam",
+  "model_id": 78003,
+  "tone3000_id": 2014
+ },
+ "Amp_MarshallJVM410H": {
+  "kind": "nam",
+  "model_id": 98986,
+  "tone3000_id": 1538
+ },
+ "Amp_MarshallPlexi": {
+  "kind": "nam",
+  "model_id": 82067,
+  "tone3000_id": 1071
+ },
+ "Amp_TW22": {
+  "kind": "nam",
+  "model_id": 82929,
+  "tone3000_id": 246
+ },
+ "Amp_TW40": {
+  "kind": "nam",
+  "model_id": 82929,
+  "tone3000_id": 246
+ },
+ "Bass_Amp_BT600B": {
+  "kind": "nam",
+  "model_id": 50312,
+  "tone3000_id": 6629
+ },
+ "Bass_Amp_BT880B": {
+  "kind": "nam",
+  "model_id": 72995,
+  "tone3000_id": 2608
+ },
+ "Bass_Amp_CH350B": {
+  "kind": "nam",
+  "model_id": 244298,
+  "tone3000_id": 45809
+ },
+ "Bass_Amp_CS75B": {
+  "kind": "nam",
+  "model_id": 72995,
+  "tone3000_id": 2608
+ },
+ "Bass_Amp_HT100B": {
+  "kind": "nam",
+  "model_id": 72993,
+  "tone3000_id": 2609
+ },
+ "Bass_Amp_HT300B": {
+  "kind": "nam",
+  "model_id": 72993,
+  "tone3000_id": 2609
+ },
+ "Bass_Pedal_BassDistortion": {
+  "kind": "nam",
+  "model_id": 234376,
+  "tone3000_id": 44395
+ },
+ "Bass_Pedal_BassEQ8": {
+  "kind": "nam",
+  "model_id": 226520,
+  "tone3000_id": 43900
+ },
+ "Bass_Pedal_MBComp": {
+  "kind": "nam",
+  "model_id": 105013,
+  "tone3000_id": 27150
+ },
+ "Cabinets": {
+  "kind": "ir",
+  "model_id": 118343,
+  "tone3000_id": 28968
+ },
+ "DI_Amp_TubePre": {
+  "kind": "nam",
+  "model_id": 100563,
+  "tone3000_id": 26480
+ },
+ "Pedal_AcousticEmulator": {
+  "kind": "nam",
+  "model_id": 125801,
+  "tone3000_id": 29201
+ },
+ "Pedal_Chorus": {
+  "kind": "nam",
+  "model_id": 99790,
+  "tone3000_id": 26327
+ },
+ "Pedal_ClassicFlanger": {
+  "kind": "nam",
+  "model_id": 73077,
+  "tone3000_id": 2593
+ },
+ "Pedal_Compression": {
+  "kind": "nam",
+  "model_id": 80070,
+  "tone3000_id": 1821
+ },
+ "Pedal_CustomDrive": {
+  "kind": "nam",
+  "model_id": 109715,
+  "tone3000_id": 27910
+ },
+ "Pedal_EQ8": {
+  "kind": "nam",
+  "model_id": 160368,
+  "tone3000_id": 34025
+ },
+ "Pedal_GermaniumDrive": {
+  "kind": "nam",
+  "model_id": 107002,
+  "tone3000_id": 27514
+ },
+ "Pedal_LoFiFilter": {
+  "kind": "nam",
+  "model_id": 239479,
+  "tone3000_id": 45024
+ },
+ "Pedal_Octavius": {
+  "kind": "nam",
+  "model_id": 134038,
+  "tone3000_id": 30348
+ },
+ "Pedal_RangeBooster": {
+  "kind": "nam",
+  "model_id": 142197,
+  "tone3000_id": 31234
+ },
+ "Pedal_SpringReverb": {
+  "kind": "nam",
+  "model_id": 108960,
+  "tone3000_id": 27890
+ },
+ "Pedal_SuperDrive": {
+  "kind": "nam",
+  "model_id": 168239,
+  "tone3000_id": 35426
+ },
+ "Pedal_ValveEcho": {
+  "kind": "nam",
+  "model_id": 145559,
+  "tone3000_id": 31712
+ },
+ "Pedals": {
+  "kind": "nam",
+  "model_id": 56,
+  "tone3000_id": 19
+ },
+ "Rack_StudioChamber": {
+  "kind": "nam",
+  "model_id": 148259,
+  "tone3000_id": 31173
+ },
+ "Rack_StudioChorus": {
+  "kind": "nam",
+  "model_id": 83327,
+  "tone3000_id": 10912
+ },
+ "Rack_StudioCompressor": {
+  "kind": "nam",
+  "model_id": 349004,
+  "tone3000_id": 59494
+ },
+ "Rack_StudioDelay": {
+  "kind": "nam",
+  "model_id": 99737,
+  "tone3000_id": 26319
+ },
+ "Rack_StudioEQ": {
+  "kind": "nam",
+  "model_id": 146073,
+  "tone3000_id": 31843
+ },
+ "Rack_StudioPlate": {
+  "kind": "nam",
+  "model_id": 148259,
+  "tone3000_id": 31173
+ },
+ "Rack_StudioVerb": {
+  "kind": "nam",
+  "model_id": 148259,
+  "tone3000_id": 31173
+ },
+ "DI_Amp_BassDriver": {
+  "kind": "nam",
+  "model_id": 139654,
+  "tone3000_id": 31010
+ },
+ "DI_Amp_MixerPre": {
+  "kind": "nam",
+  "model_id": 99737,
+  "tone3000_id": 26319
+ }
+}

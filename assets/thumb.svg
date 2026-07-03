@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Rig Builder">
+  <defs>
+    <linearGradient id="rbBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#27272d"/>
+      <stop offset="1" stop-color="#151517"/>
+    </linearGradient>
+    <linearGradient id="rbAmber" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <radialGradient id="rbCone" cx="0.5" cy="0.42" r="0.62">
+      <stop offset="0" stop-color="#3a3a42"/>
+      <stop offset="0.7" stop-color="#1b1b1f"/>
+      <stop offset="1" stop-color="#0d0d0f"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="42" fill="url(#rbBg)"/>
+  <rect x="3" y="3" width="250" height="250" rx="40" fill="none" stroke="#000" stroke-opacity="0.45" stroke-width="2"/>
+
+  <!-- amp head -->
+  <g>
+    <rect x="46" y="44" width="164" height="60" rx="12" fill="#34343b" stroke="#0a0a0c" stroke-width="2"/>
+    <rect x="56" y="54" width="144" height="22" rx="7" fill="#1c1c20"/>
+    <!-- control knobs -->
+    <g fill="#d6d6da" stroke="#0a0a0c" stroke-width="1.5">
+      <circle cx="82" cy="65" r="7"/>
+      <circle cx="112" cy="65" r="7"/>
+      <circle cx="142" cy="65" r="7"/>
+      <circle cx="172" cy="65" r="7"/>
+    </g>
+    <g stroke="url(#rbAmber)" stroke-width="2.5" stroke-linecap="round">
+      <line x1="82" y1="65" x2="82" y2="59"/>
+      <line x1="112" y1="65" x2="115" y2="60"/>
+      <line x1="142" y1="65" x2="139" y2="60"/>
+      <line x1="172" y1="65" x2="172" y2="59"/>
+    </g>
+    <!-- power lamp -->
+    <circle cx="190" cy="90" r="6" fill="url(#rbAmber)"/>
+    <circle cx="190" cy="90" r="11" fill="#f59e0b" fill-opacity="0.25"/>
+  </g>
+
+  <!-- speaker cabinet (2x2) -->
+  <g>
+    <rect x="40" y="114" width="176" height="100" rx="14" fill="#2c2c32" stroke="#0a0a0c" stroke-width="2"/>
+    <rect x="52" y="124" width="152" height="80" rx="8" fill="#16161a"/>
+    <g>
+      <g>
+        <circle cx="90" cy="150" r="21" fill="url(#rbCone)" stroke="#0a0a0c" stroke-width="2"/>
+        <circle cx="90" cy="150" r="6" fill="url(#rbAmber)"/>
+      </g>
+      <g>
+        <circle cx="166" cy="150" r="21" fill="url(#rbCone)" stroke="#0a0a0c" stroke-width="2"/>
+        <circle cx="166" cy="150" r="6" fill="url(#rbAmber)"/>
+      </g>
+      <g>
+        <circle cx="90" cy="180" r="21" fill="url(#rbCone)" stroke="#0a0a0c" stroke-width="2"/>
+        <circle cx="90" cy="180" r="6" fill="url(#rbAmber)"/>
+      </g>
+      <g>
+        <circle cx="166" cy="180" r="21" fill="url(#rbCone)" stroke="#0a0a0c" stroke-width="2"/>
+        <circle cx="166" cy="180" r="6" fill="url(#rbAmber)"/>
+      </g>
+    </g>
+  </g>
+</svg>

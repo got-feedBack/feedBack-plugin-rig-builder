@@ -1,0 +1,36 @@
+rs_gear_type,name,category,level,tone3000_id,model_id,tone3000_url,rs_gain_lo,rs_gain_hi,notes,curator
+# JCM 800 appears in the library under TWO rs_gear_types (base game uses
+# the codename `Amp_AT120`, DLCs use the explicit `Amp_MarshallJCM800`).
+# Curate BOTH rows in parallel with the same tone3000_id so songs from
+# either source pick up the variant. `model_id` is optional — leave
+# blank to let the plugin auto-pick by preferred_size, or run
+# `python3 inspect_tone3000.py <tone_id>` to see the available captures
+# and pin one specifically.
+Amp_AT120,Marshall JCM 800 2203 (base-game codename),amp,clean,,,,0,35,TODO,
+Amp_AT120,Marshall JCM 800 2203 (base-game codename),amp,crunch,37987,,https://www.tone3000.com/tones/jcm800-2203-amp-37987,35,70,Confirmed great,Nacho
+Amp_AT120,Marshall JCM 800 2203 (base-game codename),amp,dist,,,,70,100,TODO,
+Amp_MarshallJCM800,Marshall JCM 800 2203 (DLC explicit name),amp,clean,,,,0,35,TODO,
+Amp_MarshallJCM800,Marshall JCM 800 2203 (DLC explicit name),amp,crunch,37987,,https://www.tone3000.com/tones/jcm800-2203-amp-37987,35,70,Confirmed great,Nacho
+Amp_MarshallJCM800,Marshall JCM 800 2203 (DLC explicit name),amp,dist,,,,70,100,TODO,
+Amp_AT20,Marshall JCM 1,amp,clean,,,,0,35,TODO,
+Amp_AT20,Marshall JCM 1,amp,crunch,,,,35,70,TODO,
+Amp_AT20,Marshall JCM 1,amp,dist,,,,70,100,TODO,
+Amp_BT15,Vox AC15,amp,clean,,,,0,40,TODO,
+Amp_BT15,Vox AC15,amp,crunch,,,,40,100,TODO,
+Amp_BT30,Vox AC30,amp,clean,,,,0,40,TODO,
+Amp_BT30,Vox AC30,amp,crunch,,,,40,100,TODO,
+Amp_BT45,Vox AC50,amp,clean,,,,0,40,TODO,
+Amp_BT45,Vox AC50,amp,crunch,,,,40,80,TODO,
+Amp_BT45,Vox AC50,amp,dist,,,,80,100,TODO,
+Amp_FT85,Fender Twin Reverb,amp,clean,,,,0,40,TODO,
+Amp_FT85,Fender Twin Reverb,amp,breakup,,,,40,80,TODO,
+Amp_FT85,Fender Twin Reverb,amp,dist,,,,80,100,TODO,
+Amp_MT100,Mesa Boogie Mark IV,amp,clean,,,,0,30,TODO,
+Amp_MT100,Mesa Boogie Mark IV,amp,crunch,,,,30,65,TODO,
+Amp_MT100,Mesa Boogie Mark IV,amp,dist,,,,65,100,TODO,
+Amp_EN1000,Engl Powerball,amp,clean,,,,0,30,TODO,
+Amp_EN1000,Engl Powerball,amp,rhythm,,,,30,70,TODO,
+Amp_EN1000,Engl Powerball,amp,lead,,,,70,100,TODO,
+Amp_SD100,Soldano SLO-100,amp,clean,,,,0,30,TODO,
+Amp_SD100,Soldano SLO-100,amp,crunch,,,,30,70,TODO,
+Amp_SD100,Soldano SLO-100,amp,dist,,,,70,100,TODO,
