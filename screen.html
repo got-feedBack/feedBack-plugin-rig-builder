@@ -276,7 +276,7 @@
        depth. On focus it straightens out, steps forward + the side disappears. */
     /* anchored by the BOTTOM so the cab always sits on the same floor line — a
        shorter amp head grows upward instead of leaving the stack floating. */
-    .rb-amp-stack{ position:absolute; left:28%; top:auto; bottom:14%; width:168px; cursor:pointer;
+    .rb-amp-stack{ position:absolute; left:28%; top:auto; bottom:14%; width:calc(168px * var(--rb-scale,1)); cursor:pointer;
         transform-style:preserve-3d; transform:translateX(-50%) rotateY(32deg) translateZ(-140px);
         transition:left .55s cubic-bezier(.33,0,.2,1), top .55s cubic-bezier(.33,0,.2,1),
             bottom .55s cubic-bezier(.33,0,.2,1), width .55s cubic-bezier(.33,0,.2,1),
@@ -299,7 +299,7 @@
         box-shadow:inset 0 0 30px rgba(0,0,0,.45); transition:opacity .35s ease; }
     #rb-studio-room.rb-focus-active .rb-amp-stack::after{ opacity:0; }
     /* contact shadow on the floor so the amp reads as grounded, not floating */
-    .rb-amp-ground{ position:absolute; left:28%; top:78%; width:178px; height:40px; pointer-events:none;
+    .rb-amp-ground{ position:absolute; left:28%; top:78%; width:calc(178px * var(--rb-scale,1)); height:calc(40px * var(--rb-scale,1)); pointer-events:none;
         transform:translateX(-50%) rotateX(66deg);
         background:radial-gradient(ellipse 50% 50% at 50% 50%, rgba(0,0,0,.62), transparent 72%);
         filter:blur(8px); transition:opacity .4s ease; }
@@ -308,17 +308,17 @@
         background:linear-gradient(180deg,#262a31,#171a1f);
         border:1px solid rgba(255,255,255,.09);
         box-shadow:inset 0 1px 0 rgba(255,255,255,.09), 0 10px 22px rgba(0,0,0,.55); }
-    .rb-amp-name{ font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:#cbd2dc;
+    .rb-amp-name{ font-size:calc(10px * var(--rb-scale,1)); letter-spacing:.12em; text-transform:uppercase; color:#cbd2dc;
         text-align:center; margin-bottom:9px; text-shadow:0 1px 0 rgba(0,0,0,.6);
         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .rb-amp-knobs{ display:flex; justify-content:center; gap:13px; }
-    .rb-knob{ width:24px; height:24px; border-radius:50%; position:relative;
+    .rb-amp-knobs{ display:flex; justify-content:center; gap:calc(13px * var(--rb-scale,1)); }
+    .rb-knob{ width:calc(24px * var(--rb-scale,1)); height:calc(24px * var(--rb-scale,1)); border-radius:50%; position:relative;
         background:radial-gradient(circle at 36% 30%,#444a54,#15171a);
         border:1px solid rgba(255,255,255,.14);
         box-shadow:0 2px 5px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.12); }
-    .rb-knob::after{ content:""; position:absolute; left:calc(50% - 1px); top:3px;
-        width:2px; height:9px; background:var(--rb-accent); border-radius:1px;
-        transform-origin:50% 9px; transform:rotate(var(--rb-knob-rot,0deg)); }
+    .rb-knob::after{ content:""; position:absolute; left:calc(50% - 1px * var(--rb-scale,1)); top:calc(3px * var(--rb-scale,1));
+        width:calc(2px * var(--rb-scale,1)); height:calc(9px * var(--rb-scale,1)); background:var(--rb-accent); border-radius:1px;
+        transform-origin:50% calc(9px * var(--rb-scale,1)); transform:rotate(var(--rb-knob-rot,0deg)); }
     .rb-amp-stack:hover .rb-knob{ box-shadow:0 2px 5px rgba(0,0,0,.55), 0 0 10px rgba(52,211,192,.45); }
     .rb-amp-cab{ aspect-ratio:1.04; margin-top:-3px; border-radius:7px; position:relative;
         background:linear-gradient(180deg,#1b1d22,#0f1012);
@@ -356,7 +356,7 @@
        stops applying and the inline style returns it to the corner. */
     #rb-studio-room.rb-focus-active .rb-amp-stack.rb-amp-focused{
         left:37% !important; top:20% !important; bottom:auto !important;
-        width:min(820px,63%) !important; z-index:6; cursor:default;
+        width:min(calc(820px * var(--rb-scale,1)),63%) !important; z-index:6; cursor:default;
         transform:translateX(-50%) rotateY(0deg) !important; }
     #rb-studio-room.rb-focus-active .rb-amp-stack.rb-amp-focused:hover{ transform:translateX(-50%) rotateY(0deg); filter:none; }
     #rb-studio-room.rb-focus-active .rb-amp-stack:not(.rb-amp-focused){ opacity:0 !important; pointer-events:none; }
@@ -429,7 +429,7 @@
 
     /* ── Rack tower on a table — set back against the RIGHT WALL, on the wood
        floor, angled almost to the left (faces into the room) ── */
-    .rb-rack-zone{ position:absolute; right:11%; bottom:6%; width:min(280px,26%); cursor:pointer;
+    .rb-rack-zone{ position:absolute; right:11%; bottom:6%; width:min(calc(280px * var(--rb-scale,1)),26%); cursor:pointer;
         transform-style:preserve-3d; transform:translateZ(150px) rotateY(-88deg);
         transform-origin:bottom right; transition:opacity .4s ease, filter .2s; }
     /* highlight only the placeholder on hover — a filter on the preserve-3d zone
@@ -475,7 +475,7 @@
     /* hover brightens the FACES only — a filter on the preserve-3d .rb-rack would
        flatten it and make the depth faces vanish */
     .rb-rack:hover > img, .rb-rack:hover::after, .rb-rack:hover::before{ filter:brightness(1.18); }
-    .rb-rack img{ display:block; width:auto; height:auto; max-width:100%; max-height:66px; border-radius:2px; }
+    .rb-rack img{ display:block; width:auto; height:auto; max-width:100%; max-height:calc(66px * var(--rb-scale,1)); border-radius:2px; }
     .rb-rack-fallback{ height:42px; display:flex; align-items:center; justify-content:center; text-align:center;
         padding:4px; font-size:11px; color:#9aa3af; border-radius:2px;
         background:linear-gradient(180deg,#1c1f24,#101114); border:1px solid rgba(255,255,255,.06); }
@@ -483,7 +483,7 @@
     .rb-rack-placeholder{ height:42px; display:flex; align-items:center; justify-content:center;
         color:#7c848f; font-size:11px; border-radius:3px; border:1.5px dashed rgba(255,255,255,.12); }
     /* contact shadow under the rack table */
-    .rb-rack-ground{ position:absolute; right:12%; bottom:4%; width:230px; height:30px; pointer-events:none;
+    .rb-rack-ground{ position:absolute; right:12%; bottom:4%; width:calc(230px * var(--rb-scale,1)); height:calc(30px * var(--rb-scale,1)); pointer-events:none;
         transform:translateZ(-35px) rotateX(66deg) rotateZ(-12deg); transform-origin:bottom right;
         background:radial-gradient(ellipse 50% 50% at 50% 50%, rgba(0,0,0,.6), transparent 72%);
         filter:blur(8px); transition:opacity .4s ease; }
@@ -510,8 +510,8 @@
         min-width:min(170px,17%); max-width:74%; min-height:26px; cursor:pointer;
         transform:translateX(-50%) rotateX(40deg);
         transform-origin:bottom center; transform-style:preserve-3d;
-        display:flex; gap:18px; align-items:flex-end; justify-content:center;
-        padding:8px 18px 6px; border-radius:9px; transition:opacity .4s ease, filter .2s; }
+        display:flex; gap:calc(18px * var(--rb-scale,1)); align-items:flex-end; justify-content:center;
+        padding:calc(8px * var(--rb-scale,1)) calc(18px * var(--rb-scale,1)) calc(6px * var(--rb-scale,1)); border-radius:9px; transition:opacity .4s ease, filter .2s; }
     .rb-pedalboard-empty:hover{ filter:brightness(1.25); }
     .rb-pedalboard{
         background:
@@ -537,7 +537,7 @@
     .rb-pedal{ flex:0 0 auto; cursor:pointer; position:relative; transform:translateZ(8px) rotateX(2deg);
         transition:filter .2s; --rb-d:5px; }
     .rb-pedal:hover{ filter:brightness(1.16); }
-    .rb-pedal img{ max-width:94px; max-height:66px; width:auto; height:auto; display:block;
+    .rb-pedal img{ max-width:calc(94px * var(--rb-scale,1)); max-height:calc(66px * var(--rb-scale,1)); width:auto; height:auto; display:block;
         border-radius:6px 6px 2px 2px; position:relative; z-index:1;
         box-shadow:0 0 0 1px rgba(255,255,255,.07), 14px 30px 24px rgba(0,0,0,.55); }
     /* bottom-front face (lighter) */
@@ -548,12 +548,12 @@
     .rb-pedal::before{ content:''; position:absolute; top:0; left:100%; width:var(--rb-d); height:100%;
         background:var(--rb-edge,#15171b); filter:brightness(.5);
         transform:skewY(45deg); transform-origin:top left; z-index:0; border-radius:0 3px 2px 0; }
-    .rb-pedal > .rb-pedal-fallback{ width:60px; height:66px; }
-    .rb-pedal-fallback{ height:116px; border-radius:8px; display:flex; align-items:center;
+    .rb-pedal > .rb-pedal-fallback{ width:calc(60px * var(--rb-scale,1)); height:calc(66px * var(--rb-scale,1)); }
+    .rb-pedal-fallback{ height:calc(116px * var(--rb-scale,1)); border-radius:8px; display:flex; align-items:center;
         justify-content:center; text-align:center; padding:8px; font-size:10px; color:#9aa3af;
         background:linear-gradient(180deg,#1c1f24,#101114); border:1px solid rgba(255,255,255,.07); }
     .rb-pedal-bypassed{ opacity:.4; filter:grayscale(.7) drop-shadow(0 14px 11px rgba(0,0,0,.5)); }
-    .rb-pedal-add{ width:92px; height:112px; border-radius:8px; cursor:pointer; transform:rotateX(-20deg);
+    .rb-pedal-add{ width:calc(92px * var(--rb-scale,1)); height:calc(112px * var(--rb-scale,1)); border-radius:8px; cursor:pointer; transform:rotateX(-20deg);
         display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
         color:#7c848f; font-size:11px; background:rgba(255,255,255,.015);
         border:1.5px dashed rgba(255,255,255,.12); transition:border-color .2s, color .2s; }
@@ -627,7 +627,7 @@
     /* coverflow row: prev (small/blur) · current (big) · next (small/blur) */
     .rb-pf-row{ display:flex; align-items:center; justify-content:center; gap:20px; width:100%; }
     /* zoom-in: the big pedal grows small → full as focus opens ("se acerque") */
-    .rb-pf-stage{ flex:0 0 auto; width:min(320px,34%); transform:scale(.78);
+    .rb-pf-stage{ flex:0 0 auto; width:min(calc(320px * var(--rb-scale,1)),34%); transform:scale(.78);
         transition:transform .38s cubic-bezier(.33,0,.2,1); }
     .rb-pedal-focus.rb-pf-open .rb-pf-stage{ transform:scale(1); }
     .rb-pf-pedal{ width:100%; border-radius:12px; overflow:hidden;
@@ -637,14 +637,14 @@
         text-align:center; padding:22px; font-size:13px; color:#9fb0cc; line-height:1.5;
         background:linear-gradient(180deg,#1c2026,#101318); border:1.5px dashed rgba(120,160,220,.32); }
     /* neighbour pedals — smaller, faded + blurred, click to slide along */
-    .rb-pf-side{ flex:0 0 auto; width:min(132px,14%); cursor:pointer; opacity:.42;
+    .rb-pf-side{ flex:0 0 auto; width:min(calc(132px * var(--rb-scale,1)),14%); cursor:pointer; opacity:.42;
         filter:blur(2.4px); transform:scale(.9); transition:opacity .2s, filter .2s, transform .2s; }
     .rb-pf-side:hover{ opacity:.72; filter:blur(1.1px); transform:scale(.96); }
     .rb-pf-side img{ width:100%; display:block; border-radius:10px;
         box-shadow:0 18px 40px -16px rgba(0,0,0,.8); }
     .rb-pf-side-empty{ visibility:hidden; pointer-events:none; }
     /* "＋" add tile to the right of the last pedal (replaces the Add button) */
-    .rb-pf-side-add{ flex:0 0 auto; width:min(96px,11%); aspect-ratio:1/1.05; cursor:pointer;
+    .rb-pf-side-add{ flex:0 0 auto; width:min(calc(96px * var(--rb-scale,1)),11%); aspect-ratio:1/1.05; cursor:pointer;
         display:flex; align-items:center; justify-content:center; font-size:34px; line-height:1;
         color:#8fa0bd; border:2px dashed rgba(120,160,220,.32); border-radius:12px;
         background:rgba(120,160,220,.06); transition:color .15s, border-color .15s, background .15s; }

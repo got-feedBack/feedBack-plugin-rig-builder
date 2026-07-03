@@ -4004,6 +4004,7 @@ function rbRenderStudioRoom() {
             <button onclick="rbShowTab('gear')" class="underline ml-1 text-gray-300 hover:text-white">add gear</button>.
         </div>` : ''}`;
     rbStudioTintPedalEdges();   // colour each pedal's extruded depth from its render
+    rbStudioApplyScale();       // scale the fixed-px gear up to fill a larger room
 }
 
 // Sample each floor pedal's lower-body colour and expose it as --rb-edge so the
@@ -4031,6 +4032,30 @@ function rbStudioTintPedalEdges() {
         if (img.complete && img.naturalWidth) apply();
         else img.addEventListener('load', apply, { once: true });
     });
+}
+
+// ── Studio gear scaling ──────────────────────────────────────────────────
+// The 3D room fills the viewport (#rb-studio-room height = calc(100vh - …px)),
+// so it grows on a larger / higher-resolution display. The gear inside (amp,
+// pedals, racks, knobs) is authored in FIXED px, tuned at a ~1080p viewport, so
+// on a taller viewport it stayed the same physical size and read as tiny.
+// Expose a uniform --rb-scale that the gear CSS multiplies its px dimensions by.
+// Driven by the LOGICAL viewport height (shell-independent; DPI is already
+// handled by the canvas backing store) against a 1080p reference, clamped to
+// [1, 2.2]: 1.0 at ≤1080p so normal screens are byte-for-byte unchanged, and it
+// grows only on genuinely taller viewports (1440p → 1.33×, 4K → 2×).
+const RB_STUDIO_REF_H = 1080;   // reference viewport height the gear px was tuned at
+function rbStudioApplyScale() {
+    const room = document.getElementById('rb-studio-room');
+    if (!room) return;
+    const vh = window.innerHeight || room.clientHeight || 0;
+    if (!vh) return;
+    const scale = Math.max(1, Math.min(2.2, vh / RB_STUDIO_REF_H));
+    room.style.setProperty('--rb-scale', scale.toFixed(3));
+}
+if (!window.__rbStudioScaleHook) {
+    window.__rbStudioScaleHook = true;
+    window.addEventListener('resize', () => { try { rbStudioApplyScale(); } catch (_) {} });
 }
 
 async function rbLoadStudioRoom() {
