@@ -73,7 +73,7 @@ Key paths:
 | App bundle | `/Applications/feedBack.app/` |
 | Bundled Python | `…/feedBack.app/Contents/Resources/python/runtime/bin/python3.12` |
 | Host code | `…/feedBack.app/Contents/Resources/slopsmith/` |
-| Sister plugin (in bundle) | `…/Resources/feedBack/plugins/nam_tone/` |
+| Sister plugin (in bundle) | `…/Resources/slopsmith/plugins/nam_tone/` |
 | Config dir | `~/Library/Application Support/slopsmith-desktop/slopsmith-config/` |
 | DB / models / IRs | `slopsmith-config/nam_tone.db`, `nam_models/*.nam`, `nam_irs/*.wav` |
 

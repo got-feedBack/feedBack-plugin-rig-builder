@@ -451,12 +451,7 @@ function rbChainGainTargetFor(chainSpec) {
     // Trim at build time + live via RbMegaChain.setOutputTrimDb), so the
     // pre-leveler chain bus must NOT also apply `makeup` — the AGC would just
     // cancel it (that was the "x5 does nothing / everything quiet" bug).
-    // NOTHING chain-dependent may sit on this bus either: the bare-cab lift
-    // that used to live here (rbBareCabBoostFor, 2.5x post-leveler) made
-    // bare-cab tones play ~+8 dB over every leveled tone. routes.py now adds
-    // that lift as a pre-leveler impulse-gain stage + lower baked gate, so the
-    // leveler owns the final level for every chain shape → bus stays at 1.0.
-    return 1.0;
+    return rbBareCabBoostFor(chainSpec);
     }
 
     let base = 1.0;
@@ -756,18 +751,16 @@ async function rbStartFinalChainNormalizer(chainSpec, opts) {
     if (!audio || typeof audio.setGain !== 'function') return;
 
     if (rbChainHasFinalLeveler(chain)) {
-        // Leveler chains: the bus stays at UNITY. Chain Volume (chain_makeup)
-        // is already BAKED into the leveler's Output Trim at build time —
-        // multiplying it here again made every path that runs this normalizer
-        // (song load, studio monitor, chain re-apply) play chain_makeup dB
-        // HOTTER than paths that only run rbApplyChainOutputGain, i.e. the
-        // same tone at different volumes depending on how it was loaded. The
-        // bare-cab lift also moved pre-leveler (routes.py) for the same
-        // reason. Keep this identical to rbChainGainTargetFor's leveler branch.
+        const userTrim = (typeof window.__rbChainMakeup === 'number')
+            ? window.__rbChainMakeup
+            : 1.0;
+        // Lift bare/acoustic RS cabs (no amp) that the leveler can't bring up
+        // from under its gate — same boost the song-playback path applies.
+        const target = userTrim * rbBareCabBoostFor(chain);
         window.__rbChainBaseTarget = 1.0;
-        window.__rbPendingChainGainTarget = 1.0;
+        window.__rbPendingChainGainTarget = target;
         try {
-            await audio.setGain('chain', 1.0);
+            await audio.setGain('chain', rbClampChainGainTarget(target));
         } catch (e) {
             console.warn('[rig_builder final-leveler] setGain(chain) failed:', e);
         }
@@ -1355,17 +1348,17 @@ const RB_EFFECTS_PLAN_SCHEMA = 'slopsmith.audio_effects.chain_plan.v1';
 const RB_JOBS_PROVIDER_ID = 'rig_builder.jobs';
 const RB_PLAYBACK_OBSERVER_ID = 'rig_builder.playback-observer';
 
-function rbSlopsmith() { return window.slopsmith || null; }
-function rbCapabilitiesApi() { const s = rbSlopsmith(); return s && s.capabilities; }
-function rbCandidateDomainsApi() { const s = rbSlopsmith(); return s && s.candidateDomains; }
-function rbAudioEffectsApi() { const s = rbSlopsmith(); return s && s.audioEffects; }
-function rbJobsApi() { const s = rbSlopsmith(); return s && s.jobs; }
+function rbfeedBack() { return window.slopsmith || null; }
+function rbCapabilitiesApi() { const s = rbfeedBack(); return s && s.capabilities; }
+function rbCandidateDomainsApi() { const s = rbfeedBack(); return s && s.candidateDomains; }
+function rbAudioEffectsApi() { const s = rbfeedBack(); return s && s.audioEffects; }
+function rbJobsApi() { const s = rbfeedBack(); return s && s.jobs; }
 function rbPlaybackApi() {
-    const s = rbSlopsmith();
+    const s = rbfeedBack();
     return s && s.playback && s.playback.version === 1 ? s.playback : null;
 }
 function rbLibraryProvidersApi() {
-    const s = rbSlopsmith();
+    const s = rbfeedBack();
     const api = s && s.libraryProviders;
     return api && typeof api === 'object' ? api : null;
 }
@@ -1777,7 +1770,7 @@ function rbCapabilityCommand(capability, command, payload) {
 }
 
 function rbRegisterUiCapabilities() {
-    const nav = rbSlopsmith() && rbSlopsmith().uiNavigation;
+    const nav = rbfeedBack() && rbfeedBack().uiNavigation;
     if (!nav || typeof nav.registerScreen !== 'function') return;
     nav.registerScreen({
         pluginId: RB_PLUGIN_ID,
@@ -4004,7 +3997,6 @@ function rbRenderStudioRoom() {
             <button onclick="rbShowTab('gear')" class="underline ml-1 text-gray-300 hover:text-white">add gear</button>.
         </div>` : ''}`;
     rbStudioTintPedalEdges();   // colour each pedal's extruded depth from its render
-    rbStudioApplyScale();       // scale the fixed-px gear up to fill a larger room
 }
 
 // Sample each floor pedal's lower-body colour and expose it as --rb-edge so the
@@ -4032,30 +4024,6 @@ function rbStudioTintPedalEdges() {
         if (img.complete && img.naturalWidth) apply();
         else img.addEventListener('load', apply, { once: true });
     });
-}
-
-// ── Studio gear scaling ──────────────────────────────────────────────────
-// The 3D room fills the viewport (#rb-studio-room height = calc(100vh - …px)),
-// so it grows on a larger / higher-resolution display. The gear inside (amp,
-// pedals, racks, knobs) is authored in FIXED px, tuned at a ~1080p viewport, so
-// on a taller viewport it stayed the same physical size and read as tiny.
-// Expose a uniform --rb-scale that the gear CSS multiplies its px dimensions by.
-// Driven by the LOGICAL viewport height (shell-independent; DPI is already
-// handled by the canvas backing store) against a 1080p reference, clamped to
-// [1, 2.2]: 1.0 at ≤1080p so normal screens are byte-for-byte unchanged, and it
-// grows only on genuinely taller viewports (1440p → 1.33×, 4K → 2×).
-const RB_STUDIO_REF_H = 1080;   // reference viewport height the gear px was tuned at
-function rbStudioApplyScale() {
-    const room = document.getElementById('rb-studio-room');
-    if (!room) return;
-    const vh = window.innerHeight || room.clientHeight || 0;
-    if (!vh) return;
-    const scale = Math.max(1, Math.min(2.2, vh / RB_STUDIO_REF_H));
-    room.style.setProperty('--rb-scale', scale.toFixed(3));
-}
-if (!window.__rbStudioScaleHook) {
-    window.__rbStudioScaleHook = true;
-    window.addEventListener('resize', () => { try { rbStudioApplyScale(); } catch (_) {} });
 }
 
 async function rbLoadStudioRoom() {
@@ -6907,14 +6875,7 @@ async function rbOnLeaveRigBuilder() {
             // The inline editor left its VST loaded in the engine; clear it so
             // it doesn't linger or get torn down under a half-closed window.
             const api = rbAudioApi();
-            if (api && api.clearChain) {
-                // Mute around the teardown: clearing the slot mid-stream passes a
-                // broadband transient (part of the menu-switch noise burst). The
-                // mute's own fallback timer restores the gain (~370 ms), and any
-                // preset load the next screen triggers coalesces with it.
-                try { await rbPreLoadMute(1, window.__rbPendingChainGainTarget); } catch (_) {}
-                await api.clearChain().catch(() => {});
-            }
+            if (api && api.clearChain) await api.clearChain().catch(() => {});
         }
     } finally {
         _rbLeaving = false;

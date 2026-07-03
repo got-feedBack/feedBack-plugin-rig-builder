@@ -1,23 +1,16 @@
 #ifndef BASS_PHASE_PARAMS_H
 #define BASS_PHASE_PARAMS_H
 
-// the game "Bass Phase" -> a 4-knob analog bass phaser (MXR Phase 90 / 100 +
-// Boss PH-3 lineage, adapted for bass). A chain of swept first-order all-pass
-// stages whose break frequency is moved by an LFO; summing the phased signal
-// with the dry signal creates the moving notches. On bass the wet path is
-// gently high-passed so the low fundamentals stay solid instead of washing out.
-// the game knobs (from the gear art): Rate / Depth / Mix / Filter.
-//   Rate   = LFO speed
-//   Depth  = sweep depth (how far the notches travel) + a little regeneration
-//   Mix    = dry/wet blend (full = classic 50/50 deep notches)
-//   Filter = centre frequency of the sweep (where the notches sit)
-enum BassPhaseParamId { kRate = 0, kDepth, kMix, kFilter, kParamCount };
+// Ibanez PH99 style phaser. Real panel controls are Speed, Depth, Feedback,
+// and Level; Rocksmith's Rate/Depth/Mix/Filter are translated in
+// data/rs_knob_to_vst_param.json.
+enum BassPhaseParamId { kSpeed = 0, kDepth, kFeedback, kLevel, kParamCount };
 
-static const char* const kBassPhaseNames[kParamCount]   = { "Rate", "Depth", "Mix", "Filter" };
-static const char* const kBassPhaseSymbols[kParamCount] = { "rate", "depth", "mix", "filter" };
+static const char* const kBassPhaseNames[kParamCount]   = { "Speed", "Depth", "Feedback", "Level" };
+static const char* const kBassPhaseSymbols[kParamCount] = { "speed", "depth", "feedback", "level" };
 
 static const float kBassPhaseMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f };
 static const float kBassPhaseMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f };
-static const float kBassPhaseDef[kParamCount] = { 0.30f, 0.60f, 0.60f, 0.40f };
+static const float kBassPhaseDef[kParamCount] = { 0.32f, 0.58f, 0.46f, 0.72f };
 
 #endif // BASS_PHASE_PARAMS_H

@@ -12,5 +12,5 @@
 #define PEDAL_ARCB 238
 #define PEDAL_W 360
 #define PEDAL_H 440
-#define PEDAL_KNOBS { {0.22f,0.20f,0.100f}, {0.50f,0.20f,0.100f}, {0.78f,0.20f,0.100f} }
+#define PEDAL_KNOBS { {0.22f,0.18f,0.095f}, {0.50f,0.18f,0.095f}, {0.78f,0.18f,0.095f}, {0.50f,0.44f,0.095f} }  /* +Mode (Bypass/Latch/Unlatch) */
 #include "../_shared/pedal_ui.hpp"

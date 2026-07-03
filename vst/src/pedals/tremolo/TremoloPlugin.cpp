@@ -4,7 +4,7 @@
  *
  * Local reference: pedals/tremolo.jpg, a Colorsound Tremolo/Tremola version 1
  * schematic with a discrete transistor audio stage and a simple transistor LFO.
- * the game exposes Speed and Mix; Mix is the tremolo depth/intensity.
+ * Real controls are Speed and Depth. Rocksmith's Mix knob maps to Depth.
  */
 #include "DistrhoPlugin.hpp"
 #include "TremoloParams.h"
@@ -50,7 +50,7 @@ class TremoloCore
 {
     float sampleRate = 48000.0f;
     float speed = kTremoloDef[kSpeed];
-    float mix = kTremoloDef[kMix];
+    float depth = kTremoloDef[kDepth];
 
     float phase = 0.0f;
     float lfoLag = 0.0f;
@@ -84,7 +84,7 @@ class TremoloCore
         const float hpRc = 1.0f / (2.0f * kPi * hpHz);
         hpA = hpRc / (hpRc + dt);
 
-        toneA = onePoleCoeffHz(8600.0f - 1450.0f * antiLogPot(mix), sampleRate);
+        toneA = onePoleCoeffHz(8600.0f - 1450.0f * antiLogPot(depth), sampleRate);
     }
 
     float highPass(float x)
@@ -139,9 +139,9 @@ public:
         updateCoeffs();
     }
 
-    void setMix(float v)
+    void setDepth(float v)
     {
-        mix = clamp01(v);
+        depth = clamp01(v);
         updateCoeffs();
     }
 
@@ -155,17 +155,21 @@ public:
         const float lfoA = lfo > lfoLag ? lfoRiseA : lfoFallA;
         lfoLag += lfoA * (lfo - lfoLag);
 
-        const float depth = 0.03f + 0.97f * antiLogPot(mix);
-        const float floor = 1.0f - 0.94f * depth;
-        const float targetGain = floor + (1.0f - floor) * (1.0f - lfoLag);
+        const float amount = 0.03f + 0.97f * antiLogPot(depth);
+        const float bc184Sink = smoothstep(lfoLag * (0.82f + 0.38f * amount));
+        const float floor = 1.0f - 0.94f * amount;
+        const float targetGain = floor + (1.0f - floor) * (1.0f - bc184Sink);
         gainSmooth += gainA * (targetGain - gainSmooth);
 
         float x = highPass(in);
         x = toneLowPass(x);
 
-        // Keep the transistor color restrained; the pedal should modulate
-        // level, not add noticeable drive.
-        const float makeup = 1.0f + 0.035f * depth;
+        // BC169B common-emitter audio stage, lightly loaded by the BC184L LFO
+        // shunt. It should color transients a little without becoming a drive.
+        const float transistor = std::tanh(x * (1.18f + 0.16f * amount));
+        x = x * 0.955f + transistor * 0.045f;
+
+        const float makeup = 1.0f + 0.035f * amount;
         return x * gainSmooth * makeup * 0.99f;
     }
 };
@@ -180,8 +184,8 @@ class TremoloPlugin : public Plugin
     {
         left.setSpeed(params[kSpeed]);
         right.setSpeed(params[kSpeed]);
-        left.setMix(params[kMix]);
-        right.setMix(params[kMix]);
+        left.setDepth(params[kDepth]);
+        right.setDepth(params[kDepth]);
     }
 
 public:

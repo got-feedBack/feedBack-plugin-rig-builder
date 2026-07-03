@@ -3,22 +3,22 @@
 
 enum MultiTremParamId
 {
-    kSpeed = 0,
-    kMix,
-    kWaveform,
+    kRate = 0,
+    kDepth,
+    kWave,
     kParamCount
 };
 
 static const char* const kMultiTremNames[kParamCount] = {
-    "Speed",
-    "Mix",
-    "Waveform",
+    "Rate",
+    "Depth",
+    "Wave",
 };
 
 static const char* const kMultiTremSymbols[kParamCount] = {
-    "speed",
-    "mix",
-    "waveform",
+    "rate",
+    "depth",
+    "wave",
 };
 
 static const float kMultiTremMin[kParamCount] = { 0.0f, 0.0f, 0.0f };

@@ -1,226 +1,137 @@
 /*
- * OmniMod - Uni-Vibe/Shin-ei style photocell phase modulation for
- * the game's Pedal_OmniMod.
+ * OmniMod - Shin-ei/Uni-Vibe style photocell phase modulation for Pedal_OmniMod.
  *
- * Local references: pedals/omnimod_1.gif and pedals/omnimod_2.jpg. The
- * schematic family uses four phase stages driven by a lamp/LDR oscillator.
- * the game exposes Rate, Depth, and Mix.
+ * Local references: pedals/omnimod_1.gif and pedals/omnimod_2.jpg. This version
+ * uses the same physical lamp/LDR and RC all-pass model as the Deja/Uni-Vibe
+ * chorus work, but with a slightly older Shin-ei voicing and stronger throb.
  */
 #include "DistrhoPlugin.hpp"
 #include "OmniModParams.h"
+#include "../_shared/ChorusComponents.h"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
 
-namespace {
-
-static constexpr float kPi = 3.14159265359f;
-static constexpr float kTwoPi = 6.28318530718f;
-static constexpr int kStageCount = 4;
-
-static inline float clamp01(float v)
-{
-    return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
-}
-
-static inline float smoothstep(float v)
-{
-    v = clamp01(v);
-    return v * v * (3.0f - 2.0f * v);
-}
-
-static inline float clampFreq(float hz, float sr)
-{
-    const float nyquist = sr * 0.45f;
-    if (hz < 18.0f)
-        return 18.0f;
-    return hz > nyquist ? nyquist : hz;
-}
-
-static inline float onePoleCoeffHz(float hz, float sr)
-{
-    hz = clampFreq(hz, sr);
-    return 1.0f - std::exp(-2.0f * kPi * hz / sr);
-}
-
-class OnePoleFilter
-{
-    float lp = 0.0f;
-    float hpX1 = 0.0f;
-    float hpY1 = 0.0f;
-    float lpA = 0.0f;
-    float hpA = 0.0f;
-
-public:
-    void reset()
-    {
-        lp = hpX1 = hpY1 = 0.0f;
-    }
-
-    void setLowPass(float sr, float hz)
-    {
-        lpA = onePoleCoeffHz(hz, sr);
-    }
-
-    void setHighPass(float sr, float hz)
-    {
-        const float dt = 1.0f / sr;
-        const float rc = 1.0f / (2.0f * kPi * clampFreq(hz, sr));
-        hpA = rc / (rc + dt);
-    }
-
-    float lowPass(float x)
-    {
-        lp += lpA * (x - lp);
-        return lp;
-    }
-
-    float highPass(float x)
-    {
-        const float y = hpA * (hpY1 + x - hpX1);
-        hpX1 = x;
-        hpY1 = y;
-        return y;
-    }
-};
-
-class FirstOrderAllpass
-{
-    float z = 0.0f;
-
-public:
-    void reset()
-    {
-        z = 0.0f;
-    }
-
-    float process(float x, float sr, float hz)
-    {
-        hz = clampFreq(hz, sr);
-        const float t = std::tan(kPi * hz / sr);
-        const float a = (1.0f - t) / (1.0f + t);
-        const float y = a * x + z;
-        z = x - a * y;
-        return y;
-    }
-};
-
-} // namespace
-
 class OmniModCore
 {
     float sampleRate = 48000.0f;
-    float phaseOffset = 0.0f;
-    float rate = kOmniModDef[kRate];
-    float depth = kOmniModDef[kDepth];
-    float mix = kOmniModDef[kMix];
+    float speed = kOmniModDef[kRate];
+    float intensity = kOmniModDef[kIntensity];
+    float volume = kOmniModDef[kVolume];
+    float mode = kOmniModDef[kMode];
 
-    FirstOrderAllpass stages[kStageCount];
-    OnePoleFilter inputHp;
-    OnePoleFilter toneLp;
-    OnePoleFilter lampLag;
-    OnePoleFilter outputHp;
-
-    float lfoPhase = 0.0f;
+    float phase = 0.0f;
+    float dc = 0.0f;
+    float preBias = 0.0f;
     float feedback = 0.0f;
     float throbMemory = 0.0f;
 
-    void updateFilters()
-    {
-        const float d = smoothstep(depth);
-        inputHp.setHighPass(sampleRate, 34.0f);
-        toneLp.setLowPass(sampleRate, 6600.0f - 1850.0f * d);
-        lampLag.setLowPass(sampleRate, 4.5f + 19.0f * rate);
-        outputHp.setHighPass(sampleRate, 24.0f);
-    }
+    rbmod::HighPass inputHp;
+    rbmod::LowPass inputLp;
+    rbmod::LowPass outputLp;
+    rbmod::HighPass outputHp;
+    rbmod::LampLdrModel lamp;
+    rbmod::FirstOrderAllPass stages[4];
 
     float currentRateHz() const
     {
-        return 0.075f + 6.85f * std::pow(clamp01(rate), 1.42f);
+        const float s = std::pow(rbmod::clamp01(speed), 1.95f);
+        return 0.060f + 6.45f * s;
+    }
+
+    void configureStages()
+    {
+        stages[0].setCap(15.0e-9f);
+        stages[1].setCap(220.0e-9f);
+        stages[2].setCap(470.0e-12f);
+        stages[3].setCap(4.7e-9f);
+        for (int i = 0; i < 4; ++i)
+            stages[i].setSampleRate(sampleRate);
+    }
+
+    void updateFilters()
+    {
+        inputHp.setHz(30.0f, sampleRate);
+        inputLp.setHz(7800.0f, sampleRate);
+        outputLp.setHz(6900.0f, sampleRate);
+        outputHp.setHz(20.0f, sampleRate);
     }
 
 public:
-    void setPhaseOffset(float offset)
-    {
-        phaseOffset = offset - std::floor(offset);
-    }
-
     void reset()
     {
-        lfoPhase = phaseOffset;
-        feedback = throbMemory = 0.0f;
-        for (int i = 0; i < kStageCount; ++i)
-            stages[i].reset();
         inputHp.reset();
-        toneLp.reset();
-        lampLag.reset();
+        inputLp.reset();
+        outputLp.reset();
         outputHp.reset();
-        updateFilters();
+        lamp.reset();
+        for (int i = 0; i < 4; ++i)
+            stages[i].reset();
+        phase = 0.0f;
+        dc = 0.0f;
+        preBias = 0.0f;
+        feedback = 0.0f;
+        throbMemory = 0.0f;
     }
 
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
+        lamp.setSampleRate(sampleRate);
+        configureStages();
+        updateFilters();
         reset();
     }
 
-    void setRate(float v)
-    {
-        rate = clamp01(v);
-        updateFilters();
-    }
-
-    void setDepth(float v)
-    {
-        depth = clamp01(v);
-        updateFilters();
-    }
-
-    void setMix(float v)
-    {
-        mix = clamp01(v);
-    }
+    void setRate(float v) { speed = rbmod::clamp01(v); }
+    void setIntensity(float v) { intensity = rbmod::clamp01(v); }
+    void setVolume(float v) { volume = rbmod::clamp01(v); }
+    void setMode(float v) { mode = v >= 0.5f ? 1.0f : 0.0f; }
 
     float process(float in)
     {
-        lfoPhase += currentRateHz() / sampleRate;
-        if (lfoPhase >= 1.0f)
-            lfoPhase -= std::floor(lfoPhase);
+        phase += currentRateHz() / sampleRate;
+        if (phase >= 1.0f)
+            phase -= std::floor(phase);
 
-        const float d = 0.04f + 0.96f * smoothstep(depth);
-        const float m = mix <= 0.0001f ? 0.0f : clamp01(0.08f + 1.04f * mix);
-        const float phase = lfoPhase + phaseOffset;
-        const float sine = std::sin(kTwoPi * phase);
-        const float lampRaw = 0.5f + 0.5f * (0.86f * sine + 0.14f * std::sin(kTwoPi * (phase * 2.0f + 0.18f)));
-        const float lamp = lampLag.lowPass(std::pow(clamp01(lampRaw), 1.55f));
+        const float sine = std::sin(rbmod::kTwoPi * phase);
+        const float lfo = rbmod::clamp01(0.50f + 0.43f * sine + 0.07f * std::sin(rbmod::kTwoPi * (phase * 2.0f + 0.11f)));
+        const float inten = std::pow(rbmod::clamp01(intensity), 1.12f);
+        const float light = lamp.processLight(rbmod::clamp01(0.08f + (0.20f + 0.84f * inten) * lfo));
 
-        float x = inputHp.highPass(in);
-        x = toneLp.lowPass(x);
-        x = std::tanh(x * 1.06f) * 0.95f;
+        float x = inputHp.process(in);
+        x = inputLp.process(x);
+        preBias += 0.00042f * (x - preBias);
+        x -= preBias;
+        x = rbmod::softClip(x * 1.19f) * 0.92f;
 
-        static const float baseHz[kStageCount] = { 58.0f, 145.0f, 420.0f, 1220.0f };
-        float shifted = x + feedback * (0.22f + 0.28f * d);
-        for (int i = 0; i < kStageCount; ++i)
+        const float ldrR = rbmod::LampLdrModel::nsl7530Resistance(light);
+        const float spread[4] = { 1.05f, 0.78f, 1.28f, 0.92f };
+        float wet = x + feedback * (0.12f + 0.30f * inten);
+        for (int i = 0; i < 4; ++i)
         {
-            float ldr = lamp + 0.14f * (float)i;
-            if (ldr > 1.0f)
-                ldr -= 1.0f;
-            ldr = 0.025f + d * smoothstep(ldr);
-            const float sweep = 0.16f + 12.8f * ldr;
-            shifted = stages[i].process(shifted, sampleRate, baseHz[i] * sweep);
+            const float stageR = 4700.0f + ldrR * spread[i];
+            wet = stages[i].process(wet, stageR);
+            wet = rbmod::softClip(wet * 1.04f);
         }
+        feedback = rbmod::softClip(wet) * (0.16f + 0.30f * inten);
 
-        feedback = std::tanh(shifted) * (0.20f + 0.28f * d + 0.08f * m);
-        throbMemory += onePoleCoeffHz(9.0f, sampleRate) * ((lamp * 2.0f - 1.0f) - throbMemory);
-        const float throb = 1.0f - (0.13f + 0.26f * d) * throbMemory;
-        shifted *= throb;
+        wet = outputLp.process(wet);
+        dc += 0.00035f * (wet - dc);
+        wet -= dc;
 
-        const float wet = shifted;
-        const float dryLevel = 1.0f - 0.38f * m;
-        const float wetLevel = (0.36f + 0.98f * m) * m;
-        float y = x * dryLevel - wet * wetLevel;
-        y = outputHp.highPass(y);
-        return std::tanh(y * (0.94f + 0.10f * d)) * 0.96f;
+        throbMemory += rbmod::onePoleCoeffHz(8.0f, sampleRate) * ((light * 2.0f - 1.0f) - throbMemory);
+        wet *= 1.0f - (0.06f + 0.15f * inten) * throbMemory;
+
+        const float vibratoMode = mode >= 0.5f ? 1.0f : 0.0f;
+        const float dry = x * (0.76f * (1.0f - vibratoMode));
+        const float wetLevel = vibratoMode > 0.5f ? 1.00f : 0.90f;
+        float y = vibratoMode > 0.5f ? wet * wetLevel
+                                      : dry - wet * wetLevel;
+
+        const float outGain = 0.18f + 1.68f * rbmod::audioTaper(volume);
+        y = outputHp.process(y);
+        return rbmod::softClip(y * outGain) * 0.74f;
     }
 };
 
@@ -234,10 +145,12 @@ class OmniModPlugin : public Plugin
     {
         left.setRate(params[kRate]);
         right.setRate(params[kRate]);
-        left.setDepth(params[kDepth]);
-        right.setDepth(params[kDepth]);
-        left.setMix(params[kMix]);
-        right.setMix(params[kMix]);
+        left.setIntensity(params[kIntensity]);
+        right.setIntensity(params[kIntensity]);
+        left.setVolume(params[kVolume]);
+        right.setVolume(params[kVolume]);
+        left.setMode(params[kMode]);
+        right.setMode(params[kMode]);
     }
 
 public:
@@ -246,8 +159,6 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kOmniModDef[i];
-        left.setPhaseOffset(0.00f);
-        right.setPhaseOffset(0.00f);
         left.setSampleRate((float)getSampleRate());
         right.setSampleRate((float)getSampleRate());
         applyAll();
@@ -258,7 +169,7 @@ protected:
     const char* getDescription() const override { return "Uni-Vibe style photocell phase modulation"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('O', 'm', 'M', 'd'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -266,6 +177,8 @@ protected:
         if (index >= (uint32_t)kParamCount)
             return;
         parameter.hints = kParameterIsAutomatable;
+        if (index == (uint32_t)kMode)
+            parameter.hints |= kParameterIsBoolean | kParameterIsInteger;
         parameter.name = kOmniModNames[index];
         parameter.symbol = kOmniModSymbols[index];
         parameter.ranges.min = kOmniModMin[index];
@@ -282,7 +195,9 @@ protected:
     {
         if (index >= (uint32_t)kParamCount)
             return;
-        params[index] = clamp01(value);
+        params[index] = index == (uint32_t)kMode
+            ? (value >= 0.5f ? 1.0f : 0.0f)
+            : rbmod::clamp01(value);
         applyAll();
     }
 
@@ -299,10 +214,12 @@ protected:
         const float* inR = inputs[1];
         float* outL = outputs[0];
         float* outR = outputs[1];
+
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = left.process(inL[i]);
-            outR[i] = right.process(inR[i]);
+            const rbmod::StereoInputPair feed = rbmod::stereoPedalFeeds(inL[i], inR[i]);
+            outL[i] = left.process(feed.left);
+            outR[i] = right.process(feed.right);
         }
     }
 

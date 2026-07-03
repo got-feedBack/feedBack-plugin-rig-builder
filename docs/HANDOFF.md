@@ -672,7 +672,7 @@ new/edited plugin code to take effect.
 ## Critical: sister plugin `nam_tone`
 
 A plugin called `nam_tone` already ships **inside the app bundle** at
-`/Applications/feedBack.app/Contents/Resources/feedBack/plugins/nam_tone/`.
+`/Applications/feedBack.app/Contents/Resources/slopsmith/plugins/nam_tone/`.
 It owns:
 
 - `nam_tone.db` — tables `presets` (one `model_file` + one `ir_file` per
@@ -1404,7 +1404,7 @@ back to the old wrapper (they still only apply in preview).
 | App bundle | `/Applications/feedBack.app/` |
 | Bundled Python | `/Applications/feedBack.app/Contents/Resources/python/runtime/bin/python3.12` |
 | Host server code | `/Applications/feedBack.app/Contents/Resources/slopsmith/server.py` |
-| Sister plugin | `/Applications/feedBack.app/Contents/Resources/feedBack/plugins/nam_tone/` |
+| Sister plugin | `/Applications/feedBack.app/Contents/Resources/slopsmith/plugins/nam_tone/` |
 | User config dir | `~/Library/Application Support/slopsmith-desktop/slopsmith-config/` |
 | User plugins dir | `~/Library/Application Support/slopsmith-desktop/plugins/` |
 | This plugin | `~/Library/Application Support/slopsmith-desktop/plugins/rig_builder/` |

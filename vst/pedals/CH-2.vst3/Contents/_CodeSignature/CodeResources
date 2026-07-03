@@ -18,18 +18,18 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
-		<key>x86_64-linux/Chorus.so</key>
+		<key>x86_64-linux/CH-2.so</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			pC9Z3SBRsVhnD5CknBMor4z4FstxJkMz7rw5NQM+tB0=
+			BOkyTc9/dr968Jctibh4/e4WqDWM9ybCVUc+5CMAgHw=
 			</data>
 		</dict>
-		<key>x86_64-win/Chorus.vst3</key>
+		<key>x86_64-win/CH-2.vst3</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			q/Z5yebgHyypr/CEl6Y//le+zyWQcqJ37qImd8wD3Sc=
+			DsS9hxLeYGQFxEliARptRL8X6CIxA6HPnalxZGurIp4=
 			</data>
 		</dict>
 	</dict>

@@ -73,7 +73,7 @@ class AmpTremCore
 
     float rateHz() const
     {
-        return 0.38f * std::pow(18.0f, speed);
+        return 0.38f * std::pow(26.0f, speed);
     }
 
     void updateCoeffs()

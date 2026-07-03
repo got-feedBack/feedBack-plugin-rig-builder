@@ -49,7 +49,7 @@ def test_rehome_repoints_stale_appimage_mount_to_current_plugin_dir(tmp_path):
     conn = _make_conn()
     routes._conn = conn
     # A tone saved under a now-dead AppImage FUSE mount.
-    stale = "/tmp/.mount_feedbavy7H0S/resources/feedBack/plugins/rig_builder/vst/amps/SamplegSBTCL.vst3"
+    stale = "/tmp/.mount_feedbavy7H0S/resources/slopsmith/plugins/rig_builder/vst/amps/SamplegSBTCL.vst3"
     pid = _insert(conn, stale)
 
     routes._migrate_rehome_bundled_vst_paths()
@@ -63,7 +63,7 @@ def test_rehome_covers_legacy_nam_rig_builder_marker(tmp_path):
     routes._plugin_dir = plugin_dir
     conn = _make_conn()
     routes._conn = conn
-    stale = "/tmp/.mount_feedbaOLD/resources/feedBack/plugins/nam_rig_builder/vst/racks/RB Final Leveler.vst3"
+    stale = "/tmp/.mount_feedbaOLD/resources/slopsmith/plugins/nam_rig_builder/vst/racks/RB Final Leveler.vst3"
     pid = _insert(conn, stale)
 
     routes._migrate_rehome_bundled_vst_paths()

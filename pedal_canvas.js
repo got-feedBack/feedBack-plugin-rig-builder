@@ -437,8 +437,8 @@
     outlineText(d, W*0.5, tyTop+(tBot-tyTop)*0.66, FONTS.crete, 42, rgb(168,171,176), rgb(118,121,127), 'Ibañez', 1);
   }
   // Builder for Ibanez Tonelok pedals (parallels chiefSpec). knobIds:[{id,cx,lbl,lblPx?}];
-  // model = salmon code badge ('LF6'), fxname = effect tag ('LO FI'). Labels use
-  // the RS knob names so the face matches what the knob actually does.
+  // model = salmon code badge ('LF6'), fxname = effect tag ('LO FI'). Labels
+  // are the exposed plugin controls for that pedal.
   function ibanezSpec(w,h,knobIds,model,fxname){ return { w,h,
     knobs: knobIds.map(k=>({id:k.id,cx:k.cx,cy:.135,r:k.r||.060,style:'pointer',cap:[224,226,230]})),
     tick:rgb(74,76,82), ptr:rgb(40,42,48),
@@ -484,7 +484,7 @@
   }
   // Builder for Foog (moogerfooger) pedals (parallels chiefSpec/ibanezSpec).
   // knobIds:[{id,cx,cy,r?,lbl,lblPx?}] (free 2D placement); model = e.g. 'FM108'.
-  // Labels (RS knob names) sit ABOVE each knob, moogerfooger-style.
+  // Labels sit ABOVE each knob, moogerfooger-style.
   function foogSpec(w,h,knobIds,model){ return { w,h,
     knobs: knobIds.map(k=>({id:k.id,cx:k.cx,cy:k.cy,r:k.r||.10,style:'moog'})),
     tick:rgb(150,152,158), ptr:rgb(238,240,244),
@@ -1085,16 +1085,16 @@
     [{id:0,cx:.17,lbl:'MANUAL',lblPx:7},{id:1,cx:.39,lbl:'DEPTH'},{id:2,cx:.61,lbl:'RATE'},{id:3,cx:.83,lbl:'RES'}],
     'Flanger',null,'FL-2');
 
-  // Shaver Phaser — Boss PH-1-style: Chief body in the PH-1 grass green.
-  // RS knob names. 2 RS knobs: Rate0 Depth1.
+  // Shaver Phaser — Boss PH-1R-style: Chief body in the PH-1 grass green.
+  // Real controls: Rate0 Depth1 Resonance2.
   P.ph1 = chiefSpec(300,480,[66,176,70],
-    [{id:0,cx:.33,lbl:'RATE'},{id:1,cx:.67,lbl:'DEPTH'}],
-    'Phaser',null,'PH-1');
+    [{id:0,cx:.22,lbl:'RATE'},{id:1,cx:.50,lbl:'DEPTH'},{id:2,cx:.78,lbl:'RES',lblPx:10}],
+    'Phaser',null,'PH-1R');
 
   // Multi-Trem — Boss TR-2-style: Chief body in the TR-2 teal/turquoise.
-  // RS knob names. 3 RS knobs: Speed0 Mix1 Waveform2.
+  // Real controls: Rate0 Depth1 Wave2.
   P.tr2 = chiefSpec(300,480,[34,150,146],
-    [{id:0,cx:.25,lbl:'SPEED'},{id:1,cx:.50,lbl:'MIX'},{id:2,cx:.75,lbl:'WAVEFORM',lblPx:7}],
+    [{id:0,cx:.25,lbl:'RATE'},{id:1,cx:.50,lbl:'DEPTH'},{id:2,cx:.75,lbl:'WAVE',lblPx:9}],
     'Tremolo',null,'TR-2');
 
   // Multi-Vibe — Boss VB-2-style: Chief body in the VB-2 bright blue.
@@ -1111,9 +1111,9 @@
     'Rotary','Ensemble','RT-2');
 
   // NPN Delay — Boss DM-2-style: Chief body in the DM-2 hot pink/red.
-  // RS knob names. 3 RS knobs: Time0 Feedback1 Mix2.
+  // Real controls: Repeat Rate0 Echo1 Intensity2.
   P.dm2 = chiefSpec(300,480,[216,82,114],
-    [{id:0,cx:.25,lbl:'TIME'},{id:1,cx:.50,lbl:'FEEDBACK',lblPx:7},{id:2,cx:.75,lbl:'MIX'}],
+    [{id:0,cx:.25,lbl:'REPEAT',lblPx:7.5},{id:1,cx:.50,lbl:'ECHO'},{id:2,cx:.75,lbl:'INTENSITY',lblPx:7}],
     'Delay',null,'DM-2');
 
   // Digital Verb — Boss RV-2-style: Chief body in the RV-2 gunmetal grey.
@@ -1753,25 +1753,25 @@
       if(sub) textC(d,.5*d.W,.68*d.H,F.barlow,10,rgb(170,170,176),sub);
       ledDot(d,d.W*.5,d.H*.77,true,210,70,58); footRound(d,d.W*.5,d.H*.88,23*d.s); } }; }
 
-  // Bass Phase — MXR-style orange box (NYR parody, matches the Dyna Comp).
+  // Bass Phase — Ibanez PH99-style orange box.
   // 2x2 knobs; NYR logo centred with the LED above it; name below the footswitch.
-  // RS params: Rate0 Depth1 Mix2 Filter3.
+  // Real controls: Speed0 Depth1 Feedback2 Level3.
   P.phase99 = { w:300,h:460,
     knobs:[
-      {id:0,cx:.30,cy:.175,r:.088,style:'davies'},  // RATE
+      {id:0,cx:.30,cy:.175,r:.088,style:'davies'},  // SPEED
       {id:1,cx:.70,cy:.175,r:.088,style:'davies'},  // DEPTH
-      {id:2,cx:.30,cy:.395,r:.088,style:'davies'},  // MIX
-      {id:3,cx:.70,cy:.395,r:.088,style:'davies'}], // FILTER
+      {id:2,cx:.30,cy:.395,r:.088,style:'davies'},  // FEEDBACK
+      {id:3,cx:.70,cy:.395,r:.088,style:'davies'}], // LEVEL
     tick:rgb(46,24,4), ptr:rgb(244,244,240),
     draw(d){ const {ctx:c,W,H,s}=d; const ink=rgb(42,22,6), m=7*s;
       c.fillStyle=rgb(10,8,6); c.fillRect(0,0,W,H);
       const g=c.createLinearGradient(0,m,0,H-m); g.addColorStop(0,rgb(240,134,32)); g.addColorStop(1,rgb(210,96,14));
       rr(c,m,m,W-2*m,H-2*m,13*s); c.fillStyle=g; c.fill();
       rr(c,m,m,W-2*m,H-2*m,13*s); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=2*s; c.stroke();
-      textSpaced(d,.30*W,.275*H,F.barlow,9.5,ink,'RATE',0.4);
+      textSpaced(d,.30*W,.275*H,F.barlow,9.5,ink,'SPEED',0.4);
       textSpaced(d,.70*W,.275*H,F.barlow,9.5,ink,'DEPTH',0.4);
-      textSpaced(d,.30*W,.495*H,F.barlow,9.5,ink,'MIX',0.4);
-      textSpaced(d,.70*W,.495*H,F.barlow,9,ink,'FILTER',0.3);
+      textSpaced(d,.30*W,.495*H,F.barlow,8.5,ink,'FEEDBACK',0.1);
+      textSpaced(d,.70*W,.495*H,F.barlow,9.5,ink,'LEVEL',0.3);
       ledDot(d,W*.50,H*.565,true,224,52,46);                    // LED above the NYR logo
       const bw=W*.28,bh=H*.09,bx=W*.5-bw/2,by=H*.635-bh/2;
       rr(c,bx,by,bw,bh,8*s); c.strokeStyle=ink; c.lineWidth=2.6*s; c.stroke();
@@ -1832,8 +1832,8 @@
       textSpaced(d,.70*W,.90*H,F.barlow,8,wt,'FAST',0.4); } };
 
   // Tremolo — Colorsound Tremolo-style: purple box, bubble logo, two chrome
-  // knobs, a comic 'TREMOLO' starburst badge. Parody (Lightaudio). RS knob
-  // names. Speed0 Mix1.
+  // knobs, a comic 'TREMOLO' starburst badge. Parody (Lightaudio). Real
+  // controls: Speed0 Depth1.
   P.tremolo = { w:260,h:470, knobs:[
       {id:0,cx:.30,cy:.37,r:.10,style:'knurled'},
       {id:1,cx:.70,cy:.37,r:.10,style:'knurled'}],
@@ -1850,9 +1850,9 @@
       outlineText(d,.5*W,.155*H,F.anton,28,rgb(120,82,112),wt,'LIGHTAUDIO',1.5);
       textSpaced(d,.5*W,.225*H,F.barlow,7.5,wt,'LIGHT SOUND',0.4);
       textSpaced(d,.5*W,.255*H,F.barlow,7.5,wt,'LONDON ENGLAND',0.4);
-      // knob labels (RS names)
+      // knob labels
       textSpaced(d,.30*W,.49*H,F.barlow,10,wt,'SPEED',0.5);
-      textSpaced(d,.70*W,.49*H,F.barlow,10,wt,'MIX',0.5);
+      textSpaced(d,.70*W,.49*H,F.barlow,10,wt,'DEPTH',0.5);
       // 'TREMOLO' comic starburst badge
       const bx=W*.5, by=H*.67, Ro=W*.40, Ri=W*.30, n=12;
       c.beginPath();
@@ -1903,7 +1903,7 @@
   // Trem Ole — Keeley DynaTrem-style: crimson brushed top panel with 4 black
   // fluted knobs + a 3-way mode toggle, over a tan tweed grille-cloth bottom
   // with a gold 'DYNA-TREM' plaque + script brand + chrome stomp. Parody
-  // (Peeley). RS knob names. Sens0 Attack1 Release2 Mix3.
+  // (Peeley). Real controls: Rate0 Depth1 Shape2 Level3; Mode is the toggle.
   P.dynatrem = { w:280,h:460, knobs:[
       {id:0,cx:.255,cy:.175,r:.078,style:'boss'},
       {id:1,cx:.745,cy:.175,r:.078,style:'boss'},
@@ -1932,11 +1932,11 @@
       c.beginPath(); c.moveTo(m,H*.52); c.lineTo(W-m,H*.52); c.strokeStyle=rgb(122,98,42); c.lineWidth=2.5*s; c.stroke();
       // status LED (top centre)
       ledDot(d,W*.50,H*.055,true,150,196,255);
-      // knob labels (RS names)
-      textSpaced(d,.255*W,.080*H,F.barlow,9,wt,'SENS',0.4);
-      textSpaced(d,.745*W,.080*H,F.barlow,9,wt,'ATTACK',0.4);
-      textSpaced(d,.255*W,.280*H,F.barlow,9,wt,'RELEASE',0.3);
-      textSpaced(d,.745*W,.280*H,F.barlow,9,wt,'MIX',0.4);
+      // knob labels
+      textSpaced(d,.255*W,.080*H,F.barlow,9,wt,'RATE',0.4);
+      textSpaced(d,.745*W,.080*H,F.barlow,9,wt,'DEPTH',0.4);
+      textSpaced(d,.255*W,.280*H,F.barlow,9,wt,'SHAPE',0.3);
+      textSpaced(d,.745*W,.280*H,F.barlow,9,wt,'LEVEL',0.4);
       // 3-way mode toggle + printed mode legends (centre, between top knobs)
       textC(d,.455*W,.145*H,F.barlow,5,wt,'DYNAMIC RATE','right');
       textC(d,.455*W,.178*H,F.barlow,5,wt,'DYNAMIC DEPTH','right');
@@ -2153,11 +2153,14 @@
 
   // Valve Echo — Catalinbread Echorec-style: gold metallic body, black knob
   // panel, outline ECHOREC wordmark, column + concentric-arc line-art, chrome
-  // stomp + script brand. Parody (Venson). RS knob names. Time0 Feedback1 Mix2.
+  // stomp + script brand. Parody (Venson). Real controls:
+  // Drum Speed0 Swell1 Echo Volume2 Tone3 Heads4.
   P.valveecho = { w:280,h:480, knobs:[
-      {id:0,cx:.22,cy:.235,r:.072,style:'davies'},
-      {id:1,cx:.50,cy:.235,r:.072,style:'davies'},
-      {id:2,cx:.78,cy:.235,r:.072,style:'davies'}],
+      {id:0,cx:.18,cy:.225,r:.058,style:'davies'},
+      {id:1,cx:.38,cy:.225,r:.058,style:'davies'},
+      {id:2,cx:.58,cy:.225,r:.058,style:'davies'},
+      {id:3,cx:.78,cy:.225,r:.058,style:'davies'},
+      {id:4,cx:.50,cy:.360,r:.052,style:'davies'}],
     ptr:rgb(240,240,242),
     draw(d){ const {ctx:c,W,H,s}=d; const m=8*s, goldD=rgb(150,112,28), wt=rgb(240,238,232);
       c.fillStyle=rgb(8,8,9); c.fillRect(0,0,W,H);
@@ -2169,15 +2172,17 @@
       for(let i=0;i<7;i++){ const lx=W*(.105+i*.028); c.beginPath(); c.moveTo(lx,H*.44); c.lineTo(lx,H*.85); c.stroke(); }
       for(let i=1;i<=7;i++){ c.beginPath(); c.arc(W*.80,H*.70,W*.05*i,Math.PI*0.70,Math.PI*1.35); c.stroke(); }
       // black knob panel
-      rr(c,W*.07,H*.075,W*.86,H*.31,10*s); c.fillStyle=rgb(22,22,24); c.fill();
-      rr(c,W*.07,H*.075,W*.86,H*.31,10*s); c.strokeStyle='rgba(0,0,0,0.5)'; c.lineWidth=1.4*s; c.stroke();
-      // knob labels (RS names)
-      textSpaced(d,.22*W,.125*H,F.barlow,8.5,wt,'TIME',0.3);
-      textSpaced(d,.50*W,.125*H,F.barlow,7.5,wt,'FEEDBACK',0.2);
-      textSpaced(d,.78*W,.125*H,F.barlow,8.5,wt,'MIX',0.3);
+      rr(c,W*.07,H*.075,W*.86,H*.365,10*s); c.fillStyle=rgb(22,22,24); c.fill();
+      rr(c,W*.07,H*.075,W*.86,H*.365,10*s); c.strokeStyle='rgba(0,0,0,0.5)'; c.lineWidth=1.4*s; c.stroke();
+      // knob labels (real panel controls)
+      textSpaced(d,.18*W,.125*H,F.barlow,7.0,wt,'DRUM',0.2);
+      textSpaced(d,.38*W,.125*H,F.barlow,7.4,wt,'SWELL',0.2);
+      textSpaced(d,.58*W,.125*H,F.barlow,6.2,wt,'ECHO VOL',0.1);
+      textSpaced(d,.78*W,.125*H,F.barlow,7.6,wt,'TONE',0.2);
+      textSpaced(d,.50*W,.310*H,F.barlow,7.4,wt,'HEADS',0.2);
       // ECHOREC wordmark on a black band
-      rr(c,W*.10,H*.475,W*.80,H*.085,6*s); c.fillStyle=rgb(20,20,22); c.fill();
-      outlineText(d,.5*W,.518*H,F.anton,40,wt,rgb(20,20,22),'ECHOREC',1);
+      rr(c,W*.10,H*.495,W*.80,H*.085,6*s); c.fillStyle=rgb(20,20,22); c.fill();
+      outlineText(d,.5*W,.538*H,F.anton,40,wt,rgb(20,20,22),'ECHOREC',1);
       // footswitch
       footRound(d,W*.50,H*.685,20*s);
       // power symbol + script brand + tagline
@@ -2187,12 +2192,13 @@
 
   // Oil Can Echo — Tel-Ray AD-N-ECHO-style: vintage amp-head box, black tolex,
   // black top panel with rotary knobs + bat toggles, faded-teal lower panel with
-  // jacks, badge + script + red jewel. Parody (Cel-Ray / Oil-Can Echo). RS knob
-  // names on the three rotaries. Time0 Feedback1 Mix2.
+  // jacks, badge + script + red jewel. Parody (Cel-Ray / Oil-Can Echo). Real
+  // controls: Time0 Sustain1 Mix2 Tone3.
   P.oilcanecho = { w:600,h:330, knobs:[
-      {id:0,cx:.12,cy:.37,r:.050,style:'pointer',cap:[28,28,30]},
-      {id:1,cx:.50,cy:.37,r:.044,style:'knurled'},
-      {id:2,cx:.88,cy:.37,r:.050,style:'pointer',cap:[28,28,30]}],
+      {id:0,cx:.12,cy:.37,r:.046,style:'pointer',cap:[28,28,30]},
+      {id:1,cx:.38,cy:.37,r:.042,style:'knurled'},
+      {id:2,cx:.64,cy:.37,r:.042,style:'knurled'},
+      {id:3,cx:.88,cy:.37,r:.046,style:'pointer',cap:[28,28,30]}],
     tick:rgb(96,96,100), ptr:rgb(232,232,226),
     draw(d){ const {ctx:c,W,H,s}=d; const m=8*s, wt=rgb(228,228,222), brass=rgb(176,142,72);
       // black tolex box
@@ -2207,12 +2213,13 @@
       // black top control panel
       rr(c,W*.035,H*.07,W*.93,H*.50,6*s); c.fillStyle=rgb(16,16,17); c.fill();
       rr(c,W*.035,H*.07,W*.93,H*.50,6*s); c.strokeStyle=rgb(4,4,5); c.lineWidth=1.4*s; c.stroke();
-      // sweep arrows above the rotaries + RS knob labels
+      // sweep arrows above the rotaries + real knob labels
       const sweep=(kx)=>{ c.beginPath(); c.arc(kx,H*.37,W*.045,Math.PI*1.18,Math.PI*1.82); c.strokeStyle=wt; c.lineWidth=1.1*s; c.stroke(); };
-      sweep(.12*W); sweep(.50*W); sweep(.88*W);
+      sweep(.12*W); sweep(.38*W); sweep(.64*W); sweep(.88*W);
       textSpaced(d,.12*W,.165*H,F.barlow,8.5,wt,'TIME',0.3);
-      textSpaced(d,.50*W,.165*H,F.barlow,8,wt,'FEEDBACK',0.2);
-      textSpaced(d,.88*W,.165*H,F.barlow,8.5,wt,'MIX',0.3);
+      textSpaced(d,.38*W,.165*H,F.barlow,7.5,wt,'SUSTAIN',0.2);
+      textSpaced(d,.64*W,.165*H,F.barlow,8.5,wt,'MIX',0.3);
+      textSpaced(d,.88*W,.165*H,F.barlow,8.5,wt,'TONE',0.3);
       // decorative bat toggles
       const tog=(tx,up)=>{ const tw=11*s, th=20*s, ty=H*.37;
         rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.fillStyle=rgb(26,26,28); c.fill();
@@ -2255,7 +2262,8 @@
 
   // Cosmic Echo — Tom's Line/Mooer 'Cosmic'-style mini echo: black body, blue
   // atom/galaxy graphic, three blue knobs, outline wordmark + side jack legends.
-  // Parody (RocketSynth / Space Echo). RS knob names. Time0 Feedback1 Mix2.
+  // Parody (RocketSynth / Space Echo). Real controls:
+  // Delay Length0 Feedback1 Mix2.
   P.galaxyecho = { w:260,h:420, knobs:[
       {id:0,cx:.22,cy:.46,r:.072,style:'pointer',cap:[54,150,212]},
       {id:1,cx:.50,cy:.46,r:.072,style:'pointer',cap:[54,150,212]},
@@ -2275,8 +2283,8 @@
       // OUT / IN side legends
       textSpaced(d,.15*W,.305*H,F.barlow,7,wt,'◄ OUT',0.2);
       textSpaced(d,.85*W,.305*H,F.barlow,7,wt,'IN ►',0.2);
-      // knob labels (RS names)
-      textSpaced(d,.22*W,.585*H,F.barlow,9,wt,'TIME',0.3);
+      // knob labels (real panel controls)
+      textSpaced(d,.22*W,.585*H,F.barlow,8,wt,'LENGTH',0.2);
       textSpaced(d,.50*W,.585*H,F.barlow,8,wt,'FEEDBACK',0.2);
       textSpaced(d,.78*W,.585*H,F.barlow,9,wt,'MIX',0.3);
       // white design band
@@ -2289,8 +2297,8 @@
 
   // Mod Delay — Ibanez DL10 (10-series)-style: blue body, light-blue top panel
   // with mode LEDs + five small black knobs, 'DELAY DL9 digital' branding, big
-  // black ribbed treadle with embossed Ibañez wordmark. Parody. RS knob names.
-  // Time0 Feedback1 Mix2 Rate3 Depth4.
+  // black ribbed treadle with embossed Ibañez wordmark. Parody. Real controls:
+  // Delay Time0 Regen1 Delay Level2 Speed3 Width4.
   P.dl9 = { w:280,h:460, knobs:[
       {id:0,cx:.14,cy:.205,r:.055,style:'boss'},
       {id:1,cx:.32,cy:.205,r:.055,style:'boss'},
@@ -2308,8 +2316,8 @@
       rr(c,W*.05,H*.04,W*.90,H*.355,8*s); c.strokeStyle='rgba(0,0,0,0.25)'; c.lineWidth=1.2*s; c.stroke();
       // mode LEDs + labels
       [['A·INT',.175],['ADD·DLY',.39],['FBC',.60],['FB',.78]].forEach(p=>{ ledDot(d,p[1]*W,H*.078,true,224,60,52); textSpaced(d,p[1]*W,H*.118,F.barlow,5.5,dk,p[0],0.1); });
-      // knob labels (RS names)
-      [['TIME',.14],['FEEDBACK',.32],['MIX',.50],['RATE',.68],['DEPTH',.86]].forEach(p=> textSpaced(d,p[1]*W,.295*H,F.barlow,6,dk,p[0],0.05));
+      // knob labels (real panel controls)
+      [['TIME',.14],['REGEN',.32],['LEVEL',.50],['SPEED',.68],['WIDTH',.86]].forEach(p=> textSpaced(d,p[1]*W,.295*H,F.barlow,6,dk,p[0],0.05));
       // DELAY / DL9 / digital branding at the seam
       textSpaced(d,.40*W,.440*H,F.bebas,30,wt,'DELAY',1.0);
       textSpaced(d,.73*W,.450*H,F.barlow,12,wt,'DL9',0.5);
@@ -2649,9 +2657,11 @@
     'LF6','LO FI');
 
   // NoFi Echo — Ibanez DE7-style: the Ibanez Tonelok (silver) template.
-  // RS knob names. 3 RS knobs: Time0 Feedback1 Mix2.
+  // Real controls: Delay Time0 Repeat1 Delay Level2 Range3 Mode4.
   P.nofiecho = ibanezSpec(280,460,
-    [{id:0,cx:.20,r:.070,lbl:'TIME'},{id:1,cx:.50,r:.070,lbl:'FEEDBACK',lblPx:7},{id:2,cx:.80,r:.070,lbl:'MIX'}],
+    [{id:0,cx:.13,r:.055,lbl:'TIME'},{id:1,cx:.32,r:.055,lbl:'REPEAT',lblPx:7},
+     {id:2,cx:.51,r:.055,lbl:'LEVEL'},{id:3,cx:.70,r:.050,lbl:'RANGE',lblPx:7},
+     {id:4,cx:.87,r:.050,lbl:'MODE'}],
     'DE6','DELAY/ECHO');
 
   // Foog FM108 — Moog MF-108M Cluster Flux-style. Real controls:
@@ -2718,10 +2728,13 @@
   P.fm107 = P.fm108;
 
   // Analog Delay — Moog MF-104M-style: the foog (moogerfooger) template.
-  // RS knob names. 3 RS knobs: Time0 Feedback1 Mix2.
-  P.fm104 = foogSpec(300,420,
-    [{id:0,cx:.32,cy:.33,lbl:'TIME'},{id:1,cx:.68,cy:.33,lbl:'FEEDBACK',lblPx:7.5},
-     {id:2,cx:.50,cy:.63,lbl:'MIX'}],
+  // Real controls: Drive0 Output1 Time2 Feedback3 Mix4.
+  P.fm104 = foogSpec(340,460,
+    [{id:0,cx:.20,cy:.260,r:.064,lbl:'DRIVE'},
+     {id:1,cx:.50,cy:.260,r:.064,lbl:'OUTPUT',lblPx:7.5},
+     {id:2,cx:.80,cy:.260,r:.064,lbl:'TIME'},
+     {id:3,cx:.32,cy:.560,r:.064,lbl:'FEEDBACK',lblPx:7.0},
+     {id:4,cx:.68,cy:.560,r:.064,lbl:'MIX'}],
     'FM104');
 
   // Bob Filter — Moog MF-105 MuRF-style: custom foog layout (not the simple
@@ -4176,16 +4189,14 @@
   // blue wireframe CHIEF logo + circuit traces up top, 3 sections (PRE DELAY /
   // MODULATION / EFFECT) of colour-capped knobs, right logo block + POWER.
   // Parody CHIEF / "DIGITAL CHORUS ENSEMBLE RCE-12".
-  // RS params (7 knobs): Rate0 Depth1 EffectLevel2 LowCut3 EffectEQ4 Stereo5 PreDelay6.
+  // The 5 REAL RCE-10 pots (param index): Rate0 Depth1 EffectLevel2 EffectEQ3 PreDelay4.
   P.studiochorus = { w:960, h:300,
     knobs:[
-      {id:6,cx:.120,cy:.66,r:.032,style:'pointer',cap:[42,182,120]},  // Delay  (PRE DELAY / TIME, green)
-      {id:0,cx:.230,cy:.66,r:.032,style:'pointer',cap:[68,150,212]},  // Rate   (blue)
-      {id:1,cx:.310,cy:.66,r:.032,style:'pointer',cap:[68,150,212]},  // Depth  (blue)
-      {id:3,cx:.420,cy:.66,r:.032,style:'pointer',cap:[232,200,44]},  // Low Cut (yellow)
-      {id:4,cx:.500,cy:.66,r:.032,style:'pointer',cap:[232,200,44]},  // Effect EQ (yellow)
-      {id:5,cx:.580,cy:.66,r:.032,style:'pointer',cap:[235,140,42]},  // Stereo width (orange)
-      {id:2,cx:.660,cy:.66,r:.032,style:'pointer',cap:[235,140,42]}], // Effect Level (orange)
+      {id:4,cx:.140,cy:.66,r:.032,style:'pointer',cap:[42,182,120]},  // Pre Delay (green)
+      {id:0,cx:.300,cy:.66,r:.032,style:'pointer',cap:[68,150,212]},  // Rate   (blue)
+      {id:1,cx:.410,cy:.66,r:.032,style:'pointer',cap:[68,150,212]},  // Depth  (blue)
+      {id:3,cx:.560,cy:.66,r:.032,style:'pointer',cap:[232,200,44]},  // Effect EQ (yellow)
+      {id:2,cx:.690,cy:.66,r:.032,style:'pointer',cap:[235,140,42]}], // Effect Level (orange)
     tick:rgb(150,154,160), ptr:rgb(236,238,240),
     draw(d){ const {ctx:c,W,H}=d, m=7;
       c.fillStyle=rgb(14,15,16); c.fillRect(0,0,W,H);
@@ -4204,14 +4215,14 @@
       outlineText(d,.40*W,.255*H,F.bebas,52,body,blu,'CHIEF',3);
       // section dividers
       c.strokeStyle=rgb(96,100,106); c.lineWidth=1.2;
-      for(const xx of [.180,.375]){ c.beginPath(); c.moveTo(xx*W,.52*H); c.lineTo(xx*W,.84*H); c.stroke(); }
+      for(const xx of [.220,.490]){ c.beginPath(); c.moveTo(xx*W,.52*H); c.lineTo(xx*W,.84*H); c.stroke(); }
       // section labels (+ underline)
       const sec=(cx,t)=>{ textC(d,cx*W,.50*H,F.barlow,13,wt,t);
         c.strokeStyle=blu; c.lineWidth=1.4; const hw=t.length*3.6;
         c.beginPath(); c.moveTo(cx*W-hw,.560*H); c.lineTo(cx*W+hw,.560*H); c.stroke(); };
-      sec(.120,'PRE DELAY'); sec(.270,'MODULATION'); sec(.540,'EFFECT');
+      sec(.140,'PRE DELAY'); sec(.355,'MODULATION'); sec(.625,'EFFECT');
       // knob sub-labels
-      [[.120,'TIME'],[.230,'RATE'],[.310,'DEPTH'],[.420,'LOW CUT'],[.500,'EQ'],[.580,'WIDTH'],[.660,'LEVEL']]
+      [[.140,'TIME'],[.300,'RATE'],[.410,'DEPTH'],[.560,'EQ'],[.690,'LEVEL']]
         .forEach(p=> textC(d,p[0]*W,.820*H,F.barlow,12,wt,p[1]));
       // slide switch helper
       const slide=(cx,cy)=>{ rr(c,cx-.011*W,cy-.05*H,.022*W,.10*H,3); c.fillStyle=rgb(26,27,29); c.fill();

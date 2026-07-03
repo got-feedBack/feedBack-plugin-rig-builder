@@ -165,7 +165,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/PH-1.vst3",
-   "notes": "Bundled ET-25B style phaser based on the local shaver phaser schematic, using the game's Rate and Depth knobs with fixed internal mix."
+   "notes": "Bundled Boss PH-1R style four-stage JFET phaser based on the local PH-1R schematic. Real controls: Rate, Depth, Resonance; RS Rate/Depth map directly and Resonance uses a circuit default unless an RS Mix/Feedback value is present."
   }
  ],
  "Pedal_PlanePhase": [
@@ -186,7 +186,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/phase 99.vst3",
    "free": true,
-   "notes": "Bundled analog bass phaser — 4 swept all-pass stages with regeneration, dry/wet notch blend, and a wet-path high-pass so bass lows stay solid. Maps RS Rate/Depth/Mix/Filter."
+   "notes": "Bundled Ibanez PH99 style opto phaser based on the local schematic: NE571 compander, C4570/4558 all-pass chain, TL022 LFO, P873-G35 optos, and real Speed, Depth, Feedback, Level controls. RS Rate/Depth/Mix/Filter map to those real controls."
   }
  ],
  "Pedal_Tremolo": [
@@ -197,7 +197,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Tremolo.vst3",
-   "notes": "Bundled Colorsound Tremolo/Tremola style transistor tremolo based on the local schematic, using the game's Speed and Mix knobs."
+   "notes": "Bundled Colorsound Tremola V1 style transistor tremolo based on the local schematic: BC169B audio stage, BC184L LFO shunt, and real Speed/Depth controls. Rocksmith Mix maps to Depth."
   }
  ],
  "Pedal_AmpTrem": [
@@ -208,7 +208,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Mega-Trem.vst3",
-   "notes": "Bundled Demeter Tremulator-style optical amp tremolo based on the local schematic, using the game's Speed and Depth knobs."
+   "notes": "Bundled Demeter Tremulator-style optical tremolo based on the local schematic: LF442/LF351 LFO, 1N5229 LED clamp, VTL5C1 optocoupler, TL061 audio stage, and real Speed/Depth controls."
   }
  ],
  "Pedal_MultiTrem": [
@@ -219,7 +219,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/TR-2.vst3",
-   "notes": "Bundled Boss TR-2 style multi-wave tremolo based on the local schematic, using the game's Speed, Mix, and Waveform knobs."
+   "notes": "Bundled Boss TR-2 style tremolo based on the local schematic: 2SK118 input, M5207L01 VCA, M5218AL stages, and real Rate/Depth/Wave controls. Rocksmith Speed/Mix/Waveform map to those controls."
   }
  ],
  "Pedal_TremOle": [
@@ -230,7 +230,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Dyna-Trem.vst3",
-   "notes": "Bundled envelope-aware stereo tremolo using the game's Sens, Attack, Release, and Mix knobs."
+   "notes": "Bundled Keeley DynaTrem-inspired dynamic tremolo. No usable schematic is available locally, so it models the documented Dynamic Rate, Dynamic Depth, Harmonic Tremolo, Shape, and Level behaviour. Rocksmith Sens/Attack/Release/Mix map to real-style controls."
   }
  ],
  "Pedal_AmpVibe": [
@@ -241,7 +241,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Multi-Vibe.vst3",
-   "notes": "Bundled Uni-Vibe style four-stage phase modulation based on the local schematic, using the game's Speed and Mix knobs."
+   "notes": "Bundled Uni-Vibe style optical modulation based on the local schematic. Real controls: Speed, Intensity, Volume, Mode; Rocksmith Speed/Mix map to Speed/Intensity."
   }
  ],
  "Pedal_MultiVibe": [
@@ -252,7 +252,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/VB-2.vst3",
-   "notes": "Bundled Boss VB-2 style BBD vibrato based on the local schematic, using the game's Speed, Mix and Waveform knobs."
+   "notes": "Bundled Boss VB-2 style BBD vibrato based on the local schematic and datasheets. Real controls: Rate, Depth, Rise Time; Rocksmith Speed/Mix/Waveform map to those controls."
   }
  ],
  "Pedal_AutoVibe": [
@@ -263,7 +263,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Oceanduct.vst3",
-   "notes": "Bundled envelope-controlled vibrato/vibe using the game's Sens, Attack, Release, and Mix knobs."
+   "notes": "Bundled envelope-controlled vibrato/vibe. No exact schematic is available locally, so this is a behaviour-driven auto-vibrato using Sens, Attack, Release, and Mix."
   }
  ],
  "Pedal_BassEmulator": [
@@ -285,7 +285,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/UV-1.vst3",
-   "notes": "Bundled Marshall SV-1/Supervibe style MN3007 BBD vibe based on the local schematic, using the game's Rate, Depth, Mix and Wave knobs."
+   "notes": "Bundled Marshall SV-1/Supervibe style MN3007 BBD vibe based on the local schematic and datasheets. Real controls: Rate, Depth, Tone, Sweep; Rocksmith Mix/Wave map to Tone/Sweep."
   }
  ],
  "Pedal_BakedRotatoe": [
@@ -307,7 +307,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/UniMod.vst3",
-   "notes": "Bundled Uni-Vibe/Shin-ei style photocell phase modulation based on the local Omni Mod schematics, using the game's Rate, Depth, and Mix knobs."
+   "notes": "Bundled Uni-Vibe/Shin-ei style photocell phase modulation based on the local Omni Mod schematics. Real controls: Speed, Intensity, Volume, Mode; Rocksmith Rate/Depth/Mix map to Speed/Intensity/Volume."
   }
  ],
  "Pedal_AnalogueDelay": [
@@ -317,7 +317,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/FM104.vst3",
    "free": true,
-   "notes": "Bundled MF-104 style BBD delay using the game Time, Feedback and Mix controls"
+   "notes": "Bundled FM104 / Moog MF-104 style BBD delay based on the local schematic: TL072 input, SA572 compander, MN3005/MN3008 BBD chain, LM13700 wet/dry VCAs and dark feedback filtering. Real controls: Drive, Output, Time, Feedback, Mix; Rocksmith Time/Feedback/Mix map to Time/Feedback/Mix and Drive/Output are pinned by _static."
   }
  ],
  "Pedal_ValveEcho": [
@@ -327,7 +327,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/Valve Echo.vst3",
    "free": true,
-   "notes": "Bundled Binson Echorec style valve drum echo using the game Time, Feedback and Mix controls"
+   "notes": "Bundled Binson Echorec PE603-T style valve drum echo based on the local schematics: ECC83/ECC82 stages, OA81 rectified biasing, magnetic drum smear and four playback heads. Real controls: Drum Speed, Swell, Echo Volume, Tone, Heads; Rocksmith Time/Feedback/Mix map to Drum Speed/Swell/Echo Volume."
   }
  ],
  "Pedal_NPNDelay": [
@@ -337,7 +337,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/DM-2.vst3",
    "free": true,
-   "notes": "Bundled DM-2 style BBD/NPN delay using the game Time, Feedback and Mix controls"
+   "notes": "Bundled Boss DM-2 style BBD/NPN delay based on the local schematic: 4558 filtering, NE570 compander, MN3005/MN3205 BBD, MN3101/MN3102 clock and transistor/JFET switching. Real controls: Repeat Rate, Echo, Intensity; Rocksmith Time/Feedback/Mix map to Repeat Rate/Intensity/Echo."
   }
  ],
  "Pedal_NoFiEcho": [
@@ -347,7 +347,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/No Fi Echo.vst3",
    "free": true,
-   "notes": "Bundled DE7-style stereo no-fi echo using the game Time, Feedback and Mix controls"
+   "notes": "Bundled Ibanez DE7-style stereo Delay/Echo based on the local schematic. Real controls: Delay Time, Repeat, Delay Level, Range, Mode; Rocksmith Time/Feedback/Mix map to Delay Time/Repeat/Delay Level with Range and Echo Mode pinned by _static."
   }
  ],
  "Pedal_OilCanEcho": [
@@ -358,7 +358,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Oil Can Echo.vst3",
-   "notes": "Bundled Tel-Ray / OK Pacemaker oil-can echo based on the local schematics, using the game's Time, Feedback, and Mix knobs."
+   "notes": "Bundled Tel-Ray / OK Pacemaker oil-can echo based on the local schematics: discrete transistor preamp, electrostatic storage can, bias oscillator texture and smeared repeats. Real controls: Time, Sustain, Mix, Tone; Rocksmith Time/Feedback/Mix map to Time/Sustain/Mix."
   }
  ],
  "Pedal_CosmicEcho": [
@@ -369,7 +369,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Galaxy Echo.vst3",
-   "notes": "Bundled Synthrotek ECHO / PT2399-style cosmic delay based on the local schematic, using the game's Time, Feedback, and Mix knobs."
+   "notes": "Bundled Synthrotek ECHO / PT2399-style cosmic delay based on the local schematic: PT2399 core, TL074 delay CV, feedback tone shaping and op-amp mixers. Real controls: Delay Length, Feedback, Mix; Rocksmith Time/Feedback/Mix map directly."
   }
  ],
  "Pedal_ModDelay": [
@@ -380,7 +380,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/DL9.vst3",
-   "notes": "Bundled DLL10/DML10-style modulated delay using the game's Time, Feedback, Mix, Rate, and Depth knobs."
+   "notes": "Bundled Ibanez DLL10/DML10-style modulated delay based on the local schematics: M5218/TL062 analog conditioning, NE571/NJM570 companding, MC4101/uPD4164 digital delay and modulated VCO control. Real controls: Delay Time, Regen, Delay Level, Speed, Width; Rocksmith Time/Feedback/Mix/Rate/Depth map to those controls."
   }
  ],
  "Bass_Pedal_BassFilterDelay": [
@@ -935,7 +935,7 @@
    "format": "VST3",
    "bundled": "vst/racks/StereoPhaser.vst3",
    "free": true,
-   "notes": "Bundled Stereo phaser. Maps RS Rate/Depth/Mix."
+   "notes": "Bundled Boss RPH-10 Micro Rack style stereo phaser based on the local owner manual and block diagram: input/output level stages, compander, 12-stage phase shift core, feedback, Mode I/II/III behavior and stereo modulation bus. Maps RS Rate/Depth/Mix."
   }
  ],
  "Rack_StudioWahFilter": [
@@ -955,7 +955,7 @@
    "format": "VST3",
    "bundled": "vst/racks/SynthFilter.vst3",
    "free": true,
-   "notes": "Bundled Envelope filterbank. Maps RS Sens/Attack/Release/FilterType/Mix."
+   "notes": "Bundled Korg MS-20 External Signal Processor / KORG35-style synth filterbank based on the local service manual: ESP low-cut/high-cut envelope/CV extraction, resonant VC HPF + VC LPF and LP/BP/HP output morph. Maps RS Sens/Attack/Release/FilterType/Mix."
   }
  ],
  "Rack_RotaVibe": [
@@ -975,7 +975,7 @@
    "format": "VST3",
    "bundled": "vst/racks/StereoTubeTrem.vst3",
    "free": true,
-   "notes": "Bundled Tube tremolo. Maps RS Speed/Mix/Waveform."
+   "notes": "Bundled Peavey Valverb-style stereo tube/opto tremolo based on the local VALVERB schematic: 12AX7/12AT7 line path, transistor LED driver, dual LDR pan/trem network and tube recovery color. Maps RS Speed/Mix/Waveform."
   }
  ],
  "Rack_StudioPitch": [
@@ -1035,7 +1035,7 @@
    "format": "VST3",
    "bundled": "vst/racks/StudioChamber.vst3",
    "free": true,
-   "notes": "Bundled Freeverb-style StudioChamber. Maps RS Time/Tone/Depth/Mix."
+   "notes": "Bundled Lexicon PCM70 Rich Chamber-style StudioChamber. Maps RS Time/Tone/Depth/Mix."
   }
  ],
  "Rack_StudioChorus": [
@@ -1065,7 +1065,7 @@
    "format": "VST3",
    "bundled": "vst/racks/StudioFlanger.vst3",
    "free": true,
-   "notes": "Bundled stereo flanger — modulated short delay + Regen feedback + Tone low-pass. Maps RS Rate(Hz)/Depth/Regen/Tone/Mix."
+   "notes": "Bundled Boss RBF-10 Micro Rack style stereo flanger based on the local service notes: M5218L/IR9022 conditioning, MN3102 clock, MN3204 512-stage BBD, feedback level, balance and D+E/D-E stereo spread. Maps RS Rate(Hz)/Depth/Regen/Tone/Mix."
   }
  ],
  "Rack_StudioPlate": [
@@ -1075,7 +1075,7 @@
    "format": "VST3",
    "bundled": "vst/racks/StudioPlate.vst3",
    "free": true,
-   "notes": "Bundled Freeverb-style StudioPlate. Maps RS Time/Tone/Depth/Mix."
+   "notes": "Bundled EMT 140-style StudioPlate. Maps RS Time/Tone/Depth/Mix."
   }
  ],
  "Rack_StudioVerb": [
@@ -1085,7 +1085,7 @@
    "format": "VST3",
    "bundled": "vst/racks/StudioVerb.vst3",
    "free": true,
-   "notes": "Bundled Freeverb-style StudioVerb. Maps RS Time/Tone/Depth/Mix."
+   "notes": "Bundled Lexicon 224-style StudioVerb. Maps RS Time/Tone/Depth/Mix."
   }
  ],
  "Rack_TapeEcho": [

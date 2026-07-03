@@ -1,5 +1,5 @@
-/* BassPhase UI — copyright-free analog phaser look: copper box, 4 knobs in a row
- * (RS count: Rate/Depth/Mix/Filter), condensed wordmark. */
+/* BassPhase UI — Ibanez PH99-inspired analog phaser look. Real controls:
+ * Speed, Depth, Feedback, Level. */
 #include "BassPhaseParams.h"
 #include "../_shared/pedalkit.hpp"
 START_NAMESPACE_DISTRHO
@@ -8,10 +8,10 @@ public:
     BassPhaseUI() : PedalKitUI(320, 470, kParamCount, kBassPhaseDef) {
         names_ = kBassPhaseNames; labelFont_ = fBarlow;
         labelClr = Color(238,228,210); pointerClr = Color(240,232,216); tickClr = Color(150,128,104);
-        addKnob(kRate,   0.20f, 0.27f, 0.082f, 40,34,28, 0);
-        addKnob(kDepth,  0.40f, 0.27f, 0.082f, 40,34,28, 0);
-        addKnob(kMix,    0.60f, 0.27f, 0.082f, 40,34,28, 0);
-        addKnob(kFilter, 0.80f, 0.27f, 0.082f, 40,34,28, 0);
+        addKnob(kSpeed,    0.20f, 0.27f, 0.082f, 40,34,28, 0);
+        addKnob(kDepth,    0.40f, 0.27f, 0.082f, 40,34,28, 0);
+        addKnob(kFeedback, 0.60f, 0.27f, 0.082f, 40,34,28, 0);
+        addKnob(kLevel,    0.80f, 0.27f, 0.082f, 40,34,28, 0);
     }
 protected:
     void drawFace() override {
