@@ -1235,6 +1235,27 @@
             </label>
         </div>
 
+        <!-- Final Leveler — the AGC that evens out tone/song loudness -->
+        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+            <h3 class="text-white font-semibold mb-2">Final Leveler</h3>
+            <label class="flex items-start gap-2 text-sm cursor-pointer">
+                <input type="checkbox" id="rb-final-leveler-enabled"
+                       onchange="rbSetFinalLevelerEnabled(this.checked)"
+                       class="mt-1 accent-emerald-500">
+                <span class="text-gray-300">
+                    <span class="font-medium text-emerald-300">Enable RB Final Leveler</span>
+                    <div class="text-gray-500 mt-1 leading-snug">
+                        The last stage of every chain: levels all tones and songs to
+                        the same loudness and gates idle noise. Turn it off to hear
+                        each chain's raw output level (tones will differ in volume
+                        and idle hiss returns). Takes effect on the next tone/song
+                        load.
+                    </div>
+                    <div id="rb-final-leveler-status" class="text-emerald-400 mt-1 leading-snug"></div>
+                </span>
+            </label>
+        </div>
+
         <!-- Original Settings panels below -->
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
             <h3 class="text-white font-semibold mb-3">VST / Audio Unit plugins</h3>

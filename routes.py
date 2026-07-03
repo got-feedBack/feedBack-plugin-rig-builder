@@ -6992,6 +6992,10 @@ def setup(app, context):
                     allowed[key] = max(1, min(hi, int(data[key])))
                 except (TypeError, ValueError):
                     pass
+        if "final_leveler_enabled" in data:
+            # Setup toggle for the RB Final Leveler stage; consulted by
+            # _final_leveler_stage() on every chain build (next-load effect).
+            allowed["final_leveler_enabled"] = bool(data["final_leveler_enabled"])
         if "bypass_all_cabs" in data:
             want = bool(data["bypass_all_cabs"])
             allowed["bypass_all_cabs"] = want
