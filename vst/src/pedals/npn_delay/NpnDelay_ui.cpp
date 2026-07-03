@@ -1,7 +1,7 @@
 /* NpnDelay stompbox UI — shared pedal_ui template. Colour sampled from the
  * the game art (Pedal_NPNDelay); knob count + labels from the plugin params. */
 #include "NpnDelayParams.h"
-#define PEDAL_TITLE  "NPN DELAY"
+#define PEDAL_TITLE  "DM-2"
 #define PEDAL_NAMES  kNpnDelayNames
 #define PEDAL_DEFS   kNpnDelayDef
 #define PEDAL_ACR 104

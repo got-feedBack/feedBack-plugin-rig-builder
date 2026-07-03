@@ -4,18 +4,18 @@
 enum TremoloParamId
 {
     kSpeed = 0,
-    kMix,
+    kDepth,
     kParamCount
 };
 
 static const char* const kTremoloNames[kParamCount] = {
     "Speed",
-    "Mix",
+    "Depth",
 };
 
 static const char* const kTremoloSymbols[kParamCount] = {
     "speed",
-    "mix",
+    "depth",
 };
 
 static const float kTremoloMin[kParamCount] = { 0.0f, 0.0f };

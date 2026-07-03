@@ -6,29 +6,33 @@
 enum OilCanEchoParamId
 {
     kTime = 0,
-    kFeedback,
+    kSustain,
     kMix,
+    kTone,
     kParamCount
 };
 
 static const char* const kOilCanEchoNames[kParamCount] = {
     "Time",
-    "Feedback",
+    "Sustain",
     "Mix",
+    "Tone",
 };
 
 static const char* const kOilCanEchoSymbols[kParamCount] = {
     "time",
-    "feedback",
+    "sustain",
     "mix",
+    "tone",
 };
 
-static const float kOilCanEchoMin[kParamCount] = { 0.0f, 0.0f, 0.0f };
-static const float kOilCanEchoMax[kParamCount] = { 1.0f, 1.0f, 1.0f };
+static const float kOilCanEchoMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f };
+static const float kOilCanEchoMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f };
 static const float kOilCanEchoDef[kParamCount] = {
-    260.0f / 2000.0f,
+    (260.0f - 70.0f) / (620.0f - 70.0f),
     0.55f,
     0.34f,
+    0.48f,
 };
 
 #endif // OIL_CAN_ECHO_PARAMS_H

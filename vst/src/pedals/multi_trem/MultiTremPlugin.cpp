@@ -2,7 +2,7 @@
  * MultiTrem - Boss TR-2 style multi-wave tremolo for the game's
  * Pedal_MultiTrem. The local PDF is a TR-2 schematic: JFET input, LFO with a
  * Wave control, and an M5207L01 linear-control VCA. Real controls are Rate,
- * Depth, and Wave. Rocksmith Speed/Mix/Waveform map to those controls.
+ * Depth, and Wave. the game Speed/Mix/Waveform map to those controls.
  */
 #include "DistrhoPlugin.hpp"
 #include "MultiTremParams.h"
@@ -106,21 +106,16 @@ class MultiTremCore
     {
         const float p = phase - std::floor(phase);
         const float tri = 1.0f - std::fabs(2.0f * p - 1.0f);
-        const float sine = 0.5f + 0.5f * std::sin((p - 0.25f) * 2.0f * kPi);
 
-        const float edge = 0.030f + 0.090f * (1.0f - wave);
+        // Boss TR-2 WAVE morphs triangle (CCW) -> square (CW), with NO sine
+        // detent. Sharpen the square edges as Wave rises (shorter rise/fall).
+        const float edge = 0.030f + 0.170f * (1.0f - wave);
         const float rise = smoothstep(p / edge);
         const float fall = 1.0f - smoothstep((p - 0.50f) / edge);
         const float square = clamp01(rise * fall);
 
-        if (wave < 0.5f)
-        {
-            const float t = smoothstep(wave * 2.0f);
-            return tri * (1.0f - t) + sine * t;
-        }
-
-        const float t = smoothstep((wave - 0.5f) * 2.0f);
-        return sine * (1.0f - t) + square * t;
+        const float t = smoothstep(wave);
+        return tri * (1.0f - t) + square * t;
     }
 
 public:
