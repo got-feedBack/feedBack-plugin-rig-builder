@@ -289,7 +289,7 @@ public:
         // recovery (ECC83) into the tone stack
         y = interstageHp.process(y);
         y = vRecovery.process(recoveryMiller.process(y) *
-                              (0.7f + 7.0f * preDrive) * bplus.preamp);
+                              (0.5f + 2.8f * preDrive) * bplus.preamp);   // pass4: recovery was the real distorter — was 0.7+7.0
         y = cathodeLp.process(y);
 
         y = toneStack.process(y) * toneMk;
