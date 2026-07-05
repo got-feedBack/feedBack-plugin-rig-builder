@@ -45,9 +45,9 @@ a VST or a NAM to any piece.
 1. Install feedBack and run it once (it ships the `nam_tone` engine and
    creates the app-data folder). Quit feedBack.
 2. Drop this folder into the plugins directory so it lives at:
-   - **macOS:** `~/Library/Application Support/slopsmith-desktop/plugins/rig_builder/`
-   - **Windows:** `%APPDATA%\slopsmith-desktop\plugins\rig_builder\`
-   - **Linux:** `~/.config/slopsmith-desktop/plugins/rig_builder/`
+   - **macOS:** `~/Library/Application Support/feedback-desktop/plugins/rig_builder/`
+   - **Windows:** `%APPDATA%\feedback-desktop\plugins\rig_builder\`
+   - **Linux:** `~/.config/feedback-desktop/plugins/rig_builder/`
 3. Restart feedBack. **Rig Builder** appears in the nav.
 
 Optional: open **Setup** and connect a tone3000 account to unlock in-app
