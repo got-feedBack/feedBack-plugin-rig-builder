@@ -3722,6 +3722,73 @@ function rbRenderStatus() {
 
 // ── Tabs ────────────────────────────────────────────────────────────
 
+// ── Plugin self-update (Setup → Rig Builder version) ─────────────────────────
+// Reuses the update_manager plugin's endpoints: /check resolves this plugin's
+// repo (via the `url` field in our plugin.json) and reports local/remote
+// version; /update pulls the latest in place. `auto` = the silent check fired
+// once when Setup first opens (so we don't spend a GitHub API call per visit).
+let _rbUpdateAutoChecked = false;
+async function rbCheckPluginUpdate(opts = {}) {
+    const statusEl = document.getElementById('rb-plugin-update-status');
+    const verEl = document.getElementById('rb-plugin-update-version');
+    const applyBtn = document.getElementById('rb-plugin-update-apply');
+    const checkBtn = document.getElementById('rb-plugin-update-check');
+    if (!statusEl) return;
+    if (opts.auto && _rbUpdateAutoChecked) return;
+    _rbUpdateAutoChecked = true;
+    statusEl.textContent = 'Checking…';
+    statusEl.className = 'text-xs text-gray-400';
+    applyBtn?.classList.add('hidden');
+    if (checkBtn) checkBtn.disabled = true;
+    try {
+        const r = await fetch('/api/plugins/update_manager/check/rig_builder');
+        const d = await r.json();
+        const local = (d.source && d.source.local_version) || (d.update && d.update.local_version) || null;
+        const remote = (d.update && d.update.remote_version) || (d.source && d.source.remote_version) || null;
+        if (verEl) verEl.textContent = 'Installed: ' + (local || '(unknown)') + (remote ? '  ·  Latest: ' + remote : '');
+        if (d.error) {
+            statusEl.textContent = d.error.message || 'Could not check for updates.';
+            statusEl.className = 'text-xs text-amber-400';
+        } else if (d.update) {
+            statusEl.textContent = 'Update available' + (remote ? ' → ' + remote : '');
+            statusEl.className = 'text-xs text-emerald-400';
+            applyBtn?.classList.remove('hidden');
+        } else {
+            statusEl.textContent = 'Up to date ✓';
+            statusEl.className = 'text-xs text-gray-400';
+        }
+    } catch (e) {
+        statusEl.textContent = 'Check failed — no connection?';
+        statusEl.className = 'text-xs text-amber-400';
+    } finally {
+        if (checkBtn) checkBtn.disabled = false;
+    }
+}
+
+async function rbApplyPluginUpdate() {
+    const statusEl = document.getElementById('rb-plugin-update-status');
+    const applyBtn = document.getElementById('rb-plugin-update-apply');
+    if (!confirm('Update Rig Builder to the latest version? Restart feedBack afterward to load it.')) return;
+    if (applyBtn) applyBtn.disabled = true;
+    if (statusEl) { statusEl.textContent = 'Updating…'; statusEl.className = 'text-xs text-gray-400'; }
+    try {
+        const r = await fetch('/api/plugins/update_manager/update/rig_builder', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+        });
+        const d = await r.json();
+        if (d.error) {
+            if (statusEl) { statusEl.textContent = d.error; statusEl.className = 'text-xs text-red-400'; }
+            if (applyBtn) applyBtn.disabled = false;
+        } else {
+            if (statusEl) { statusEl.textContent = 'Updated ✓ — restart feedBack to load the new version.'; statusEl.className = 'text-xs text-emerald-400'; }
+            applyBtn?.classList.add('hidden');
+        }
+    } catch (e) {
+        if (statusEl) { statusEl.textContent = 'Update failed.'; statusEl.className = 'text-xs text-red-400'; }
+        if (applyBtn) applyBtn.disabled = false;
+    }
+}
+
 function rbShowTab(name) {
     // Leaving any view tears down an open inline VST editor first so its
     // orphaned native window can't crash the host on the next chain load.
@@ -3749,6 +3816,7 @@ function rbShowTab(name) {
         rbLoadCoverage();        // batch / coverage panel (was dashboard)
         rbLoadSettings();        // tone3000 + prefs
         rbUpdateScanStatus();
+        rbCheckPluginUpdate({ auto: true });   // silent version check, once per session
     }
 }
 
