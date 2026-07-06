@@ -4862,22 +4862,31 @@ async function rbStudioFinalizeFocusEdit(api, idx) {
                 if (typeof api.getParameters === 'function') {
                     const live = await api.getParameters(piece._vst_slot_id);
                     if (Array.isArray(live) && live.length) {
-                        const params = {};
+                        // MERGE into the already-staged params — NEVER a wholesale
+                        // replace. The dragged edits (and the seeded saved values)
+                        // already live in _vst_params and are authoritative. The
+                        // slot can read back at engine DEFAULTS (no audio device
+                        // configured, or an amp slot right after the editor
+                        // teardown), and the old wholesale replace then persisted
+                        // those defaults over the user's edits — knobs came back
+                        // to default on the next open. Only ADD params the
+                        // read-back surfaces that we didn't already have (e.g. a
+                        // knob moved in the native editor, not via our canvas).
+                        const merged = Object.assign({}, piece._vst_params || {});
                         live.forEach((p, i) => {
                             const id = p.id ?? p.paramId ?? p.index ?? i;
                             const nm = p.name ?? p.label;
                             const v = p.value ?? p.current;
-                            if (typeof v === 'number') {
-                                if (id != null) params[id] = v;
-                                if (nm) params[nm] = v;
-                            }
+                            if (typeof v !== 'number') return;
+                            if (id != null && merged[id] == null) merged[id] = v;
+                            if (nm && merged[nm] == null) merged[nm] = v;
                         });
-                        if (Object.keys(params).length) { piece._vst_params = params; gotLive = true; }
+                        if (Object.keys(merged).length) { piece._vst_params = merged; gotLive = true; }
                     }
                 }
             } catch (_) {}
-            // Only discard the opaque when we secured a fresh full param snapshot
-            // to stand in for it; otherwise keep it as a fallback.
+            // Drop the (possibly stale) opaque only once we hold explicit params
+            // to stand in for it — the merged _vst_params are now authoritative.
             if (gotLive) piece._vst_opaque = null;
             rbStampVstState(piece, null);
             await rbStudioPersist().catch(() => null);
