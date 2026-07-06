@@ -198,9 +198,16 @@ class Dr103Core
         speakerHp.setHighPass(sampleRate, 100.0f, 0.72f);
         speakerThump.setPeaking(sampleRate, 116.0f, 0.84f, -1.5f + 1.6f * bass);
         speakerLowMid.setPeaking(sampleRate, 420.0f + 90.0f * mid, 0.74f, 1.0f + 2.2f * mid);
-        speakerBite.setPeaking(sampleRate, 2400.0f + 500.0f * treble, 0.78f, 2.0f + 1.8f * treble + 1.0f * pres - 0.5f * pushed);
-        speakerFizz.setHighShelf(sampleRate, 3800.0f, 0.70f, 4.5f + 2.0f * treble + 1.5f * pres - 1.0f * pushed);
-        speakerLp.setLowPass(sampleRate, 16000.0f + 1700.0f * treble + 800.0f * pres - 1500.0f * pushed, 0.66f);
+        // De-screeched top end (pass6): the old cab stage stacked a +2 dB bite
+        // peak AND a +4.5 dB (up to +6.5) high shelf, so the post-power-amp EQ
+        // sat ~+6 dB across 4–8 kHz — fine on single-note leads but icy/screechy
+        // on a distorted signal (its high harmonics land right in that shelf).
+        // Trim both toward a present-but-not-fizzy ~+3.5 dB: bite base 2.0->1.2,
+        // fizz base 4.5->2.2 with a slightly higher 4 kHz corner, and roll the
+        // extreme-highs LP down a touch so there's air, not hiss.
+        speakerBite.setPeaking(sampleRate, 2400.0f + 500.0f * treble, 0.78f, 1.2f + 1.4f * treble + 0.8f * pres - 0.5f * pushed);
+        speakerFizz.setHighShelf(sampleRate, 4000.0f, 0.70f, 2.2f + 1.4f * treble + 1.1f * pres - 1.0f * pushed);
+        speakerLp.setLowPass(sampleRate, 14500.0f + 1500.0f * treble + 700.0f * pres - 1500.0f * pushed, 0.66f);
 
         // 4x EL34 (~100W) power amp — stiff supply, LOW sag/drive (the Hiwatt stays
         // clean & loud, breaks up only when the Master is cranked).

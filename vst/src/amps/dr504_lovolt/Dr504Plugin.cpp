@@ -197,9 +197,15 @@ class Dr504Core
         speakerHp.setHighPass(sampleRate, 100.0f, 0.72f);
         speakerThump.setPeaking(sampleRate, 120.0f, 0.84f, -1.5f + 1.6f * bass);
         speakerLowMid.setPeaking(sampleRate, 420.0f + 90.0f * mid, 0.74f, 1.0f + 2.2f * mid);
-        speakerBite.setPeaking(sampleRate, 2400.0f + 500.0f * treble, 0.78f, 2.0f + 1.8f * treble + 1.0f * pres - 0.5f * pushed);
-        speakerFizz.setHighShelf(sampleRate, 3800.0f, 0.70f, 4.5f + 2.0f * treble + 1.5f * pres - 1.0f * pushed);
-        speakerLp.setLowPass(sampleRate, 16000.0f + 1700.0f * treble + 800.0f * pres - 1500.0f * pushed, 0.66f);
+        // De-screeched top end (pass6) — shares the DR103 cab voicing. The old
+        // +2 dB bite peak + +4.5 dB (up to +6.5) high shelf put the post-power-
+        // amp EQ ~+6 dB across 4–8 kHz: fine on leads, icy/screechy on distorted
+        // tones whose high harmonics land in that shelf. Trim toward ~+3.5 dB:
+        // bite base 2.0->1.2, fizz base 4.5->2.2 (corner 3800->4000 Hz), and roll
+        // the extreme-highs LP down slightly so it's air, not hiss.
+        speakerBite.setPeaking(sampleRate, 2400.0f + 500.0f * treble, 0.78f, 1.2f + 1.4f * treble + 0.8f * pres - 0.5f * pushed);
+        speakerFizz.setHighShelf(sampleRate, 4000.0f, 0.70f, 2.2f + 1.4f * treble + 1.1f * pres - 1.0f * pushed);
+        speakerLp.setLowPass(sampleRate, 14500.0f + 1500.0f * treble + 700.0f * pres - 1500.0f * pushed, 0.66f);
 
         // 2x EL34 (~50W) — slightly less headroom than the DR103 (a touch more sag/
         // drive) but still the high-headroom Hiwatt; breaks up when the Master is up.
