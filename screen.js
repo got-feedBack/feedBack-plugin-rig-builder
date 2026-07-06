@@ -10813,8 +10813,17 @@ async function rbStopPreview() {
     } catch (_) { /* best-effort */ }
     rbState._previewStartedAudio = false;
     rbState._previewPayload = null;
-    // After a Listen/audition stops, fall back to the idle default tone.
-    setTimeout(() => rbReloadDefaultTone().catch(() => {}), 150);
+    // After a Listen/audition stops, fall back to the idle default tone —
+    // pero SOLO si nada nuevo empezó: cambiar rápido entre audiciones (p.ej.
+    // arrastrar el mic del Cab Room) hace stop→load-nueva, y este timer de
+    // 150 ms pisaba la audición entrante con el default (sonaba "normal",
+    // sin cab). rbAuditionFile marca _auditionId ANTES de cargar, así que
+    // este guard lo ve aunque la carga siga en vuelo.
+    setTimeout(() => {
+        if (rbState._previewMode || rbState._auditionId
+            || rbState.listeningTone !== null) return;
+        rbReloadDefaultTone().catch(() => {});
+    }, 150);
     // Restore whichever button label was showing "⏸ Stop".
     if (wasListening !== null) {
         const b = document.getElementById(`rb-listen-${wasListening}`);
@@ -11343,6 +11352,9 @@ async function rbAuditionFile(file, kind, btnId, gain, rsGear) {
     await rbStopPreview();   // stop any other preview/audition first
     const api = rbNativeAudio();
     if (!api) { alert('Audio engine unavailable. Open the “NAM” plugin once to initialize it.'); return; }
+    // Reservar la audición YA (antes del load): el fallback-al-default de
+    // rbStopPreview corre a los 150 ms y solo respeta audiciones marcadas.
+    rbState._auditionId = auditionKey;
     // Stash the button's original label (e.g. "▶ clean", "▶ Listen")
     // so we can restore it after the user stops or switches buttons.
     // The previous implementation hard-coded "▶" on restore, which
@@ -11390,6 +11402,7 @@ async function rbAuditionFile(file, kind, btnId, gain, rsGear) {
             btn.textContent = labelTail ? `⏸ ${labelTail}` : '⏸';
         }
     } catch (e) {
+        if (rbState._auditionId === auditionKey) rbState._auditionId = null;
         if (btn) {
             btn.disabled = false;
             btn.textContent = btn.dataset.origLabel || '▶';
