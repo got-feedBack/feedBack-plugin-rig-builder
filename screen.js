@@ -5304,18 +5304,21 @@ window.rbStudioShowDefault = function rbStudioShowDefault() {
     rbState.studioView = { source: 'default' };
     rbShowTab('studio');
     try { rbRenderStudioRoom(); rbStudioRenderToneChips(); } catch (_) {}
+    rbLoadCurrentToneGate();   // this tone's own noise gate (audio-independent)
     rbStudioLoadMonitor();   // reload the live monitor so the switch is heard
 };
 window.rbStudioShowSongTone = function rbStudioShowSongTone(i) {
     rbState.studioView = { source: 'song', toneIdx: i };
     rbShowTab('studio');
     try { rbRenderStudioRoom(); rbStudioRenderToneChips(); } catch (_) {}
+    rbLoadCurrentToneGate();   // THIS song tone's own noise gate, not the last one's
     rbStudioLoadMonitor();   // audition the song tone (gear AND sound change together)
 };
 window.rbStudioShowSavedTone = function rbStudioShowSavedTone(name) {
     rbState.studioView = { source: 'saved', name };
     rbShowTab('studio');
     try { rbRenderStudioRoom(); rbStudioRenderToneChips(); } catch (_) {}
+    rbLoadCurrentToneGate();   // this tone's own noise gate (audio-independent)
     rbStudioLoadMonitor();   // reload the live monitor so the switch is heard
 };
 
@@ -13715,6 +13718,32 @@ function rbAdvGateChange() {
         depth: val('rb-adv-gate-depth'),
     }, { persist: true });
 }
+// Identity of the tone the Studio is showing, for the /tone_gate lookup.
+function rbCurrentToneIdentity() {
+    const v = rbState.studioView || { source: 'default' };
+    if (v.source === 'song' && rbState.currentSongFile) {
+        const tone = ((rbState.songTones && rbState.songTones.tones) || [])[v.toneIdx];
+        const key = tone ? (tone.key || tone.name || '') : '';
+        return { source: 'song', name: `${rbState.currentSongFile}::${key}` };
+    }
+    if (v.source === 'saved' && v.name) return { source: 'saved', name: v.name };
+    return { source: 'default', name: '' };
+}
+// Load THIS tone's saved gate from the backend and apply it (UI + engine).
+// Audio-independent — runs on every tone switch so each song tone keeps its
+// OWN gate instead of inheriting the last-loaded tone's (the monitor-load
+// apply is gated behind an audio device, so without one _toneGate went stale
+// across tones and the gate looked "shared" for a whole song).
+async function rbLoadCurrentToneGate() {
+    const id = rbCurrentToneIdentity();
+    let gate = null;
+    try {
+        const q = new URLSearchParams(id).toString();
+        const r = await fetch(`${window.RB_API}/tone_gate?${q}`);
+        if (r.ok) { const d = await r.json(); gate = d && d.gate; }
+    } catch (_) {}
+    rbApplyToneGate(gate, {});   // null → gate off (unsaved tone)
+}
 
 async function rbLoadAdvanced() {
     if (!rbState.gearCatalog) {
@@ -13741,7 +13770,7 @@ async function rbLoadAdvanced() {
     rbAdvPaletteRender();
     rbAdvRenderCanvas();
     rbAdvBindCanvasOnce();
-    rbAdvGateSyncUI();                                 // reflect this tone's saved noise gate
+    rbLoadCurrentToneGate();                           // load THIS tone's saved noise gate (not stale state)
     rbStudioApplyStereoToEngine().catch(() => {});   // push pan/branch to the live engine
     rbAdvApplyConnectivity();                         // mute if Input/Output is unwired
 }

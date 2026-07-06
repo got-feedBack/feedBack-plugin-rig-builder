@@ -3851,6 +3851,25 @@ def _preset_gate(preset_id) -> dict:
     return {"enabled": bool(ge), "threshold": gt, "release": gr, "depth": gd}
 
 
+def _resolve_tone_preset_id(source: str, name: str):
+    """Resolve the preset id for the tone the Studio is showing, by identity:
+    `default` → the default-tone preset; `saved` → the __rig_builder_saved_...
+    row for `name`; anything else (a song tone) → the client sends the full
+    "<filename>::<tone_key>" preset name verbatim (the same one save_preset
+    stores under). Returns None when no preset exists yet (unsaved tone)."""
+    if source == "default":
+        return _get_default_tone_preset_id()
+    pname = (_SAVED_TONE_PREFIX + name) if source == "saved" else (name or "")
+    if not pname:
+        return None
+    try:
+        row = _get_conn().execute(
+            "SELECT id FROM presets WHERE name = ?", (pname,)).fetchone()
+    except Exception:
+        return None
+    return int(row[0]) if row else None
+
+
 def _persist_preset_chain(
     *,
     filename: str,
@@ -7439,6 +7458,14 @@ def setup(app, context):
             "enabled": bool(_load_settings().get("default_tone_enabled", False)),
             "gate": _preset_gate(_get_default_tone_preset_id()),
         }
+
+    @app.get("/api/plugins/rig_builder/tone_gate")
+    def get_tone_gate(source: str = "", name: str = ""):
+        """The per-tone noise gate for the tone the Studio is showing, resolved
+        by identity (source + name). Used by the client to refresh the gate on
+        every tone switch, independent of whether the audio monitor loads — so
+        each tone's gate stays its own (not the last-loaded tone's)."""
+        return {"gate": _preset_gate(_resolve_tone_preset_id(source, name))}
 
     @app.post("/api/plugins/rig_builder/default_tone/save")
     def save_default_tone(data: dict = Body(...)):
