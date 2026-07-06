@@ -295,6 +295,16 @@
             transform .55s cubic-bezier(.33,0,.2,1), filter .2s ease, opacity .35s ease; will-change:transform; }
     .rb-amp-stack:hover{ transform:translateX(-50%) rotateY(32deg) translateZ(-140px); }
     .rb-amp-stack:hover .rb-amp-face{ filter:brightness(1.13); }
+    /* Empty-amp placeholder — shown when the tone has NO amp (e.g. after
+       deleting it), so there's always a way to add one back. Mirrors the
+       pedalboard/rack empty affordances. */
+    .rb-amp-empty{ position:absolute; left:28%; bottom:14%; transform:translateX(-50%);
+        width:calc(168px * var(--rb-scale,1)); height:calc(128px * var(--rb-scale,1));
+        display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:1;
+        border:2px dashed rgba(120,170,240,.4); border-radius:12px; color:#9fb4d6;
+        font-size:15px; font-weight:600; letter-spacing:.02em; background:rgba(30,46,76,.3);
+        transition:color .15s, border-color .15s, background .15s; }
+    .rb-amp-empty:hover{ color:var(--rb-accent); border-color:var(--rb-accent); background:rgba(48,72,118,.42); }
     /* extruded side panel = box depth for the amp + cab (hidden when flat) */
     .rb-amp-stack::before{ content:''; position:absolute; top:1%; bottom:0; left:0; width:54px;
         transform-origin:left center; transform:rotateY(90deg);

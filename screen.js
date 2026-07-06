@@ -4105,6 +4105,7 @@ function rbRenderStudioRoom() {
                 ${amp ? '<div class="rb-amp-ground"></div>' : ''}
                 ${extraGroundHtml}
                 ${ampHtml}
+                ${amp ? '' : `<div class="rb-amp-empty" onclick="rbStudioBrowseAmps()" title="Click to add an amp">＋ amp</div>`}
                 ${pedalHtml}
                 ${rackHtml}
                 <!-- props to dress the room -->
@@ -4336,6 +4337,7 @@ async function rbStudioCloseFocus() {
     const idx = rbState._studioFocusIdx;
     const kind = rbState._studioFocusKind || 'amp';
     rbState._studioPedalAddMode = false;
+    rbState._studioAmpAddMode = false;
     try { rbStudioCloseSwap(); } catch (_) {}   // close the always-on swap rail too
     // Swap the interactive canvas back to the static face IMG *first*, at the
     // current (focus) size — visually identical. This way the dolly-out
@@ -4456,6 +4458,38 @@ function rbStudioBrowsePedals() {
     const order = rbStudioPedalOrder();
     if (order.length) { rbStudioFocusPedal(0); return; }
     rbStudioFocusPedalAdd();
+}
+
+// Click the amp (or its empty placeholder) → focus the amp, or ADD one if the
+// tone has none. Deleting the amp used to leave the tone stuck with no way to
+// add another (the amp had no browse-to-add flow like pedals/racks).
+function rbStudioBrowseAmps() {
+    const room = document.getElementById("rb-studio-room");
+    if (rbStudioIsFocused(room)) return;
+    const amps = rbStudioGroupDefault().amp || [];
+    if (amps.length) { rbStudioFocusAmp(amps[0].idx); return; }
+    rbStudioFocusAmpAdd();
+}
+
+// Add-mode for the amp: no amp exists, so there's no amp stack to "grow" — dim
+// the room, show a ← Room bar, and dock the amp swap rail. Picking an amp in
+// rbStudioSwapToGear creates the piece and focuses it.
+async function rbStudioFocusAmpAdd() {
+    const room = document.getElementById('rb-studio-room');
+    if (!room) return;
+    rbState._studioFocusKind = 'amp';
+    rbState._studioAmpAddMode = true;
+    rbState._studioFocusIdx = -1;
+    room.classList.remove('rb-gfocus-pedal', 'rb-gfocus-rack', 'rb-pfocus');
+    room.classList.add('rb-focus-active');
+    let bar = document.getElementById('rb-studio-focus-bar');
+    if (!bar) { bar = document.createElement('div'); bar.id = 'rb-studio-focus-bar'; room.appendChild(bar); }
+    bar.className = 'rb-focus-bar2';
+    bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Room</button>
+        <div class="rb-focus-title" style="color:#aab7cf;font-size:13px;">Pick an amp →</div>
+        <div class="rb-focus-actions" style="min-width:80px"></div>`;
+    requestAnimationFrame(() => bar.classList.add('rb-focus-open'));
+    rbStudioOpenSwap(-1, 'amp');
 }
 
 // Click the rack table → focus the first rack, or add one if the tower is empty.
@@ -5082,6 +5116,30 @@ function rbStudioSwapToGear(rsGear) {
         // board repaints on close (rbStudioCloseFocus).
         const order = rbStudioPedalOrder();
         rbStudioFocusPedal(order.length - 1);
+        return;
+    }
+    // Amp add-mode: the tone had NO amp (deleted, or a fresh empty chain).
+    // Create a new amp piece and append it — mirrors the pedal/rack add branch;
+    // the plain swap path below requires an existing amp piece to mutate.
+    if (kind === 'amp' && rbState._studioAmpAddMode) {
+        const vp = rbGearVstPath(g);
+        if (!vp) return;
+        const newPiece = {
+            type: g.rs_gear, real_name: g.real_name || g.rs_gear,
+            category: 'amp', rs_category: 'amp', slot: 'amp',
+            _vst_kind: 'vst', _vst_path: vp, _vst_format: g.vst_format || 'VST3',
+            assigned: { kind: 'vst', vst_path: vp, vst_format: g.vst_format || 'VST3', vst_state: null },
+        };
+        rbStudioCurrentChain().push(newPiece);
+        rbState._studioAmpAddMode = false;
+        try { rbStudioPersist(); } catch (_) {}
+        rbStudioReloadLiveChainAfterSwap();
+        // The amp stack didn't exist, so re-render the room to create it, then
+        // focus the freshly-added amp (rbRenderStudioRoom wipes the swap rail +
+        // focus bar; rbStudioFocusAmp rebuilds them).
+        try { rbRenderStudioRoom(); } catch (_) {}
+        const added = (rbStudioGroupDefault().amp || [])[0];
+        if (added) rbStudioFocusAmp(added.idx); else { try { rbStudioCloseFocus(); } catch (_) {} }
         return;
     }
     const idx = rbState._studioFocusIdx;
