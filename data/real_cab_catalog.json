@@ -1,0 +1,45 @@
+{
+  "_comment": "Real Cab: mapeo de los cabs RS de guitarra al modelo físico (rb_core/cab_synth.py). La CONFIG (drivers/size/back/baffle) se decodifica del nombre RS (0112C=1x12 combo, 412=4x12, 410=4x10, 215=2x15, OB=open-back). speaker_confidence: high = familia conocida (Marshall/Orange/ENGL/TW/AT-Vox); low = por refinar con las fotos/manifiestos del juego. Los drivers marcados TODO en cab_synth.DRIVERS caen a la curva más parecida hasta digitalizar su datasheet. Bass cabs: NO están aquí — siguen con IRs RS.",
+  "mic_suffixes": {
+    "5": "sm57",
+    "c": "tlm103",
+    "r": "r121",
+    "t": "tube"
+  },
+  "pos_suffixes": {
+    "c": { "x": 0.15, "dist_in": 1.0, "angle_deg": 0 },
+    "e": { "x": 0.85, "dist_in": 1.0, "angle_deg": 0 },
+    "o": { "x": 0.30, "dist_in": 2.0, "angle_deg": 45 }
+  },
+  "cabs": {
+    "Cab_AT0112C":         { "speaker": "blue",   "drivers": 1, "size_in": 12, "back": "open",   "baffle_m": 0.50, "speaker_confidence": "high" },
+    "Cab_AT1121C":         { "speaker": "blue",   "drivers": 2, "size_in": 12, "back": "open",   "baffle_m": 0.70, "speaker_confidence": "medium" },
+    "Cab_BT1120C":         { "speaker": "g12h",   "drivers": 1, "size_in": 12, "back": "open",   "baffle_m": 0.50, "speaker_confidence": "low" },
+    "Cab_BT1121C":         { "speaker": "g12h",   "drivers": 1, "size_in": 12, "back": "open",   "baffle_m": 0.50, "speaker_confidence": "low" },
+    "Cab_BT410C":          { "speaker": "c12n",   "drivers": 4, "size_in": 10, "back": "open",   "baffle_m": 0.60, "speaker_confidence": "medium" },
+    "Cab_CA112C":          { "speaker": "c12n",   "drivers": 1, "size_in": 12, "back": "open",   "baffle_m": 0.50, "speaker_confidence": "low" },
+    "Cab_CA215C":          { "speaker": "g12h",   "drivers": 2, "size_in": 15, "back": "closed", "baffle_m": 0.80, "speaker_confidence": "low" },
+    "Cab_CA412C":          { "speaker": "v30",    "drivers": 4, "size_in": 12, "back": "closed", "baffle_m": 0.76, "speaker_confidence": "medium" },
+    "Cab_CS1120C":         { "speaker": "v30",    "drivers": 1, "size_in": 12, "back": "open",   "baffle_m": 0.50, "speaker_confidence": "low" },
+    "Cab_CS1515C":         { "speaker": "g12h",   "drivers": 1, "size_in": 15, "back": "closed", "baffle_m": 0.60, "speaker_confidence": "low" },
+    "Cab_CS212C":          { "speaker": "v30",    "drivers": 2, "size_in": 12, "back": "closed", "baffle_m": 0.66, "speaker_confidence": "medium" },
+    "Cab_EN212C":          { "speaker": "v30",    "drivers": 2, "size_in": 12, "back": "closed", "baffle_m": 0.66, "speaker_confidence": "high" },
+    "Cab_EN4120C":         { "speaker": "v30",    "drivers": 4, "size_in": 12, "back": "closed", "baffle_m": 0.76, "speaker_confidence": "high" },
+    "Cab_GB412CMKI":       { "speaker": "g12m",   "drivers": 4, "size_in": 12, "back": "closed", "baffle_m": 0.76, "speaker_confidence": "medium" },
+    "Cab_GB412CMKII":      { "speaker": "g12t75", "drivers": 4, "size_in": 12, "back": "closed", "baffle_m": 0.76, "speaker_confidence": "medium" },
+    "Cab_GB412CMKIII":     { "speaker": "g12t75", "drivers": 4, "size_in": 12, "back": "closed", "baffle_m": 0.76, "speaker_confidence": "medium" },
+    "Cab_HG2120C":         { "speaker": "g12h",   "drivers": 2, "size_in": 12, "back": "closed", "baffle_m": 0.66, "speaker_confidence": "medium" },
+    "Cab_HG212C":          { "speaker": "g12h",   "drivers": 2, "size_in": 12, "back": "closed", "baffle_m": 0.66, "speaker_confidence": "medium" },
+    "Cab_HG215C":          { "speaker": "g12h",   "drivers": 2, "size_in": 15, "back": "closed", "baffle_m": 0.80, "speaker_confidence": "low" },
+    "Cab_MARSHALL1936":    { "speaker": "g12t75", "drivers": 2, "size_in": 12, "back": "closed", "baffle_m": 0.66, "speaker_confidence": "high" },
+    "Cab_MARSHALL1960A":   { "speaker": "g12t75", "drivers": 4, "size_in": 12, "back": "closed", "baffle_m": 0.76, "speaker_confidence": "high" },
+    "Cab_MARSHALL1960AX":  { "speaker": "g12m",   "drivers": 4, "size_in": 12, "back": "closed", "baffle_m": 0.76, "speaker_confidence": "high" },
+    "Cab_MARSHALL1960TV":  { "speaker": "g12m",   "drivers": 4, "size_in": 12, "back": "closed", "baffle_m": 0.76, "speaker_confidence": "high" },
+    "Cab_ORANGEJIMMYBEAN": { "speaker": "v30",    "drivers": 4, "size_in": 12, "back": "closed", "baffle_m": 0.76, "speaker_confidence": "low" },
+    "Cab_ORANGEPPC212OB":  { "speaker": "v30",    "drivers": 2, "size_in": 12, "back": "open",   "baffle_m": 0.66, "speaker_confidence": "high" },
+    "Cab_ORANGEPPC412":    { "speaker": "v30",    "drivers": 4, "size_in": 12, "back": "closed", "baffle_m": 0.76, "speaker_confidence": "high" },
+    "Cab_TW110C":          { "speaker": "c12n",   "drivers": 1, "size_in": 10, "back": "open",   "baffle_m": 0.45, "speaker_confidence": "high" },
+    "Cab_TW112C":          { "speaker": "c12n",   "drivers": 1, "size_in": 12, "back": "open",   "baffle_m": 0.50, "speaker_confidence": "high" },
+    "Cab_TW410C":          { "speaker": "c12n",   "drivers": 4, "size_in": 10, "back": "open",   "baffle_m": 0.60, "speaker_confidence": "high" }
+  }
+}
