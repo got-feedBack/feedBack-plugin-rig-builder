@@ -8165,6 +8165,78 @@ def setup(app, context):
             log.warning("save_preset: mirror to sibling format failed", exc_info=True)
         return {"ok": True, "preset_id": preset_id, "mirrored": mirrored, "mirrored_presets": mirrored_presets}
 
+    # ── Real Cab: sintetizador paramétrico de IRs de cabinet ─────────────
+    # (rb_core/cab_synth.py + data/real_cab_catalog.json — ver
+    #  Cabs/CAB_MODELING_GUIDE.md §5b). El canvas del cab room llama a
+    #  /cab/synthesize al soltar el mic; el wav cae en nam_irs/realcab/ y se
+    #  aplica como un IR normal (piece._uploaded_kind='ir').
+    @app.get("/api/plugins/rig_builder/cab/catalog")
+    def real_cab_catalog():
+        """El catálogo Real Cab completo (la UI lo cachea una vez)."""
+        try:
+            with open(_plugin_dir / "data" / "real_cab_catalog.json",
+                      encoding="utf-8") as fh:
+                return json.load(fh)
+        except Exception as e:
+            return JSONResponse({"error": f"{type(e).__name__}: {e}"}, 500)
+
+    @app.post("/api/plugins/rig_builder/cab/synthesize")
+    def cab_synthesize(data: dict = Body(...)):
+        """Renderiza el IR del modelo físico para (gear, mic, x, dist, angle).
+
+        Devuelve {"name": "realcab/….wav"} listo para asignarse a la pieza
+        cabinet como kind='ir' (mismo flujo que un IR subido). Cacheado por
+        parámetros: mismo cab+mic+posición ⇒ mismo archivo.
+        """
+        gear = str(data.get("gear_type") or "")
+        mic = str(data.get("mic") or "sm57")
+        x = float(data.get("x", 0.15))
+        dist_in = float(data.get("dist_in", 1.0))
+        angle = float(data.get("angle_deg", 0.0))
+        try:
+            with open(_plugin_dir / "data" / "real_cab_catalog.json",
+                      encoding="utf-8") as fh:
+                cat = json.load(fh)
+        except Exception as e:
+            return JSONResponse({"error": f"catalog: {e}"}, 500)
+        # el gear puede venir con sufijo de mic/posición (Cab_XXX_5c) — probar
+        # el nombre completo y luego el base sin sufijo
+        entry = cat["cabs"].get(gear)
+        if entry is None and "_" in gear:
+            entry = cat["cabs"].get(gear.rsplit("_", 1)[0])
+        if entry is None:
+            return JSONResponse({"error": f"cab not in Real Cab catalog: {gear}"}, 404)
+        if mic not in ("sm57", "tlm103", "md421", "km84", "r121", "tube"):
+            return JSONResponse({"error": f"unknown mic: {mic}"}, 400)
+        x = min(max(x, 0.0), 1.0)
+        dist_in = min(max(dist_in, 0.0), 12.0)
+        angle = min(max(angle, 0.0), 60.0)
+
+        out_dir = _config_dir / "nam_irs" / "realcab"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        base = entry.get("speaker", "g12m")
+        fname = (f"realcab_{base}_{entry.get('drivers', 1)}x{entry.get('size_in', 12)}"
+                 f"{'c' if entry.get('back') == 'closed' else 'o'}_{mic}"
+                 f"_x{int(round(x * 100)):03d}_d{int(round(dist_in * 10)):03d}"
+                 f"_a{int(round(angle)):02d}.wav")
+        out_path = out_dir / fname
+        rel = f"realcab/{fname}"
+        if not out_path.exists():
+            try:
+                from rb_core import cab_synth
+                cab_synth.synthesize_ir_wav(
+                    str(out_path), speaker=base, mic=mic, x=x, dist_in=dist_in,
+                    angle_deg=angle, drivers=int(entry.get("drivers", 1)),
+                    size_in=float(entry.get("size_in", 12)),
+                    back=str(entry.get("back", "closed")),
+                    baffle_m=float(entry.get("baffle_m", 0.6)))
+            except Exception as e:
+                log.exception("cab_synthesize failed")
+                return JSONResponse({"error": f"{type(e).__name__}: {e}"}, 500)
+        return {"ok": True, "name": rel, "entry": entry,
+                "params": {"mic": mic, "x": x, "dist_in": dist_in,
+                           "angle_deg": angle}}
+
     @app.post("/api/plugins/rig_builder/reset_tone")
     def reset_tone(data: dict = Body(...)):
         """Reload ONE song tone EXACTLY as it ships in the sloppak.
