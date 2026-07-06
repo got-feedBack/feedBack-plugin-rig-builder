@@ -107,6 +107,49 @@ _BLUE_POINTS = [
 ]
 
 
+# Celestion Vintage 30 (speakers/Celestion_Vintage_30.pdf). Fs=75, 100 dB.
+# La firma V30: mid-range "vocal" 1.6-2.5k + pico fuerte 4.5-5k, cliff >5.2k.
+_V30_POINTS = [
+    (50, 86.0), (63, 90.0), (75, 94.5), (100, 95.5), (150, 96.0), (200, 95.5),
+    (300, 96.5), (400, 97.0), (500, 97.5), (700, 98.5), (900, 99.5),
+    (1200, 100.5), (1600, 102.0), (2000, 103.0), (2400, 103.5), (2800, 102.0),
+    (3300, 100.5), (3800, 101.5), (4300, 104.0), (4800, 105.5), (5300, 103.0),
+    (6500, 88.0), (7500, 80.0), (8500, 77.0), (10000, 75.0), (12000, 76.0),
+    (15000, 71.0), (20000, 66.0),
+]
+# Celestion G12T-75 (speakers/Celestion_G12T-75.pdf). Fs=85, 97 dB.
+# El scoop de medios clásico (500-900) + doble pico 3-4.5k + top suavizado.
+_G12T75_POINTS = [
+    (50, 84.0), (63, 88.0), (85, 94.0), (100, 95.0), (150, 95.5), (200, 95.0),
+    (300, 94.5), (400, 94.0), (500, 93.5), (700, 93.0), (900, 93.5),
+    (1200, 95.0), (1600, 97.5), (2000, 99.5), (2500, 101.5), (3000, 104.0),
+    (3600, 105.5), (4200, 105.0), (4800, 103.0), (5400, 99.0),
+    (6500, 86.0), (7500, 78.0), (8500, 74.0), (10000, 72.0), (12000, 73.0),
+    (15000, 69.0), (20000, 64.0),
+]
+# Celestion G12H Anniversary (speakers/Celestion_G12H_Anniversary_1.pdf).
+# Fs=85, 100 dB. Low-mids potentes + upper-mid atacante, "ice-cool top".
+_G12H_POINTS = [
+    (50, 87.0), (63, 91.0), (85, 95.5), (100, 96.5), (150, 97.0), (200, 96.5),
+    (300, 96.5), (400, 96.5), (500, 97.0), (700, 97.5), (900, 98.5),
+    (1200, 100.0), (1600, 102.0), (2000, 103.5), (2500, 104.5), (3000, 104.0),
+    (3600, 104.5), (4200, 104.0), (4800, 103.5), (5400, 100.0),
+    (6500, 88.0), (7500, 80.0), (8500, 76.0), (10000, 74.0), (12000, 75.0),
+    (15000, 70.0), (20000, 65.0),
+]
+# Jensen C12N (speakers/JENSEN_C12N_ENG.pdf, curva 8Ω en baffle IEC).
+# Fs=112 (!) — graves apretados americanos; brillo 2.5k y top más extendido
+# que los británicos (el cliff llega ~1 octava más arriba).
+_C12N_POINTS = [
+    (60, 78.0), (80, 88.0), (100, 96.0), (120, 99.5), (150, 100.0), (200, 99.0),
+    (300, 98.0), (400, 97.5), (500, 97.5), (700, 98.0), (900, 98.5),
+    (1200, 99.5), (1600, 101.0), (2000, 103.5), (2500, 105.5), (3000, 104.0),
+    (3500, 101.0), (4000, 103.0), (4500, 104.5), (5200, 103.0), (6000, 100.0),
+    (7000, 92.0), (8000, 84.0), (9000, 80.0), (10000, 78.0), (12000, 79.0),
+    (15000, 73.0), (20000, 67.0),
+]
+
+
 def _interp_points(points, f):
     pf = np.array([p[0] for p in points], float)
     pd = np.array([p[1] for p in points], float)
@@ -117,11 +160,10 @@ def _interp_points(points, f):
 DRIVERS = {
     "g12m": lambda f: _interp_points(_G12M_POINTS, f),
     "blue": lambda f: _interp_points(_BLUE_POINTS, f),
-    # pendientes de digitalizar (Cabs/speakers/): caen al más parecido
-    "v30": lambda f: _interp_points(_G12M_POINTS, f),      # TODO datasheet V30
-    "g12t75": lambda f: _interp_points(_G12M_POINTS, f),   # TODO datasheet
-    "g12h": lambda f: _interp_points(_G12M_POINTS, f),     # TODO datasheet
-    "c12n": lambda f: _interp_points(_BLUE_POINTS, f),     # TODO datasheet
+    "v30": lambda f: _interp_points(_V30_POINTS, f),
+    "g12t75": lambda f: _interp_points(_G12T75_POINTS, f),
+    "g12h": lambda f: _interp_points(_G12H_POINTS, f),
+    "c12n": lambda f: _interp_points(_C12N_POINTS, f),
 }
 
 
