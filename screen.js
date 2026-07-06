@@ -3629,7 +3629,6 @@ async function rbInit() {
     rbShowTab(rbState.currentTab);
     rbStudioRenderToneChips();              // show the current-tone label right away
     rbStudioLoadSavedTones().catch(() => {});   // then fill in saved tones
-    rbLoadRealCabCatalog().catch(() => {});     // Real Cab catalog (cab room)
     // Close the tone dropdown when clicking outside it. Use mousedown (fires
     // before click handlers mutate the DOM) so the target is still attached —
     // a 'click' listener saw the replaced Save button as "outside" and closed
@@ -6975,24 +6974,6 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
             </div>`;
     }
 
-    // Real Cab — cab room paramétrico (modelo físico, rb_core/cab_synth):
-    // canvas con el cab dibujado + mic ARRASTRABLE + selector de mic +
-    // distancia. Solo para cabs presentes en el catálogo Real Cab.
-    let realCabControl = '';
-    if ((p.rs_category === 'cab' || p.slot === 'cabinet')
-        && rbRealCabEntryFor(p.type || p.rs_gear)) {
-        realCabControl = `
-            <div class="bg-violet-900/15 border border-violet-800/30 rounded p-2.5 mt-2">
-                <div class="flex items-center gap-2">
-                    <span class="text-xs text-violet-300">🔬 Real Cab</span>
-                    <span class="text-[10px] text-gray-500">cab físico modelado — mic libre</span>
-                    <button onclick="rbRealCabToggle(${toneIdx}, ${pIdx})"
-                            class="ml-auto bg-violet-800/60 hover:bg-violet-700/70 text-violet-100 text-[11px] px-2.5 py-0.5 rounded border border-violet-600/40">abrir</button>
-                </div>
-                <div id="rb-realcab-${toneIdx}-${pIdx}" class="hidden mt-2"></div>
-            </div>`;
-    }
-
     // Amp gain variant picker — clickable buttons, active level highlighted.
     let ampVariantBadge = '';
     if (hasNam && p.amp_variant && Array.isArray(p.amp_variant.available) && p.amp_variant.available.length) {
@@ -7120,7 +7101,6 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
 
             ${rsKnobsBlock}
             ${rsIrControl}
-            ${realCabControl}
         </div>`;
 }
 
@@ -10624,221 +10604,6 @@ function rbPickCabMic(toneIdx, pIdx, irFile) {
     piece._uploaded_file = irFile;
     piece._uploaded_kind = 'rs_ir';
     rbAfterGearChange(toneIdx);
-}
-
-// ── Real Cab: cab room paramétrico ──────────────────────────────────────
-// Canvas que dibuja el cab físico (caja + rejilla + N parlantes) con un
-// micrófono ARRASTRABLE: drag = posición sobre el cono, slider = distancia,
-// botones = tipo de mic, toggle 45°. Al soltar → POST /cab/synthesize →
-// el IR renderizado se aplica por el flujo normal de IR subido.
-// Backend: rb_core/cab_synth.py + data/real_cab_catalog.json.
-
-function rbRealCabEntryFor(gear) {
-    const cat = rbState.realCabCatalog;
-    if (!cat || !gear) return null;
-    return cat.cabs[gear] || cat.cabs[String(gear).replace(/_[a-z0-9]+$/i, '')] || null;
-}
-
-async function rbLoadRealCabCatalog() {
-    try {
-        const r = await fetch(`${window.RB_API}/cab/catalog`);
-        if (r.ok) rbState.realCabCatalog = await r.json();
-    } catch (_) { /* sin catálogo = sin panel Real Cab */ }
-}
-
-window.rbRealCabToggle = function rbRealCabToggle(toneIdx, pIdx) {
-    const box = document.getElementById(`rb-realcab-${toneIdx}-${pIdx}`);
-    if (!box) return;
-    if (!box.classList.contains('hidden')) { box.classList.add('hidden'); return; }
-    box.classList.remove('hidden');
-    if (!box.dataset.built) { rbRealCabBuild(box, toneIdx, pIdx); box.dataset.built = '1'; }
-};
-
-function rbRealCabState(toneIdx, pIdx) {
-    const piece = rbState.songTones?.tones?.[toneIdx]?.chain?.[pIdx];
-    if (!piece) return null;
-    piece._realcab = piece._realcab
-        || { mic: 'sm57', x: 0.15, dist_in: 1.0, angle_deg: 0, micPx: null };
-    return piece._realcab;
-}
-
-function rbRealCabBuild(box, toneIdx, pIdx) {
-    const piece = rbState.songTones?.tones?.[toneIdx]?.chain?.[pIdx];
-    const entry = rbRealCabEntryFor(piece && (piece.type || piece.rs_gear));
-    const st = rbRealCabState(toneIdx, pIdx);
-    if (!entry || !st) return;
-    const mics = [['sm57', '57'], ['md421', '421'], ['km84', 'KM84'],
-                  ['r121', 'R121'], ['tlm103', 'Cond'], ['tube', 'Tube']];
-    const micBtns = mics.map(([k, lbl]) =>
-        `<button data-mic="${k}" onclick="rbRealCabSetMic(${toneIdx},${pIdx},'${k}')"
-                 class="rb-rc-mic px-2 py-0.5 rounded border text-[11px] ${st.mic === k
-                     ? 'bg-violet-700/60 text-violet-100 border-violet-500/60 font-semibold'
-                     : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-violet-900/40'}">${lbl}</button>`).join(' ');
-    box.innerHTML = `
-        <canvas id="rb-rc-cv-${toneIdx}-${pIdx}" width="300" height="190"
-                class="rounded border border-gray-800 cursor-crosshair w-full"
-                style="max-width:340px; touch-action:none;"></canvas>
-        <div class="flex items-center gap-1.5 flex-wrap mt-1.5">${micBtns}</div>
-        <div class="flex items-center gap-2 mt-1.5">
-            <span class="text-[10px] text-gray-500 whitespace-nowrap">distancia</span>
-            <input type="range" min="0" max="6" step="0.5" value="${st.dist_in}"
-                   oninput="rbRealCabSetDist(${toneIdx},${pIdx},this.value)" class="flex-1">
-            <span id="rb-rc-dist-${toneIdx}-${pIdx}" class="text-[10px] text-gray-400 w-8">${st.dist_in}"</span>
-            <button id="rb-rc-ang-${toneIdx}-${pIdx}" onclick="rbRealCabToggleAngle(${toneIdx},${pIdx})"
-                    class="text-[11px] px-2 py-0.5 rounded border ${st.angle_deg ? 'bg-violet-700/60 text-violet-100 border-violet-500/60' : 'bg-dark-800 text-gray-400 border-gray-700'}">45°</button>
-            <span id="rb-rc-status-${toneIdx}-${pIdx}" class="text-[10px] text-gray-500"></span>
-        </div>`;
-    const cv = box.querySelector('canvas');
-    cv.addEventListener('pointerdown', e => rbRealCabPointer(e, toneIdx, pIdx, true));
-    cv.addEventListener('pointermove', e => rbRealCabPointer(e, toneIdx, pIdx, false));
-    cv.addEventListener('pointerup', () => rbRealCabDrop(toneIdx, pIdx));
-    rbRealCabDraw(toneIdx, pIdx);
-}
-
-// layout de parlantes por config: [cx, cy, r] relativos al canvas 300x190
-function rbRealCabSpeakerLayout(entry) {
-    const n = entry.drivers || 1;
-    if (n === 1) return [[150, 95, 62]];
-    if (n === 2) return [[82, 95, 56], [218, 95, 56]];
-    return [[82, 52, 44], [218, 52, 44], [82, 138, 44], [218, 138, 44]];   // 4
-}
-
-function rbRealCabDraw(toneIdx, pIdx) {
-    const cv = document.getElementById(`rb-rc-cv-${toneIdx}-${pIdx}`);
-    const piece = rbState.songTones?.tones?.[toneIdx]?.chain?.[pIdx];
-    const entry = rbRealCabEntryFor(piece && (piece.type || piece.rs_gear));
-    const st = rbRealCabState(toneIdx, pIdx);
-    if (!cv || !entry || !st) return;
-    const g = cv.getContext('2d');
-    g.clearRect(0, 0, 300, 190);
-    // caja (tolex) + rejilla
-    g.fillStyle = '#1a1410';
-    g.fillRect(0, 0, 300, 190);
-    g.strokeStyle = '#3a2f24'; g.lineWidth = 6; g.strokeRect(3, 3, 294, 184);
-    g.save(); g.beginPath(); g.rect(10, 10, 280, 170); g.clip();
-    g.fillStyle = '#241d14'; g.fillRect(10, 10, 280, 170);
-    g.strokeStyle = 'rgba(120,100,70,.16)'; g.lineWidth = 1;
-    for (let i = -190; i < 300; i += 7) {
-        g.beginPath(); g.moveTo(i, 10); g.lineTo(i + 170, 180); g.stroke();
-    }
-    // parlantes: aro (cono) + dustcap
-    for (const [cx, cy, r] of rbRealCabSpeakerLayout(entry)) {
-        g.beginPath(); g.arc(cx, cy, r, 0, 7);
-        g.fillStyle = 'rgba(8,6,4,.72)'; g.fill();
-        g.strokeStyle = 'rgba(190,170,140,.5)'; g.lineWidth = 2.5; g.stroke();
-        g.beginPath(); g.arc(cx, cy, r * 0.62, 0, 7);
-        g.strokeStyle = 'rgba(140,120,95,.35)'; g.lineWidth = 1; g.stroke();
-        g.beginPath(); g.arc(cx, cy, r * 0.27, 0, 7);
-        g.fillStyle = 'rgba(30,24,18,.9)'; g.fill();
-        g.strokeStyle = 'rgba(190,170,140,.4)'; g.stroke();
-    }
-    g.restore();
-    // micrófono: punto + caña, sobre el parlante más cercano según st.x
-    const [mx, my] = rbRealCabMicPx(entry, st);
-    const scale = 1.0 - 0.35 * (st.dist_in / 6.0);     // se aleja = más chico
-    g.beginPath(); g.moveTo(mx, my); g.lineTo(mx + 26 * scale, my + 34 * scale);
-    g.strokeStyle = '#c9b8ff'; g.lineWidth = 2.5 * scale; g.stroke();
-    g.beginPath(); g.arc(mx, my, 7.5 * scale, 0, 7);
-    g.fillStyle = st.angle_deg ? '#8f6fff' : '#b39dff'; g.fill();
-    g.strokeStyle = '#efe9ff'; g.lineWidth = 1.5; g.stroke();
-    // etiqueta
-    g.fillStyle = 'rgba(230,222,255,.85)'; g.font = '10px sans-serif';
-    g.fillText(`${st.mic}  x=${st.x.toFixed(2)}  ${st.dist_in}"${st.angle_deg ? '  45°' : ''}`, 14, 176);
-}
-
-function rbRealCabMicPx(entry, st) {
-    if (st.micPx) return st.micPx;
-    const [cx, cy, r] = rbRealCabSpeakerLayout(entry)[0];
-    return [cx + st.x * r, cy];       // default: sobre el primer parlante
-}
-
-function rbRealCabPointer(e, toneIdx, pIdx, isDown) {
-    if (!isDown && e.buttons !== 1) return;
-    const cv = e.currentTarget;
-    cv.setPointerCapture?.(e.pointerId);
-    const rect = cv.getBoundingClientRect();
-    const px = (e.clientX - rect.left) * (300 / rect.width);
-    const py = (e.clientY - rect.top) * (190 / rect.height);
-    const piece = rbState.songTones?.tones?.[toneIdx]?.chain?.[pIdx];
-    const entry = rbRealCabEntryFor(piece && (piece.type || piece.rs_gear));
-    const st = rbRealCabState(toneIdx, pIdx);
-    if (!entry || !st) return;
-    // x_norm = distancia radial al centro del parlante MÁS CERCANO / su radio
-    let best = null;
-    for (const [cx, cy, r] of rbRealCabSpeakerLayout(entry)) {
-        const d = Math.hypot(px - cx, py - cy) / r;
-        if (best === null || d < best) best = d;
-    }
-    st.x = Math.min(Math.max(best, 0.0), 1.0);
-    st.micPx = [Math.min(Math.max(px, 12), 288), Math.min(Math.max(py, 12), 178)];
-    st._dirty = true;
-    rbRealCabDraw(toneIdx, pIdx);
-}
-
-window.rbRealCabSetMic = function (toneIdx, pIdx, mic) {
-    const st = rbRealCabState(toneIdx, pIdx);
-    if (!st) return;
-    st.mic = mic;
-    const box = document.getElementById(`rb-realcab-${toneIdx}-${pIdx}`);
-    box?.querySelectorAll('.rb-rc-mic').forEach(b => {
-        const on = b.dataset.mic === mic;
-        b.className = `rb-rc-mic px-2 py-0.5 rounded border text-[11px] ${on
-            ? 'bg-violet-700/60 text-violet-100 border-violet-500/60 font-semibold'
-            : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-violet-900/40'}`;
-    });
-    rbRealCabDraw(toneIdx, pIdx);
-    rbRealCabApply(toneIdx, pIdx);
-};
-
-window.rbRealCabSetDist = function (toneIdx, pIdx, v) {
-    const st = rbRealCabState(toneIdx, pIdx);
-    if (!st) return;
-    st.dist_in = parseFloat(v);
-    const lbl = document.getElementById(`rb-rc-dist-${toneIdx}-${pIdx}`);
-    if (lbl) lbl.textContent = `${st.dist_in}"`;
-    st._dirty = true;
-    rbRealCabDraw(toneIdx, pIdx);
-    clearTimeout(st._distT);
-    st._distT = setTimeout(() => rbRealCabApply(toneIdx, pIdx), 350);
-};
-
-window.rbRealCabToggleAngle = function (toneIdx, pIdx) {
-    const st = rbRealCabState(toneIdx, pIdx);
-    if (!st) return;
-    st.angle_deg = st.angle_deg ? 0 : 45;
-    rbRealCabDraw(toneIdx, pIdx);
-    rbRealCabApply(toneIdx, pIdx);
-};
-
-function rbRealCabDrop(toneIdx, pIdx) {
-    const st = rbRealCabState(toneIdx, pIdx);
-    if (st && st._dirty) { st._dirty = false; rbRealCabApply(toneIdx, pIdx); }
-}
-
-async function rbRealCabApply(toneIdx, pIdx) {
-    const piece = rbState.songTones?.tones?.[toneIdx]?.chain?.[pIdx];
-    const st = rbRealCabState(toneIdx, pIdx);
-    if (!piece || !st) return;
-    const status = document.getElementById(`rb-rc-status-${toneIdx}-${pIdx}`);
-    if (status) status.textContent = '⏳';
-    try {
-        const r = await fetch(`${window.RB_API}/cab/synthesize`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                gear_type: piece.type || piece.rs_gear, mic: st.mic,
-                x: st.x, dist_in: st.dist_in, angle_deg: st.angle_deg,
-            }),
-        });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || r.status);
-        // mismo flujo que un IR subido: persist + re-audition
-        piece._uploaded_file = d.name;
-        piece._uploaded_kind = 'ir';
-        if (status) status.textContent = '✓';
-        await rbAfterGearChange(toneIdx);
-    } catch (e) {
-        if (status) status.textContent = '✗ ' + (e.message || e);
-    }
 }
 
 async function rbUploadFile(input, toneIdx, pIdx) {
