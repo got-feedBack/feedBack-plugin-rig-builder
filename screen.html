@@ -305,7 +305,7 @@
         transition:color .15s, border-color .15s, background .15s; }
     .rb-amp-stack-empty:hover .rb-amp-face-empty{ color:var(--rb-accent); border-color:var(--rb-accent); background:rgba(48,72,118,.45); }
     /* extruded side panel = box depth for the amp + cab (hidden when flat) */
-    .rb-amp-stack::before{ content:''; position:absolute; top:1%; bottom:0; left:0; width:54px;
+    .rb-amp-stack::before{ content:''; position:absolute; top:1%; bottom:0; left:0; width:calc(54px * var(--rb-scale,1));
         transform-origin:left center; transform:rotateY(90deg);
         background:linear-gradient(90deg,#1d2026,#090a0c);
         box-shadow:inset 0 0 55px rgba(0,0,0,.6); border-radius:2px 0 0 2px;
@@ -314,7 +314,7 @@
     /* top face = the box's roof; lies back from the top edge (rotateX -90) so the
        slightly-elevated camera sees the amp's top. Opaque (no transparent stop)
        or it looks see-through. Hidden when an amp is focused/flat. */
-    .rb-amp-stack::after{ content:''; position:absolute; top:2px; left:0; width:100%; height:60px;
+    .rb-amp-stack::after{ content:''; position:absolute; top:2px; left:0; width:100%; height:calc(60px * var(--rb-scale,1));
         transform-origin:top center; transform:rotateX(-90deg);
         background:linear-gradient(180deg,#363b44,#23272e); border-radius:3px 3px 0 0;
         box-shadow:inset 0 0 30px rgba(0,0,0,.45); transition:opacity .35s ease; }
@@ -565,8 +565,8 @@
        fills height — consistent, not giant. --rb-d = extrusion depth. The two
        skewed pseudo faces (bottom-front + right side) form a real 3D box, each
        shaded differently and tinted with the pedal's own colour (--rb-edge). */
-    .rb-pedal{ flex:0 0 auto; cursor:pointer; position:relative; transform:translateZ(8px) rotateX(2deg);
-        transition:filter .2s; --rb-d:5px; }
+    .rb-pedal{ flex:0 0 auto; cursor:pointer; position:relative; transform:translateZ(calc(8px * var(--rb-scale,1))) rotateX(2deg);
+        transition:filter .2s; --rb-d:calc(5px * var(--rb-scale,1)); }
     .rb-pedal:hover{ filter:brightness(1.16); }
     .rb-pedal img{ max-width:calc(94px * var(--rb-scale,1)); max-height:calc(66px * var(--rb-scale,1)); width:auto; height:auto; display:block;
         border-radius:6px 6px 2px 2px; position:relative; z-index:1;
