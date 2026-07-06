@@ -11088,7 +11088,7 @@ async function rbLoadRealCabCatalog() {
 
 const RB_SPEAKER_LABELS = {
     g12m: 'Greenback G12M', blue: 'Alnico Blue', v30: 'Vintage 30',
-    g12t75: 'G12T-75', g12h: 'G12H', c12n: 'Jensen C12N', p10q: 'Jensen P10Q', mod12110: 'Jensen MOD 12-110',
+    g12t75: 'G12T-75', g12h: 'G12H', c12n: 'Jensen C12N', p10q: 'Jensen P10Q', mod12110: 'Jensen MOD 12-110', evm15l: 'EV EVM15L',
 };
 
 const RB_CABROOM_W = 560, RB_CABROOM_H = 340;

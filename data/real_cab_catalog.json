@@ -106,16 +106,16 @@
       ]
     },
     "Cab_CA215C": {
-      "speaker": "g12h",
+      "speaker": "evm15l",
       "drivers": 2,
       "size_in": 15,
       "back": "closed",
       "baffle_m": 0.8,
-      "speaker_confidence": "low",
+      "speaker_confidence": "high",
       "name": "Silla 2x15",
       "speakers": [
-        "g12h",
-        "v30"
+        "evm15l",
+        "g12h"
       ]
     },
     "Cab_CA412C": {
@@ -125,7 +125,7 @@
       "back": "closed",
       "baffle_m": 0.76,
       "speaker_confidence": "high",
-      "name": "Silla 4x12 Recto",
+      "name": "Silla Dual Recto 4x12",
       "speakers": [
         "v30",
         "g12t75"
@@ -193,7 +193,7 @@
       "back": "closed",
       "baffle_m": 0.76,
       "speaker_confidence": "high",
-      "name": "Engel 4x12 Pro",
+      "name": "Engel Fireball 4x12",
       "speakers": [
         "v30",
         "g12t75"
@@ -213,16 +213,17 @@
       ]
     },
     "Cab_GB412CMKII": {
-      "speaker": "g12t75",
+      "speaker": "g12h",
       "drivers": 4,
       "size_in": 12,
       "back": "closed",
       "baffle_m": 0.76,
-      "speaker_confidence": "medium",
-      "name": "GB 4x12 MKII",
+      "speaker_confidence": "high",
+      "name": "Mr. Y Maz 4x12",
       "speakers": [
-        "g12t75",
-        "g12m"
+        "g12h",
+        "g12m",
+        "blue"
       ]
     },
     "Cab_GB412CMKIII": {
@@ -231,8 +232,8 @@
       "size_in": 12,
       "back": "closed",
       "baffle_m": 0.76,
-      "speaker_confidence": "medium",
-      "name": "GB 4x12 MKIII",
+      "speaker_confidence": "high",
+      "name": "Raney AOR 4x12",
       "speakers": [
         "g12t75",
         "v30"
@@ -375,30 +376,32 @@
       ]
     },
     "Cab_TW110C": {
-      "speaker": "p10q",
+      "speaker": "c12n",
       "drivers": 1,
-      "size_in": 10,
+      "size_in": 12,
       "back": "open",
       "baffle_m": 0.45,
       "speaker_confidence": "high",
-      "name": "Bender Tweed 1x10",
+      "name": "Bender Deluxe 1x12",
       "speakers": [
+        "c12n",
         "p10q",
-        "c12n"
+        "blue"
       ]
     },
     "Cab_TW112C": {
-      "speaker": "c12n",
+      "speaker": "g12m",
       "drivers": 1,
       "size_in": 12,
       "back": "open",
       "baffle_m": 0.5,
       "speaker_confidence": "high",
-      "name": "Bender Tweed 1x12",
+      "name": "Bender Supernova 1x12",
       "speakers": [
+        "g12m",
         "c12n",
         "blue",
-        "p10q"
+        "v30"
       ]
     },
     "Cab_TW410C": {
@@ -408,7 +411,7 @@
       "back": "open",
       "baffle_m": 0.6,
       "speaker_confidence": "high",
-      "name": "Bender Tweed 4x10 Bassman",
+      "name": "Bender Bassman 4x10",
       "speakers": [
         "p10q",
         "c12n"

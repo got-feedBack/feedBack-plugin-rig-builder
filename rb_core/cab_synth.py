@@ -194,6 +194,8 @@ DRIVERS = {
     "c12n": lambda f: _interp_points(_C12N_POINTS, f),
     "p10q": lambda f: _interp_points(_P10Q_POINTS, f),
     "mod12110": lambda f: _interp_points(_MOD12110_POINTS, f),
+    # TODO datasheet EVM15L (Electro-Voice 15" del Mesa 2x15) — proxy g12h
+    "evm15l": lambda f: _interp_points(_G12H_POINTS, f),
 }
 
 
