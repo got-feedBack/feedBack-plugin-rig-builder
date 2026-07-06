@@ -173,16 +173,17 @@
       ]
     },
     "Cab_EN212C": {
-      "speaker": "v30",
+      "speaker": "blue",
       "drivers": 2,
       "size_in": 12,
-      "back": "closed",
-      "baffle_m": 0.66,
+      "back": "open",
+      "baffle_m": 0.7,
       "speaker_confidence": "high",
-      "name": "Engel 2x12",
+      "name": "Box AC30 2x12",
       "speakers": [
-        "v30",
-        "g12t75"
+        "blue",
+        "g12h",
+        "g12m"
       ]
     },
     "Cab_EN4120C": {

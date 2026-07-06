@@ -11222,7 +11222,7 @@ function rbCabRoomPointer(e, safeId, gear, isDown) {
 
 function rbCabRoomDrop(safeId, gear) {
     const st = _rbCabRoom[safeId];
-    if (st && st._dirty) { st._dirty = false; rbCabRoomListen(safeId, gear); }
+    if (st && st._dirty) { st._dirty = false; rbCabRoomListen(safeId, gear, true); }
 }
 
 async function rbCabRoomSynth(safeId, gear, assign) {
@@ -11242,10 +11242,15 @@ async function rbCabRoomSynth(safeId, gear, assign) {
     return d;
 }
 
-window.rbCabRoomListen = async function (safeId, gear) {
+window.rbCabRoomListen = async function (safeId, gear, restart) {
     try {
         const d = await rbCabRoomSynth(safeId, gear, false);
-        await rbAuditionFile(d.name, 'ir', `rb-cabroom-play-${safeId}`);
+        const btnId = `rb-cabroom-play-${safeId}`;
+        // rbAuditionFile TOGGLEA (mismo botón sonando → pausa). Los cambios
+        // del Cab Room (drag/mic/parlante/distancia) deben REINICIAR con el
+        // IR nuevo, no pausar — limpiar el estado de toggle primero.
+        if (restart && rbState._auditionId === btnId) rbState._auditionId = null;
+        await rbAuditionFile(d.name, 'ir', btnId);
     } catch (e) {
         const s = document.getElementById(`rb-cabroom-status-${safeId}`);
         if (s) s.textContent = '✗ ' + (e.message || e);
@@ -11273,7 +11278,7 @@ window.rbCabRoomSetSpeaker = function (safeId, gear, sp) {
             ? 'bg-amber-700/60 text-amber-100 border-amber-500/60 font-semibold'
             : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-amber-900/40'}`;
     });
-    rbCabRoomListen(safeId, gear);
+    rbCabRoomListen(safeId, gear, true);
 };
 
 window.rbCabRoomSetMic = function (safeId, gear, mic) {
@@ -11287,7 +11292,7 @@ window.rbCabRoomSetMic = function (safeId, gear, mic) {
             : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-violet-900/40'}`;
     });
     rbCabRoomDraw(safeId, rbCabRoomEntry(gear));
-    rbCabRoomListen(safeId, gear);
+    rbCabRoomListen(safeId, gear, true);
 };
 
 window.rbCabRoomSetDist = function (safeId, gear, v) {
@@ -11298,7 +11303,7 @@ window.rbCabRoomSetDist = function (safeId, gear, v) {
     if (lbl) lbl.textContent = `${st.dist_in}"`;
     rbCabRoomDraw(safeId, rbCabRoomEntry(gear));
     clearTimeout(st._distT);
-    st._distT = setTimeout(() => rbCabRoomListen(safeId, gear), 400);
+    st._distT = setTimeout(() => rbCabRoomListen(safeId, gear, true), 400);
 };
 
 window.rbCabRoomToggleAngle = function (safeId, gear) {
@@ -11310,7 +11315,7 @@ window.rbCabRoomToggleAngle = function (safeId, gear) {
         ? 'bg-violet-700/60 text-violet-100 border-violet-500/60'
         : 'bg-dark-800 text-gray-400 border-gray-700'}`;
     rbCabRoomDraw(safeId, rbCabRoomEntry(gear));
-    rbCabRoomListen(safeId, gear);
+    rbCabRoomListen(safeId, gear, true);
 };
 
 function rbAuditionGainForVariantLevel(level) {
