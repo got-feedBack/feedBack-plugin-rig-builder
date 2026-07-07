@@ -3802,6 +3802,18 @@ function rbShowTab(name) {
     // Leaving any view tears down an open inline VST editor first so its
     // orphaned native window can't crash the host on the next chain load.
     rbCloseActiveVstEditor();
+    // The Studio room is a permanent backdrop (never hidden), so an open focus
+    // overlay — the Cab Room and its position:fixed swap rail — would linger on
+    // top of whatever tab you open. Tear it down when LEAVING Studio. (Not when
+    // name==='studio': the cab swap re-enters via rbStudioShowSongTone→rbShowTab
+    // ('studio') and must keep its focus + rail.)
+    if (name !== 'studio') {
+        try {
+            if (rbState._studioFocusKind === 'cab') rbStudioCloseCabFocus();
+            else if (document.getElementById('rb-studio-focus-bar')) rbStudioCloseFocus();
+            else rbStudioCloseSwap();
+        } catch (_) {}
+    }
     rbState.currentTab = name;
     // Immersive shell: the Studio room is the permanent backdrop (never hidden);
     // the other tabs float over it (overlay panels or the Songs search dock).
