@@ -417,6 +417,269 @@
         "p10q",
         "c12n"
       ]
+    },
+    "Bass_Cab_AT810BC": {
+      "name": "Sampleg SVT 8x10",
+      "speaker": "bp102",
+      "speakers": [
+        "bp102",
+        "deltalite2510"
+      ],
+      "drivers": 8,
+      "size_in": 10,
+      "back": "closed",
+      "baffle_m": 0.66,
+      "speaker_confidence": "high"
+    },
+    "Bass_Cab_AT1150BC": {
+      "name": "Sampleg 1x15",
+      "speaker": "cb158",
+      "speakers": [
+        "cb158",
+        "p15n",
+        "evm15l",
+        "pulse15"
+      ],
+      "drivers": 1,
+      "size_in": 15,
+      "back": "ported",
+      "baffle_m": 0.6,
+      "speaker_confidence": "medium"
+    },
+    "Bass_Cab_BT115BC": {
+      "name": "BT Bass 1x15",
+      "speaker": "cb158",
+      "speakers": [
+        "cb158",
+        "p15n",
+        "pulse15"
+      ],
+      "drivers": 1,
+      "size_in": 15,
+      "back": "ported",
+      "baffle_m": 0.55,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_BT212BC": {
+      "name": "BT Bass 2x12",
+      "speaker": "deltalite2512",
+      "speakers": [
+        "deltalite2512",
+        "evm12l"
+      ],
+      "drivers": 2,
+      "size_in": 12,
+      "back": "ported",
+      "baffle_m": 0.66,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_BT410BC": {
+      "name": "BT Bass 4x10",
+      "speaker": "bp102",
+      "speakers": [
+        "bp102",
+        "deltalite2510"
+      ],
+      "drivers": 4,
+      "size_in": 10,
+      "back": "ported",
+      "baffle_m": 0.6,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_CA1510BC": {
+      "name": "Silla Bass 1x15",
+      "speaker": "evm15l",
+      "speakers": [
+        "evm15l",
+        "cb158"
+      ],
+      "drivers": 1,
+      "size_in": 15,
+      "back": "ported",
+      "baffle_m": 0.6,
+      "speaker_confidence": "medium"
+    },
+    "Bass_Cab_CH210BC": {
+      "name": "CH Bass 2x10",
+      "speaker": "deltalite2510",
+      "speakers": [
+        "deltalite2510",
+        "bp102"
+      ],
+      "drivers": 2,
+      "size_in": 10,
+      "back": "ported",
+      "baffle_m": 0.58,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_CH310BC": {
+      "name": "CH Bass 3x10",
+      "speaker": "deltalite2510",
+      "speakers": [
+        "deltalite2510",
+        "bp102"
+      ],
+      "drivers": 3,
+      "size_in": 10,
+      "back": "ported",
+      "baffle_m": 0.6,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_CH410BC": {
+      "name": "CH Bass 4x10",
+      "speaker": "deltalite2510",
+      "speakers": [
+        "deltalite2510",
+        "bp102"
+      ],
+      "drivers": 4,
+      "size_in": 10,
+      "back": "ported",
+      "baffle_m": 0.6,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_CS112BC": {
+      "name": "CS Bass 1x12",
+      "speaker": "deltalite2512",
+      "speakers": [
+        "deltalite2512",
+        "evm12l"
+      ],
+      "drivers": 1,
+      "size_in": 12,
+      "back": "ported",
+      "baffle_m": 0.48,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_CS15BC": {
+      "name": "CS Bass 1x15",
+      "speaker": "cb158",
+      "speakers": [
+        "cb158",
+        "pulse15"
+      ],
+      "drivers": 1,
+      "size_in": 15,
+      "back": "ported",
+      "baffle_m": 0.55,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_CS410BC": {
+      "name": "CS Bass 4x10",
+      "speaker": "bp102",
+      "speakers": [
+        "bp102",
+        "deltalite2510"
+      ],
+      "drivers": 4,
+      "size_in": 10,
+      "back": "ported",
+      "baffle_m": 0.6,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_EDEND115XLT": {
+      "name": "Edena D115XLT",
+      "speaker": "cb158",
+      "speakers": [
+        "cb158",
+        "pulse15"
+      ],
+      "drivers": 1,
+      "size_in": 15,
+      "back": "ported",
+      "baffle_m": 0.58,
+      "speaker_confidence": "medium"
+    },
+    "Bass_Cab_EDEND212XLT": {
+      "name": "Edena D212XLT",
+      "speaker": "deltalite2512",
+      "speakers": [
+        "deltalite2512"
+      ],
+      "drivers": 2,
+      "size_in": 12,
+      "back": "ported",
+      "baffle_m": 0.66,
+      "speaker_confidence": "medium"
+    },
+    "Bass_Cab_EDEND410XST": {
+      "name": "Edena D410XST",
+      "speaker": "deltalite2510",
+      "speakers": [
+        "deltalite2510",
+        "bp102"
+      ],
+      "drivers": 4,
+      "size_in": 10,
+      "back": "ported",
+      "baffle_m": 0.6,
+      "speaker_confidence": "high"
+    },
+    "Bass_Cab_EDEND610XST": {
+      "name": "Edena D610XST",
+      "speaker": "deltalite2510",
+      "speakers": [
+        "deltalite2510"
+      ],
+      "drivers": 6,
+      "size_in": 10,
+      "back": "ported",
+      "baffle_m": 0.66,
+      "speaker_confidence": "high"
+    },
+    "Bass_Cab_GB415BC": {
+      "name": "GB Bass 4x15",
+      "speaker": "cb158",
+      "speakers": [
+        "cb158",
+        "evm15l"
+      ],
+      "drivers": 4,
+      "size_in": 15,
+      "back": "ported",
+      "baffle_m": 0.9,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_ORANGEOBC115": {
+      "name": "Citrus OBC115",
+      "speaker": "cb158",
+      "speakers": [
+        "cb158",
+        "pulse15",
+        "p15n"
+      ],
+      "drivers": 1,
+      "size_in": 15,
+      "back": "closed",
+      "baffle_m": 0.6,
+      "speaker_confidence": "medium"
+    },
+    "Bass_Cab_ORANGEOBC810": {
+      "name": "Citrus OBC810",
+      "speaker": "bp102",
+      "speakers": [
+        "bp102",
+        "deltalite2510"
+      ],
+      "drivers": 8,
+      "size_in": 10,
+      "back": "closed",
+      "baffle_m": 0.66,
+      "speaker_confidence": "high"
+    },
+    "Bass_Cab_TW215BC": {
+      "name": "Bender Bass 2x15",
+      "speaker": "c15n",
+      "speakers": [
+        "c15n",
+        "p15n",
+        "cb158"
+      ],
+      "drivers": 2,
+      "size_in": 15,
+      "back": "ported",
+      "baffle_m": 0.85,
+      "speaker_confidence": "medium"
     }
   }
 }

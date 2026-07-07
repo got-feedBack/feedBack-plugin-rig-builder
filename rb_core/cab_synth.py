@@ -201,6 +201,71 @@ _EVM12L_POINTS = [
 ]
 
 
+
+# ── drivers de BAJO (datasheets oficiales, Cabs/speakers/) ────────────────
+# Eminence Legend BP102 (10", el clásico de los 8x10/4x10 vintage tipo SVT).
+# Fs=35, 91.8 dB, usable 40 Hz-2 kHz — OSCURO, cliff ~2.5k.
+_BP102_POINTS = [
+    (40, 78.0), (60, 86.0), (80, 89.0), (100, 90.0), (150, 90.5), (200, 90.5),
+    (300, 91.0), (400, 91.5), (500, 91.0), (700, 90.0), (900, 90.0),
+    (1200, 91.0), (1600, 92.0), (2000, 92.0), (2500, 89.0), (3000, 84.0),
+    (4000, 74.0), (5000, 66.0), (6000, 62.0), (8000, 58.0), (10000, 56.0),
+    (15000, 52.0), (20000, 50.0),
+]
+# Eminence Legend CB158 (15" clásico). Fs=34, 98.2 dB, 47 Hz-3 kHz,
+# montaña de presencia ~2 kHz y cliff ~3k.
+_CB158_POINTS = [
+    (40, 82.0), (60, 90.0), (80, 94.0), (100, 95.0), (150, 95.5), (200, 95.5),
+    (300, 95.0), (400, 94.5), (500, 94.0), (700, 94.0), (900, 95.0),
+    (1200, 97.0), (1600, 99.5), (2000, 101.5), (2500, 101.0), (3000, 97.0),
+    (3500, 90.0), (4000, 83.0), (5000, 73.0), (6000, 68.0), (8000, 63.0),
+    (10000, 60.0), (15000, 55.0), (20000, 52.0),
+]
+# Eminence Deltalite II 2510 (10" neo moderno, Eden/SWR). Fs=53, 97.3 dB,
+# 60 Hz-4 kHz — más brillante, pico 2-2.5k.
+_DL2510_POINTS = [
+    (50, 84.0), (70, 91.0), (100, 95.0), (150, 95.5), (200, 95.5),
+    (300, 95.5), (500, 96.0), (700, 96.0), (900, 96.5), (1200, 97.5),
+    (1600, 99.5), (2000, 102.0), (2400, 102.5), (2800, 101.0), (3200, 100.0),
+    (4000, 96.0), (5000, 93.0), (6000, 85.0), (7000, 79.0), (8000, 76.0),
+    (10000, 73.0), (12000, 70.0), (15000, 66.0), (20000, 60.0),
+]
+# Eminence Deltalite II 2512 (12" neo). Fs=44, 99.9 dB, 58 Hz-4.3 kHz.
+_DL2512_POINTS = [
+    (45, 84.0), (70, 92.0), (100, 96.0), (150, 96.5), (200, 96.5),
+    (300, 96.5), (500, 97.0), (700, 97.0), (900, 97.5), (1200, 98.5),
+    (1600, 100.5), (2000, 103.5), (2400, 104.5), (2800, 103.0), (3300, 103.5),
+    (4000, 100.0), (4800, 88.0), (5500, 76.0), (6500, 73.0), (8000, 78.0),
+    (9000, 77.0), (10000, 72.0), (15000, 64.0), (20000, 58.0),
+]
+# Jensen P15N No Bell (15" ALNICO vintage — el sonido B-15/Bassman 15).
+# Fs=77, 96.8 dB, con top de verdad (voz de guitarra/bajo vintage).
+_P15N_POINTS = [
+    (50, 72.0), (70, 84.0), (90, 96.0), (110, 100.0), (150, 99.0),
+    (200, 98.5), (300, 98.0), (400, 97.0), (500, 96.5), (700, 97.0),
+    (900, 98.5), (1200, 100.0), (1600, 102.5), (2000, 104.5), (2500, 106.0),
+    (3000, 105.0), (3500, 103.0), (4200, 100.0), (5000, 90.0), (6000, 82.0),
+    (7000, 80.0), (8000, 83.0), (10000, 86.0), (12000, 78.0), (15000, 72.0),
+    (20000, 64.0),
+]
+# Jensen C15N (15" cerámico vintage). Fs=73, 96.3 dB, presencia 2-3k enorme.
+_C15N_POINTS = [
+    (50, 66.0), (70, 78.0), (100, 92.0), (150, 99.0), (200, 100.0),
+    (300, 100.5), (400, 100.5), (500, 100.0), (700, 97.0), (900, 98.0),
+    (1200, 99.5), (1600, 102.0), (2000, 105.0), (2500, 107.0), (3000, 106.0),
+    (3500, 105.0), (4200, 92.0), (5000, 95.0), (6000, 96.0), (7000, 88.0),
+    (8000, 78.0), (10000, 75.0), (15000, 70.0), (20000, 65.0),
+]
+# Celestion Pulse 15 (15" bass moderno, Kevlar). Fs=35.7, 96 dB, 40-3500 Hz.
+_PULSE15_POINTS = [
+    (40, 80.0), (60, 86.0), (80, 89.0), (100, 90.0), (150, 92.0), (200, 93.0),
+    (300, 93.5), (400, 94.0), (500, 94.5), (700, 95.0), (900, 95.5),
+    (1200, 97.0), (1600, 100.0), (2000, 103.5), (2500, 102.0), (3000, 100.0),
+    (3500, 93.0), (4000, 82.0), (5000, 74.0), (6000, 72.0), (8000, 70.0),
+    (10000, 68.0), (15000, 62.0), (20000, 58.0),
+]
+
+
 def _interp_points(points, f):
     pf = np.array([p[0] for p in points], float)
     pd = np.array([p[1] for p in points], float)
@@ -219,6 +284,13 @@ DRIVERS = {
     "mod12110": lambda f: _interp_points(_MOD12110_POINTS, f),
     "evm15l": lambda f: _interp_points(_EVM15L_POINTS, f),
     "evm12l": lambda f: _interp_points(_EVM12L_POINTS, f),
+    "bp102": lambda f: _interp_points(_BP102_POINTS, f),
+    "cb158": lambda f: _interp_points(_CB158_POINTS, f),
+    "deltalite2510": lambda f: _interp_points(_DL2510_POINTS, f),
+    "deltalite2512": lambda f: _interp_points(_DL2512_POINTS, f),
+    "p15n": lambda f: _interp_points(_P15N_POINTS, f),
+    "c15n": lambda f: _interp_points(_C15N_POINTS, f),
+    "pulse15": lambda f: _interp_points(_PULSE15_POINTS, f),
 }
 
 
@@ -301,6 +373,13 @@ def _enclosure_db(f, drivers=4, size_in=12.0, back="closed", baffle_m=0.76):
         # bloom medido en el 4x12 (+11 dB <550); escala ±3 dB por duplicación
         bloom = 11.0 + 3.0 * np.log2(max(drivers, 1) / 4.0)
         d += bloom / (1.0 + np.exp(np.log2(np.maximum(f, 1.0) / 550.0) * 1.6))
+    elif back == "ported":
+        # bass-reflex: bloom de caja + HUMP del puerto (~55 Hz) + rolloff
+        # subsónico bajo la sintonía (el puerto descarga el cono)
+        bloom = 10.0 + 3.0 * np.log2(max(drivers, 1) / 4.0)
+        d += bloom / (1.0 + np.exp(np.log2(np.maximum(f, 1.0) / 500.0) * 1.6))
+        d += 3.5 * np.exp(-0.5 * (np.log2(np.maximum(f, 1.0) / 55.0) / 0.5) ** 2)
+        d -= 10.0 / (1.0 + np.exp(np.log2(np.maximum(f, 1.0) / 38.0) * 3.0))
     else:
         # open-back: bloom menor + cancelación dipolo (medido en el AC30 2x12)
         bloom = 8.0 + 3.0 * np.log2(max(drivers, 1) / 2.0)
