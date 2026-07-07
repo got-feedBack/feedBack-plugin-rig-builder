@@ -4146,13 +4146,17 @@ def _is_rocksmith_ir_file(value: str | Path | None) -> bool:
 
 
 def _is_synth_cab_ir(value: str | Path | None) -> bool:
-    """Our own synthesized/captured cab IRs live under nam_irs/cabs/. The engine's
+    """Our own synthesized/captured cab IRs live under nam_irs/cabs/ (bundled
+    RC_ sets) AND nam_irs/realcab/ (posiciones custom del Cab Room). The engine's
     JUCE convolution force-normalizes EVERY cab IR to ~-18 dB, so these need the
     SAME +18 dB makeup as the RS cabs to land at a usable level — but they are NOT
-    rocksmith assets, so the global 'bypass all Rocksmith cabs' must NOT skip them."""
+    rocksmith assets, so the global 'bypass all Rocksmith cabs' must NOT skip them.
+    (Bug arreglado: realcab/ no matcheaba → los tonos con posición custom del
+    Cab Room quedaban ~18 dB abajo = cab inaudible en la canción.)"""
     if not value:
         return False
-    return "cabs/" in Path(value).as_posix().lower()
+    p = Path(value).as_posix().lower()
+    return "cabs/" in p or "realcab/" in p
 
 
 def _ir_stage_gain(kind: str | None, ir_path: str | Path | None, base_gain: float = 1.0) -> float:
