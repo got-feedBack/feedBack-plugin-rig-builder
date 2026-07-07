@@ -11437,18 +11437,31 @@ async function rbStudioCabRoomApply(safeId, gear) {
     const info = st && st._studio;
     if (!info) return;
     const status = document.getElementById(`rb-cabroom-status-${safeId}`);
-    try {
-        const d = await rbCabRoomSynth(safeId, gear, false);
-        const piece = rbState.songTones?.tones?.[info.toneIdx]?.chain?.[info.pIdx];
-        if (!piece) throw new Error('pieza no encontrada');
-        piece._uploaded_file = d.name;
-        piece._uploaded_kind = 'ir';
-        await rbPersistTone(info.toneIdx, rbState.currentSongFile);
-        try { rbStudioLoadMonitor(); } catch (_) {}
-        if (status) status.textContent = '✓ aplicado al tono';
-    } catch (e) {
-        if (status) status.textContent = '✗ ' + (e.message || e);
-    }
+    // DEBOUNCE: aplicar al tono recarga la cadena COMPLETA del monitor
+    // (re-instancia los VSTs del amp → ~1-2 s de silencio). Arrastres
+    // seguidos no deben encadenar recargas: se aplica UNA vez, 600 ms
+    // después del último cambio. (La cura real del gap es la API de
+    // hot-swap del IR en el engine — spec pendiente para el engine.)
+    if (status) status.textContent = '🎙 posición lista — aplicando…';
+    clearTimeout(st._applyT);
+    st._applyT = setTimeout(async () => {
+        try {
+            const d = await rbCabRoomSynth(safeId, gear, false);
+            const piece = rbState.songTones?.tones?.[info.toneIdx]?.chain?.[info.pIdx];
+            if (!piece) throw new Error('pieza no encontrada');
+            piece._uploaded_file = d.name;
+            piece._uploaded_kind = 'ir';
+            await rbPersistTone(info.toneIdx, rbState.currentSongFile);
+            try { rbStudioLoadMonitor(); } catch (_) {}
+            if (status) status.textContent = '✓ aplicado — cargando tono… (~2 s de silencio, normal)';
+            setTimeout(() => {
+                if (status && status.textContent.startsWith('✓ aplicado — cargando'))
+                    status.textContent = '✓ sonando con la posición nueva';
+            }, 2600);
+        } catch (e) {
+            if (status) status.textContent = '✗ ' + (e.message || e);
+        }
+    }, 600);
 }
 
 window.rbStudioCabSwap = async function (newBase) {
