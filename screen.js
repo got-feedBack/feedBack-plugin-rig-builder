@@ -11252,36 +11252,48 @@ function rbCabRoomBuild(g, entry, safeId, opts) {
                  class="rb-cabroom-mic px-2.5 py-1 rounded border text-xs ${st.mic === k
                      ? 'bg-violet-700/60 text-violet-100 border-violet-500/60 font-semibold'
                      : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-violet-900/40'}">${lbl}</button>`).join(' ');
+    // New left-rail layout (mic buttons + distance stacked at left) is Studio-only;
+    // Gear catalog + node editor keep the old horizontal layout below the cab.
+    const isStudioLayout = (safeId === 'studio');
+    const speakerBtns = (entry.speakers && entry.speakers.length > 1)
+        ? entry.speakers.map(sp =>
+            `<button data-spk="${sp}" onclick="rbCabRoomSetSpeaker('${safeId}','${g.rs_gear}','${sp}')"
+                     class="rb-cabroom-spk px-2 py-1 rounded border text-xs ${st.speaker === sp
+                         ? 'bg-amber-700/60 text-amber-100 border-amber-500/60 font-semibold'
+                         : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-amber-900/40'}">${RB_SPEAKER_LABELS[sp] || sp}</button>`).join(' ')
+        : '';
+    const stageInner = `${cabArt ? `<div class="rb-cabroom-art" style="position:absolute;inset:0;border-radius:.5rem;overflow:hidden;background:#0a0a0b;display:flex;align-items:center;justify-content:center">${cabArt}</div>` : ''}
+                <canvas id="rb-cabroom-cv-${safeId}" width="${RB_CABROOM_W}" height="${RB_CABROOM_H}"
+                        class="rounded-lg border border-gray-800 cursor-crosshair w-full"
+                        style="touch-action:none;position:relative;${cabArt ? 'background:transparent' : ''}"></canvas>`;
+    const distSlider = `<input type="range" min="0" max="6" step="0.5" value="${st.dist_in}"
+                oninput="rbCabRoomSetDist('${safeId}','${g.rs_gear}',this.value)" class="flex-1" style="min-width:0">
+        <span id="rb-cabroom-dist-${safeId}" class="text-[10px] text-gray-400" style="width:22px">${st.dist_in}"</span>`;
+    const angBtn = `<button id="rb-cabroom-ang-${safeId}" onclick="rbCabRoomToggleAngle('${safeId}','${g.rs_gear}')"
+            class="text-xs px-2 py-1 rounded border ${st.angle_deg ? 'bg-violet-700/60 text-violet-100 border-violet-500/60' : 'bg-dark-800 text-gray-400 border-gray-700'}">45°</button>`;
+    const middleHtml = isStudioLayout
+        ? `<div class="flex gap-3 items-start">
+                <div class="flex flex-col gap-1" style="width:106px;flex:none">
+                    <span class="text-[10px] text-gray-500 uppercase tracking-wider">Mic</span>
+                    <div class="flex flex-col gap-1">${micBtns}</div>
+                    ${speakerBtns ? `<span class="text-[10px] text-gray-500 uppercase tracking-wider mt-1.5">Speaker</span><div class="flex flex-col gap-1">${speakerBtns}</div>` : ''}
+                    <span class="text-[10px] text-gray-500 uppercase tracking-wider mt-1.5">Distance</span>
+                    <div class="flex items-center gap-1">${distSlider}</div>
+                    ${angBtn}
+                </div>
+                <div class="flex-1" style="position:relative;min-width:0">${stageInner}</div>
+            </div>`
+        : `<div style="position:relative;width:100%">${stageInner}</div>
+            <div class="flex items-center gap-1.5 flex-wrap">${micBtns}</div>
+            ${speakerBtns ? `<div class="flex items-center gap-1.5 flex-wrap"><span class="text-[11px] text-gray-500">parlante:</span>${speakerBtns}</div>` : ''}
+            <div class="flex items-center gap-2"><span class="text-[11px] text-gray-500 whitespace-nowrap">distancia</span>${distSlider}${angBtn}</div>`;
     box.innerHTML = `
         <div class="bg-dark-800/60 border border-gray-800/50 rounded-lg p-3 space-y-2">
             <div class="flex items-center gap-2">
                 <span class="text-sm text-violet-300 font-medium">🎙 ${rbEsc(entry.name || 'Cab Room')}</span>
                 <span class="text-[11px] text-gray-500">arrastra el micrófono — se escucha al soltar · ${entry.drivers}x${entry.size_in} ${entry.back === 'closed' ? 'cerrado' : 'open-back'}</span>
             </div>
-            <div style="position:relative;width:100%">
-                ${cabArt ? `<div class="rb-cabroom-art" style="position:absolute;inset:0;border-radius:.5rem;overflow:hidden;background:#0a0a0b;display:flex;align-items:center;justify-content:center">${cabArt}</div>` : ''}
-                <canvas id="rb-cabroom-cv-${safeId}" width="${RB_CABROOM_W}" height="${RB_CABROOM_H}"
-                        class="rounded-lg border border-gray-800 cursor-crosshair w-full"
-                        style="touch-action:none;position:relative;${cabArt ? 'background:transparent' : ''}"></canvas>
-            </div>
-            <div class="flex items-center gap-1.5 flex-wrap">${micBtns}</div>
-            ${(entry.speakers && entry.speakers.length > 1) ? `
-            <div class="flex items-center gap-1.5 flex-wrap">
-                <span class="text-[11px] text-gray-500">parlante:</span>
-                ${entry.speakers.map(sp =>
-                    `<button data-spk="${sp}" onclick="rbCabRoomSetSpeaker('${safeId}','${g.rs_gear}','${sp}')"
-                             class="rb-cabroom-spk px-2.5 py-1 rounded border text-xs ${st.speaker === sp
-                                 ? 'bg-amber-700/60 text-amber-100 border-amber-500/60 font-semibold'
-                                 : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-amber-900/40'}">${RB_SPEAKER_LABELS[sp] || sp}</button>`).join(' ')}
-            </div>` : ''}
-            <div class="flex items-center gap-2">
-                <span class="text-[11px] text-gray-500 whitespace-nowrap">distancia</span>
-                <input type="range" min="0" max="6" step="0.5" value="${st.dist_in}"
-                       oninput="rbCabRoomSetDist('${safeId}','${g.rs_gear}',this.value)" class="flex-1">
-                <span id="rb-cabroom-dist-${safeId}" class="text-[11px] text-gray-400 w-8">${st.dist_in}"</span>
-                <button id="rb-cabroom-ang-${safeId}" onclick="rbCabRoomToggleAngle('${safeId}','${g.rs_gear}')"
-                        class="text-xs px-2.5 py-1 rounded border ${st.angle_deg ? 'bg-violet-700/60 text-violet-100 border-violet-500/60' : 'bg-dark-800 text-gray-400 border-gray-700'}">45°</button>
-            </div>
+            ${middleHtml}
             ${(opts && opts.selector) ? `
             <div class="flex items-center gap-2">
                 <span class="text-[11px] text-gray-500">cab:</span>
