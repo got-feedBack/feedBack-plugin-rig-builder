@@ -9737,6 +9737,11 @@ def setup(app, context):
         type_tags = _load_pedal_type_tags()
         cats: dict[str, list] = {}
         for gear, b in best.items():
+            # Skip the generic parser-miss placeholders ('Cabinets'/'Amps'/
+            # 'Pedals'/'Racks') — they're not real models the user can browse;
+            # each song's real gear is recovered on open by the auto-fix.
+            if gear in ("Cabinets", "Amps", "Pedals", "Racks"):
+                continue
             info = rs_map.get(gear) or {}
             category = info.get("category") or _category_from_codename(gear)
             # Gear with an assigned VST shows its copyright-free display name
