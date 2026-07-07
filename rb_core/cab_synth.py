@@ -422,24 +422,58 @@ VOICINGS = {
     "boombox": lambda f: (_hp_db(f, 80, 3) + _lp_db(f, 10000, 2)
         + _bump(f, 100, 5.0, 0.4) + _bump(f, 550, -5.0, 0.8)
         + _bump(f, 3500, 5.5, 0.6) + _bump(f, 8000, 3.0, 0.5)),
-    # audiophile: full-range plano hi-fi, leve rolloff en extremos
-    "audiophile": lambda f: (_hp_db(f, 42, 2) + _lp_db(f, 18000, 2)
-        + _bump(f, 60, 1.5, 0.7) + _bump(f, 12000, 1.5, 0.8)),
-    # vintage hi-fi: cálido, agudos rodados, presencia recesiva
-    "vintagehifi": lambda f: (_hp_db(f, 50, 2) + _lp_db(f, 11000, 2)
-        + _bump(f, 90, 3.0, 0.7) + _bump(f, 2500, -2.5, 0.9)
-        + _hi_shelf(f, 6000, -3.0, 1.2)),
-    # PA PS-600: full-range con horn de presencia
-    "pa600c": lambda f: (_hp_db(f, 62, 3) + _lp_db(f, 16000, 2)
-        + _bump(f, 3000, 3.0, 0.8) + _bump(f, 800, -1.5, 1.0)),
-    # PA-999C: PA mayor, más extensión de graves
-    "pa999c": lambda f: (_hp_db(f, 50, 3) + _lp_db(f, 16000, 2)
-        + _bump(f, 2500, 2.5, 0.9) + _bump(f, 700, -2.0, 1.0)),
-    # PS-115.2C: 15" + horn, graves extendidos, medios scoopeados, top brillante
-    "pa1152c": lambda f: (_hp_db(f, 45, 3) + _lp_db(f, 17000, 2)
-        + _bump(f, 70, 2.5, 0.6) + _bump(f, 650, -3.5, 1.0)
-        + _bump(f, 3500, 3.5, 0.8)),
+    # ── los 5 "serios" anclados a datasheets REALES (Cabs/speakers/) ──────
+    # Audiophile Hi-Fi: 2-vías moderno neutral, plano 40 Hz-20 kHz.
+    "audiophile": lambda f: _interp_points(_HIFI_MODERN_POINTS, f),
+    # Vintage Hi-Fi = JBL D123 (12" full-range alnico, dome dural, Fs 35,
+    # usable 30-15k): cálido, suave, agudos extendidos que ruedan tras ~9k.
+    "vintagehifi": lambda f: _interp_points(_HIFI_D123_POINTS, f),
+    # PS-600 PA = JBL SRX812 (12"+horn, -3dB 57 Hz-20 kHz, xover 1.9k):
+    # PA moderno ULTRA-plano, meseta pareja, extendido hasta 20k.
+    "pa600c": lambda f: _interp_points(_PA_JBL12_POINTS, f),
+    # PA-999C = Mc Crypt PA 15/2A (15"+horn, curva MEDIDA 0°): PA económico
+    # con bump de graves ~70, dip de crossover ~800 y pico de horn ~10k.
+    "pa999c": lambda f: _interp_points(_PA_BUDGET15_POINTS, f),
+    # PS-115.2C = NEXO PS15 (15"+2" HF, el parlante real que parodia): PA
+    # premium de gira, muy plano con brillo de horn suave arriba.
+    "pa1152c": lambda f: _interp_points(_PA_NEXO15_POINTS, f),
 }
+
+# JBL D123 12" full-range alnico (D123.jpg) — Fs 35, dome dural, 30-15k
+_HIFI_D123_POINTS = [
+    (30, 74), (40, 84), (50, 90), (60, 93), (80, 95), (100, 96), (150, 96),
+    (200, 95.5), (300, 95), (500, 95), (700, 95), (1000, 95.5), (1500, 96),
+    (2000, 96.5), (3000, 97), (4000, 97), (5000, 96.5), (7000, 95), (9000, 93),
+    (11000, 90), (13000, 86), (15000, 82), (18000, 74), (20000, 68),
+]
+# hi-fi 2-vías moderno neutral (referencia audiophile plana)
+_HIFI_MODERN_POINTS = [
+    (30, 80), (40, 90), (50, 94), (60, 95), (80, 96), (100, 96), (200, 96),
+    (500, 96), (1000, 96), (2000, 96), (3000, 96.5), (5000, 96.5), (7000, 96),
+    (10000, 96), (13000, 95.5), (16000, 95), (18000, 93), (20000, 90),
+]
+# JBL SRX812 12"+horn (JBL_SRX812) — -3dB 57 Hz-20 kHz, meseta plana ~93
+_PA_JBL12_POINTS = [
+    (40, 72), (50, 84), (57, 90), (70, 92), (100, 93), (150, 93), (200, 93),
+    (300, 92.5), (500, 92.5), (700, 92.5), (1000, 92.5), (1500, 92.5),
+    (1900, 92.5), (2500, 93), (3500, 92.5), (5000, 93), (7000, 93),
+    (10000, 93.5), (13000, 93), (16000, 92), (18000, 91), (20000, 89),
+]
+# Mc Crypt PA 15/2A 15"+horn — leído de la curva MEDIDA 0° del datasheet
+_PA_BUDGET15_POINTS = [
+    (20, 68), (30, 78), (40, 88), (50, 96), (60, 100), (70, 101), (80, 101),
+    (100, 100), (150, 100), (200, 98), (300, 99), (400, 98.5), (500, 98),
+    (700, 97), (800, 96), (1000, 97), (1500, 99), (2000, 100), (2500, 98.5),
+    (3000, 99), (4000, 100), (5000, 99), (7000, 100), (10000, 103),
+    (12000, 102), (15000, 98), (18000, 96), (20000, 95),
+]
+# NEXO PS15 15"+2" HF (PS15-R2) — PA premium de gira, plano y extendido
+_PA_NEXO15_POINTS = [
+    (40, 78), (50, 90), (60, 97), (70, 99), (80, 100), (100, 100), (150, 100),
+    (200, 100), (300, 99.5), (500, 99.5), (700, 99), (1000, 99), (1500, 99.5),
+    (2000, 100), (3000, 100), (4000, 100.5), (5000, 100.5), (7000, 101),
+    (10000, 101), (13000, 100), (16000, 98), (18000, 95), (20000, 90),
+]
 
 
 def synthesize_ir(speaker="g12m", mic="sm57", x=0.15, dist_in=1.0,
