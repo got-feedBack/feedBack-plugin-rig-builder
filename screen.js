@@ -11388,7 +11388,9 @@ function rbCabRoomPinMicRail() {
     const room = document.getElementById('rb-studio-room');
     const rail = document.getElementById('rb-mic-rail');
     if (!room || !rail) return;
-    const r = room.getBoundingClientRect(), topOff = 60;
+    // Bigger top offset than the right rail: the floating "← Room" bar sits
+    // top-LEFT, so the left rail must clear it.
+    const r = room.getBoundingClientRect(), topOff = 104;
     rail.style.position = 'fixed'; rail.style.left = Math.max(0, r.left) + 'px'; rail.style.right = 'auto';
     rail.style.top = (r.top + topOff) + 'px'; rail.style.bottom = 'auto';
     rail.style.height = Math.max(0, r.height - topOff) + 'px';
@@ -11672,7 +11674,7 @@ window.rbStudioOpenCabRoom = function rbStudioOpenCabRoom() {
     // Centred between the two rails (mic left, catalog right), no panel chrome —
     // the cab fills the middle like a focused amp/pedal.
     ov.style.cssText = 'position:absolute; left:50%; top:8%; transform:translateX(-50%); z-index:60; width:min(46%,520px); height:74%;';
-    ov.innerHTML = `<div class="relative"><div id="rb-cabroom-studio"></div></div>`;
+    ov.innerHTML = `<div class="relative" style="height:100%"><div id="rb-cabroom-studio" style="height:100%"></div></div>`;
     room.appendChild(ov);
     delete _rbCabRoom['studio'];   // estado fresco por apertura
     rbCabRoomBuild({ rs_gear: gearName }, entry, 'studio', {
