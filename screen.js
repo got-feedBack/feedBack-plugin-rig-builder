@@ -11271,56 +11271,84 @@ function rbCabRoomBuild(g, entry, safeId, opts) {
         <span id="rb-cabroom-dist-${safeId}" class="text-[10px] text-gray-400" style="width:22px">${st.dist_in}"</span>`;
     const angBtn = `<button id="rb-cabroom-ang-${safeId}" onclick="rbCabRoomToggleAngle('${safeId}','${g.rs_gear}')"
             class="text-xs px-2 py-1 rounded border ${st.angle_deg ? 'bg-violet-700/60 text-violet-100 border-violet-500/60' : 'bg-dark-800 text-gray-400 border-gray-700'}">45°</button>`;
-    const middleHtml = isStudioLayout
-        ? `<div class="flex gap-3 items-start">
-                <div class="flex flex-col gap-1" style="width:106px;flex:none">
-                    <span class="text-[10px] text-gray-500 uppercase tracking-wider">Mic</span>
-                    <div class="flex flex-col gap-1">${micBtns}</div>
-                    ${speakerBtns ? `<span class="text-[10px] text-gray-500 uppercase tracking-wider mt-1.5">Speaker</span><div class="flex flex-col gap-1">${speakerBtns}</div>` : ''}
-                    <span class="text-[10px] text-gray-500 uppercase tracking-wider mt-1.5">Distance</span>
-                    <div class="flex items-center gap-1">${distSlider}</div>
-                    ${angBtn}
-                </div>
-                <div class="flex-1" style="position:relative;min-width:0">${stageInner}</div>
-            </div>`
-        : `<div style="position:relative;width:100%">${stageInner}</div>
+    const oldControls = `<div style="position:relative;width:100%">${stageInner}</div>
             <div class="flex items-center gap-1.5 flex-wrap">${micBtns}</div>
             ${speakerBtns ? `<div class="flex items-center gap-1.5 flex-wrap"><span class="text-[11px] text-gray-500">parlante:</span>${speakerBtns}</div>` : ''}
             <div class="flex items-center gap-2"><span class="text-[11px] text-gray-500 whitespace-nowrap">distancia</span>${distSlider}${angBtn}</div>`;
-    box.innerHTML = `
+    if (isStudioLayout) {
+        // Studio: the cab fills the centre, no panel chrome — mic picker is a
+        // left rail (rbCabRoomBuildMicRail) and the cab catalog is the right rail.
+        box.innerHTML = `<div class="rb-cabroom-bigstage" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center"><div style="position:relative;width:100%">${stageInner}</div></div>`;
+    } else {
+        box.innerHTML = `
         <div class="bg-dark-800/60 border border-gray-800/50 rounded-lg p-3 space-y-2">
             <div class="flex items-center gap-2">
                 <span class="text-sm text-violet-300 font-medium">🎙 ${rbEsc(entry.name || 'Cab Room')}</span>
                 <span class="text-[11px] text-gray-500">arrastra el micrófono — se escucha al soltar · ${entry.drivers}x${entry.size_in} ${entry.back === 'closed' ? 'cerrado' : 'open-back'}</span>
             </div>
-            ${middleHtml}
+            ${oldControls}
             ${(opts && opts.selector) ? `
             <div class="flex items-center gap-2">
                 <span class="text-[11px] text-gray-500">cab:</span>
-                <select onchange="${(opts && opts.studio) ? 'rbStudioCabSwap(this.value)' : `rbCabRoomExplore('${safeId}', this.value)`}"
+                <select onchange="rbCabRoomExplore('${safeId}', this.value)"
                         class="flex-1 bg-dark-800 border border-gray-700 rounded text-xs text-gray-300 px-1 py-1">
                     ${Object.entries(rbState.realCabCatalog.cabs).map(([k, e]) =>
                         `<option value="${k}" ${g.rs_gear.startsWith(k) ? 'selected' : ''}>${rbEsc(e.name || k)}</option>`).join('')}
                 </select>
-                ${(opts && opts.studio) ? `<button onclick="rbStudioCabRoomApply('${safeId}','${g.rs_gear}')"
-                        class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-3 py-1 rounded whitespace-nowrap"
-                        title="Guardar esta posición en el tono y recargar el monitor (1 recarga, ~2 s de silencio)">✓ Aplicar al tono</button>` : ''}
             </div>` : ''}
             <div class="flex items-center gap-2">
-                ${(opts && opts.studio) ? '' : `
                 <button id="rb-cabroom-play-${safeId}" onclick="rbCabRoomListen('${safeId}','${g.rs_gear}')"
                         class="bg-violet-700 hover:bg-violet-600 text-white text-xs px-3 py-1.5 rounded">▶ Escuchar</button>
                 <button onclick="rbCabRoomAssign('${safeId}','${g.rs_gear}')"
                         class="bg-emerald-800/70 hover:bg-emerald-700 text-emerald-100 text-xs px-3 py-1.5 rounded border border-emerald-600/40"
-                        title="Usar esta posición de mic como el sonido de este cab en TODAS las canciones">★ Usar en todas las canciones</button>`}
+                        title="Usar esta posición de mic como el sonido de este cab en TODAS las canciones">★ Usar en todas las canciones</button>
                 <span id="rb-cabroom-status-${safeId}" class="text-[11px] text-gray-500"></span>
             </div>
         </div>`;
+    }
+    if (isStudioLayout) rbCabRoomBuildMicRail(safeId, g, entry, micBtns, speakerBtns, distSlider, angBtn);
     const cv = box.querySelector('canvas');
     cv.addEventListener('pointerdown', e => rbCabRoomPointer(e, safeId, g.rs_gear, true));
     cv.addEventListener('pointermove', e => rbCabRoomPointer(e, safeId, g.rs_gear, false));
     cv.addEventListener('pointerup', () => rbCabRoomDrop(safeId, g.rs_gear));
     rbCabRoomDraw(safeId, entry);
+}
+
+// Studio-only LEFT rail: mic picker + speaker + distance, mirroring the cab
+// catalog rail on the right. Buttons reuse the rb-cabroom-mic/spk classes + ids
+// so the existing handlers (now document-scoped) drive them.
+function rbCabRoomBuildMicRail(safeId, g, entry, micBtns, speakerBtns, distSlider, angBtn) {
+    const room = document.getElementById('rb-studio-room');
+    if (!room) return;
+    let rail = document.getElementById('rb-mic-rail');
+    if (!rail) { rail = document.createElement('div'); rail.id = 'rb-mic-rail'; room.appendChild(rail); }
+    rail.className = 'rb-mic-rail';
+    rail.innerHTML = `
+        <div class="rb-mic-sec"><div class="rb-mic-h">Mic</div>
+            <div class="rb-mic-btns">${micBtns}</div></div>
+        ${speakerBtns ? `<div class="rb-mic-sec"><div class="rb-mic-h">Speaker</div>
+            <div class="rb-mic-btns">${speakerBtns}</div></div>` : ''}
+        <div class="rb-mic-sec"><div class="rb-mic-h">Distance</div>
+            <div class="flex items-center gap-1 mb-1">${distSlider}</div>${angBtn}</div>`;
+    rbCabRoomPinMicRail();
+    if (!rbState._micRailResizeHooked) {
+        rbState._micRailResizeHooked = true;
+        window.addEventListener('resize', () => { try { rbCabRoomPinMicRail(); } catch (_) {} });
+    }
+    requestAnimationFrame(() => rail.classList.add('rb-swap-open'));
+}
+function rbCabRoomPinMicRail() {
+    const room = document.getElementById('rb-studio-room');
+    const rail = document.getElementById('rb-mic-rail');
+    if (!room || !rail) return;
+    const r = room.getBoundingClientRect(), topOff = 60;
+    rail.style.position = 'fixed'; rail.style.left = '0'; rail.style.right = 'auto';
+    rail.style.top = (r.top + topOff) + 'px'; rail.style.bottom = 'auto';
+    rail.style.height = Math.max(0, r.height - topOff) + 'px';
+}
+function rbCabRoomCloseMicRail() {
+    const rail = document.getElementById('rb-mic-rail');
+    if (rail) { rail.classList.remove('rb-swap-open'); setTimeout(() => { try { rail.remove(); } catch (_) {} }, 300); }
 }
 
 function rbCabRoomDraw(safeId, entry) {
@@ -11474,7 +11502,7 @@ window.rbCabRoomSetSpeaker = function (safeId, gear, sp) {
     const st = _rbCabRoom[safeId];
     if (!st) return;
     st.speaker = sp;
-    document.querySelectorAll(`#rb-cabroom-${safeId} .rb-cabroom-spk`).forEach(b => {
+    document.querySelectorAll('.rb-cabroom-spk').forEach(b => {
         const on = b.dataset.spk === sp;
         b.className = `rb-cabroom-spk px-2.5 py-1 rounded border text-xs ${on
             ? 'bg-amber-700/60 text-amber-100 border-amber-500/60 font-semibold'
@@ -11487,7 +11515,7 @@ window.rbCabRoomSetMic = function (safeId, gear, mic) {
     const st = _rbCabRoom[safeId];
     if (!st) return;
     st.mic = mic;
-    document.querySelectorAll(`#rb-cabroom-${safeId} .rb-cabroom-mic`).forEach(b => {
+    document.querySelectorAll('.rb-cabroom-mic').forEach(b => {
         const on = b.dataset.mic === mic;
         b.className = `rb-cabroom-mic px-2.5 py-1 rounded border text-xs ${on
             ? 'bg-violet-700/60 text-violet-100 border-violet-500/60 font-semibold'
@@ -11590,7 +11618,9 @@ window.rbStudioOpenCabRoom = function rbStudioOpenCabRoom() {
     // the catalog rail can pin to the right (mirrors amp: gear left, rail right).
     const ov = document.createElement('div');
     ov.id = 'rb-studio-cabroom';
-    ov.style.cssText = 'position:absolute; left:44%; top:52px; transform:translateX(-50%); z-index:60; width:560px; max-width:56%;';
+    // Centred between the two rails (mic left, catalog right), no panel chrome —
+    // the cab fills the middle like a focused amp/pedal.
+    ov.style.cssText = 'position:absolute; left:50%; top:8%; transform:translateX(-50%); z-index:60; width:min(46%,520px); height:74%;';
     ov.innerHTML = `<div class="relative"><div id="rb-cabroom-studio"></div></div>`;
     room.appendChild(ov);
     delete _rbCabRoom['studio'];   // estado fresco por apertura
@@ -11612,6 +11642,7 @@ window.rbStudioCloseCabFocus = function rbStudioCloseCabFocus() {
     try { rbStudioCloseSwap(); } catch (_) {}
     const bar = document.getElementById('rb-studio-focus-bar');
     if (bar) { bar.classList.remove('rb-focus-open'); setTimeout(() => { try { bar.remove(); } catch (_) {} }, 220); }
+    try { rbCabRoomCloseMicRail(); } catch (_) {}
     const ov = document.getElementById('rb-studio-cabroom');
     if (ov) ov.remove();
     delete _rbCabRoom['studio'];
