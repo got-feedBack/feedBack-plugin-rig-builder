@@ -11456,7 +11456,7 @@ window.rbStudioOpenCabRoom = function rbStudioOpenCabRoom() {
     // the catalog rail can pin to the right (mirrors amp: gear left, rail right).
     const ov = document.createElement('div');
     ov.id = 'rb-studio-cabroom';
-    ov.style.cssText = 'position:absolute; left:46%; top:16px; transform:translateX(-50%); z-index:60; width:560px; max-width:56%;';
+    ov.style.cssText = 'position:absolute; left:44%; top:52px; transform:translateX(-50%); z-index:60; width:560px; max-width:56%;';
     ov.innerHTML = `<div class="relative"><div id="rb-cabroom-studio"></div></div>`;
     room.appendChild(ov);
     delete _rbCabRoom['studio'];   // estado fresco por apertura
