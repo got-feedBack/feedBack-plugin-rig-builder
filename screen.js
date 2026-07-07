@@ -3922,6 +3922,24 @@ function rbCabArtFor(gear, uid) {
     const fn = RB_CAB_ART[key];
     return fn ? fn('c' + (uid == null ? 0 : uid)) : '';
 }
+// Art aspect (width/height of the SVG viewBox) per cab — used to letterbox the
+// art inside the Cab Room canvas AND to clamp the mic to the cab (not the gaps).
+const RB_CAB_ART_ASPECT = { 'Bass_Cab_AT1150BC': 460 / 480, 'Bass_Cab_AT810BC': 320 / 580 };
+function rbCabArtAspect(gear) {
+    if (!gear) return 0;
+    let k = gear;
+    if (!(k in RB_CAB_ART_ASPECT) && String(gear).includes('_')) k = String(gear).replace(/_[a-z0-9]{2}$/i, '');
+    return RB_CAB_ART_ASPECT[k] || 0;
+}
+// The [x,y,w,h] rect the art occupies inside the WxH canvas (preserveAspectRatio
+// meet). aspect 0 → full canvas.
+function rbCabArtRect(aspect) {
+    const W = RB_CABROOM_W, H = RB_CABROOM_H;
+    if (!aspect) return [0, 0, W, H];
+    let bw, bh;
+    if (aspect < W / H) { bh = H; bw = H * aspect; } else { bw = W; bh = W / aspect; }
+    return [(W - bw) / 2, (H - bh) / 2, bw, bh];
+}
 
 function rbStudioPieceStem(p) {
     const vp = rbEffVstPath(p);
@@ -11226,6 +11244,7 @@ function rbCabRoomBuild(g, entry, safeId, opts) {
     if (opts && opts.init) Object.assign(st, opts.init);
     const cabArt = rbCabArtFor(g.rs_gear);   // recreated cab SVG (or '')
     st._hasArt = !!cabArt;
+    st._artAspect = rbCabArtAspect(g.rs_gear);
     const mics = [['sm57', 'Dynamic 57'], ['md421', 'MD421'], ['km84', 'KM84'],
                   ['r121', 'Ribbon R121'], ['tlm103', 'Condenser'], ['tube', 'Tube']];
     const micBtns = mics.map(([k, lbl]) =>
@@ -11340,6 +11359,10 @@ function rbCabRoomDraw(safeId, entry) {
 function rbCabRoomMicPx(safeId, entry) {
     const st = _rbCabRoom[safeId];
     if (st.micPx) return st.micPx;
+    if (st._hasArt) {   // start the mic on the cab (upper-centre of the art rect)
+        const [ax, ay, aw, ah] = rbCabArtRect(st._artAspect);
+        return [ax + aw * (0.4 + st.x * 0.2), ay + ah * 0.42];
+    }
     const [cx, cy, r] = rbCabRoomLayout(entry)[0];
     return [cx + st.x * r, cy];
 }
@@ -11354,8 +11377,18 @@ function rbCabRoomPointer(e, safeId, gear, isDown) {
     const st = _rbCabRoom[safeId];
     if (!entry || !st) return;
     const rect = cv.getBoundingClientRect();
-    const px = (e.clientX - rect.left) * (RB_CABROOM_W / rect.width);
-    const py = (e.clientY - rect.top) * (RB_CABROOM_H / rect.height);
+    let px = (e.clientX - rect.left) * (RB_CABROOM_W / rect.width);
+    let py = (e.clientY - rect.top) * (RB_CABROOM_H / rect.height);
+    // Keep the mic INSIDE the cab: with recreated art the cab is letterboxed, so
+    // clamp to the art rect (not the whole canvas); else the whole canvas.
+    if (st._hasArt) {
+        const [ax, ay, aw, ah] = rbCabArtRect(st._artAspect), m = 16;
+        px = Math.min(Math.max(px, ax + m), ax + aw - m);
+        py = Math.min(Math.max(py, ay + m), ay + ah - m);
+    } else {
+        px = Math.min(Math.max(px, 20), RB_CABROOM_W - 20);
+        py = Math.min(Math.max(py, 20), RB_CABROOM_H - 20);
+    }
     // x = distancia radial al centro del parlante MÁS CERCANO / su radio
     let best = null;
     for (const [cx, cy, r] of rbCabRoomLayout(entry)) {
@@ -11363,8 +11396,7 @@ function rbCabRoomPointer(e, safeId, gear, isDown) {
         if (best === null || d < best) best = d;
     }
     st.x = Math.min(Math.max(best, 0.0), 1.0);
-    st.micPx = [Math.min(Math.max(px, 20), RB_CABROOM_W - 20),
-                Math.min(Math.max(py, 20), RB_CABROOM_H - 20)];
+    st.micPx = [px, py];
     st._dirty = true;
     rbCabRoomDraw(safeId, entry);
 }
