@@ -11158,6 +11158,9 @@ function rbCabRoomBuild(g, entry, safeId, opts) {
                     ${Object.entries(rbState.realCabCatalog.cabs).map(([k, e]) =>
                         `<option value="${k}" ${g.rs_gear.startsWith(k) ? 'selected' : ''}>${rbEsc(e.name || k)}</option>`).join('')}
                 </select>
+                ${(opts && opts.studio) ? `<button onclick="rbStudioCabRoomApply('${safeId}','${g.rs_gear}')"
+                        class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-3 py-1 rounded whitespace-nowrap"
+                        title="Guardar esta posición en el tono y recargar el monitor (1 recarga, ~2 s de silencio)">✓ Aplicar al tono</button>` : ''}
             </div>` : ''}
             <div class="flex items-center gap-2">
                 ${(opts && opts.studio) ? '' : `
@@ -11273,7 +11276,14 @@ async function rbCabRoomSynth(safeId, gear, assign) {
 
 window.rbCabRoomListen = async function (safeId, gear, restart) {
     const stx = _rbCabRoom[safeId];
-    if (stx && stx._studio) return rbStudioCabRoomApply(safeId, gear);
+    if (stx && stx._studio) {
+        // En el Studio, explorar NO recarga el tono (recargar re-instancia el
+        // amp VST → segundos de silencio, eterno con amps pesados como el
+        // Super-Sonic). El drag audiciona el CAB SOLO al instante; el botón
+        // "✓ Aplicar al tono" hace la recarga UNA vez, cuando tú decides.
+        const status = document.getElementById(`rb-cabroom-status-${safeId}`);
+        if (status) status.textContent = '🎧 escuchando cab solo — "Aplicar" para oírlo en el tono';
+    }
     try {
         const d = await rbCabRoomSynth(safeId, gear, false);
         const btnId = `rb-cabroom-play-${safeId}`;
@@ -11437,12 +11447,10 @@ async function rbStudioCabRoomApply(safeId, gear) {
     const info = st && st._studio;
     if (!info) return;
     const status = document.getElementById(`rb-cabroom-status-${safeId}`);
-    // DEBOUNCE: aplicar al tono recarga la cadena COMPLETA del monitor
-    // (re-instancia los VSTs del amp → ~1-2 s de silencio). Arrastres
-    // seguidos no deben encadenar recargas: se aplica UNA vez, 600 ms
-    // después del último cambio. (La cura real del gap es la API de
-    // hot-swap del IR en el engine — spec pendiente para el engine.)
-    if (status) status.textContent = '🎙 posición lista — aplicando…';
+    // Apply EXPLÍCITO (botón): recarga la cadena completa del monitor UNA
+    // vez (re-instancia el amp VST → ~2 s de silencio; más en amps pesados).
+    // La exploración con drags usa la audición rápida del cab solo.
+    if (status) status.textContent = '⏳ guardando y recargando el tono…';
     clearTimeout(st._applyT);
     st._applyT = setTimeout(async () => {
         try {
@@ -11461,7 +11469,7 @@ async function rbStudioCabRoomApply(safeId, gear) {
         } catch (e) {
             if (status) status.textContent = '✗ ' + (e.message || e);
         }
-    }, 600);
+    }, 0);
 }
 
 window.rbStudioCabSwap = async function (newBase) {
