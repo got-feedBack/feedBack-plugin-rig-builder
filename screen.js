@@ -14663,14 +14663,14 @@ function rbAdvPaletteRender() {
         .filter(g => !q || rbNorm(`${g.name || ''} ${g.rs_gear || ''} ${g.real_name || ''}`).includes(q));
     if (!items.length) { host.innerHTML = `<div class="rb-adv-pal-empty">No ${cat}s${q ? ' match' : ' yet'}.</div>`; return; }
     host.innerHTML = (cabLocked
-        ? `<div class="rb-adv-pal-empty" style="padding:6px 8px;line-height:1.35">Ya hay un cab en el grafo. Todos los amps comparten el mismo cab, así que solo se permite uno — bórralo para poner otro.</div>`
+        ? `<div class="rb-adv-pal-empty" style="padding:6px 8px;line-height:1.35">A cab is already on the graph. Every amp shares the same cab, so only one is allowed — delete it to add a different one.</div>`
         : '') + items.map(g => {
         const name = rbEsc(g.name || g.real_name || g.rs_gear || 'Gear');
         const img = rbAdvGearImg(g);   // VST face only — never the RS gear photo
         const thumb = img
             ? `<img src="${img}" alt="" draggable="false" onerror="this.style.display='none'">`
             : `<span class="rb-adv-pal-ph">${rbAdvGearInitials(g)}</span>`;
-        const lock = cabLocked ? ' style="opacity:.4;cursor:not-allowed;pointer-events:none" title="Solo se permite un cab"' : '';
+        const lock = cabLocked ? ' style="opacity:.4;cursor:not-allowed;pointer-events:none" title="Only one cab is allowed"' : '';
         return `<div class="rb-adv-pal-item" draggable="false"${lock}
                      data-adv-gear="${rbEsc(g.rs_gear)}" data-adv-cat="${cat}" data-adv-name="${name}">
                     <div class="rb-adv-pal-thumb">${thumb}</div>
@@ -15362,7 +15362,7 @@ function rbAdvAddGearNode(data, x, y) {
     const adv = rbAdvState();
     // Only ONE cab allowed — all amps share it (see rbAdvGearIsCab).
     if (rbAdvGearIsCab(data.cat, data.rs_gear) && rbAdvHasCab()) {
-        alert('Solo se permite un cab: todos los amps comparten el mismo cab.');
+        alert('Only one cab is allowed — every amp shares the same cab.');
         return null;
     }
     const id = Math.max(0, ...adv.nodes.map(n => n.id)) + 1;
