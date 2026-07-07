@@ -1804,12 +1804,28 @@ def _vst_display_stem(vst_path: str) -> str:
 _GEAR_DISPLAY_NAME_CACHE: dict | None = None
 
 
+def _cab_clone_name(rs_gear: str) -> str | None:
+    """Clone (parody) display name for a cab gear, from real_cab_catalog.json —
+    what we show in-app instead of the raw 'Cab_EN212C' code (cabs aren't in
+    rs_to_real, so they have no other name). Handles a mic-position suffix
+    (e.g. 'Cab_EN212C_5c') by falling back to the base gear."""
+    cat = _load_cached_json("real_cab_catalog.json") or {}
+    cabs = cat.get("cabs", cat)
+    if not isinstance(cabs, dict):
+        return None
+    e = cabs.get(rs_gear)
+    if not isinstance(e, dict) and "_" in rs_gear:
+        e = cabs.get(rs_gear.rsplit("_", 1)[0])
+    return e.get("name") if isinstance(e, dict) else None
+
+
 def _gear_display_name(rs_gear: str, fallback: str = "") -> str:
     """Parody display name for a gear — the copyright-free product name shown
     EVERYWHERE the plugin's name appears (chain piece, add-piece picker, …),
     not just the Gear catalog. Resolves rs_gear → its bundled-VST stem (via
-    rs_gear_to_vst.json) → vst_display_names.json. Falls back to `fallback`
-    (the real name) when the gear has no bundled VST or no curated name.
+    rs_gear_to_vst.json) → vst_display_names.json; for cabs → the clone name in
+    real_cab_catalog.json. Falls back to `fallback` (the real name) when the
+    gear has no bundled VST / clone / curated name.
     Cached for the process (no hot reload, so the map is stable)."""
     global _GEAR_DISPLAY_NAME_CACHE
     if _GEAR_DISPLAY_NAME_CACHE is None:
@@ -1827,7 +1843,7 @@ def _gear_display_name(rs_gear: str, fallback: str = "") -> str:
             if dn:
                 m[g] = dn
         _GEAR_DISPLAY_NAME_CACHE = m
-    return _GEAR_DISPLAY_NAME_CACHE.get(rs_gear) or fallback
+    return _GEAR_DISPLAY_NAME_CACHE.get(rs_gear) or _cab_clone_name(rs_gear) or fallback
 
 
 def _gear_bundled_vst(rs_gear: str) -> str | None:
