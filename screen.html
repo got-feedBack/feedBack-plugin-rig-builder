@@ -437,20 +437,31 @@
     .rb-swap-thumb img{ width:100%; height:100%; object-fit:contain; }
     .rb-swap-name{ flex:1 1 auto; min-width:0; font-size:12.5px; color:#e8eef8; font-weight:500; line-height:1.25;
         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    /* Studio Cab Room: LEFT mic rail — mirror of the right cab-catalog rail. */
-    .rb-mic-rail{ position:absolute; top:0; left:0; bottom:0; width:min(196px,22%); z-index:8;
-        display:flex; flex-direction:column; gap:16px; padding:16px 12px; overflow-y:auto;
+    /* Studio Cab Room: LEFT mic rail — same look/size as the right cab rail. */
+    .rb-mic-rail{ position:absolute; top:0; left:0; bottom:0; width:min(320px,30%); z-index:8;
+        display:flex; flex-direction:column; gap:12px; padding:16px 14px;
         background:linear-gradient(180deg, rgba(48,74,134,.15), rgba(30,52,100,.20));
         -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
         border-right:1px solid rgba(120,160,220,.14);
         transform:translateX(-100%); opacity:0;
         transition:transform .35s cubic-bezier(.33,0,.2,1), opacity .3s ease; }
     .rb-mic-rail.rb-swap-open{ transform:none; opacity:1; }
-    .rb-mic-rail::-webkit-scrollbar{ width:0; }
+    .rb-mic-list{ flex:1 1 auto; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:2px; }
+    .rb-mic-list::-webkit-scrollbar{ width:0; }
+    .rb-mic-foot{ flex:0 0 auto; display:flex; flex-direction:column; gap:10px;
+        border-top:1px solid rgba(120,160,220,.14); padding-top:12px; }
     .rb-mic-sec{ display:flex; flex-direction:column; gap:6px; }
     .rb-mic-h{ font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:#8a97b0; font-weight:700; }
-    .rb-mic-btns{ display:flex; flex-direction:column; gap:5px; }
-    .rb-mic-btns > button{ width:100%; text-align:left; }
+    .rb-mic-btns{ display:flex; flex-wrap:wrap; gap:5px; }
+    /* Studio cab centre: transparent, fills the middle at the cab's real aspect. */
+    .rb-cab-center{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+    .rb-cab-fit{ position:relative; max-width:100%; cursor:crosshair; touch-action:none; }
+    .rb-cab-fit > svg{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+    .rb-cabmic{ position:absolute; width:24px; height:24px; border-radius:50%; transform:translate(-50%,-50%);
+        background:#b39dff; border:2px solid #f0eaff; box-shadow:0 3px 11px rgba(0,0,0,.55); z-index:3; pointer-events:none; }
+    .rb-cabmic::after{ content:""; position:absolute; left:50%; top:64%; width:5px; height:40px; border-radius:3px;
+        background:#cbb9ff; transform:translateX(-50%); }
+    .rb-cabmic-ang{ background:#8f6fff; }
 
     /* floating control bar shown in focus mode */
     .rb-focus-bar2{ position:absolute; top:0; left:0; right:0; z-index:7; display:flex; align-items:center;

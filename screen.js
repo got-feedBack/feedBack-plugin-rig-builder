@@ -11276,9 +11276,17 @@ function rbCabRoomBuild(g, entry, safeId, opts) {
             ${speakerBtns ? `<div class="flex items-center gap-1.5 flex-wrap"><span class="text-[11px] text-gray-500">parlante:</span>${speakerBtns}</div>` : ''}
             <div class="flex items-center gap-2"><span class="text-[11px] text-gray-500 whitespace-nowrap">distancia</span>${distSlider}${angBtn}</div>`;
     if (isStudioLayout) {
-        // Studio: the cab fills the centre, no panel chrome — mic picker is a
-        // left rail (rbCabRoomBuildMicRail) and the cab catalog is the right rail.
-        box.innerHTML = `<div class="rb-cabroom-bigstage" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center"><div style="position:relative;width:100%">${stageInner}</div></div>`;
+        // Studio: the cab fills the centre, transparent, no panel chrome. The mic
+        // is a DOM element ON the cab (drag to move) sized to the cab's real
+        // aspect — tall cabs fill top-to-bottom, square cabs (1x15) sit smaller +
+        // centred. Mic picker is the left rail; the cab catalog is the right rail.
+        const _fx = (st._micFx != null ? st._micFx : 0.5), _fy = (st._micFy != null ? st._micFy : 0.44);
+        const _a = st._artAspect || 1, _fitH = _a < 0.85 ? 100 : 76;
+        box.innerHTML = `<div class="rb-cab-center">
+            <div class="rb-cab-fit" id="rb-cabfit-${safeId}" style="aspect-ratio:${_a};height:${_fitH}%">
+                ${cabArt}
+                <div class="rb-cabmic ${st.angle_deg ? 'rb-cabmic-ang' : ''}" id="rb-cabmic-${safeId}" style="left:${_fx * 100}%;top:${_fy * 100}%"></div>
+            </div></div>`;
     } else {
         box.innerHTML = `
         <div class="bg-dark-800/60 border border-gray-800/50 rounded-lg p-3 space-y-2">
@@ -11306,12 +11314,42 @@ function rbCabRoomBuild(g, entry, safeId, opts) {
             </div>
         </div>`;
     }
-    if (isStudioLayout) rbCabRoomBuildMicRail(safeId, g, entry, micBtns, speakerBtns, distSlider, angBtn);
+    if (isStudioLayout) {
+        rbCabRoomBuildMicRail(safeId, g, entry, micBtns, speakerBtns, distSlider, angBtn);
+        const fit = document.getElementById(`rb-cabfit-${safeId}`);
+        if (fit) {
+            fit.addEventListener('pointerdown', e => rbCabMicDrag(e, safeId, g.rs_gear, true));
+            fit.addEventListener('pointermove', e => rbCabMicDrag(e, safeId, g.rs_gear, false));
+            fit.addEventListener('pointerup', () => rbCabRoomDrop(safeId, g.rs_gear));
+        }
+        return;   // no canvas in the Studio layout
+    }
     const cv = box.querySelector('canvas');
+    if (!cv) return;
     cv.addEventListener('pointerdown', e => rbCabRoomPointer(e, safeId, g.rs_gear, true));
     cv.addEventListener('pointermove', e => rbCabRoomPointer(e, safeId, g.rs_gear, false));
     cv.addEventListener('pointerup', () => rbCabRoomDrop(safeId, g.rs_gear));
     rbCabRoomDraw(safeId, entry);
+}
+
+// DOM mic drag for the Studio cab (aspect-correct, no canvas). fx/fy are 0..1
+// over the cab; st.x maps the horizontal offset from centre to the cone param.
+function rbCabMicDrag(e, safeId, gear, isDown) {
+    if (!isDown && e.buttons !== 1) return;
+    const fit = e.currentTarget;
+    fit.setPointerCapture?.(e.pointerId);
+    const st = _rbCabRoom[safeId];
+    if (!st) return;
+    const rect = fit.getBoundingClientRect();
+    let fx = (e.clientX - rect.left) / rect.width;
+    let fy = (e.clientY - rect.top) / rect.height;
+    fx = Math.min(Math.max(fx, 0.05), 0.95);
+    fy = Math.min(Math.max(fy, 0.05), 0.95);
+    st._micFx = fx; st._micFy = fy;
+    st.x = Math.min(1, Math.abs(fx - 0.5) * 2);   // 0 at centre cone, 1 at edge
+    const mic = document.getElementById(`rb-cabmic-${safeId}`);
+    if (mic) { mic.style.left = (fx * 100) + '%'; mic.style.top = (fy * 100) + '%'; }
+    st._dirty = true;
 }
 
 // Studio-only LEFT rail: mic picker + speaker + distance, mirroring the cab
@@ -11323,13 +11361,22 @@ function rbCabRoomBuildMicRail(safeId, g, entry, micBtns, speakerBtns, distSlide
     let rail = document.getElementById('rb-mic-rail');
     if (!rail) { rail = document.createElement('div'); rail.id = 'rb-mic-rail'; room.appendChild(rail); }
     rail.className = 'rb-mic-rail';
+    const st = _rbCabRoom[safeId];
+    const MICS = [['sm57', 'Dynamic 57'], ['md421', 'MD421'], ['km84', 'KM84'],
+                  ['r121', 'Ribbon R121'], ['tlm103', 'Condenser'], ['tube', 'Tube']];
+    // Same item shape as the cab catalog: thumb (mic photo later) + name.
+    const items = MICS.map(([k, lbl]) =>
+        `<div class="rb-swap-item rb-cabroom-mic ${st.mic === k ? 'rb-swap-current' : ''}" data-mic="${k}"
+              onclick="rbCabRoomSetMic('${safeId}','${g.rs_gear}','${k}')" title="${lbl}">
+            <span class="rb-swap-thumb"><span style="font-size:24px">🎙</span></span>
+            <span class="rb-swap-name">${lbl}</span></div>`).join('');
     rail.innerHTML = `
-        <div class="rb-mic-sec"><div class="rb-mic-h">Mic</div>
-            <div class="rb-mic-btns">${micBtns}</div></div>
-        ${speakerBtns ? `<div class="rb-mic-sec"><div class="rb-mic-h">Speaker</div>
-            <div class="rb-mic-btns">${speakerBtns}</div></div>` : ''}
-        <div class="rb-mic-sec"><div class="rb-mic-h">Distance</div>
-            <div class="flex items-center gap-1 mb-1">${distSlider}</div>${angBtn}</div>`;
+        <div class="rb-swap-head" style="justify-content:center"><span class="rb-mic-h">Microphone</span></div>
+        <div class="rb-mic-list">${items}</div>
+        <div class="rb-mic-foot">
+            ${speakerBtns ? `<div class="rb-mic-sec"><div class="rb-mic-h">Speaker</div><div class="rb-mic-btns">${speakerBtns}</div></div>` : ''}
+            <div class="rb-mic-sec"><div class="rb-mic-h">Distance</div><div class="flex items-center gap-1">${distSlider}</div>${angBtn}</div>
+        </div>`;
     rbCabRoomPinMicRail();
     if (!rbState._micRailResizeHooked) {
         rbState._micRailResizeHooked = true;
@@ -11342,7 +11389,7 @@ function rbCabRoomPinMicRail() {
     const rail = document.getElementById('rb-mic-rail');
     if (!room || !rail) return;
     const r = room.getBoundingClientRect(), topOff = 60;
-    rail.style.position = 'fixed'; rail.style.left = '0'; rail.style.right = 'auto';
+    rail.style.position = 'fixed'; rail.style.left = Math.max(0, r.left) + 'px'; rail.style.right = 'auto';
     rail.style.top = (r.top + topOff) + 'px'; rail.style.bottom = 'auto';
     rail.style.height = Math.max(0, r.height - topOff) + 'px';
 }
@@ -11392,8 +11439,6 @@ function rbCabRoomDraw(safeId, entry) {
     g.beginPath(); g.arc(mx, my, 12 * sc, 0, 7);
     g.fillStyle = st.angle_deg ? '#8f6fff' : '#b39dff'; g.fill();
     g.strokeStyle = '#f0eaff'; g.lineWidth = 2; g.stroke();
-    g.fillStyle = 'rgba(235,228,255,.9)'; g.font = '12px sans-serif';
-    g.fillText(`${st.mic} · x=${st.x.toFixed(2)} · ${st.dist_in}"${st.angle_deg ? ' · 45°' : ''}`, 24, H - 26);
 }
 
 function rbCabRoomMicPx(safeId, entry) {
@@ -11517,9 +11562,13 @@ window.rbCabRoomSetMic = function (safeId, gear, mic) {
     st.mic = mic;
     document.querySelectorAll('.rb-cabroom-mic').forEach(b => {
         const on = b.dataset.mic === mic;
-        b.className = `rb-cabroom-mic px-2.5 py-1 rounded border text-xs ${on
-            ? 'bg-violet-700/60 text-violet-100 border-violet-500/60 font-semibold'
-            : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-violet-900/40'}`;
+        if (b.classList.contains('rb-swap-item')) {   // Studio catalog item
+            b.classList.toggle('rb-swap-current', on);
+        } else {                                        // Gear/node-editor button
+            b.className = `rb-cabroom-mic px-2.5 py-1 rounded border text-xs ${on
+                ? 'bg-violet-700/60 text-violet-100 border-violet-500/60 font-semibold'
+                : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-violet-900/40'}`;
+        }
     });
     rbCabRoomDraw(safeId, rbCabRoomEntry(gear));
     rbCabRoomListen(safeId, gear, true);
@@ -11541,9 +11590,11 @@ window.rbCabRoomToggleAngle = function (safeId, gear) {
     if (!st) return;
     st.angle_deg = st.angle_deg ? 0 : 45;
     const b = document.getElementById(`rb-cabroom-ang-${safeId}`);
-    if (b) b.className = `text-xs px-2.5 py-1 rounded border ${st.angle_deg
+    if (b) b.className = `text-xs px-2 py-1 rounded border ${st.angle_deg
         ? 'bg-violet-700/60 text-violet-100 border-violet-500/60'
         : 'bg-dark-800 text-gray-400 border-gray-700'}`;
+    const dm = document.getElementById(`rb-cabmic-${safeId}`);
+    if (dm) dm.classList.toggle('rb-cabmic-ang', !!st.angle_deg);
     rbCabRoomDraw(safeId, rbCabRoomEntry(gear));
     rbCabRoomListen(safeId, gear, true);
 };
