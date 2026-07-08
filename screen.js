@@ -17151,8 +17151,11 @@ async function rbAdvOnPanInput(id, val) {
 // the chain behaves exactly as before. Feature-detected: a no-op on an engine
 // without setPan/setBranch (the currently shipped build), so nothing breaks there.
 // Diagnostics relay: renderer console isn't visible from a terminal run, so
-// mirror routing decisions to the backend (prints as [python:stdout] [rb-debug]).
+// Dev-only stereo/routing trace, mirrored to the backend relay ([python:stdout]
+// [rb-debug]). OFF by default — enable with `window.RB_DEBUG = true` or
+// localStorage 'rbDebug' when diagnosing parallel/pan routing.
 function rbDebugLog(msg) {
+    try { if (!(window.RB_DEBUG || localStorage.getItem('rbDebug'))) return; } catch (_) { return; }
     try { console.log('[rb-stereo]', msg); } catch (_) {}
     try {
         fetch('/api/plugins/rig_builder/debug_log', {
