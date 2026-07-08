@@ -4762,27 +4762,22 @@ function rbStudioRoomMicSetup(cabPiece) {
 let _rbRoomStandN = 0;
 function rbStudioRoomMicStandHtml(s) {
     const mx = +(s.fx * 100).toFixed(1), my = +(s.fy * 100).toFixed(1);
-    const side = s.fx < 0.55 ? 1 : -1;                       // base on the side away from the mic
-    const bx = Math.min(88, Math.max(12, mx + side * 30));   // pole/base x
-    const pivotY = Math.min(98, Math.max(12, my - 10));      // boom pivot ≈ just above the mic
-    const cwx = +(bx + (bx - mx) * 0.26).toFixed(1), cwy = +(pivotY + (pivotY - my) * 0.26).toFixed(1);
-    const theta = +(Math.atan2(bx - mx, -(pivotY - my)) * 180 / Math.PI).toFixed(1);
+    const side = s.fx < 0.55 ? 1 : -1;                       // pole on the side away from the mic
+    const bx = Math.min(88, Math.max(12, mx + side * 26));   // pole/base x
+    const pivotY = Math.min(96, Math.max(8, my - 12));       // boom pivot ≈ just above the mic
     const uid = 'rs' + (++_rbRoomStandN);
+    // Two strokes per metal part (dark outline + chrome) so it reads on any grille.
+    const seg = (x1, y1, x2, y2, w) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#0d0e10" stroke-width="${w + 1.6}" stroke-linecap="round"/>`
+        + `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="url(#${uid})" stroke-width="${w}" stroke-linecap="round"/>`;
     const stand = `<svg class="rb-room-stand" viewBox="0 0 100 122" preserveAspectRatio="none" aria-hidden="true"><defs>`
         + `<linearGradient id="${uid}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#40454c"/><stop offset=".5" stop-color="#c2c8d0"/><stop offset="1" stop-color="#3a3e44"/></linearGradient></defs>`
-        + `<ellipse cx="${bx}" cy="116" rx="15" ry="2.8" fill="#000" opacity=".38"/>`
-        + `<path d="M${bx - 12} 116 L${bx} 109 L${bx + 12} 116" fill="none" stroke="#0d0e10" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>`
-        + `<path d="M${bx - 12} 116 L${bx} 109 L${bx + 12} 116" fill="none" stroke="url(#${uid})" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`
-        + `<ellipse cx="${bx}" cy="110.5" rx="5.4" ry="2" fill="url(#${uid})" stroke="#0d0e10" stroke-width=".6"/>`
-        + `<line x1="${bx}" y1="110" x2="${bx}" y2="${pivotY}" stroke="#0d0e10" stroke-width="4.6"/>`
-        + `<line x1="${bx}" y1="110" x2="${bx}" y2="${pivotY}" stroke="url(#${uid})" stroke-width="3"/>`
-        + `<line x1="${bx}" y1="${pivotY}" x2="${cwx}" y2="${cwy}" stroke="#0d0e10" stroke-width="4"/>`
-        + `<line x1="${bx}" y1="${pivotY}" x2="${cwx}" y2="${cwy}" stroke="url(#${uid})" stroke-width="2.6"/>`
-        + `<circle cx="${cwx}" cy="${cwy}" r="4.2" fill="#1c1d20" stroke="#c2c8d0" stroke-width="1"/>`
-        + `<line x1="${bx}" y1="${pivotY}" x2="${mx}" y2="${my}" stroke="#0d0e10" stroke-width="4"/>`
-        + `<line x1="${bx}" y1="${pivotY}" x2="${mx}" y2="${my}" stroke="url(#${uid})" stroke-width="2.6"/>`
-        + `<circle cx="${bx}" cy="${pivotY}" r="3" fill="#17181b" stroke="#c2c8d0" stroke-width="1"/></svg>`;
-    const mic = `<div class="rb-room-mic" style="left:${mx}%;top:${my}%;transform:translate(-50%,-8%) rotate(${theta}deg)">${rbMicOnCabHtml(s.mic, uid)}</div>`;
+        + `<ellipse cx="${bx}" cy="116" rx="14" ry="2.6" fill="#000" opacity=".38"/>`
+        + `<path d="M${bx - 12} 116 L${bx} 109 L${bx + 12} 116" fill="none" stroke="#0d0e10" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>`
+        + `<path d="M${bx - 12} 116 L${bx} 109 L${bx + 12} 116" fill="none" stroke="url(#${uid})" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`
+        + seg(bx, 110, bx, pivotY, 3)                         // vertical pole
+        + seg(bx, pivotY, mx, my, 2.6)                        // boom arm → mic capsule
+        + `<circle cx="${bx}" cy="${pivotY}" r="1.8" fill="url(#${uid})" stroke="#0d0e10" stroke-width=".6"/></svg>`;   // pivot clutch (small)
+    const mic = `<div class="rb-room-mic${s.angle ? ' rb-cabmic-ang' : ''}" style="left:${mx}%;top:${my}%">${rbMicOnCabHtml(s.mic, uid)}</div>`;
     return stand + mic;
 }
 
