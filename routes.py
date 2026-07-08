@@ -4543,6 +4543,37 @@ def _ir_rms_makeup(path: Path) -> float:
     return max(1.0, min(_IR_MAKEUP_MAX, _IR_REF_L2 / l2))
 
 
+# Per-cab PERCEPTUAL loudness makeup — the accurate version of the L2 match above.
+# data/cab_loudness_makeup.json holds a measured BS.1770-4 (K-weighted) loudness
+# per cab (pink-noise reference convolved through each cab's IRs, target = median),
+# because L2 (broadband) badly under-reads the spread: the real spread is ~21 dB
+# vs ~7 dB by L2 (full-range hi-fi/PA cabs sit far quieter perceptually than a
+# mid-forward guitar 4x12). Keyed by the IR folder name = clone_slug, which at
+# runtime is Path(ir_path).parent.name. Regenerate with tools/measure_cab_loudness.py.
+_cab_loud_makeup_tbl: dict | None = None
+
+
+def _load_cab_loudness_makeup() -> dict:
+    global _cab_loud_makeup_tbl
+    if _cab_loud_makeup_tbl is None:
+        try:
+            p = _data_path("cab_loudness_makeup.json")
+            _cab_loud_makeup_tbl = (json.loads(p.read_text(encoding="utf-8")).get("makeup", {})
+                                    if p.exists() else {})
+        except Exception:
+            _cab_loud_makeup_tbl = {}
+    return _cab_loud_makeup_tbl
+
+
+def _cab_loudness_makeup(path: Path) -> float:
+    """Per-cab measured-LUFS makeup; falls back to the broadband L2 match when the
+    cab isn't in the table (e.g. a freshly synthesized custom mic-position IR)."""
+    f = _load_cab_loudness_makeup().get(path.parent.name)
+    if isinstance(f, (int, float)) and f > 0:
+        return float(f)
+    return _ir_rms_makeup(path)
+
+
 # ── DI + Cab blend for bass cabs (the "70% DI / 30% cab" feature) ─────────────
 # Real bass is amplified/recorded mostly via DI with a little mic'd cab. The
 # native engine is series-only (no parallel dry/wet on an IR), so the blend is
@@ -4746,15 +4777,15 @@ def _ir_stage(ir_path, *, bypassed, gain=1.0,
     # chain-gain cab makeup neutral here — else NAM-amp chains would double it.
     p = Path(ir_path)
     if _is_rocksmith_ir_file(p) or _is_synth_cab_ir(p):
-        # Per-cab RMS makeup — BAKE IT INTO THE ENGINE GAIN so every cab imparts the
-        # same output RMS and arrives at the final leveler MATCHED. It used to be
-        # surfaced only as `cab_rms_makeup` and folded into the global JS chain bus —
-        # a single last-wins value that couldn't equalize per-tone or per-song, so
-        # the flat _RS_IR_MAKEUP left the ~8 dB L2 spread for the AGC to chase (which
-        # it can't do per song → songs came out at different volumes). Now every cab
-        # stage carries its own makeup, correct even in the deduped mega-chain where
-        # each tone has its own cab stage. DI+cab blends already bake their makeup.
-        cab_mk = 1.0 if di_cab_blend else _ir_rms_makeup(p)
+        # Per-cab loudness makeup — BAKE IT INTO THE ENGINE GAIN so every cab lands
+        # at the final leveler MATCHED. Uses the measured BS.1770 table (real spread
+        # ~21 dB) with an L2 fallback. It used to be surfaced only as `cab_rms_makeup`
+        # and folded into the global JS chain bus — a single last-wins value that
+        # couldn't equalize per-tone or per-song, so the flat _RS_IR_MAKEUP left the
+        # spread for the AGC to chase (which it can't do per song → songs came out at
+        # different volumes). Now every cab stage carries its own makeup, correct even
+        # in the deduped mega-chain. DI+cab blends already bake their own makeup.
+        cab_mk = 1.0 if di_cab_blend else _cab_loudness_makeup(p)
         gain = gain * cab_mk
         # Field kept for the UI but neutralised so the JS chain-bus fold is a no-op
         # (the makeup now lives in the engine gain above — never applied twice).
