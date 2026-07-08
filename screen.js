@@ -12765,6 +12765,16 @@ window.rbStudioOpenCabRoom = function rbStudioOpenCabRoom() {
     if (!room) return;
     // Toggle: clicking the cab again (or its close) exits the cab focus.
     if (document.getElementById('rb-studio-cabroom')) { rbStudioCloseCabFocus(); return; }
+    // The catalog may not have loaded yet — the initial fetch can fail while a
+    // factory-reset re-download keeps the backend busy, and it isn't retried. Load
+    // it ON DEMAND and reopen instead of dead-ending on the "no cargado" alert.
+    if (!rbState.realCabCatalog) {
+        rbLoadRealCabCatalog().finally(() => {
+            if (rbState.realCabCatalog) rbStudioOpenCabRoom();
+            else alert('Catálogo Real Cab no cargó — reintentá en unos segundos.');
+        });
+        return;
+    }
     const v = rbState.studioView || { source: 'default' };
     const isSong = v.source === 'song';
     // Edit the cab piece of WHATEVER tone the Studio shows (song / default /

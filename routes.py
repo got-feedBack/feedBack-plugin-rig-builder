@@ -6580,21 +6580,28 @@ def _auto_download_for_song(filename: str, path: Path) -> dict:
                 # variant we need; without that, picking a "clean" for
                 # tone A would mean tone B's "dist" check also matches
                 # the clean and skips the dist download.
-                if amp_variant:
-                    existing = conn.execute(
-                        "SELECT kind, file FROM preset_pieces "
-                        "WHERE rs_gear_type = ? AND tone3000_id = ? "
-                        "  AND file IS NOT NULL AND file != '' "
-                        "ORDER BY id DESC LIMIT 1",
-                        (rs_type, amp_variant["tone3000_id"]),
-                    ).fetchone()
-                else:
-                    existing = conn.execute(
-                        "SELECT kind, file FROM preset_pieces "
-                        "WHERE rs_gear_type = ? AND file IS NOT NULL AND file != '' "
-                        "ORDER BY id DESC LIMIT 1",
-                        (rs_type,),
-                    ).fetchone()
+                # Cabs NEVER reuse a stale DB assignment — after prior sessions that
+                # can be a random other/*.wav tone3000 download that survived, which
+                # is what made factory reset "reuse existing → other/…wav" instead of
+                # the rig-builder default. They resolve to the game IR / OUR bundled
+                # cab IR below, so skip the reuse query for cabs entirely.
+                existing = None
+                if category != "cab":
+                    if amp_variant:
+                        existing = conn.execute(
+                            "SELECT kind, file FROM preset_pieces "
+                            "WHERE rs_gear_type = ? AND tone3000_id = ? "
+                            "  AND file IS NOT NULL AND file != '' "
+                            "ORDER BY id DESC LIMIT 1",
+                            (rs_type, amp_variant["tone3000_id"]),
+                        ).fetchone()
+                    else:
+                        existing = conn.execute(
+                            "SELECT kind, file FROM preset_pieces "
+                            "WHERE rs_gear_type = ? AND file IS NOT NULL AND file != '' "
+                            "ORDER BY id DESC LIMIT 1",
+                            (rs_type,),
+                        ).fetchone()
                 if existing:
                     # Trust the reused row only if the file still exists on
                     # disk (mirrors _existing_assignment_for_gear) — a purged
