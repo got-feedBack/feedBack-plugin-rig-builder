@@ -1354,7 +1354,7 @@ const RB_API = '/api/plugins/rig_builder';
 const RB_PLUGIN_ID = 'rig_builder';
 const RB_EFFECTS_PARTICIPANT_ID = 'rig_builder.effects';
 const RB_EFFECTS_ROUTE_KEY = 'desktop-main';
-const RB_EFFECTS_PLAN_SCHEMA = 'slopsmith.audio_effects.chain_plan.v1';
+const RB_EFFECTS_PLAN_SCHEMA = 'feedBack.audio_effects.chain_plan.v1';
 const RB_JOBS_PROVIDER_ID = 'rig_builder.jobs';
 const RB_PLAYBACK_OBSERVER_ID = 'rig_builder.playback-observer';
 
