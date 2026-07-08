@@ -4527,8 +4527,15 @@ function rbCabArtCanonKey(gear) {
     const stripped = String(gear).replace(/_[a-z0-9]{2}$/i, '');
     if (RB_CAB_ART[stripped]) return stripped;
     if (!_rbCabArtLc) { _rbCabArtLc = {}; for (const k in RB_CAB_ART) _rbCabArtLc[k.toLowerCase()] = k; }
-    return _rbCabArtLc[String(gear).toLowerCase()] || _rbCabArtLc[stripped.toLowerCase()] || null;
+    const hit = _rbCabArtLc[String(gear).toLowerCase()] || _rbCabArtLc[stripped.toLowerCase()];
+    if (hit) return hit;
+    // Generic RS placeholder cab ("Cabinets") — a tone that never got promoted to
+    // a specific modeled cab. Show a neutral default so the Studio cab face / Cab
+    // Room aren't blank (the audio side maps it to the same default IR).
+    if (/^cabinets?$/i.test(String(gear))) return RB_DEFAULT_CAB_GEAR;
+    return null;
 }
+const RB_DEFAULT_CAB_GEAR = 'Cab_EN212C';   // neutral fallback for generic/unmapped cabs
 function rbCabArtFor(gear, uid) {
     const key = rbCabArtCanonKey(gear);
     return key ? RB_CAB_ART[key]('c' + (uid == null ? 0 : uid)) : '';

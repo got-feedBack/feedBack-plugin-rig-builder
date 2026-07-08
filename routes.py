@@ -2386,6 +2386,12 @@ def _apply_cab_override(ir_path):
     return ir_path
 
 
+# Neutral default cab for generic/unmapped cab gears (the RS "Cabinets" placeholder,
+# or any cab not in rb_cab_overrides). Matches the frontend RB_DEFAULT_CAB_GEAR so
+# the audio IR and the shown cab art agree.
+_DEFAULT_CAB_GEAR = "Cab_EN212C"
+
+
 def _override_ir_for_cab(rs_gear: str | None, irs_root) -> str | None:
     """Resolve OUR shipped override IR (rb_cab_overrides) for a cab GEAR that has
     no assigned IR file — so a song whose cabinet seeded to kind='none' (the RS
@@ -2405,6 +2411,12 @@ def _override_ir_for_cab(rs_gear: str | None, irs_root) -> str | None:
         base = re.sub(r"_[a-z0-9]{2}$", "", str(rs_gear), flags=re.I)   # drop a mic-pos suffix
         if base != rs_gear:
             ovr = overrides.get(base)
+    if not isinstance(ovr, dict):
+        # Generic/unmapped cab (e.g. the RS "Cabinets" placeholder that never got
+        # promoted to a specific modeled cab) — fall back to a neutral DEFAULT cab
+        # so it still gets a real, loudness-matched bundled IR (and cab art in the
+        # UI) instead of a thin/cab-less sound or a stale other/*.wav download.
+        ovr = overrides.get(_DEFAULT_CAB_GEAR)
     if not isinstance(ovr, dict):
         return None
     ir_dir = ovr.get("ir_dir")
@@ -8694,7 +8706,11 @@ def setup(app, context):
         # One cab IR at the tail (prefer the cabinet slot). Indexed in the
         # original `rows` tuples — column order: slot, kind, file, rs_gear,
         # bypassed, slot_order, vst_path, vst_format, vst_state, params_json.
-        ir_rows = [(r[0], r[2], r[3], bool(r[4]), r[1]) for r in rows if r[1] in ("ir", "rs_ir") and r[2]]
+        # Exclude the generic "Cabinets" placeholder (often carrying a stale
+        # other/*.wav download) so it drops to the _override_ir_for_cab default
+        # below — a real, loudness-matched bundled cab instead of a thin/quiet IR.
+        ir_rows = [(r[0], r[2], r[3], bool(r[4]), r[1]) for r in rows
+                   if r[1] in ("ir", "rs_ir") and r[2] and r[3] != "Cabinets"]
         ir_pick = next((row for row in ir_rows if row[0] == "cabinet"), None)
         if ir_pick is None and ir_rows:
             ir_pick = ir_rows[0]
@@ -8918,9 +8934,11 @@ def setup(app, context):
                         if _ts:
                             tone_stages.append(_ts)
 
-            # Cab IR at the tail of the tone (prefer cabinet slot).
+            # Cab IR at the tail of the tone (prefer cabinet slot). Exclude the
+            # generic "Cabinets" placeholder (may carry a stale other/*.wav) so it
+            # drops to the _override_ir_for_cab default — a real, matched bundled cab.
             ir_rows = [(r[0], r[2], r[3], bool(r[4]), r[1]) for r in rows
-                       if r[1] in ("ir", "rs_ir") and r[2]]
+                       if r[1] in ("ir", "rs_ir") and r[2] and r[3] != "Cabinets"]
             ir_pick = next((row for row in ir_rows if row[0] == "cabinet"), None)
             if ir_pick is None and ir_rows:
                 ir_pick = ir_rows[0]
