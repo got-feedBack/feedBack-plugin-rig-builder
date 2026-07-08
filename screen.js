@@ -5928,7 +5928,10 @@ function rbStudioRenderSwapList(search) {
         const cabs = (rbState.realCabCatalog && rbState.realCabCatalog.cabs) || {};
         items = Object.entries(cabs)
             .map(([rs_gear, e]) => ({ rs_gear, real_name: e.name || rs_gear }))
-            .filter(g => !q || rbNorm(g.real_name + ' ' + g.rs_gear).includes(q));
+            .filter(g => !q || rbNorm(g.real_name + ' ' + g.rs_gear).includes(q))
+            // Alphabetical by display name (the catalog's own order is by type —
+            // guitar then bass; the rail should read A→Z like the Gear list).
+            .sort((a, b) => a.real_name.localeCompare(b.real_name, undefined, { numeric: true, sensitivity: 'base' }));
     } else {
         items = ((rbState.gearCatalog && rbState.gearCatalog[kind]) || [])
             .filter(g => rbGearHasVst(g) && (!q || rbGearSearchHaystack(g).includes(q)));
