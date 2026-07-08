@@ -4464,11 +4464,13 @@ def _amp_trim_stage(trim_mult: float, *, tone_key=None) -> dict | None:
 # output RMS it imparts (output_RMS = input_RMS × ‖IR‖₂ for broadband input) —
 # is exactly its L2 norm. After the ±1.0 clip-safe peak cap, IRs no longer all
 # share an L2 (the peakiest get pulled down ~8 dB), so different cabs/mics play
-# at different loudness. We compute each RS cab IR's L2 and surface a makeup
-# factor (target_L2 / L2) on the stage dict; the engine ignores per-IR gain, so
-# screen.js (rbChainGainTargetFor) folds it into the chain gain. Result: every
-# cab imparts the same output RMS — the same loudness-match the NAM loudness
-# normalizer (`_nam_normalized_output_level`) gives amps/pedals.
+# at different loudness. We compute each RS cab IR's L2 and a makeup factor
+# (target_L2 / L2); it is now BAKED INTO THE ENGINE IR gain in `_ir_stage` (the
+# IRLoader applies stage `gain` via buffer.applyGain, confirmed in the engine —
+# an earlier note here that "the engine ignores per-IR gain" was stale). This
+# makes every cab impart the same output RMS PER STAGE — correct per-tone and
+# per-song — instead of the old global last-wins chain-bus fold in screen.js,
+# matching amps/pedals' loudness normalization (`_nam_normalized_output_level`).
 _IR_REF_L2 = 2.4          # common broadband gain (matches tone3000 cab IRs)
 _IR_MAKEUP_MAX = 2.818    # +9 dB cap — covers the ~8 dB L2 spread with headroom
 _ir_l2_cache: dict[tuple, float | None] = {}
@@ -4744,7 +4746,19 @@ def _ir_stage(ir_path, *, bypassed, gain=1.0,
     # chain-gain cab makeup neutral here — else NAM-amp chains would double it.
     p = Path(ir_path)
     if _is_rocksmith_ir_file(p) or _is_synth_cab_ir(p):
-        stage["cab_rms_makeup"] = round(1.0 if di_cab_blend else _ir_rms_makeup(p), 4)
+        # Per-cab RMS makeup — BAKE IT INTO THE ENGINE GAIN so every cab imparts the
+        # same output RMS and arrives at the final leveler MATCHED. It used to be
+        # surfaced only as `cab_rms_makeup` and folded into the global JS chain bus —
+        # a single last-wins value that couldn't equalize per-tone or per-song, so
+        # the flat _RS_IR_MAKEUP left the ~8 dB L2 spread for the AGC to chase (which
+        # it can't do per song → songs came out at different volumes). Now every cab
+        # stage carries its own makeup, correct even in the deduped mega-chain where
+        # each tone has its own cab stage. DI+cab blends already bake their makeup.
+        cab_mk = 1.0 if di_cab_blend else _ir_rms_makeup(p)
+        gain = gain * cab_mk
+        # Field kept for the UI but neutralised so the JS chain-bus fold is a no-op
+        # (the makeup now lives in the engine gain above — never applied twice).
+        stage["cab_rms_makeup"] = 1.0
     stage["state"] = _state_b64({"irPath": str(ir_path), "gain": gain})
     return stage
 
