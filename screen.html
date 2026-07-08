@@ -460,6 +460,8 @@
     .rb-cab-center{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
     .rb-cab-fit{ position:relative; max-width:100%; cursor:crosshair; touch-action:none; }
     .rb-cab-fit > svg{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+    /* Speaker-cone silhouettes faintly visible through the grille — never block the mic drag. */
+    .rb-cab-spk{ pointer-events:none; z-index:2; }
     .rb-cabmic{ position:absolute; width:24px; height:24px; border-radius:50%; transform:translate(-50%,-50%);
         background:#b39dff; border:2px solid #f0eaff; box-shadow:0 3px 11px rgba(0,0,0,.55); z-index:3; pointer-events:none; }
     .rb-cabmic::after{ content:""; position:absolute; left:50%; top:64%; width:5px; height:40px; border-radius:3px;

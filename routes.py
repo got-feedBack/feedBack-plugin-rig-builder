@@ -2386,6 +2386,43 @@ def _apply_cab_override(ir_path):
     return ir_path
 
 
+def _override_ir_for_cab(rs_gear: str | None, irs_root) -> str | None:
+    """Resolve OUR shipped override IR (rb_cab_overrides) for a cab GEAR that has
+    no assigned IR file — so a song whose cabinet seeded to kind='none' (the RS
+    game IR doesn't ship and nothing was downloaded) still gets a real cab at
+    playback instead of dropping to a thin, cab-less sound.
+
+    Returns a relpath under nam_irs (e.g. "cabs/<Clone>/dyn_cone.wav") that exists
+    on disk, or None. Uses a neutral default mic position (Dynamic Cone); the user
+    can still fine-tune the exact mic in the Cab Room, which persists its own IR."""
+    if not rs_gear or irs_root is None:
+        return None
+    overrides = _load_cab_overrides()
+    if not overrides:
+        return None
+    ovr = overrides.get(rs_gear)
+    if not isinstance(ovr, dict):
+        base = re.sub(r"_[a-z0-9]{2}$", "", str(rs_gear), flags=re.I)   # drop a mic-pos suffix
+        if base != rs_gear:
+            ovr = overrides.get(base)
+    if not isinstance(ovr, dict):
+        return None
+    ir_dir = ovr.get("ir_dir")
+    if not ir_dir:
+        return None
+    # Prefer a close dynamic mic; fall back to a condenser, then any variant.
+    for rel in (f"{ir_dir}/dyn_cone.wav", f"{ir_dir}/cond_cone.wav"):
+        p = _safe_child(irs_root, rel)
+        if p and p.exists():
+            return rel
+    cab_dir = Path(irs_root) / ir_dir
+    if cab_dir.is_dir():
+        wavs = sorted(cab_dir.glob("*.wav"))
+        if wavs:
+            return f"{ir_dir}/{wavs[0].name}"
+    return None
+
+
 def _install_bundled_cab_irs() -> None:
     """Install OUR bundled, distributable cab IRs into <config>/nam_irs/cabs/.
 
@@ -8600,6 +8637,20 @@ def setup(app, context):
                                        gain=_ir_stage_gain(ir_kind, ir_path)))
             else:
                 missing.append(ir_file)
+        else:
+            # No assigned cab IR (cabinet seeded to kind='none') — fall back to
+            # OUR shipped override IR so the cab loads without needing a Cab Room
+            # visit (mirrors the mega-chain highway fix).
+            cab_row = next((r for r in rows if r[0] == "cabinet" and r[3]), None) \
+                or next((r for r in rows if _gear_category(r[3]) == "cab" and r[3]), None)
+            if cab_row:
+                ir_rel = _override_ir_for_cab(cab_row[3], irs_dir)
+                if ir_rel:
+                    ir_path = _safe_child(irs_dir, ir_rel)
+                    if ir_path and ir_path.exists():
+                        chain.append(_ir_stage(ir_path, bypassed=bool(cab_row[4]),
+                                               slot="cabinet", rs_gear=cab_row[3], di_cab=True,
+                                               gain=_ir_stage_gain("rs_ir", ir_path)))
 
         # ── Master chain wrap (global pre + post FX) ──
         # Prepend master_pre stages BEFORE the song's chain (sees the
@@ -8811,6 +8862,22 @@ def setup(app, context):
                         gain=_ir_stage_gain(ir_kind, ir_path)))
                 else:
                     missing.append(ir_file)
+            else:
+                # No assigned cab IR (seed left the cabinet at kind='none' because
+                # the RS game IR doesn't ship) — fall back to OUR shipped override
+                # IR so the cab still loads on the highway, not just after the user
+                # opens the Cab Room and nudges the mic.
+                cab_row = next((r for r in rows if r[0] == "cabinet" and r[3]), None) \
+                    or next((r for r in rows if _gear_category(r[3]) == "cab" and r[3]), None)
+                if cab_row:
+                    ir_rel = _override_ir_for_cab(cab_row[3], irs_dir)
+                    if ir_rel:
+                        ir_path = _safe_child(irs_dir, ir_rel)
+                        if ir_path and ir_path.exists():
+                            tone_stages.append(_ir_stage(
+                                ir_path, bypassed=bool(cab_row[4]), di_cab=True,
+                                slot="cabinet", rs_gear=cab_row[3], tone_key=tone_key,
+                                gain=_ir_stage_gain("rs_ir", ir_path)))
             return tone_stages
 
         # ── Build the deduped mega-chain ──

@@ -5451,18 +5451,36 @@ async function rbStudioChainSlotIdForPiece(api, pieceIdx) {
         const arr = rbStudioCurrentChain();
         const piece = arr[pieceIdx];
         if (!piece) return null;
+        const loaded = await api.getChainState();
+        if (!Array.isArray(loaded)) return null;
+        const slotId = (slot) => slot.id != null ? slot.id : (slot.slotId != null ? slot.slotId : null);
+        // A CAB is a type-2 (IR/convolution) slot with NO vst_path, so the VST
+        // match below skipped it and setBypass was never called — that's why
+        // toggling the cab's bypass in the node editor did nothing. Match the Nth
+        // cab piece to the Nth type-2 slot by order (a chain has few IR slots and
+        // path strings differ after the override/DI-blend rewrite, so order is the
+        // robust key).
+        if (piece.rs_category === 'cab') {
+            let cabRank = 0;
+            for (let k = 0; k < pieceIdx; k++) if (arr[k] && arr[k].rs_category === 'cab') cabRank++;
+            let seen = 0;
+            for (const slot of loaded) {
+                if (!slot || Number(slot.type) !== 2) continue;  // type 2 = IR / cab
+                if (seen++ < cabRank) continue;
+                return slotId(slot);
+            }
+            return null;
+        }
         const effPath = rbEffVstPath(piece);
         if (!effPath) return null;                          // NAM / no VST → nothing to edit live
         let dupSkip = 0;
         for (let k = 0; k < pieceIdx; k++) if (rbEffVstPath(arr[k]) === effPath) dupSkip++;
-        const loaded = await api.getChainState();
-        if (!Array.isArray(loaded)) return null;
         let seen = 0;
         for (const slot of loaded) {
             if (!slot || Number(slot.type) !== 0) continue;  // type 0 = VST
             if (slot.path !== effPath) continue;
             if (seen++ < dupSkip) continue;
-            return slot.id != null ? slot.id : null;
+            return slotId(slot);
         }
         return null;
     } catch (_) { return null; }
@@ -9029,6 +9047,10 @@ async function rbReloadDefaultTone() {
         // store pan), so the panning would be lost on app restart. Restore it
         // from the saved graph (localStorage holds node.pan) + re-apply stereo.
         try { rbRestorePanFromGraph(); await rbStudioApplyStereoToEngine(); } catch (_) {}
+        // Pre-warm the cab variants so the FIRST Cab Room entry is instant (Studio
+        // view only, deferred so it never blocks the tone load).
+        if (ok && document.getElementById('rb-studio-room'))
+            setTimeout(() => { try { rbStudioWarmCabVariants(); } catch (_) {} }, 1500);
         return ok;
     }
     catch (e) { return false; }
@@ -11820,6 +11842,53 @@ function rbCabRoomLayout(entry) {
     return [[152, 92, 80], [408, 92, 80], [152, 248, 80], [408, 248, 80]];
 }
 
+// Speaker positions in the cab-art's OWN aspect space (W = aspect*100, H = 100),
+// so the silhouettes drawn on the recreated cab AND the mic→x mapping agree. The
+// grid orientation follows the real cab: tall cabs (2x15, 6x10, 8x10) stack in
+// more rows, wide cabs (2x12) in more columns (verified vs the reference photos).
+function rbCabSpeakerPositionsPhys(entry, aspect) {
+    const a = aspect && aspect > 0 ? aspect : 1;
+    const W = a * 100, H = 100;
+    const n = (entry && entry.drivers) || 1;
+    let cols, rows;
+    if (n === 1) { cols = 1; rows = 1; }
+    else if (n === 2) { if (a < 1) { cols = 1; rows = 2; } else { cols = 2; rows = 1; } }
+    else if (n === 3) { if (a < 1) { cols = 1; rows = 3; } else { cols = 3; rows = 1; } }
+    else if (n === 4) { cols = 2; rows = 2; }
+    else if (n === 6) { if (a < 1) { cols = 2; rows = 3; } else { cols = 3; rows = 2; } }
+    else if (n === 8) { cols = 2; rows = 4; }
+    else { cols = Math.ceil(Math.sqrt(n)); rows = Math.ceil(n / cols); }
+    const mx = W * 0.10, my = H * 0.09;              // grille inset (tolex frame)
+    const gw = W - 2 * mx, gh = H - 2 * my;
+    const cw = gw / cols, ch = gh / rows;
+    const r = Math.min(cw, ch) * 0.46;
+    const pos = [];
+    for (let i = 0; i < n; i++) {
+        const c = i % cols, ro = Math.floor(i / cols);
+        pos.push([mx + (c + 0.5) * cw, my + (ro + 0.5) * ch, r]);
+    }
+    return pos;
+}
+
+// Subtle SVG overlay: the speaker cones faintly visible THROUGH the grille cloth
+// (like a real cab), so the player can aim the mic. pointer-events:none so it
+// never blocks the mic drag. viewBox aspect == fit aspect → circles stay round.
+function rbCabSpeakerSilhouettesSvg(entry, aspect) {
+    const a = aspect && aspect > 0 ? aspect : 1;
+    const W = a * 100, H = 100;
+    const body = rbCabSpeakerPositionsPhys(entry, a).map(([cx, cy, r]) =>
+        `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${r.toFixed(2)}" fill="url(#rbSpkCone)"/>`
+        + `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${r.toFixed(2)}" fill="none" stroke="#000" stroke-opacity=".13" stroke-width=".8"/>`
+        + `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${r.toFixed(2)}" fill="none" stroke="#d5def0" stroke-opacity=".035" stroke-width=".4"/>`
+        + `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${(r * 0.4).toFixed(2)}" fill="none" stroke="#000" stroke-opacity=".08" stroke-width=".7"/>`
+    ).join('');
+    return `<svg class="rb-cab-spk" viewBox="0 0 ${W.toFixed(1)} ${H}" preserveAspectRatio="none" aria-hidden="true">`
+        + `<defs><radialGradient id="rbSpkCone" cx="50%" cy="46%" r="52%">`
+        + `<stop offset="0%" stop-color="#cdd6ea" stop-opacity=".025"/>`
+        + `<stop offset="62%" stop-color="#000" stop-opacity="0"/>`
+        + `<stop offset="100%" stop-color="#000" stop-opacity=".08"/></radialGradient></defs>${body}</svg>`;
+}
+
 function rbCabRoomBuild(g, entry, safeId, opts) {
     const box = document.getElementById(`rb-cabroom-${safeId}`);
     if (!box) return;
@@ -11828,7 +11897,23 @@ function rbCabRoomBuild(g, entry, safeId, opts) {
              speaker: (entry.speakers && entry.speakers[0]) || entry.speaker };
     st._studio = (opts && opts.studio) || null;
     st._opts = opts || null;
+    st._gear = g.rs_gear;
     if (opts && opts.init) Object.assign(st, opts.init);
+    // Restore the saved VISUAL mic spot (cosmetic; the acoustic x/dist/angle come
+    // from the IR name via opts.init). Without this the mic icon jumped back to an
+    // x-derived canonical position on reopen even though the sound was correct.
+    if (st._micFx == null && !st.micPx) {
+        try {
+            const saved = JSON.parse(localStorage.getItem(rbCabRoomMicKey(st)) || 'null');
+            if (Array.isArray(saved) && saved.length === 2
+                && isFinite(saved[0]) && isFinite(saved[1])) {
+                // Studio DOM mic: positioned from _micFx/_micFy (line ~11894).
+                st._micFx = saved[0]; st._micFy = saved[1];
+                // Canvas mic (gear/node-editor): positioned from micPx.
+                st.micPx = [saved[0] * RB_CABROOM_W, saved[1] * RB_CABROOM_H];
+            }
+        } catch (_) {}
+    }
     const cabArt = rbCabArtFor(g.rs_gear);   // recreated cab SVG (or '')
     st._hasArt = !!cabArt;
     st._artAspect = rbCabArtAspect(g.rs_gear);
@@ -11872,6 +11957,7 @@ function rbCabRoomBuild(g, entry, safeId, opts) {
         box.innerHTML = `<div class="rb-cab-center">
             <div class="rb-cab-fit" id="rb-cabfit-${safeId}" style="aspect-ratio:${_a};height:${_fitH}%">
                 ${cabArt}
+                ${rbCabSpeakerSilhouettesSvg(entry, _a)}
                 <div class="rb-cabmic ${st.angle_deg ? 'rb-cabmic-ang' : ''}" id="rb-cabmic-${safeId}" style="left:${_fx * 100}%;top:${_fy * 100}%"></div>
             </div></div>`;
     } else {
@@ -11933,7 +12019,18 @@ function rbCabMicDrag(e, safeId, gear, isDown) {
     fx = Math.min(Math.max(fx, 0.05), 0.95);
     fy = Math.min(Math.max(fy, 0.05), 0.95);
     st._micFx = fx; st._micFy = fy;
-    st.x = Math.min(1, Math.abs(fx - 0.5) * 2);   // 0 at centre cone, 1 at edge
+    // Distance to the NEAREST speaker (in the cab-art aspect space, matching the
+    // drawn silhouettes) drives the cone→edge IR param — so aiming the mic BELOW
+    // or to the SIDE of a cone now changes the sound, not only horizontal-from-
+    // centre. 0 = dead-centre on a cone (on-axis), 1 = at/beyond the cone rim.
+    const _a = st._artAspect && st._artAspect > 0 ? st._artAspect : 1;
+    const _px = fx * _a * 100, _py = fy * 100;
+    let _best = null;
+    for (const [sx, sy, r] of rbCabSpeakerPositionsPhys(rbCabRoomEntry(gear), _a)) {
+        const d = Math.hypot(_px - sx, _py - sy) / r;
+        if (_best === null || d < _best) _best = d;
+    }
+    st.x = Math.min(1, Math.max(0, _best == null ? Math.abs(fx - 0.5) * 2 : _best));
     const mic = document.getElementById(`rb-cabmic-${safeId}`);
     if (mic) { mic.style.left = (fx * 100) + '%'; mic.style.top = (fy * 100) + '%'; }
     st._dirty = true;
@@ -12080,9 +12177,23 @@ function rbCabRoomDrop(safeId, gear) {
     if (!st || !st._dirty) return;
     st._dirty = false;
     if (st._studio && st._studio.local) {
-        // Default/saved tone: bake the new mic position into the cabinet piece +
-        // persist. The monitor reload re-auditions it in context, so no separate
-        // listen call; keep the room in place (no reopen) so the drag feels live.
+        // Instant preview via the preloaded variants (setBypass, no reload) when
+        // available — that avoids the ~1 s pre-load-mute silence on every mic
+        // move. The exact position is then baked + persisted in the BACKGROUND
+        // without a monitor reload (debounced). Only if variants aren't loaded
+        // (e.g. idle default tone) fall back to the full synth+reload.
+        if (st._variantMap) {
+            rbCabRoomSwitchVariant(safeId).then(ok => {
+                if (ok) {
+                    rbCabRoomAutoPersistLocal(safeId);   // saves micPx + debounced synth persist
+                } else {
+                    rbCabRoomSaveMicPx(st);
+                    rbStudioCabApplyLocal(null, { reopen: false });
+                }
+            });
+            return;
+        }
+        rbCabRoomSaveMicPx(st);
         rbStudioCabApplyLocal(null, { reopen: false });
         return;
     }
@@ -12151,6 +12262,45 @@ window.rbCabRoomAssign = async function (safeId, gear) {
     }
 };
 
+// Stable key for the mic's VISUAL 2D spot (localStorage). The synth only saves
+// the radial `x` (cone/edge/offaxis), which the sound depends on, but NOT the
+// exact 2D pixel spot the user dragged to — so on reopen the mic icon jumped to
+// an x-derived canonical spot ("no se guarda la ubicación"). We persist the
+// normalized micPx here (cosmetic, survives restart) keyed by tone + cab.
+function rbCabRoomMicKey(st) {
+    // Key by TONE only (NOT the cab gear — its mic/pos suffix is unstable across
+    // opens, so a gear-based key mismatched save vs restore). A tone has one cab.
+    const v = rbState.studioView || {};
+    const src = v.source || 'default';
+    const name = src === 'saved' ? (v.name || '')
+        : (src === 'song' ? (rbState.currentSongFile || '') : 'default');
+    return `rb_cabmicpx_${src}_${name}`;
+}
+function rbCabRoomSaveMicPx(st) {
+    try {
+        let p = null;
+        if (st && typeof st._micFx === 'number' && typeof st._micFy === 'number')
+            p = [st._micFx, st._micFy];                    // Studio DOM mic (already 0..1)
+        else if (st && st.micPx)
+            p = [st.micPx[0] / RB_CABROOM_W, st.micPx[1] / RB_CABROOM_H];   // canvas mic
+        if (p) localStorage.setItem(rbCabRoomMicKey(st), JSON.stringify(p));
+    } catch (_) {}
+}
+
+// Save the current mic/speaker/dist/angle into the Studio tone (debounced, in the
+// BACKGROUND, no monitor reload) so changes made with the CONTROLS survive leave/
+// return — before, only a mic DRAG persisted; the buttons/slider merely previewed
+// (rbCabRoomListen), so their changes reverted to default on reopen.
+function rbCabRoomAutoPersistLocal(safeId) {
+    const st = _rbCabRoom[safeId];
+    if (!st || !(st._studio && st._studio.local)) return;   // Studio default/saved only
+    rbCabRoomSaveMicPx(st);
+    clearTimeout(st._localPersistT);
+    st._localPersistT = setTimeout(() => {
+        rbStudioCabApplyLocal(null, { reopen: false, skipReload: true }).catch(() => {});
+    }, 450);
+}
+
 window.rbCabRoomSetSpeaker = function (safeId, gear, sp) {
     const st = _rbCabRoom[safeId];
     if (!st) return;
@@ -12162,6 +12312,7 @@ window.rbCabRoomSetSpeaker = function (safeId, gear, sp) {
             : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-amber-900/40'}`;
     });
     rbCabRoomListen(safeId, gear, true);
+    rbCabRoomAutoPersistLocal(safeId);
 };
 
 window.rbCabRoomSetMic = function (safeId, gear, mic) {
@@ -12180,6 +12331,7 @@ window.rbCabRoomSetMic = function (safeId, gear, mic) {
     });
     rbCabRoomDraw(safeId, rbCabRoomEntry(gear));
     rbCabRoomListen(safeId, gear, true);
+    rbCabRoomAutoPersistLocal(safeId);
 };
 
 window.rbCabRoomSetDist = function (safeId, gear, v) {
@@ -12190,7 +12342,10 @@ window.rbCabRoomSetDist = function (safeId, gear, v) {
     if (lbl) lbl.textContent = `${st.dist_in}"`;
     rbCabRoomDraw(safeId, rbCabRoomEntry(gear));
     clearTimeout(st._distT);
-    st._distT = setTimeout(() => rbCabRoomListen(safeId, gear, true), 400);
+    st._distT = setTimeout(() => {
+        rbCabRoomListen(safeId, gear, true);
+        rbCabRoomAutoPersistLocal(safeId);
+    }, 400);
 };
 
 window.rbCabRoomToggleAngle = function (safeId, gear) {
@@ -12205,6 +12360,7 @@ window.rbCabRoomToggleAngle = function (safeId, gear) {
     if (dm) dm.classList.toggle('rb-cabmic-ang', !!st.angle_deg);
     rbCabRoomDraw(safeId, rbCabRoomEntry(gear));
     rbCabRoomListen(safeId, gear, true);
+    rbCabRoomAutoPersistLocal(safeId);
 };
 
 // ── Cab Room en THE STUDIO ──────────────────────────────────────────────
@@ -12224,9 +12380,19 @@ function rbStudioCabPiece() {
 }
 
 function rbCabRoomStateFromPiece(piece) {
-    // 1) si ya usa un IR realcab custom, parsear sus parámetros del nombre
-    const f = piece._uploaded_file || (piece.assigned && piece.assigned.file) || '';
-    const m = /realcab_.*_([a-z0-9]+)_x(\d{3})_d(\d{3})_a(\d{2})\.wav$/i.exec(String(f));
+    // 1) si ya usa un IR realcab custom, parsear sus parámetros del nombre.
+    // IMPORTANTE: incluir `piece.file` — tras salir y volver, la pieza se
+    // re-trae del backend en ese campo (NO en _uploaded_file, que es runtime y se
+    // pierde), así que sin él la posición/mic/parlante volvían a default.
+    const f = piece._uploaded_file || (piece.assigned && piece.assigned.file)
+              || piece.file || (piece.assigned && piece.assigned.ir_file) || '';
+    // Nombre completo: realcab_<spk>_<drivers>x<size><c|o>_<mic>_x###_d###_a##.wav
+    // → recupera TAMBIÉN el speaker (antes se perdía y volvía al default).
+    let m = /realcab_([a-z0-9]+)_(\d+x\d+[co])_([a-z0-9]+)_x(\d{3})_d(\d{3})_a(\d{2})\.wav$/i.exec(String(f));
+    if (m) return { speaker: m[1], mic: m[3], x: parseInt(m[4], 10) / 100,
+                    dist_in: parseInt(m[5], 10) / 10, angle_deg: parseInt(m[6], 10), micPx: null };
+    // Fallback para nombres viejos sin el token de configuración (mic/pos solo).
+    m = /realcab_.*_([a-z0-9]+)_x(\d{3})_d(\d{3})_a(\d{2})\.wav$/i.exec(String(f));
     if (m) return { mic: m[1], x: parseInt(m[2], 10) / 100,
                     dist_in: parseInt(m[3], 10) / 10, angle_deg: parseInt(m[4], 10), micPx: null };
     // 2) si no, del sufijo RS del gear (lo que la canción dice usar)
@@ -12296,7 +12462,10 @@ window.rbStudioOpenCabRoom = function rbStudioOpenCabRoom() {
             : { local: true, pIdx: found ? found.pIdx : -1 },
         init: found ? rbCabRoomStateFromPiece(found.piece) : {},
     });
-    if (isSong && found) rbCabRoomPreloadVariants('studio', gearName).catch(() => {});
+    // Preload the 12 mic/pos variants for instant (silent-gap-free) mic swapping.
+    // Songs AND Studio saved tones can do this (both resolve a preset id); the
+    // idle default tone can't (preload returns false → drop falls back to reload).
+    if (found) rbCabRoomPreloadVariants('studio', gearName).catch(() => {});
     // Catalog on the right — reuse the amp/pedal swap rail with kind='cab'.
     rbStudioOpenSwap(rbState._studioFocusIdx, 'cab');
 };
@@ -12350,6 +12519,36 @@ function rbCabRoomSnapPos(st) {
     return (st.x < 0.5) ? 'cone' : 'edge';
 }
 
+// Pre-install the 12 cab variants in the engine ONCE when the Studio loads, so the
+// FIRST Cab Room entry uses the instant replaceIR fast path instead of a full
+// reload (that reload — the amp VSTs tearing down + rebuilding — is the one-time
+// wait/flash on first entry). Deferred + guarded; no-op if already warm, if the
+// user is already in the cab room, or if there isn't exactly one cab slot loaded.
+let _rbCabWarming = false;
+async function rbStudioWarmCabVariants() {
+    if (_rbCabWarming) return;
+    if (document.getElementById('rb-studio-cabroom')) return;   // already in the cab room
+    const api = rbAudioApi();
+    if (!api || typeof api.getChainState !== 'function' || typeof api.replaceIR !== 'function') return;
+    try {
+        const loaded = await api.getChainState();
+        if (!Array.isArray(loaded)) return;
+        const cabs = loaded.filter(sl => sl && Number(sl.type) === 2
+            && /\/(cabs|realcab)\//i.test(String(sl.path || '').replace(/\\/g, '/')));
+        if (cabs.length !== 1) return;   // 0 = no cab; ≥12 = already warm (re-warms after a song leaves 1 cab)
+        const found = rbStudioCabPiece();
+        if (!found || !found.piece || !found.piece.type) return;
+        const gear = String(found.piece.type);
+        const st = _rbCabRoom['studio'] = _rbCabRoom['studio']
+            || { mic: 'sm57', x: 0.15, dist_in: 1.0, angle_deg: 0, micPx: null };
+        st._studio = st._studio || { local: true, pIdx: found.pIdx };
+        Object.assign(st, rbCabRoomStateFromPiece(found.piece));
+        st._artAspect = rbCabArtAspect(gear);
+        _rbCabWarming = true;
+        try { await rbCabRoomPreloadVariants('studio', gear); } finally { _rbCabWarming = false; }
+    } catch (_) { _rbCabWarming = false; }
+}
+
 async function rbCabRoomPreloadVariants(safeId, gear) {
     const st = _rbCabRoom[safeId];
     const info = st && st._studio;
@@ -12358,11 +12557,30 @@ async function rbCabRoomPreloadVariants(safeId, gear) {
     const status = document.getElementById(`rb-cabroom-status-${safeId}`);
     if (status) status.textContent = '⏳ cargando el tono con las variantes del cab…';
     try {
-        const presetId = await rbPersistTone(info.toneIdx, rbState.currentSongFile);
-        if (presetId == null) return false;
-        const r = await fetch(`${window.RB_API}/native_preset_full/${presetId}`);
-        if (!r.ok) return false;
-        const payload = await r.json();
+        // Fetch a clean chain payload for whatever tone is live, so the instant
+        // (silent-gap-free) mic swap works everywhere: songs persist by toneIdx →
+        // native_preset_full; Studio SAVED tones have a preset id → same endpoint;
+        // the idle DEFAULT tone has none but exposes /default_tone/native.
+        let payload = null;
+        if (info.toneIdx != null) {
+            const presetId = await rbPersistTone(info.toneIdx, rbState.currentSongFile);
+            if (presetId == null) return false;
+            const r = await fetch(`${window.RB_API}/native_preset_full/${presetId}`);
+            if (r.ok) payload = await r.json();
+        } else {
+            const view = rbState.studioView || {};
+            if (view.source === 'saved') {
+                const t = (rbState.savedTones || []).find(x => x.name === view.name);
+                if (t && t.id != null) {
+                    const r = await fetch(`${window.RB_API}/native_preset_full/${t.id}`);
+                    if (r.ok) payload = await r.json();
+                }
+            } else if (view.source === 'default') {
+                const r = await fetch(`${window.RB_API}/default_tone/native`);
+                if (r.ok) payload = await r.json();
+            }
+        }
+        if (!payload) return false;
         const chain = payload && payload.native_preset && payload.native_preset.chain;
         if (!Array.isArray(chain) || !chain.length) return false;
         let ci = chain.findIndex(sg => sg && sg.type === 2
@@ -12402,6 +12620,44 @@ async function rbCabRoomPreloadVariants(safeId, gear) {
                 vmap[key] = variants.length;
                 variants.push(stage);
             }
+        }
+        // FAST PATH: if the engine already has our cab-variant IR slots loaded
+        // (reopening the Cab Room, or a cab SWAP), swap ONLY their IRs in place via
+        // the engine's replaceIR — no full loadPreset, so the amp VST above is NOT
+        // re-instantiated (that teardown/rebuild is the ~1-2 s wait when changing
+        // cabs). Slot ids are preserved, so params/stereo stay applied. Falls
+        // through to the full reload below on any mismatch or if replaceIR is
+        // absent (older engine build).
+        if (typeof api.replaceIR === 'function') {
+            try {
+                const loaded = await api.getChainState();
+                if (Array.isArray(loaded)) {
+                    const idxs = [];
+                    loaded.forEach((sl, i) => {
+                        if (sl && Number(sl.type) === 2
+                            && /\/(cabs|realcab)\//i.test(String(sl.path || '').replace(/\\/g, '/'))) idxs.push(i);
+                    });
+                    const ok = idxs.length === variants.length
+                        && idxs.every((vv, i) => i === 0 || vv === idxs[i - 1] + 1);
+                    if (ok) {
+                        for (let k = 0; k < variants.length; k++) {
+                            const sl = loaded[idxs[k]];
+                            const id = (sl && sl.id != null) ? sl.id
+                                : (sl && sl.slotId != null) ? sl.slotId : idxs[k];
+                            await api.replaceIR(id, variants[k].path);
+                            if (typeof api.setBypass === 'function')
+                                await api.setBypass(id, !!variants[k].bypassed);
+                        }
+                        chain.splice(ci, 1, ...variants);   // keep the JS chain model in sync
+                        st._variantBase = idxs[0];
+                        st._variantMap = vmap;
+                        st._variantActive = activeKey;
+                        rbState._defaultToneActive = true;
+                        if (status) status.textContent = `✓ cambio instantáneo — ${activeKey.replace('_', ' @ ')}`;
+                        return true;
+                    }
+                }
+            } catch (_) { /* fall through to the full reload */ }
         }
         chain.splice(ci, 1, ...variants);
         delete payload.id;
@@ -12509,6 +12765,58 @@ window.rbStudioCabSwap = async function (newBase) {
     }
 };
 
+// In-place cab SWAP for a Studio tone: replace the 12 loaded cab-variant IRs with
+// the new cab's (engine replaceIR — no chain rebuild, amp/params untouched) and
+// repaint ONLY the cab-art element. No studio-room re-render, no cab-room rebuild,
+// no payload re-fetch → near-instant, no amp flash. Returns false (→ caller falls
+// back to the full reopen) if the 12 variants aren't loaded or replaceIR is absent.
+async function rbStudioFastCabSwapInPlace(base) {
+    const st = _rbCabRoom['studio'];
+    const api = rbAudioApi();
+    if (!st || !st._variantMap || st._variantBase == null
+        || !api || typeof api.replaceIR !== 'function') return false;
+    const cat = rbState.realCabCatalog || {};
+    const entry = cat.cabs && cat.cabs[base];
+    if (!entry) return false;
+    const sub = rbCloneSlug(entry.name || base);
+    try {
+        const loaded = await api.getChainState();
+        if (!Array.isArray(loaded)) return false;
+        const ids = loaded.map((sl, i) => (sl && (sl.id != null ? sl.id : sl.slotId)) != null
+            ? (sl.id != null ? sl.id : sl.slotId) : i);
+        const cabSlot = loaded.find(sl => sl && Number(sl.type) === 2
+            && /\/(cabs|realcab)\//i.test(String(sl.path || '').replace(/\\/g, '/')));
+        const m = /^(.*nam_irs)\//i.exec(String(cabSlot && cabSlot.path || '').replace(/\\/g, '/'));
+        const root = m ? m[1] : null;
+        if (!root) return false;
+        // Swap every variant's IR to the new cab (same mic_pos key → same slot).
+        for (const [key, vi] of Object.entries(st._variantMap)) {
+            const slotId = ids[st._variantBase + vi];
+            if (slotId != null) await api.replaceIR(slotId, `${root}/cabs/${sub}/${key}.wav`);
+        }
+        // Repaint ONLY the cab-art element (art + speaker silhouettes + mic), in
+        // place — the fit element keeps its drag handlers, the variant state stays.
+        st.speaker = null;
+        st._hasArt = !!rbCabArtFor(base);
+        st._artAspect = rbCabArtAspect(base);
+        st._gear = base;
+        const fit = document.getElementById('rb-cabfit-studio');
+        if (fit) {
+            const a = st._artAspect || 1;
+            const _fx = (st._micFx != null ? st._micFx : 0.5), _fy = (st._micFy != null ? st._micFy : 0.44);
+            fit.style.aspectRatio = a;
+            fit.style.height = (a < 0.85 ? 100 : 76) + '%';
+            fit.innerHTML = `${rbCabArtFor(base)}${rbCabSpeakerSilhouettesSvg(entry, a)}`
+                + `<div class="rb-cabmic ${st.angle_deg ? 'rb-cabmic-ang' : ''}" id="rb-cabmic-studio" style="left:${_fx * 100}%;top:${_fy * 100}%"></div>`;
+        }
+        // Reflect the pick in the catalog rail (highlight) without rebuilding it.
+        document.querySelectorAll('#rb-swap-rail .rb-swap-item').forEach(el => {
+            try { el.classList.toggle('rb-swap-current', el.dataset && el.dataset.gear && el.dataset.gear.startsWith(base)); } catch (_) {}
+        });
+        return true;
+    } catch (_) { return false; }
+}
+
 // Cab apply for the DEFAULT tone or a SAVED tone (no song). Songs go through
 // rbStudioCabSwap (/gear/replace_with by preset id); here we own the chain array
 // directly. Find or create the cabinet piece, point it at `rsGear` (or keep the
@@ -12541,7 +12849,19 @@ window.rbStudioCabApplyLocal = async function (rsGear, opts) {
         if (rsGear && st) st.speaker = null;
         // IR at the cab room's current mic position (defaults on a fresh open).
         let irName = null;
-        try { const d = await rbCabRoomSynth('studio', base, false); irName = d && d.name; } catch (_) {}
+        if (rsGear) {
+            // Cab SWAP: use the PRECOMPUTED override IR (cabs/<Clone>/<mic>_<pos>.wav)
+            // instead of the ~3.6 s physics-model /cab/synthesize — that render was
+            // the whole "tarda en cargar". The exact realcab is synthesized lazily
+            // only when the user then drags the mic on the new cab (backgrounded).
+            const cat = rbState.realCabCatalog || {};
+            const sub = rbCloneSlug((cat.cabs && cat.cabs[base] && cat.cabs[base].name) || base);
+            const mic = (st && _RB_CR_MIC_TOK[st.mic]) || 'dyn';
+            const pos = st ? rbCabRoomSnapPos(st) : 'cone';
+            irName = `cabs/${sub}/${mic}_${pos}.wav`;
+        } else {
+            try { const d = await rbCabRoomSynth('studio', base, false); irName = d && d.name; } catch (_) {}
+        }
         if (!piece) { piece = { _bypassed: false }; chain.push(piece); }
         piece.type = base;
         piece.slot = 'cabinet';
@@ -12557,13 +12877,32 @@ window.rbStudioCabApplyLocal = async function (rsGear, opts) {
             piece.assigned = { kind: 'ir', file: irName, assigned_mode: 'manual' };
         }
         try { rbStudioPersist(); } catch (_) {}
-        await rbStudioReloadLiveChainAfterSwap();   // persist reaches DB → reload the live monitor (also syncs the node editor)
+        // skipReload: the caller (mic drag) already updated the LIVE sound via the
+        // instant variant switch, so skip the monitor reload whose pre-load mute
+        // is the audible ~1 s silence. Still sync the node editor to the new cab.
+        if (opts.skipReload) {
+            try { rbAdvSyncFromChain(); } catch (_) {}
+        } else if (reopen) {
+            // The reopen below re-preloads the cab room, which loads the engine via
+            // the fast in-place replaceIR path when possible — so skip THIS full
+            // reload (doing both was a redundant double-load on every cab swap).
+            try { rbAdvSyncFromChain(); } catch (_) {}
+        } else {
+            await rbStudioReloadLiveChainAfterSwap();   // persist reaches DB → reload the live monitor (also syncs the node editor)
+        }
         if (status) status.textContent = '';
         if (reopen) {
-            try { rbRenderStudioRoom(); } catch (_) {}   // room now shows the cab art
-            const ov = document.getElementById('rb-studio-cabroom');
-            if (ov) ov.remove();
-            rbStudioOpenCabRoom();   // re-enter focus on the new cab (rail + mic)
+            // FAST cab swap: replace the 12 cab IRs in place + repaint ONLY the cab
+            // art element — no studio-room re-render (no amp flash), no cab-room
+            // teardown/rebuild, no payload re-fetch. That whole reopen was the
+            // remaining "se demora". Only when swapping (rsGear) with the 12
+            // variants already loaded; otherwise fall back to the full reopen.
+            if (!(rsGear && await rbStudioFastCabSwapInPlace(base))) {
+                try { rbRenderStudioRoom(); } catch (_) {}   // room now shows the cab art
+                const ov = document.getElementById('rb-studio-cabroom');
+                if (ov) ov.remove();
+                rbStudioOpenCabRoom();   // re-enter focus on the new cab (rail + mic)
+            }
         }
     } catch (e) {
         if (status) status.textContent = '✗ ' + (e.message || e);
