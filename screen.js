@@ -7002,7 +7002,7 @@ async function rbLoadCoverage() {
     if (!el) return;   // coverage card removed from Settings
     const s = rbState.status;
     if (!s || !s.rs_to_real_loaded) {
-        el.innerHTML = '<span class="text-yellow-500">rs_to_real.json no cargado.</span>';
+        el.innerHTML = '<span class="text-yellow-500">rs_to_real.json not loaded.</span>';
         return;
     }
     const cats = s.rs_to_real_by_category || {};
@@ -12255,8 +12255,8 @@ function rbCabRoomBuild(g, entry, safeId, opts) {
             class="text-xs px-2 py-1 rounded border ${st.angle_deg ? 'bg-violet-700/60 text-violet-100 border-violet-500/60' : 'bg-dark-800 text-gray-400 border-gray-700'}">45°</button>`;
     const oldControls = `<div style="position:relative;width:100%">${stageInner}</div>
             <div class="flex items-center gap-1.5 flex-wrap">${micBtns}</div>
-            ${speakerBtns ? `<div class="flex items-center gap-1.5 flex-wrap"><span class="text-[11px] text-gray-500">parlante:</span>${speakerBtns}</div>` : ''}
-            <div class="flex items-center gap-2"><span class="text-[11px] text-gray-500 whitespace-nowrap">distancia</span>${distSlider}${angBtn}</div>`;
+            ${speakerBtns ? `<div class="flex items-center gap-1.5 flex-wrap"><span class="text-[11px] text-gray-500">speaker:</span>${speakerBtns}</div>` : ''}
+            <div class="flex items-center gap-2"><span class="text-[11px] text-gray-500 whitespace-nowrap">distance</span>${distSlider}${angBtn}</div>`;
     if (isStudioLayout) {
         // Studio: the cab fills the centre, transparent, no panel chrome. The mic
         // is a DOM element ON the cab (drag to move) sized to the cab's real
@@ -12275,7 +12275,7 @@ function rbCabRoomBuild(g, entry, safeId, opts) {
         <div class="bg-dark-800/60 border border-gray-800/50 rounded-lg p-3 space-y-2">
             <div class="flex items-center gap-2">
                 <span class="text-sm text-violet-300 font-medium">🎙 ${rbEsc(entry.name || 'Cab Room')}</span>
-                <span class="text-[11px] text-gray-500">arrastra el micrófono — se escucha al soltar · ${entry.drivers}x${entry.size_in} ${entry.back === 'closed' ? 'cerrado' : 'open-back'}</span>
+                <span class="text-[11px] text-gray-500">drag the mic — plays on release · ${entry.drivers}x${entry.size_in} ${entry.back === 'closed' ? 'closed' : 'open-back'}</span>
             </div>
             ${oldControls}
             ${(opts && opts.selector) ? `
@@ -12289,10 +12289,10 @@ function rbCabRoomBuild(g, entry, safeId, opts) {
             </div>` : ''}
             <div class="flex items-center gap-2">
                 <button id="rb-cabroom-play-${safeId}" onclick="rbCabRoomListen('${safeId}','${g.rs_gear}')"
-                        class="bg-violet-700 hover:bg-violet-600 text-white text-xs px-3 py-1.5 rounded">▶ Escuchar</button>
+                        class="bg-violet-700 hover:bg-violet-600 text-white text-xs px-3 py-1.5 rounded">▶ Listen</button>
                 <button onclick="rbCabRoomAssign('${safeId}','${g.rs_gear}')"
                         class="bg-emerald-800/70 hover:bg-emerald-700 text-emerald-100 text-xs px-3 py-1.5 rounded border border-emerald-600/40"
-                        title="Usar esta posición de mic como el sonido de este cab en TODAS las canciones">★ Usar en todas las canciones</button>
+                        title="Use this mic position as this cab's sound in ALL songs">★ Use in all songs</button>
                 <span id="rb-cabroom-status-${safeId}" class="text-[11px] text-gray-500"></span>
             </div>
         </div>`;
@@ -12514,7 +12514,7 @@ function rbCabRoomDrop(safeId, gear) {
 async function rbCabRoomSynth(safeId, gear, assign) {
     const st = _rbCabRoom[safeId];
     const status = document.getElementById(`rb-cabroom-status-${safeId}`);
-    if (status) status.textContent = '⏳ renderizando…';
+    if (status) status.textContent = '⏳ rendering…';
     const r = await fetch(`${window.RB_API}/cab/synthesize`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ gear_type: gear, mic: st.mic, x: st.x,
@@ -12545,7 +12545,7 @@ window.rbCabRoomListen = async function (safeId, gear, restart) {
         // Preload imposible (p.ej. sin song piece) → NO tocar cab-solo;
         // pedir Aplicar para no matar el amp.
         const status = document.getElementById(`rb-cabroom-status-${safeId}`);
-        if (status) status.textContent = 'usa "✓ Aplicar al tono" para escuchar el cambio en contexto';
+        if (status) status.textContent = 'use "✓ Apply to tone" to hear the change in context';
         return;
     }
     try {
@@ -12771,7 +12771,7 @@ window.rbStudioOpenCabRoom = function rbStudioOpenCabRoom() {
     if (!rbState.realCabCatalog) {
         rbLoadRealCabCatalog().finally(() => {
             if (rbState.realCabCatalog) rbStudioOpenCabRoom();
-            else alert('Catálogo Real Cab no cargó — reintentá en unos segundos.');
+            else alert('Cab catalog not loaded yet — try again in a moment.');
         });
         return;
     }
@@ -12790,7 +12790,7 @@ window.rbStudioOpenCabRoom = function rbStudioOpenCabRoom() {
     }
     if (!entry) {
         const cat = rbState.realCabCatalog;
-        if (!cat) { alert('Catálogo Real Cab no cargado aún.'); return; }
+        if (!cat) { alert('Cab catalog not loaded yet.'); return; }
         gearName = rbState._lastExploreCab || 'Cab_EN212C';
         entry = cat.cabs[gearName] || cat.cabs[Object.keys(cat.cabs)[0]];
     }
@@ -13023,7 +13023,7 @@ async function rbCabRoomPreloadVariants(safeId, gear) {
                         st._variantMap = vmap;
                         st._variantActive = activeKey;
                         rbState._defaultToneActive = true;
-                        if (status) status.textContent = `✓ cambio instantáneo — ${activeKey.replace('_', ' @ ')}`;
+                        if (status) status.textContent = `✓ instant change — ${activeKey.replace('_', ' @ ')}`;
                         return true;
                     }
                 }
@@ -13038,10 +13038,10 @@ async function rbCabRoomPreloadVariants(safeId, gear) {
         st._variantBase = ci;
         st._variantMap = vmap;
         st._variantActive = activeKey;
-        if (status) status.textContent = `✓ en contexto — cambia mic/posición al instante (${activeKey.replace('_', ' @ ')})`;
+        if (status) status.textContent = `✓ in context — change mic/position instantly (${activeKey.replace('_', ' @ ')})`;
         return true;
     } catch (e) {
-        if (status) status.textContent = '⚠ variantes no disponibles — usando audición de cab solo';
+        if (status) status.textContent = '⚠ variants unavailable — using cab-only audition';
         return false;
     }
 }
@@ -13067,7 +13067,7 @@ async function rbCabRoomSwitchVariant(safeId) {
         await api.setBypass(slotOf(st._variantMap[key]), false);
         st._variantActive = key;
         const status = document.getElementById(`rb-cabroom-status-${safeId}`);
-        if (status) status.textContent = `✓ sonando en contexto: ${key.replace('_', ' @ ')} — "Aplicar" guarda la posición exacta`;
+        if (status) status.textContent = `✓ playing in context: ${key.replace('_', ' @ ')} — "Apply" saves the exact position`;
         return true;
     } catch (_) { return false; }
 }
@@ -13094,7 +13094,7 @@ async function rbStudioCabRoomApply(safeId, gear) {
             if (status) status.textContent = '✓ aplicado — cargando tono… (~2 s de silencio, normal)';
             setTimeout(() => {
                 if (status && status.textContent.startsWith('✓ aplicado — cargando'))
-                    status.textContent = '✓ sonando con la posición nueva';
+                    status.textContent = '✓ playing with the new position';
             }, 2600);
         } catch (e) {
             if (status) status.textContent = '✗ ' + (e.message || e);
