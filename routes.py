@@ -4341,11 +4341,19 @@ def _ir_stage_gain(kind: str | None, ir_path: str | Path | None, base_gain: floa
 # clean gain the engine already applies to IR stages) — the amp's own Gain param
 # is never touched, so it still saturates exactly as before. See AMP_LOUDNESS.md.
 _AMP_LOUDNESS_FILE = "amp_loudness_model.json"
-_AMP_TARGET_LUFS = -14.0
-_AMP_CAP_GAIN_DB = 2.0     # Gain may raise output to −12 LUFS (target + 2)
-_AMP_CAP_VOL_DB = 3.0      # Volume/Master may raise output to −11 LUFS (target + 3)
+# CONSISTENCY across songs: every amp lands at the SAME loudness. The soft caps
+# used to let a high-gain amp sit ~2-3 dB LOUDER than a quiet DI preamp (Gain→−12,
+# Vol→−11 vs a quiet amp stuck at −14), and the final leveler is a fast limiter
+# that doesn't re-normalise that average — so songs came out at different volumes
+# (e.g. Runaways ≈ −12 vs Runaway Train ≈ −14). Caps are now 0 (Gain/Vol change the
+# CHARACTER, not the level — the leveler owns volume), and the target is the level
+# the good-sounding songs already sat at (−12), so nothing that was fine gets
+# quieter, only the too-quiet ones come up to match.
+_AMP_TARGET_LUFS = -12.0
+_AMP_CAP_GAIN_DB = 0.0     # no per-gain loudness bump — all amps hit the same target
+_AMP_CAP_VOL_DB = 0.0      # no per-volume loudness bump
 _AMP_TRIM_MIN_DB = -24.0   # deepest cut (very loud amps, e.g. jc90 ≈ −1.8 LUFS)
-_AMP_TRIM_MAX_DB = 9.0     # largest boost (quiet DI preamps); bounded to cap hiss
+_AMP_TRIM_MAX_DB = 12.0    # largest boost — enough for a quiet DI preamp to reach −12
 _AMP_TRIM_RS_GEAR = "__rb_amp_trim"   # sentinel rs_gear on the trim stage
 
 
