@@ -12954,7 +12954,13 @@ async function rbCabRoomPreloadVariants(safeId, gear) {
                             const sl = loaded[idxs[k]];
                             const id = (sl && sl.id != null) ? sl.id
                                 : (sl && sl.slotId != null) ? sl.slotId : idxs[k];
-                            await api.replaceIR(id, variants[k].path);
+                            // replaceIR resolves false (never rejects) on a bad
+                            // slot/missing IR/prepare fault — throw so we land in
+                            // the catch below and fall through to the full reload,
+                            // rather than reporting an instant swap that didn't
+                            // actually change the cab audio.
+                            if (!(await api.replaceIR(id, variants[k].path)))
+                                throw new Error('replaceIR failed');
                             if (typeof api.setBypass === 'function')
                                 await api.setBypass(id, !!variants[k].bypassed);
                         }
@@ -13102,7 +13108,11 @@ async function rbStudioFastCabSwapInPlace(base) {
         // Swap every variant's IR to the new cab (same mic_pos key → same slot).
         for (const [key, vi] of Object.entries(st._variantMap)) {
             const slotId = ids[st._variantBase + vi];
-            if (slotId != null) await api.replaceIR(slotId, `${root}/cabs/${sub}/${key}.wav`);
+            // Throw on a false result (bad slot / missing IR / prepare fault) so
+            // the catch returns false and the caller does the full reopen — don't
+            // repaint to the new cab while the engine still plays the old IR.
+            if (slotId != null && !(await api.replaceIR(slotId, `${root}/cabs/${sub}/${key}.wav`)))
+                throw new Error('replaceIR failed');
         }
         // Repaint ONLY the cab-art element (art + speaker silhouettes + mic), in
         // place — the fit element keeps its drag handlers, the variant state stays.
