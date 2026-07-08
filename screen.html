@@ -363,6 +363,13 @@
     .rb-amp-cab.has-art{ background:transparent; box-shadow:none; border:0; overflow:visible; }
     .rb-amp-cab.has-art::before{ display:none; }
     .rb-amp-cab.has-art > img{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
+    /* Mic on a boom stand over the room cab (position/model from the Cab Room). The
+       stand SVG extends below the cab to the floor; the mic sits at the boom tip. */
+    .rb-amp-cab .rb-room-stand{ position:absolute; left:0; top:0; width:100%; height:122%;
+        overflow:visible; pointer-events:none; z-index:1; }
+    .rb-room-mic{ position:absolute; width:15%; aspect-ratio:120/320; transform-origin:50% 8%;
+        z-index:2; pointer-events:none; filter:drop-shadow(0 2px 4px rgba(0,0,0,.55)); }
+    .rb-room-mic svg{ width:100%; height:100%; display:block; }
 
     /* camera = perspective viewport. On focus the viewpoint re-aims toward the
        amp's corner (perspective-origin shifts there) so it reads as the camera

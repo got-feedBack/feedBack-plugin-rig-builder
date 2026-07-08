@@ -4731,6 +4731,73 @@ function rbStudioGroupDefault() {
     return g;
 }
 
+// The mic setup shown on the Studio-room cab: the mic POSITION (fx/fy 0..1 over the
+// cab) + model chosen in the Cab Room, read from the tone's persisted payload
+// (rbCabRoomSaveMicPx). Falls back to the cab piece's IR name for the model, then to
+// a sensible default. Used to draw the room mic stand so the main menu mirrors where
+// the mic actually sits.
+function rbStudioRoomMicSetup(cabPiece) {
+    let fx = 0.5, fy = 0.44, mic = null, angle = 0;
+    try {
+        const saved = JSON.parse(localStorage.getItem(rbCabRoomMicKey({})) || 'null');
+        if (Array.isArray(saved) && saved.length >= 2 && isFinite(saved[0]) && isFinite(saved[1])) {
+            fx = saved[0]; fy = saved[1];
+            if (typeof saved[2] === 'string') mic = saved[2];
+            if (isFinite(saved[3])) angle = saved[3];
+        }
+    } catch (_) {}
+    if (!mic && cabPiece) { try { const s = rbCabRoomStateFromPiece(cabPiece); if (s && s.mic) mic = s.mic; } catch (_) {} }
+    if (!mic || !RB_MIC_ART[mic]) mic = 'sm57';
+    fx = Math.min(0.92, Math.max(0.08, fx)); fy = Math.min(0.92, Math.max(0.08, fy));
+    return { fx, fy, mic, angle };
+}
+
+// Draw the room mic on a BOOM STAND over the cab: the boom reaches the mic point
+// (fx,fy); the vertical pole rises from the floor to a pivot near the mic height,
+// so a high mic → tall pole, a low mic → short pole. The mic is rotated to lie
+// along the boom (capsule at the point, body toward the pivot) so it reads natural.
+// Coordinate space: viewBox 0..100 in x = cab width, 0..150 in y where 0..100 is the
+// cab and 100..122 is a short floor strip below it (parent .rb-amp-cab is
+// overflow:visible), so the tripod base sits just below the cab on the floor.
+let _rbRoomStandN = 0;
+function rbStudioRoomMicStandHtml(s) {
+    const mx = +(s.fx * 100).toFixed(1), my = +(s.fy * 100).toFixed(1);
+    const side = s.fx < 0.55 ? 1 : -1;                       // base on the side away from the mic
+    const bx = Math.min(88, Math.max(12, mx + side * 30));   // pole/base x
+    const pivotY = Math.min(98, Math.max(12, my - 10));      // boom pivot ≈ just above the mic
+    const cwx = +(bx + (bx - mx) * 0.26).toFixed(1), cwy = +(pivotY + (pivotY - my) * 0.26).toFixed(1);
+    const theta = +(Math.atan2(bx - mx, -(pivotY - my)) * 180 / Math.PI).toFixed(1);
+    const uid = 'rs' + (++_rbRoomStandN);
+    const stand = `<svg class="rb-room-stand" viewBox="0 0 100 122" preserveAspectRatio="none" aria-hidden="true"><defs>`
+        + `<linearGradient id="${uid}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#40454c"/><stop offset=".5" stop-color="#c2c8d0"/><stop offset="1" stop-color="#3a3e44"/></linearGradient></defs>`
+        + `<ellipse cx="${bx}" cy="116" rx="15" ry="2.8" fill="#000" opacity=".38"/>`
+        + `<path d="M${bx - 12} 116 L${bx} 109 L${bx + 12} 116" fill="none" stroke="#0d0e10" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>`
+        + `<path d="M${bx - 12} 116 L${bx} 109 L${bx + 12} 116" fill="none" stroke="url(#${uid})" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`
+        + `<ellipse cx="${bx}" cy="110.5" rx="5.4" ry="2" fill="url(#${uid})" stroke="#0d0e10" stroke-width=".6"/>`
+        + `<line x1="${bx}" y1="110" x2="${bx}" y2="${pivotY}" stroke="#0d0e10" stroke-width="4.6"/>`
+        + `<line x1="${bx}" y1="110" x2="${bx}" y2="${pivotY}" stroke="url(#${uid})" stroke-width="3"/>`
+        + `<line x1="${bx}" y1="${pivotY}" x2="${cwx}" y2="${cwy}" stroke="#0d0e10" stroke-width="4"/>`
+        + `<line x1="${bx}" y1="${pivotY}" x2="${cwx}" y2="${cwy}" stroke="url(#${uid})" stroke-width="2.6"/>`
+        + `<circle cx="${cwx}" cy="${cwy}" r="4.2" fill="#1c1d20" stroke="#c2c8d0" stroke-width="1"/>`
+        + `<line x1="${bx}" y1="${pivotY}" x2="${mx}" y2="${my}" stroke="#0d0e10" stroke-width="4"/>`
+        + `<line x1="${bx}" y1="${pivotY}" x2="${mx}" y2="${my}" stroke="url(#${uid})" stroke-width="2.6"/>`
+        + `<circle cx="${bx}" cy="${pivotY}" r="3" fill="#17181b" stroke="#c2c8d0" stroke-width="1"/></svg>`;
+    const mic = `<div class="rb-room-mic" style="left:${mx}%;top:${my}%;transform:translate(-50%,-8%) rotate(${theta}deg)">${rbMicOnCabHtml(s.mic, uid)}</div>`;
+    return stand + mic;
+}
+
+// Re-inject the room mic stand on every .rb-amp-cab face (after a cab room close or
+// a fast cab swap) so mic/position changes show without a full room re-render.
+function rbStudioRefreshRoomMic() {
+    const g = rbStudioGroupDefault();
+    const piece = (g.cab && g.cab[0]) ? g.cab[0].p : null;
+    const hasArt = piece && rbCabArtDataUrl(piece.type || piece.rs_gear);
+    document.querySelectorAll('#rb-studio-room .rb-amp-cab').forEach(el => {
+        el.querySelectorAll('.rb-room-stand, .rb-room-mic').forEach(n => n.remove());
+        if (hasArt) el.insertAdjacentHTML('beforeend', rbStudioRoomMicStandHtml(rbStudioRoomMicSetup(piece)));
+    });
+}
+
 function rbRenderStudioRoom() {
     const el = document.getElementById('rb-studio-room');
     if (!el) return;
@@ -4783,6 +4850,8 @@ function rbRenderStudioRoom() {
         const nm = entry.p.real_name || entry.p.type || 'Amp';
         const cabArtUrl = rbCabArtDataUrl(cabGear);   // recreated cab as an <img> src (or '')
         const cabAspect = rbCabArtAspect(cabGear);    // real width/height → sizes the room cab
+        // Mic on a boom stand over the cab, at the position/model chosen in the Cab Room.
+        const micStand = cabArtUrl ? rbStudioRoomMicStandHtml(rbStudioRoomMicSetup(g.cab[0] && g.cab[0].p)) : '';
         const img = rbStudioPedalImg(entry.p);
         const head = img
             ? `<div class="rb-amp-face"><img src="${img}" alt="${rbEsc(nm)}"></div>`
@@ -4798,7 +4867,7 @@ function rbRenderStudioRoom() {
                     ${head}
                     <div class="rb-amp-cab${cabArtUrl ? ' has-art' : ''}" title="${rbEsc(cabName)} — click: Cab Room"
                          style="cursor:pointer${cabArtUrl && cabAspect ? `;aspect-ratio:${cabAspect}` : ''}"
-                         onclick="event.stopPropagation(); rbStudioOpenCabRoom()">${cabArtUrl ? `<img src="${cabArtUrl}" alt="">` : ''}</div>
+                         onclick="event.stopPropagation(); rbStudioOpenCabRoom()">${cabArtUrl ? `<img src="${cabArtUrl}" alt="">${micStand}` : ''}</div>
                 </div>`;
     };
     const ampHtml = amps.map(ampStack).join('');
@@ -12134,7 +12203,7 @@ function rbCabRoomBuild(g, entry, safeId, opts) {
     if (st._micFx == null && !st.micPx) {
         try {
             const saved = JSON.parse(localStorage.getItem(rbCabRoomMicKey(st)) || 'null');
-            if (Array.isArray(saved) && saved.length === 2
+            if (Array.isArray(saved) && saved.length >= 2   // >=2: payload now also carries [mic, angle]
                 && isFinite(saved[0]) && isFinite(saved[1])) {
                 // Studio DOM mic: positioned from _micFx/_micFy (line ~11894).
                 st._micFx = saved[0]; st._micFy = saved[1];
@@ -12512,7 +12581,10 @@ function rbCabRoomSaveMicPx(st) {
             p = [st._micFx, st._micFy];                    // Studio DOM mic (already 0..1)
         else if (st && st.micPx)
             p = [st.micPx[0] / RB_CABROOM_W, st.micPx[1] / RB_CABROOM_H];   // canvas mic
-        if (p) localStorage.setItem(rbCabRoomMicKey(st), JSON.stringify(p));
+        // Append the mic model + angle so the Studio-room mic stand can show the
+        // right mic without reopening the Cab Room (reader tolerates the old
+        // 2-element payload). Keep [fx, fy] first for back-compat.
+        if (p) { p.push(st.mic || 'sm57', st.angle_deg || 0); localStorage.setItem(rbCabRoomMicKey(st), JSON.stringify(p)); }
     } catch (_) {}
 }
 
@@ -12714,6 +12786,7 @@ window.rbStudioCloseCabFocus = function rbStudioCloseCabFocus() {
     delete _rbCabRoom['studio'];
     if (room) room.classList.remove('rb-focus-active');
     rbState._studioFocusKind = null;
+    try { rbStudioRefreshRoomMic(); } catch (_) {}   // reflect the mic move/model in the room
 };
 
 window.rbCabRoomExplore = function (safeId, newBase) {
@@ -13054,9 +13127,10 @@ async function rbStudioFastCabSwapInPlace(base) {
                 el.title = `${nm} — click: Cab Room`;
                 el.style.aspectRatio = (url && asp) ? asp : '';
                 let img = el.querySelector('img');
-                if (url) { if (!img) { img = document.createElement('img'); img.alt = ''; el.appendChild(img); } img.src = url; }
+                if (url) { if (!img) { img = document.createElement('img'); img.alt = ''; el.insertBefore(img, el.firstChild); } img.src = url; }
                 else if (img) img.remove();
             });
+            rbStudioRefreshRoomMic();   // re-place the mic stand on the new cab
         } catch (_) {}
         return true;
     } catch (_) { return false; }
