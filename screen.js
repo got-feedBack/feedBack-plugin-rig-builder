@@ -4760,23 +4760,29 @@ function rbStudioRoomMicSetup(cabPiece) {
 // cab and 100..122 is a short floor strip below it (parent .rb-amp-cab is
 // overflow:visible), so the tripod base sits just below the cab on the floor.
 let _rbRoomStandN = 0;
-function rbStudioRoomMicStandHtml(s) {
+function rbStudioRoomMicStandHtml(s, cabAspect) {
+    const asp = cabAspect && cabAspect > 0 ? cabAspect : 1;
     const mx = +(s.fx * 100).toFixed(1), my = +(s.fy * 100).toFixed(1);
     const side = s.fx < 0.55 ? 1 : -1;                       // pole on the side away from the mic
     const bx = Math.min(88, Math.max(12, mx + side * 26));   // pole/base x
-    const pivotY = Math.min(96, Math.max(8, my - 12));       // boom pivot ≈ just above the mic
+    // Mic is drawn capsule-DOWN (aiming at the cab), body pointing UP; the boom
+    // grips its BODY (not the tip). Mic height in cab-height % = width(13%)·(320/120)·aspect.
+    const micH = 0.13 * (320 / 120) * 100 * asp;
+    const clipY = Math.max(7, +(my - micH * 0.42).toFixed(1));   // boom → mic body
+    const pivotY = Math.min(96, Math.max(6, +(clipY - 8).toFixed(1)));
     const uid = 'rs' + (++_rbRoomStandN);
-    // Two strokes per metal part (dark outline + chrome) so it reads on any grille.
-    const seg = (x1, y1, x2, y2, w) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#0d0e10" stroke-width="${w + 1.6}" stroke-linecap="round"/>`
-        + `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="url(#${uid})" stroke-width="${w}" stroke-linecap="round"/>`;
-    const stand = `<svg class="rb-room-stand" viewBox="0 0 100 122" preserveAspectRatio="none" aria-hidden="true"><defs>`
-        + `<linearGradient id="${uid}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#40454c"/><stop offset=".5" stop-color="#c2c8d0"/><stop offset="1" stop-color="#3a3e44"/></linearGradient></defs>`
-        + `<ellipse cx="${bx}" cy="116" rx="14" ry="2.6" fill="#000" opacity=".38"/>`
-        + `<path d="M${bx - 12} 116 L${bx} 109 L${bx + 12} 116" fill="none" stroke="#0d0e10" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>`
-        + `<path d="M${bx - 12} 116 L${bx} 109 L${bx + 12} 116" fill="none" stroke="url(#${uid})" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`
+    // Dark stand (black tube + thin edge highlight): a mic stand is black, and the
+    // bright chrome read as "white". Outline + dark body + faint highlight.
+    const seg = (x1, y1, x2, y2, w) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#050506" stroke-width="${w + 1.4}" stroke-linecap="round"/>`
+        + `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#2c3036" stroke-width="${w}" stroke-linecap="round"/>`
+        + `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#5a5f66" stroke-width="${Math.max(0.5, w * 0.28)}" stroke-linecap="round"/>`;
+    const stand = `<svg class="rb-room-stand" viewBox="0 0 100 122" preserveAspectRatio="none" aria-hidden="true">`
+        + `<ellipse cx="${bx}" cy="116" rx="14" ry="2.6" fill="#000" opacity=".42"/>`
+        + `<path d="M${bx - 12} 116 L${bx} 109 L${bx + 12} 116" fill="none" stroke="#050506" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>`
+        + `<path d="M${bx - 12} 116 L${bx} 109 L${bx + 12} 116" fill="none" stroke="#2c3036" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`
         + seg(bx, 110, bx, pivotY, 3)                         // vertical pole
-        + seg(bx, pivotY, mx, my, 2.6)                        // boom arm → mic capsule
-        + `<circle cx="${bx}" cy="${pivotY}" r="1.8" fill="url(#${uid})" stroke="#0d0e10" stroke-width=".6"/></svg>`;   // pivot clutch (small)
+        + seg(bx, pivotY, mx, clipY, 2.6)                     // boom arm → mic BODY
+        + `<circle cx="${mx}" cy="${clipY}" r="2.4" fill="#26282c" stroke="#050506" stroke-width=".9"/></svg>`;   // mic clip
     const mic = `<div class="rb-room-mic${s.angle ? ' rb-cabmic-ang' : ''}" style="left:${mx}%;top:${my}%">${rbMicOnCabHtml(s.mic, uid)}</div>`;
     return stand + mic;
 }
@@ -4787,9 +4793,10 @@ function rbStudioRefreshRoomMic() {
     const g = rbStudioGroupDefault();
     const piece = (g.cab && g.cab[0]) ? g.cab[0].p : null;
     const hasArt = piece && rbCabArtDataUrl(piece.type || piece.rs_gear);
+    const asp = piece ? rbCabArtAspect(piece.type || piece.rs_gear) : 1;
     document.querySelectorAll('#rb-studio-room .rb-amp-cab').forEach(el => {
         el.querySelectorAll('.rb-room-stand, .rb-room-mic').forEach(n => n.remove());
-        if (hasArt) el.insertAdjacentHTML('beforeend', rbStudioRoomMicStandHtml(rbStudioRoomMicSetup(piece)));
+        if (hasArt) el.insertAdjacentHTML('beforeend', rbStudioRoomMicStandHtml(rbStudioRoomMicSetup(piece), asp));
     });
 }
 
@@ -4846,7 +4853,7 @@ function rbRenderStudioRoom() {
         const cabArtUrl = rbCabArtDataUrl(cabGear);   // recreated cab as an <img> src (or '')
         const cabAspect = rbCabArtAspect(cabGear);    // real width/height → sizes the room cab
         // Mic on a boom stand over the cab, at the position/model chosen in the Cab Room.
-        const micStand = cabArtUrl ? rbStudioRoomMicStandHtml(rbStudioRoomMicSetup(g.cab[0] && g.cab[0].p)) : '';
+        const micStand = cabArtUrl ? rbStudioRoomMicStandHtml(rbStudioRoomMicSetup(g.cab[0] && g.cab[0].p), cabAspect) : '';
         const img = rbStudioPedalImg(entry.p);
         const head = img
             ? `<div class="rb-amp-face"><img src="${img}" alt="${rbEsc(nm)}"></div>`

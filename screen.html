@@ -367,9 +367,13 @@
        stand SVG extends below the cab to the floor; the mic sits at the boom tip. */
     .rb-amp-cab .rb-room-stand{ position:absolute; left:0; top:0; width:100%; height:122%;
         overflow:visible; pointer-events:none; z-index:1; }
-    .rb-room-mic{ position:absolute; width:14%; aspect-ratio:120/320; transform-origin:50% 6%;
-        transform:translate(-50%,-6%); z-index:2; pointer-events:none; filter:drop-shadow(0 2px 4px rgba(0,0,0,.55)); }
-    .rb-room-mic.rb-cabmic-ang{ transform:translate(-50%,-6%) rotate(32deg); }
+    /* Mic drawn capsule-DOWN (aiming at the cab): flip vertically, anchor the
+       capsule (~15% down the art) at the mic point; body then points up to the boom.
+       The 45° option tilts it to the side. */
+    .rb-room-mic{ position:absolute; width:13%; aspect-ratio:120/320; transform-origin:50% 15%;
+        transform:translate(-50%,-15%) scaleY(-1); z-index:2; pointer-events:none;
+        filter:drop-shadow(0 -2px 4px rgba(0,0,0,.5)); }
+    .rb-room-mic.rb-cabmic-ang{ transform:translate(-50%,-15%) scaleY(-1) rotate(40deg); }
     .rb-room-mic svg{ width:100%; height:100%; display:block; }
 
     /* camera = perspective viewport. On focus the viewpoint re-aims toward the
