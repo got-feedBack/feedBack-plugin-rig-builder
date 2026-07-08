@@ -3510,6 +3510,14 @@ window.addEventListener('rig-builder:tones-state', () => rbInjectPlayerToneButto
     }
 
     let _lastSeenFile = null;
+    // After playback:stopped/ended the intended state is the idle DEFAULT tone
+    // (the handlers tear the mega chain down and reload it). currentSong stays
+    // set after a stop, so without this flag the 2 s poll immediately saw
+    // "song present, chain not active" and rebuilt the mega chain — and the
+    // next stop reloaded the default again, ping-ponging full multi-VST chain
+    // rebuilds forever (heard as continuous glitching/distortion). The poll
+    // stands down after a stop; playback:ready / song:loaded lift it.
+    let _pollSuppressedUntilPlay = false;
 
     function hook() {
         if (!window.slopsmith || typeof window.slopsmith.on !== 'function') {
@@ -3525,6 +3533,7 @@ window.addEventListener('rig-builder:tones-state', () => rbInjectPlayerToneButto
                 const target = rbPlaybackTargetFromDetail(event && event.detail || {});
                 if (target.settingsKey) window.__rbPlaybackSettingsKey = target.settingsKey;
                 if (target.filename) window.__rbPlaybackSettingsFilename = target.filename;
+                _pollSuppressedUntilPlay = false;
                 if (!target.filename) {
                     console.log('[rig_builder mega-chain] playback:ready observed but no local filename is available; waiting for legacy/currentSong fallback');
                     return;
@@ -3535,6 +3544,7 @@ window.addEventListener('rig-builder:tones-state', () => rbInjectPlayerToneButto
                 _lastSeenFile = null;
                 _pendingBuildFile = null;
                 _buildingFile = null;
+                _pollSuppressedUntilPlay = true;
                 if (_pendingBuildTimer) { clearTimeout(_pendingBuildTimer); _pendingBuildTimer = null; }
                 window.__rbPlaybackSettingsKey = '';
                 window.__rbPlaybackSettingsFilename = '';
@@ -3546,6 +3556,7 @@ window.addEventListener('rig-builder:tones-state', () => rbInjectPlayerToneButto
                 _lastSeenFile = null;
                 _pendingBuildFile = null;
                 _buildingFile = null;
+                _pollSuppressedUntilPlay = true;
                 if (_pendingBuildTimer) { clearTimeout(_pendingBuildTimer); _pendingBuildTimer = null; }
                 window.__rbPlaybackSettingsKey = '';
                 window.__rbPlaybackSettingsFilename = '';
@@ -3563,6 +3574,7 @@ window.addEventListener('rig-builder:tones-state', () => rbInjectPlayerToneButto
             // Some feedBack builds emit song:loaded with no payload (or a
             // payload missing `filename`). Fall back to currentSong before
             // giving up — same info, different source.
+            _pollSuppressedUntilPlay = false;
             const filename = (info && info.filename)
                 || (window.slopsmith.currentSong && window.slopsmith.currentSong.filename);
             triggerBuild(filename, info && info.filename ? 'song:loaded event' : 'song:loaded event (fallback to currentSong)');
@@ -3586,6 +3598,7 @@ window.addEventListener('rig-builder:tones-state', () => rbInjectPlayerToneButto
         setInterval(() => {
             if (!RbMegaChain.settingOn()) return;
             if (RbMegaChain.isActive()) return;
+            if (_pollSuppressedUntilPlay) return;   // idle default tone is the intended state after a stop
             const c = window.slopsmith && window.slopsmith.currentSong;
             const f = c && c.filename;
             if (!f || f === _lastSeenFile) return;
