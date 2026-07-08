@@ -13043,6 +13043,21 @@ async function rbStudioFastCabSwapInPlace(base) {
         document.querySelectorAll('#rb-swap-rail .rb-swap-item').forEach(el => {
             try { el.classList.toggle('rb-swap-current', el.dataset && el.dataset.gear && el.dataset.gear.startsWith(base)); } catch (_) {}
         });
+        // Also refresh the main Studio-room cab face(s) BEHIND the overlay, so
+        // leaving the Cab Room shows the NEW cab at once — this fast path skips
+        // rbRenderStudioRoom, so without this the room kept the old cab until a
+        // full reload. Mirrors the in-place amp-face update in rbStudioSwapToGear.
+        try {
+            const url = rbCabArtDataUrl(base), asp = rbCabArtAspect(base), nm = entry.name || base;
+            document.querySelectorAll('#rb-studio-room .rb-amp-cab').forEach(el => {
+                el.classList.toggle('has-art', !!url);
+                el.title = `${nm} — click: Cab Room`;
+                el.style.aspectRatio = (url && asp) ? asp : '';
+                let img = el.querySelector('img');
+                if (url) { if (!img) { img = document.createElement('img'); img.alt = ''; el.appendChild(img); } img.src = url; }
+                else if (img) img.remove();
+            });
+        } catch (_) {}
         return true;
     } catch (_) { return false; }
 }
