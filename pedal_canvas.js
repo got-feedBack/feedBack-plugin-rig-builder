@@ -444,12 +444,6 @@
     tick:rgb(74,76,82), ptr:rgb(40,42,48),
     draw(d){ const {ctx:c,W,H,s}=d; ibanezBody(d); const dk=rgb(46,48,54);
       knobIds.forEach(k=> textSpaced(d,k.cx*d.W,.235*d.H,F.barlow,k.lblPx||8,dk,k.lbl,0.2));
-      // decorative MODE slider on the panel
-      const mx=W*.26, my=H*.315, mw=W*.20, mh=8*s;
-      rr(c,mx,my-mh/2,mw,mh,3*s); c.fillStyle=rgb(70,72,78); c.fill();
-      rr(c,mx+mw*0.34,my-mh*1.1,mw*0.22,mh*2.2,2*s); c.fillStyle=rgb(228,230,234); c.fill();
-      rr(c,mx+mw*0.34,my-mh*1.1,mw*0.22,mh*2.2,2*s); c.strokeStyle=rgb(90,92,98); c.lineWidth=0.8*s; c.stroke();
-      textSpaced(d,mx+mw/2,my+13*s,F.barlow,6.5,dk,'MODE',0.4);
       // red status LED
       ledDot(d, W*.66, H*.315, true, 224,60,52);
       // OUT / IN jack legends
@@ -1372,14 +1366,6 @@
       // knob labels (RS names)
       textSpaced(d,.35*W,.225*H,F.barlow,9,ink,'TONE',0.3);
       textSpaced(d,.65*W,.225*H,F.barlow,9,ink,'MIX',0.3);
-      // decorative toggles (Bright/Pure, Mids/Low)
-      const tog=(tx,up)=>{ const tw=8*s,th=18*s,ty=H*.155; rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.fillStyle=rgb(24,24,26); c.fill();
-        rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.strokeStyle=rgb(8,8,10); c.lineWidth=0.8*s; c.stroke();
-        const ly=ty+(up?-1:1)*th*0.2; const lg=c.createLinearGradient(tx-3*s,ly-4*s,tx+3*s,ly+4*s); lg.addColorStop(0,rgb(228,230,234)); lg.addColorStop(1,rgb(150,153,160));
-        rr(c,tx-3.2*s,ly-5*s,6.4*s,10*s,2*s); c.fillStyle=lg; c.fill(); };
-      tog(.165*W,true); tog(.835*W,false);
-      textSpaced(d,.165*W,.235*H,F.barlow,5.5,ink,'BRIGHT',0.1); textSpaced(d,.165*W,.265*H,F.barlow,5.5,ink,'PURE',0.1);
-      textSpaced(d,.835*W,.235*H,F.barlow,5.5,ink,'MIDS',0.1); textSpaced(d,.835*W,.265*H,F.barlow,5.5,ink,'LOW',0.1);
       // wordmark + brand
       textC(d,.46*W,.420*H,F.anton,48,ink,'OCTUP');
       textSpaced(d,.50*W,.500*H,F.barlow,11,ink,'FALCON',1.5);
@@ -1407,11 +1393,6 @@
       textSpaced(d,.245*W,.165*H,F.barlow,8.5,wt,'PITCH1',0.2);
       textSpaced(d,.500*W,.120*H,F.barlow,8,wt,'TONE',0.3);
       textSpaced(d,.755*W,.165*H,F.barlow,8.5,wt,'MIX',0.3);
-      // blue slide switches (MF-102 signature)
-      const blueSlide=(sx)=>{ const sw=22*s, sh=11*s, sy=H*.43; rr(c,sx-sw/2,sy-sh/2,sw,sh,3*s); c.fillStyle=rgb(28,30,36); c.fill();
-        rr(c,sx-sw/2,sy-sh/2,sw,sh,3*s); c.strokeStyle=rgb(10,10,12); c.lineWidth=0.8*s; c.stroke();
-        rr(c,sx-sw*0.40,sy-sh*0.30,sw*0.5,sh*0.6,2*s); c.fillStyle=rgb(74,142,212); c.fill(); };
-      blueSlide(.245*W); blueSlide(.755*W);
       // centre LED column (LEVEL / LFO / BYPASS)
       [['LEVEL',.34],['LFO',.43],['BYPASS',.52]].forEach(p=>{ textSpaced(d,.50*W,(p[1]-0.035)*H,F.barlow,5.5,wt,p[0],0.2); ledDot(d,.50*W,p[1]*H,true,150,196,255); });
       // foog logo + model + footswitch
@@ -1522,12 +1503,6 @@
       textSpaced(d,.40*W,.095*H,F.anton,18,wt,'RING MODULATOR',0.5);
       c.strokeStyle=wt; c.lineWidth=1.4*s; c.beginPath();
       for(let i=0;i<=30;i++){ const x=.31*W+i*(.20*W/30), y=.155*H+Math.sin(i*0.8)*3.5*s*(0.4+i/30); i?c.lineTo(x,y):c.moveTo(x,y); } c.stroke();
-      // PITCH RANGE HIGH/LOW toggle (decorative)
-      const tx=.905*W, ty=.135*H, tw=8*s, th=18*s; rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.fillStyle=rgb(150,153,160); c.fill();
-      rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.strokeStyle=rgb(70,72,78); c.lineWidth=0.8*s; c.stroke();
-      c.beginPath(); c.arc(tx,ty-th*0.22,2.4*s,0,7); c.fillStyle=rgb(232,234,238); c.fill();
-      textSpaced(d,.905*W,.052*H,F.barlow,6,wt,'HIGH',0.2); textSpaced(d,.905*W,.215*H,F.barlow,6,wt,'LOW',0.2);
-      textSpaced(d,.795*W,.135*H,F.barlow,6,wt,'PITCH RANGE',0.1);
       // silver scale strips behind each slider (engine draws the sliders on top)
       [.30,.42,.54,.66].forEach(y=>{ rr(c,.33*W,(y-0.045)*H,.59*W,.09*H,4*s); c.fillStyle=rgb(182,184,190); c.fill();
         c.strokeStyle=rgb(64,66,70); c.lineWidth=0.8*s; for(let i=0;i<=10;i++){ const xx=.33*W+i*(.59*W/10); c.beginPath(); c.moveTo(xx,(y-0.028)*H); c.lineTo(xx,(y+0.028)*H); c.stroke(); } });
@@ -1577,7 +1552,7 @@
       footRound(d,W*.80,H*.705,20*s); } };
 
   // Enbiggenator — TC Electronic Mimiq Doubler-style: cream box, three black
-  // knobs, a DUBS 1/2/3 toggle, big grey block wordmark, true-bypass stomp,
+  // knobs, big grey block wordmark, true-bypass stomp,
   // side jacks. Parody (LC Quimical / Mime). RS knob names. Rate0 Depth1 Mix2.
   P.mime = { w:280,h:470, knobs:[
       {id:0,cx:.55,cy:.155,r:.066,style:'davies'},
@@ -1589,14 +1564,6 @@
       const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(228,224,212)); bg.addColorStop(1,rgb(206,202,190));
       rr(c,m,m,W-2*m,H-2*m,12*s); c.fillStyle=bg; c.fill();
       rr(c,m,m,W-2*m,H-2*m,12*s); c.strokeStyle='rgba(0,0,0,0.3)'; c.lineWidth=2*s; c.stroke();
-      // DUBS 1/2/3 toggle (decorative)
-      const tx=.20*W, ty=.165*H, tw=8*s, th=24*s;
-      rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.fillStyle=rgb(40,40,44); c.fill();
-      rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.strokeStyle=rgb(10,10,12); c.lineWidth=0.8*s; c.stroke();
-      const lg=c.createLinearGradient(tx-4*s,ty-th*0.32,tx+4*s,ty-th*0.12); lg.addColorStop(0,rgb(228,230,234)); lg.addColorStop(1,rgb(150,153,160));
-      rr(c,tx-3.5*s,ty-th*0.40,7*s,9*s,2*s); c.fillStyle=lg; c.fill();
-      textSpaced(d,.295*W,.095*H,F.barlow,7,ink,'DUBS',0.3);
-      ['1','2','3'].forEach((n,i)=> textSpaced(d,.285*W,(.128+i*.034)*H,F.barlow,6,ink,n,0.1));
       // knob labels (RS names)
       textSpaced(d,.55*W,.072*H,F.barlow,8,ink,'RATE',0.3);
       textSpaced(d,.34*W,.252*H,F.barlow,8,ink,'DEPTH',0.3);
@@ -1901,7 +1868,7 @@
       footRound(d,W*.80,H*.82,16*s); textSpaced(d,.80*W,.95*H,F.barlow,7.5,wt,'HARD / SOFT',0.3); } };
 
   // Trem Ole — Keeley DynaTrem-style: crimson brushed top panel with 4 black
-  // fluted knobs + a 3-way mode toggle, over a tan tweed grille-cloth bottom
+  // fluted knobs, over a tan tweed grille-cloth bottom
   // with a gold 'DYNA-TREM' plaque + script brand + chrome stomp. Parody
   // (Peeley). RS knob names. Sens0 Attack1 Release2 Mix3.
   P.dynatrem = { w:280,h:460, knobs:[
@@ -1937,17 +1904,6 @@
       textSpaced(d,.745*W,.080*H,F.barlow,9,wt,'ATTACK',0.4);
       textSpaced(d,.255*W,.280*H,F.barlow,9,wt,'RELEASE',0.3);
       textSpaced(d,.745*W,.280*H,F.barlow,9,wt,'MIX',0.4);
-      // 3-way mode toggle + printed mode legends (centre, between top knobs)
-      textC(d,.455*W,.145*H,F.barlow,5,wt,'DYNAMIC RATE','right');
-      textC(d,.455*W,.178*H,F.barlow,5,wt,'DYNAMIC DEPTH','right');
-      textC(d,.455*W,.211*H,F.barlow,5,wt,'HARMONIC TREM','right');
-      const tx=.585*W, ty=.178*H, tw=8*s, th=21*s;
-      rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.fillStyle=rgb(16,16,18); c.fill();
-      rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.strokeStyle=rgb(6,6,8); c.lineWidth=s; c.stroke();
-      const lvy=ty-th*0.15;
-      const lg=c.createLinearGradient(tx-4*s,lvy-5*s,tx+4*s,lvy+5*s); lg.addColorStop(0,rgb(228,230,236)); lg.addColorStop(1,rgb(150,153,160));
-      rr(c,tx-3.5*s,lvy-5.5*s,7*s,11*s,2*s); c.fillStyle=lg; c.fill();
-      rr(c,tx-3.5*s,lvy-5.5*s,7*s,11*s,2*s); c.strokeStyle=rgb(70,72,78); c.lineWidth=0.8*s; c.stroke();
       // 'REVERB' printed label (lower-left of red panel)
       textSpaced(d,.255*W,.460*H,F.barlow,7,cream,'REVERB',0.4);
       // brand script + gold DYNA-TREM plaque on the tweed
@@ -1978,13 +1934,9 @@
       const px=W*.085, py=H*.085, pw=W*.83, ph=H*.80;
       rr(c,px,py,pw,ph,8*s); c.fillStyle=rgb(20,20,22); c.fill();
       rr(c,px,py,pw,ph,8*s); c.strokeStyle=rgb(224,226,230); c.lineWidth=1.6*s; c.stroke();
-      // Vibe LED + label + mini toggle (top-left)
+      // Vibe LED + label (top-left)
       ledDot(d,W*.175,H*.150,true,234,238,242);
       textSpaced(d,W*.265,H*.150,F.barlow,7,wt,'VIBE',0.3);
-      const vt=W*.355, vy=H*.150, vw=7*s, vh=17*s;
-      rr(c,vt-vw/2,vy-vh/2,vw,vh,2.5*s); c.fillStyle=rgb(150,153,160); c.fill();
-      rr(c,vt-vw/2,vy-vh/2,vw,vh,2.5*s); c.strokeStyle=rgb(70,72,78); c.lineWidth=0.8*s; c.stroke();
-      c.beginPath(); c.arc(vt,vy-vh*0.22,2.4*s,0,7); c.fillStyle=rgb(232,234,238); c.fill();
       // knob labels (RS names)
       textSpaced(d,.29*W,.435*H,F.barlow,9.5,wt,'SPEED',0.5);
       textSpaced(d,.71*W,.435*H,F.barlow,9.5,wt,'MIX',0.5);
@@ -2213,20 +2165,6 @@
       textSpaced(d,.12*W,.165*H,F.barlow,8.5,wt,'TIME',0.3);
       textSpaced(d,.50*W,.165*H,F.barlow,8,wt,'FEEDBACK',0.2);
       textSpaced(d,.88*W,.165*H,F.barlow,8.5,wt,'MIX',0.3);
-      // decorative bat toggles
-      const tog=(tx,up)=>{ const tw=11*s, th=20*s, ty=H*.37;
-        rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.fillStyle=rgb(26,26,28); c.fill();
-        rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.strokeStyle=rgb(6,6,8); c.lineWidth=0.9*s; c.stroke();
-        const ly=ty+(up?-1:1)*th*0.20; const lg=c.createLinearGradient(tx-4*s,ly-5*s,tx+4*s,ly+5*s);
-        lg.addColorStop(0,rgb(40,40,42)); lg.addColorStop(1,rgb(14,14,16));
-        rr(c,tx-4*s,ly-6*s,8*s,12*s,2*s); c.fillStyle=lg; c.fill(); };
-      tog(.26*W,true); tog(.38*W,false); tog(.62*W,true); tog(.73*W,false);
-      const dim=rgb(176,176,172);
-      textSpaced(d,.26*W,.205*H,F.barlow,6.5,dim,'ECHO',0.2); textSpaced(d,.26*W,.535*H,F.barlow,6.5,dim,'REVERB',0.2);
-      textSpaced(d,.38*W,.205*H,F.barlow,6.5,dim,'BRIGHT',0.2); textSpaced(d,.38*W,.535*H,F.barlow,6.5,dim,'NORMAL',0.2);
-      textSpaced(d,.675*W,.115*H,F.barlow,6.5,dim,'DELAY',0.2);
-      textSpaced(d,.62*W,.205*H,F.barlow,6.5,dim,'LONG',0.2); textSpaced(d,.73*W,.205*H,F.barlow,6.5,dim,'SHORT',0.2);
-      textSpaced(d,.675*W,.535*H,F.barlow,6.5,dim,'DELAY OFF',0.2);
       // faded-teal lower panel
       const ty0=H*.62, ty1=H*.91; const tg=c.createLinearGradient(0,ty0,0,ty1); tg.addColorStop(0,rgb(156,210,202)); tg.addColorStop(1,rgb(120,184,176));
       rr(c,W*.035,ty0,W*.93,ty1-ty0,5*s); c.fillStyle=tg; c.fill();
@@ -2486,7 +2424,7 @@
       textSpaced(d,.50*W,.930*H,F.barlow,6.5,red,'MECHANISMS OF MUSIC',0.4); } };
 
   // Tube Spring — Source Audio True Spring-style: brushed gunmetal box, two cream
-  // knobs, a SHORT/LONG/TANK toggle, script wordmark with a spring squiggle, chrome
+  // knobs, script wordmark with a spring squiggle, chrome
   // stomp + brand. Parody (Index Audio / Real Spring Reverb). RS knob names.
   // Mix0 Depth1.
   P.realspring = { w:280,h:420, knobs:[
@@ -2504,15 +2442,6 @@
       ledDot(d,W*.50,H*.085,true,224,60,50);
       textSpaced(d,.27*W,.085*H,F.barlow,9.5,wt,'MIX',0.4);
       textSpaced(d,.73*W,.085*H,F.barlow,9.5,wt,'DEPTH',0.4);
-      // SHORT/LONG/TANK 3-way toggle (decorative)
-      const tx=.50*W, ty=.43*H;
-      rr(c,tx-5*s,ty-9*s,10*s,18*s,3*s); c.fillStyle=rgb(30,30,32); c.fill();
-      rr(c,tx-5*s,ty-9*s,10*s,18*s,3*s); c.strokeStyle=rgb(8,8,10); c.lineWidth=s; c.stroke();
-      const lg=c.createLinearGradient(tx-4*s,ty-6*s,tx+4*s,ty); lg.addColorStop(0,rgb(228,230,236)); lg.addColorStop(1,rgb(140,143,150));
-      rr(c,tx-3.5*s,ty-7*s,7*s,8*s,2*s); c.fillStyle=lg; c.fill();
-      textSpaced(d,.355*W,.415*H,F.barlow,6.5,wt,'SHORT',0.2);
-      textSpaced(d,.50*W,.375*H,F.barlow,6.5,wt,'LONG',0.2);
-      textSpaced(d,.645*W,.415*H,F.barlow,6.5,wt,'TANK',0.2);
       // 'Real Spring' script + spring squiggle + 'REVERB'
       textC(d,.50*W,.575*H,F.ink,38,wt,'Real Spring');
       c.strokeStyle=wt; c.lineWidth=1.8*s; c.beginPath();
@@ -2618,16 +2547,6 @@
       textC(d,.50*W,.392*H,F.crete,12,gold,'Level');
       textC(d,.66*W,.392*H,F.crete,12,gold,'Mode');
       textC(d,.82*W,.392*H,F.crete,12,gold,'Voltage');
-      // two decorative 3-way mode toggles
-      const tog=(tx,ty)=>{ const w0=11*s,h0=25*s;
-        rr(c,tx-w0/2,ty-h0/2,w0,h0,4*s); c.fillStyle=rgb(18,20,28); c.fill();
-        rr(c,tx-w0/2,ty-h0/2,w0,h0,4*s); c.strokeStyle=rgb(8,9,14); c.lineWidth=1*s; c.stroke();
-        const g=c.createLinearGradient(tx-5*s,ty-8*s,tx+5*s,ty+8*s); g.addColorStop(0,rgb(232,234,240)); g.addColorStop(1,rgb(150,153,162));
-        rr(c,tx-5*s,ty-9*s,10*s,15*s,3*s); c.fillStyle=g; c.fill();
-        rr(c,tx-5*s,ty-9*s,10*s,15*s,3*s); c.strokeStyle=rgb(70,72,80); c.lineWidth=0.8*s; c.stroke(); };
-      tog(.135*W,.435*H); tog(.865*W,.435*H);
-      textC(d,.135*W,.498*H,F.crete,13,gold,'Highs');
-      textC(d,.865*W,.498*H,F.crete,13,gold,'Boost');
       // gold serif logo
       textC(d,.5*W,.560*H,F.crete,30,gold,'CARL');
       textC(d,.5*W,.610*H,F.crete,30,gold,'UNLIMITED');
@@ -2725,7 +2644,7 @@
     'FM104');
 
   // Bob Filter — Moog MF-105 MuRF-style: custom foog layout (not the simple
-  // foogSpec box) — two knob rows, decorative LFO switch, the signature
+  // foogSpec box) — two knob rows, the signature
   // 8-band FILTERS slider bank, an LED row + foog logo + stomp.
   // Real controls: Drive0 Output1 Pattern2 Rate3 Envelope4 Mix5 Mode6.
   P.fm105 = { w:340,h:500, knobs:[
@@ -2750,13 +2669,6 @@
       textSpaced(d,.90*W,(.345-.072-.018)*H,F.barlow,7.5,wt,'MODE',0.3);
       textSpaced(d,.90*W,.410*H,F.barlow,6.2,mv<0.5?wt:dim,'MIDS',0.2);
       textSpaced(d,.90*W,.440*H,F.barlow,6.2,mv>=0.5?wt:dim,'BASS',0.2);
-      // decorative LFO slide switch between the 2nd-row knobs
-      const slide=(sx,on,lbl)=>{ const sw=15*s, sh=8*s, sy=.345*H;
-        rr(c,sx-sw/2,sy-sh/2,sw,sh,3*s); c.fillStyle=rgb(38,38,42); c.fill();
-        rr(c,sx-sw/2,sy-sh/2,sw,sh,3*s); c.strokeStyle=rgb(10,10,12); c.lineWidth=0.8*s; c.stroke();
-        rr(c,sx+(on?1:-1)*sw*0.18-sw*0.16,sy-sh/2+1.2*s,sw*0.32,sh-2.4*s,2*s); c.fillStyle=rgb(228,230,234); c.fill();
-        textSpaced(d,sx,(.345-.030)*H,F.barlow,5.5,wt,lbl,0.2); };
-      slide(.375*W,true,'LFO');
       // FILTERS slider bank (decorative, MuRF signature)
       const bx=W*.105, bw=W*.81, by=H*.45, bh=H*.20;
       rr(c,bx,by,bw,bh,7*s); c.strokeStyle=wt; c.lineWidth=1.6*s; c.stroke();
@@ -2815,7 +2727,7 @@
       textSpaced(d,.805*W,.285*H,F.barlow,7,wt,'DIRECTION',0.3);
       textSpaced(d,.805*W,.405*H,F.barlow,6.2,dv<0.5?wt:dim,'DOWN',0.2);
       textSpaced(d,.805*W,.435*H,F.barlow,6.2,dv>=0.5?wt:dim,'UP',0.2);
-      // decorative POWER lever (red, ON) lower-right of panel
+      // POWER lever (red, ON) lower-right of panel
       const px=W*.80, py=H*.475;
       rr(c,px-9*s,py-7*s,18*s,14*s,3*s); c.fillStyle=rgb(28,30,38); c.fill();
       rr(c,px+1*s,py-9*s,8*s,13*s,2*s); c.fillStyle=rgb(206,44,44); c.fill();
