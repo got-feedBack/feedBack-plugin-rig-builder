@@ -554,10 +554,10 @@ def _bare_cab_boost_stage() -> dict | None:
     ir = _unit_impulse_ir_path()
     if not ir:
         return None
-    # x8 = _UNIT_IMPULSE_MAKEUP (defined next to _unit_impulse_ir_path):
-    # cancels the engine's IR normalization so the lift is the intended
-    # +8 dB, not +8 - 18.1. postGain stays plain (see _amp_trim_stage).
-    st = _ir_stage(ir, bypassed=False, gain=_BARE_CAB_BOOST * 8.0,
+    # state.gain = x8 only (cancels the engine's IR normalization on the
+    # impulse); postGain carries the actual lift — same split as
+    # _amp_trim_stage so the gain sums right on fixed AND old engines.
+    st = _ir_stage(ir, bypassed=False, gain=8.0,
                    rs_gear=_BARE_CAB_RS_GEAR)
     st["postGain"] = round(_BARE_CAB_BOOST, 4)
     return st
@@ -4495,12 +4495,17 @@ def _amp_trim_stage(trim_mult: float, *, tone_key=None) -> dict | None:
     ir = _unit_impulse_ir_path()
     if not ir:
         return None
-    # x8 cancels the engine's Normalise::yes on the impulse (see
-    # _UNIT_IMPULSE_MAKEUP) — baked into the ENGINE-side state gain only.
-    # postGain keeps the plain trim: the live path applies state.gain (verified
-    # against the instrumented leveler), and any path that applies postGain too
-    # behaves exactly as before this fix.
-    st = _ir_stage(ir, bypassed=False, gain=trim_mult * _UNIT_IMPULSE_MAKEUP,
+    # SPLIT the gain across the two engine mechanisms so it sums correctly on
+    # every engine version (measured with the instrumented leveler, 2026-07-08):
+    #   - state.gain = x8 ONLY (_UNIT_IMPULSE_MAKEUP): cancels the engine's
+    #     Normalise::yes on the impulse. Needs the NodeAddon standard-base64
+    #     state fix — older engines silently drop plugin-emitted state, which
+    #     is exactly why this stage played -18.1 dB flat.
+    #   - postGain = the plain trim (below): applied by the legacy loadPreset
+    #     path on ALL engine versions.
+    # Fixed engine: 0.125 x 8 x trim = trim (intended). Old engine: trim at
+    # -18.1 dB (unchanged behaviour, the leveler compensates what it can).
+    st = _ir_stage(ir, bypassed=False, gain=_UNIT_IMPULSE_MAKEUP,
                    slot="amp", rs_gear=_AMP_TRIM_RS_GEAR, tone_key=tone_key)
     st["amp_trim"] = round(trim_mult, 4)
     # Engines with per-slot postGain support (loadPreset reads this optional
