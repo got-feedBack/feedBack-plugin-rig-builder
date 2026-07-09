@@ -2755,6 +2755,14 @@ def _parse_gear(gear: dict, slot_type: str) -> dict:
             # The mic suffix is NOT in `model_key` — it stays purely in
             # `cabinet_key` so the per-piece variant override sees it.
             base = _cab_base_from_effect_name(key)
+            if not base:
+                # RS1-era tones store the BASE cab key directly (no mic
+                # suffix, e.g. "Cab_PA600C") — absent from the mic map, but
+                # a direct (case-insensitive) rs_cab_to_ir key. Same
+                # resolution as _resolve_cab_for_effect's Tier 2.
+                c2i = _load_rs_cab_to_ir() or {}
+                base = key if key in c2i else next(
+                    (k for k in c2i if k.lower() == key.lower()), None)
             if base:
                 out["type"] = base
     return out
@@ -2840,12 +2848,29 @@ def _resolve_cab_for_effect(effect_name: str, irs_root) -> tuple[str, str] | Non
                 o = _override_variant(ovr, spec)
                 if o and irs_root and (irs_root / o["ir_file"]).exists():
                     return (base, o["ir_file"])
-    # Tier 2 — bare base cab via rs_cab_to_ir default IR
-    entry = (_load_rs_cab_to_ir() or {}).get(effect_name)
+    # Tier 2 — bare base cab via rs_cab_to_ir default IR. RS1-era songs store
+    # the BASE key directly in Cabinet.Key (e.g. "Cab_PA600C", no mic suffix),
+    # so resolve it case-insensitively against rs_cab_to_ir (the RS gear-id
+    # casing drifts between eras — the Title-Case vs UPPER gotcha).
+    c2i = _load_rs_cab_to_ir() or {}
+    canon = effect_name if effect_name in c2i else next(
+        (k for k in c2i if k.lower() == effect_name.lower()), effect_name)
+    entry = c2i.get(canon)
     if isinstance(entry, dict):
         irs = entry.get("irs") or []
         if irs and irs[0] and irs_root and (irs_root / irs[0]).exists():
-            return (effect_name, irs[0])
+            return (canon, irs[0])
+    # Tier 2b — the game IR isn't on disk (post-DMCA nothing extracts it), but
+    # we ship a MODELED cab for this base (rb_cab_overrides): use its default
+    # mic variant, mirroring Tier 1's override fallback. Without this the RS1
+    # bare cabs (Cab_PA600C et al.) never promote out of the generic
+    # "Cabinets" placeholder. Guarded on the override existing for THIS gear:
+    # _override_ir_for_cab's own generic-default fallback would pair a default
+    # cab's IR with the promoted rs_gear.
+    if isinstance(_load_cab_overrides().get(canon), dict):
+        f = _override_ir_for_cab(canon, irs_root)
+        if f:
+            return (canon, f)
     return None
 
 
@@ -7089,6 +7114,28 @@ def _watch_fire(name: str) -> None:
         _watcher_state["last_error"] = f"{song_key}: {type(e).__name__}: {e}"
 
 
+def _self_heal_song_gear(filename: str) -> None:
+    """Idempotent cab + generic-gear self-heal against the song's live
+    GearList, callable from any chain-build path (not just the editor's
+    get_song). Covers songs SEEDED before a parser fix — e.g. RS1-era tones
+    whose Cabinet.Key is a bare base cab ("Cab_PA600C"): their rows stayed on
+    the generic "Cabinets" placeholder until the user happened to open the
+    song in the editor. Already-correct rows are no-ops, so running it on
+    every song load doesn't churn."""
+    try:
+        path = _resolve_song_file(filename)
+        if path is None or not _is_song_pack(path) or not _song_data_available(path):
+            return
+        song_key = _db_song_key(filename, path)
+        raw_tones = _read_tones_from_sloppak(song_key, _get_dlc_dir())
+        if not raw_tones:
+            return
+        _auto_fix_cab_mics_for_song_module(song_key, raw_tones)
+        _promote_generic_gear_for_song_module(song_key, raw_tones)
+    except Exception:
+        log.exception("song gear self-heal failed for %s", filename)
+
+
 def _auto_fix_cab_mics_for_song_module(filename: str, raw_tones: list) -> int:
     """Module-level version of the per-song cab-mic fixer (the closure
     `_auto_fix_cab_mics_for_song` inside setup() captures `conn`/`_lock`
@@ -8881,6 +8928,11 @@ def setup(app, context):
         except Exception:
             log.warning("rig_builder: stale-seed resync check failed for %r",
                         decoded, exc_info=True)
+        # Promote parser-miss placeholders (cab "Cabinets" / generic Amps/
+        # Pedals/Racks) against the live GearList on every song build — songs
+        # seeded before a parser fix (e.g. RS1 bare-cab keys like Cab_PA600C)
+        # heal on PLAY, not only when the user opens them in the editor.
+        _self_heal_song_gear(decoded)
 
         mappings = _lookup(decoded)
         # No per-song tone mappings. This is the norm for songs that carry no
