@@ -46,7 +46,7 @@ def test_manifest_keeps_audio_effects_jobs_and_privileged_surfaces():
 def test_screen_registers_executable_audio_effects_provider():
     src = (ROOT / "screen.js").read_text()
 
-    assert "RB_EFFECTS_PLAN_SCHEMA = 'slopsmith.audio_effects.chain_plan.v1'" in src
+    assert "RB_EFFECTS_PLAN_SCHEMA = 'feedBack.audio_effects.chain_plan.v1'" in src
     assert "rbAudioEffectsApi" in src
     assert "registerProvider" in src
     assert "requests: ['select-chain', 'bypass', 'restore', 'fallback', 'inspect-route', 'upsert-mapping']" in src
