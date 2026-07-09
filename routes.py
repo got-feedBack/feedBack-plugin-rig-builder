@@ -554,7 +554,10 @@ def _bare_cab_boost_stage() -> dict | None:
     ir = _unit_impulse_ir_path()
     if not ir:
         return None
-    st = _ir_stage(ir, bypassed=False, gain=_BARE_CAB_BOOST,
+    # x8 = _UNIT_IMPULSE_MAKEUP (defined next to _unit_impulse_ir_path):
+    # cancels the engine's IR normalization so the lift is the intended
+    # +8 dB, not +8 - 18.1. postGain stays plain (see _amp_trim_stage).
+    st = _ir_stage(ir, bypassed=False, gain=_BARE_CAB_BOOST * 8.0,
                    rs_gear=_BARE_CAB_RS_GEAR)
     st["postGain"] = round(_BARE_CAB_BOOST, 4)
     return st
@@ -4454,6 +4457,18 @@ def _amp_trim_mult_for_state(vst_path, effective_vst_state) -> float:
     return 10.0 ** (_amp_loudness_trim_db(entry, params) / 20.0)
 
 
+# The engine loads EVERY IR stage with JUCE Normalise::yes, which rescales the
+# impulse to a broadband L2 of 0.125 (-18.1 dB) — including our 1-sample unit
+# impulse. Cab stages cancel that with _RS_IR_MAKEUP (x8); the unit-impulse
+# stages (amp trim, bare-cab lift) did NOT, so every chain carrying one played
+# a flat -18.1 dB. That ate almost the whole +20 dB max-boost of the final
+# leveler: real chains arrived at -33..-45 LUFS (measured with the instrumented
+# leveler, 2026-07-08), the AGC pegged at +20 and songs came out 2..5 dB apart
+# ("unas canciones necesitan +12 en AMP"). x8 makes the impulse stage carry
+# exactly its intended clean gain again.
+_UNIT_IMPULSE_MAKEUP = 8.0
+
+
 def _unit_impulse_ir_path() -> Path | None:
     """A cached 1-sample (identity) IR under nam_irs/other/. The per-amp loudness
     trim rides this as a clean gain stage right after the amp."""
@@ -4480,7 +4495,12 @@ def _amp_trim_stage(trim_mult: float, *, tone_key=None) -> dict | None:
     ir = _unit_impulse_ir_path()
     if not ir:
         return None
-    st = _ir_stage(ir, bypassed=False, gain=trim_mult,
+    # x8 cancels the engine's Normalise::yes on the impulse (see
+    # _UNIT_IMPULSE_MAKEUP) — baked into the ENGINE-side state gain only.
+    # postGain keeps the plain trim: the live path applies state.gain (verified
+    # against the instrumented leveler), and any path that applies postGain too
+    # behaves exactly as before this fix.
+    st = _ir_stage(ir, bypassed=False, gain=trim_mult * _UNIT_IMPULSE_MAKEUP,
                    slot="amp", rs_gear=_AMP_TRIM_RS_GEAR, tone_key=tone_key)
     st["amp_trim"] = round(trim_mult, 4)
     # Engines with per-slot postGain support (loadPreset reads this optional
