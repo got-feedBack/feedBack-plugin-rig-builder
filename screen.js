@@ -7400,12 +7400,39 @@ async function rbListSongs() {
         el.innerHTML = `<p class="text-red-400 text-sm">Library search failed: ${rbEsc(e.message || e)}</p>`;
         return;
     }
-    const songs = Array.isArray(data.songs) ? data.songs : [];
+    const songs = rbDedupePlatformVariants(
+        Array.isArray(data.songs) ? data.songs : [], providerId);
     if (!songs.length) {
         el.innerHTML = '<p class="text-gray-500 text-sm">No matches</p>';
         return;
     }
     el.innerHTML = songs.map(song => rbRenderLibrarySongListItem(song, providerId)).join('');
+}
+
+// Some CDLC shipped both a PC (`_p`) and a Mac (`_m`) PSARC; converting BOTH
+// yields two byte-for-byte-equivalent .sloppak entries for one song (e.g.
+// jackiwan_p.sloppak + jackiwan_m.sloppak, both "I Want You Back"). They only
+// differ by that trailing platform marker, so collapse the pair in the picker
+// — keeping the PC (`_p`) variant — instead of listing the song twice. A file
+// with no `_m`/`_p` suffix, or one whose partner isn't present, is untouched.
+function rbDedupePlatformVariants(songs, providerId) {
+    const seenBase = new Map();   // platform-agnostic base -> index in `out`
+    const out = [];
+    for (const song of songs) {
+        const fn = String(rbLibraryLocalFilename(song, providerId)
+            || rbLibrarySongId(song) || '');
+        const m = fn.match(/^(.*)_([mp])\.sloppak$/i);
+        if (!m) { out.push(song); continue; }
+        const base = m[1].toLowerCase();
+        const isPC = m[2].toLowerCase() === 'p';
+        if (!seenBase.has(base)) {
+            seenBase.set(base, out.length);
+            out.push(song);
+        } else if (isPC) {
+            out[seenBase.get(base)] = song;   // prefer the PC variant
+        }
+    }
+    return out;
 }
 
 function rbRenderLibrarySongListItem(song, fallbackProviderId) {
