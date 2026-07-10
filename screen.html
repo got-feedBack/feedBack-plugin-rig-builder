@@ -1021,24 +1021,9 @@
                         class="rb-gear-filter-btn px-3 py-1.5 rounded text-xs text-gray-300 transition">
                     All gear
                 </button>
-                <button onclick="rbGearFilter('files')" data-rb-gear-filter="files"
-                        class="rb-gear-filter-btn px-3 py-1.5 rounded text-xs text-gray-300 transition">
-                    Files
-                </button>
                 <button onclick="rbShowTab('advanced')" title="Open the node-graph chain editor"
                         class="rb-gear-filter-btn px-3 py-1.5 rounded text-xs text-cyan-300 transition">
                     ⚙ Advanced
-                </button>
-            </div>
-            <div class="flex gap-2 flex-wrap">
-                <button onclick="rbPreloadCuratedVariants()"
-                        title="Single action: rename any cryptic legacy files to readable names, download every gain_variants entry curated in rs_to_real.json, then wire each one back to the preset_pieces rows that need it."
-                        class="bg-emerald-900/30 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/40 px-3 py-1.5 rounded text-xs transition">
-                    ⬇ Download all curated variants
-                </button>
-                <button onclick="rbPurgeNams({}, 'EVERYTHING — every NAM and IR')"
-                        class="bg-red-900/30 hover:bg-red-900/60 text-red-300 border border-red-800/40 px-3 py-1.5 rounded text-xs transition">
-                    🗑 Purge all
                 </button>
             </div>
         </div>
@@ -1059,6 +1044,16 @@
                         <option value="bass">Bass</option>
                     </select>
                     <div id="rb-gear-category-menu" class="grid grid-cols-2 gap-2"></div>
+                    <!-- Backing-type filter: show gear by what powers it. Multi-
+                         select — pick any combination (all off = show everything). -->
+                    <div class="flex items-center gap-1.5" title="Filter by what backs each gear">
+                        <button type="button" data-rb-backing="nam" onclick="rbToggleBackingFilter('nam')"
+                                class="rb-backing-btn flex-1 px-2 py-1 rounded text-xs text-gray-400 border border-gray-800 bg-dark-800 transition">NAM</button>
+                        <button type="button" data-rb-backing="vst" onclick="rbToggleBackingFilter('vst')"
+                                class="rb-backing-btn flex-1 px-2 py-1 rounded text-xs text-gray-400 border border-gray-800 bg-dark-800 transition">VST</button>
+                        <button type="button" data-rb-backing="ir" onclick="rbToggleBackingFilter('ir')"
+                                class="rb-backing-btn flex-1 px-2 py-1 rounded text-xs text-gray-400 border border-gray-800 bg-dark-800 transition">IR</button>
+                    </div>
                     <label class="text-xs text-gray-400 flex items-center gap-1.5 whitespace-nowrap cursor-pointer hover:text-gray-200 transition">
                         <input type="checkbox" id="rb-gear-only-unassigned" onchange="rbApplyGearFilters()" class="rounded">
                         Only unassigned
@@ -1106,22 +1101,6 @@
             </div>
         </div>
 
-        <!-- View: Files (downloaded NAM/IR inventory) -->
-        <div id="rb-gear-view-files" class="rb-gear-view hidden">
-            <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-4 mb-4">
-                <div class="flex items-center justify-between gap-3 flex-wrap">
-                    <div>
-                        <h3 class="text-white font-semibold text-sm">Downloaded captures</h3>
-                        <p class="text-gray-500 text-xs mt-1" id="rb-manage-summary">Loading inventory…</p>
-                    </div>
-                    <button onclick="rbLoadManageTab()"
-                            class="bg-dark-600 hover:bg-dark-500 text-gray-200 px-3 py-1.5 rounded text-xs transition">
-                        ↻ Refresh
-                    </button>
-                </div>
-            </div>
-            <div id="rb-manage-buckets" class="space-y-4"></div>
-        </div>
     </div>
 
     <!-- Master chain — global pre/post FX wrapper -->
@@ -1220,6 +1199,18 @@
          DOM ids used by JS — only the layout was reorganised. -->
     <div id="rb-tab-settings" class="rb-tab-panel rb-overlay hidden">
 
+        <!-- Setup sub-tabs: General settings (library-wide + preferences) and
+             tone3000 (account, downloads, Files). -->
+        <div class="inline-flex gap-1 bg-dark-800/50 border border-gray-800/50 rounded-lg p-1 mb-6">
+            <button id="rb-setup-sub-general" onclick="rbSetupSubtab('general')"
+                    class="rb-setup-sub-btn px-4 py-1.5 rounded text-sm text-gray-300 transition">General settings</button>
+            <button id="rb-setup-sub-tone3000" onclick="rbSetupSubtab('tone3000')"
+                    class="rb-setup-sub-btn px-4 py-1.5 rounded text-sm text-gray-300 transition">tone3000</button>
+        </div>
+
+        <!-- ════════════════ GENERAL SETTINGS ════════════════ -->
+        <div id="rb-setup-general">
+
         <!-- Rig Builder master ON/OFF — turn the whole thing off if you don't use it. -->
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
             <h3 class="text-white font-semibold mb-2">Rig Builder</h3>
@@ -1254,103 +1245,6 @@
                     <span id="rb-chain-makeup-val" class="text-xs text-purple-300 mt-1">0.0 dB</span>
                     <span class="text-sm text-gray-300 mt-1">AMP</span>
                 </div>
-            </div>
-        </div>
-
-        <!-- Connect tone3000 first — it's the prerequisite for in-app
-             candidate listing and automatic downloads, so it leads Settings. -->
-        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
-            <h3 class="text-white font-semibold mb-3">Connect tone3000 account</h3>
-            <p class="text-gray-500 text-sm mb-3">
-                Sign in to tone3000 to list candidates in-app and unlock
-                automatic downloads — <strong>no API key to paste</strong>.
-                This opens tone3000 in your browser; you approve once and come
-                back. The plugin only receives a temporary, revocable token.
-            </p>
-            <div class="flex gap-3 items-center">
-                <button id="rb-oauth-btn" onclick="rbOauthConnect()" class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-sm transition">Connect with tone3000</button>
-                <button id="rb-oauth-disconnect" onclick="rbOauthDisconnect()" class="hidden bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Disconnect</button>
-                <span id="rb-oauth-status" class="text-xs text-gray-500"></span>
-            </div>
-        </div>
-
-        <!-- Capture-download progress, mirrored from the Gear → Files
-             preload so the user can watch tone3000 captures download
-             without leaving Setup (e.g. right after a reset re-triggers
-             downloads). Driven by the same GET /preload_status poll as the
-             Gear tab; hidden unless a run is in flight or just finished. -->
-        <div id="rb-setup-preload" class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6 hidden">
-            <h3 class="text-white font-semibold mb-2">Downloading captures from tone3000</h3>
-            <div class="flex items-center gap-3 mb-2 text-sm text-gray-400">
-                <span id="rb-setup-preload-pct">0%</span>
-                <span id="rb-setup-preload-count">0 / 0</span>
-            </div>
-            <div class="h-2 bg-dark-800 rounded-full overflow-hidden">
-                <div id="rb-setup-preload-bar" class="h-full bg-accent transition-all" style="width:0%"></div>
-            </div>
-            <p id="rb-setup-preload-current" class="text-gray-500 text-xs mt-2"></p>
-            <p id="rb-setup-preload-summary" class="text-xs mt-2 hidden"></p>
-        </div>
-
-        <!-- Batch operations (was Dashboard) -->
-        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
-            <h3 class="text-white font-semibold mb-2">Scan library &amp; auto-assign captures</h3>
-            <p class="text-gray-500 text-sm mb-3">
-                Walks every sloppak song in your library and, for each
-                gear in each tone, resolves a NAM / IR / VST in this order:
-                <span class="text-gray-400">(1)</span> reuse an assignment you've already made for that gear in
-                another song, <span class="text-gray-400">(2)</span> your curated picks
-                (<code class="bg-dark-800 px-1 rounded">default_captures.json</code> +
-                <code class="bg-dark-800 px-1 rounded">gain_variants</code>),
-                <span class="text-gray-400">(3)</span> a fresh tone3000 search + download —
-                unless you turn that step off below.
-            </p>
-            <label class="flex items-start gap-2 mb-4 text-sm cursor-pointer">
-                <input type="checkbox" id="rb-allow-tone3000-fallback"
-                       onchange="rbSetAllowTone3000Fallback(this.checked)"
-                       class="mt-1 accent-amber-500">
-                <span class="text-gray-300">
-                    <span class="font-medium text-amber-300">⚠ Allow tone3000 fuzzy fallback</span>
-                    <span class="text-gray-500 ml-1">(opt-out from curated-only)</span>
-                    <div class="text-gray-500 mt-1 leading-snug">
-                        Leave <strong class="text-gray-400">unchecked</strong> (recommended) and the plugin
-                        will only use the curated 1-to-1 mappings in
-                        <code class="bg-dark-800 px-1 rounded">rs_to_real.json</code> +
-                        <code class="bg-dark-800 px-1 rounded">default_captures.json</code>.
-                        Gears without a curated default land in
-                        <span class="text-amber-300">pending</span> — you assign them
-                        manually via Gear → 📚 Library / 🎚 Variants.
-                    </div>
-                    <div class="text-gray-500 mt-1 leading-snug">
-                        Check this box only if your library has lots of uncurated
-                        gear and you want the plugin to fuzzy-search tone3000 and
-                        auto-download a "best guess" capture for each. The shipped
-                        repo is fully curated, so most users should leave it off.
-                    </div>
-                </span>
-            </label>
-            <div class="flex flex-wrap gap-3">
-                <button class="rb-batch-btn bg-accent hover:bg-accent/80 text-white px-5 py-2 rounded-xl text-sm transition"
-                        onclick="rbStartBatch('all')"
-                        title="Rescan every song. Re-resolves captures with the current/default presets. Preserves per-tone bypass + manual swaps (assigned_mode='manual')">
-                    Rescan all (keeps manual edits)
-                </button>
-                <button class="rb-batch-btn bg-red-700 hover:bg-red-600 text-white px-5 py-2 rounded-xl text-sm transition"
-                        onclick="rbFactoryReset()"
-                        title="Reset every tone to the default factory mapping. Re-resolves ALL pieces — including your manual gear swaps (assigned_mode is ignored). Per-tone bypass is kept. Cannot be undone.">
-                    Reset to factory (ignores manual)
-                </button>
-            </div>
-            <div id="rb-batch-progress" class="hidden mt-4">
-                <div class="flex items-center gap-3 mb-2 text-sm text-gray-400">
-                    <span id="rb-batch-pct">0%</span>
-                    <span id="rb-batch-count">0 / 0</span>
-                    <span id="rb-batch-assigned" class="text-green-400 hidden"></span>
-                </div>
-                <div class="h-2 bg-dark-800 rounded-full overflow-hidden">
-                    <div id="rb-batch-bar" class="h-full bg-accent transition-all" style="width:0%"></div>
-                </div>
-                <pre id="rb-batch-log" class="mt-3 text-xs text-gray-500 max-h-48 overflow-auto bg-dark-900/50 p-2 rounded"></pre>
             </div>
         </div>
 
@@ -1419,6 +1313,160 @@
             </div>
             <div id="rb-plugin-update-version" class="text-xs text-gray-500 mt-2"></div>
         </div>
+
+        <!-- Reset to factory — kept at the VERY bottom: takes the whole plugin
+             back to its default (factory) state. -->
+        <div class="bg-dark-700/50 border border-red-900/40 rounded-xl p-5 mt-6">
+            <h3 class="text-white font-semibold mb-2">Reset to factory</h3>
+            <p class="text-gray-500 text-sm mb-3">
+                Takes everything back to the default plugin: every tone is
+                re-resolved to its default bundled VST / capture / IR, and all gear
+                redirects (custom + auto tone3000 mappings) are cleared so gear plays
+                its own native VST again. Your manual gear swaps are <strong>discarded</strong>;
+                per-tone bypass is kept. This cannot be undone.
+            </p>
+            <button class="rb-batch-btn bg-red-700 hover:bg-red-600 text-white px-5 py-2 rounded-xl text-sm transition"
+                    onclick="rbFactoryReset()"
+                    title="Reset the whole plugin to factory defaults. Clears gear redirects and re-resolves every tone. Cannot be undone.">
+                Reset to factory
+            </button>
+            <div class="rb-batch-progress hidden mt-4">
+                <div class="flex items-center gap-3 mb-2 text-sm text-gray-400">
+                    <span class="rb-batch-pct">0%</span>
+                    <span class="rb-batch-count">0 / 0</span>
+                    <span class="rb-batch-assigned text-green-400 hidden"></span>
+                </div>
+                <div class="h-2 bg-dark-800 rounded-full overflow-hidden">
+                    <div class="rb-batch-bar h-full bg-accent transition-all" style="width:0%"></div>
+                </div>
+                <pre class="rb-batch-log mt-3 text-xs text-gray-500 max-h-48 overflow-auto bg-dark-900/50 p-2 rounded"></pre>
+            </div>
+        </div>
+
+        </div><!-- /#rb-setup-general -->
+
+        <!-- ════════════════ TONE3000 ════════════════ -->
+        <div id="rb-setup-tone3000" class="hidden">
+
+            <!-- Connect tone3000 — prerequisite for listing candidates + downloads. -->
+            <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+                <h3 class="text-white font-semibold mb-3">Connect tone3000 account</h3>
+                <p class="text-gray-500 text-sm mb-3">
+                    Sign in to tone3000 to list candidates in-app and unlock
+                    automatic downloads — <strong>no API key to paste</strong>.
+                    This opens tone3000 in your browser; you approve once and come
+                    back. The plugin only receives a temporary, revocable token.
+                </p>
+                <div class="flex gap-3 items-center">
+                    <button id="rb-oauth-btn" onclick="rbOauthConnect()" class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-sm transition">Connect with tone3000</button>
+                    <button id="rb-oauth-disconnect" onclick="rbOauthDisconnect()" class="hidden bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Disconnect</button>
+                    <span id="rb-oauth-status" class="text-xs text-gray-500"></span>
+                </div>
+            </div>
+
+            <!-- Fuzzy fallback — placed ABOVE the download/map actions so its
+                 warning ("this can pull bad NAMs") is seen BEFORE you download. -->
+            <div class="bg-dark-700/50 border border-amber-900/40 rounded-xl p-5 mb-6">
+                <label class="flex items-start gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" id="rb-allow-tone3000-fallback"
+                           onchange="rbSetAllowTone3000Fallback(this.checked)"
+                           class="mt-1 accent-amber-500">
+                    <span class="text-gray-300">
+                        <span class="font-medium text-amber-300">⚠ Allow tone3000 fuzzy fallback</span>
+                        <span class="text-gray-500 ml-1">(opt-out from curated-only)</span>
+                        <div class="text-gray-500 mt-1 leading-snug">
+                            Heads-up: with this ON, downloads/maps may pull a
+                            <strong class="text-amber-300">"best guess" capture that sounds wrong</strong>
+                            for gear without a curated match. Leave it
+                            <strong class="text-gray-400">unchecked</strong> (recommended) and the plugin
+                            only uses the curated 1-to-1 mappings in
+                            <code class="bg-dark-800 px-1 rounded">rs_to_real.json</code> +
+                            <code class="bg-dark-800 px-1 rounded">default_captures.json</code>;
+                            gear without a curated default lands in
+                            <span class="text-amber-300">pending</span> instead.
+                        </div>
+                        <div class="text-gray-500 mt-1 leading-snug">
+                            Check this only if your library has lots of uncurated gear
+                            and you want the plugin to fuzzy-search tone3000 and
+                            auto-download a guess for each.
+                        </div>
+                    </span>
+                </label>
+            </div>
+
+            <!-- Download tone3000 tones as NEW gain-variant gear (clean/crunch/dist
+                 in one gear, auto-switched by the song's mapped volume). Does NOT
+                 touch existing gear — it only builds your library; Map gear to songs
+                 then maps songs to them. -->
+            <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+                <h3 class="text-white font-semibold mb-2">Download automatic tone3000 tones</h3>
+                <p class="text-gray-500 text-sm mb-3">
+                    Downloads each curated amp's clean / crunch / dist captures from
+                    tone3000 and creates <strong>one new gear per amp</strong> that
+                    holds all three — auto-selected by the song's mapped volume, with
+                    editable switch levels. It only builds your gear library (the new
+                    gears start <span class="text-gray-400">unassigned</span>); use
+                    <span class="text-gray-400">Map gear to songs</span> below to map
+                    your songs onto them.
+                </p>
+                <button onclick="rbDownloadTone3000Gears()"
+                        class="bg-emerald-900/30 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/40 px-4 py-2 rounded-lg text-sm transition">
+                    ⬇ Download automatic tone3000 tones
+                </button>
+            </div>
+
+            <!-- Map the song library onto gear (redirects amp slots onto the auto
+                 tone3000 gears; preserves manual swaps). -->
+            <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+                <h3 class="text-white font-semibold mb-2">Map library to gear</h3>
+                <p class="text-gray-500 text-sm mb-3">
+                    Walks every song and, for each gear in each tone, resolves a
+                    NAM / IR / VST — reusing an assignment you already made, then your
+                    curated picks, then (optionally) a fresh tone3000 search. Also
+                    redirects amp slots onto the auto tone3000 gears you downloaded.
+                    Preserves per-tone bypass + your manual swaps.
+                </p>
+                <button class="rb-batch-btn bg-accent hover:bg-accent/80 text-white px-5 py-2 rounded-xl text-sm transition"
+                        onclick="rbOpenMapModal()"
+                        title="Pick which gear categories to map onto your songs.">
+                    Map gear to songs
+                </button>
+                <div class="rb-batch-progress hidden mt-4">
+                    <div class="flex items-center gap-3 mb-2 text-sm text-gray-400">
+                        <span class="rb-batch-pct">0%</span>
+                        <span class="rb-batch-count">0 / 0</span>
+                        <span class="rb-batch-assigned text-green-400 hidden"></span>
+                    </div>
+                    <div class="h-2 bg-dark-800 rounded-full overflow-hidden">
+                        <div class="rb-batch-bar h-full bg-accent transition-all" style="width:0%"></div>
+                    </div>
+                    <pre class="rb-batch-log mt-3 text-xs text-gray-500 max-h-48 overflow-auto bg-dark-900/50 p-2 rounded"></pre>
+                </div>
+            </div>
+
+            <!-- Files: downloaded NAM/IR inventory (moved here from the Gear tab). -->
+            <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-4 mb-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                        <h3 class="text-white font-semibold text-sm">Files · downloaded captures</h3>
+                        <p class="text-gray-500 text-xs mt-1" id="rb-manage-summary">Loading inventory…</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="rbLoadManageTab()"
+                                class="bg-dark-600 hover:bg-dark-500 text-gray-200 px-3 py-1.5 rounded text-xs transition">
+                            ↻ Refresh
+                        </button>
+                        <button onclick="rbPurgeNams({}, 'EVERYTHING — every NAM and IR')"
+                                class="bg-red-900/30 hover:bg-red-900/60 text-red-300 border border-red-800/40 px-3 py-1.5 rounded text-xs transition">
+                            🗑 Purge all
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="rb-manage-buckets" class="space-y-4"></div>
+
+        </div><!-- /#rb-setup-tone3000 -->
+
     </div>
     </div><!-- /#rb-stage-wrap -->
 </div>

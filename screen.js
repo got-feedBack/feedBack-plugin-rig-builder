@@ -3870,6 +3870,7 @@ function rbShowTab(name) {
     if (name === 'master') rbLoadMasterChain();
     if (name === 'advanced') rbLoadAdvanced();
     if (name === 'settings') {
+        rbSetupSubtab(rbState._setupSubtab || 'general');   // General vs tone3000
         rbLoadCoverage();        // batch / coverage panel (was dashboard)
         rbLoadSettings();        // tone3000 + prefs
         rbUpdateScanStatus();
@@ -3883,7 +3884,8 @@ function rbShowTab(name) {
 // top-level tab so the user doesn't ping-pong between two tabs to
 // resolve a gear and inspect its file.
 function rbGearFilter(filter) {
-    if (!['all', 'files'].includes(filter)) filter = 'all';
+    // Files moved to Setup → tone3000; the Gear tab is now just the catalog.
+    filter = 'all';
     rbState.currentGearFilter = filter;
     document.querySelectorAll('.rb-gear-view').forEach(v => v.classList.add('hidden'));
     const view = document.getElementById(`rb-gear-view-${filter}`);
@@ -3894,8 +3896,29 @@ function rbGearFilter(filter) {
         b.classList.toggle('text-white', active);
         b.classList.toggle('text-gray-400', !active);
     });
-    if (filter === 'all') rbLoadCatalog();
-    else if (filter === 'files') rbLoadManageTab();
+    rbLoadCatalog();
+}
+
+// Setup sub-tabs: General settings vs tone3000. Persists the last choice so
+// re-opening Setup lands where you left it; loads the Files inventory + shows
+// download progress when tone3000 is opened.
+function rbSetupSubtab(name) {
+    if (name !== 'tone3000') name = 'general';
+    rbState._setupSubtab = name;
+    document.getElementById('rb-setup-general')?.classList.toggle('hidden', name !== 'general');
+    document.getElementById('rb-setup-tone3000')?.classList.toggle('hidden', name !== 'tone3000');
+    ['general', 'tone3000'].forEach(n => {
+        const b = document.getElementById(`rb-setup-sub-${n}`);
+        if (!b) return;
+        const active = n === name;
+        b.classList.toggle('bg-dark-600', active);
+        b.classList.toggle('text-white', active);
+        b.classList.toggle('text-gray-300', !active);
+    });
+    if (name === 'tone3000') {
+        try { rbLoadManageTab(); } catch (_) {}
+        try { rbSetupPreloadCheck(); } catch (_) {}
+    }
 }
 
 // ── Studio room (Phase 1: static premium scene of the Default tone) ──────
@@ -6959,6 +6982,49 @@ async function rbPreloadCuratedVariants() {
     }
 }
 
+// Download tone3000 amp captures (clean/crunch/dist) and create ONE new gear
+// per amp — auto-switched by mapped volume, editable thresholds. Builds the
+// library only; Rescan all then maps songs onto them. Shares the preload
+// progress UI + polling.
+async function rbDownloadTone3000Gears() {
+    if (!confirm('Download tone3000 amp tones as new gear?\n\n'
+               + 'Downloads each curated amp\'s clean / crunch / dist captures and '
+               + 'creates ONE new gear per amp that auto-switches between them by the '
+               + 'song\'s mapped volume.\n\n'
+               + 'Existing gear is NOT touched — the new gears start unassigned. '
+               + 'Run "Rescan all" in General settings afterward to map your songs '
+               + 'onto them.\n\nContinue?')) return;
+    let jobId = null;
+    try {
+        jobId = await rbStartCapabilityJob('rig-builder.tone3000-gears', 'Download tone3000 gain-variant gears', {
+            logicalJobKey: 'rig-builder.tone3000-gears',
+            targetKind: 'curated-captures',
+            targetRef: 'tone3000-gears',
+        });
+        rbState._preloadJobId = jobId;
+        const r = await fetch(`${RB_API}/download_tone3000_gears`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || r.status);
+        if (d.started === false) {
+            if (d.reason === 'no_amps_with_variants') {
+                rbFinishCapabilityJob(jobId, true, 'No amps with gain variants to download');
+                alert('No curated amps with clean/crunch/dist variants were found.');
+                return;
+            }
+            rbFinishCapabilityJob(jobId, true, 'Download already running');
+            alert('Already running — progress is shown below.');
+            rbPreloadStartPolling();
+            return;
+        }
+        rbPreloadStartPolling();
+    } catch (e) {
+        if (jobId) rbFinishCapabilityJob(jobId, false, e.message || e, 'external-dependency');
+        alert(`Could not start download: ${e.message || e}`);
+    }
+}
+
 // Live progress polling for the curated-variants preload. Polls the
 // backend's /preload_status every 500ms while a run is in flight,
 // stops automatically when `running` flips to false, and surfaces the
@@ -7103,10 +7169,17 @@ async function rbPurgeNams(filter, label) {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || r.status);
         rbLoadManageTab();
+        // Custom gears whose files were deleted are gone now — refresh the catalog
+        // so they drop out of the browser too.
+        const removed = (d.removed_gears || []).length;
+        if (removed) { rbState.gearCatalog = null; try { rbLoadCatalog(); } catch (_) {} }
         rbFinishCapabilityJob(jobId, true, `Purged ${d.deleted_count || 0} cached capture files`);
+        const extra = removed ? ` and removed ${removed} gear${removed > 1 ? 's' : ''}` : '';
         if ((d.errors || []).length) {
-            alert(`Purged ${d.deleted_count} files. ${d.errors.length} errors:\n` +
+            alert(`Purged ${d.deleted_count} files${extra}. ${d.errors.length} errors:\n` +
                   d.errors.slice(0, 5).join('\n'));
+        } else if (removed) {
+            alert(`Purged ${d.deleted_count} files${extra}.`);
         }
     } catch (e) {
         rbFinishCapabilityJob(jobId, false, e.message || e, 'storage');
@@ -7137,15 +7210,53 @@ async function rbLoadCoverage() {
 // assigned_mode (manual swaps are discarded). Destructive → confirm first.
 async function rbFactoryReset() {
     if (!confirm(
-        'Reset ALL tones to the factory mapping?\n\n' +
-        'Every piece is re-resolved to its default bundled VST / capture / IR. '
-        + 'Your manual gear swaps are DISCARDED (assigned_mode is ignored). '
+        'Reset the whole plugin to factory defaults?\n\n' +
+        'Every tone is re-resolved to its default bundled VST / capture / IR, and '
+        + 'ALL gear redirects (custom + auto tone3000 mappings) are cleared so gear '
+        + 'plays its own native VST again. Your manual gear swaps are DISCARDED. '
         + 'Per-tone bypass is kept. This cannot be undone.'
     )) return;
     await rbStartBatch('factory');
 }
 
-async function rbStartBatch(mode) {
+// "Map gear to songs": a small modal to pick which categories get mapped.
+function rbOpenMapModal() {
+    document.querySelectorAll('.rb-map-modal').forEach(m => m.remove());
+    const cats = [['amp', 'Amps'], ['pedal', 'Pedals'], ['rack', 'Racks'], ['cab', 'Cabs']];
+    const modal = document.createElement('div');
+    modal.className = 'rb-map-modal fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6';
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    modal.innerHTML = `
+        <div class="bg-dark-700 border border-gray-800 rounded-xl p-6 max-w-sm w-full">
+            <h3 class="text-white font-semibold mb-1">Map gear to songs</h3>
+            <p class="text-gray-500 text-sm mb-4">Pick which gear categories to (re)map. Checked ones get mapped; the rest are left untouched.</p>
+            <div class="space-y-2 mb-5">
+                ${cats.map(([k, lbl]) => `
+                    <label class="flex items-center gap-2 text-sm text-gray-200 cursor-pointer">
+                        <input type="checkbox" class="rb-map-cat accent-emerald-500 w-4 h-4" value="${k}" checked>
+                        ${lbl}
+                    </label>`).join('')}
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="this.closest('.rb-map-modal').remove()"
+                        class="bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Cancel</button>
+                <button onclick="rbConfirmMapModal(this)"
+                        class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-sm transition">Map selected</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+}
+
+function rbConfirmMapModal(btn) {
+    const modal = btn.closest('.rb-map-modal');
+    const categories = Array.from(modal.querySelectorAll('.rb-map-cat:checked')).map(c => c.value);
+    if (!categories.length) { alert('Pick at least one category.'); return; }
+    modal.remove();
+    // All four selected → no filter (map everything).
+    rbStartBatch('all', categories.length === 4 ? [] : categories);
+}
+
+async function rbStartBatch(mode, categories) {
     mode = mode || 'all';
     const btns = document.querySelectorAll('.rb-batch-btn');
     btns.forEach(b => { b.disabled = true; });
@@ -7160,7 +7271,7 @@ async function rbStartBatch(mode) {
         const r = await fetch(`${RB_API}/batch_all`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode }),
+            body: JSON.stringify({ mode, categories: categories || [] }),
         });
         if (!r.ok) {
             const err = await r.json().catch(() => ({}));
@@ -7175,7 +7286,9 @@ async function rbStartBatch(mode) {
     } finally {
         btns.forEach(b => { b.disabled = false; });
     }
-    document.getElementById('rb-batch-progress').classList.remove('hidden');
+    // There may be more than one progress block (Map all in tone3000, Reset to
+    // factory in General) — reveal every instance.
+    document.querySelectorAll('.rb-batch-progress').forEach(el => el.classList.remove('hidden'));
     if (rbState.batchPoll) clearInterval(rbState.batchPoll);
     rbState.batchPoll = setInterval(rbPollBatch, 1000);
     rbPollBatch();
@@ -7202,25 +7315,21 @@ async function rbPollBatch() {
     const pct = st.total ? Math.round(100 * st.progress / st.total) : 0;
     rbUpdateCapabilityJob(rbState._batchJobId, { mode: st.total ? 'determinate' : 'indeterminate', percent: pct, step: 'mapping', message: `${st.progress || 0} / ${st.total || 0}` });
     // The user may have navigated away from the batch panel — the poll keeps
-    // running for the capability job, so every DOM write is optional.
-    const pctEl = document.getElementById('rb-batch-pct');
-    if (pctEl) pctEl.textContent = `${pct}%`;
-    const countEl = document.getElementById('rb-batch-count');
-    if (countEl) countEl.textContent = `${st.progress} / ${st.total}`;
-    const barEl = document.getElementById('rb-batch-bar');
-    if (barEl) barEl.style.width = `${pct}%`;
-
-    const assignedEl = document.getElementById('rb-batch-assigned');
-    if (assignedEl && st.assigned) {
-        assignedEl.textContent = `${st.assigned} tones persisted`;
-        assignedEl.classList.remove('hidden');
+    // running for the capability job, so every DOM write is optional. Update
+    // EVERY progress block (there can be one per Setup sub-tab).
+    document.querySelectorAll('.rb-batch-pct').forEach(el => { el.textContent = `${pct}%`; });
+    document.querySelectorAll('.rb-batch-count').forEach(el => { el.textContent = `${st.progress} / ${st.total}`; });
+    document.querySelectorAll('.rb-batch-bar').forEach(el => { el.style.width = `${pct}%`; });
+    if (st.assigned) {
+        document.querySelectorAll('.rb-batch-assigned').forEach(el => {
+            el.textContent = `${st.assigned} tones persisted`;
+            el.classList.remove('hidden');
+        });
     }
-
-    const log = document.getElementById('rb-batch-log');
-    if (log) {
+    document.querySelectorAll('.rb-batch-log').forEach(log => {
         log.textContent = (st.log || []).join('\n');
         log.scrollTop = log.scrollHeight;
-    }
+    });
 
     if (!st.running && rbState.batchPoll) {
         clearInterval(rbState.batchPoll);
@@ -8810,11 +8919,19 @@ function rbLoadCustomGearMap() {
 // Attach a custom gear's saved UI + source to a piece from the ALREADY-loaded
 // map (sync, no fetch). No-op if the map isn't loaded yet or it's not custom.
 function rbAttachCustomUiSync(piece) {
-    if (!piece || piece._custom_ui) return;
+    if (!piece) return;
     const t = piece.type || piece.rs_gear || '';
     if (t.indexOf('custom_') !== 0) return;
     const rec = rbState._customGearMap && rbState._customGearMap[t];
     if (!rec) return;
+    // Give the piece the user's chosen name so views (node editor, Studio cards)
+    // show it instead of the raw "custom_rack_xxxx" id it loads with. Runs even
+    // when the UI is already attached (name may still be the raw id).
+    if (!piece.real_name || piece.real_name === t) {
+        const nm = rec.real_name || rec.name;
+        if (nm) piece.real_name = nm;
+    }
+    if (piece._custom_ui) return;
     if (rec.ui) piece._custom_ui = rec.ui;
     if (rec.vst_path && !piece._vst_path) {
         piece._vst_path = rec.vst_path; piece._vst_format = rec.vst_format || 'VST3';
@@ -13913,9 +14030,14 @@ function rbGearIsAssigned(g) {
 // unassigned. Cabs/other keep the legacy meaning.
 function rbGearEffectiveAssigned(g) {
     if (!g) return false;
-    const isMappable = !!g.custom || g.category !== 'cab';
-    if (isMappable) return Array.isArray(g.assigned_rs) && g.assigned_rs.length > 0;
-    return rbGearIsAssigned(g);
+    // Custom / user-added gear (incl. auto tone3000): a "new" gear that reads
+    // assigned only once it covers a game slot (i.e. it's been mapped to songs).
+    if (g.custom) return Array.isArray(g.assigned_rs) && g.assigned_rs.length > 0;
+    // Native gear: the game's factory roster is assigned by default. Exceptions:
+    // a post-factory DLC/new gear (is_new, e.g. BS103) or one whose slot is
+    // redirected away to a custom gear both read unassigned.
+    if (g.is_new || g.mapped_custom) return false;
+    return true;
 }
 
 function rbGearSearchHaystack(g) {
@@ -13928,8 +14050,37 @@ function rbGearSearchHaystack(g) {
     ) + rbGearTypeTags(g);
 }
 
+// What backs a gear: a real VST, a NAM capture, or an IR (cab). Used by the
+// NAM/VST/IR sidebar filter. Returns null when nothing is resolved yet.
+function rbGearBacking(g) {
+    if (!g) return null;
+    if (rbGearHasVst(g)) return 'vst';
+    const file = g.file || (g.assigned && g.assigned.file) || '';
+    if (g.kind === 'ir' || (g.assigned && g.assigned.kind === 'ir') || /\.wav$/i.test(file)) return 'ir';
+    if (g.kind === 'nam' || (g.assigned && g.assigned.kind === 'nam') || /\.nam$/i.test(file)) return 'nam';
+    return null;
+}
+
+// Toggle one backing type in the multi-select filter (empty set = show all).
+function rbToggleBackingFilter(kind) {
+    const set = rbState.gearBackingFilter || (rbState.gearBackingFilter = {});
+    set[kind] = !set[kind];
+    document.querySelectorAll('.rb-backing-btn').forEach(b => {
+        const on = !!set[b.dataset.rbBacking];
+        b.style.background = on ? 'rgba(120,160,220,.22)' : '';
+        b.style.borderColor = on ? 'rgba(120,160,220,.6)' : '';
+        b.style.color = on ? '#cfe0ff' : '';
+    });
+    rbApplyGearFilters();
+}
+
 function rbGearMatchesFilters(g, search, onlyUnassigned, instrument) {
     if (onlyUnassigned && rbGearEffectiveAssigned(g)) return false;
+    const bf = rbState.gearBackingFilter;
+    if (bf && (bf.nam || bf.vst || bf.ir)) {
+        const b = rbGearBacking(g);
+        if (!b || !bf[b]) return false;
+    }
     if (instrument && instrument !== 'all') {
         const gi = rbGearInstrument(g);
         if (gi !== 'all' && gi !== instrument) return false;
@@ -14132,7 +14283,10 @@ async function rbCatalogCustomEditInline(g) {
     // (for live audio + reading the plugin's current values).
     let slotId = null;
     let model = { idMap: {}, values: {} };
-    let layout = g.ui ? PC.normalizeLayout(g.ui) : null;
+    // NAM/IR gears (incl. auto-downloaded tone3000 gears) ship no saved UI — fall
+    // back to a default face so they render instead of hanging on "Loading…".
+    let layout = g.ui ? PC.normalizeLayout(g.ui)
+               : (!vstPath && PC.defaultFace ? PC.defaultFace(g.category, null, { title: g.real_name || '' }) : null);
     const idToParam = {};
     const mapParams = () => {
         Object.keys(idToParam).forEach(k => delete idToParam[k]);
@@ -14319,6 +14473,7 @@ function rbRenderGearDetail(g) {
         ${isCustom
             ? `<div id="rb-cg-cat-face-${safeId}">${visualBlock}</div>`
             : (isVst ? '' : visualBlock)}
+        ${rbGainVariantEditorHtml(g)}
         <div class="bg-dark-800/50 border border-gray-800/40 rounded-lg p-3 space-y-2">
             ${isMappableGear
                 ? `<div id="rb-cg-assign-${safeId}" class="text-xs text-gray-500">Loading assignments…</div>`
@@ -14347,6 +14502,69 @@ function rbRenderGearDetail(g) {
     }
     if (cabRoomEntry) {
         setTimeout(() => rbCabRoomBuild(g, cabRoomEntry, safeId), 0);
+    }
+}
+
+// Editable clean/crunch/dist switch-point editor for auto-downloaded tone3000
+// gears. Each level owns a game-Gain range [lo, hi]; playback picks the level
+// whose range contains the song's mapped Gain.
+function rbGainVariantEditorHtml(g) {
+    if (!g || !g.gain_variants) return '';
+    const gv = g.gain_variants;
+    const safeId = g.rs_gear.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const order = ['clean', 'crunch', 'dist'];
+    const levels = Object.keys(gv).sort((a, b) => {
+        const ai = order.indexOf(a), bi = order.indexOf(b);
+        return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    });
+    const rows = levels.map(lvl => {
+        const v = gv[lvl] || {};
+        const rng = Array.isArray(v.rs_gain_range) ? v.rs_gain_range : [0, 100];
+        const fname = (v.file || '').split('/').pop();
+        return `<div class="flex items-center gap-1.5 text-xs py-0.5">
+            <span class="w-14 text-gray-300 capitalize">${rbEsc(lvl)}</span>
+            <span class="text-gray-600">Gain</span>
+            <input type="number" min="0" max="100" value="${Math.round(rng[0])}" data-gv-lvl="${rbEsc(lvl)}" data-gv-end="lo"
+                   class="w-12 bg-dark-900 border border-gray-800 rounded px-1 py-0.5 text-gray-200 text-center outline-none">
+            <span class="text-gray-600">–</span>
+            <input type="number" min="0" max="100" value="${Math.round(rng[1])}" data-gv-lvl="${rbEsc(lvl)}" data-gv-end="hi"
+                   class="w-12 bg-dark-900 border border-gray-800 rounded px-1 py-0.5 text-gray-200 text-center outline-none">
+            ${fname ? `<span class="text-gray-600 truncate flex-1 min-w-0" title="${rbEsc(v.file)}">${rbEsc(fname)}</span>` : ''}
+        </div>`;
+    }).join('');
+    return `<div class="bg-emerald-900/10 border border-emerald-800/30 rounded-lg p-3 mb-2">
+        <div class="flex items-center justify-between mb-1">
+            <span class="text-[11px] uppercase tracking-wide text-emerald-300/80">Volume switch points · game Gain 0–100</span>
+            <button onclick="rbSaveGainVariantRanges('${rbEsc(g.rs_gear)}','${safeId}')"
+                    class="text-[11px] text-emerald-300 hover:text-emerald-200">Save</button>
+        </div>
+        <div id="rb-gv-${safeId}">${rows}</div>
+        <div id="rb-gv-status-${safeId}" class="text-[10px] text-gray-500 mt-1">Auto-switches by each song's mapped Gain.</div>
+    </div>`;
+}
+
+async function rbSaveGainVariantRanges(rsGear, safeId) {
+    const host = document.getElementById(`rb-gv-${safeId}`);
+    if (!host) return;
+    const ranges = {};
+    host.querySelectorAll('input[data-gv-lvl]').forEach(inp => {
+        const lvl = inp.dataset.gvLvl, end = inp.dataset.gvEnd;
+        if (!ranges[lvl]) ranges[lvl] = [0, 100];
+        const val = Math.max(0, Math.min(100, parseFloat(inp.value) || 0));
+        ranges[lvl][end === 'lo' ? 0 : 1] = val;
+    });
+    const status = document.getElementById(`rb-gv-status-${safeId}`);
+    try {
+        const r = await fetch(`${window.RB_API}/custom_gear_gain_ranges`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rs_gear: rsGear, ranges }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || r.status);
+        const g = rbFindGear(rsGear); if (g) g.gain_variants = d.gain_variants;
+        if (status) { status.textContent = 'Saved — applies on next song load / Rescan all.'; status.className = 'text-[10px] text-emerald-400 mt-1'; }
+    } catch (e) {
+        if (status) { status.textContent = 'Error: ' + (e.message || e); status.className = 'text-[10px] text-red-400 mt-1'; }
     }
 }
 
@@ -14999,13 +15217,108 @@ async function rbCgLoadFiles() {
 
 function rbCgFilePickerHtml() {
     const s = rbCgState;
-    if (s.files == null) return `<div class="text-xs text-gray-500">loading files…</div>`;
-    if (!s.files.length) return `<div class="text-xs text-gray-500">No downloaded NAM/IR files yet — download some in the Gear catalog first.</div>`;
+    const local = (s.files == null)
+        ? `<div class="text-xs text-gray-500">loading files…</div>`
+        : (!s.files.length
+            ? `<div class="text-xs text-gray-500">No downloaded NAM/IR files yet — search tone3000 above or download from the Gear catalog.</div>`
+            : `<input type="text" placeholder="🔍 filter downloaded files…" value="${rbEsc(s._fileFilter || '')}"
+                   oninput="rbCgSetFileFilter(this.value)"
+                   class="w-full bg-dark-900 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1 mb-1">
+               <div id="rb-cg-file-rows" class="max-h-40 overflow-y-auto space-y-0.5">${rbCgFileRowsHtml()}</div>`);
+    return `${rbCgT3kSearchHtml()}
+        <div class="text-[10px] uppercase tracking-wide text-gray-600 mt-3 mb-1">Downloaded on disk</div>
+        ${local}`;
+}
+
+// tone3000 search inside the Add-gear NAM·IR tab: find a capture, download it
+// (no assign), and use it as this new gear's source.
+function rbCgT3kSearchHtml() {
+    const s = rbCgState;
+    const results = s._t3kResults;
+    let rows = '';
+    if (s._t3kSearching) {
+        rows = `<div class="text-[11px] text-gray-500 px-1 py-2">searching tone3000…</div>`;
+    } else if (results && !results.has_api_access) {
+        rows = `<div class="text-[11px] text-amber-400/80 px-1 py-2">Connect tone3000 in Setup → tone3000 to search in-app.</div>`;
+    } else if (results && !results.candidates.length) {
+        rows = `<div class="text-[11px] text-gray-500 px-1 py-2">No results — try a brand/model (e.g. "Fender Twin").</div>`;
+    } else if (results) {
+        rows = results.candidates.slice(0, 12).map(c => {
+            const photo = (c.images && c.images[0])
+                ? `<img src="${rbEsc(c.images[0])}" alt="" loading="lazy" style="width:34px;height:34px;object-fit:cover" class="rounded bg-dark-900 flex-shrink-0" onerror="this.style.visibility='hidden'">`
+                : `<div class="rounded bg-dark-900 flex items-center justify-center text-gray-700 text-[8px] flex-shrink-0" style="width:34px;height:34px">no img</div>`;
+            return `
+            <div class="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-dark-700">
+                ${photo}
+                <a href="${rbEsc(c.url || '#')}" target="_blank" class="flex-1 min-w-0 hover:text-white transition" title="${rbEsc(c.title)}">
+                    <div class="text-[11px] text-gray-300 truncate">${rbEsc(c.title)}</div>
+                    <div class="text-[10px] text-gray-600">${rbEsc(c.license || 'unknown')} · ${c.downloads_count || 0} dl · ${c.favorites_count || 0} ♥</div>
+                </a>
+                <button onclick="rbCgT3kUse(this, ${c.id})"
+                        class="bg-green-700 hover:bg-green-600 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap flex-shrink-0">⬇ Use</button>
+            </div>`;
+        }).join('');
+    }
     return `
-        <input type="text" placeholder="🔍 filter files…" value="${rbEsc(s._fileFilter || '')}"
-               oninput="rbCgSetFileFilter(this.value)"
-               class="w-full bg-dark-900 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1 mb-1">
-        <div id="rb-cg-file-rows" class="max-h-40 overflow-y-auto space-y-0.5">${rbCgFileRowsHtml()}</div>`;
+        <div class="border border-emerald-800/30 rounded-lg p-2 bg-emerald-900/10">
+            <div class="text-[10px] uppercase tracking-wide text-emerald-300/80 mb-1">Search tone3000</div>
+            <div class="flex gap-1">
+                <input id="rb-cg-t3k-query" type="text" value="${rbEsc(s._t3kQuery || '')}"
+                       placeholder="brand / model…" onkeydown="if(event.key==='Enter')rbCgT3kSearch()"
+                       class="flex-1 bg-dark-900 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1">
+                <button onclick="rbCgT3kSearch()" class="bg-emerald-800/40 hover:bg-emerald-800/70 text-emerald-200 text-xs px-2.5 py-1 rounded">Search</button>
+            </div>
+            ${rows ? `<div class="mt-1 max-h-40 overflow-y-auto">${rows}</div>` : ''}
+        </div>`;
+}
+
+async function rbCgT3kSearch() {
+    const s = rbCgState; if (!s) return;
+    const q = (document.getElementById('rb-cg-t3k-query') || {}).value || '';
+    s._t3kQuery = q.trim();
+    if (!s._t3kQuery) return;
+    s._t3kSearching = true;
+    rbCgRerenderSource();
+    const gears = s.cat === 'cab' ? 'cabinet' : s.cat;
+    const qs = new URLSearchParams({ rs_gear: '', query_override: s._t3kQuery, gears_override: gears, limit: '12' });
+    try {
+        const r = await fetch(`${window.RB_API}/search?${qs}`);
+        s._t3kResults = await r.json();
+    } catch (e) {
+        s._t3kResults = { has_api_access: true, candidates: [] };
+    }
+    s._t3kSearching = false;
+    if (rbCgState === s && s.sourceTab === 'file') rbCgRerenderSource();
+}
+
+async function rbCgT3kUse(btn, toneId) {
+    const s = rbCgState; if (!s) return;
+    const old = btn.textContent;
+    btn.disabled = true; btn.textContent = '…';
+    try {
+        const r = await fetch(`${window.RB_API}/audition_candidate`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rs_gear: '', tone3000_id: toneId }),
+        });
+        const d = await r.json();
+        if (!r.ok || !d.file) throw new Error(d.error || 'download failed');
+        s.file = d.file;
+        s.kind = d.kind || 'nam';
+        s.vst_path = '';
+        // Pull the new file into the local list too, then refresh.
+        s.files = null;
+        rbCgLoadFiles();
+        rbCgUpdateSourceLabel();
+        rbCgRerenderSource();
+    } catch (e) {
+        btn.disabled = false; btn.textContent = old;
+        alert(`Couldn't download: ${e.message || e}`);
+    }
+}
+
+function rbCgRerenderSource() {
+    const host = document.getElementById('rb-cg-source');
+    if (host && rbCgState && rbCgState.sourceTab === 'file') host.innerHTML = rbCgFilePickerHtml();
 }
 
 function rbCgFileRowsHtml() {
@@ -15484,7 +15797,7 @@ function rbRenderCatalogCard(g) {
         const btns = g.variants.map(v => {
             const vId = `rb-aud-${_rbCatalogSeq++}`;
             if (!v.available || !v.file) {
-                return `<button disabled title="NAM not downloaded — Setup → Download all curated variants"
+                return `<button disabled title="NAM not downloaded — Setup → tone3000 → Download automatic tone3000 tones"
                                 class="text-[10px] px-2 py-0.5 rounded bg-dark-800/50 text-gray-600 cursor-not-allowed">▶ ${rbEsc(v.level)}</button>`;
             }
             // Per-level perceptual trim: clean=1.0, crunch=0.71 (-3 dB),
@@ -17871,6 +18184,9 @@ function rbAdvRenderCanvas() {
             if (n.kind === 'gear' && typeof n.pieceIdx === 'number' && n.pieceIdx >= 0) {
                 const p = chain[n.pieceIdx];
                 if (p && p._custom_ui) { const im = rbAdvPieceImg(p); if (im) n.img = im; }
+                // Refresh the label once the custom name resolves (loads as the
+                // raw "custom_..." id, becomes the user's name after enrich).
+                if (p && p.real_name && p.real_name !== n.label) n.label = p.real_name;
             }
         });
     } catch (_) {}
