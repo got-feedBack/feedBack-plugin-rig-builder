@@ -1362,6 +1362,215 @@ def _atomic_write_json(path: Path, obj, indent: int = 2, **dumps_kwargs) -> None
     os.replace(tmp, path)
 
 
+_CUSTOM_GEAR_FILENAME = "rig_builder_custom_gear.json"
+_CUSTOM_GEAR_CATEGORIES = ("amp", "cab", "pedal", "rack")
+
+
+def _custom_gear_path() -> Path | None:
+    """Path to the user's custom-gear store (a JSON list of user-authored
+    amps/cabs/pedals/racks). Lives next to the settings file in the config
+    dir. None when we have no config dir (shouldn't happen in the app)."""
+    if _config_dir is None:
+        return None
+    return _config_dir / _CUSTOM_GEAR_FILENAME
+
+
+def _load_custom_gear() -> list[dict]:
+    """Return the list of user-defined custom gear records. Tolerant of a
+    missing / corrupt file (returns [])."""
+    path = _custom_gear_path()
+    if path is None or not path.exists():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        log.warning("%s unreadable — ignoring custom gear", _CUSTOM_GEAR_FILENAME,
+                    exc_info=True)
+        return []
+    if isinstance(raw, dict):            # tolerate {"gear": [...]} shape
+        raw = raw.get("gear") or raw.get("items") or []
+    return [g for g in raw if isinstance(g, dict) and g.get("rs_gear")]
+
+
+def _save_custom_gear(items: list[dict]) -> None:
+    path = _custom_gear_path()
+    if path is None:
+        raise RuntimeError("no config dir for custom gear")
+    _atomic_write_json(path, items)
+
+
+def _custom_gear_catalog_item(rec: dict) -> dict:
+    """Shape a stored custom-gear record like a /gear_catalog entry so it drops
+    straight into the browser list, the node-editor palette, and the per-song
+    picker (all read the same shape). Custom gear is always 'assigned' — it
+    carries its own VST or NAM/IR — and flags `custom: true` so the UI can show
+    an Edit/Delete affordance."""
+    kind = (rec.get("kind") or "").lower()
+    return {
+        "rs_gear": rec.get("rs_gear"),
+        "real_name": rec.get("real_name") or rec.get("name") or rec.get("rs_gear"),
+        "type_tags": rec.get("type_tags", ""),
+        "make": rec.get("make", ""),
+        "model": rec.get("model", ""),
+        "category": rec.get("category") or "other",
+        "assigned": bool(rec.get("vst_path") or rec.get("file")),
+        "kind": kind,
+        "file": rec.get("file"),
+        "vst_path": rec.get("vst_path"),
+        "vst_format": rec.get("vst_format"),
+        "vst_state": rec.get("vst_state"),
+        "tone3000_id": None,
+        "tone3000_title": None,
+        "image": None,
+        "tone3000_url": None,
+        "rs_order": None,
+        "variants": [],
+        "mic_variants": [],
+        # custom-gear extras
+        "custom": True,
+        "instrument": rec.get("instrument") or "all",
+        "ui": rec.get("ui") or None,
+    }
+
+
+# ── Gear mapping: game (RS) gear → one of the user's CUSTOM gears ────────────
+# Instead of assigning a bare VST to a game gear, the user maps it to a whole
+# custom gear (which carries its own VST + UI + params) and maps each RS knob to
+# one of that custom gear's parameters. Persisted in rig_builder_gear_map.json:
+#   { "Amp_JCM800": { "custom": "custom_amp_123",
+#                     "params": { "Gain": "Drive", "Bass": "Bass" } } }
+_GEAR_MAP_FILENAME = "rig_builder_gear_map.json"
+
+# Fallback RS-knob sets when a gear has no entry in the knob table.
+_DEFAULT_RS_KNOBS = {
+    "amp":  ["Gain", "Bass", "Mid", "Treble", "Presence", "Volume"],
+    "pedal": ["Level", "Tone", "Gain"],
+    "rack": ["Mix", "Level"],
+    "cab":  [],
+}
+
+
+def _gear_map_path() -> Path | None:
+    if _config_dir is None:
+        return None
+    return _config_dir / _GEAR_MAP_FILENAME
+
+
+def _load_gear_map() -> dict:
+    path = _gear_map_path()
+    if path is None or not path.exists():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return raw if isinstance(raw, dict) else {}
+    except (ValueError, OSError):
+        log.warning("%s unreadable — ignoring gear map", _GEAR_MAP_FILENAME, exc_info=True)
+        return {}
+
+
+def _save_gear_map(m: dict) -> None:
+    path = _gear_map_path()
+    if path is None:
+        raise RuntimeError("no config dir for gear map")
+    _atomic_write_json(path, m)
+
+
+def _rs_knobs_for_gear(rs_gear: str) -> list[str]:
+    """The RS knob names for a game gear — taken from the shipped knob table
+    (rs_knob_to_vst_param.json) when present, else a per-category default."""
+    table = _load_knob_to_vst_table() or {}
+    entry = table.get(rs_gear) or {}
+    for _vst_name, mapping in entry.items():
+        if isinstance(mapping, dict):
+            knobs = [k for k in mapping if not str(k).startswith("_")]
+            if knobs:
+                return knobs
+    info = _load_rs_to_real().get(rs_gear) or {}
+    cat = info.get("category") or _gear_category(rs_gear) or "amp"
+    return list(_DEFAULT_RS_KNOBS.get(cat, []))
+
+
+def _custom_gear_params(rec: dict) -> list[str]:
+    """The parameter names a custom gear exposes for mapping — the labels of the
+    controls in its saved UI that are wired to a real plugin param."""
+    ui = rec.get("ui") or {}
+    out, seen = [], set()
+    for c in (ui.get("controls") or []):
+        if not isinstance(c, dict):
+            continue
+        lbl = (c.get("label") or "").strip()
+        if lbl and c.get("param") is not None and lbl not in seen:
+            seen.add(lbl)
+            out.append(lbl)
+    # Fall back to ALL labelled controls if none carry an explicit param id.
+    if not out:
+        for c in (ui.get("controls") or []):
+            if isinstance(c, dict):
+                lbl = (c.get("label") or "").strip()
+                if lbl and lbl not in seen:
+                    seen.add(lbl)
+                    out.append(lbl)
+    return out
+
+
+def _is_custom_gear(gear_id: str) -> bool:
+    return isinstance(gear_id, str) and gear_id.startswith("custom_")
+
+
+def _installed_vst_block(gear_id: str) -> dict:
+    """The knob-table variant mapping for the SPECIFIC VST installed for this
+    native gear — a single variant, not a merge across every candidate plugin.
+    Falls back to the first shipped variant when the installed stem doesn't
+    resolve. This is what prevents the 'more options than knobs' inflation."""
+    table = _load_knob_to_vst_table() or {}
+    entry = table.get(gear_id) or {}
+    if not entry:
+        return {}
+    try:
+        pick = _pick_installed_primary_vst(gear_id, _build_known_vst_lookup())
+    except Exception:
+        pick = None
+    if pick and pick.get("vst_path"):
+        blk = entry.get(_vst_mapping_stem(pick["vst_path"]))
+        if isinstance(blk, dict):
+            return blk
+    for v in entry.values():
+        if isinstance(v, dict):
+            return v
+    return {}
+
+
+def _gear_params(gear_id: str) -> list[str]:
+    """The parameters a gear exposes as knob-mapping TARGETS — the real plugin
+    params that actually get set. Custom → its created-VST control labels; native
+    → the installed VST's own param names (single variant, deduped)."""
+    rec = next((c for c in _load_custom_gear() if c.get("rs_gear") == gear_id), None)
+    if rec:
+        return _custom_gear_params(rec)
+    out, seen = [], set()
+    for k, spec in _installed_vst_block(gear_id).items():
+        if str(k).startswith("_"):
+            continue
+        p = spec.get("param") if isinstance(spec, dict) else None
+        if p and p not in seen:
+            seen.add(p)
+            out.append(p)
+    return out
+
+
+def _native_default_knobmap(gear_id: str) -> dict:
+    """A native gear's own slot pre-fills each RS knob with the VST param it
+    actually drives (its shipped mapping for the installed variant)."""
+    block = _installed_vst_block(gear_id)
+    out = {}
+    for k in _rs_knobs_for_gear(gear_id):
+        spec = block.get(k) if isinstance(block, dict) else None
+        p = spec.get("param") if isinstance(spec, dict) else None
+        if p:
+            out[k] = p
+    return out
+
+
 def _load_cached_json(filename: str, *, post=None, empty=None):
     """Load the generated data file `<plugin>/data/<filename>` as JSON once,
     cached by filename (legacy flat location as fallback — see `_data_path`).
@@ -7961,8 +8170,371 @@ def setup(app, context):
                 "daw_category": _daw_category_for(rs_gear, category),
                 "type_tags": type_tags.get(rs_gear, ""),
             })
+        # User-defined custom gear — surface it in the per-song "Add piece"
+        # picker too (same flat shape). daw_category maps the coarse category
+        # to a picker bucket so it lands under the right tab.
+        _daw_bucket = {"amp": "amps", "cab": "cabs", "pedal": "other", "rack": "other"}
+        for rec in _load_custom_gear():
+            cat = rec.get("category") or "other"
+            out.append({
+                "rs_gear": rec.get("rs_gear"),
+                "name": rec.get("real_name") or rec.get("name") or rec.get("rs_gear"),
+                "make": rec.get("make", ""),
+                "model": rec.get("model", ""),
+                "category": cat,
+                "daw_category": _daw_bucket.get(cat, "other"),
+                "type_tags": rec.get("type_tags", ""),
+                "custom": True,
+                # Source fields so the per-song "Add piece" picker can attach the
+                # saved VST/NAM the moment a custom gear is added (no manual
+                # re-assign). Absent for regular game gear.
+                "kind": rec.get("kind"),
+                "vst_path": rec.get("vst_path"),
+                "vst_format": rec.get("vst_format"),
+                "vst_state": rec.get("vst_state"),
+                "file": rec.get("file"),
+                # The custom UI layout so a piece added from the picker shows the
+                # user's own face (not the plugin's native window) in the editor.
+                "ui": rec.get("ui"),
+            })
         out.sort(key=lambda g: (g["daw_category"], (g["name"] or "").lower()))
         return {"gears": out, "count": len(out)}
+
+    # ── Custom (user-authored) gear: create / edit / delete ───────────
+
+    @app.get("/api/plugins/rig_builder/custom_gear")
+    def custom_gear_list():
+        """List the user's custom gear (raw stored records)."""
+        return {"gear": _load_custom_gear()}
+
+    @app.post("/api/plugins/rig_builder/custom_gear")
+    def custom_gear_save(data: dict = Body(...)):
+        """Create or update a user-defined gear (amp/cab/pedal/rack) backed by a
+        bundled/installed VST or a NAM/IR file, plus a serializable custom UI
+        layout. Persisted to rig_builder_custom_gear.json; surfaced by
+        /gear_catalog (browser + node-editor palette) and /gears_catalog
+        (per-song picker). No preset_pieces rows are written — the gear only
+        materializes into a chain when the user actually adds it to a tone.
+
+        Body:
+          rs_gear   optional — present ⇒ edit that record, absent ⇒ create
+          category  required — amp | cab | pedal | rack
+          name      required — display name
+          instrument optional — guitar | bass | all (default all)
+          kind      vst | nam | ir  (inferred from vst_path/file when omitted)
+          vst_path, vst_format, vst_state  — when kind == vst
+          file      — relative NAM/IR path (under nam_models/ or nam_irs/)
+          ui        — the serializable canvas layout (opaque to the backend)
+        """
+        category = (data.get("category") or "").strip().lower()
+        name = (data.get("name") or data.get("real_name") or "").strip()
+        if category not in _CUSTOM_GEAR_CATEGORIES:
+            return JSONResponse(
+                {"error": f"category must be one of {_CUSTOM_GEAR_CATEGORIES}"}, 400)
+        if not name:
+            return JSONResponse({"error": "name is required"}, 400)
+
+        vst_path = (data.get("vst_path") or "").strip()
+        file = (data.get("file") or "").strip()
+        if not vst_path and not file:
+            return JSONResponse(
+                {"error": "a source is required (vst_path or file)"}, 400)
+        kind = (data.get("kind") or "").strip().lower()
+        if kind not in ("vst", "nam", "ir"):
+            kind = "vst" if vst_path else ("ir" if category == "cab" else "nam")
+
+        instrument = (data.get("instrument") or "all").strip().lower()
+        if instrument not in ("guitar", "bass", "all"):
+            instrument = "all"
+
+        items = _load_custom_gear()
+        rs_gear = (data.get("rs_gear") or "").strip()
+        existing = None
+        if rs_gear:
+            existing = next((g for g in items if g.get("rs_gear") == rs_gear), None)
+        if not rs_gear:
+            # Stable, collision-resistant synthetic id.
+            rs_gear = f"custom_{category}_{int(time.time()*1000)}_{secrets.token_hex(2)}"
+
+        rec = {
+            "rs_gear": rs_gear,
+            "category": category,
+            "real_name": name,
+            "instrument": instrument,
+            "kind": kind,
+            "vst_path": vst_path or None,
+            "vst_format": (data.get("vst_format") or "VST3") if vst_path else None,
+            "vst_state": data.get("vst_state") if vst_path else None,
+            "file": file or None,
+            "make": (data.get("make") or "").strip(),
+            "model": (data.get("model") or "").strip(),
+            "type_tags": (data.get("type_tags") or "").strip(),
+            "ui": data.get("ui") or None,
+            "custom": True,
+        }
+        if existing is not None:
+            existing.update(rec)
+        else:
+            items.append(rec)
+        try:
+            _save_custom_gear(items)
+        except Exception as e:      # noqa: BLE001
+            return JSONResponse({"error": f"could not save: {e}"}, 500)
+        return {"ok": True, "gear": _custom_gear_catalog_item(rec)}
+
+    @app.delete("/api/plugins/rig_builder/custom_gear/{rs_gear}")
+    def custom_gear_delete(rs_gear: str):
+        """Remove a custom gear by its rs_gear id."""
+        items = _load_custom_gear()
+        kept = [g for g in items if g.get("rs_gear") != rs_gear]
+        if len(kept) == len(items):
+            return JSONResponse({"error": "not found"}, 404)
+        try:
+            _save_custom_gear(kept)
+        except Exception as e:      # noqa: BLE001
+            return JSONResponse({"error": f"could not save: {e}"}, 500)
+        return {"ok": True, "removed": rs_gear}
+
+    # ── Gear mapping: game (RS) gear → a user custom gear + knob map ───
+
+    def _assign_vst_to_gear(rs_gear: str, vst_path: str, vst_format: str,
+                            vst_state) -> int:
+        """Point every preset_pieces row for a game gear at a VST (mirrors
+        /vst/assign). Used when mapping a game gear to a custom gear so it plays
+        that custom gear's plugin."""
+        conn = _get_conn()
+        with _lock:
+            cur = conn.execute(
+                "UPDATE preset_pieces SET kind='vst', file=NULL, "
+                "  vst_path=?, vst_format=?, vst_state=?, assigned_mode='manual_vst' "
+                "WHERE rs_gear_type = ?",
+                (vst_path, vst_format, vst_state, rs_gear),
+            )
+            n = cur.rowcount
+            affected = [r[0] for r in conn.execute(
+                "SELECT DISTINCT preset_id FROM preset_pieces WHERE rs_gear_type = ?",
+                (rs_gear,)).fetchall()]
+            for pid in affected:
+                _recompute_preset_primaries(conn, pid)
+            conn.commit()
+        return n
+
+    @app.get("/api/plugins/rig_builder/gear_map/{rs_gear}")
+    def gear_map_get(rs_gear: str):
+        """Everything the game gear's detail needs: its current mapping, the
+        selectable custom gears (SAME category only), the gear's RS knobs, and
+        the mapped custom gear's params."""
+        rs_gear = (rs_gear or "").strip()
+        gmap = _load_gear_map()
+        entry = gmap.get(rs_gear) or {}
+        info = _load_rs_to_real().get(rs_gear) or {}
+        category = info.get("category") or _gear_category(rs_gear) or "amp"
+        custom = _load_custom_gear()
+        # Only custom gear of the SAME category is offered.
+        options = [
+            {"rs_gear": c.get("rs_gear"),
+             "name": c.get("real_name") or c.get("rs_gear"),
+             "params": _custom_gear_params(c)}
+            for c in custom if (c.get("category") or "") == category
+        ]
+        mapped_to = entry.get("custom")
+        mapped_rec = next((c for c in custom if c.get("rs_gear") == mapped_to), None)
+        return {
+            "rs_gear": rs_gear,
+            "category": category,
+            "rs_knobs": _rs_knobs_for_gear(rs_gear),
+            "options": options,
+            "mapped_to": mapped_to if mapped_rec else None,
+            "mapped_name": (mapped_rec.get("real_name") if mapped_rec else None),
+            "mapped_params": (_custom_gear_params(mapped_rec) if mapped_rec else []),
+            "params": entry.get("params") or {},
+        }
+
+    @app.post("/api/plugins/rig_builder/gear_map")
+    def gear_map_save(data: dict = Body(...)):
+        """Set (or CLEAR) what plays a game gear in songs — a pure REDIRECT that
+        never changes the gear's own identity. custom='' ⇒ back to itself (native).
+
+        Body: { rs_gear, custom (''=native), params {rs_knob: param} }
+        """
+        rs_gear = (data.get("rs_gear") or "").strip()
+        custom_id = (data.get("custom") or "").strip()
+        params = data.get("params") or {}
+        if not rs_gear:
+            return JSONResponse({"error": "rs_gear required"}, 400)
+        gmap = _load_gear_map()
+        if custom_id:
+            if not any(c.get("rs_gear") == custom_id for c in _load_custom_gear()):
+                return JSONResponse({"error": "custom gear not found"}, 404)
+            gmap[rs_gear] = {"custom": custom_id,
+                             "params": {k: v for k, v in params.items() if v}}
+        else:
+            gmap.pop(rs_gear, None)   # native
+        try:
+            _save_gear_map(gmap)
+        except Exception as e:      # noqa: BLE001
+            return JSONResponse({"error": f"could not save: {e}"}, 500)
+        # Keep the gear's own identity intact (restore its native bundled VST);
+        # the redirect is applied only at play-chain build.
+        try:
+            prim = _pick_installed_primary_vst(rs_gear, _build_known_vst_lookup())
+            if prim and prim.get("vst_path"):
+                _assign_vst_to_gear(rs_gear, prim["vst_path"],
+                                    prim.get("vst_format") or "VST3",
+                                    _compute_vst_state_for_piece(rs_gear, prim["vst_path"], {}))
+        except Exception:   # noqa: BLE001
+            log.warning("gear_map: restore native failed for %s", rs_gear, exc_info=True)
+        return {"ok": True, "mapped_to": custom_id or None}
+
+    @app.delete("/api/plugins/rig_builder/gear_map/{rs_gear}")
+    def gear_map_delete(rs_gear: str):
+        gmap = _load_gear_map()
+        if rs_gear in gmap:
+            gmap.pop(rs_gear, None)
+            try:
+                _save_gear_map(gmap)
+            except Exception as e:  # noqa: BLE001
+                return JSONResponse({"error": f"could not save: {e}"}, 500)
+        return {"ok": True, "removed": rs_gear}
+
+    # ── Assignment from the REAL gear's side: a custom gear covers game gears ──
+
+    def _rs_gear_options(category: str) -> list[dict]:
+        """The game (RS) gears of a category a real gear can be assigned to —
+        shown by their COPYRIGHT-FREE display name (never the RS codename), each
+        with its RS knob list (for the knob→param mapping)."""
+        rs_map = _load_rs_to_real()
+        out = []
+        for g, info in rs_map.items():
+            if str(g).startswith("_") or not isinstance(info, dict):
+                continue
+            cat = info.get("category") or _gear_category(g)
+            if cat != category:
+                continue
+            out.append({
+                "rs_gear": g,
+                "name": _gear_display_name(g, info.get("name") or g),
+                "knobs": _rs_knobs_for_gear(g),
+            })
+        out.sort(key=lambda x: (x["name"] or "").lower())
+        return out
+
+    def _gear_category_of(gear_id: str) -> str:
+        rec = next((c for c in _load_custom_gear() if c.get("rs_gear") == gear_id), None)
+        if rec:
+            return rec.get("category") or "amp"
+        info = _load_rs_to_real().get(gear_id) or {}
+        return info.get("category") or _gear_category(gear_id) or "amp"
+
+    @app.get("/api/plugins/rig_builder/custom_assignments/{gear_id}")
+    def custom_assignments_get(gear_id: str):
+        """Assignment panel data for ANY gear (native OR custom — treated the
+        same): its params, the assignable game gears (same category, copyright-
+        free names), and which game gears it currently covers + their knob maps.
+        A NATIVE gear covers its OWN slot by default."""
+        category = _gear_category_of(gear_id)
+        gmap = _load_gear_map()
+        options = _rs_gear_options(category)
+        by_rs = {o["rs_gear"]: o for o in options}
+        assigned = {}
+        for rs_gear, entry in gmap.items():
+            if isinstance(entry, dict) and entry.get("custom") == gear_id:
+                o = by_rs.get(rs_gear) or {"name": _gear_display_name(rs_gear, rs_gear),
+                                           "knobs": _rs_knobs_for_gear(rs_gear)}
+                assigned[rs_gear] = {"name": o["name"], "knobs": o["knobs"],
+                                     "params": entry.get("params") or {},
+                                     "self": rs_gear == gear_id}
+        # Native gear covers its OWN slot unless that slot was redirected away —
+        # pre-filled with its shipped default knob mapping so it's not blank.
+        if not _is_custom_gear(gear_id) and gear_id not in gmap and gear_id in by_rs:
+            o = by_rs[gear_id]
+            assigned[gear_id] = {"name": o["name"], "knobs": o["knobs"],
+                                 "params": _native_default_knobmap(gear_id), "self": True}
+        return {
+            "custom": gear_id,
+            "category": category,
+            "custom_params": _gear_params(gear_id),
+            "options": options,
+            "assigned": assigned,
+        }
+
+    @app.post("/api/plugins/rig_builder/custom_assignments")
+    def custom_assignments_save(data: dict = Body(...)):
+        """Set which game gears a gear (native OR custom) covers. Pure REDIRECT
+        (gear_map): a gear covering slot X ⇒ songs on X play this gear. A gear
+        covering its OWN slot is the native default (no entry stored).
+
+        Body: { custom: <gear_id>, assigned: { <rs_gear>: { <rs_knob>: <param> } } }
+        """
+        gear_id = (data.get("custom") or "").strip()
+        assigned = data.get("assigned") or {}
+        if not gear_id:
+            return JSONResponse({"error": "gear id required"}, 400)
+
+        gmap = _load_gear_map()
+        removed = [k for k, v in gmap.items()
+                   if isinstance(v, dict) and v.get("custom") == gear_id and k not in assigned]
+        for rs_gear in removed:
+            gmap.pop(rs_gear, None)
+        for rs_gear, params in assigned.items():
+            clean = {k: v for k, v in (params or {}).items() if v}
+            # Own slot with NO custom knob overrides = native default → no entry
+            # (keeps the map clean; Reset just removes any entry).
+            if rs_gear == gear_id and not clean:
+                gmap.pop(rs_gear, None)
+                continue
+            gmap[rs_gear] = {"custom": gear_id, "params": clean}
+        try:
+            _save_gear_map(gmap)
+        except Exception as e:      # noqa: BLE001
+            return JSONResponse({"error": f"could not save: {e}"}, 500)
+
+        # The map is a pure REDIRECT (applied at play-chain build in
+        # native_preset_full) — it does NOT change any gear's identity. Restore
+        # every touched game gear's NATIVE bundled VST in preset_pieces (repairs
+        # the earlier overwrite bug: a gear now always "points to itself" again;
+        # the redirect swaps it only during playback).
+        known = _build_known_vst_lookup()
+        for rs_gear in set(list(assigned.keys()) + removed):
+            try:
+                prim = _pick_installed_primary_vst(rs_gear, known)
+                if prim and prim.get("vst_path"):
+                    _assign_vst_to_gear(
+                        rs_gear, prim["vst_path"], prim.get("vst_format") or "VST3",
+                        _compute_vst_state_for_piece(rs_gear, prim["vst_path"], {}))
+            except Exception:   # noqa: BLE001
+                log.warning("restore native VST failed for %s", rs_gear, exc_info=True)
+        return {"ok": True, "assigned_count": len(assigned)}
+
+    @app.post("/api/plugins/rig_builder/gear_reset")
+    def gear_reset(data: dict = Body(...)):
+        """Reset a NATIVE gear to its factory state: drop every redirect where
+        it's the target (incl. its own slot), so it covers ONLY itself again with
+        its shipped default knob mapping."""
+        gear_id = (data.get("gear") or "").strip()
+        if not gear_id:
+            return JSONResponse({"error": "gear required"}, 400)
+        gmap = _load_gear_map()
+        touched = [s for s, v in gmap.items()
+                   if isinstance(v, dict) and v.get("custom") == gear_id]
+        for s in touched:
+            gmap.pop(s, None)
+        gmap.pop(gear_id, None)   # its own slot back to native
+        try:
+            _save_gear_map(gmap)
+        except Exception as e:      # noqa: BLE001
+            return JSONResponse({"error": f"could not save: {e}"}, 500)
+        known = _build_known_vst_lookup()
+        for rs_gear in set(touched + [gear_id]):
+            try:
+                prim = _pick_installed_primary_vst(rs_gear, known)
+                if prim and prim.get("vst_path"):
+                    _assign_vst_to_gear(rs_gear, prim["vst_path"],
+                                        prim.get("vst_format") or "VST3",
+                                        _compute_vst_state_for_piece(rs_gear, prim["vst_path"], {}))
+            except Exception:   # noqa: BLE001
+                log.warning("gear_reset restore failed for %s", rs_gear, exc_info=True)
+        return {"ok": True}
 
     # ── Song / chain inspection ───────────────────────────────────────
 
@@ -8738,8 +9310,39 @@ def setup(app, context):
         # Build (rank, slot_order, kind, slot, payload, gear, bypassed) tuples
         # so we can stable-sort everything (NAM + VST) by signal-flow first
         # and stored slot_order within the same slot second.
+        # REDIRECT layer (gear_map): a game gear can be redirected to one of the
+        # user's custom gears WITHOUT changing the stored piece — songs then play
+        # the custom's plugin/file while the gear keeps its own identity. Applied
+        # only here, at chain-build time.
+        # A slot can be redirected to a CUSTOM gear (its VST/file) or to another
+        # NATIVE gear (its bundled VST). Resolve each to a stage descriptor.
+        _redirect: dict[str, dict] = {}
+        _gmap = _load_gear_map()
+        if _gmap:
+            _custom_by_id = {c.get("rs_gear"): c for c in _load_custom_gear()}
+            _known = _build_known_vst_lookup()
+            for _rs, _e in _gmap.items():
+                tgt = _e.get("custom") if isinstance(_e, dict) else None
+                if not tgt:
+                    continue
+                if tgt in _custom_by_id:
+                    _redirect[_rs] = _custom_by_id[tgt]
+                else:   # native target → its bundled VST
+                    prim = _pick_installed_primary_vst(tgt, _known)
+                    if prim and prim.get("vst_path"):
+                        _redirect[_rs] = {"vst_path": prim["vst_path"],
+                                          "vst_format": prim.get("vst_format") or "VST3",
+                                          "vst_state": _compute_vst_state_for_piece(tgt, prim["vst_path"], {})}
+
         audio_pieces = []
         for slot, kind, file, gear, bypassed, slot_order, vst_path, vst_format, vst_state, params_json in rows:
+            rec = _redirect.get(gear)
+            if rec is not None:
+                if rec.get("vst_path"):
+                    kind, vst_path = "vst", rec["vst_path"]
+                    vst_format, vst_state, file = rec.get("vst_format") or "VST3", rec.get("vst_state"), None
+                elif rec.get("file"):
+                    kind, file, vst_path = ("ir" if rec.get("kind") == "ir" else "nam"), rec["file"], None
             if kind == "nam" and file:
                 audio_pieces.append((_rank(slot), slot_order, "nam", slot,
                                      file, gear, bool(bypassed), None, None,
@@ -9848,6 +10451,17 @@ def setup(app, context):
         from rb_core.tone3000_client import Tone3000Client
         conn = _get_conn()
         rs_map = _load_rs_to_real()
+        # Game gear → user custom gear mapping (for the "mapped to" label).
+        _gmap = _load_gear_map()
+        _custom_names = {c.get("rs_gear"): (c.get("real_name") or c.get("rs_gear"))
+                         for c in _load_custom_gear()}
+        # Inverse of the redirect map: which game-gear slots each gear covers
+        # (copyright-free names). Used for the uniform "Assigned to" label on both
+        # native and custom gear.
+        _covers: dict[str, list[str]] = {}
+        for _rs, _e in _gmap.items():
+            if isinstance(_e, dict) and _e.get("custom"):
+                _covers.setdefault(_e["custom"], []).append(_gear_display_name(_rs, _rs))
         img_idx = _tone_image_index()
 
         # Best preset_piece per gear: prefer a row with an effective
@@ -10110,6 +10724,19 @@ def setup(app, context):
             vst_state = b["vst_state"]
             if category == "amp" and b.get("vst_path"):
                 vst_state = _compute_gear_open_vst_state(gear, b["vst_path"])
+            _mp = _gmap.get(gear) or {}
+            _mapped_custom = _mp.get("custom")
+            # IDENTITY: a game gear ALWAYS shows its own NATIVE bundled VST — never
+            # a redirect target. This keeps its editor + face pointed at itself
+            # even when a song slot is redirected (and repairs the earlier bug
+            # where the stored piece got overwritten). The redirect is separate.
+            _id_vst_path, _id_vst_format, _id_vst_state = b["vst_path"], b["vst_format"], vst_state
+            if b.get("vst_path"):
+                _native = _pick_installed_primary_vst(gear, known_lookup)
+                if _native and _native.get("vst_path"):
+                    _id_vst_path = _native["vst_path"]
+                    _id_vst_format = _native.get("vst_format") or "VST3"
+                    _id_vst_state = _compute_gear_open_vst_state(gear, _id_vst_path)
             cats.setdefault(category, []).append({
                 "rs_gear": gear,
                 "real_name": real_name,
@@ -10118,14 +10745,23 @@ def setup(app, context):
                 "model": info.get("model", ""),
                 "category": category,
                 "assigned": b["has_assignment"],
+                # Which custom gear this game gear's song slot is redirected to.
+                "mapped_custom": _mapped_custom,
+                "mapped_name": _custom_names.get(_mapped_custom) if _mapped_custom else None,
+                # Slots this game gear COVERS: its own (unless redirected away) +
+                # any other slot redirected to it. Same field custom gear uses.
+                "assigned_rs": sorted(
+                    ([real_name] if _mapped_custom is None else [])
+                    + _covers.get(gear, []),
+                    key=lambda s: s.lower()),
                 "kind": b["kind"],
                 # Show OUR cab IR when we ship one (rb_cab_overrides) so the
                 # catalog card + its active mic highlight match the per-song
                 # editor and the ▶ audition plays ours. No-op for non-cab files.
                 "file": _apply_cab_override(b["file"]),
-                "vst_path": b["vst_path"],
-                "vst_format": b["vst_format"],
-                "vst_state": vst_state,
+                "vst_path": _id_vst_path,
+                "vst_format": _id_vst_format,
+                "vst_state": _id_vst_state,
                 "tone3000_id": t3kid,
                 "tone3000_title": (meta or {}).get("title"),
                 "image": (meta or {}).get("image"),
@@ -10143,6 +10779,22 @@ def setup(app, context):
                 # rs_cab_mic_map.json.
                 "mic_variants": mic_variants,
             })
+
+        # User-defined custom gear — append each to its category so it shows in
+        # the Gear browser, the node-editor palette, and (via /gears_catalog)
+        # the per-song picker. `rs_order` is None → these sort after the game's
+        # gear within their category.
+        for rec in _load_custom_gear():
+            cat = rec.get("category") or "other"
+            if cat not in cats:
+                cat = "other"
+            item = _custom_gear_catalog_item(rec)
+            item["category"] = cat
+            # Copyright-free names of the game gears this custom is assigned to.
+            item["assigned_rs"] = sorted(_covers.get(rec.get("rs_gear"), []),
+                                         key=lambda s: s.lower())
+            cats.setdefault(cat, []).append(item)
+
         for lst in cats.values():
             # Primary sort: the game's psarc order (same order as the
             # in-game tone designer). Secondary: name fallback for

@@ -4680,6 +4680,12 @@ function rbStudioPieceStem(p) {
     return vp.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 function rbStudioPedalImg(p) {
+    // Custom gear: draw the user's own layout, never the plugin's native face.
+    if (p && p._custom_ui && window.RBPedalCanvas && window.RBPedalCanvas.layoutDataURL) {
+        let vals = {};
+        try { vals = rbCustomUiValues(p) || {}; } catch (_) {}
+        try { return window.RBPedalCanvas.layoutDataURL(p._custom_ui, vals); } catch (_) {}
+    }
     const stem = rbStudioPieceStem(p);
     if (stem && window.RBPedalCanvas && window.RBPedalCanvas.has(stem)) {
         // Render the face at the piece's SAVED knob values (not plugin defaults)
@@ -4857,6 +4863,10 @@ function rbStudioRefreshRoomMic() {
 function rbRenderStudioRoom() {
     const el = document.getElementById('rb-studio-room');
     if (!el) return;
+    // Custom gear loaded from a saved tone lacks its UI until opened — attach it
+    // up front so the room shows the created face on first paint (re-render once
+    // the gear map arrives if it wasn't cached yet).
+    try { rbEnsureChainCustomUi(rbStudioCurrentChain(), () => { try { rbRenderStudioRoom(); } catch (_) {} }); } catch (_) {}
     // Re-rendering wipes any open focus layer / bar / swap rail (room children),
     // so clear the focus state + tear down its editor VST — otherwise switching
     // tones mid-focus strands a broken, can't-exit focus view.
@@ -5216,6 +5226,12 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
     const piece = (rbStudioCurrentChain())[idx];
     const face = faceEl;
     if (!piece || !face) return;
+    // Custom gear renders ITS OWN layout (interactive), driving the plugin params
+    // its controls are mapped to — never the plugin's native window.
+    if (piece._custom_ui && window.RBPedalCanvas && window.RBPedalCanvas.specFromLayout) {
+        rbStudioMakeCustomFaceInteractive(idx, face, piece);
+        return;
+    }
     const api = rbAudioApi();
     const stem = rbCanvasStem(piece);
     if (!(window.RBPedalCanvas && (window.RBPedalCanvas.has(stem) || (piece._vst_param_meta || []).length))) return;
@@ -5270,6 +5286,39 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
     // try { rbStartGrMeterPoll(canvas, piece, idx, stem); } catch (_) {}
     // Redraw once the amp has finished growing to its focused size so the
     // canvas backing store matches the larger on-screen size (stays crisp).
+    setTimeout(draw, 520);
+}
+
+// Interactive editor for CUSTOM gear: draw the user's own layout and, when a
+// control is mapped to a real plugin parameter, drive that param live. Controls
+// with no mapping (hand-added) are cosmetic. Mirrors rbStudioMakeFaceInteractive
+// but sources the spec from the saved layout instead of a bundled stem.
+function rbStudioMakeCustomFaceInteractive(idx, face, piece) {
+    const PC = window.RBPedalCanvas;
+    const layout = piece._custom_ui;
+    face.innerHTML = `<canvas class="rb-amp-face-canvas" style="width:100%;display:block;cursor:ns-resize;touch-action:none"></canvas>`;
+    const canvas = face.querySelector('canvas');
+    // control id → real plugin param (logical id in the filtered list).
+    const idToParam = {};
+    (layout.controls || []).forEach(c => { if (typeof c.param === 'number') idToParam[c.id] = c.param; });
+    const draw = () => {
+        let values = {};
+        try { values = rbCustomUiValues(piece) || {}; } catch (_) {}
+        canvas.__rbVals = values;
+        PC.attachSpec(canvas, PC.specFromLayout(layout), {
+            values,
+            interactive: true,
+            onChange: (ctrlId, val) => {
+                const logical = idToParam[ctrlId];
+                if (typeof logical !== 'number') return;   // cosmetic control
+                piece._vst_logical = piece._vst_logical || {};
+                piece._vst_logical[logical] = val;
+                rbStudioApplyKnobToEngine(piece, idx, logical, val);
+            },
+        });
+    };
+    if (PC.ready) PC.ready().then(draw);
+    draw();
     setTimeout(draw, 520);
 }
 
@@ -5602,9 +5651,15 @@ function rbStudioFitFocusStage(stage, piece, room) {
     if (!stage || !room) return;
     let aspect = 0.6;   // default portrait-ish (w/h)
     try {
-        const spec = window.RBPedalCanvas && window.RBPedalCanvas.specs
-            && window.RBPedalCanvas.specs[rbCanvasStem(piece)];
-        if (spec && spec.w && spec.h) aspect = spec.w / spec.h;
+        if (piece && piece._custom_ui && piece._custom_ui.w && piece._custom_ui.h) {
+            // Custom gear has no bundled spec — use ITS OWN layout aspect so a wide
+            // rack/amp fills the box instead of being squished into a portrait one.
+            aspect = piece._custom_ui.w / piece._custom_ui.h;
+        } else {
+            const spec = window.RBPedalCanvas && window.RBPedalCanvas.specs
+                && window.RBPedalCanvas.specs[rbCanvasStem(piece)];
+            if (spec && spec.w && spec.h) aspect = spec.w / spec.h;
+        }
     } catch (_) {}
     const rr = room.getBoundingClientRect();
     // Racks read bigger than pedals (wide units against a wall) — give them more
@@ -5783,6 +5838,7 @@ async function rbStudioLoadFocusVst(idx, faceEl, growMs) {
     const room = document.getElementById('rb-studio-room');
     const piece = (rbStudioCurrentChain())[idx];
     if (!room || !piece || !faceEl) return;
+    await rbEnsureCustomUi(piece);           // reloaded custom gear → re-attach its UI
     const api = rbAudioApi();
     const vstPath = rbEffVstPath(piece);
     if (!vstPath || !api) return;            // static face stays; nothing to load
@@ -5960,6 +6016,8 @@ function rbStudioCloseSwap() {
 }
 
 function rbStudioAmpThumb(g) {
+    const customUrl = rbGearCustomArt(g);             // custom gear's created face
+    if (customUrl) return `<img src="${customUrl}" alt="">`;
     const cabUrl = g && rbCabArtDataUrl(g.rs_gear);   // recreated cab beats the RS photo
     if (cabUrl) return `<img src="${cabUrl}" alt="">`;
     const stem = rbGearCanvasStem(g);
@@ -6123,7 +6181,7 @@ function rbStudioSwapToGear(rsGear) {
             _vst_kind: 'vst', _vst_path: vp, _vst_format: g.vst_format || 'VST3',
             assigned: { kind: 'vst', vst_path: vp, vst_format: g.vst_format || 'VST3', vst_state: null },
         };
-        
+        if (g.custom && g.ui) newPiece._custom_ui = g.ui;   // show the created face
         rbStudioCurrentChain().push(newPiece);
         rbState._studioPedalAddMode = false;
         try { rbStudioPersist(); } catch (_) {}
@@ -6147,6 +6205,7 @@ function rbStudioSwapToGear(rsGear) {
             _vst_kind: 'vst', _vst_path: vp, _vst_format: g.vst_format || 'VST3',
             assigned: { kind: 'vst', vst_path: vp, vst_format: g.vst_format || 'VST3', vst_state: null },
         };
+        if (g.custom && g.ui) newPiece._custom_ui = g.ui;   // show the created face
         rbStudioCurrentChain().push(newPiece);
         rbState._studioAmpAddMode = false;
         try { rbStudioPersist(); } catch (_) {}
@@ -6169,6 +6228,9 @@ function rbStudioSwapToGear(rsGear) {
     piece.category = kind; piece.rs_category = kind;
     piece._vst_path = vstPath; piece._vst_format = g.vst_format || 'VST3';
     piece.assigned = { kind: 'vst', vst_path: vstPath, vst_format: g.vst_format || 'VST3', vst_state: null };
+    // Swap in the new gear's custom UI (or CLEAR a stale one) — otherwise the
+    // previous gear's face would bleed onto the newly-swapped gear.
+    if (g.custom && g.ui) piece._custom_ui = g.ui; else delete piece._custom_ui;
     // Reset captured state for the new gear (loads at its own defaults).
     piece._vst_state = null; piece._vst_params = null; piece._vst_logical = null;
     piece._vst_param_meta = null; piece._vst_slot_id = null; piece._vst_opaque = null;
@@ -8438,6 +8500,14 @@ async function rbToneEditVst(toneIdx, pIdx) {
         piece._vst_slot_id = null;
         return;
     }
+    // Custom gear: make sure its saved layout is attached (reloaded pieces lose
+    // it), then render the CREATED UI — never the plugin's native window.
+    await rbEnsureCustomUi(piece);
+    if (piece._custom_ui && !rbEffVstPath(piece)) {
+        // NAM/IR-backed custom gear: cosmetic face, no plugin to drive.
+        editor.classList.remove('hidden');
+        return rbToneRenderCustomFace(toneIdx, pIdx, piece, editor);
+    }
     if (!api) return alert('Native VST hosting not available');
     const vstPath = rbEffVstPath(piece);
     if (!vstPath) return alert('This piece has no VST assigned yet.');
@@ -8541,18 +8611,17 @@ async function rbToneEditVst(toneIdx, pIdx) {
                 }
             } catch (_) { /* mapping is best-effort; defaults remain on failure */ }
         }
-        // Editor priority: (1) faithful in-app canvas recreation; (2) for VSTs we
-        // HAVEN'T recreated, the plugin's OWN native window on top (the real UI,
-        // not generic sliders); (3) generic in-app sliders only when the plugin
-        // has no native window (UI-less, e.g. a headless filter).
-        if (rbHasCanvasUI(piece)) {
-            rbToneRenderInlineVstParams(toneIdx, pIdx);
-        } else if (await rbTryOpenNativeEditor(api, slotId)) {
-            const _nm = vstPath.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '');
-            editor.innerHTML = rbNativeEditorPanelHtml(
-                _nm, `rbToneCaptureVstState(${toneIdx}, ${pIdx})`, `rbToneEditVst(${toneIdx}, ${pIdx})`);
-        } else {
-            rbToneRenderInlineVstParams(toneIdx, pIdx);   // UI-less fallback: generic sliders
+        // Editor priority: IN-APP FIRST for every VST — a faithful canvas
+        // recreation, the custom layout, or a knob panel generated from the
+        // plugin's live parameters. The plugin's OWN native window is now
+        // opt-in (an "Open plugin window" button in the inline header). Only a
+        // truly UI-less plugin with NO params falls straight to the window.
+        if (!rbToneRenderInlineVstParams(toneIdx, pIdx)) {
+            if (await rbTryOpenNativeEditor(api, slotId)) {
+                const _nm = vstPath.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '');
+                editor.innerHTML = rbNativeEditorPanelHtml(
+                    _nm, `rbToneCaptureVstState(${toneIdx}, ${pIdx})`, `rbToneEditVst(${toneIdx}, ${pIdx})`);
+            }
         }
     } catch (e) {
         editor.innerHTML = `<div class="text-xs text-red-400">load failed: ${rbEsc(rbFriendlyVstLoadError(e))}</div>`;
@@ -8589,7 +8658,25 @@ function rbCanvasStem(piece) {
 }
 // True if we have an in-app canvas recreation of this piece's plugin UI.
 function rbHasCanvasUI(piece) {
+    // Custom gear always has an in-app face (its layout) → never the native window.
+    if (piece && piece._custom_ui) return true;
     return !!(window.RBPedalCanvas && window.RBPedalCanvas.has(rbCanvasStem(piece)));
+}
+
+// Values object (keyed by the custom layout's control id) for drawing a custom
+// gear's face at the piece's saved knob positions. A control tagged with a real
+// plugin `param` (logical id) reads that param's saved value; others default.
+function rbCustomUiValues(piece) {
+    const out = {};
+    const layout = piece && piece._custom_ui;
+    if (!layout || !Array.isArray(layout.controls)) return out;
+    const logical = (piece._vst_logical) || {};
+    layout.controls.forEach(c => {
+        if (typeof c.param === 'number' && typeof logical[c.param] === 'number') {
+            out[c.id] = logical[c.param];
+        }
+    });
+    return out;
 }
 
 // Try to open the plugin's OWN native window. Returns true if it opened, false
@@ -8600,6 +8687,28 @@ async function rbTryOpenNativeEditor(api, slotId) {
     if (!api || typeof api.openPluginEditor !== 'function' || slotId == null) return false;
     try { await api.openPluginEditor(slotId); return true; }
     catch (e) { console.warn('[rig_builder] this plugin has no native editor window:', e); return false; }
+}
+
+// Opt-in: open the REAL plugin window for a gear already loaded in the in-app
+// editor (its slot is live). The in-app param UI stays; this just also pops the
+// vendor UI for anyone who wants the exact original interface.
+async function rbToneOpenNativeWindow(toneIdx, pIdx) {
+    const api = rbAudioApi();
+    const piece = rbState.songTones && rbState.songTones.tones[toneIdx] && rbState.songTones.tones[toneIdx].chain[pIdx];
+    if (!api || !piece) return;
+    if (piece._vst_slot_id == null) { alert('Load the gear first (open its editor), then try again.'); return; }
+    if (!(await rbTryOpenNativeEditor(api, piece._vst_slot_id))) {
+        alert("This plugin has no native editor window (it's UI-less).");
+    }
+}
+async function rbMasterOpenNativeWindow(role, idx) {
+    const api = rbAudioApi();
+    const piece = rbState.master && rbState.master[role] && rbState.master[role][idx];
+    if (!api || !piece) return;
+    if (piece._vst_slot_id == null) { alert('Load the gear first (open its editor), then try again.'); return; }
+    if (!(await rbTryOpenNativeEditor(api, piece._vst_slot_id))) {
+        alert("This plugin has no native editor window (it's UI-less).");
+    }
 }
 
 // Inline panel shown when a non-recreated VST is being edited in its own native
@@ -8678,10 +8787,131 @@ function rbCanvasThumbValues(piece) {
     return byName;
 }
 
+// Re-attach a custom gear's UI layout (+ its source) to a piece that lost it —
+// e.g. a piece rebuilt from a saved song, where the backend chain rows carry the
+// rs_gear but not our custom layout. Looks it up by rs_gear from a cached map of
+// the user's custom gear (fetched once). Without this, a reloaded custom piece
+// falls back to the plugin's NATIVE window instead of the created UI.
+// Fetch (once) the user's custom gear into rbState._customGearMap.
+function rbLoadCustomGearMap() {
+    if (!rbState._customGearPromise) {
+        rbState._customGearPromise = fetch(`${window.RB_API}/custom_gear`)
+            .then(r => r.json())
+            .then(d => {
+                rbState._customGearMap = {};
+                (d.gear || []).forEach(x => { if (x && x.rs_gear) rbState._customGearMap[x.rs_gear] = x; });
+                return rbState._customGearMap;
+            })
+            .catch(() => (rbState._customGearMap = {}));
+    }
+    return rbState._customGearPromise;
+}
+
+// Attach a custom gear's saved UI + source to a piece from the ALREADY-loaded
+// map (sync, no fetch). No-op if the map isn't loaded yet or it's not custom.
+function rbAttachCustomUiSync(piece) {
+    if (!piece || piece._custom_ui) return;
+    const t = piece.type || piece.rs_gear || '';
+    if (t.indexOf('custom_') !== 0) return;
+    const rec = rbState._customGearMap && rbState._customGearMap[t];
+    if (!rec) return;
+    if (rec.ui) piece._custom_ui = rec.ui;
+    if (rec.vst_path && !piece._vst_path) {
+        piece._vst_path = rec.vst_path; piece._vst_format = rec.vst_format || 'VST3';
+    } else if (rec.file && !piece._uploaded_file && !(piece.assigned && piece.assigned.file)) {
+        const ck = rec.kind === 'ir' ? 'ir' : 'nam';
+        piece._uploaded_file = rec.file; piece._uploaded_kind = ck;
+        piece.assigned = { kind: ck, file: rec.file, assigned_mode: 'manual' };
+    }
+}
+
+// Ensure every custom piece in a chain has its UI attached so it renders on the
+// FIRST paint (not only after being selected). If the map isn't loaded yet,
+// fetch it and call onReady() so the caller can re-render.
+function rbEnsureChainCustomUi(chain, onReady) {
+    if (!Array.isArray(chain)) return;
+    const pending = chain.filter(p => p && !p._custom_ui && (p.type || p.rs_gear || '').indexOf('custom_') === 0);
+    if (!pending.length) return;
+    if (rbState._customGearMap) { pending.forEach(rbAttachCustomUiSync); return; }
+    rbLoadCustomGearMap().then(() => {
+        let changed = false;
+        pending.forEach(p => { const before = p._custom_ui; rbAttachCustomUiSync(p); if (!before && p._custom_ui) changed = true; });
+        if (changed && onReady) { try { onReady(); } catch (_) {} }
+    });
+}
+
+async function rbEnsureCustomUi(piece) {
+    if (!piece || piece._custom_ui) return;
+    const t = piece.type || piece.rs_gear || '';
+    if (t.indexOf('custom_') !== 0) return;
+    if (!rbState._customGearMap) await rbLoadCustomGearMap();
+    rbAttachCustomUiSync(piece);
+}
+
+// Interactive tone-editor face for CUSTOM gear: the user's layout, knobs mapped
+// to the real plugin params they carry, persisting into the song like the normal
+// canvas editor.
+function rbToneRenderCustomFace(toneIdx, pIdx, piece, editor) {
+    const PC = window.RBPedalCanvas;
+    const layout = piece._custom_ui;
+    const vstName = (rbEffVstPath(piece) || '').split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '');
+    editor.innerHTML = `
+        <div class="flex items-center justify-between mb-1">
+            <div class="text-[11px] text-purple-300 font-semibold">Custom UI · ${rbEsc(piece.real_name || vstName || 'Gear')}</div>
+            <div class="flex items-center gap-1">
+                ${rbEffVstPath(piece) ? `<button onclick="rbToneOpenNativeWindow(${toneIdx}, ${pIdx})"
+                        title="Open the plugin's own (real) editor window"
+                        class="bg-dark-700 hover:bg-dark-600 text-gray-300 text-[10px] px-2 py-0.5 rounded">🪟 Plugin window</button>` : ''}
+                <button onclick="rbToneCaptureVstState(${toneIdx}, ${pIdx})"
+                        title="Snapshot the current parameter values into this tone's saved state"
+                        class="bg-amber-700/60 hover:bg-amber-600/60 text-amber-100 text-[10px] px-2 py-0.5 rounded">📸 Capture state</button>
+                <button onclick="rbToneEditVst(${toneIdx}, ${pIdx})"
+                        title="Close inline editor"
+                        class="text-[10px] text-gray-400 hover:text-gray-200 px-1">✕</button>
+            </div>
+        </div>
+        <div class="flex justify-center">
+            <canvas id="rb-tone-vst-canvas-${toneIdx}-${pIdx}" style="width:100%;max-width:360px;cursor:ns-resize;touch-action:none"></canvas>
+        </div>
+        <div class="text-[10px] text-gray-500 text-center mt-1">Drag a knob up/down to adjust</div>`;
+    const canvas = document.getElementById(`rb-tone-vst-canvas-${toneIdx}-${pIdx}`);
+    const api = rbAudioApi();
+    const idToParam = {};
+    (layout.controls || []).forEach(c => { if (typeof c.param === 'number') idToParam[c.id] = c.param; });
+    const draw = () => {
+        const model = rbCanvasParamModel(piece);   // idMap: logical → real engine id
+        let values = {};
+        try { values = rbCustomUiValues(piece) || {}; } catch (_) {}
+        PC.attachSpec(canvas, PC.specFromLayout(layout), {
+            values,
+            interactive: true,
+            onChange: (ctrlId, val) => {
+                const logical = idToParam[ctrlId];
+                if (typeof logical !== 'number') return;   // cosmetic control
+                const realId = (model.idMap && model.idMap[logical] != null) ? model.idMap[logical] : logical;
+                if (piece._vst_slot_id != null && api) { try { api.setParameter(piece._vst_slot_id, realId, val); } catch (_) {} }
+                piece._vst_params = piece._vst_params || {};
+                piece._vst_params[realId] = val;
+                piece._vst_logical = piece._vst_logical || {};
+                piece._vst_logical[logical] = val;
+                rbStampVstState(piece);
+                rbDebouncedToneSave(toneIdx, pIdx);
+            },
+        });
+    };
+    if (PC.ready) PC.ready().then(draw);
+    draw();
+    return true;
+}
+
 function rbToneRenderInlineVstParams(toneIdx, pIdx) {
     const editor = document.getElementById(`rb-tone-vst-editor-${toneIdx}-${pIdx}`);
     if (!editor) return false;
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
+    // Custom gear: draw the user's own layout (never the plugin's stem/native UI).
+    if (piece && piece._custom_ui && window.RBPedalCanvas && window.RBPedalCanvas.specFromLayout) {
+        return rbToneRenderCustomFace(toneIdx, pIdx, piece, editor);
+    }
     const params = rbFilterVstParams((piece && piece._vst_param_meta) || []);
     const effVstPath = rbEffVstPath(piece);
     const vstName = effVstPath.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '');
@@ -8693,6 +8923,9 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
             <div class="flex items-center justify-between mb-1">
                 <div class="text-[11px] text-purple-300 font-semibold">In-feedBack editor · ${rbEsc(vstName)}</div>
                 <div class="flex items-center gap-1">
+                    <button onclick="rbToneOpenNativeWindow(${toneIdx}, ${pIdx})"
+                            title="Open the plugin's own (real) editor window"
+                            class="bg-dark-700 hover:bg-dark-600 text-gray-300 text-[10px] px-2 py-0.5 rounded">🪟 Plugin window</button>
                     <button onclick="rbToneCaptureVstState(${toneIdx}, ${pIdx})"
                             title="Snapshot the current parameter values into this tone's saved state"
                             class="bg-amber-700/60 hover:bg-amber-600/60 text-amber-100 text-[10px] px-2 py-0.5 rounded">📸 Capture state</button>
@@ -9574,6 +9807,7 @@ async function rbMasterEditVst(role, idx) {
         piece._vst_slot_id = null;
         return;
     }
+    await rbEnsureCustomUi(piece);   // custom gear → created UI, not the native window
     if (!api) {
         alert('Native VST hosting not available');
         return;
@@ -9622,17 +9856,14 @@ async function rbMasterEditVst(role, idx) {
             const v  = param.value ?? param.current;
             if (id != null && typeof v === 'number') piece._vst_params[id] = v;
         }
-        // Editor priority: (1) faithful in-app canvas recreation; (2) the
-        // plugin's OWN native window for VSTs we haven't recreated; (3) generic
-        // in-app sliders only when the plugin is UI-less (no native window).
-        if (rbHasCanvasUI(piece)) {
-            rbMasterRenderInlineVstParams(role, idx);
-        } else if (await rbTryOpenNativeEditor(api, slotId)) {
-            const _nm = vstPath.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '');
-            editor.innerHTML = rbNativeEditorPanelHtml(
-                _nm, `rbMasterCaptureVstState('${role}', ${idx})`, `rbMasterEditVst('${role}', ${idx})`);
-        } else {
-            rbMasterRenderInlineVstParams(role, idx);   // UI-less fallback: generic sliders
+        // In-app FIRST for every VST (see rbToneEditVst). The native window is
+        // opt-in via the inline header; only a param-less plugin falls to it.
+        if (!rbMasterRenderInlineVstParams(role, idx)) {
+            if (await rbTryOpenNativeEditor(api, slotId)) {
+                const _nm = vstPath.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '');
+                editor.innerHTML = rbNativeEditorPanelHtml(
+                    _nm, `rbMasterCaptureVstState('${role}', ${idx})`, `rbMasterEditVst('${role}', ${idx})`);
+            }
         }
     } catch (e) {
         editor.innerHTML = `<div class="text-xs text-red-400">load failed: ${rbEsc(rbFriendlyVstLoadError(e))}</div>`;
@@ -9654,6 +9885,9 @@ function rbMasterRenderInlineVstParams(role, idx) {
             <div class="flex items-center justify-between mb-1">
                 <div class="text-[11px] text-purple-300 font-semibold">In-feedBack editor · ${rbEsc(vstName)}</div>
                 <div class="flex items-center gap-1">
+                    <button onclick="rbMasterOpenNativeWindow('${role}', ${idx})"
+                            title="Open the plugin's own (real) editor window"
+                            class="bg-dark-700 hover:bg-dark-600 text-gray-300 text-[10px] px-2 py-0.5 rounded">🪟 Plugin window</button>
                     <button onclick="rbMasterCaptureVstState('${role}', ${idx})"
                             title="Snapshot the current parameter values into the master chain's saved state"
                             class="bg-amber-700/60 hover:bg-amber-600/60 text-amber-100 text-[10px] px-2 py-0.5 rounded">📸 Capture state</button>
@@ -9969,9 +10203,28 @@ function rbMasterAddPieceVstFromPath(role, vstPath) {
     return rbMasterAddPieceVst(role, path, fmt, name);
 }
 
+// If a picked gear is a custom (user-authored) one, attach its saved VST or
+// NAM/IR source to the freshly-created chain piece so it plays immediately
+// rather than landing unassigned. No-op for regular game gear.
+function rbAttachCustomSource(piece, entry) {
+    if (!entry || !entry.custom) return;
+    if (entry.ui) piece._custom_ui = entry.ui;   // show the user's face, not the native window
+    if (entry.vst_path) {
+        piece._vst_path = entry.vst_path;
+        piece._vst_format = entry.vst_format || 'VST3';
+        piece._vst_state = entry.vst_state || null;
+        piece._vst_kind = 'vst';
+    } else if (entry.file) {
+        const ck = entry.kind === 'ir' ? 'ir' : 'nam';
+        piece._uploaded_file = entry.file;
+        piece._uploaded_kind = ck;
+        piece.assigned = { kind: ck, file: entry.file, assigned_mode: 'manual' };
+    }
+}
+
 function rbMasterAddPiece(role, rsGearType, category) {
     const catalogEntry = (_rbGearsCatalog || []).find(g => g.rs_gear === rsGearType) || {};
-    rbState.master[role].push({
+    const piece = {
         type: rsGearType,
         slot: `master_${role}`,
         rs_category: category,
@@ -9981,7 +10234,9 @@ function rbMasterAddPiece(role, rsGearType, category) {
         model: catalogEntry.model || '',
         assigned: null,
         _bypassed: false,
-    });
+    };
+    rbAttachCustomSource(piece, catalogEntry);
+    rbState.master[role].push(piece);
     // Close picker.
     const picker = document.getElementById(`rb-master-${role}-picker`);
     if (picker) { picker.classList.add('hidden'); picker.innerHTML = ''; }
@@ -10478,6 +10733,7 @@ async function rbAddPiece(toneIdx, filename, rsGearType, category) {
         bypassed: false,
         rs_irs: [],
     };
+    rbAttachCustomSource(newPiece, catalogEntry);
     tone.chain.push(newPiece);
     tone.chain_source = 'edited';
     // Close the modal so the user sees the freshly-added piece.
@@ -10553,11 +10809,18 @@ function rbVstCategoryLabel(p) {
 // Build <optgroup>-grouped <option>s from rbState.knownVsts, applying a text
 // filter (name / manufacturer / category) and the hide-instruments flag.
 // Shared by both pickers so the Songs and Gear panels stay in sync.
-function rbBuildVstOptions(stagedPath, filter, hideInstruments) {
+function rbBuildVstOptions(stagedPath, filter, hideInstruments, extraPredicate) {
     const known = rbState.knownVsts || [];
     const q = (filter || '').trim().toLowerCase();
+    // De-dupe by resolved path so a plugin listed by more than one source
+    // (engine scan + our bundled cache, or VST3 + AU) shows once per path.
+    const seenPath = new Set();
     const matches = known.filter(p => {
+        if (extraPredicate && !extraPredicate(p)) return false;
         if (hideInstruments && p.isInstrument) return false;
+        const key = (p.path || p.name || '');
+        if (seenPath.has(key)) return false;
+        seenPath.add(key);
         if (!q) return true;
         return ((p.name || '') + ' ' + (p.manufacturer || '') + ' ' + (p.category || ''))
             .toLowerCase().includes(q);
@@ -13596,10 +13859,21 @@ function rbGearTypeTags(g) {
 }
 
 function rbGearInstrument(g) {
+    // Custom (user-authored) gear stores its own instrument choice.
+    if (g && g.custom && g.instrument) return String(g.instrument).toLowerCase();
     const category = (g && g.category || '').toLowerCase();
     if (category === 'rack') return 'all';
     const rs = String(g && g.rs_gear || '');
     return /^Bass_/i.test(rs) || /(^|_)Bass(_|$)/i.test(rs) ? 'bass' : 'guitar';
+}
+
+// PNG data-URL of a custom gear's editable UI layout (its "face"), or null for
+// non-custom gear / gear without a saved layout. Custom gear draws from its
+// serializable `ui` layout via RBPedalCanvas.layoutDataURL rather than a
+// bundled-VST stem.
+function rbGearCustomArt(g) {
+    if (!g || !g.ui || !window.RBPedalCanvas || !window.RBPedalCanvas.layoutDataURL) return null;
+    try { return window.RBPedalCanvas.layoutDataURL(g.ui, {}); } catch (_) { return null; }
 }
 
 function rbGearHasVst(g) {
@@ -13633,6 +13907,17 @@ function rbGearIsAssigned(g) {
     return rbGearHasVst(g) || !!(g && (g.assigned || g.file));
 }
 
+// Assignment status under the NEW model: a real gear (game amp/pedal/rack or a
+// custom gear) is "assigned" when it covers ≥1 game-gear slot (assigned_rs). A
+// game gear whose slot was redirected to another gear covers nothing → shows
+// unassigned. Cabs/other keep the legacy meaning.
+function rbGearEffectiveAssigned(g) {
+    if (!g) return false;
+    const isMappable = !!g.custom || g.category !== 'cab';
+    if (isMappable) return Array.isArray(g.assigned_rs) && g.assigned_rs.length > 0;
+    return rbGearIsAssigned(g);
+}
+
 function rbGearSearchHaystack(g) {
     return rbNorm(
         (g.real_name || '') + ' ' +
@@ -13644,7 +13929,7 @@ function rbGearSearchHaystack(g) {
 }
 
 function rbGearMatchesFilters(g, search, onlyUnassigned, instrument) {
-    if (onlyUnassigned && rbGearIsAssigned(g)) return false;
+    if (onlyUnassigned && rbGearEffectiveAssigned(g)) return false;
     if (instrument && instrument !== 'all') {
         const gi = rbGearInstrument(g);
         if (gi !== 'all' && gi !== instrument) return false;
@@ -13717,12 +14002,12 @@ function rbRenderGearCategoryMenu(filtered) {
 
 function rbRenderGearListItem(g) {
     const selected = rbState.gearSelected === g.rs_gear;
-    const assigned = rbGearIsAssigned(g);
+    const assigned = rbGearEffectiveAssigned(g);
     const instrument = rbGearInstrument(g);
     const rsArt = rbCabArtDataUrl(g.rs_gear) || `${window.RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}${_RB_GEAR_PHOTO_CB}`;
     const stem = rbGearCanvasStem(g);
-    const vstArt = (stem && window.RBPedalCanvas && window.RBPedalCanvas.has(stem))
-        ? window.RBPedalCanvas.dataURL(stem, {}) : null;
+    const vstArt = rbGearCustomArt(g) || ((stem && window.RBPedalCanvas && window.RBPedalCanvas.has(stem))
+        ? window.RBPedalCanvas.dataURL(stem, {}) : null);
     const thumbW = vstArt ? 84 : 56;
     const sub = [
         instrument === 'all' ? 'all instruments' : instrument,
@@ -13751,10 +14036,19 @@ function rbRenderGearListItem(g) {
 function rbCatalogVisualForGear(g, size) {
     const isVst = rbGearHasVst(g);
     const gStem = isVst ? g.vst_path.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '') : '';
-    const canvasArt = (gStem && window.RBPedalCanvas && window.RBPedalCanvas.has(gStem))
-        ? window.RBPedalCanvas.dataURL(gStem, {}) : null;
+    const customArt = rbGearCustomArt(g);
+    const canvasArt = customArt || ((gStem && window.RBPedalCanvas && window.RBPedalCanvas.has(gStem))
+        ? window.RBPedalCanvas.dataURL(gStem, {}) : null);
     const minHeight = size === 'large' ? '360px' : '96px';
     const height = size === 'large' ? '52vh' : '96px';
+    // Custom gear always renders its own editable face (even NAM/IR-backed gear
+    // that has no VST) — its layout IS the visual.
+    if (customArt) {
+        return `<div class="bg-dark-900 border border-purple-800/30 rounded-xl overflow-hidden flex items-center justify-center"
+                    style="min-height:${minHeight};height:${height}">
+                    <img src="${customArt}" alt="" style="max-width:100%;max-height:100%;object-fit:contain">
+                </div>`;
+    }
     if (rbGearUsesVstOnlyVisual(g)) {
         if (isVst) {
             if (canvasArt) {
@@ -13821,6 +14115,113 @@ function rbOpenSelectedGearVst(g) {
     );
 }
 
+// Interactive in-app editor for a CUSTOM gear shown in the Gear catalog detail:
+// loads the plugin in isolation and renders the created face (custom mode) or a
+// panel generated from the plugin's real params (original mode), with knobs that
+// drive the plugin live so you can HEAR what each control does. NAM/IR gear (no
+// plugin) shows its static face. A 🪟 button opens the real plugin window.
+async function rbCatalogCustomEditInline(g) {
+    const PC = window.RBPedalCanvas;
+    if (!g || !PC) return;
+    const safeId = g.rs_gear.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const host = document.getElementById(`rb-cg-cat-face-${safeId}`);
+    if (!host) return;
+    const vstPath = g.vst_path || '';
+
+    // Shared render state — the plugin load (async) later fills slotId + model
+    // (for live audio + reading the plugin's current values).
+    let slotId = null;
+    let model = { idMap: {}, values: {} };
+    let layout = g.ui ? PC.normalizeLayout(g.ui) : null;
+    const idToParam = {};
+    const mapParams = () => {
+        Object.keys(idToParam).forEach(k => delete idToParam[k]);
+        ((layout && layout.controls) || []).forEach(c => { if (typeof c.param === 'number') idToParam[c.id] = c.param; });
+    };
+    mapParams();
+
+    // Draw the created face directly onto the canvas (NO static photo → no flash).
+    const renderFace = () => {
+        if (!layout) return;
+        let canvas = document.getElementById(`rb-cg-cat-canvas-${safeId}`);
+        if (!canvas) {
+            host.innerHTML = `
+                <div class="flex items-center justify-between mb-1">
+                    <div class="text-[11px] text-purple-300 font-semibold">In-feedBack editor · ${rbEsc(g.real_name || '')}</div>
+                    <button onclick="rbCatalogOpenNative()" title="Open the plugin's own (real) editor window"
+                            class="bg-dark-700 hover:bg-dark-600 text-gray-300 text-[10px] px-2 py-0.5 rounded">🪟 Plugin window</button>
+                </div>
+                <div style="text-align:center">
+                    <canvas id="rb-cg-cat-canvas-${safeId}" style="cursor:ns-resize;touch-action:none;display:inline-block;vertical-align:top"></canvas>
+                </div>
+                <div class="text-[10px] text-gray-500 text-center mt-1">Drag a knob up/down to hear what it does</div>`;
+            canvas = document.getElementById(`rb-cg-cat-canvas-${safeId}`);
+        }
+        const spec = PC.specFromLayout(layout);
+        // CONTAIN: fill the available width (small saved sizes aren't shown tiny).
+        const wrap = canvas.parentElement;
+        const availW = Math.max(280, ((wrap && wrap.clientWidth) ? wrap.clientWidth : 460) - 8);
+        const scale = Math.min(availW / spec.w, 430 / spec.h);
+        canvas.style.maxWidth = 'none';
+        canvas.style.width = Math.round(spec.w * scale) + 'px';
+        const values = {};
+        (layout.controls || []).forEach(c => { if (typeof c.param === 'number' && typeof model.values[c.param] === 'number') values[c.id] = model.values[c.param]; });
+        PC.attachSpec(canvas, spec, {
+            values, interactive: true,
+            onChange: (ctrlId, val) => {
+                const logical = idToParam[ctrlId];
+                if (typeof logical !== 'number' || slotId == null) return;   // cosmetic / not loaded yet
+                const realId = (model.idMap && model.idMap[logical] != null) ? model.idMap[logical] : logical;
+                try { (rbNativeAudio ? rbNativeAudio() : rbAudioApi()).setParameter(slotId, realId, val); } catch (_) {}
+            },
+        });
+    };
+
+    if (layout) {
+        renderFace();
+        if (PC.ready) PC.ready().then(() => { if (rbState.gearSelected === g.rs_gear) renderFace(); });
+    } else {
+        host.innerHTML = `<div class="text-xs text-gray-500 p-4 text-center">Loading ${rbEsc(g.real_name || 'plugin')}…</div>`;
+    }
+
+    // Load the plugin in the BACKGROUND to wire the knobs to live audio.
+    if (!vstPath) return;
+    const api = rbNativeAudio ? rbNativeAudio() : rbAudioApi();
+    if (!api || typeof api.loadVST !== 'function') return;
+    const loadToken = rbStandaloneVstLoadToken();
+    try {
+        await rbCloseActiveVstEditor().catch(() => {});
+        if (rbState.listeningTone !== null || rbState._auditionId) await rbStopPreview().catch(() => {});
+        const sid = await rbSafeLoadStandaloneVst(api, vstPath);
+        if (!rbStandaloneVstLoadActive(loadToken) || rbState.gearSelected !== g.rs_gear || !document.body.contains(host)) return;
+        const baseStage = { type: 0, slot: g.category === 'amp' ? 'amp' : 'pedal', path: vstPath, format: g.vst_format || 'VST3', rs_gear: g.rs_gear, bypassed: false };
+        await rbApplyCatalogGearVstParams(api, sid, vstPath, g.rs_gear).catch(() => {});
+        const chainForLeveling = await rbAppendFinalLevelerToStandaloneVstChain(api, baseStage).catch(() => null);
+        await rbMakeStandaloneVstAudible(api).catch(() => {});
+        if (chainForLeveling) await rbStartFinalChainNormalizer(chainForLeveling).catch(() => {});
+        setTimeout(() => rbSignalChainLoaded().catch(() => {}), 250);
+        let raw = [];
+        try { raw = (typeof api.getParameters === 'function' ? await api.getParameters(sid) : []) || []; } catch (_) {}
+        if (rbState.gearSelected !== g.rs_gear || !document.body.contains(host)) return;
+        slotId = sid;
+        rbState._cgCatSlotId = sid;
+        rbStashGearVstParamNames(g.rs_gear, raw);
+        model = rbBuildCanvasModel(raw, null);
+        if (!layout) { layout = PC.smartLayout(g.category, rbFilterVstParams(raw), { title: g.real_name || '' }); mapParams(); }
+        renderFace();   // re-draw with the plugin's live values + audio wiring
+    } catch (_) { /* the face is already shown */ }
+}
+
+async function rbCatalogOpenNative(slotId) {
+    const api = rbAudioApi();
+    const sid = (slotId != null) ? slotId : rbState._cgCatSlotId;
+    if (api && sid != null) {
+        if (!(await rbTryOpenNativeEditor(api, sid))) alert("This plugin has no native editor window (it's UI-less).");
+    } else {
+        alert('The plugin is still loading — try again in a moment.');
+    }
+}
+
 function rbRenderGearDetail(g) {
     const el = document.getElementById('rb-gear-detail');
     if (!el) return;
@@ -13832,11 +14233,26 @@ function rbRenderGearDetail(g) {
     }
     const safeId = g.rs_gear.replace(/[^a-zA-Z0-9_-]/g, '_');
     const isVst = rbGearHasVst(g);
-    const assignedLine = isVst
-        ? `<span class="text-purple-300 break-all">VST: ${rbEsc(g.vst_path.split(/[\\/]/).pop())}</span>`
-        : rbGearIsAssigned(g)
-            ? `<span class="text-emerald-300 break-all">${rbEsc(g.tone3000_title || rbLibShortName(g.file) || 'assigned')}</span>`
-            : `<span class="text-gray-500">unassigned</span>`;
+    const isCustom = !!g.custom;
+    // A GAME gear (amp/pedal/rack) is now PLAYED BY a real gear (custom or a
+    // bundled default). A CUSTOM gear is ASSIGNED TO the game gears it covers —
+    // and that assignment is edited from the custom gear's own detail.
+    // A game gear (amp/pedal/rack) and a custom gear are treated IDENTICALLY —
+    // both are real gears with the same "Assigned to game gears" panel. The only
+    // difference is native gear has no Edit/Delete. Cabs keep the Cab Room.
+    const isGameGear = !isCustom && g.category !== 'cab';
+    const isMappableGear = isGameGear || isCustom;
+    const assignedRs = Array.isArray(g.assigned_rs) ? g.assigned_rs : [];
+    const assignLabel = isMappableGear ? 'Assigned to' : 'Current assignment';
+    const assignedLine = isMappableGear
+        ? (assignedRs.length
+            ? `<span class="text-purple-300 break-all">${rbEsc(assignedRs.slice(0, 4).join(', '))}${assignedRs.length > 4 ? ` +${assignedRs.length - 4}` : ''}</span>`
+            : `<span class="text-gray-500">Unassigned</span>`)
+        : isVst
+            ? `<span class="text-purple-300 break-all">VST: ${rbEsc(g.vst_path.split(/[\\/]/).pop())}</span>`
+            : rbGearIsAssigned(g)
+                ? `<span class="text-emerald-300 break-all">${rbEsc(g.tone3000_title || rbLibShortName(g.file) || 'assigned')}</span>`
+                : `<span class="text-gray-500">unassigned</span>`;
     const instrument = rbGearInstrument(g);
     const t3kHeaderLink = g.tone3000_url
         ? `<a href="${rbEsc(g.tone3000_url)}" target="_blank" title="View on tone3000"
@@ -13853,6 +14269,18 @@ function rbRenderGearDetail(g) {
     const searchBtn = `<button onclick="rbOpenSuggest('${rbEsc(g.rs_gear)}')"
                                 class="text-gray-400 hover:text-gray-200 text-xs px-2 py-1.5">🔍 Search tone3000</button>`;
     const editVstBtn = ''
+    const customActions = '';
+    // Top-right actions: custom gear → Edit/Delete; native game gear → Reset (to
+    // its default assignment + knob mapping).
+    const headerActions = isCustom
+        ? `<button onclick="rbEditCustomGear('${rbEsc(g.rs_gear)}')" title="Edit this custom gear"
+                   class="bg-purple-900/30 hover:bg-purple-900/50 text-purple-200 border border-purple-700/40 px-2 py-1 rounded text-xs">✎ Edit</button>
+           <button onclick="rbDeleteCustomGear('${rbEsc(g.rs_gear)}')" title="Delete this custom gear"
+                   class="bg-red-900/30 hover:bg-red-900/50 text-red-300 border border-red-800/40 px-2 py-1 rounded text-xs">🗑</button>`
+        : (isGameGear
+            ? `<button onclick="rbResetGear('${rbEsc(g.rs_gear)}')" title="Reset assignment + knob mapping to default"
+                       class="bg-dark-700 hover:bg-dark-600 text-gray-300 border border-gray-700/50 px-2 py-1 rounded text-xs">↺ Reset</button>`
+            : '');
     const variantAuditions = Array.isArray(g.variants) && g.variants.length
         ? `<div class="flex items-center gap-1 flex-wrap">${g.variants.map(v => {
             const vId = `rb-aud-${_rbCatalogSeq++}`;
@@ -13882,36 +14310,258 @@ function rbRenderGearDetail(g) {
             <div class="min-w-0">
                 <h3 class="text-white text-xl font-semibold leading-tight break-words">${rbEsc((cabRoomEntry && cabRoomEntry.name) || g.real_name || g.rs_gear)}</h3>
                 <div class="text-xs text-gray-500 mt-1">
-                    ${rbEsc(g.rs_gear)} · ${rbEsc(RB_GEAR_LABEL[g.category] || g.category || 'gear')} · ${rbEsc(instrument === 'all' ? 'all instruments' : instrument)}
+                    ${isCustom ? '<span class="text-purple-300">✦ custom</span> · ' : ''}${rbEsc(RB_GEAR_LABEL[g.category] || g.category || 'gear')} · ${rbEsc(instrument === 'all' ? 'all instruments' : instrument)}
                 </div>
             </div>
-            ${t3kHeaderLink}
+            <div class="flex items-center gap-1.5 flex-shrink-0">${headerActions}${t3kHeaderLink}</div>
         </div>
         <div id="rb-cat-edit-${safeId}" class="hidden bg-purple-900/10 border border-purple-800/30 rounded p-2"></div>
-        ${isVst ? '' : visualBlock}
+        ${isCustom
+            ? `<div id="rb-cg-cat-face-${safeId}">${visualBlock}</div>`
+            : (isVst ? '' : visualBlock)}
         <div class="bg-dark-800/50 border border-gray-800/40 rounded-lg p-3 space-y-2">
-            <div class="text-xs text-gray-400">Current assignment: ${assignedLine}</div>
-            ${variantAuditions}
-            ${micAuditions}
-            <div class="flex flex-wrap items-center gap-1.5">
-                ${editVstBtn}
-                ${variantsBtn}
-                ${libraryBtn}
-                <div class="flex-1"></div>
-                ${searchBtn}
-            </div>
+            ${isMappableGear
+                ? `<div id="rb-cg-assign-${safeId}" class="text-xs text-gray-500">Loading assignments…</div>`
+                : `<div class="text-xs text-gray-400">${assignLabel}: ${assignedLine}</div>
+                   ${variantAuditions}
+                   ${micAuditions}
+                   <div class="flex flex-wrap items-center gap-1.5">
+                    ${editVstBtn}${variantsBtn}${libraryBtn}<div class="flex-1"></div>${searchBtn}
+                   </div>`}
             <div id="rb-cat-lib-${safeId}" class="hidden bg-indigo-900/10 border border-indigo-800/30 rounded p-2"></div>
             <div id="rb-cat-variants-${safeId}" class="hidden bg-emerald-900/10 border border-emerald-800/30 rounded p-2"></div>
         </div>
     </div>`;
 
-    if (isVst) {
-    setTimeout(() => {
-        rbOpenSelectedGearVst(g);
-    }, 0);
-}
+    // Native and custom gear are treated the SAME: show the gear's own VST
+    // editor + the "Assigned to game gears" panel. (Custom uses the in-app
+    // canvas editor; native uses its bundled-VST editor.)
+    if (isCustom) {
+        setTimeout(() => rbCatalogCustomEditInline(g), 0);
+        setTimeout(() => rbLoadCustomAssignments(g), 0);
+    } else if (isGameGear) {
+        if (isVst) setTimeout(() => rbOpenSelectedGearVst(g), 0);
+        setTimeout(() => rbLoadCustomAssignments(g), 0);
+    } else if (isVst) {
+        setTimeout(() => rbOpenSelectedGearVst(g), 0);
+    }
     if (cabRoomEntry) {
         setTimeout(() => rbCabRoomBuild(g, cabRoomEntry, safeId), 0);
+    }
+}
+
+// ── Assign panel: a real gear (native OR custom) covers game gear slots ──────
+async function rbLoadCustomAssignments(g) {
+    const safeId = g.rs_gear.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const host = document.getElementById(`rb-cg-assign-${safeId}`);
+    if (!host) return;
+    let data;
+    try { data = await (await fetch(`${window.RB_API}/custom_assignments/${encodeURIComponent(g.rs_gear)}`)).json(); }
+    catch (e) { host.innerHTML = `<div class="text-xs text-red-400">Error: ${rbEsc(e.message)}</div>`; return; }
+    rbState._assignData = rbState._assignData || {};
+    rbState._assignData[g.rs_gear] = data;
+    if (rbState.gearSelected !== g.rs_gear) return;
+    host.innerHTML = rbRenderCustomAssignPanel(g.rs_gear, data);
+}
+
+// Cache of a gear's FULL real VST parameter names (from getParameters), keyed by
+// rs_gear. The knob-mapping panel maps a game knob → one of THESE — the actual
+// plugin params — not just the subset the shipped table happens to translate.
+// Filled whenever the gear's VST loads in the detail editor (game or custom).
+function rbStashGearVstParamNames(rsGear, rawParams) {
+    if (!rsGear) return;
+    const names = [];
+    const seen = new Set();
+    for (const p of rbFilterVstParams(rawParams || [])) {
+        const n = String((p && (p.name ?? p.label)) || '').trim();
+        if (n && !seen.has(n)) { seen.add(n); names.push(n); }
+    }
+    if (!names.length) return;
+    rbState._gearVstParamNames = rbState._gearVstParamNames || {};
+    rbState._gearVstParamNames[rsGear] = names;
+    // Re-render the assign panel in place if it's showing this gear.
+    if (rbState.gearSelected === rsGear) {
+        const safeId = rsGear.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const host = document.getElementById(`rb-cg-assign-${safeId}`);
+        const data = rbState._assignData && rbState._assignData[rsGear];
+        if (host && data) host.innerHTML = rbRenderCustomAssignPanel(rsGear, data);
+    }
+}
+
+function rbRenderCustomAssignPanel(customId, data) {
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const catLabel = RB_CG_ADD_LABEL[data.category] || 'gear';
+    const paramLabel = (RB_CG_ADD_LABEL[data.category] || 'gear').toLowerCase();
+    const assigned = data.assigned || {};
+    const assignedKeys = Object.keys(assigned);
+    // Mapping TARGETS: the gear's full real VST params (from getParameters) when
+    // the plugin has loaded; else the backend's subset. Always union in any param
+    // already chosen in a saved map so it stays selectable before the VST loads.
+    const liveNames = (rbState._gearVstParamNames && rbState._gearVstParamNames[customId]) || null;
+    const cps = (() => {
+        const out = [];
+        const seen = new Set();
+        const push = v => { const s = String(v || '').trim(); if (s && !seen.has(s)) { seen.add(s); out.push(s); } };
+        (liveNames || data.custom_params || []).forEach(push);
+        assignedKeys.forEach(rs => Object.values((assigned[rs] && assigned[rs].params) || {}).forEach(push));
+        return out;
+    })();
+    const q = (data._filter || '').toLowerCase();
+    // One ISLAND per assigned game gear: big name + a pressable knob-mapping.
+    const islands = assignedKeys.map(rs => {
+        const a = assigned[rs];
+        const rsSafe = rs.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const open = !!(data._openKnobs && data._openKnobs[rs]);
+        const knobRows = (a.knobs || []).map(k => {
+            const cur = (a.params && a.params[k]) || '';
+            const opts = `<option value="">—</option>` +
+                cps.map(p => `<option value="${rbEsc(p)}"${p === cur ? ' selected' : ''}>${rbEsc(p)}</option>`).join('');
+            return `<div class="flex items-center gap-2 text-xs py-1">
+                <span class="w-28 text-gray-300 truncate" title="${rbEsc(k)}">${rbEsc(k)}</span>
+                <span class="text-gray-600">→</span>
+                <select data-cga-rs="${rbEsc(rs)}" data-cga-knob="${rbEsc(k)}" class="flex-1 bg-dark-800 border border-gray-800 rounded px-2 py-1 text-gray-200 outline-none">${opts}</select>
+            </div>`;
+        }).join('');
+        return `<div class="bg-dark-900/60 border border-purple-800/30 rounded-lg p-3 mb-2">
+            <div class="flex items-center gap-2 mb-1">
+                <span class="flex-1 text-sm text-purple-100 font-semibold truncate">${rbEsc(a.name)}${a.self ? ' <span class="text-gray-500 text-xs font-normal">(itself)</span>' : ''}</span>
+                ${a.self
+                    ? ''
+                    : `<button onclick="rbCustomAssignRemove('${rbEsc(customId)}','${rbEsc(rs)}')" class="text-red-400 hover:text-red-300 text-[11px]">✕ remove</button>`}
+            </div>
+            <button onclick="rbCustomAssignExpand('${rbEsc(customId)}','${rbEsc(rs)}')"
+                    class="w-full text-left text-xs text-cyan-300 hover:text-cyan-200 border border-gray-800/60 rounded px-2 py-1.5 bg-dark-800/40">
+                ${open ? '▾' : '▸'} Knob mapping ${a.knobs && a.knobs.length ? `<span class="text-gray-600">(${a.knobs.length})</span>` : ''}
+            </button>
+            <div id="rb-cga-knobs-${safeId}-${rsSafe}" class="${open ? '' : 'hidden'} pt-2">
+                <div class="text-[10px] text-gray-500 mb-1">Game knob → ${rbEsc(paramLabel)} parameter</div>
+                ${knobRows || '<div class="text-[11px] text-gray-600">This game gear has no known knobs.</div>'}
+            </div>
+        </div>`;
+    }).join('');
+    const addable = (data.options || [])
+        .filter(o => !assigned[o.rs_gear] && (!q || (o.name || '').toLowerCase().includes(q)))
+        .slice(0, 40)
+        .map(o => `<button onclick="rbCustomAssignAdd('${rbEsc(customId)}','${rbEsc(o.rs_gear)}')"
+                        class="w-full text-left px-2 py-1 rounded text-[11px] text-gray-300 hover:bg-dark-700">＋ ${rbEsc(o.name)}</button>`).join('');
+    const addOpen = !!data._addOpen;
+    return `
+        <div>
+            <div class="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Assigned to game ${rbEsc(catLabel.toLowerCase())}s</div>
+            ${assignedKeys.length ? islands : '<div class="text-[11px] text-gray-500 mb-2">Not assigned to any game gear yet.</div>'}
+            <div class="bg-dark-900/40 border border-gray-800/50 rounded-lg p-2">
+                <button onclick="rbCustomAssignToggleAdd('${rbEsc(customId)}')"
+                        class="text-xs text-purple-300 hover:text-purple-200">${addOpen ? '▾' : '＋'} Assign a game ${rbEsc(paramLabel)}</button>
+                ${addOpen ? `<div class="mt-2">
+                    <input type="text" placeholder="🔍 search game ${rbEsc(paramLabel)}…" value="${rbEsc(data._filter || '')}"
+                           oninput="rbCustomAssignFilter('${rbEsc(customId)}', this.value)"
+                           class="w-full bg-dark-900 border border-gray-800 rounded text-[11px] text-gray-200 px-2 py-1 mb-1">
+                    <div class="max-h-44 overflow-y-auto">${addable || '<div class="text-[11px] text-gray-600 px-2">no matches</div>'}</div>
+                </div>` : ''}
+            </div>
+            <div class="pt-2"><button onclick="rbSaveCustomAssignments('${rbEsc(customId)}')" class="bg-purple-700 hover:bg-purple-600 text-white text-xs px-4 py-1.5 rounded transition">💾 Save</button></div>
+            <div id="rb-cga-msg-${safeId}" class="text-[11px] mt-1"></div>
+        </div>`;
+}
+
+function rbCustomAssignToggleAdd(customId) {
+    const data = rbState._assignData && rbState._assignData[customId];
+    if (!data) return;
+    rbCustomAssignCapture(customId);
+    data._addOpen = !data._addOpen;
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const host = document.getElementById(`rb-cg-assign-${safeId}`);
+    if (host) host.innerHTML = rbRenderCustomAssignPanel(customId, data);
+}
+
+function rbCustomAssignFilter(customId, v) {
+    const data = rbState._assignData && rbState._assignData[customId];
+    if (!data) return;
+    data._filter = v;
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const host = document.getElementById(`rb-cg-assign-${safeId}`);
+    if (host) host.innerHTML = rbRenderCustomAssignPanel(customId, data);
+    const inp = host && host.querySelector('input[placeholder^="🔍"]');
+    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+}
+
+function rbCustomAssignExpand(customId, rs) {
+    const data = rbState._assignData && rbState._assignData[customId];
+    if (!data) return;
+    rbCustomAssignCapture(customId);
+    data._openKnobs = data._openKnobs || {};
+    data._openKnobs[rs] = !data._openKnobs[rs];
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const host = document.getElementById(`rb-cg-assign-${safeId}`);
+    if (host) host.innerHTML = rbRenderCustomAssignPanel(customId, data);
+}
+
+async function rbResetGear(rsGear) {
+    if (!confirm('Reset this gear to its default assignment and knob mapping?')) return;
+    try {
+        const r = await fetch(`${window.RB_API}/gear_reset`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gear: rsGear }),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+    } catch (e) { alert('Reset failed: ' + (e.message || e)); return; }
+    if (rbState._assignData) delete rbState._assignData[rsGear];
+    await rbLoadCatalog();
+    rbState.gearSelected = rsGear;
+    rbApplyGearFilters();
+}
+
+// Snapshot the current knob-param picks from the DOM into state before re-render.
+function rbCustomAssignCapture(customId) {
+    const data = rbState._assignData && rbState._assignData[customId];
+    if (!data) return;
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    document.querySelectorAll(`#rb-cg-assign-${safeId} select[data-cga-rs]`).forEach(s => {
+        const rs = s.dataset.cgaRs, knob = s.dataset.cgaKnob;
+        if (data.assigned[rs]) { data.assigned[rs].params = data.assigned[rs].params || {}; if (s.value) data.assigned[rs].params[knob] = s.value; else delete data.assigned[rs].params[knob]; }
+    });
+}
+
+function rbCustomAssignAdd(customId, rs) {
+    const data = rbState._assignData && rbState._assignData[customId];
+    if (!data) return;
+    rbCustomAssignCapture(customId);
+    const o = (data.options || []).find(x => x.rs_gear === rs);
+    if (o && !data.assigned[rs]) data.assigned[rs] = { name: o.name, knobs: o.knobs || [], params: {} };
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const host = document.getElementById(`rb-cg-assign-${safeId}`);
+    if (host) host.innerHTML = rbRenderCustomAssignPanel(customId, data);
+}
+
+function rbCustomAssignRemove(customId, rs) {
+    const data = rbState._assignData && rbState._assignData[customId];
+    if (!data) return;
+    rbCustomAssignCapture(customId);
+    delete data.assigned[rs];
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const host = document.getElementById(`rb-cg-assign-${safeId}`);
+    if (host) host.innerHTML = rbRenderCustomAssignPanel(customId, data);
+}
+
+async function rbSaveCustomAssignments(customId) {
+    const data = rbState._assignData && rbState._assignData[customId];
+    if (!data) return;
+    rbCustomAssignCapture(customId);
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const msg = document.getElementById(`rb-cga-msg-${safeId}`);
+    const assigned = {};
+    Object.keys(data.assigned).forEach(rs => { assigned[rs] = data.assigned[rs].params || {}; });
+    try {
+        const r = await fetch(`${window.RB_API}/custom_assignments`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ custom: customId, assigned }),
+        });
+        const d = await r.json();
+        if (!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+        if (msg) { msg.className = 'text-[11px] text-emerald-400'; msg.textContent = `✓ Saved — covers ${d.assigned_count} game gear(s).`; }
+        try { await rbLoadCatalog(); } catch (_) {}
+    } catch (e) {
+        if (msg) { msg.className = 'text-[11px] text-red-400'; msg.textContent = 'Save failed: ' + (e.message || e); }
     }
 }
 
@@ -13926,6 +14576,7 @@ function rbApplyGearFilters() {
 
     const filtered = rbFilteredGearByCategory(search, onlyUnassigned, instrument);
     rbRenderGearCategoryMenu(filtered);
+    rbRenderGearAddButton();
 
     const activeCat = rbState.gearBrowserCategory || 'amp';
     const activeList = filtered[activeCat] || [];
@@ -13998,6 +14649,668 @@ function rbClearGearFilters() {
     rbState.gearSelected = null;
     rbState.gearCollapsedCats.clear();
     rbApplyGearFilters();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  Custom gear — "Add amp / pedal / rack / cab"
+//
+//  The Gear browser gets an "Add <type>" button above the catalog list; it
+//  opens a form in the detail pane (right) with: a name, a VST/NAM·IR source
+//  picker, an EDITABLE custom-UI preview (click a control to change its
+//  kind/colour/label), and Save. Saving POSTs /custom_gear; the gear then shows
+//  in the browser, the node-editor palette, and the per-song picker.
+// ══════════════════════════════════════════════════════════════════════════
+const RB_CG_ADD_LABEL = { amp: 'Amp', pedal: 'Pedal', rack: 'Rack', cab: 'Cab' };
+
+// px-per-layout-unit scale for a preview canvas, derived from the container so
+// that the W slider's MAX fills the available width (and the H max fits the box
+// height). A single scale keeps W→width / H→height independent and undistorted.
+const RB_CG_W_MAX = 680, RB_CG_H_MAX = 540;
+function rbCgFitScale(canvas, boxInnerH) {
+    const wrap = canvas && canvas.parentElement;
+    const availW = Math.max(280, ((wrap && wrap.clientWidth) ? wrap.clientWidth : 460) - 16);
+    return Math.min(availW / RB_CG_W_MAX, (boxInnerH || 446) / RB_CG_H_MAX);
+}
+let rbCgState = null;
+
+function rbRenderGearAddButton() {
+    const el = document.getElementById('rb-gear-add-btn');
+    if (!el) return;
+    const cat = rbState.gearBrowserCategory || 'amp';
+    const label = RB_CG_ADD_LABEL[cat] || 'Gear';
+    el.innerHTML = `<button onclick="rbOpenAddCustomGear('${cat}')"
+        class="w-full mb-2 flex items-center justify-center gap-1.5 bg-purple-900/30 hover:bg-purple-900/50 text-purple-200 border border-purple-700/40 rounded-lg px-3 py-2 text-sm font-medium transition">
+        ＋ Add ${label}</button>`;
+}
+
+async function rbOpenAddCustomGear(cat, editRec) {
+    cat = (cat || 'amp').toLowerCase();
+    const PC = window.RBPedalCanvas;
+    let name, instrument, kind, vst_path, vst_format, file, layout, editRsGear = null;
+    if (editRec) {
+        editRsGear = editRec.rs_gear;
+        name = editRec.real_name || '';
+        instrument = editRec.instrument || 'all';
+        kind = editRec.kind || (editRec.vst_path ? 'vst' : 'nam');
+        vst_path = editRec.vst_path || '';
+        vst_format = editRec.vst_format || 'VST3';
+        file = editRec.file || '';
+        layout = (editRec.ui && PC) ? PC.normalizeLayout(editRec.ui)
+                                    : (PC ? PC.defaultFace(cat, null, { title: name }) : null);
+    } else {
+        name = '';
+        instrument = cat === 'rack' ? 'all' : 'guitar';
+        kind = ''; vst_path = ''; vst_format = 'VST3'; file = '';
+        layout = PC ? PC.defaultFace(cat, null, { title: '' }) : null;
+    }
+    rbCgState = {
+        cat, name, instrument, kind, vst_path, vst_format, file, layout,
+        values: {}, editRsGear, files: null, _fileFilter: '', _editIdx: -1,
+        sourceTab: (kind === 'nam' || kind === 'ir' || (!vst_path && file)) ? 'file' : 'vst',
+    };
+    const el = document.getElementById('rb-gear-detail');
+    if (el) el.innerHTML = rbCgFormHtml();
+    if (!rbState.knownVsts || !rbState.knownVsts.length) {
+        try { await rbLoadKnownVsts(); } catch (_) { /* best-effort */ }
+    }
+    if (!rbCgState) return;      // cancelled while VSTs loaded
+    rbCgRenderSource();
+    rbCgRenderPreview();
+}
+
+function rbCgFormHtml() {
+    const s = rbCgState;
+    const typeLabel = RB_CG_ADD_LABEL[s.cat] || 'Gear';
+    return `
+    <div class="bg-dark-700/50 border border-purple-800/40 rounded-xl p-4 space-y-4">
+        <div class="flex items-center justify-between">
+            <h3 class="text-white font-semibold text-sm">${s.editRsGear ? 'Edit' : 'Add'} ${typeLabel}</h3>
+            <button onclick="rbCancelAddCustomGear()" class="text-gray-400 hover:text-gray-200 text-xs">✕ Cancel</button>
+        </div>
+
+        <div>
+            <label class="block text-[11px] uppercase tracking-wide text-gray-500 mb-1">Name</label>
+            <input id="rb-cg-name" type="text" value="${rbEsc(s.name)}" placeholder="e.g. My Custom ${typeLabel}"
+                   oninput="rbCgOnName(this.value)"
+                   class="w-full bg-dark-800 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100 outline-none focus:border-purple-500/50">
+        </div>
+
+        <div class="flex items-center gap-2">
+            <label class="text-[11px] uppercase tracking-wide text-gray-500">Instrument</label>
+            <select onchange="rbCgOnInstrument(this.value)" class="bg-dark-800 border border-gray-800 rounded px-2 py-1 text-xs text-gray-200 outline-none">
+                <option value="guitar"${s.instrument === 'guitar' ? ' selected' : ''}>Guitar</option>
+                <option value="bass"${s.instrument === 'bass' ? ' selected' : ''}>Bass</option>
+                <option value="all"${s.instrument === 'all' ? ' selected' : ''}>Both</option>
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-[11px] uppercase tracking-wide text-gray-500 mb-1">Sound source (VST or NAM/IR)</label>
+            <div class="inline-flex gap-1 bg-dark-800/60 border border-gray-800 rounded-lg p-0.5 mb-2">
+                <button onclick="rbCgSetSourceTab('vst')" id="rb-cg-tab-vst" class="px-3 py-1 rounded text-xs text-gray-400 transition">VST / AU</button>
+                <button onclick="rbCgSetSourceTab('file')" id="rb-cg-tab-file" class="px-3 py-1 rounded text-xs text-gray-400 transition">NAM · IR</button>
+            </div>
+            <div id="rb-cg-source"></div>
+            <div id="rb-cg-source-current" class="text-[11px] text-gray-500 mt-1"></div>
+        </div>
+
+        <div>
+            <div class="flex items-center justify-between mb-1">
+                <label class="text-[11px] uppercase tracking-wide text-gray-500">In-app UI</label>
+                <div class="flex items-center gap-3 flex-wrap">
+                    <label class="text-[10px] text-gray-400 flex items-center gap-1" title="Background template">Style
+                        <select onchange="rbCgOnTemplate(this.value)" class="bg-dark-800 border border-gray-800 rounded px-1 py-0.5 text-[10px] text-gray-200 outline-none">
+                            ${(window.RBPedalCanvas && window.RBPedalCanvas.templates ? window.RBPedalCanvas.templates(s.cat) : [{key:'default',label:'Default'}]).map(t => `<option value="${t.key}"${((s.layout && s.layout.template) || 'default') === t.key ? ' selected' : ''}>${rbEsc(t.label)}</option>`).join('')}
+                        </select>
+                    </label>
+                    <label class="text-[10px] text-gray-400 flex items-center gap-1">Body
+                        <input type="color" value="${window.RBPedalCanvas ? window.RBPedalCanvas.rgbToHex(s.layout ? s.layout.body : [40,42,48]) : '#282a30'}"
+                               oninput="rbCgOnBodyColor(this.value)"
+                               style="width:26px;height:20px;border:1px solid #3a3a44;border-radius:4px;background:#232329;cursor:pointer;padding:0">
+                    </label>
+                    <label class="text-[10px] text-gray-400 flex items-center gap-1" title="Set every knob's colour at once">All knobs
+                        <input type="color" value="${window.RBPedalCanvas ? window.RBPedalCanvas.rgbToHex((s.layout && s.layout.controls[0]) ? s.layout.controls[0].color : [200,200,200]) : '#c8c8c8'}"
+                               oninput="rbCgOnAllColor(this.value)"
+                               style="width:26px;height:20px;border:1px solid #3a3a44;border-radius:4px;background:#232329;cursor:pointer;padding:0">
+                    </label>
+                    <label class="text-[10px] text-gray-400 flex items-center gap-1" title="Resize every knob at once">Size
+                        <input type="range" min="0.02" max="0.13" step="0.004"
+                               value="${(s.layout && s.layout.controls[0] && s.layout.controls[0].r) || 0.06}"
+                               oninput="rbCgOnAllSize(this.value)" style="width:64px;accent-color:#8b5cf6">
+                    </label>
+                    <label class="text-[10px] text-gray-400 flex items-center gap-1" title="How wide the gear is (left↔right)">W
+                        <input type="range" min="240" max="680" step="20"
+                               value="${(s.layout && s.layout.w) || 400}"
+                               oninput="rbCgOnWidth(this.value)" style="width:64px;accent-color:#8b5cf6">
+                    </label>
+                    <label class="text-[10px] text-gray-400 flex items-center gap-1" title="How tall the gear is (top↕bottom)">H
+                        <input type="range" min="220" max="540" step="20"
+                               value="${(s.layout && s.layout.h) || 400}"
+                               oninput="rbCgOnHeight(this.value)" style="width:64px;accent-color:#8b5cf6">
+                    </label>
+                    <button onclick="rbCgAddControl()" class="text-[11px] text-purple-300 hover:text-purple-200">＋ Control</button>
+                    <span class="text-[10px] text-gray-600">drag to move · click to edit</span>
+                </div>
+            </div>
+            <div class="bg-dark-900/60 border border-gray-800/60 rounded-xl p-3 flex items-center justify-center" style="height:470px;overflow:auto">
+                <canvas id="rb-cg-canvas" style="cursor:pointer;display:block"></canvas>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 pt-1">
+            <button onclick="rbSaveCustomGear()" id="rb-cg-save"
+                    class="flex-1 bg-purple-700 hover:bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-medium transition">
+                💾 Save ${typeLabel}
+            </button>
+            ${s.editRsGear ? `<button onclick="rbDeleteCustomGear('${rbEsc(s.editRsGear)}')" class="bg-red-900/40 hover:bg-red-900/60 text-red-300 border border-red-800/40 rounded-lg px-3 py-2 text-sm transition">🗑</button>` : ''}
+        </div>
+        <div id="rb-cg-msg" class="text-xs"></div>
+    </div>`;
+}
+
+function rbCgSetSourceTab(tab) {
+    if (!rbCgState) return;
+    rbCgState.sourceTab = tab;
+    rbCgRenderSource();
+}
+
+function rbCgRenderSource() {
+    const s = rbCgState; if (!s) return;
+    for (const t of ['vst', 'file']) {
+        const b = document.getElementById('rb-cg-tab-' + t);
+        if (b) {
+            const on = s.sourceTab === t;
+            b.classList.toggle('bg-purple-700', on);
+            b.classList.toggle('text-white', on);
+            b.classList.toggle('text-gray-400', !on);
+        }
+    }
+    const host = document.getElementById('rb-cg-source');
+    if (host) host.innerHTML = s.sourceTab === 'file' ? rbCgFilePickerHtml() : rbCgVstPickerHtml();
+    if (s.sourceTab === 'file' && s.files == null) rbCgLoadFiles();
+    rbCgUpdateSourceLabel();
+}
+
+// A custom gear is meant to wrap YOUR OWN / an installed VST — never one of the
+// bundled Rig Builder effects, which are already the game's built-in gear.
+// Exclude those (they also arrived from several sources, causing duplicates).
+function rbCgIsExternalVst(p) {
+    if (!p) return false;
+    if (p.bundled) return false;
+    if ((p.manufacturer || '') === 'Rig Builder') return false;
+    if (/[\\/]rig_builder[\\/]vst[\\/]/i.test(p.path || '')) return false;
+    return true;
+}
+
+function rbCgVstPickerHtml() {
+    const known = rbState.knownVsts || [];
+    const external = known.filter(rbCgIsExternalVst);
+    if (!external.length) return `<div class="text-xs text-gray-500">No external plugins found. Scan your installed VST3/AU in Settings → VST / Audio Unit, or use the NAM · IR tab. (Rig Builder's bundled effects are excluded — they're already built-in gear.)</div>`;
+    const opts = rbBuildVstOptions(rbCgState.vst_path || '', '', true, rbCgIsExternalVst);
+    return `
+    <div class="flex items-center gap-2 mb-1">
+        <input id="rb-cg-vst-search" type="text" placeholder="🔍 filter by name / brand" oninput="rbCgFilterVst()"
+               class="flex-1 bg-dark-900 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1">
+        <label class="text-[10px] text-gray-400 flex items-center gap-1 whitespace-nowrap">
+            <input id="rb-cg-vst-hideinst" type="checkbox" checked onchange="rbCgFilterVst()"> hide instruments
+        </label>
+    </div>
+    <select id="rb-cg-vst-select" size="6" onchange="rbCgOnVstChange(this)"
+            class="w-full bg-dark-900 border border-gray-800 rounded text-xs text-gray-200 px-1 py-1">${opts}</select>`;
+}
+
+function rbCgFilterVst() {
+    const sel = document.getElementById('rb-cg-vst-select');
+    if (!sel) return;
+    const input = document.getElementById('rb-cg-vst-search');
+    const cb = document.getElementById('rb-cg-vst-hideinst');
+    sel.innerHTML = rbBuildVstOptions(rbCgState.vst_path || '', input ? input.value : '', cb ? cb.checked : true, rbCgIsExternalVst);
+}
+
+async function rbCgOnVstChange(sel) {
+    const path = sel.value; if (!path || !rbCgState) return;
+    const p = (rbState.knownVsts || []).find(x => x.path === path);
+    rbCgState.vst_path = path;
+    rbCgState.vst_format = (p && p.format) || 'VST3';
+    rbCgState.kind = 'vst';
+    rbCgState.file = '';
+    rbCgUpdateSourceLabel();
+    // Rebuild the UI so it has ONE knob per real sound-changing parameter of the
+    // chosen plugin (the engine's Buffer Size / Sample Rate / Bypass / MIDI junk
+    // is filtered out by rbFilterVstParams — same rule the chain editor uses).
+    await rbCgApplyVstParamLayout(path);
+}
+
+// Load the picked VST in isolation, read its parameter list, and regenerate the
+// default face from the sound-affecting params (their real names as labels).
+// Best-effort: if the engine isn't available or the load fails, the current
+// type-default face is kept. Preserves the user's body colour + name.
+async function rbCgApplyVstParamLayout(path) {
+    const s = rbCgState; if (!s || !window.RBPedalCanvas) return;
+    const seq = (s._paramSeq = (s._paramSeq || 0) + 1);
+    const status = document.getElementById('rb-cg-source-current');
+    if (status) status.textContent = 'Reading plugin parameters…';
+    let params = null;
+    try { params = await rbCgFetchVstParams(path); } catch (_) { /* best-effort */ }
+    if (!rbCgState || rbCgState !== s || s._paramSeq !== seq) return;   // stale / cancelled
+    if (params && params.length) {
+        const body = s.layout ? s.layout.body : null;
+        const tpl = s.layout ? s.layout.template : null;
+        const title = s.name || (s.layout && s.layout.title) || '';
+        // Smart layout: group + order by function, map each param to the right
+        // control (switch / stepped selector / knob), and carry discrete labels.
+        s.layout = window.RBPedalCanvas.smartLayout(s.cat, params, { title });
+        if (body) s.layout.body = body;
+        if (tpl) s.layout.template = tpl;      // keep the user's chosen background
+        rbCgRenderPreview();
+    }
+    rbCgUpdateSourceLabel();
+}
+
+async function rbCgFetchVstParams(vstPath) {
+    const api = rbAudioApi();
+    if (!api || typeof api.getParameters !== 'function' || typeof rbLoadVSTWhenReady !== 'function') return null;
+    try {
+        if (api.clearChain) await api.clearChain();
+        if (typeof api.startAudio === 'function') await api.startAudio().catch(() => {});
+        const slotId = await rbLoadVSTWhenReady(api, vstPath);
+        if (slotId == null || slotId < 0) return null;
+        const raw = await api.getParameters(slotId).catch(() => null);
+        const filtered = raw ? rbFilterVstParams(raw) : null;
+        // For discrete "mode" params (numSteps 3..16), read the value label at
+        // each step so the face can print them around the knob (Pultec-style).
+        if (filtered && typeof api.setParameter === 'function') {
+            for (const p of filtered) {
+                const steps = p.numSteps || 0;
+                if (steps > 2 && steps <= 16) {
+                    try { p.ticks = await rbCgEnumParamTicks(api, slotId, p, steps); } catch (_) { /* skip */ }
+                }
+            }
+        }
+        return filtered;
+    } catch (_) { return null; }
+}
+
+// Step a discrete param through its positions and collect the plugin's value
+// text at each (e.g. "200","300","500","700","1000"). Returns the ordered,
+// de-duped list, or null if it couldn't read at least two distinct labels.
+async function rbCgEnumParamTicks(api, slotId, p, steps) {
+    const pid = p.id ?? p.paramId ?? p.index;
+    if (pid == null) return null;
+    const out = [];
+    for (let i = 0; i < steps; i++) {
+        const v = steps > 1 ? i / (steps - 1) : 0;
+        try {
+            await api.setParameter(slotId, pid, v);
+            const fresh = await api.getParameters(slotId).catch(() => null);
+            const cur = fresh && fresh.find(x => (x.id ?? x.paramId ?? x.index) === pid);
+            const t = cur && (cur.text ?? cur.display);
+            if (t != null && String(t).trim()) out.push(String(t).trim());
+        } catch (_) { /* skip this step */ }
+    }
+    const uniq = out.filter((t, i) => i === 0 || t !== out[i - 1]);
+    return uniq.length >= 2 ? uniq.slice(0, 16) : null;
+}
+
+function rbCgOnBodyColor(hex) {
+    if (!rbCgState || !rbCgState.layout || !window.RBPedalCanvas) return;
+    rbCgState.layout.body = window.RBPedalCanvas.hexToRgb(hex);
+    rbCgRenderPreview();
+}
+
+function rbCgOnTemplate(key) {
+    if (!rbCgState || !rbCgState.layout) return;
+    rbCgState.layout.template = key || 'default';
+    rbCgRenderPreview();
+}
+
+// Gear face width/height (left↔right / top↕bottom). Controls are fractional so
+// they stay proportionally placed; the preview always scales the WHOLE face to
+// fit its box, so nothing is ever cut off.
+function rbCgOnWidth(v) {
+    if (!rbCgState || !rbCgState.layout) return;
+    rbCgState.layout.w = Math.max(240, Math.min(680, parseInt(v, 10) || 400));
+    rbCgRenderPreview();
+}
+function rbCgOnHeight(v) {
+    if (!rbCgState || !rbCgState.layout) return;
+    rbCgState.layout.h = Math.max(220, Math.min(540, parseInt(v, 10) || 400));
+    rbCgRenderPreview();
+}
+
+async function rbCgLoadFiles() {
+    const s = rbCgState; if (!s) return;
+    try {
+        const [namR, irR] = await Promise.all([
+            fetch(`${window.RB_API}/local_files?kind=nam`).then(r => r.json()).catch(() => ({ files: [] })),
+            fetch(`${window.RB_API}/local_files?kind=ir`).then(r => r.json()).catch(() => ({ files: [] })),
+        ]);
+        s.files = [
+            ...((namR.files || []).map(f => ({ ...f, kind: 'nam' }))),
+            ...((irR.files || []).map(f => ({ ...f, kind: 'ir' }))),
+        ];
+    } catch (_) { s.files = []; }
+    if (rbCgState === s && s.sourceTab === 'file') {
+        const host = document.getElementById('rb-cg-source');
+        if (host) host.innerHTML = rbCgFilePickerHtml();
+        rbCgUpdateSourceLabel();
+    }
+}
+
+function rbCgFilePickerHtml() {
+    const s = rbCgState;
+    if (s.files == null) return `<div class="text-xs text-gray-500">loading files…</div>`;
+    if (!s.files.length) return `<div class="text-xs text-gray-500">No downloaded NAM/IR files yet — download some in the Gear catalog first.</div>`;
+    return `
+        <input type="text" placeholder="🔍 filter files…" value="${rbEsc(s._fileFilter || '')}"
+               oninput="rbCgSetFileFilter(this.value)"
+               class="w-full bg-dark-900 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1 mb-1">
+        <div id="rb-cg-file-rows" class="max-h-40 overflow-y-auto space-y-0.5">${rbCgFileRowsHtml()}</div>`;
+}
+
+function rbCgFileRowsHtml() {
+    const s = rbCgState;
+    const q = (s._fileFilter || '').toLowerCase();
+    const list = (s.files || [])
+        .filter(f => !q || (f.name + ' ' + (f.title || '')).toLowerCase().includes(q))
+        .slice(0, 300);
+    if (!list.length) return `<div class="text-[11px] text-gray-600 px-2 py-1">no match</div>`;
+    return list.map(f => {
+        const on = f.name === s.file;
+        return `<button onclick="rbCgPickFile('${rbEsc(f.name)}','${f.kind}')"
+                    class="w-full text-left px-2 py-1 rounded text-[11px] ${on ? 'bg-purple-800/40 text-purple-100' : 'text-gray-300 hover:bg-dark-700'}">
+                    <span class="opacity-60">[${f.kind}]</span> ${rbEsc(f.title || f.name)}</button>`;
+    }).join('');
+}
+
+function rbCgSetFileFilter(v) {
+    if (!rbCgState) return;
+    rbCgState._fileFilter = v;
+    rbCgRenderFileRows();
+}
+
+function rbCgRenderFileRows() {
+    const el = document.getElementById('rb-cg-file-rows');
+    if (el) el.innerHTML = rbCgFileRowsHtml();
+}
+
+function rbCgPickFile(name, kind) {
+    if (!rbCgState) return;
+    rbCgState.file = name;
+    rbCgState.kind = kind;
+    rbCgState.vst_path = '';
+    rbCgRenderFileRows();
+    rbCgUpdateSourceLabel();
+}
+
+function rbCgUpdateSourceLabel() {
+    const el = document.getElementById('rb-cg-source-current');
+    if (!el || !rbCgState) return;
+    const s = rbCgState;
+    let txt = '(no source selected)';
+    if (s.kind === 'vst' && s.vst_path) txt = 'VST: ' + s.vst_path.split(/[\\/]/).pop();
+    else if (s.file) txt = (s.kind || 'file').toUpperCase() + ': ' + s.file;
+    el.textContent = txt;
+}
+
+function rbCgOnName(v) {
+    if (!rbCgState) return;
+    rbCgState.name = v;
+    if (rbCgState.layout) rbCgState.layout.title = v;
+    rbCgRenderPreview();
+}
+
+function rbCgOnInstrument(v) { if (rbCgState) rbCgState.instrument = v; }
+
+// ── editable UI preview + per-control popover editor ────────────────────────
+function rbCgRenderPreview() {
+    const s = rbCgState; const PC = window.RBPedalCanvas;
+    const canvas = document.getElementById('rb-cg-canvas');
+    if (!canvas || !PC || !s || !s.layout) return;
+    s.spec = PC.specFromLayout(s.layout);
+    // Single scale from the container: canvas width = w·scale, height = h·scale.
+    // W slider → width, H slider → height (independent). At the W max the gear
+    // fills the available width; the H max fits the box height.
+    canvas.style.maxWidth = 'none';
+    canvas.style.width = Math.round(s.spec.w * rbCgFitScale(canvas, 446)) + 'px';
+    PC.attachSpec(canvas, s.spec, { interactive: false, values: s.values });
+    canvas.onmousedown = rbCgCanvasMouseDown;   // drag to move, click to edit
+    if (!s._fontsRepaint && PC.ready) {
+        s._fontsRepaint = true;
+        PC.ready().then(() => {
+            try {
+                if (rbCgState === s && document.getElementById('rb-cg-canvas') === canvas) {
+                    PC.attachSpec(canvas, PC.specFromLayout(s.layout), { interactive: false, values: s.values });
+                }
+            } catch (_) { /* ignore */ }
+        });
+    }
+}
+
+// Hit-test the control nearest the pointer (in spec-pixel space), or -1.
+function rbCgHitControl(canvas, clientX, clientY) {
+    const s = rbCgState; if (!s || !s.layout) return -1;
+    const rect = canvas.getBoundingClientRect();
+    const fx = (clientX - rect.left) / rect.width;
+    const fy = (clientY - rect.top) / rect.height;
+    const w = s.layout.w, h = s.layout.h;
+    let best = -1, bestD = Infinity;
+    (s.layout.controls || []).forEach((c, i) => {
+        const dx = (fx - c.cx) * w, dy = (fy - c.cy) * h;
+        const rad = Math.max((c.r || 0.06) * w * 1.7, (c.hs || 0.03) * w * 2, 24);
+        const d = Math.hypot(dx, dy);
+        if (d <= rad && d < bestD) { best = i; bestD = d; }
+    });
+    return best;
+}
+
+// Press a control to DRAG it (reposition); a press without movement opens the
+// edit popover. Empty-space click closes any open popover.
+function rbCgCanvasMouseDown(ev) {
+    const s = rbCgState; if (!s || !s.layout) return;
+    if (ev.button !== 0) return;
+    const canvas = ev.currentTarget;
+    const idx = rbCgHitControl(canvas, ev.clientX, ev.clientY);
+    if (idx < 0) { rbCgCloseControlPopover(); return; }
+    ev.preventDefault();
+    const startX = ev.clientX, startY = ev.clientY;
+    const ctrl = s.layout.controls[idx];
+    let moved = false;
+    const move = (e) => {
+        if (!moved && (Math.abs(e.clientX - startX) > 3 || Math.abs(e.clientY - startY) > 3)) {
+            moved = true;
+            rbCgCloseControlPopover();   // don't leave the popover behind while dragging
+        }
+        if (!moved) return;
+        const r = canvas.getBoundingClientRect();
+        const fx = (e.clientX - r.left) / r.width;
+        const fy = (e.clientY - r.top) / r.height;
+        ctrl.cx = Math.max(0.03, Math.min(0.97, fx));
+        ctrl.cy = Math.max(0.05, Math.min(0.95, fy));
+        rbCgRenderPreview();
+    };
+    const up = (e) => {
+        window.removeEventListener('mousemove', move, true);
+        window.removeEventListener('mouseup', up, true);
+        if (!moved) rbCgOpenControlPopover(idx, e.clientX, e.clientY);
+    };
+    window.addEventListener('mousemove', move, true);
+    window.addEventListener('mouseup', up, true);
+}
+
+function rbCgOpenControlPopover(idx, clientX, clientY) {
+    const s = rbCgState; if (!s) return;
+    const c = s.layout.controls[idx]; if (!c) return;
+    rbCgCloseControlPopover();
+    const hex = window.RBPedalCanvas.rgbToHex(c.color);
+    const pop = document.createElement('div');
+    pop.id = 'rb-cg-pop';
+    pop.style.cssText = 'position:fixed;z-index:9999;';
+    pop.innerHTML = `
+      <div style="background:#1a1a1f;border:1px solid #3a3a44;border-radius:10px;padding:10px;width:200px;box-shadow:0 8px 28px rgba(0,0,0,.55)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:11px;color:#c7c9d1;text-transform:uppercase;letter-spacing:.04em">Edit control</span>
+          <button onclick="rbCgCloseControlPopover()" style="color:#8a8d98;font-size:12px;cursor:pointer">✕</button>
+        </div>
+        <div style="font-size:10px;color:#7e8290;margin-bottom:2px">Type</div>
+        <div style="display:flex;gap:4px;margin-bottom:8px">
+          ${['knob', 'slider', 'switch'].map(k => `<button onclick="rbCgSetControlKind(${idx},'${k}')" style="flex:1;padding:4px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid ${c.kind === k ? '#8b5cf6' : '#3a3a44'};background:${c.kind === k ? 'rgba(139,92,246,.25)' : '#232329'};color:#d5d7de">${k}</button>`).join('')}
+        </div>
+        <div style="font-size:10px;color:#7e8290;margin-bottom:2px">Size</div>
+        <input type="range" min="0.02" max="0.13" step="0.004" value="${c.r || 0.06}"
+               oninput="rbCgSetControlSize(${idx},this.value)"
+               style="width:100%;margin-bottom:8px;accent-color:#8b5cf6">
+        <div style="font-size:10px;color:#7e8290;margin-bottom:2px">Label</div>
+        <input value="${rbEsc(c.label || '')}" oninput="rbCgSetControlLabel(${idx},this.value)"
+               style="width:100%;box-sizing:border-box;background:#232329;border:1px solid #3a3a44;border-radius:6px;padding:4px 6px;font-size:11px;color:#e2e3e8;margin-bottom:8px">
+        <div style="font-size:10px;color:#7e8290;margin-bottom:2px">Colour</div>
+        <input type="color" value="${hex}" oninput="rbCgSetControlColor(${idx},this.value)"
+               style="width:100%;height:28px;background:#232329;border:1px solid #3a3a44;border-radius:6px;margin-bottom:8px;cursor:pointer">
+        <button onclick="rbCgDeleteControl(${idx})"
+                style="width:100%;padding:5px;border-radius:6px;font-size:11px;cursor:pointer;background:rgba(220,60,60,.18);border:1px solid rgba(220,60,60,.35);color:#eb8f8f">🗑 Remove control</button>
+      </div>`;
+    document.body.appendChild(pop);
+    const pw = 210, ph = 300;
+    let x = clientX + 8, y = clientY + 8;
+    if (x + pw > window.innerWidth) x = Math.max(8, window.innerWidth - pw - 8);
+    if (y + ph > window.innerHeight) y = Math.max(8, window.innerHeight - ph - 8);
+    pop.style.left = x + 'px';
+    pop.style.top = y + 'px';
+    s._editIdx = idx;
+}
+
+function rbCgCloseControlPopover() {
+    const p = document.getElementById('rb-cg-pop');
+    if (p) p.remove();
+    if (rbCgState) rbCgState._editIdx = -1;
+}
+
+function rbCgSetControlKind(i, k) {
+    if (!rbCgState) return;
+    rbCgState.layout.controls[i].kind = k;
+    rbCgRenderPreview();
+    // reopen so the highlighted type button reflects the change
+    const p = document.getElementById('rb-cg-pop');
+    if (p) { const r = p.getBoundingClientRect(); rbCgOpenControlPopover(i, r.left - 8, r.top - 8); }
+}
+
+function rbCgSetControlLabel(i, v) {
+    if (!rbCgState) return;
+    rbCgState.layout.controls[i].label = v;
+    rbCgRenderPreview();
+}
+
+function rbCgSetControlColor(i, hex) {
+    if (!rbCgState || !window.RBPedalCanvas) return;
+    rbCgState.layout.controls[i].color = window.RBPedalCanvas.hexToRgb(hex);
+    rbCgRenderPreview();
+}
+
+function rbCgSetControlSize(i, v) {
+    if (!rbCgState) return;
+    const r = Math.max(0.02, Math.min(0.14, parseFloat(v) || 0.06));
+    const c = rbCgState.layout.controls[i];
+    c.r = r;
+    c.hs = Math.max(0.015, r * 0.6);
+    rbCgRenderPreview();
+}
+
+// Set EVERY control's colour at once (bulk), leaving the per-control picker in
+// the popover for one-off overrides.
+function rbCgOnAllColor(hex) {
+    if (!rbCgState || !rbCgState.layout || !window.RBPedalCanvas) return;
+    const col = window.RBPedalCanvas.hexToRgb(hex);
+    rbCgState.layout.controls.forEach(c => { c.color = col.slice(); });
+    rbCgRenderPreview();
+}
+
+// Resize EVERY control at once (bulk); the per-control popover slider still
+// overrides individual sizes afterward.
+function rbCgOnAllSize(v) {
+    if (!rbCgState || !rbCgState.layout) return;
+    const r = Math.max(0.02, Math.min(0.14, parseFloat(v) || 0.06));
+    rbCgState.layout.controls.forEach(c => { c.r = r; c.hs = Math.max(0.015, r * 0.6); });
+    rbCgRenderPreview();
+}
+
+function rbCgDeleteControl(i) {
+    if (!rbCgState) return;
+    rbCgState.layout.controls.splice(i, 1);
+    rbCgCloseControlPopover();
+    rbCgRenderPreview();
+}
+
+function rbCgAddControl() {
+    const s = rbCgState; if (!s || !s.layout || !window.RBPedalCanvas) return;
+    const L = s.layout;
+    const id = (L.controls.length ? Math.max(...L.controls.map(c => c.id || 0)) + 1 : 0);
+    const color = window.RBPedalCanvas.hexToRgb(L.controls[0] ? L.controls[0].color : '#888888');
+    const cy = s.cat === 'cab' ? 0.72 : s.cat === 'amp' ? 0.55 : s.cat === 'rack' ? 0.5 : 0.34;
+    L.controls.push({ id, kind: 'knob', label: 'New', cx: 0.5, cy, r: 0.07, hs: 0.032, color });
+    rbCgRenderPreview();
+}
+
+async function rbSaveCustomGear() {
+    const s = rbCgState; if (!s) return;
+    const msg = document.getElementById('rb-cg-msg');
+    const setErr = (t) => { if (msg) { msg.className = 'text-xs text-red-400'; msg.textContent = t; } };
+    const name = ((document.getElementById('rb-cg-name') || {}).value || s.name || '').trim();
+    if (!name) return setErr('Enter a name.');
+    if (!s.vst_path && !s.file) return setErr('Pick a VST or a NAM/IR file as the sound source.');
+    s.name = name;
+    if (s.layout) s.layout.title = name;
+    const body = {
+        rs_gear: s.editRsGear || undefined,
+        category: s.cat, name, instrument: s.instrument,
+        kind: s.kind, vst_path: s.vst_path || '', vst_format: s.vst_format || 'VST3',
+        file: s.file || '', ui: s.layout,
+    };
+    const btn = document.getElementById('rb-cg-save');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    try {
+        const r = await fetch(`${window.RB_API}/custom_gear`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await r.json();
+        if (!r.ok || data.error) throw new Error(data.error || ('HTTP ' + r.status));
+        const newId = data.gear && data.gear.rs_gear;
+        rbCgCloseControlPopover();
+        rbState.gearBrowserCategory = s.cat;
+        rbCgState = null;
+        await rbLoadCatalog();               // re-fetch → shows in browser + palette source
+        if (newId) rbState.gearSelected = newId;
+        rbApplyGearFilters();
+        try { rbAdvPaletteRender(); } catch (_) { /* palette may not be built yet */ }
+    } catch (e) {
+        setErr('Save failed: ' + (e.message || e));
+        if (btn) { btn.disabled = false; btn.textContent = '💾 Save'; }
+    }
+}
+
+async function rbDeleteCustomGear(rsGear) {
+    if (!confirm('Delete this custom gear? This cannot be undone.')) return;
+    try {
+        const r = await fetch(`${window.RB_API}/custom_gear/${encodeURIComponent(rsGear)}`, { method: 'DELETE' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+    } catch (e) { alert('Delete failed: ' + (e.message || e)); return; }
+    rbCgCloseControlPopover();
+    rbCgState = null;
+    rbState.gearSelected = null;
+    await rbLoadCatalog();
+    rbApplyGearFilters();
+    try { rbAdvPaletteRender(); } catch (_) { /* ignore */ }
+}
+
+function rbCancelAddCustomGear() {
+    rbCgCloseControlPopover();
+    rbCgState = null;
+    rbApplyGearFilters();
+}
+
+function rbEditCustomGear(rsGear) {
+    const g = rbFindGear(rsGear);
+    if (g && g.custom) rbOpenAddCustomGear(g.category, g);
 }
 
 // One-line card used in compact mode. Drops the photo to a thumbnail
@@ -15422,6 +16735,7 @@ async function rbCatalogEditInline(safeId, vstPath, vstFormat, rsGear, stem) {
         let model = { values: {}, idMap: {}, logicalParams: [] };
         try {
             const raw = (typeof api.getParameters === 'function' ? await api.getParameters(slotId) : []) || [];
+            rbStashGearVstParamNames(rsGear, raw);
             model = rbBuildCanvasModel(raw, null);
         } catch (_) {}
         // No faithful in-app canvas recreation → open the plugin's OWN native
@@ -16338,6 +17652,8 @@ function rbAdvAutoLayout() {
 // — NEVER the RS gear photo (/gear_photo/...), which must not be shown. Returns a
 // data URL when the VST's canvas face is available, else null (text placeholder).
 function rbAdvGearImg(g) {
+    const customUrl = rbGearCustomArt(g);   // custom gear's editable face
+    if (customUrl) return customUrl;
     const cabUrl = g && rbCabArtDataUrl(g.rs_gear || g.type);   // recreated cab photo
     if (cabUrl) return cabUrl;
     const vp = g && (g.vst_path || g._vst_path);
@@ -16546,6 +17862,18 @@ function rbAdvRenderCanvas() {
     const svg = document.getElementById('rb-adv-cables');
     const canvas = document.getElementById('rb-adv-canvas');
     if (!layer || !svg || !canvas) return;
+    // Attach custom-gear UI up front so node thumbnails show the created face
+    // without needing to open each node first, then refresh those nodes' images.
+    try { rbEnsureChainCustomUi(rbStudioCurrentChain(), () => { try { rbAdvRenderCanvas(); } catch (_) {} }); } catch (_) {}
+    try {
+        const chain = rbStudioCurrentChain();
+        adv.nodes.forEach(n => {
+            if (n.kind === 'gear' && typeof n.pieceIdx === 'number' && n.pieceIdx >= 0) {
+                const p = chain[n.pieceIdx];
+                if (p && p._custom_ui) { const im = rbAdvPieceImg(p); if (im) n.img = im; }
+            }
+        });
+    } catch (_) {}
     layer.innerHTML = adv.nodes.map(rbAdvNodeHtml).join('');
     // size content so the canvas scrolls and nodes/cables stay aligned
     let maxX = 0, maxY = 0;
@@ -16705,6 +18033,7 @@ async function rbAdvEditNode(id) {
     if (!n || n.kind !== 'gear' || typeof n.pieceIdx !== 'number' || n.pieceIdx < 0) return;
     const piece = rbStudioCurrentChain()[n.pieceIdx];
     if (!piece) return;
+    await rbEnsureCustomUi(piece);           // reloaded custom gear → re-attach its UI
     const stem = rbCanvasStem(piece);
     const host = document.querySelector('#rb-tab-advanced .rb-adv-main') || document.getElementById('rb-tab-advanced');
     let panel = document.getElementById('rb-adv-editor');
@@ -16712,6 +18041,31 @@ async function rbAdvEditNode(id) {
     panel = document.createElement('div');
     panel.id = 'rb-adv-editor';
     panel.className = 'rb-adv-editor';
+    // Custom gear: show the user's own face (interactive) in the node editor —
+    // never the plugin's native window. (Editing the gear itself is done from the
+    // Gear catalog's ✎ Edit button, not here.)
+    if (piece._custom_ui && window.RBPedalCanvas && window.RBPedalCanvas.specFromLayout) {
+        panel.innerHTML = `<div class="rb-adv-editor-bar">
+                <span class="rb-adv-editor-name">${rbEsc(piece.real_name || piece.type || 'Gear')}</span>
+                <button class="rb-adv-editor-close" onclick="rbAdvCloseEditor()">✕</button>
+            </div>
+            <div class="rb-adv-editor-face rb-amp-face"></div>`;
+        host.appendChild(panel);
+        // Size the card from the custom layout's aspect (same as built-in gear
+        // below), so a wide rack/amp isn't left at the tiny default card width.
+        try {
+            const cl = piece._custom_ui;
+            const aspect = (cl.w && cl.h) ? (cl.w / cl.h) : 1.5;
+            let natW = 560;
+            const maxH = (window.innerHeight || 800) * 0.62;
+            if (natW / aspect > maxH) natW = Math.round(maxH * aspect);
+            natW = Math.min(natW, 640);
+            panel.style.width = `min(${Math.round(natW) + 28}px, 94vw)`;
+        } catch (_) {}
+        rbState._advEditPieceIdx = n.pieceIdx;
+        rbStudioMakeFaceInteractive(n.pieceIdx, panel.querySelector('.rb-adv-editor-face'));
+        return;
+    }
     // Cabinet → Cab Room (Real Cab) dentro del editor del Advanced. Con un
     // tono de canción cargado, los cambios PERSISTEN al tono (modo studio);
     // si no, funciona como explorador con audición.
@@ -17216,15 +18570,23 @@ async function rbAdvMaterializeGear(node) {
         make: catalogEntry.make || '', model: catalogEntry.model || '',
         assigned: null, _bypassed: false,
     };
+    if (catItem.custom && catItem.ui) piece._custom_ui = catItem.ui;   // user's face in the editor
     if (catItem.vst_path) {
         piece._vst_path = catItem.vst_path;
         piece._vst_format = catItem.vst_format || 'VST3';
         piece._vst_state = catItem.vst_state || null;
         piece._vst_kind = 'vst';
+    } else if (catItem.custom && catItem.file) {
+        // Custom gear backed by a NAM/IR file (no VST) — attach its file so the
+        // dropped node actually plays that capture, not silence.
+        const ck = catItem.kind === 'ir' ? 'ir' : 'nam';
+        piece._uploaded_file = catItem.file; piece._uploaded_kind = ck;
+        piece.assigned = { kind: ck, file: catItem.file, assigned_mode: 'manual' };
     }
     // Cabs have no VST — synth a default-position IR so the added cab actually
     // colours the sound (else native_preset_full skips a fileless cab piece).
-    if (isCab) {
+    // A custom cab that already carries its own IR file keeps it.
+    if (isCab && !piece._uploaded_file) {
         const irName = await rbSynthCabIrDefault(piece.type);
         if (irName) {
             piece._uploaded_file = irName; piece._uploaded_kind = 'ir';
