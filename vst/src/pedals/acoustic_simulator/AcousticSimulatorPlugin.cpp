@@ -168,6 +168,18 @@ public:
             1.0f + alpha / a, -2.0f * c, 1.0f - alpha / a);
     }
 
+    // Constant-0dB-peak bandpass (RBJ). Narrow (high-Q) instances RING like a
+    // physical resonance — the modal building block for the acoustic body.
+    void setBandPass(float sr, float hz, float q)
+    {
+        hz = clampFreq(hz, sr);
+        const float w0 = 2.0f * kPi * hz / sr;
+        const float c = std::cos(w0);
+        const float alpha = std::sin(w0) / (2.0f * q);
+        set(alpha, 0.0f, -alpha,
+            1.0f + alpha, -2.0f * c, 1.0f - alpha);
+    }
+
     void setHighShelf(float sr, float hz, float slope, float gainDb)
     {
         hz = clampFreq(hz, sr);
@@ -183,6 +195,42 @@ public:
             (a + 1.0f) - (a - 1.0f) * c + 2.0f * rootA * alpha,
             2.0f * ((a - 1.0f) - (a + 1.0f) * c),
             (a + 1.0f) - (a - 1.0f) * c - 2.0f * rootA * alpha);
+    }
+};
+
+// Short fixed-delay allpass — the diffuse "inside the box" air. Two of these
+// nested (3.7/6.1 ms) + a lowpass give the hollow early-reflection shimmer an
+// acoustic body adds around the plucked string.
+class ShortAllpass
+{
+    float buf[512] = {};
+    int idx = 0;
+    int len = 1;
+    float g = 0.55f;
+
+public:
+    void init(float sr, float ms, float gain)
+    {
+        len = (int)(sr * ms * 0.001f);
+        if (len < 1) len = 1;
+        if (len > 512) len = 512;
+        g = gain;
+        reset();
+    }
+
+    void reset()
+    {
+        for (int i = 0; i < 512; ++i) buf[i] = 0.0f;
+        idx = 0;
+    }
+
+    float process(float x)
+    {
+        const float d = buf[idx];
+        const float y = d - g * x;
+        buf[idx] = x + g * y;
+        if (++idx >= len) idx = 0;
+        return dn(y);
     }
 };
 
@@ -221,6 +269,17 @@ class AcousticSimulatorCore
     Biquad pickupScoop;
     Biquad topShelf;
     Biquad finalLowPass;
+
+    // ── acoustic BODY model (what the AC-2 circuit can't do) ─────────────
+    // A real acoustic body is a dense set of NARROW resonant modes, not a wide
+    // EQ band. 12 parallel high-Q bandpass resonators at published dreadnought
+    // modal frequencies (A0 Helmholtz ~100 Hz, T(1,1) top ~196, back ~226, then
+    // the modal comb) with alternating polarity (physical modes alternate
+    // phase) — this is what makes it "sing" hollow/woody instead of filtered.
+    static constexpr int kModes = 12;
+    Biquad modeBank[kModes];
+    ShortAllpass boxAp1, boxAp2;
+    RcLowPass boxAirLP;
 
     rbshared::OpAmpStage ic1a;
     rbshared::OpAmpStage ic1b;
@@ -261,6 +320,20 @@ class AcousticSimulatorCore
         ic3aBodyBand.setPeaking(sampleRate, 118.0f + 92.0f * b, 0.72f, -2.8f + 8.6f * b);
         topShelf.setHighShelf(sampleRate, 3900.0f + 1200.0f * t, 0.76f, -2.6f + 7.4f * t);
         finalLowPass.setLowPass(sampleRate, 11800.0f + 3600.0f * t, 0.68f);
+
+        // Dreadnought modal set {Hz, Q}. A0/T(1,1)/back strong and ringy; the
+        // comb above thins out (lower Q, lower gain — see kModeGain in process).
+        static const float modeF[kModes] = { 100.0f, 196.0f, 226.0f, 292.0f,
+                                             388.0f, 466.0f, 556.0f, 672.0f,
+                                             792.0f, 918.0f, 1088.0f, 1284.0f };
+        static const float modeQ[kModes] = { 16.0f, 22.0f, 25.0f, 20.0f,
+                                             18.0f, 16.0f, 14.0f, 13.0f,
+                                             12.0f, 11.0f, 10.0f, 9.0f };
+        for (int i = 0; i < kModes; ++i)
+            modeBank[i].setBandPass(sampleRate, modeF[i], modeQ[i]);
+        boxAp1.init(sampleRate, 3.7f, 0.55f);
+        boxAp2.init(sampleRate, 6.1f, 0.50f);
+        boxAirLP.setHz(sampleRate, 4200.0f);
     }
 
     float jfet2N4339Vcr(float x) const
@@ -322,6 +395,10 @@ public:
         pickupScoop.reset();
         topShelf.reset();
         finalLowPass.reset();
+        for (int i = 0; i < kModes; ++i) modeBank[i].reset();
+        boxAp1.reset();
+        boxAp2.reset();
+        boxAirLP.reset();
         ic1a.reset();
         ic1b.reset();
         ic2a.reset();
@@ -404,10 +481,29 @@ public:
         y = pickupScoop.process(y);
 
         const float topPath = ic2b.process(ic2bTopBand.process(y), 1.9f + 2.2f * t);
-        const float bodyPath = ic3a.process(ic3aBodyBand.process(y), 1.7f + 2.6f * b);
-        const float mixed = y * 0.46f
-                          + topPath * (0.18f + 0.30f * t)
-                          + bodyPath * (0.18f + 0.34f * b);
+
+        // BODY = modal resonator bank + box air, replacing the old single wide
+        // EQ band (which read as "a filter"). Alternating mode polarity +
+        // per-mode gains tapering with frequency = the woody hollow comb.
+        static const float kModeGain[kModes] = { 1.00f, 0.92f, 0.72f, 0.76f,
+                                                 0.60f, 0.52f, 0.46f, 0.40f,
+                                                 0.35f, 0.31f, 0.27f, 0.24f };
+        // Signs: the strong low modes (A0/T11/back/292) add IN PHASE with the
+        // dry path — strict ± alternation cancelled every other mode against
+        // the dry mix and flattened them. Some inversion up high keeps the
+        // comb-like character between upper modes.
+        static const float kModeSign[kModes] = { 1.0f, 1.0f, 1.0f, 1.0f,
+                                                 1.0f, -1.0f, 1.0f, -1.0f,
+                                                 1.0f, -1.0f, 1.0f, -1.0f };
+        float res = 0.0f;
+        for (int i = 0; i < kModes; ++i)
+            res += kModeSign[i] * kModeGain[i] * modeBank[i].process(y);
+        const float air = boxAirLP.process(boxAp2.process(boxAp1.process(y)));
+        const float bodyPath = ic3a.process(res * 3.4f + air * 0.7f, 1.4f + 1.6f * b);
+
+        const float mixed = y * 0.34f
+                          + topPath * (0.16f + 0.28f * t)
+                          + bodyPath * (0.30f + 0.50f * b);
 
         y = ic3b.process(mixed, 2.0f);
         y = topShelf.process(y);
