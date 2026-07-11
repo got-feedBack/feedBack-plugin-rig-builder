@@ -125,6 +125,8 @@ class AutoFilterCore
     float mode = kAutoFilterDef[kMode];
     float range = kAutoFilterDef[kRange];
     float direction = kAutoFilterDef[kDirection];
+    float attack = kAutoFilterDef[kAttack];
+    float release = kAutoFilterDef[kRelease];
 
     Svf filter;
 
@@ -138,11 +140,15 @@ class AutoFilterCore
 
     void updateCoeffs()
     {
-        // Fixed time constants — a real Mu-Tron III has NO attack/release pots.
+        // A real Mu-Tron III has FIXED opto times (no attack/release pots), but
+        // the game's Auto Tone gear authors Attack/Release per tone — so the
+        // pots SCALE the authentic NSL-32 constants (log, 0.25x..4x; 0.5 = stock).
+        const float fA = std::pow(4.0f, 2.0f * (clamp01(attack) - 0.5f));
+        const float fR = std::pow(4.0f, 2.0f * (clamp01(release) - 0.5f));
         rectAtkA = onePoleCoeffMs(3.0f, sampleRate);    // precision rectifier, fast
         rectRelA = onePoleCoeffMs(15.0f, sampleRate);
-        optoAtkA = onePoleCoeffMs(55.0f, sampleRate);   // NSL-32 rise time TR
-        optoRelA = onePoleCoeffMs(90.0f, sampleRate);   // NSL-32 decay TD (+ CdS tail)
+        optoAtkA = onePoleCoeffMs(55.0f * fA, sampleRate);   // NSL-32 rise TR (scaled)
+        optoRelA = onePoleCoeffMs(90.0f * fR, sampleRate);   // NSL-32 decay TD (scaled)
     }
 
     int modeIndex() const
@@ -174,6 +180,8 @@ public:
     void setMode(float v)      { mode = clamp01(v); }
     void setRange(float v)     { range = clamp01(v); }
     void setDirection(float v) { direction = clamp01(v); }
+    void setAttack(float v)    { attack = clamp01(v); updateCoeffs(); }
+    void setRelease(float v)   { release = clamp01(v); updateCoeffs(); }
 
     float process(float in)
     {
@@ -241,6 +249,10 @@ class AutoFilterPlugin : public Plugin
         right.setRange(params[kRange]);
         left.setDirection(params[kDirection]);
         right.setDirection(params[kDirection]);
+        left.setAttack(params[kAttack]);
+        right.setAttack(params[kAttack]);
+        left.setRelease(params[kRelease]);
+        right.setRelease(params[kRelease]);
     }
 
 public:
