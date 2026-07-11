@@ -2656,50 +2656,63 @@
   // foog logo bottom-right. Params: Drive0 Output1 Cutoff2 Resonance3
   // Envelope4 Attack5 Release6 Mix7 Mode8(2/4-pole).
   P.fm101 = { w:320,h:500, knobs:[
-      {id:4,cx:.27,cy:.225,r:.075,style:'moog'},   // AMOUNT (env amount)
-      {id:5,cx:.19,cy:.405,r:.046,style:'moog'},   // ATTACK
-      {id:6,cx:.35,cy:.405,r:.046,style:'moog'},   // RELEASE
-      {id:7,cx:.27,cy:.545,r:.068,style:'moog'},   // MIX
-      {id:0,cx:.50,cy:.215,r:.052,style:'moog'},   // DRIVE
-      {id:1,cx:.50,cy:.360,r:.044,style:'moog'},   // OUTPUT (real = level jumper)
-      {id:2,cx:.73,cy:.225,r:.075,style:'moog'},   // CUTOFF
-      {id:3,cx:.73,cy:.545,r:.068,style:'moog'}],  // RESONANCE
-    switches:[{id:8,cx:.73,cy:.402,hs:.034}],
+      {id:4,cx:.27,cy:.215,r:.072,style:'moog'},   // AMOUNT (env amount)
+      {id:7,cx:.27,cy:.505,r:.066,style:'moog'},   // MIX
+      {id:0,cx:.50,cy:.205,r:.048,style:'moog'},   // DRIVE
+      {id:2,cx:.73,cy:.215,r:.072,style:'moog'},   // CUTOFF
+      {id:3,cx:.73,cy:.505,r:.066,style:'moog'}],  // RESONANCE
+    switches:[{id:5,cx:.27,cy:.365,hs:.036},{id:8,cx:.73,cy:.365,hs:.036}],
     tick:rgb(150,152,158), ptr:rgb(238,240,244),
     draw(d,values){ const {ctx:c,W,H,s}=d; foogBody(d); const wt=rgb(230,232,236), dim=rgb(150,152,158);
-      // header: brand left + model right (two lines, like the real face)
+      // header (photo: moogerfooger™ + LOWPASS FILTER two lines)
       textC(d,.33*W,.045*H,F.crete,15,wt,'foogermooger');
-      textC(d,.78*W,.032*H,F.crete,13,wt,'FM101');
-      textC(d,.78*W,.062*H,F.barlow,7,wt,'LOWPASS FILTER');
-      // boxed sections with white header pills
+      textC(d,.78*W,.036*H,F.barlow,9,wt,'LOWPASS');
+      textC(d,.78*W,.060*H,F.barlow,9,wt,'FILTER');
+      // boxed sections with white header pills (ENVELOPE / FILTER)
       const panel=(x,y,w,h,title)=>{
         rr(c,x*W,y*H,w*W,h*H,8*s); c.strokeStyle=wt; c.lineWidth=1.5*s; c.stroke();
         rr(c,(x+w*.5-.105)*W,(y-.016)*H,.21*W,.032*H,4*s); c.fillStyle=rgb(240,240,238); c.fill();
         textC(d,(x+w*.5)*W,(y+.001)*H,F.barlow,10.5,rgb(22,22,25),title); };
-      panel(.095,.125,.35,.50,'ENVELOPE');
-      panel(.555,.125,.35,.50,'FILTER');
+      panel(.095,.115,.35,.475,'ENVELOPE');
+      panel(.555,.115,.35,.475,'FILTER');
       // knob labels
-      const KL=[['AMOUNT',.27,.225,.075],['ATTACK',.19,.405,.046],['RELEASE',.35,.405,.046],
-                ['MIX',.27,.545,.068],['DRIVE',.50,.215,.052],['OUTPUT',.50,.360,.044],
-                ['CUTOFF',.73,.225,.075],['RESONANCE',.73,.545,.068]];
-      KL.forEach(k=> textSpaced(d,k[1]*W,(k[2]-k[3]-.020)*H,F.barlow,k[0].length>8?7:8,wt,k[0],0.25));
-      // 2-POLE / 4-POLE orange rocker (id8) — painted like the real face
-      const on=(values&&values[8]!=null)?values[8]>=0.5:true;
-      textSpaced(d,.655*W,.372*H,F.barlow,6.4,!on?wt:dim,'2-POLE',0.15);
-      textSpaced(d,.805*W,.372*H,F.barlow,6.4,on?wt:dim,'4-POLE',0.15);
-      rr(c,.655*W,.390*H,.150*W,.030*H,3*s); c.fillStyle=rgb(120,40,10); c.fill();
-      rr(c,(on?.730:.655)*W,.386*H,.075*W,.038*H,3*s); c.fillStyle=rgb(235,120,30); c.fill();
-      rr(c,(on?.730:.655)*W,.386*H,.075*W,.038*H,3*s); c.strokeStyle=rgb(60,25,8); c.lineWidth=s; c.stroke();
-      // LED column (center): LEVEL / ENV / BYPASS — env LED breathes with Amount
-      const led=(y,lbl,r2,g2,b2,onn)=>{ ledDot(d,.50*W,y*H,onn,r2,g2,b2); textSpaced(d,.50*W,(y+.030)*H,F.barlow,6.5,wt,lbl,0.2); };
-      led(.455,'LEVEL',220,70,60,true);
-      led(.535,'ENV',255,120,40,true);
-      led(.615,'BYPASS',150,196,255,true);
-      // foog logo + stomp
-      textC(d,.78*W,.700*H,F.crete,24,wt,'foog');
-      footRound(d,W*.50,H*.880,18*s); } };
+      textSpaced(d,.27*W,.128*H,F.barlow,8.5,wt,'AMOUNT',0.25);
+      textSpaced(d,.27*W,.425*H,F.barlow,8.5,wt,'MIX',0.25);
+      textSpaced(d,.50*W,.142*H,F.barlow,8.5,wt,'DRIVE',0.25);
+      textSpaced(d,.73*W,.128*H,F.barlow,8.5,wt,'CUTOFF',0.25);
+      textSpaced(d,.73*W,.425*H,F.barlow,8,wt,'RESONANCE',0.2);
+      // dial numbers (photo): 0-10 on amount/mix/resonance, freq marks on cutoff
+      const nums=(cx,cy,r,labels)=>{ const angs=[135,180,225,270,315,405];
+        labels.forEach((t,i)=>{ const a=(angs[i])*Math.PI/180;
+          textC(d,cx*W+Math.cos(a)*(r+.032)*W,cy*H+Math.sin(a)*(r+.032)*W*(H/W)*0+Math.sin(a)*(r+.030)*H*0.72,F.barlow,6,dim,t); }); };
+      nums(.27,.215,.072,['0','2','4','6','8','10']);
+      nums(.27,.505,.066,['0','2','4','6','8','10']);
+      nums(.73,.505,.066,['0','2','4','6','8','10']);
+      textC(d,.645*W,.165*H,F.barlow,6,dim,'250'); textC(d,.815*W,.165*H,F.barlow,6,dim,'1K');
+      textC(d,.645*W,.275*H,F.barlow,6,dim,'20');  textC(d,.815*W,.275*H,F.barlow,6,dim,'12K');
+      // the two orange rockers (photo): SMOOTH/FAST (env attack) + 2-POLE/4-POLE
+      const rocker=(cx,cy,val,l1,l2)=>{
+        const tw=W*.150, th=H*.030;
+        textSpaced(d,(cx-.075)*W,(cy-.028)*H,F.barlow,6.4,val<0.5?wt:dim,l1,0.15);
+        textSpaced(d,(cx+.075)*W,(cy-.028)*H,F.barlow,6.4,val>=0.5?wt:dim,l2,0.15);
+        rr(c,(cx-.075)*W,cy*H-th/2,tw,th,3*s); c.fillStyle=rgb(120,40,10); c.fill();
+        rr(c,(val>=0.5?cx:cx-.075)*W,cy*H-th*0.63,tw*.5,th*1.27,3*s); c.fillStyle=rgb(235,120,30); c.fill();
+        rr(c,(val>=0.5?cx:cx-.075)*W,cy*H-th*0.63,tw*.5,th*1.27,3*s); c.strokeStyle=rgb(60,25,8); c.lineWidth=s; c.stroke(); };
+      // SMOOTH/FAST drives the env ATTACK param (id5): SMOOTH=slow(1), FAST=quick(0).
+      const av=(values&&values[5]!=null)?values[5]:0.15;
+      rocker(.27,.365,av<0.5?1:0,'SMOOTH','FAST');   // painted: right=FAST when attack is fast
+      const mv=(values&&values[8]!=null)?values[8]:1;
+      rocker(.73,.365,mv,'2-POLE','4-POLE');
+      // LED column (photo: LEVEL / ENV / BYPASS)
+      const led=(y,lbl,r2,g2,b2)=>{ ledDot(d,.50*W,y*H,true,r2,g2,b2); textSpaced(d,.50*W,(y-.028)*H,F.barlow,6.5,wt,lbl,0.2); };
+      led(.335,'LEVEL',220,70,60);
+      led(.435,'ENV',255,120,40);
+      led(.535,'BYPASS',150,196,255);
+      // big centered foog logo + stomp (photo)
+      textC(d,.50*W,.660*H,F.crete,30,wt,'foog');
+      footRound(d,W*.50,H*.815,17*s); } };
 
-  // Auto Filter — Mu-Tron III-style: brushed-silver box, blue control panel with
+    // Auto Filter — Mu-Tron III-style: brushed-silver box, blue control panel with
   // black scaled knobs, rainbow maker logo + a red POWER lever, wordmark + brand
   // + chrome stomp. Parody (Bu-Tron III / auditronics). Real controls:
   // Gain0 Peak1 Mode2 Range3 Direction4.

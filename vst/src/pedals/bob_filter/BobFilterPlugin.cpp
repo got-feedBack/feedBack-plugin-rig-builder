@@ -131,6 +131,17 @@ public:
         dcIn += 0.0009f * (in - dcIn);
         float x = in - dcIn;
 
+        // ── envelope follower FIRST, from the PRE-drive signal: with the real
+        //    34x Drive law a post-drive detector saturates (env pinned high →
+        //    the filter hovers half-open and barely moves = "static filter",
+        //    not auto-wah). Reading the input keeps the wah sensitivity
+        //    constant no matter where Drive sits, and the knee is tuned so the
+        //    envelope CLOSES between notes and fires on the pick attack —
+        //    that swing is the quack. ──
+        const float rect = std::fabs(x) * 9.0f;
+        env += (rect > env ? atkA : relA) * (rect - env);
+        const float e01 = env / (env + 0.55f);        // 0..~1, note-attack knee
+
         // DRIVE — real MF-101 input stage: TL072 non-inv, gain 1 + P2(50KA)/R8(1.5K)
         // = up to ~34x (audited vs the Moog BRD-10-011-320 schematic). At max it
         // genuinely overdrives the ladder input pair (the tanh stages saturate,
@@ -138,18 +149,10 @@ public:
         const float dg = 1.0f + 33.0f * audioTaper(drive);
         x *= dg;
 
-        // ── envelope follower: |x| with Attack/Release, soft-knee normalize.
-        //    Fixed detector gain calibrated so guitar-level input (peaks around
-        //    -12 dBFS) drives the knee well into its range — an envelope filter
-        //    that doesn't move is just a dark EQ. ──
-        const float rect = std::fabs(x) * 1.5f;   // detector sees post-drive signal (like the real DRIVE_DIR tap)
-        env += (rect > env ? atkA : relA) * (rect - env);
-        const float e01 = env / (env + 0.40f);        // 0..~1, playing-level knee
-
         // ── cutoff: base (Cutoff pot, log 60 Hz-6 kHz) + envelope sweep in
         //    octaves (Amount pot, up to +4.5 oct — the MF-101 upward sweep) ──
         const float base = 60.0f * std::pow(100.0f, clamp01(cutoff));   // 60..6000
-        const float oct = 4.5f * clamp01(envAmount) * e01;
+        const float oct = 5.0f * clamp01(envAmount) * e01;
         float fc = base * std::pow(2.0f, oct);
         const float fcMax = sampleRate * 0.40f;
         if (fc > fcMax) fc = fcMax;
