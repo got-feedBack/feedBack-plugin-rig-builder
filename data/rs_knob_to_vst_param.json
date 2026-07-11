@@ -3474,7 +3474,17 @@
   }
  },
  "Pedal_BobFilter": {
-  "bobfilter": {
+  "khs filter": {
+   "Cutoff": {
+    "param": "Cutoff",
+    "scale": 0.01
+   },
+   "Resonance": {
+    "param": "Resonance",
+    "scale": 0.01
+   }
+  },
+  "fm101": {
    "_static": {
     "Output": 0.6,
     "Cutoff": 0.22,
@@ -3505,51 +3515,6 @@
     "param": "Mode",
     "scale": 1.0,
     "_hint": "game binary Filter switch -> 2-pole/4-pole (the real MF-101 switch)."
-   }
-  },
-  "khs filter": {
-   "Cutoff": {
-    "param": "Cutoff",
-    "scale": 0.01
-   },
-   "Resonance": {
-    "param": "Resonance",
-    "scale": 0.01
-   }
-  },
-  "fm105": {
-   "_static": {
-    "Output": 0.68,
-    "Pattern": 0.28
-   },
-   "Sens": {
-    "param": "Drive",
-    "scale": 0.008,
-    "offset": 0.18,
-    "_hint": "RS Sens drives the real Drive/input amount with a floor so the filter keeps moving."
-   },
-   "Attack": {
-    "param": "Envelope",
-    "scale": 0.004016064257028112,
-    "offset": -0.004016064257028112,
-    "invert": true,
-    "_hint": "RS Attack is observed 1-250 ms; smaller attack means faster MF-105 envelope response."
-   },
-   "Release": {
-    "param": "Rate",
-    "scale": 0.00072,
-    "offset": -0.0072,
-    "invert": true,
-    "_hint": "RS Release has no direct MF-105 panel equivalent, so it biases the pattern rate slower at larger values."
-   },
-   "Mix": {
-    "param": "Mix",
-    "scale": 0.01
-   },
-   "Filter": {
-    "param": "Mode",
-    "scale": 1.0,
-    "_hint": "the game Filter is a binary 0/1 voicing switch mapped to Mids/Bass Mode."
    }
   }
  },

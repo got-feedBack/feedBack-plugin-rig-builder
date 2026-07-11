@@ -2650,55 +2650,12 @@
      {id:2,cx:.50,cy:.63,lbl:'MIX'}],
     'FM104');
 
-  // Bob Filter — Moog MF-105 MuRF-style: custom foog layout (not the simple
-  // foogSpec box) — two knob rows, the signature
-  // 8-band FILTERS slider bank, an LED row + foog logo + stomp.
-  // Real controls: Drive0 Output1 Pattern2 Rate3 Envelope4 Mix5 Mode6.
-  P.fm105 = { w:340,h:500, knobs:[
-      {id:0,cx:.20,cy:.165,r:.064,style:'moog'},
-      {id:1,cx:.50,cy:.165,r:.064,style:'moog'},
-      {id:2,cx:.80,cy:.165,r:.064,style:'moog'},
-      {id:3,cx:.24,cy:.345,r:.062,style:'moog'},
-      {id:4,cx:.50,cy:.345,r:.062,style:'moog'},
-      {id:5,cx:.74,cy:.345,r:.062,style:'moog'}],
-    switches:[{id:6,cx:.90,cy:.345,hs:.032}],
-    tick:rgb(150,152,158), ptr:rgb(238,240,244),
-    draw(d,values){ const {ctx:c,W,H,s}=d; foogBody(d); const wt=rgb(226,228,232), dim=rgb(150,152,158);
-      // brand + model
-      textC(d,.34*W,.052*H,F.crete,17,wt,'foogermooger');
-      textC(d,.74*W,.052*H,F.crete,15,wt,'FM105');
-      // knob labels (real panel names) above each knob
-      const KL=[['DRIVE',.20,.165],['OUTPUT',.50,.165],['PATTERN',.80,.165],
-                ['RATE',.24,.345],['ENVELOPE',.50,.345],['MIX',.74,.345]];
-      KL.forEach(k=> textSpaced(d,k[1]*W,(k[2]-.072-.018)*H,F.barlow,8,wt,k[0],0.3));
-      // MODE is the Bass/Mids range selector (engine draws the toggle via `switches`).
-      const mv=(values&&values[6]!=null)?values[6]:1;
-      textSpaced(d,.90*W,(.345-.072-.018)*H,F.barlow,7.5,wt,'MODE',0.3);
-      textSpaced(d,.90*W,.410*H,F.barlow,6.2,mv<0.5?wt:dim,'MIDS',0.2);
-      textSpaced(d,.90*W,.440*H,F.barlow,6.2,mv>=0.5?wt:dim,'BASS',0.2);
-      // FILTERS slider bank (decorative, MuRF signature)
-      const bx=W*.105, bw=W*.81, by=H*.45, bh=H*.20;
-      rr(c,bx,by,bw,bh,7*s); c.strokeStyle=wt; c.lineWidth=1.6*s; c.stroke();
-      c.save(); c.translate(bx+10*s,by+bh/2); c.rotate(-Math.PI/2); textSpaced(d,0,0,F.barlow,8,wt,'FILTERS',0.6); c.restore();
-      const caps=[.30,.60,.25,.82,.18,.48,.70,.38], n=8, tx0=W*.24, tx1=W*.86, tTop=by+bh*0.20, tBot=by+bh*0.86;
-      for(let i=0;i<n;i++){ const x=tx0+i*(tx1-tx0)/(n-1);
-        c.strokeStyle=rgb(150,152,158); c.lineWidth=1.4*s; c.beginPath(); c.moveTo(x,tTop); c.lineTo(x,tBot); c.stroke();
-        const cy2=tTop+caps[i]*(tBot-tTop);
-        const cg=c.createRadialGradient(x-2*s,cy2-2*s,1*s,x,cy2,7*s); cg.addColorStop(0,rgb(238,240,244)); cg.addColorStop(1,rgb(150,153,160));
-        rr(c,x-6*s,cy2-4*s,12*s,8*s,2.5*s); c.fillStyle=cg; c.fill();
-        rr(c,x-6*s,cy2-4*s,12*s,8*s,2.5*s); c.strokeStyle=rgb(40,42,46); c.lineWidth=0.8*s; c.stroke(); }
-      // LED row + labels
-      [['DRIVE',.30],['BYPASS',.50],['RATE',.70]].forEach(p=>{ ledDot(d,p[1]*W,.695*H,true,150,196,255); textSpaced(d,p[1]*W,.730*H,F.barlow,6.5,wt,p[0],0.2); });
-      // foog logo + footswitch
-      textC(d,.50*W,.795*H,F.crete,22,wt,'foog');
-      footRound(d,W*.50,H*.885,18*s); } };
-
   // Bob Filter — Moog MF-101 Lowpass Filter (envelope filter), from the real
   // panel photo: black face + wood rails, boxed ENVELOPE / FILTER sections with
   // white header pills, big silver knobs, orange rockers, 3 LEDs center column,
   // foog logo bottom-right. Params: Drive0 Output1 Cutoff2 Resonance3
   // Envelope4 Attack5 Release6 Mix7 Mode8(2/4-pole).
-  P.bobfilter = { w:320,h:500, knobs:[
+  P.fm101 = { w:320,h:500, knobs:[
       {id:4,cx:.27,cy:.225,r:.075,style:'moog'},   // AMOUNT (env amount)
       {id:5,cx:.19,cy:.405,r:.046,style:'moog'},   // ATTACK
       {id:6,cx:.35,cy:.405,r:.046,style:'moog'},   // RELEASE
