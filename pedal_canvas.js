@@ -2596,9 +2596,8 @@
     tick:rgb(150,152,158), ptr:rgb(238,240,244),
     draw(d,values){ const {ctx:c,W,H,s}=d; foogBody(d); const wt=rgb(226,228,232), dim=rgb(155,158,164);
       textC(d,.325*W,.060*H,F.crete,18,wt,'foogermooger');
-      textC(d,.665*W,.058*H,F.barlow,15,wt,'FM-108M');
-      textC(d,.675*W,.072*H,F.crete,12,wt,'FM108');
-      textC(d,.675*W,.098*H,F.barlow,7,wt,'CLUSTERFLUX');
+      textC(d,.675*W,.052*H,F.crete,13,wt,'FM108');
+      textC(d,.675*W,.080*H,F.barlow,7,wt,'CLUSTERFLUX');
 
       const panel=(x,y,w,h,title)=>{
         rr(c,x*W,y*H,w*W,h*H,8*s); c.strokeStyle=wt; c.lineWidth=1.5*s; c.stroke();
@@ -2624,7 +2623,7 @@
       textC(d,.710*W,.178*H,F.barlow,9.5,wt,'SHAPE');
       textC(d,.710*W,.405*H,F.barlow,9.5,wt,'RATE');
       textC(d,.710*W,.590*H,F.barlow,9.5,wt,'AMOUNT');
-      ledDot(d,.593*W,.352*H,true,220,70,65);
+      ledDot(d,.618*W,.408*H,true,220,70,65);
       ledDot(d,.315*W,.750*H,true,120,52,48);
       ledDot(d,.505*W,.750*H,true,110,205,120);
       ledDot(d,.710*W,.750*H,true,110,205,120);
@@ -2639,8 +2638,9 @@
 
       // Range switch is drawn manually; sw3 only provides the invisible hit-area.
       const on = values && values[1] > 0.5;
-      rr(c,.266*W,.435*H,.098*W,.035*H,2*s); c.fillStyle=rgb(120,25,22); c.fill();
-      rr(c,(on?.315:.266)*W,.430*H,.050*W,.048*H,2*s); c.fillStyle=rgb(228,50,42); c.fill();
+      rr(c,.253*W,.437*H,.124*W,.030*H,3*s); c.fillStyle=rgb(110,26,22); c.fill();
+      rr(c,(on?.315:.253)*W,.431*H,.062*W,.042*H,3*s); c.fillStyle=rgb(226,58,46); c.fill();
+      rr(c,(on?.315:.253)*W,.431*H,.062*W,.042*H,3*s); c.strokeStyle=rgb(60,16,12); c.lineWidth=s; c.stroke();
     } };
   P.fm107 = P.fm108;
 
@@ -2650,15 +2650,15 @@
   // TIME-red LEVEL-yellow BYPASS-green LEDs, TAP TEMPO + BYPASS stomps.
   // Params: Drive0 Output1 Time2 Feedback3 Mix4 Range5 Rate6 Amount7 Wave8.
   P.fm104 = { w:340,h:520, knobs:[
-      {id:2,cx:.245,cy:.190,r:.070,style:'moog'},   // TIME
-      {id:3,cx:.245,cy:.475,r:.062,style:'moog'},   // FEEDBACK
-      {id:0,cx:.50,cy:.155,r:.044,style:'moog'},    // DRIVE
-      {id:1,cx:.50,cy:.320,r:.044,style:'moog'},    // OUTPUT LEVEL
-      {id:4,cx:.50,cy:.480,r:.044,style:'moog'},    // MIX
-      {id:8,cx:.755,cy:.165,r:.058,style:'moog'},   // LFO WAVEFORM
-      {id:6,cx:.755,cy:.335,r:.062,style:'moog'},   // LFO RATE
-      {id:7,cx:.755,cy:.500,r:.062,style:'moog'}],  // LFO AMOUNT
-    switches:[{id:5,cx:.245,cy:.328,hs:.036}],
+      {id:2,cx:.245,cy:.200,r:.066,style:'moog'},   // TIME
+      {id:3,cx:.245,cy:.475,r:.058,style:'moog'},   // FEEDBACK
+      {id:0,cx:.50,cy:.160,r:.042,style:'moog'},    // DRIVE
+      {id:1,cx:.50,cy:.330,r:.042,style:'moog'},    // OUTPUT LEVEL
+      {id:4,cx:.50,cy:.490,r:.042,style:'moog'},    // MIX
+      {id:8,cx:.755,cy:.200,r:.054,style:'moog'},   // LFO WAVEFORM
+      {id:6,cx:.755,cy:.390,r:.056,style:'moog'},   // LFO RATE
+      {id:7,cx:.755,cy:.565,r:.056,style:'moog'}],  // LFO AMOUNT
+    switches:[{id:5,cx:.245,cy:.330,hs:.036}],
     tick:rgb(150,152,158), ptr:rgb(238,240,244),
     draw(d,values){ const {ctx:c,W,H,s}=d; foogBody(d); const wt=rgb(230,232,236), dim=rgb(150,152,158);
       textC(d,.32*W,.045*H,F.crete,15,wt,'foogermooger');
@@ -2668,45 +2668,48 @@
         rr(c,x*W,y*H,w*W,h*H,8*s); c.strokeStyle=wt; c.lineWidth=1.5*s; c.stroke();
         rr(c,(x+w*.5-.09)*W,(y-.015)*H,.18*W,.030*H,4*s); c.fillStyle=rgb(240,240,238); c.fill();
         textC(d,(x+w*.5)*W,(y+.0005)*H,F.barlow,10,rgb(22,22,25),title); };
-      panel(.085,.105,.32,.455,'DELAY');
-      panel(.595,.105,.32,.455,'LFO');
-      // labels
-      textSpaced(d,.245*W,.132*H,F.barlow,8.5,wt,'TIME',0.25);
-      textSpaced(d,.245*W,.398*H,F.barlow,8,wt,'FEEDBACK',0.2);
-      textSpaced(d,.50*W,.098*H,F.barlow,8.5,wt,'DRIVE',0.25);
-      textSpaced(d,.50*W,.252*H,F.barlow,7.5,wt,'OUTPUT',0.2);
-      textSpaced(d,.50*W,.272*H,F.barlow,7.5,wt,'LEVEL',0.2);
-      textSpaced(d,.50*W,.424*H,F.barlow,8.5,wt,'MIX',0.25);
-      textSpaced(d,.755*W,.395*H,F.barlow,8,wt,'RATE',0.25);   // (photo: RATE under wave)
-      textSpaced(d,.755*W,.560*H,F.barlow,8,wt,'AMOUNT',0.2);
-      // dial marks (photo): TIME .1-.6, RATE .05-50, AMOUNT/FEEDBACK 0-10
-      textC(d,.165*W,.148*H,F.barlow,6,dim,'.2'); textC(d,.325*W,.148*H,F.barlow,6,dim,'.3');
-      textC(d,.155*W,.245*H,F.barlow,6,dim,'.1'); textC(d,.335*W,.245*H,F.barlow,6,dim,'.6');
-      textC(d,.675*W,.300*H,F.barlow,6,dim,'.8'); textC(d,.835*W,.300*H,F.barlow,6,dim,'3');
-      textC(d,.665*W,.388*H,F.barlow,6,dim,'.05'); textC(d,.845*W,.388*H,F.barlow,6,dim,'50');
-      textC(d,.165*W,.432*H,F.barlow,6,dim,'4'); textC(d,.325*W,.432*H,F.barlow,6,dim,'6');
-      textC(d,.155*W,.535*H,F.barlow,6,dim,'0'); textC(d,.335*W,.535*H,F.barlow,6,dim,'10');
-      textC(d,.675*W,.462*H,F.barlow,6,dim,'4'); textC(d,.835*W,.462*H,F.barlow,6,dim,'6');
-      textC(d,.665*W,.560*H,F.barlow,6,dim,'0'); textC(d,.845*W,.560*H,F.barlow,6,dim,'10');
-      // waveform icons around the WAVEFORM knob (photo): ~ /\ ⊓ / \ S&H
-      textC(d,.665*W,.128*H,F.barlow,7,dim,'∿'); textC(d,.845*W,.128*H,F.barlow,7,dim,'⊓');
-      textC(d,.665*W,.205*H,F.barlow,7,dim,'∧'); textC(d,.845*W,.205*H,F.barlow,7,dim,'⌁');
-      // SHORT/LONG white rocker (id5)
+      panel(.085,.105,.32,.53,'DELAY');
+      panel(.595,.105,.32,.53,'LFO');
+      // labels ABOVE their knobs (like the photo)
+      textSpaced(d,.245*W,.140*H,F.barlow,8.5,wt,'TIME',0.25);
+      textSpaced(d,.245*W,.412*H,F.barlow,8,wt,'FEEDBACK',0.2);
+      textSpaced(d,.50*W,.103*H,F.barlow,8.5,wt,'DRIVE',0.25);
+      textSpaced(d,.50*W,.258*H,F.barlow,7.5,wt,'OUTPUT',0.2);
+      textSpaced(d,.50*W,.278*H,F.barlow,7.5,wt,'LEVEL',0.2);
+      textSpaced(d,.50*W,.434*H,F.barlow,8.5,wt,'MIX',0.25);
+      textSpaced(d,.755*W,.328*H,F.barlow,8,wt,'RATE',0.25);
+      textSpaced(d,.755*W,.502*H,F.barlow,8,wt,'AMOUNT',0.2);
+      // TIME dial marks (.1-.6, photo)
+      textC(d,.170*W,.157*H,F.barlow,6,dim,'.2'); textC(d,.320*W,.157*H,F.barlow,6,dim,'.3');
+      textC(d,.160*W,.252*H,F.barlow,6,dim,'.1'); textC(d,.330*W,.252*H,F.barlow,6,dim,'.6');
+      // FEEDBACK 0-10
+      textC(d,.175*W,.437*H,F.barlow,6,dim,'4'); textC(d,.315*W,.437*H,F.barlow,6,dim,'6');
+      textC(d,.168*W,.528*H,F.barlow,6,dim,'0'); textC(d,.322*W,.528*H,F.barlow,6,dim,'10');
+      // WAVEFORM glyphs hugging the wave knob (sine/tri/square/S&H)
+      textC(d,.678*W,.163*H,F.barlow,7,dim,'∿'); textC(d,.832*W,.163*H,F.barlow,7,dim,'⊓');
+      textC(d,.672*W,.238*H,F.barlow,7,dim,'∧'); textC(d,.838*W,.238*H,F.barlow,7,dim,'⌁');
+      // RATE .05-50 (photo)
+      textC(d,.680*W,.352*H,F.barlow,6,dim,'.8'); textC(d,.830*W,.352*H,F.barlow,6,dim,'3');
+      textC(d,.668*W,.443*H,F.barlow,6,dim,'.05'); textC(d,.842*W,.443*H,F.barlow,6,dim,'50');
+      // AMOUNT 0-10
+      textC(d,.685*W,.527*H,F.barlow,6,dim,'4'); textC(d,.825*W,.527*H,F.barlow,6,dim,'6');
+      textC(d,.678*W,.618*H,F.barlow,6,dim,'0'); textC(d,.832*W,.618*H,F.barlow,6,dim,'10');
+      // SHORT/LONG white rocker (id5), photo-style
       const rv=(values&&values[5]!=null)?values[5]:0;
-      textSpaced(d,.175*W,.298*H,F.barlow,6.6,rv<0.5?wt:dim,'SHORT',0.15);
-      textSpaced(d,.315*W,.298*H,F.barlow,6.6,rv>=0.5?wt:dim,'LONG',0.15);
-      rr(c,.170*W,.315*H,.150*W,.028*H,3*s); c.fillStyle=rgb(60,60,64); c.fill();
-      rr(c,(rv>=0.5?.245:.170)*W,.311*H,.075*W,.036*H,3*s); c.fillStyle=rgb(238,238,236); c.fill();
-      rr(c,(rv>=0.5?.245:.170)*W,.311*H,.075*W,.036*H,3*s); c.strokeStyle=rgb(40,40,44); c.lineWidth=s; c.stroke();
+      textSpaced(d,.180*W,.301*H,F.barlow,6.6,rv<0.5?wt:dim,'SHORT',0.15);
+      textSpaced(d,.312*W,.301*H,F.barlow,6.6,rv>=0.5?wt:dim,'LONG',0.15);
+      rr(c,.170*W,.318*H,.150*W,.026*H,3*s); c.fillStyle=rgb(60,60,64); c.fill();
+      rr(c,(rv>=0.5?.245:.170)*W,.313*H,.075*W,.036*H,3*s); c.fillStyle=rgb(238,238,236); c.fill();
+      rr(c,(rv>=0.5?.245:.170)*W,.313*H,.075*W,.036*H,3*s); c.strokeStyle=rgb(40,40,44); c.lineWidth=s; c.stroke();
       // LED row (photo: TIME red / LEVEL yellow / BYPASS green)
-      const led=(x,lbl,r2,g2,b2)=>{ ledDot(d,x*W,.612*H,true,r2,g2,b2); textSpaced(d,x*W,.640*H,F.barlow,6.5,wt,lbl,0.2); };
+      const led=(x,lbl,r2,g2,b2)=>{ ledDot(d,x*W,.672*H,true,r2,g2,b2); textSpaced(d,x*W,.700*H,F.barlow,6.5,wt,lbl,0.2); };
       led(.245,'TIME',225,60,60); led(.50,'LEVEL',215,200,70); led(.755,'BYPASS',90,200,110);
-      // stomps (photo: TAP TEMPO + BYPASS) + foog logo
-      textSpaced(d,.28*W,.705*H,F.barlow,8.5,wt,'TAP TEMPO',0.3);
-      textSpaced(d,.72*W,.705*H,F.barlow,8.5,wt,'BYPASS',0.3);
-      footRound(d,W*.28,H*.775,15*s);
-      footRound(d,W*.72,H*.775,15*s);
-      textC(d,.50*W,.910*H,F.crete,26,wt,'foog'); } };
+      // stomps + foog logo
+      textSpaced(d,.28*W,.752*H,F.barlow,8.5,wt,'TAP TEMPO',0.3);
+      textSpaced(d,.72*W,.752*H,F.barlow,8.5,wt,'BYPASS',0.3);
+      footRound(d,W*.28,H*.815,15*s);
+      footRound(d,W*.72,H*.815,15*s);
+      textC(d,.50*W,.930*H,F.crete,24,wt,'foog'); } };
 
   // Bob Filter — Moog MF-101 Lowpass Filter (envelope filter), from the real
   // panel photo: black face + wood rails, boxed ENVELOPE / FILTER sections with
