@@ -2676,10 +2676,10 @@
       panel(.095,.115,.35,.475,'ENVELOPE');
       panel(.555,.115,.35,.475,'FILTER');
       // knob labels
-      textSpaced(d,.27*W,.128*H,F.barlow,8.5,wt,'AMOUNT',0.25);
+      textSpaced(d,.27*W,.158*H,F.barlow,8.5,wt,'AMOUNT',0.25);
       textSpaced(d,.27*W,.425*H,F.barlow,8.5,wt,'MIX',0.25);
       textSpaced(d,.50*W,.142*H,F.barlow,8.5,wt,'DRIVE',0.25);
-      textSpaced(d,.73*W,.128*H,F.barlow,8.5,wt,'CUTOFF',0.25);
+      textSpaced(d,.73*W,.158*H,F.barlow,8.5,wt,'CUTOFF',0.25);
       textSpaced(d,.73*W,.425*H,F.barlow,8,wt,'RESONANCE',0.2);
       // dial numbers (photo): 0-10 on amount/mix/resonance, freq marks on cutoff
       const nums=(cx,cy,r,labels)=>{ const angs=[135,180,225,270,315,405];
@@ -2688,7 +2688,7 @@
       nums(.27,.215,.072,['0','2','4','6','8','10']);
       nums(.27,.505,.066,['0','2','4','6','8','10']);
       nums(.73,.505,.066,['0','2','4','6','8','10']);
-      textC(d,.645*W,.165*H,F.barlow,6,dim,'250'); textC(d,.815*W,.165*H,F.barlow,6,dim,'1K');
+      textC(d,.635*W,.185*H,F.barlow,6,dim,'250'); textC(d,.825*W,.185*H,F.barlow,6,dim,'1K');
       textC(d,.645*W,.275*H,F.barlow,6,dim,'20');  textC(d,.815*W,.275*H,F.barlow,6,dim,'12K');
       // the two orange rockers (photo): SMOOTH/FAST (env attack) + 2-POLE/4-POLE
       const rocker=(cx,cy,val,l1,l2)=>{
