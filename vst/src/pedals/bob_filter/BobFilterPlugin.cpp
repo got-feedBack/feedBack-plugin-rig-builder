@@ -131,15 +131,18 @@ public:
         dcIn += 0.0009f * (in - dcIn);
         float x = in - dcIn;
 
-        // DRIVE — MF-101 input gain into the ladder (gentle overload at max)
-        const float dg = 1.0f + 5.5f * audioTaper(drive);
+        // DRIVE — real MF-101 input stage: TL072 non-inv, gain 1 + P2(50KA)/R8(1.5K)
+        // = up to ~34x (audited vs the Moog BRD-10-011-320 schematic). At max it
+        // genuinely overdrives the ladder input pair (the tanh stages saturate,
+        // exactly like the LM3046 quads do).
+        const float dg = 1.0f + 33.0f * audioTaper(drive);
         x *= dg;
 
         // ── envelope follower: |x| with Attack/Release, soft-knee normalize.
         //    Fixed detector gain calibrated so guitar-level input (peaks around
         //    -12 dBFS) drives the knee well into its range — an envelope filter
         //    that doesn't move is just a dark EQ. ──
-        const float rect = std::fabs(x) * 5.0f;
+        const float rect = std::fabs(x) * 1.5f;   // detector sees post-drive signal (like the real DRIVE_DIR tap)
         env += (rect > env ? atkA : relA) * (rect - env);
         const float e01 = env / (env + 0.40f);        // 0..~1, playing-level knee
 
@@ -168,7 +171,7 @@ public:
 
         float y = x * (1.0f - mix) + wet * mix;
         // +2.4x wet makeup: a mostly-closed 4-pole ladder eats broadband level
-        y *= (0.20f + 1.60f * audioTaper(output)) * 2.4f / std::sqrt(dg);
+        y *= (0.20f + 1.60f * audioTaper(output)) * 4.2f / std::pow(dg, 0.75f);
         return std::tanh(y * 1.05f) * 0.95f;
     }
 };
