@@ -245,217 +245,115 @@ static inline float softExcess(float x, float threshold)
 
 class AcousticSimulatorCore
 {
+    // ── Acoustic image processor (rebuilt from scratch) ──────────────────
+    // The AC-2-style circuit (wide EQ bands + FET/diode branch) reads as "a
+    // filter" — the real pedal does too. This core instead models what makes
+    // an acoustic sound acoustic, the way modern sims (Aura/ToneDexter) do:
+    //
+    //   1. PICKUP DE-EMPHASIS  — tame the magnetic pickup's mid resonance.
+    //   2. BODY                — a DENSE bank of 24 narrow modal resonators at
+    //      published dreadnought frequencies (A0 Helmholtz ~98 Hz, T(1,1) top
+    //      ~196, back ~226, then the modal comb thickening into a statistical
+    //      plateau by ~2.5 kHz) + diffuse "inside the box" air (nested short
+    //      allpasses). Narrow modes RING like wood; wide EQ never does.
+    //   3. STRING SPARKLE      — soft asymmetric saturation of the top band,
+    //      restoring the bronze-string zing a magnetic pickup rolls off.
+    //   4. ATTACK SOFTENING    — gentle envelope compression, the mic'd-box
+    //      "bloom" instead of the electric pick spike.
+    //
+    // Panel semantics preserved (Gain/Top/Body/Volume; RS maps Mid->Gain,
+    // Tone->Top, Body->Body): Gain = drive/compression character, Top =
+    // sparkle + brightness, Body = how much box.
     float sampleRate = 48000.0f;
     float gain = kAcousticSimulatorDef[kGain];
     float top = kAcousticSimulatorDef[kTop];
     float body = kAcousticSimulatorDef[kBody];
     float volume = kAcousticSimulatorDef[kVolume];
 
-    RcHighPass inputC1;
-    RcHighPass gainC6;
-    RcHighPass voiceC10;
-    RcHighPass voiceC11;
-    RcHighPass outputC18;
-    RcLowPass ic1aFeedbackC3;
-    RcLowPass ic1aBrightC4;
-    RcLowPass ic1bFeedbackC5;
-    RcLowPass diodeStorageC7;
-    RcLowPass tl061TrimC;
-    RcLowPass outputFeedbackC17;
-    RcLowPass outputLoad;
-    Biquad ic2aScoop;
-    Biquad ic2bTopBand;
-    Biquad ic3aBodyBand;
-    Biquad pickupScoop;
-    Biquad topShelf;
-    Biquad finalLowPass;
+    RcHighPass inputHP;
+    Biquad pickupNotch;
+    Biquad pickupLP;
 
-    // ── acoustic BODY model (what the AC-2 circuit can't do) ─────────────
-    // A real acoustic body is a dense set of NARROW resonant modes, not a wide
-    // EQ band. 12 parallel high-Q bandpass resonators at published dreadnought
-    // modal frequencies (A0 Helmholtz ~100 Hz, T(1,1) top ~196, back ~226, then
-    // the modal comb) with alternating polarity (physical modes alternate
-    // phase) — this is what makes it "sing" hollow/woody instead of filtered.
-    static constexpr int kModes = 12;
+    static constexpr int kModes = 24;
     Biquad modeBank[kModes];
-    ShortAllpass boxAp1, boxAp2;
+    RcHighPass bodyHP;
+    ShortAllpass boxAp1, boxAp2, boxAp3;
     RcLowPass boxAirLP;
 
-    rbshared::OpAmpStage ic1a;
-    rbshared::OpAmpStage ic1b;
-    rbshared::OpAmpStage ic2a;
-    rbshared::OpAmpStage ic2b;
-    rbshared::OpAmpStage ic3a;
-    rbshared::OpAmpStage ic3b;
-    rbshared::OpAmpStage ic4a;
-    rbshared::OpAmpStage ic5;
+    Biquad sparkleBand;
+    Biquad topShelfOut;
+    Biquad finalLP;
+    RcHighPass outHP;
 
-    rbcomponents::JfetSpec q1 = rbcomponents::jfet2N4339();
-    float diodeMemory = 0.0f;
-    float trim1 = 0.56f;
+    float env = 0.0f;
+    float envAttack = 0.0f;
+    float envRelease = 0.0f;
+
+    // Dreadnought modal set {Hz}: strong ringy low modes, comb thickening up
+    // high (Caldersmith/French modal surveys). Q and gain taper with index.
+    static const float kModeF[kModes];
+    static const float kModeQ[kModes];
+    static const float kModeG[kModes];
+    static const float kModeS[kModes];
 
     void updateFilters()
     {
-        const float g = audioTaper(gain);
         const float t = audioTaper(top);
-        const float b = audioTaper(body);
-
-        inputC1.setRC(sampleRate, 2200000.0f, 10.0e-9f);
-        gainC6.setRC(sampleRate, 22000.0f + 3300.0f, 10.0e-6f);
-        voiceC10.setRC(sampleRate, 75000.0f, 4.7e-9f);
-        voiceC11.setRC(sampleRate, 4700.0f, 4.7e-9f);
-        outputC18.setRC(sampleRate, 100000.0f, 1.0e-6f);
-
-        ic1aFeedbackC3.setRC(sampleRate, 11000.0f + 4700.0f, 33.0e-9f);
-        ic1aBrightC4.setRC(sampleRate, 6800.0f + 3300.0f, 3.9e-9f);
-        ic1bFeedbackC5.setRC(sampleRate, 470000.0f + 22000.0f, 100.0e-12f);
-        diodeStorageC7.setRC(sampleRate, 1000000.0f, 330.0e-9f);
-        tl061TrimC.setRC(sampleRate, 25000.0f + 12000.0f, 1.0e-9f);
-        outputFeedbackC17.setRC(sampleRate, 100000.0f, 220.0e-12f);
-        outputLoad.setHz(sampleRate, 15500.0f - 2600.0f * t);
-
-        ic2aScoop.setPeaking(sampleRate, 560.0f + 190.0f * g, 0.72f, -5.9f + 1.2f * g);
-        pickupScoop.setPeaking(sampleRate, 920.0f, 0.86f, -4.4f + 1.6f * b);
-        ic2bTopBand.setPeaking(sampleRate, 2700.0f + 2200.0f * t, 0.66f, -3.0f + 8.8f * t);
-        ic3aBodyBand.setPeaking(sampleRate, 118.0f + 92.0f * b, 0.72f, -2.8f + 8.6f * b);
-        topShelf.setHighShelf(sampleRate, 3900.0f + 1200.0f * t, 0.76f, -2.6f + 7.4f * t);
-        finalLowPass.setLowPass(sampleRate, 11800.0f + 3600.0f * t, 0.68f);
-
-        // Dreadnought modal set {Hz, Q}. A0/T(1,1)/back strong and ringy; the
-        // comb above thins out (lower Q, lower gain — see kModeGain in process).
-        static const float modeF[kModes] = { 100.0f, 196.0f, 226.0f, 292.0f,
-                                             388.0f, 466.0f, 556.0f, 672.0f,
-                                             792.0f, 918.0f, 1088.0f, 1284.0f };
-        static const float modeQ[kModes] = { 16.0f, 22.0f, 25.0f, 20.0f,
-                                             18.0f, 16.0f, 14.0f, 13.0f,
-                                             12.0f, 11.0f, 10.0f, 9.0f };
-        for (int i = 0; i < kModes; ++i)
-            modeBank[i].setBandPass(sampleRate, modeF[i], modeQ[i]);
-        boxAp1.init(sampleRate, 3.7f, 0.55f);
-        boxAp2.init(sampleRate, 6.1f, 0.50f);
-        boxAirLP.setHz(sampleRate, 4200.0f);
-    }
-
-    float jfet2N4339Vcr(float x) const
-    {
         const float g = audioTaper(gain);
-        const float vgsOff = 0.5f * (std::fabs(q1.vgsOffMinV) + std::fabs(q1.vgsOffMaxV));
-        const float gateBias = -vgsOff * (0.72f - 0.48f * g);
-        const float vgs = gateBias - 0.10f * std::fabs(x);
-        const float conduct = std::pow(clamp01(1.0f + vgs / vgsOff), 2.0f);
-        const float rds = q1.rdsOnMaxOhm + (270000.0f * (1.0f - conduct));
-        const float divider = 3900000.0f / (3900000.0f + rds);
-        return x * divider * (0.72f + 0.28f * conduct);
-    }
 
-    float diodeLadder(float x)
-    {
-        const float unitPerVolt = 1.0f / 3.0f;
-        const float silicon = 0.62f * unitPerVolt;
-        const float schottky = 0.36f * unitPerVolt;
-        const float green = rbcomponents::greenLed5mm().maxAbsV * unitPerVolt;
+        inputHP.setRC(sampleRate, 45000.0f, 100.0e-9f);          // ~35 Hz
+        // Magnetic pickup mid "spike" de-emphasis: deeper with Gain (more
+        // "acoustic image", less electric character).
+        pickupNotch.setPeaking(sampleRate, 2600.0f, 1.1f, -3.0f - 4.5f * g);
+        pickupLP.setLowPass(sampleRate, 7800.0f + 2800.0f * t, 0.60f);
 
-        const float posThreshold = green + 4.0f * silicon;
-        const float negThreshold = schottky + silicon;
-        const float drive = x * (1.85f + 1.65f * audioTaper(gain));
-        const float pos = softExcess(drive, posThreshold);
-        const float neg = softExcess(-drive, negThreshold);
-        const float clamped = drive - 0.34f * pos + 0.22f * neg;
-        diodeMemory = diodeStorageC7.process(clamped);
-        return 0.58f * x + 0.42f * diodeMemory;
-    }
+        for (int i = 0; i < kModes; ++i)
+            modeBank[i].setBandPass(sampleRate, kModeF[i], kModeQ[i]);
+        bodyHP.setRC(sampleRate, 33000.0f, 68.0e-9f);            // ~70 Hz, keep rumble out
+        boxAp1.init(sampleRate, 3.1f, 0.55f);
+        boxAp2.init(sampleRate, 5.3f, 0.52f);
+        boxAp3.init(sampleRate, 8.9f, 0.45f);
+        boxAirLP.setHz(sampleRate, 4600.0f);
 
-    float voiceBranch(float x)
-    {
-        float fet = jfet2N4339Vcr(x);
-        float servo = ic5.process(tl061TrimC.process(fet * (0.9f + 3.5f * trim1)), 42.0f);
-        servo = diodeLadder(servo);
-        const float voiced = voiceC10.process(servo);
-        return voiceC11.process(voiced);
+        sparkleBand.setHighPass(sampleRate, 2500.0f, 0.707f);
+        topShelfOut.setHighShelf(sampleRate, 5200.0f, 0.75f, -1.5f + 6.5f * t);
+        finalLP.setLowPass(sampleRate, 10500.0f + 4000.0f * t, 0.62f);
+        outHP.setRC(sampleRate, 100000.0f, 47.0e-9f);            // ~34 Hz DC guard
+
+        envAttack = 1.0f - std::exp(-1.0f / (0.004f * sampleRate));   // 4 ms
+        envRelease = 1.0f - std::exp(-1.0f / (0.180f * sampleRate));  // 180 ms
     }
 
 public:
     void reset()
     {
-        inputC1.reset();
-        gainC6.reset();
-        voiceC10.reset();
-        voiceC11.reset();
-        outputC18.reset();
-        ic1aFeedbackC3.reset();
-        ic1aBrightC4.reset();
-        ic1bFeedbackC5.reset();
-        diodeStorageC7.reset();
-        tl061TrimC.reset();
-        outputFeedbackC17.reset();
-        outputLoad.reset();
-        ic2aScoop.reset();
-        ic2bTopBand.reset();
-        ic3aBodyBand.reset();
-        pickupScoop.reset();
-        topShelf.reset();
-        finalLowPass.reset();
+        inputHP.reset();
+        pickupNotch.reset();
+        pickupLP.reset();
         for (int i = 0; i < kModes; ++i) modeBank[i].reset();
+        bodyHP.reset();
         boxAp1.reset();
         boxAp2.reset();
+        boxAp3.reset();
         boxAirLP.reset();
-        ic1a.reset();
-        ic1b.reset();
-        ic2a.reset();
-        ic2b.reset();
-        ic3a.reset();
-        ic3b.reset();
-        ic4a.reset();
-        ic5.reset();
-        diodeMemory = 0.0f;
+        sparkleBand.reset();
+        topShelfOut.reset();
+        finalLP.reset();
+        outHP.reset();
+        env = 0.0f;
         updateFilters();
     }
 
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
-        ic1a.setSpec(rbshared::tl072Spec());
-        ic1b.setSpec(rbshared::tl072Spec());
-        ic2a.setSpec(rbshared::tl072Spec());
-        ic2b.setSpec(rbshared::tl072Spec());
-        ic3a.setSpec(rbshared::tl072Spec());
-        ic3b.setSpec(rbshared::tl072Spec());
-        ic4a.setSpec(rbshared::tl072Spec());
-        ic5.setSpec(rbshared::tl061Spec());
-        ic1a.setSampleRate(sampleRate);
-        ic1b.setSampleRate(sampleRate);
-        ic2a.setSampleRate(sampleRate);
-        ic2b.setSampleRate(sampleRate);
-        ic3a.setSampleRate(sampleRate);
-        ic3b.setSampleRate(sampleRate);
-        ic4a.setSampleRate(sampleRate);
-        ic5.setSampleRate(sampleRate);
         reset();
     }
 
-    void setGain(float v)
-    {
-        gain = clamp01(v);
-        updateFilters();
-    }
-
-    void setTop(float v)
-    {
-        top = clamp01(v);
-        updateFilters();
-    }
-
-    void setBody(float v)
-    {
-        body = clamp01(v);
-        updateFilters();
-    }
-
-    void setVolume(float v)
-    {
-        volume = clamp01(v);
-        updateFilters();
-    }
+    void setGain(float v)   { gain = clamp01(v); updateFilters(); }
+    void setTop(float v)    { top = clamp01(v); updateFilters(); }
+    void setBody(float v)   { body = clamp01(v); updateFilters(); }
+    void setVolume(float v) { volume = clamp01(v); updateFilters(); }
 
     float process(float in)
     {
@@ -463,68 +361,68 @@ public:
         const float t = audioTaper(top);
         const float b = audioTaper(body);
 
-        float x = inputC1.process(in);
-        const float ic1aLocalFb = ic1aFeedbackC3.process(x);
-        const float bright = x - ic1aBrightC4.process(x);
-        x = ic1a.process(x + 0.18f * bright - 0.08f * ic1aLocalFb, 3.25f);
+        // 1) input conditioning: HP + pickup de-emphasis
+        float x = inputHP.process(in);
+        x = pickupNotch.process(x);
+        x = pickupLP.process(x);
 
-        // VR4 is the circuit gain/drive control; keep its low end near unity
-        // in the plugin because the real pedal also has a dedicated Volume pot.
-        const float gainPotDb = 2.5f + 15.5f * g;
-        x = gainC6.process(x * dbToGain(gainPotDb));
-        x = ic1b.process(x - 0.12f * ic1bFeedbackC5.process(x), 3.1f + 8.6f * g);
+        // 4) attack softening (feed-forward): mic'd boxes bloom, they don't
+        // spike. Gentle ratio, scaled by Gain.
+        const float mag = std::fabs(x);
+        env += (mag > env ? envAttack : envRelease) * (mag - env);
+        const float comp = 1.0f / (1.0f + (1.5f + 4.0f * g) * env);
+        x *= 0.55f + 0.45f * comp;
 
-        const float branch = voiceBranch(x);
-        float y = x * (0.78f - 0.10f * g) + branch * (0.22f + 0.18f * g);
-
-        y = ic2a.process(ic2aScoop.process(y), 2.4f);
-        y = pickupScoop.process(y);
-
-        const float topPath = ic2b.process(ic2bTopBand.process(y), 1.9f + 2.2f * t);
-
-        // BODY = modal resonator bank + box air, replacing the old single wide
-        // EQ band (which read as "a filter"). Alternating mode polarity +
-        // per-mode gains tapering with frequency = the woody hollow comb.
-        static const float kModeGain[kModes] = { 1.00f, 0.92f, 0.72f, 0.76f,
-                                                 0.60f, 0.52f, 0.46f, 0.40f,
-                                                 0.35f, 0.31f, 0.27f, 0.24f };
-        // Signs: the strong low modes (A0/T11/back/292) add IN PHASE with the
-        // dry path — strict ± alternation cancelled every other mode against
-        // the dry mix and flattened them. Some inversion up high keeps the
-        // comb-like character between upper modes.
-        static const float kModeSign[kModes] = { 1.0f, 1.0f, 1.0f, 1.0f,
-                                                 1.0f, -1.0f, 1.0f, -1.0f,
-                                                 1.0f, -1.0f, 1.0f, -1.0f };
+        // 2) BODY: dense modal bank + diffuse box air
+        const float xb = bodyHP.process(x);
         float res = 0.0f;
         for (int i = 0; i < kModes; ++i)
-            res += kModeSign[i] * kModeGain[i] * modeBank[i].process(y);
-        const float air = boxAirLP.process(boxAp2.process(boxAp1.process(y)));
-        const float bodyPath = ic3a.process(res * 3.4f + air * 0.7f, 1.4f + 1.6f * b);
+            res += kModeS[i] * kModeG[i] * modeBank[i].process(xb);
+        const float air = boxAirLP.process(
+            boxAp3.process(boxAp2.process(boxAp1.process(xb))));
 
-        const float mixed = y * 0.34f
-                          + topPath * (0.16f + 0.28f * t)
-                          + bodyPath * (0.30f + 0.50f * b);
+        // 3) string sparkle: soft asymmetric saturation of the top band (adds
+        // the even-harmonic bronze zing magnetic pickups lose)
+        const float sp = sparkleBand.process(x + 0.6f * res);
+        const float spDrive = sp * (2.2f + 2.4f * t);
+        const float sparkle = std::tanh(spDrive + 0.22f * spDrive * spDrive) * 0.30f;
 
-        y = ic3b.process(mixed, 2.0f);
-        y = topShelf.process(y);
-        y = finalLowPass.process(y);
+        // mix: direct string + body + air + sparkle
+        float y = x * 0.34f
+                + res * (0.55f + 0.95f * b)
+                + air * (0.10f + 0.30f * b)
+                + sparkle * (0.10f + 0.42f * t);
 
-        // Keep Gain as a voicing/drive control. Output loudness belongs to the
-        // Volume pot, so compensate the low end of VR4's range before Volume.
-        const float gainMakeupDb = 8.5f * std::pow(1.0f - gain, 2.15f);
-        y *= dbToGain(gainMakeupDb);
+        y = topShelfOut.process(y);
+        y = finalLP.process(y);
+        y = outHP.process(y);
 
-        // Volume range raised: the old -24..+4 dB span left the pinned Volume
-        // (0.62) ~11 dB below unity (output -39 dBFS = near-inaudible in a mix).
-        // Now 0.62 lands ~-16 dBFS, in line with the other pedals.
-        const float vol = dbToGain(7.0f + 11.0f * audioTaper(volume));
-        const float fb = outputFeedbackC17.process(y);
-        y = ic4a.process((y - 0.10f * fb) * vol, 1.0f + 3.2f * audioTaper(volume));
-        y = outputLoad.process(y);
-        y = outputC18.process(y);
+        // Makeup: the narrow modal bank passes far less broadband energy than
+        // a wide-EQ chain; +19 dB lands the default at ~-15.5 dBFS RMS like
+        // the other pedals (RS pins Volume at 0.62).
+        y *= dbToGain(19.0f);
+        const float vol = dbToGain(-6.0f + 18.0f * audioTaper(volume));
+        y *= vol;
         return std::tanh(y * 1.04f) * 0.96f;
     }
 };
+
+const float AcousticSimulatorCore::kModeF[AcousticSimulatorCore::kModes] = {
+     98.0f, 196.0f, 226.0f, 258.0f, 292.0f, 330.0f, 388.0f, 435.0f,
+    480.0f, 556.0f, 610.0f, 672.0f, 735.0f, 800.0f, 875.0f, 950.0f,
+   1040.0f, 1140.0f, 1250.0f, 1400.0f, 1600.0f, 1850.0f, 2150.0f, 2500.0f };
+const float AcousticSimulatorCore::kModeQ[AcousticSimulatorCore::kModes] = {
+    18.0f, 26.0f, 28.0f, 22.0f, 20.0f, 18.0f, 17.0f, 16.0f,
+    15.0f, 14.0f, 13.0f, 12.5f, 12.0f, 11.5f, 11.0f, 10.5f,
+    10.0f,  9.5f,  9.0f,  8.5f,  8.0f,  7.5f,  7.0f,  6.5f };
+const float AcousticSimulatorCore::kModeG[AcousticSimulatorCore::kModes] = {
+    1.00f, 0.95f, 0.70f, 0.55f, 0.72f, 0.50f, 0.58f, 0.42f,
+    0.38f, 0.42f, 0.33f, 0.36f, 0.28f, 0.30f, 0.24f, 0.26f,
+    0.22f, 0.20f, 0.19f, 0.17f, 0.16f, 0.15f, 0.14f, 0.13f };
+const float AcousticSimulatorCore::kModeS[AcousticSimulatorCore::kModes] = {
+    1.0f, 1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
+    1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f,
+    -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f };
 
 class AcousticSimulatorPlugin : public Plugin
 {
