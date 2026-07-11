@@ -625,17 +625,15 @@
    "notes": "Bundled Lofinator-style lo-fi filter based on the local schematic. The plugin exposes the real Drive, Level, Lo and Hi controls; Rocksmith FilterType/Mix are translated in the mapping table."
   }
  ],
- "Pedal_BobFilter": [
-  {
-   "name": "BobFilter",
-   "manufacturer": "Rig Builder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/pedals/FM105.vst3",
-   "notes": "Bundled Moog MF-101 Lowpass Filter style ENVELOPE filter (rebuilt; the previous MuRF sequencer model never tracked the pick). Envelope follower sweeping a 4-pole tanh transistor ladder with resonance; panel Drive, Output, Cutoff, Resonance, Envelope, Attack, Release, Mix, Mode(2/4-pole). RS Sens/Attack/Release/Mix/Filter map to Envelope/Attack/Release/Mix/Mode."
-  }
- ],
+ "Pedal_BobFilter": {
+  "name": "BobFilter",
+  "manufacturer": "Rig Builder",
+  "format": "VST3",
+  "url": "",
+  "free": true,
+  "bundled": "vst/pedals/FM105.vst3",
+  "notes": "Bundled Moog MF-101 Lowpass Filter style ENVELOPE filter (rebuilt; the previous MuRF sequencer model never tracked the pick). Envelope follower sweeping a 4-pole tanh transistor ladder with resonance; panel Drive, Output, Cutoff, Resonance, Envelope, Attack, Release, Mix, Mode(2/4-pole). RS Sens/Attack/Release/Mix/Filter map to Envelope/Attack/Release/Mix/Mode."
+ },
  "Pedal_AutoFilter": [
   {
    "name": "AutoFilter",

@@ -2712,8 +2712,8 @@
     draw(d,values){ const {ctx:c,W,H,s}=d; foogBody(d); const wt=rgb(230,232,236), dim=rgb(150,152,158);
       // header: brand left + model right (two lines, like the real face)
       textC(d,.33*W,.045*H,F.crete,15,wt,'foogermooger');
-      textC(d,.78*W,.036*H,F.barlow,9,wt,'LOWPASS');
-      textC(d,.78*W,.060*H,F.barlow,9,wt,'FILTER');
+      textC(d,.78*W,.032*H,F.crete,13,wt,'FM101');
+      textC(d,.78*W,.062*H,F.barlow,7,wt,'LOWPASS FILTER');
       // boxed sections with white header pills
       const panel=(x,y,w,h,title)=>{
         rr(c,x*W,y*H,w*W,h*H,8*s); c.strokeStyle=wt; c.lineWidth=1.5*s; c.stroke();
@@ -2747,54 +2747,65 @@
   // + chrome stomp. Parody (Bu-Tron III / auditronics). Real controls:
   // Gain0 Peak1 Mode2 Range3 Direction4.
   P.butroniii = { w:300,h:470, knobs:[
-      {id:0,cx:.24,cy:.330,r:.064,style:'pointer',cap:[26,26,28]},
-      {id:1,cx:.56,cy:.330,r:.064,style:'pointer',cap:[26,26,28]}],
-    sw3:[{id:2,cx:.190,cy:.145}],
-    switches:[{id:3,cx:.805,cy:.188,hs:.034},{id:4,cx:.805,cy:.365,hs:.034}],
-    tick:rgb(200,210,230), ptr:rgb(240,242,246),
-    draw(d,values){ const {ctx:c,W,H,s}=d; const m=8*s, wt=rgb(238,240,244), dim=rgb(185,195,220), dk=rgb(30,30,34);
-      // brushed-silver box
+      {id:2,cx:.27,cy:.115,r:.060,style:'pointer',cap:[24,24,26]},   // MODE (LP..HP)
+      {id:1,cx:.27,cy:.300,r:.062,style:'pointer',cap:[24,24,26]},   // PEAK
+      {id:0,cx:.27,cy:.490,r:.068,style:'pointer',cap:[24,24,26]}],  // GAIN
+    switches:[{id:3,cx:.73,cy:.345,hs:.038},{id:4,cx:.73,cy:.445,hs:.038}],
+    tick:rgb(215,222,240), ptr:rgb(240,242,246),
+    draw(d,values){ const {ctx:c,W,H,s}=d; const m=8*s, wt=rgb(240,242,246), dim=rgb(160,168,190), dk=rgb(30,30,34);
+      // brushed-silver body (photo: aluminum wedge)
       c.fillStyle=rgb(8,8,10); c.fillRect(0,0,W,H);
-      const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(196,198,202)); bg.addColorStop(1,rgb(162,164,170));
+      const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(200,202,206)); bg.addColorStop(1,rgb(168,170,176));
       rr(c,m,m,W-2*m,H-2*m,12*s); c.fillStyle=bg; c.fill();
       c.save(); rr(c,m,m,W-2*m,H-2*m,12*s); c.clip(); c.strokeStyle='rgba(255,255,255,0.10)'; c.lineWidth=1;
-      for(let y=m;y<H*.58;y+=3*s){ c.beginPath(); c.moveTo(m,y); c.lineTo(W-m,y); c.stroke(); } c.restore();
+      for(let y=m;y<H*.62;y+=3*s){ c.beginPath(); c.moveTo(m,y); c.lineTo(W-m,y); c.stroke(); } c.restore();
       rr(c,m,m,W-2*m,H-2*m,12*s); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=2*s; c.stroke();
-      // blue control panel
-      rr(c,W*.07,H*.05,W*.86,H*.505,8*s); c.fillStyle=rgb(34,70,150); c.fill();
-      rr(c,W*.07,H*.05,W*.86,H*.505,8*s); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=1.4*s; c.stroke();
-      // rainbow maker logo (top-right of panel)
-      const lx=W*.74, ly=H*.085, bw=6*s, bh=20*s;
-      [[214,52,52],[70,176,90],[64,120,212]].forEach((col,i)=>{ rr(c,lx+i*(bw+2*s),ly,bw,bh,1.5*s); c.fillStyle=rgb(col[0],col[1],col[2]); c.fill(); });
-      // knob labels (real names) below each knob
-      [['GAIN',.24,.330,8],['PEAK',.56,.330,8]]
-        .forEach(k=> textSpaced(d,k[1]*W,(k[2]+.085)*H,F.barlow,k[3],wt,k[0],0.2));
-      // 3-way MODE selector (LP/BP/HP) — lever drawn by engine via sw3.
-      textSpaced(d,.185*W,.072*H,F.barlow,7,wt,'MODE',0.3);
-      textSpaced(d,.305*W,.118*H,F.barlow,6.5,wt,'HP',0.2);
-      textSpaced(d,.305*W,.150*H,F.barlow,6.5,wt,'BP',0.2);
-      textSpaced(d,.305*W,.182*H,F.barlow,6.5,wt,'LP',0.2);
-      // Range and Direction toggles (switch hit areas are provided in `switches`).
+      // blue control face with rounded black frame (photo)
+      rr(c,W*.055,H*.032,W*.89,H*.585,10*s); c.fillStyle=rgb(16,16,20); c.fill();
+      rr(c,W*.07,H*.045,W*.86,H*.560,8*s); c.fillStyle=rgb(46,62,158); c.fill();
+      // black inset (right block that holds the three sliders)
+      rr(c,W*.50,H*.275,W*.43,H*.330,10*s); c.fillStyle=rgb(16,16,18); c.fill();
+      c.fillRect(W*.80,H*.045,W*.13,H*.30);   // (photo: black wraps the top-right corner too)
+      c.fillStyle=rgb(46,62,158); rr(c,W*.50,H*.045,W*.30,H*.23,6*s); c.fill();
+      // rainbow "U" logo (white tile + blue/pink verticals + green base)
+      const lx=W*.665,ly=H*.075,lw=W*.145,lh=H*.105;
+      rr(c,lx,ly,lw,lh,4*s); c.fillStyle=rgb(238,240,242); c.fill();
+      c.fillStyle=rgb(64,120,212); c.fillRect(lx+lw*.22,ly+lh*.16,lw*.16,lh*.52);
+      c.fillStyle=rgb(232,110,170); c.fillRect(lx+lw*.62,ly+lh*.16,lw*.16,lh*.52);
+      c.fillStyle=rgb(70,176,110); c.fillRect(lx+lw*.22,ly+lh*.58,lw*.56,lh*.20);
+      // knob arc labels + names (photo: LP..HP over MODE, 0-10 scales)
+      textSpaced(d,.165*W,.058*H,F.barlow,7,wt,'LP',0.2);
+      textSpaced(d,.375*W,.058*H,F.barlow,7,wt,'HP',0.2);
+      textSpaced(d,.165*W,.185*H,F.barlow,8.5,wt,'MODE',0.3);
+      textSpaced(d,.155*W,.372*H,F.barlow,8.5,wt,'PEAK',0.3);
+      textSpaced(d,.150*W,.568*H,F.barlow,8.5,wt,'GAIN',0.3);
+      // ── the three colored slide switches (photo: RANGE blue / DRIVE grey / POWER red)
+      const slider=(cy,val,cap,l1,l2,name,live)=>{
+        const tx=W*.73, tw=W*.17, th=H*.030;
+        rr(c,tx-tw/2,cy*H-th/2,tw,th,3*s); c.fillStyle=rgb(30,30,34); c.fill();
+        const on=val>=0.5, capw=tw*.48;
+        rr(c,on?tx: tx-capw, cy*H-th*0.80, capw, th*1.6, 3*s);
+        c.fillStyle=rgb(cap[0],cap[1],cap[2]); c.fill();
+        rr(c,on?tx: tx-capw, cy*H-th*0.80, capw, th*1.6, 3*s);
+        c.strokeStyle='rgba(0,0,0,0.5)'; c.lineWidth=s; c.stroke();
+        textSpaced(d,.585*W,cy*H,F.barlow,6.2,(!on&&live)?wt:dim,l1,0.15);
+        textSpaced(d,.875*W,cy*H,F.barlow,6.2,(on&&live)?wt:dim,l2,0.15);
+        textSpaced(d,.73*W,(cy+.043)*H,F.barlow,7.5,wt,name,0.35); };
       const rv=(values&&values[3]!=null)?values[3]:1;
       const dv=(values&&values[4]!=null)?values[4]:1;
-      textSpaced(d,.805*W,.108*H,F.barlow,7,wt,'RANGE',0.3);
-      textSpaced(d,.805*W,.230*H,F.barlow,6.2,rv<0.5?wt:dim,'LOW',0.2);
-      textSpaced(d,.805*W,.260*H,F.barlow,6.2,rv>=0.5?wt:dim,'HIGH',0.2);
-      textSpaced(d,.805*W,.285*H,F.barlow,7,wt,'DIRECTION',0.3);
-      textSpaced(d,.805*W,.405*H,F.barlow,6.2,dv<0.5?wt:dim,'DOWN',0.2);
-      textSpaced(d,.805*W,.435*H,F.barlow,6.2,dv>=0.5?wt:dim,'UP',0.2);
-      // POWER lever (red, ON) lower-right of panel
-      const px=W*.80, py=H*.475;
-      rr(c,px-9*s,py-7*s,18*s,14*s,3*s); c.fillStyle=rgb(28,30,38); c.fill();
-      rr(c,px+1*s,py-9*s,8*s,13*s,2*s); c.fillStyle=rgb(206,44,44); c.fill();
-      textSpaced(d,px,py+15*s,F.barlow,6,wt,'POWER',0.2);
-      textSpaced(d,px-16*s,py,F.barlow,5,wt,'OFF',0.1); textSpaced(d,px+16*s,py,F.barlow,5,wt,'ON',0.1);
-      // wordmark + chrome stomp + brand
-      textSpaced(d,.42*W,.625*H,F.anton,24,dk,'BU-TRON III',0.5);
-      footRound(d,W*.50,H*.79,22*s);
-      textSpaced(d,.78*W,.93*H,F.barlow,8.5,dk,'auditronics',0.2); } };
+      slider(.345,rv,[92,150,224],'LOW','HIGH','RANGE',true);
+      slider(.445,dv,[168,170,176],'DOWN','UP','DRIVE',true);
+      slider(.545,1,[214,48,44],'OFF','ON','POWER',false);
+      // engraved nameplate on the wedge slope (photo: MU-TRON III strip)
+      rr(c,W*.14,H*.630,W*.72,H*.052,4*s); c.fillStyle='rgba(0,0,0,0.10)'; c.fill();
+      textSpaced(d,.50*W,.656*H,F.anton,22,dk,'BU-TRON III',0.6);
+      c.strokeStyle='rgba(30,30,34,0.55)'; c.lineWidth=1.2*s;
+      c.beginPath(); c.moveTo(W*.15,H*.678); c.lineTo(W*.85,H*.678); c.stroke();
+      // flat lower body: chrome stomp + brand
+      footRound(d,W*.50,H*.800,20*s);
+      textSpaced(d,.76*W,.930*H,F.barlow,9,dk,'auditronics',0.2); } };
 
-  // Custom Drive - Fulltone OCD-style: cream box, three black knobs, an HP/LP voice
+    // Custom Drive - Fulltone OCD-style: cream box, three black knobs, an HP/LP voice
   // toggle + blue LED, fat black wordmark + script brand. Parody (ExtraTone / CDO).
   // Real controls: Drive0 Tone1 Voice2 Volume3.
   P.cdo = { w:280,h:480, knobs:[
