@@ -278,7 +278,7 @@ public:
         // overshot and flattened the whole gain sweep — maxed volumes no longer
         // distorted at all (a cranked DR504 genuinely roars: that's the sound).
         // Extra drive ramps in ONLY past ~55%, low/normal keep the clean Hiwatt.
-        const float roar = smoothstepRange(0.55f, 1.0f, preDrive);
+        const float roar = smoothstepRange(0.45f, 1.0f, preDrive);
 
         float x = inputHp.process(in * 1.8f);  // pass5: global input boost cut hard (4.5->1.8) — tube grids saw too many volts, still distorting
         x = pickupLoad.process(x);
@@ -289,11 +289,11 @@ public:
         float bch = brightCapShelf.process(brightBody.process(x));
         bch = vBright.process(brightMiller.process(bch) *
                               (0.35f + 3.3f * brightVol
-                               + 5.5f * smoothstepRange(0.55f, 1.0f, brightVol)) * bplus.preamp);   // pass3 + roar (was 0.6+14.0 orig)
+                               + 7.5f * smoothstepRange(0.45f, 1.0f, brightVol)) * bplus.preamp);   // pass3 + roar (was 0.6+14.0 orig)
         float nch = normalBody.process(x);
         nch = vNormal.process(normalMiller.process(nch) *
                               (0.3f + 2.3f * normalVol
-                               + 3.5f * smoothstepRange(0.55f, 1.0f, normalVol)) * bplus.preamp);   // pass3 + roar (was 0.5+9.0 orig)
+                               + 4.5f * smoothstepRange(0.45f, 1.0f, normalVol)) * bplus.preamp);   // pass3 + roar (was 0.5+9.0 orig)
 
         // jumpered mix
         float y = brightG * (0.34f + 0.66f * brightVol) * bch
@@ -302,7 +302,7 @@ public:
         // recovery (ECC83) into the tone stack
         y = interstageHp.process(y);
         y = vRecovery.process(recoveryMiller.process(y) *
-                              (0.5f + 2.8f * preDrive + 3.8f * roar) * bplus.preamp);   // pass4 + roar: back toward the original 7.7x, only when cranked
+                              (0.5f + 2.8f * preDrive + 5.0f * roar) * bplus.preamp);   // pass4 + roar: back toward the original 7.7x, only when cranked
         y = cathodeLp.process(y);
 
         y = toneStack.process(y) * toneMk;
@@ -316,7 +316,7 @@ public:
         // CLEAN LINEAR phase-inverter — the Koren LTP was THE GATE (cut small signals to −240 dBFS
         // silence at low drive; see the DR103 fix). Linear here = no gating; the real Koren EL34 power
         // amp below keeps the authentic breakup. Modest gain so the 50W EL34 stays clean until cranked.
-        y = y * bplus.screen * (0.42f + 0.26f * roar * mPush);
+        y = y * bplus.screen * (0.42f + 0.30f * roar * mPush);
         lastPowerLoad = 0.65f * std::fabs(y) + 0.12f * pushed;
         lastScreenLoad = 0.42f * std::fabs(y) + 0.06f * preDrive;
 
@@ -345,7 +345,7 @@ public:
             + 0.010f * std::fabs((pres - 0.5f) * 16.0f);
         const float cleanMakeup = 1.0f + 1.0f * std::exp(-preDrive / 0.30f);
         const float level = (0.28f + 0.09f * (1.0f - preDrive)) * cleanMakeup /
-            ((1.0f + 0.40f * mPush + 0.20f * pushed + 0.90f * roar) * toneEnergy);
+            ((1.0f + 0.40f * mPush + 0.20f * pushed + 1.05f * roar) * toneEnergy);
         return softClip(y * level) * 0.97f;
     }
 };
