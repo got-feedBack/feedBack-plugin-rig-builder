@@ -5961,6 +5961,11 @@ async function rbStudioFinalizeFocusEdit(api, idx) {
                             const nm = p.name ?? p.label;
                             const v = p.value ?? p.current;
                             if (typeof v !== 'number') return;
+                            // DPF host meta-params are not knobs — storing them
+                            // poisoned saved states ("Buffer Size"/"Sample Rate"
+                            // keys reapplied to the plugin on every song load).
+                            const lo = String(nm || '').toLowerCase();
+                            if (lo === 'buffer size' || lo === 'sample rate') return;
                             if (id != null && merged[id] == null) merged[id] = v;
                             if (nm && merged[nm] == null) merged[nm] = v;
                         });
@@ -9068,6 +9073,11 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
                     if (piece._vst_slot_id != null && api) { try { api.setParameter(piece._vst_slot_id, realId, val); } catch (_) {} }
                     piece._vst_params = piece._vst_params || {};
                     piece._vst_params[realId] = val;
+                    // A param can live in _vst_params under TWO aliases (numeric
+                    // id + NAME, both persisted). Update the name alias too when
+                    // it already exists, or the stale name value overrides this
+                    // fresh drag on the next song load ("edits don't save").
+                    rbSyncParamNameAlias(piece, realId, val);
                     // Keep the LOGICAL-id value too so the song thumbnail redraws
                     // the right knob on a fresh load (the spec draws by logical id).
                     piece._vst_logical = piece._vst_logical || {};
@@ -9157,6 +9167,7 @@ async function rbToneSetVstParam(toneIdx, pIdx, paramId, value, valueDisplayEl) 
     // the latest values — not just an explicit Capture state click.
     piece._vst_params = piece._vst_params || {};
     piece._vst_params[paramId] = v;
+    rbSyncParamNameAlias(piece, paramId, v);   // keep the NAME alias fresh too
     rbStampVstState(piece);   // refresh params (opaque is captured at save time)
     // Debounced auto-save so the user doesn't lose drags after navigating
     // away from the song. 500 ms after the last drag we hit /save_preset.
@@ -10030,6 +10041,11 @@ function rbMasterRenderInlineVstParams(role, idx) {
                     if (piece._vst_slot_id != null && api) { try { api.setParameter(piece._vst_slot_id, realId, val); } catch (_) {} }
                     piece._vst_params = piece._vst_params || {};
                     piece._vst_params[realId] = val;
+                    // A param can live in _vst_params under TWO aliases (numeric
+                    // id + NAME, both persisted). Update the name alias too when
+                    // it already exists, or the stale name value overrides this
+                    // fresh drag on the next song load ("edits don't save").
+                    rbSyncParamNameAlias(piece, realId, val);
                 },
             });
         };
@@ -11662,6 +11678,23 @@ async function rbLoadAndEditVst(toneIdx, pIdx) {
 // {"params": {paramId: value, ...}} JSON shape). Matches stages to chain
 // JSON by index — assumes loadPreset preserves order, which is what the
 // audio_engine plugin code path also relies on (see bundle screen.js).
+// Keep the NAME alias of a param in sync with a fresh numeric-id edit.
+// _vst_params can hold the same param under BOTH its numeric id and its
+// name (the finalize read-back adds name entries). If only the numeric
+// entry were updated on a drag, the stale name entry would win at song
+// load (rbReapplyVstParamsToChain resolves names via getParameters) and
+// the user's edit would appear "not saved".
+function rbSyncParamNameAlias(piece, realId, val) {
+    try {
+        const meta = piece && piece._vst_param_meta;
+        if (!Array.isArray(meta)) return;
+        const m = meta.find((p, i) => (p.id ?? p.paramId ?? p.index ?? i) === realId);
+        const nm = m && (m.name ?? m.label);
+        if (nm && piece._vst_params && piece._vst_params[nm] != null)
+            piece._vst_params[nm] = val;
+    } catch (_) {}
+}
+
 async function rbReapplyVstParamsToChain(api, chainSpec) {
     // Verbose per-stage/per-param VST re-apply trace — OFF by default; enable with
     // window.RB_DEBUG / localStorage 'rbDebug' (same flag as rbDebugLog).
@@ -11741,32 +11774,51 @@ async function rbReapplyVstParamsToChain(api, chainSpec) {
 
         let appliedCount = 0;
         const failed = [];
+        // Resolve EVERY key to its targetId first, then apply ONCE per id.
+        // A param can be saved under TWO aliases — its numeric id (what a
+        // live knob drag stages) and its NAME (added by the finalize
+        // read-back, possibly sessions ago). Object.entries orders integer
+        // keys first, so the name entry applied LAST and a stale name value
+        // overwrote the user's fresh edit on every song load ("my Studio
+        // tone edits don't save"). Numeric-id entries now take precedence.
+        // DPF host meta-params (Buffer Size / Sample Rate) leaked into old
+        // saved states — they're not knobs, skip them entirely.
+        const idToName = {};
+        if (nameToId) for (const [nm, npid] of Object.entries(nameToId)) idToName[npid] = nm;
+        const byTarget = new Map();   // targetId -> {v, numeric}
         for (const [pid, v] of Object.entries(params)) {
             // Resolve by NAME first (handles numeric-named params like the
             // graphic-EQ bands); fall back to a numeric paramId only when no
             // param name matches the key.
             let targetId = nameToId ? nameToId[String(pid).toLowerCase()] : undefined;
+            let numericKey = false;
             if (targetId == null) {
                 const asNum = parseInt(pid, 10);
-                if (!isNaN(asNum) && String(asNum) === String(pid).trim()) targetId = asNum;
+                if (!isNaN(asNum) && String(asNum) === String(pid).trim()) { targetId = asNum; numericKey = true; }
             }
             if (targetId == null || isNaN(targetId)) {
                 failed.push(pid);
                 continue;
             }
+            const rname = String(idToName[targetId] || '').toLowerCase();
+            if (rname === 'buffer size' || rname === 'sample rate') continue;
+            const prev = byTarget.get(targetId);
+            if (!prev || (numericKey && !prev.numeric)) byTarget.set(targetId, { v, numeric: numericKey });
+        }
+        for (const [targetId, entry] of byTarget) {
             // Engine takes normalized [0,1]. Old states may still carry raw
             // dB/Hz values from before the apply_vst_state.py normalization
             // fix — clamp defensively so they don't pin params to the wrong
             // extreme (the symptom that produced "Gain -2328 dB" in the
             // editor). New states are already normalized so clamp is a no-op
             // for them.
-            const clamped = Math.max(0, Math.min(1, parseFloat(v)));
+            const clamped = Math.max(0, Math.min(1, parseFloat(entry.v)));
             try {
                 await api.setParameter(slotId, targetId, clamped);
                 appliedCount++;
             } catch (e) {
-                _warn(`[rig_builder reapply] setParameter slot=${slotId} param=${pid}(${targetId}):`, e);
-                failed.push(`${pid}(setParam threw)`);
+                _warn(`[rig_builder reapply] setParameter slot=${slotId} param=${targetId}:`, e);
+                failed.push(`${targetId}(setParam threw)`);
             }
         }
         if (failed.length) {
