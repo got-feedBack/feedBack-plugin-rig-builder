@@ -2512,6 +2512,36 @@ const RbMegaChain = (function () {
         } catch (_) { return null; }
     }
 
+    // Bass-flavored tone detection SHARED by every tone fallback. Tone keys
+    // are "<SongPrefix>_<toneName>" — look for "bass" inside the tone-name
+    // segments (not the song prefix, so "BasslineJunkie_lead" stays guitar)
+    // plus the chain's gear family. The old /(^|_)bass(_|\b)/ regex missed
+    // compound names like "FaitEpic_bassflange", which then got applied as
+    // the "guitar" default on a guitar chart.
+    function _toneIsBassFlavored(t) {
+        const looksBass = (raw) => {
+            const segs = String(raw || '').split('_');
+            if (segs.length > 1 && segs.slice(1).some(s => /bass/i.test(s))) return true;
+            return segs.length === 1 && /^bass/i.test(segs[0]);
+        };
+        if (looksBass(t && t.tone_key)) return true;
+        if (Array.isArray(t && t.aliases) && t.aliases.some(looksBass)) return true;
+        return Array.isArray(t && t.chain) && t.chain.some(p => /^Bass_/i.test((p && p.rs_gear) || ''));
+    }
+
+    // What is the player ACTUALLY holding? The highway's string count is the
+    // authoritative signal: 4 = bass, 6/7/8 = guitar. Defaults to guitar.
+    function _playerWantsBass() {
+        try {
+            const hw = window.highway;
+            if (hw && typeof hw.getStringCount === 'function') {
+                const n = hw.getStringCount();
+                if (typeof n === 'number' && n > 0) return n <= 4;
+            }
+        } catch (_) {}
+        return false;
+    }
+
     function _findToneByKey(toneKey) {
         if (!_mega || !Array.isArray(_mega.tones) || !toneKey) return null;
         const wanted = String(toneKey).trim().toLowerCase();
@@ -2555,14 +2585,26 @@ const RbMegaChain = (function () {
                 if (typeof hw.getToneBase === 'function') push(hw.getToneBase());
                 for (const c of (hw.getToneChanges() || [])) push(c && c.name);
                 const pos = order.indexOf(String(toneKey).trim());
-                if (pos >= 0 && pos < _mega.tones.length) {
-                    if (_mega && !_mega._loggedOrderMap) {
-                        _mega._loggedOrderMap = true;
-                        console.warn(`[rig_builder mega-chain] tone "${toneKey}" matched by POSITION `
-                            + `#${pos} → seeded "${_mega.tones[pos].tone_key}" — the chart's published `
-                            + `tone names match no seeded Key/Name; using order as a fallback.`);
+                if (pos >= 0) {
+                    // Map positions WITHIN the player's instrument family:
+                    // _mega.tones mixes guitar AND bass tones (e.g. tones[0]
+                    // can be "TakeMeOut_bass"), so a raw index handed a BASS
+                    // tone to a guitar chart. The chart's published order only
+                    // covers its own instrument — align it to the same-family
+                    // seeded list before indexing.
+                    const wantBass = _playerWantsBass();
+                    const family = _mega.tones.filter(t => _toneIsBassFlavored(t) === wantBass);
+                    const pool = family.length ? family : _mega.tones;
+                    if (pos < pool.length) {
+                        if (_mega && !_mega._loggedOrderMap) {
+                            _mega._loggedOrderMap = true;
+                            console.warn(`[rig_builder mega-chain] tone "${toneKey}" matched by POSITION `
+                                + `#${pos} → seeded "${pool[pos].tone_key}" (${wantBass ? 'bass' : 'guitar'}-family pool `
+                                + `of ${pool.length}/${_mega.tones.length}) — the chart's published tone names `
+                                + `match no seeded Key/Name; using order as a fallback.`);
+                        }
+                        return pool[pos];
                     }
-                    return _mega.tones[pos];
                 }
             }
         } catch (_) {}
@@ -3057,21 +3099,13 @@ const RbMegaChain = (function () {
         const _pickDefaultTone = () => {
             const all = (mega.tones || []);
             if (!all.length) return null;
-            const isBassFlavored = t =>
-                /(^|_)bass(_|\b)/i.test(t.tone_key || '')
-                || (Array.isArray(t.chain) && t.chain.some(p => /^Bass_/i.test(p.rs_gear || '')));
-            let stringCount = 6;
-            try {
-                const hw = window.highway;
-                if (hw && typeof hw.getStringCount === 'function') {
-                    const n = hw.getStringCount();
-                    if (typeof n === 'number' && n > 0) stringCount = n;
-                }
-            } catch (_) {}
-            const wantBass = stringCount <= 4;
+            // Shared detection (see _toneIsBassFlavored): the local regex this
+            // used before missed compound keys like "FaitEpic_bassflange" and
+            // handed a bass tone to a guitar chart as the "no-schedule" default.
+            const wantBass = _playerWantsBass();
             const preferred = wantBass
-                ? all.find(t => isBassFlavored(t))
-                : all.find(t => !isBassFlavored(t));
+                ? all.find(t => _toneIsBassFlavored(t))
+                : all.find(t => !_toneIsBassFlavored(t));
             return preferred || all[0];
         };
 
