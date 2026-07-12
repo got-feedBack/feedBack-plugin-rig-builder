@@ -276,8 +276,13 @@ protected:
         float* outR = outputs[1];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = rbAmpLvl(0.560f * left.process(inL[i]));
-            outR[i] = rbAmpLvl(0.560f * right.process(inR[i]));
+            // 1.25 lands the default operating point at the fleet's ~-16 dBFS
+            // RMS reference (was 0.560 = -23.8 dBFS: a clean DI keeps the full
+            // ~15 dB guitar crest, so equal-peak trimming left it ~8 dB quieter
+            // than the compressed amps). Peaks sit ~-1.3 dBFS, under the
+            // rbAmpLvl knee.
+            outL[i] = rbAmpLvl(1.25f * left.process(inL[i]));
+            outR[i] = rbAmpLvl(1.25f * right.process(inR[i]));
         }
     }
 
