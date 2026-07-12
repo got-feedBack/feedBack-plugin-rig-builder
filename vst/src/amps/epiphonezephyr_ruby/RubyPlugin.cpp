@@ -220,7 +220,7 @@ public:
 };
 
 static constexpr float kRubyMakeup = 3.50f;   // tuned offline (-14 dBFS @ kDef)
-static constexpr float kRubyLvl    = 1.138f;
+static constexpr float kRubyLvl    = 1.427f;
 
 class RubyPlugin : public Plugin {
     RubyChannel L, R;

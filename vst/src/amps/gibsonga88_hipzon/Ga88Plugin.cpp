@@ -203,7 +203,7 @@ public:
 };
 
 static constexpr float kGa88Makeup = 3.50f;   // tuned offline (-14 dBFS @ kDef)
-static constexpr float kGa88Lvl    = 1.00f;
+static constexpr float kGa88Lvl    = 1.262f;
 
 class Ga88Plugin : public Plugin {
     Ga88Channel L, R;
