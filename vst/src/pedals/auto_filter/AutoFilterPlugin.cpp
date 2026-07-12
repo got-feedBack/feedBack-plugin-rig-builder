@@ -193,8 +193,15 @@ public:
         const float detDrive = 1.0f + 9.0f * gain;            // input sensitivity into the rectifier
         const float rect = std::fabs(x) * detDrive;
         env += (rect > env ? rectAtkA : rectRelA) * (rect - env);
-        // LED → LDR photocell lag: the smooth Mu-Tron "vowel" sweep
-        const float optoTarget = clamp01(env);
+        // LED → LDR photocell lag: the smooth Mu-Tron "vowel" sweep.
+        // LED-current → LDR-conductance is COMPRESSIVE, not a hard ceiling: the
+        // old clamp01 here pinned the CV at 1.0 whenever Gain was high (env >> 1
+        // through the whole note), parking the filter fully open — the wah
+        // stopped moving (same detector-saturation bug the FM101 had). The soft
+        // knee keeps the CV inside its moving range at every Gain setting and
+        // still closes between notes; the 1.15 factor lets hot drive reach the
+        // fully-open stop like the real LED bottoming out the LDR.
+        const float optoTarget = clamp01(1.15f * env / (env + 0.60f));
         opto += (optoTarget > opto ? optoAtkA : optoRelA) * (optoTarget - opto);
 
         // sweep 0..1; DIRECTION DOWN inverts the CV (filter closes on attack)
