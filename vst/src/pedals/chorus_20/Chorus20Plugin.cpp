@@ -122,10 +122,18 @@ public:
         wet -= dc;
 
         const float chorusMode = 1.0f - mode; // 0 = chorus, 1 = vibrato
-        const float dry = x * (0.78f * chorusMode);
-        const float wetLevel = mode >= 0.5f ? 0.96f : 0.86f;
+        // CHORUS mode SUMS dry + wet (the real Uni-Vibe mixes both through
+        // equal resistors into the output stage): the classic vibe NOTCHES
+        // fall where the 4-stage phase crosses 180°/540°, and bass/treble
+        // (where the allpass chain returns to 0°/720° = in phase) pass at
+        // full level. The previous SUBTRACTION inverted that — it canceled
+        // the in-phase extremes instead, gutting lows AND highs into a
+        // midband hump ("the chorus mode darkens the guitar a lot").
+        // 0.52+0.52 keeps the in-phase sum ~unity where 0.78−0.86 sat.
+        const float dry = x * (0.52f * chorusMode);
+        const float wetLevel = mode >= 0.5f ? 0.96f : 0.52f;
         const float mixed = mode >= 0.5f ? wet * wetLevel
-                                         : dry - wet * wetLevel;
+                                         : dry + wet * wetLevel;
         // Level-match to the chorus group at UNITY. The old curve (0.18+1.65·t
         // then ×0.72) left the pinned Volume (0.62) at ~-6.7 dB and low RS-Mix
         // settings near-inaudible; only full Volume reached ~unity. Raised the
