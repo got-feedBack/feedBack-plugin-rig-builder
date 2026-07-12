@@ -310,10 +310,13 @@ class AcousticSimulatorCore
         for (int i = 0; i < kModes; ++i)
             modeBank[i].setBandPass(sampleRate, kModeF[i], kModeQ[i]);
         bodyHP.setRC(sampleRate, 33000.0f, 68.0e-9f);            // ~70 Hz, keep rumble out
-        boxAp1.init(sampleRate, 3.1f, 0.55f);
-        boxAp2.init(sampleRate, 5.3f, 0.52f);
-        boxAp3.init(sampleRate, 8.9f, 0.45f);
-        boxAirLP.setHz(sampleRate, 4600.0f);
+        // Lower allpass feedback + darker air: short allpasses at g>=0.5 ring
+        // with an audible metallic comb of their own; g<=0.4 keeps the diffuse
+        // "inside the box" smear without the clang.
+        boxAp1.init(sampleRate, 3.1f, 0.40f);
+        boxAp2.init(sampleRate, 5.3f, 0.36f);
+        boxAp3.init(sampleRate, 8.9f, 0.30f);
+        boxAirLP.setHz(sampleRate, 3200.0f);
 
         sparkleBand.setHighPass(sampleRate, 2500.0f, 0.707f);
         topShelfOut.setHighShelf(sampleRate, 5200.0f, 0.75f, -1.5f + 6.5f * t);
@@ -382,16 +385,18 @@ public:
             boxAp3.process(boxAp2.process(boxAp1.process(xb))));
 
         // 3) string sparkle: soft asymmetric saturation of the top band (adds
-        // the even-harmonic bronze zing magnetic pickups lose)
-        const float sp = sparkleBand.process(x + 0.6f * res);
-        const float spDrive = sp * (2.2f + 2.4f * t);
-        const float sparkle = std::tanh(spDrive + 0.22f * spDrive * spDrive) * 0.30f;
+        // the even-harmonic bronze zing magnetic pickups lose). Kept SUBTLE:
+        // over-driving a highs-only saturator dumps intermod energy at 3-6 kHz
+        // that reads as tinny/metallic — measured hottest IR band pre-fix.
+        const float sp = sparkleBand.process(x + 0.35f * res);
+        const float spDrive = sp * (1.4f + 1.6f * t);
+        const float sparkle = std::tanh(spDrive + 0.10f * spDrive * spDrive) * 0.30f;
 
         // mix: direct string + body + air + sparkle
         float y = x * 0.34f
                 + res * (0.55f + 0.95f * b)
                 + air * (0.10f + 0.30f * b)
-                + sparkle * (0.10f + 0.42f * t);
+                + sparkle * (0.08f + 0.30f * t);
 
         y = topShelfOut.process(y);
         y = finalLP.process(y);
@@ -411,10 +416,16 @@ const float AcousticSimulatorCore::kModeF[AcousticSimulatorCore::kModes] = {
      98.0f, 196.0f, 226.0f, 258.0f, 292.0f, 330.0f, 388.0f, 435.0f,
     480.0f, 556.0f, 610.0f, 672.0f, 735.0f, 800.0f, 875.0f, 950.0f,
    1040.0f, 1140.0f, 1250.0f, 1400.0f, 1600.0f, 1850.0f, 2150.0f, 2500.0f };
+// Q taper: low modes (Helmholtz + top/back plates) keep their woody ring, but
+// above ~500 Hz real bodies have modal overlap > 1 — individual modes stop
+// being audible as separate ringing. The first version kept Q 8-12 up to
+// 2.5 kHz and those isolated 100+ ms rings at 1-2 kHz read as METALLIC clang;
+// tapering hard to Q~3 turns the upper bank back into a broad statistical
+// plateau (measured: T40 @0.8-1.6 kHz 114 ms -> ~35 ms).
 const float AcousticSimulatorCore::kModeQ[AcousticSimulatorCore::kModes] = {
-    18.0f, 26.0f, 28.0f, 22.0f, 20.0f, 18.0f, 17.0f, 16.0f,
-    15.0f, 14.0f, 13.0f, 12.5f, 12.0f, 11.5f, 11.0f, 10.5f,
-    10.0f,  9.5f,  9.0f,  8.5f,  8.0f,  7.5f,  7.0f,  6.5f };
+    16.0f, 22.0f, 24.0f, 17.0f, 14.0f, 11.0f,  9.5f,  8.5f,
+     7.5f,  7.0f,  6.5f,  6.0f,  5.5f,  5.0f,  4.7f,  4.4f,
+     4.1f,  3.9f,  3.7f,  3.5f,  3.3f,  3.2f,  3.1f,  3.0f };
 const float AcousticSimulatorCore::kModeG[AcousticSimulatorCore::kModes] = {
     1.00f, 0.95f, 0.70f, 0.55f, 0.72f, 0.50f, 0.58f, 0.42f,
     0.38f, 0.42f, 0.33f, 0.36f, 0.28f, 0.30f, 0.24f, 0.26f,
@@ -458,7 +469,7 @@ protected:
     const char* getDescription() const override { return "blue-button acoustic simulator"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('A', 'c', 's', 'm'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
