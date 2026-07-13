@@ -11138,6 +11138,32 @@ def setup(app, context):
                 "_synth_unused": True,
             }
 
+        # Surface OUR bundled VSTs that aren't mapped to ANY RS gear — the
+        # "extra gear" (Silver Jubilee, DS-2, CE-1…) built for manual use. The
+        # catalog is keyed off the RS gear map, so without this these never
+        # appear even though the .vst3 ships. Skip any whose VST is already
+        # represented (the mapped amps/pedals) to avoid duplicates; category
+        # comes from the vst/<amps|pedals|racks>/ subfolder.
+        _used_vst = {Path(bb["vst_path"]).name.lower()
+                     for bb in best.values() if bb.get("vst_path")}
+        _bundled_cat = {"amps": "amp", "pedals": "pedal", "racks": "rack"}
+        for bp in _bundled_vst_plugins():
+            fname = Path(bp["path"]).name
+            if fname.lower() in _used_vst:
+                continue
+            cat = _bundled_cat.get(Path(bp["path"]).parent.name.lower())
+            if not cat:
+                continue
+            key = "Extra_" + bp["name"]
+            if key in best:
+                continue
+            best[key] = {
+                "kind": "vst", "file": None, "tone3000_id": None,
+                "has_assignment": True, "category": cat,
+                "vst_path": bp["path"], "vst_format": bp["format"],
+                "vst_state": None, "_synth_unused": True,
+            }
+
         # Surface EVERY cab WE model (real_cab_catalog.json — the 58 curated
         # cabs) even if no downloaded song uses it, so the Cabs catalog shows
         # our full roster instead of only the ~25 the user's library happens to
@@ -11171,7 +11197,10 @@ def setup(app, context):
             if gear in ("Cabinets", "Amps", "Pedals", "Racks"):
                 continue
             info = rs_map.get(gear) or {}
-            category = info.get("category") or _category_from_codename(gear)
+            # Category: RS map first, then the entry's own (bundled-VST extras
+            # carry their vst/<amps|pedals|racks>/ folder category), then the
+            # codename-prefix fallback.
+            category = info.get("category") or b.get("category") or _category_from_codename(gear)
             # Gear with an assigned VST shows its copyright-free display name
             # when available, even if the historical row is still kind="nam".
             # Route through _gear_display_name so cabs (absent from rs_to_real)
