@@ -109,6 +109,7 @@ struct DelayControls
     float mode;
     float range;
     float heads;
+    float shape;      // LFO waveform 0..1: sine/tri/square/saw-up/saw-down/S&H (MF-104M panel)
 
     DelayControls()
         : delay(0.35f),
@@ -119,6 +120,7 @@ struct DelayControls
           tone(0.55f),
           rate(0.20f),
           depth(0.15f),
+          shape(0.0f),
           mode(0.0f),
           range(0.5f),
           heads(1.0f)
@@ -166,6 +168,9 @@ class ComponentDelayCore
     float sampleRate = 48000.0f;
     float smoothedDelayMs = 120.0f;
     float wowPhase = 0.0f;
+    float lastShPhase = 0.0f;
+    float shValue = 0.0f;
+    unsigned shSeed = 22222u;
     float flutterPhase = 0.0f;
     float clockPhase = 0.0f;
     float lastFeedback = 0.0f;
@@ -363,7 +368,26 @@ public:
         flutterPhase += (5.5f + 13.0f * controls.depth) / sampleRate;
         flutterPhase -= std::floor(flutterPhase);
 
-        const float wow = std::sin(rbmod::kTwoPi * wowPhase) * voice.wowMs * (0.15f + 0.85f * controls.depth);
+        // MF-104M-style LFO waveform select for the delay-time modulation.
+        // 6 shapes across the pot; sine (0) is the legacy default so every
+        // other delay voice sounds identical.
+        float lfo;
+        {
+            const int shp = (int)(rbmod::clamp01(controls.shape) * 5.999f);
+            const float ph = wowPhase - std::floor(wowPhase);
+            switch (shp)
+            {
+            default: lfo = std::sin(rbmod::kTwoPi * ph); break;                       // sine
+            case 1:  lfo = 4.0f * std::fabs(ph - 0.5f) - 1.0f; break;                // triangle
+            case 2:  lfo = ph < 0.5f ? 1.0f : -1.0f; break;                          // square
+            case 3:  lfo = 2.0f * ph - 1.0f; break;                                  // saw up
+            case 4:  lfo = 1.0f - 2.0f * ph; break;                                  // saw down
+            case 5:                                                                   // sample & hold
+                if (ph < lastShPhase) shValue = 2.0f * ((shSeed = shSeed * 1664525u + 1013904223u) >> 16 & 0x7FFF) / 32767.0f - 1.0f;
+                lastShPhase = ph; lfo = shValue; break;
+            }
+        }
+        const float wow = lfo * voice.wowMs * (0.15f + 0.85f * controls.depth);
         const float flutter = std::sin(rbmod::kTwoPi * flutterPhase + 0.7f * std::sin(rbmod::kTwoPi * wowPhase)) *
                               voice.flutterMs * (0.18f + 0.82f * controls.depth);
         const float modMs = wow + flutter;

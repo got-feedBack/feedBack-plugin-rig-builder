@@ -1077,6 +1077,7 @@ if (window.slopsmith && window.slopsmith.audio) {
 let _rbMuteInFlight = false;
 let _rbUnmuteRun = null;     // the pending unmute closure (event-driven trigger)
 let _rbUnmuteTimer = null;   // safety-fallback timer handle
+let _rbUnmuteDeadline = 0;   // when the pending timer fires (coalesce may only extend)
 // Event-driven unmute: a caller that KNOWS the chain finished loading (the
 // mega-chain build awaits loadPreset + getChainState + the VST-param re-apply)
 // calls this so the un-mute fires on the REAL completion instead of a fixed
@@ -1090,23 +1091,6 @@ async function rbPreLoadMute(chainLen, targetGain, opts) {
     const deferUnmute = !!(opts && opts.deferUnmute);
     const pendingTarget = rbClampChainGainTarget(targetGain);
     window.__rbPendingChainGainTarget = pendingTarget;
-    if (_rbMuteInFlight) {
-        // Already muted (e.g. the fetch-interceptor's SHORT timer-based mute
-        // fired first, at song:loaded). If THIS caller (the mega-chain preload)
-        // will signal real completion, UPGRADE the pending unmute to the long
-        // safety net so that short timer can't fire mid-load and let the VST/NAM
-        // load peaks through — the un-mute then comes from rbSignalChainLoaded()
-        // (flag/event-driven, as intended) the moment the load truly finishes.
-        if (deferUnmute && _rbUnmuteRun && _rbUnmuteTimer) {
-            clearTimeout(_rbUnmuteTimer);
-            _rbUnmuteTimer = setTimeout(_rbUnmuteRun, 15000);
-        }
-        return;                            // coalesce rapid tone changes
-    }
-    _rbMuteInFlight = true;
-    const audio = rbAudioApi();
-    if (!audio) { _rbMuteInFlight = false; return; }
-    const target = pendingTarget;   // was 4 — chains can need ~20×
     // Hold the chain muted until the WHOLE chain has loaded AND the post-load
     // VST-param / input-drive re-apply has settled — otherwise the un-mute
     // races the stage-by-stage NAM/VST init and the user hears the load peaks
@@ -1119,6 +1103,34 @@ async function rbPreLoadMute(chainLen, targetGain, opts) {
     const hold = (typeof window.__rbMutePreLoadHold === 'number')
         ? Math.max(20, window.__rbMutePreLoadHold | 0)
         : 250 + 120 * Math.max(1, chainLen | 0);
+    if (_rbMuteInFlight) {
+        // Already muted (e.g. the fetch-interceptor's SHORT timer-based mute
+        // fired first, at song:loaded). If THIS caller (the mega-chain preload)
+        // will signal real completion, UPGRADE the pending unmute to the long
+        // safety net so that short timer can't fire mid-load and let the VST/NAM
+        // load peaks through — the un-mute then comes from rbSignalChainLoaded()
+        // (flag/event-driven, as intended) the moment the load truly finishes.
+        if (deferUnmute && _rbUnmuteRun && _rbUnmuteTimer) {
+            clearTimeout(_rbUnmuteTimer);
+            _rbUnmuteTimer = setTimeout(_rbUnmuteRun, 15000);
+            _rbUnmuteDeadline = Date.now() + 15000;
+        } else if (_rbUnmuteRun && _rbUnmuteTimer
+                   && Date.now() + hold > _rbUnmuteDeadline) {
+            // A coalesced NON-defer caller (e.g. the default-tone reload that
+            // fires 250 ms after the song-exit teardown mute) must EXTEND the
+            // pending unmute to cover its own load — the teardown's short timer
+            // would otherwise fire mid-load and let the load peaks through.
+            // Only ever lengthen (a defer caller's 15 s net is never cut short).
+            clearTimeout(_rbUnmuteTimer);
+            _rbUnmuteTimer = setTimeout(_rbUnmuteRun, hold);
+            _rbUnmuteDeadline = Date.now() + hold;
+        }
+        return;                            // coalesce rapid tone changes
+    }
+    _rbMuteInFlight = true;
+    const audio = rbAudioApi();
+    if (!audio) { _rbMuteInFlight = false; return; }
+    const target = pendingTarget;   // was 4 — chains can need ~20×
     // When the caller will explicitly signal completion (deferUnmute — the
     // mega-chain path awaits the real load), the timer becomes a LONG safety net
     // (the unmute really happens via rbSignalChainLoaded the moment the load
@@ -1151,14 +1163,16 @@ async function rbPreLoadMute(chainLen, targetGain, opts) {
         if (_rbUnmuteTimer) { clearTimeout(_rbUnmuteTimer); _rbUnmuteTimer = null; }
         try {
             // Restore the monitor to whatever it was before the load (dry mode
-            // forced it on; put it back so normal play isn't doubled).
-            if (typeof audio.setMonitorMute === 'function') await audio.setMonitorMute(wasMuted);
+            // forced it on; put it back so normal play isn't doubled). A user
+            // mute always wins so it survives tone/song loads.
+            if (typeof audio.setMonitorMute === 'function') await audio.setMonitorMute(wasMuted || !!rbState._userMuted);
             // Fade chain gain 0 → target over ~24 ms in 4 steps so the
             // restore doesn't click. Final value is the smart target,
             // not a fixed 1.0 — that's how we normalise across "amp +
-            // cab" and "amp only" without a user-facing knob.
+            // cab" and "amp only" without a user-facing knob. If the user
+            // muted, keep the chain at 0 (mute persists across loads).
             if (typeof audio.setGain === 'function') {
-                const restoreTarget = rbClampChainGainTarget(window.__rbPendingChainGainTarget ?? target);
+                const restoreTarget = rbState._userMuted ? 0 : rbClampChainGainTarget(window.__rbPendingChainGainTarget ?? target);
                 const steps = [restoreTarget * 0.25, restoreTarget * 0.5, restoreTarget * 0.8, restoreTarget];
                 for (const v of steps) {
                     await audio.setGain('chain', v);
@@ -1170,6 +1184,7 @@ async function rbPreLoadMute(chainLen, targetGain, opts) {
     };
     _rbUnmuteRun = doUnmute;
     _rbUnmuteTimer = setTimeout(doUnmute, fallbackMs);
+    _rbUnmuteDeadline = Date.now() + fallbackMs;
 }
 
 // NOTE: an earlier version of this file tried to monkey-patch
@@ -2499,6 +2514,36 @@ const RbMegaChain = (function () {
         } catch (_) { return null; }
     }
 
+    // Bass-flavored tone detection SHARED by every tone fallback. Tone keys
+    // are "<SongPrefix>_<toneName>" — look for "bass" inside the tone-name
+    // segments (not the song prefix, so "BasslineJunkie_lead" stays guitar)
+    // plus the chain's gear family. The old /(^|_)bass(_|\b)/ regex missed
+    // compound names like "FaitEpic_bassflange", which then got applied as
+    // the "guitar" default on a guitar chart.
+    function _toneIsBassFlavored(t) {
+        const looksBass = (raw) => {
+            const segs = String(raw || '').split('_');
+            if (segs.length > 1 && segs.slice(1).some(s => /bass/i.test(s))) return true;
+            return segs.length === 1 && /^bass/i.test(segs[0]);
+        };
+        if (looksBass(t && t.tone_key)) return true;
+        if (Array.isArray(t && t.aliases) && t.aliases.some(looksBass)) return true;
+        return Array.isArray(t && t.chain) && t.chain.some(p => /^Bass_/i.test((p && p.rs_gear) || ''));
+    }
+
+    // What is the player ACTUALLY holding? The highway's string count is the
+    // authoritative signal: 4 = bass, 6/7/8 = guitar. Defaults to guitar.
+    function _playerWantsBass() {
+        try {
+            const hw = window.highway;
+            if (hw && typeof hw.getStringCount === 'function') {
+                const n = hw.getStringCount();
+                if (typeof n === 'number' && n > 0) return n <= 4;
+            }
+        } catch (_) {}
+        return false;
+    }
+
     function _findToneByKey(toneKey) {
         if (!_mega || !Array.isArray(_mega.tones) || !toneKey) return null;
         const wanted = String(toneKey).trim().toLowerCase();
@@ -2542,14 +2587,26 @@ const RbMegaChain = (function () {
                 if (typeof hw.getToneBase === 'function') push(hw.getToneBase());
                 for (const c of (hw.getToneChanges() || [])) push(c && c.name);
                 const pos = order.indexOf(String(toneKey).trim());
-                if (pos >= 0 && pos < _mega.tones.length) {
-                    if (_mega && !_mega._loggedOrderMap) {
-                        _mega._loggedOrderMap = true;
-                        console.warn(`[rig_builder mega-chain] tone "${toneKey}" matched by POSITION `
-                            + `#${pos} → seeded "${_mega.tones[pos].tone_key}" — the chart's published `
-                            + `tone names match no seeded Key/Name; using order as a fallback.`);
+                if (pos >= 0) {
+                    // Map positions WITHIN the player's instrument family:
+                    // _mega.tones mixes guitar AND bass tones (e.g. tones[0]
+                    // can be "TakeMeOut_bass"), so a raw index handed a BASS
+                    // tone to a guitar chart. The chart's published order only
+                    // covers its own instrument — align it to the same-family
+                    // seeded list before indexing.
+                    const wantBass = _playerWantsBass();
+                    const family = _mega.tones.filter(t => _toneIsBassFlavored(t) === wantBass);
+                    const pool = family.length ? family : _mega.tones;
+                    if (pos < pool.length) {
+                        if (_mega && !_mega._loggedOrderMap) {
+                            _mega._loggedOrderMap = true;
+                            console.warn(`[rig_builder mega-chain] tone "${toneKey}" matched by POSITION `
+                                + `#${pos} → seeded "${pool[pos].tone_key}" (${wantBass ? 'bass' : 'guitar'}-family pool `
+                                + `of ${pool.length}/${_mega.tones.length}) — the chart's published tone names `
+                                + `match no seeded Key/Name; using order as a fallback.`);
+                        }
+                        return pool[pos];
                     }
-                    return _mega.tones[pos];
                 }
             }
         } catch (_) {}
@@ -2713,7 +2770,20 @@ const RbMegaChain = (function () {
             return false;
         }
         markPending(filename);
-        const api = _api();
+        // The native audio host can still be initializing right after app boot
+        // (the very first song of a session), so _api() may return null even
+        // though the engine is about to come up. Wait for it with a bounded
+        // backoff instead of failing outright — the old immediate _markFailed
+        // here was a first-load-only "no tone" path that healed on the second
+        // entry once the engine was ready.
+        let api = _api();
+        if (!api) {
+            const _API_WAIT_DELAYS = [200, 400, 800, 1500, 2500];   // ~5.4 s total
+            for (let i = 0; i < _API_WAIT_DELAYS.length && !api; i++) {
+                await new Promise(r => setTimeout(r, _API_WAIT_DELAYS[i]));
+                api = _api();
+            }
+        }
         if (!api) {
             console.warn('[rig_builder mega-chain] buildForSong aborted — no native audio API');
             _markFailed(filename, 'Native audio engine is not available');
@@ -2733,62 +2803,91 @@ const RbMegaChain = (function () {
         // the wrong chain on top of the new song.
         const myGen = ++_buildGen;
 
-        // Fetch the mega-chain, tolerating the seeding RACE: a freshly
-        // materialized/opened song's tone_mappings are written ASYNCHRONOUSLY
-        // (background watcher / cloud_loader), so the first build at +600 ms
-        // can beat the seed and 404 — which is exactly the "no sound until I
-        // exit and reload the song" report. On a 404 we (a) kick a one-shot
-        // on-demand seed (idempotent, lock-guarded server-side; needs a
-        // tone3000 key) and (b) retry with backoff until it lands, so the user
-        // no longer has to reload by hand. A non-404 error is a real failure —
-        // don't retry, fall straight back to the cooperative path. On every
+        // Fetch the mega-chain, resolving the seeding RACE DETERMINISTICALLY.
+        // A freshly materialized/opened song's tone_mappings are written by an
+        // ASYNCHRONOUS seeder (background watcher / cloud_loader), so the first
+        // build at +600 ms can beat the seed and 404 — this is exactly the "no
+        // sound until I exit and reload the song" report. The /auto_download_song
+        // endpoint runs that same seed SYNCHRONOUSLY (it is lock-guarded and
+        // idempotent server-side, and returns only AFTER preset_pieces +
+        // tone_mappings are persisted), so instead of blindly retrying a fixed
+        // window that could expire before a network NAM download finished, we:
+        //   1. try /mega_chain once,
+        //   2. on 404 AWAIT the on-demand seed — when it returns the mapping is
+        //      guaranteed to exist (or the song is genuinely unmappable, e.g. a
+        //      feedpak, and mega_chain serves the default-tone fallback),
+        //   3. re-fetch, with a short backoff to absorb any watcher/write
+        //      ordering.
+        // A non-404 error is a real backend failure — don't retry. On every
         // terminal failure we _markFailed so the player button can explain why
         // rig tones are off (ownership visibility, audio-effects migration).
-        const _RETRY_DELAYS = [0, 1200, 2500, 4000, 6000];   // ~13.7 s total
         let mega = null;
-        for (let attempt = 0; attempt < _RETRY_DELAYS.length; attempt++) {
-            if (_RETRY_DELAYS[attempt]) {
-                await new Promise(r => setTimeout(r, _RETRY_DELAYS[attempt]));
-            }
-            if (myGen !== _buildGen) {
-                console.log('[rig_builder mega-chain] build superseded by a newer song load — abandoning retry');
-                return false;
-            }
-            let resp;
-            try {
-                resp = await fetch(`${RB_API}/mega_chain/${encodeURIComponent(filename)}`);
-            } catch (e) {
-                console.warn('[rig_builder mega-chain] fetch failed:', e);
-                _markFailed(filename, e && e.message ? e.message : 'Could not fetch this song\'s tone chain');
-                return false;
-            }
-            if (resp.ok) {
-                mega = await resp.json();
-                break;
-            }
-            if (resp.status !== 404) {
-                console.warn(`[rig_builder mega-chain] /mega_chain/${filename} → HTTP ${resp.status} — giving up (real backend error)`);
-                _markFailed(filename, `Rig Builder song chain unavailable: HTTP ${resp.status}`);
-                return false;
-            }
-            // 404 → not seeded yet. Kick the on-demand seed ONCE for this song,
-            // then keep retrying so the watcher/seed result is picked up.
+        let resp;
+        try {
+            resp = await fetch(`${RB_API}/mega_chain/${encodeURIComponent(filename)}`);
+        } catch (e) {
+            console.warn('[rig_builder mega-chain] fetch failed:', e);
+            _markFailed(filename, e && e.message ? e.message : 'Could not fetch this song\'s tone chain');
+            return false;
+        }
+        if (myGen !== _buildGen) {
+            console.log('[rig_builder mega-chain] build superseded by a newer song load — abandoning');
+            return false;
+        }
+        if (!resp.ok && resp.status === 404) {
+            // Not seeded yet. Run the on-demand seed and WAIT for it, so the
+            // mapping exists when we re-fetch — no more blind race window.
             if (_seedTried !== filename) {
                 _seedTried = filename;
-                fetch(`${RB_API}/auto_download_song`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename }),
-                }).then(r => console.log(`[rig_builder mega-chain] on-demand seed for "${filename}" → HTTP ${r.status}`))
-                  .catch(e => console.warn('[rig_builder mega-chain] on-demand seed failed:', e));
+                try {
+                    const seedResp = await fetch(`${RB_API}/auto_download_song`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ filename }),
+                    });
+                    console.log(`[rig_builder mega-chain] on-demand seed for "${filename}" → HTTP ${seedResp.status}`);
+                } catch (e) {
+                    console.warn('[rig_builder mega-chain] on-demand seed failed:', e);
+                }
             }
-            console.warn(`[rig_builder mega-chain] /mega_chain/${filename} → 404 (mappings not seeded yet — seeding + retry ${attempt + 1}/${_RETRY_DELAYS.length - 1})`);
+            if (myGen !== _buildGen) {
+                console.log('[rig_builder mega-chain] build superseded during seed — abandoning');
+                return false;
+            }
+            // Re-fetch after the (awaited) seed. The short backoff absorbs any
+            // remaining watcher/write ordering and the lazy default-tone seed.
+            const _POST_SEED_DELAYS = [0, 800, 2000];
+            for (let attempt = 0; attempt < _POST_SEED_DELAYS.length; attempt++) {
+                if (_POST_SEED_DELAYS[attempt]) {
+                    await new Promise(r => setTimeout(r, _POST_SEED_DELAYS[attempt]));
+                }
+                if (myGen !== _buildGen) {
+                    console.log('[rig_builder mega-chain] build superseded during re-fetch — abandoning');
+                    return false;
+                }
+                try {
+                    resp = await fetch(`${RB_API}/mega_chain/${encodeURIComponent(filename)}`);
+                } catch (e) {
+                    console.warn('[rig_builder mega-chain] fetch failed:', e);
+                    _markFailed(filename, e && e.message ? e.message : 'Could not fetch this song\'s tone chain');
+                    return false;
+                }
+                if (resp.ok || resp.status !== 404) break;
+                console.warn(`[rig_builder mega-chain] /mega_chain/${filename} → 404 after seed (re-fetch ${attempt + 1}/${_POST_SEED_DELAYS.length - 1})`);
+            }
+        }
+        if (resp.ok) {
+            mega = await resp.json();
+        } else if (resp.status !== 404) {
+            console.warn(`[rig_builder mega-chain] /mega_chain/${filename} → HTTP ${resp.status} — giving up (real backend error)`);
+            _markFailed(filename, `Rig Builder song chain unavailable: HTTP ${resp.status}`);
+            return false;
         }
         if (!mega) {
-            // Still no mappings after the retry window → fall back to the
+            // Still no mappings after the awaited seed → fall back to the
             // cooperative path (the bundle still plays). Run Batch all or open
             // the song in the per-song tab to seed it (needs a tone3000 key).
-            console.warn(`[rig_builder mega-chain] /mega_chain/${filename} → still no mappings after retries (no tone3000 key, or song not mappable? Run Batch all or open it in the per-song tab)`);
+            console.warn(`[rig_builder mega-chain] /mega_chain/${filename} → still no mappings after seed (no tone3000 key, or song not mappable? Run Batch all or open it in the per-song tab)`);
             _markFailed(filename, 'No mapped Rig Builder tones were found for this song');
             return false;
         }
@@ -3044,21 +3143,13 @@ const RbMegaChain = (function () {
         const _pickDefaultTone = () => {
             const all = (mega.tones || []);
             if (!all.length) return null;
-            const isBassFlavored = t =>
-                /(^|_)bass(_|\b)/i.test(t.tone_key || '')
-                || (Array.isArray(t.chain) && t.chain.some(p => /^Bass_/i.test(p.rs_gear || '')));
-            let stringCount = 6;
-            try {
-                const hw = window.highway;
-                if (hw && typeof hw.getStringCount === 'function') {
-                    const n = hw.getStringCount();
-                    if (typeof n === 'number' && n > 0) stringCount = n;
-                }
-            } catch (_) {}
-            const wantBass = stringCount <= 4;
+            // Shared detection (see _toneIsBassFlavored): the local regex this
+            // used before missed compound keys like "FaitEpic_bassflange" and
+            // handed a bass tone to a guitar chart as the "no-schedule" default.
+            const wantBass = _playerWantsBass();
             const preferred = wantBass
-                ? all.find(t => isBassFlavored(t))
-                : all.find(t => !isBassFlavored(t));
+                ? all.find(t => _toneIsBassFlavored(t))
+                : all.find(t => !_toneIsBassFlavored(t));
             return preferred || all[0];
         };
 
@@ -3228,6 +3319,16 @@ const RbMegaChain = (function () {
         if (!silent) _restoreGuitarStem();
         if (_active) {
             const api = _api();
+            // Mute around the teardown: clearChain removes stages one by one
+            // (the final leveler included), so for a moment the un-leveled
+            // chain hits the output. With the per-stage IR gains actually
+            // applying now (cab makeup + amp-trim x8), that raw level sits
+            // 18-38 dB hotter than before and the once-buried transient became
+            // an audible distorted burst on song exit ("se escucha cómo cambia
+            // de tonos"). Same guard as every other clearChain+load path; the
+            // default-tone reload that follows coalesces into this mute and
+            // extends it to cover its own load.
+            await rbPreLoadMute(8, 1.0).catch(() => {});
             const releasedByHost = await rbReleaseAudioEffectsRouteWithHost('mega-chain-teardown');
             if (!releasedByHost && api && api.clearChain) {
                 try { await api.clearChain(); } catch (_) {}
@@ -3642,6 +3743,7 @@ async function rbInit() {
     rbShowTab(rbState.currentTab);
     rbStudioRenderToneChips();              // show the current-tone label right away
     rbStudioLoadSavedTones().catch(() => {});   // then fill in saved tones
+    rbLoadRealCabCatalog().catch(() => {});     // Real Cab catalog (cab room)
     // Close the tone dropdown when clicking outside it. Use mousedown (fires
     // before click handlers mutate the DOM) so the target is still attached —
     // a 'click' listener saw the replaced Save button as "outside" and closed
@@ -3814,6 +3916,18 @@ function rbShowTab(name) {
     // Leaving any view tears down an open inline VST editor first so its
     // orphaned native window can't crash the host on the next chain load.
     rbCloseActiveVstEditor();
+    // The Studio room is a permanent backdrop (never hidden), so an open focus
+    // overlay — the Cab Room and its position:fixed swap rail — would linger on
+    // top of whatever tab you open. Tear it down when LEAVING Studio. (Not when
+    // name==='studio': the cab swap re-enters via rbStudioShowSongTone→rbShowTab
+    // ('studio') and must keep its focus + rail.)
+    if (name !== 'studio') {
+        try {
+            if (rbState._studioFocusKind === 'cab') rbStudioCloseCabFocus();
+            else if (document.getElementById('rb-studio-focus-bar')) rbStudioCloseFocus();
+            else rbStudioCloseSwap();
+        } catch (_) {}
+    }
     rbState.currentTab = name;
     // Immersive shell: the Studio room is the permanent backdrop (never hidden);
     // the other tabs float over it (overlay panels or the Songs search dock).
@@ -3834,6 +3948,7 @@ function rbShowTab(name) {
     if (name === 'master') rbLoadMasterChain();
     if (name === 'advanced') rbLoadAdvanced();
     if (name === 'settings') {
+        rbSetupSubtab(rbState._setupSubtab || 'general');   // General vs tone3000
         rbLoadCoverage();        // batch / coverage panel (was dashboard)
         rbLoadSettings();        // tone3000 + prefs
         rbUpdateScanStatus();
@@ -3847,7 +3962,8 @@ function rbShowTab(name) {
 // top-level tab so the user doesn't ping-pong between two tabs to
 // resolve a gear and inspect its file.
 function rbGearFilter(filter) {
-    if (!['all', 'files'].includes(filter)) filter = 'all';
+    // Files moved to Setup → tone3000; the Gear tab is now just the catalog.
+    filter = 'all';
     rbState.currentGearFilter = filter;
     document.querySelectorAll('.rb-gear-view').forEach(v => v.classList.add('hidden'));
     const view = document.getElementById(`rb-gear-view-${filter}`);
@@ -3858,8 +3974,29 @@ function rbGearFilter(filter) {
         b.classList.toggle('text-white', active);
         b.classList.toggle('text-gray-400', !active);
     });
-    if (filter === 'all') rbLoadCatalog();
-    else if (filter === 'files') rbLoadManageTab();
+    rbLoadCatalog();
+}
+
+// Setup sub-tabs: General settings vs tone3000. Persists the last choice so
+// re-opening Setup lands where you left it; loads the Files inventory + shows
+// download progress when tone3000 is opened.
+function rbSetupSubtab(name) {
+    if (name !== 'tone3000') name = 'general';
+    rbState._setupSubtab = name;
+    document.getElementById('rb-setup-general')?.classList.toggle('hidden', name !== 'general');
+    document.getElementById('rb-setup-tone3000')?.classList.toggle('hidden', name !== 'tone3000');
+    ['general', 'tone3000'].forEach(n => {
+        const b = document.getElementById(`rb-setup-sub-${n}`);
+        if (!b) return;
+        const active = n === name;
+        b.classList.toggle('bg-dark-600', active);
+        b.classList.toggle('text-white', active);
+        b.classList.toggle('text-gray-300', !active);
+    });
+    if (name === 'tone3000') {
+        try { rbLoadManageTab(); } catch (_) {}
+        try { rbSetupPreloadCheck(); } catch (_) {}
+    }
 }
 
 // ── Studio room (Phase 1: static premium scene of the Default tone) ──────
@@ -3871,12 +4008,785 @@ const RB_STUDIO_KNOB_ANGLES = [-135, -70, -10, 45, 110];
 const RB_MAX_PEDALS = 4;   // pedalboard capacity
 const RB_MAX_RACKS = 4;    // rack-tower capacity
 
+// ── Recreated cab artwork (copyright-free clones) ────────────────────────────
+// Inline SVG per cab gear, shown on the Studio room cab face (.rb-amp-cab). Uses
+// the amps' own PKBebas face (already loaded by RBPedalCanvas) for the badge, so
+// the branding matches the amp heads. Each id is suffixed per-instance (u) so two
+// amp stacks sharing one cab don't collide on gradient/pattern ids. Cabs without
+// art fall back to the CSS default. Add one entry per approved cab.
+const RB_CAB_ART = {
+    // Sampleg 1x15 — Ampeg Portaflex clone
+    'Bass_Cab_AT1150BC': u => `<svg viewBox="24 20 412 440" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="tx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2a2c"/><stop offset=".5" stop-color="#161617"/><stop offset="1" stop-color="#0c0c0d"/></linearGradient>
+        <pattern id="dm${u}" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H8M0 4H8" stroke="#000" stroke-opacity=".28" stroke-width="1"/></pattern>
+        <linearGradient id="gb${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3b3e"/><stop offset="1" stop-color="#232427"/></linearGradient>
+        <pattern id="rb${u}" width="6" height="7" patternUnits="userSpaceOnUse"><rect width="6" height="7" fill="url(#gb${u})"/><rect width="6" height="2.4" fill="#c9cbce" opacity=".85"/><rect y="2.4" width="6" height="1.2" fill="#7f8286" opacity=".6"/></pattern>
+        <linearGradient id="ch${u}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9ebee"/><stop offset=".5" stop-color="#9a9ea3"/><stop offset="1" stop-color="#c7cace"/></linearGradient></defs>
+        <rect x="24" y="20" width="412" height="440" rx="16" fill="url(#tx${u})" stroke="#000" stroke-width="2"/>
+        <rect x="24" y="20" width="412" height="440" rx="16" fill="url(#dm${u})"/>
+        <text x="230" y="58" text-anchor="middle" font-family="PKBebas,Georgia,serif" font-size="38" letter-spacing="1.5" fill="#e2e4e8">Sampleg</text>
+        <rect x="52" y="80" width="356" height="356" rx="7" fill="#101012"/>
+        <rect x="58" y="86" width="344" height="344" rx="5" fill="url(#rb${u})"/>
+        <rect x="58" y="86" width="344" height="344" rx="5" fill="none" stroke="#000" stroke-opacity=".5" stroke-width="2"/>
+        <circle cx="230" cy="258" r="122" fill="#000" opacity=".16"/>
+        <g fill="url(#ch${u})" stroke="#5c5f63" stroke-width="1">
+          <path d="M24 44 V36 a16 16 0 0 1 16-16 h8 v6 h-8 a10 10 0 0 0-10 10 v8 z"/><path d="M436 44 V36 a16 16 0 0 0-16-16 h-8 v6 h8 a10 10 0 0 1 10 10 v8 z"/>
+          <path d="M24 436 v8 a16 16 0 0 0 16 16 h8 v-6 h-8 a10 10 0 0 1-10-10 v-8 z"/><path d="M436 436 v8 a16 16 0 0 1-16 16 h-8 v-6 h8 a10 10 0 0 0 10-10 v-8 z"/></g></svg>`,
+    // Sampleg SVT 8x10 — Ampeg SVT-810E clone
+    'Bass_Cab_AT810BC': u => `<svg viewBox="14 14 292 552" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="tx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#242426"/><stop offset=".5" stop-color="#141415"/><stop offset="1" stop-color="#0b0b0c"/></linearGradient>
+        <pattern id="dm${u}" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H8M0 4H8" stroke="#000" stroke-opacity=".3" stroke-width="1"/></pattern>
+        <pattern id="wv${u}" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="#0c0c0d"/><path d="M0 0H5M0 2.5H5" stroke="#1d1d20" stroke-width="1"/><path d="M0 0V5M2.5 0V5" stroke="#161618" stroke-width="1"/></pattern>
+        <linearGradient id="ch${u}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9ebee"/><stop offset=".5" stop-color="#9a9ea3"/><stop offset="1" stop-color="#c7cace"/></linearGradient></defs>
+        <rect x="14" y="14" width="292" height="552" rx="15" fill="url(#tx${u})" stroke="#000" stroke-width="2"/>
+        <rect x="14" y="14" width="292" height="552" rx="15" fill="url(#dm${u})"/>
+        <rect x="25" y="25" width="270" height="530" rx="10" fill="none" stroke="url(#ch${u})" stroke-width="2.4"/>
+        <rect x="31" y="31" width="258" height="518" rx="6" fill="#0c0c0d"/>
+        <rect x="31" y="31" width="258" height="518" rx="6" fill="url(#wv${u})"/>
+        <rect x="31" y="31" width="258" height="518" rx="6" fill="none" stroke="#000" stroke-opacity=".6" stroke-width="1.5"/>
+        <g transform="translate(56 66) rotate(45)"><rect x="-12" y="-12" width="24" height="24" rx="2.5" fill="#283460" stroke="#d0d4dc" stroke-width="1.4"/></g>
+        <text x="56" y="66" text-anchor="middle" dominant-baseline="central" font-family="PKBebas,Georgia,serif" font-size="16" fill="#dee2ea">S</text>
+        <text x="76" y="66" text-anchor="start" dominant-baseline="central" font-family="PKBebas,Georgia,serif" font-size="26" letter-spacing="1" fill="#e8eaee">Sampleg</text>
+        <g transform="translate(239 532)"><rect x="0" y="0" width="50" height="14.5" rx="2.5" fill="#0f0f10" stroke="url(#ch${u})" stroke-width="1"/><text x="25" y="7.6" text-anchor="middle" dominant-baseline="central" font-family="PKBebas,Georgia,serif" font-size="10" letter-spacing="1.3" fill="#c7cace">CLASSIC</text></g>
+        <g fill="url(#ch${u})" stroke="#5c5f63" stroke-width="1">
+          <path d="M14 34 V26 a12 12 0 0 1 12-12 h7 v5 h-7 a7 7 0 0 0-7 7 v8 z"/><path d="M306 34 V26 a12 12 0 0 0-12-12 h-7 v5 h7 a7 7 0 0 1 7 7 v8 z"/>
+          <path d="M14 546 v8 a12 12 0 0 0 12 12 h7 v-5 h-7 a7 7 0 0 1-7-7 v-8 z"/><path d="M306 546 v8 a12 12 0 0 1-12 12 h-7 v-5 h7 a7 7 0 0 0 7-7 v-8 z"/></g></svg>`,
+    // Marsten 1960A — Marshall 1960A angled 4x12: black tolex, black basketweave
+    // grille, white piping + maroon inner line, centred white "Marsten" script,
+    // gold "1960 LEAD" plate bottom-left, gold corner screws.
+    'Cab_MARSHALL1960A': u => `<svg viewBox="0 0 440 434" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="tx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#242426"/><stop offset=".5" stop-color="#141416"/><stop offset="1" stop-color="#0b0b0c"/></linearGradient>
+        <pattern id="dm${u}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H9M0 4.5H9" stroke="#000" stroke-opacity=".26" stroke-width="1"/></pattern>
+        <pattern id="wv${u}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#0c0c0d"/><path d="M0 0H6M0 3H6" stroke="#1c1c20" stroke-width="1"/><path d="M0 0V6M3 0V6" stroke="#171719" stroke-width="1"/></pattern>
+        <linearGradient id="gd${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2ca80"/><stop offset="1" stop-color="#9c7e42"/></linearGradient></defs>
+        <rect x="1" y="1" width="438" height="432" rx="15" fill="url(#tx${u})" stroke="#000" stroke-width="2"/>
+        <rect x="1" y="1" width="438" height="432" rx="15" fill="url(#dm${u})"/>
+        <rect x="25" y="23" width="390" height="388" rx="7" fill="#070708"/>
+        <rect x="30" y="28" width="380" height="378" rx="5" fill="url(#wv${u})"/>
+        <rect x="35" y="33" width="370" height="368" rx="4" fill="none" stroke="#5f2a2a" stroke-width="2"/>
+        <rect x="29" y="27" width="382" height="380" rx="6" fill="none" stroke="#eae9e6" stroke-width="2.4"/>
+        <text x="220" y="200" text-anchor="middle" dominant-baseline="middle" font-family="PKInk,cursive" font-size="70" fill="#f2f1eb" stroke="#0a0a0a" stroke-opacity=".4" stroke-width="1.4" paint-order="stroke">Marsten</text>
+        <g transform="translate(38 362)"><rect x="0" y="0" width="98" height="32" rx="3" fill="#0d0c0a" stroke="url(#gd${u})" stroke-width="1.4"/><text x="14" y="17" dominant-baseline="central" font-family="PKBebas,Georgia,serif" font-size="22" letter-spacing="1" fill="url(#gd${u})">1960</text><text x="72" y="20" dominant-baseline="central" font-family="PKBebas,Georgia,serif" font-size="10" letter-spacing="1.2" fill="url(#gd${u})">LEAD</text></g>
+        <g fill="url(#gd${u})"><circle cx="16" cy="16" r="3.2"/><circle cx="424" cy="16" r="3.2"/><circle cx="16" cy="418" r="3.2"/><circle cx="424" cy="418" r="3.2"/></g></svg>`,
+    // Marsten 1960AX — Marshall 1960AX vintage 4x12: black tolex, grey
+    // salt-and-pepper grille, thin gold piping, lower-centre white "Marsten".
+    'Cab_MARSHALL1960AX': u => `<svg viewBox="0 0 436 430" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="tx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#242426"/><stop offset=".5" stop-color="#151517"/><stop offset="1" stop-color="#0c0c0d"/></linearGradient>
+        <pattern id="dm${u}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H9M0 4.5H9" stroke="#000" stroke-opacity=".26" stroke-width="1"/></pattern>
+        <pattern id="sp${u}" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="4" fill="#3d3e42"/><rect width="2" height="2" fill="#787a7e"/><rect x="2" y="2" width="2" height="2" fill="#787a7e"/><rect x="2" y="0" width="2" height="2" fill="#1f1f23"/><rect x="0" y="2" width="2" height="2" fill="#1f1f23"/></pattern>
+        <linearGradient id="gd${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d8b95e"/><stop offset="1" stop-color="#9d8038"/></linearGradient></defs>
+        <rect x="1" y="1" width="434" height="428" rx="14" fill="url(#tx${u})" stroke="#000" stroke-width="2"/>
+        <rect x="1" y="1" width="434" height="428" rx="14" fill="url(#dm${u})"/>
+        <rect x="22" y="21" width="392" height="388" rx="6" fill="#0a0a0b"/>
+        <rect x="27" y="26" width="382" height="378" rx="4" fill="url(#sp${u})"/>
+        <rect x="26" y="25" width="384" height="380" rx="5" fill="none" stroke="url(#gd${u})" stroke-width="2.2"/>
+        <text x="218" y="262" text-anchor="middle" dominant-baseline="middle" font-family="PKInk,cursive" font-size="52" fill="#eeede7" stroke="#0a0a0a" stroke-opacity=".35" stroke-width="1" paint-order="stroke">Marsten</text>
+        <g fill="url(#gd${u})" opacity=".8"><circle cx="15" cy="15" r="2.8"/><circle cx="421" cy="15" r="2.8"/><circle cx="15" cy="415" r="2.8"/><circle cx="421" cy="415" r="2.8"/></g></svg>`,
+    // Marsten 1960TV — Marshall 1960TV angled 4x12: green-black levant tolex, tan
+    // horizontal-stripe vintage cloth, gold piping, lower-left gold "Marsten".
+    'Cab_MARSHALL1960TV': u => `<svg viewBox="0 0 372 440" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="tx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#20291f"/><stop offset=".5" stop-color="#121a13"/><stop offset="1" stop-color="#0b110c"/></linearGradient>
+        <pattern id="dm${u}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H9M0 4.5H9" stroke="#000" stroke-opacity=".28" stroke-width="1"/></pattern>
+        <pattern id="tn${u}" width="8" height="5" patternUnits="userSpaceOnUse"><rect width="8" height="5" fill="#6c5836"/><rect width="8" height="2" fill="#493b21"/><path d="M0 3.6H8" stroke="#b89a5c" stroke-opacity=".5" stroke-width="0.7"/></pattern>
+        <linearGradient id="gd${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0c67c"/><stop offset=".55" stop-color="#b3924f"/><stop offset="1" stop-color="#8f7238"/></linearGradient></defs>
+        <rect x="1" y="1" width="370" height="438" rx="13" fill="url(#tx${u})" stroke="#000" stroke-width="2"/>
+        <rect x="1" y="1" width="370" height="438" rx="13" fill="url(#dm${u})"/>
+        <rect x="20" y="20" width="332" height="400" rx="6" fill="#0d0b06"/>
+        <rect x="25" y="25" width="322" height="390" rx="4" fill="url(#tn${u})"/>
+        <rect x="24" y="24" width="324" height="392" rx="5" fill="none" stroke="url(#gd${u})" stroke-width="2.4"/>
+        <text x="150" y="250" text-anchor="middle" dominant-baseline="middle" font-family="PKInk,cursive" font-size="46" fill="#f1e2ac" stroke="#3a2c0e" stroke-opacity=".7" stroke-width="1.6" paint-order="stroke">Marsten</text></svg>`,
+    // Marsten 1936 — Marshall 1936 2x12 (landscape): black tolex, black grille,
+    // white piping + maroon line, upper white "Marsten", gold "1936 LEAD" plate.
+    'Cab_MARSHALL1936': u => `<svg viewBox="0 0 520 360" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="tx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#242426"/><stop offset=".5" stop-color="#141416"/><stop offset="1" stop-color="#0b0b0c"/></linearGradient>
+        <pattern id="dm${u}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H9M0 4.5H9" stroke="#000" stroke-opacity=".26" stroke-width="1"/></pattern>
+        <pattern id="wv${u}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#0c0c0d"/><path d="M0 0H6M0 3H6" stroke="#1c1c20" stroke-width="1"/><path d="M0 0V6M3 0V6" stroke="#171719" stroke-width="1"/></pattern>
+        <linearGradient id="gd${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2ca80"/><stop offset="1" stop-color="#9c7e42"/></linearGradient></defs>
+        <rect x="1" y="1" width="518" height="358" rx="14" fill="url(#tx${u})" stroke="#000" stroke-width="2"/>
+        <rect x="1" y="1" width="518" height="358" rx="14" fill="url(#dm${u})"/>
+        <rect x="23" y="22" width="474" height="316" rx="7" fill="#070708"/>
+        <rect x="28" y="27" width="464" height="306" rx="5" fill="url(#wv${u})"/>
+        <rect x="33" y="32" width="454" height="296" rx="4" fill="none" stroke="#5f2a2a" stroke-width="2"/>
+        <rect x="27" y="26" width="466" height="308" rx="6" fill="none" stroke="#eae9e6" stroke-width="2.4"/>
+        <text x="260" y="112" text-anchor="middle" dominant-baseline="middle" font-family="PKInk,cursive" font-size="60" fill="#f2f1eb" stroke="#0a0a0a" stroke-opacity=".4" stroke-width="1.3" paint-order="stroke">Marsten</text>
+        <g transform="translate(36 296)"><rect x="0" y="0" width="94" height="30" rx="3" fill="#0d0c0a" stroke="url(#gd${u})" stroke-width="1.4"/><text x="13" y="16" dominant-baseline="central" font-family="PKBebas,Georgia,serif" font-size="21" letter-spacing="1" fill="url(#gd${u})">1936</text><text x="66" y="18" dominant-baseline="central" font-family="PKBebas,Georgia,serif" font-size="9" letter-spacing="1.2" fill="url(#gd${u})">LEAD</text></g>
+        <g fill="url(#gd${u})"><circle cx="15" cy="15" r="3"/><circle cx="505" cy="15" r="3"/><circle cx="15" cy="345" r="3"/><circle cx="505" cy="345" r="3"/></g></svg>`,
+    // Orange/"Citrus" cabs — shared rbCitrusCab builder (orange or black tolex,
+    // tan or black weave grille, colour crest + Citrus bubble-logo plaque in the
+    // amps' PKGraffiti). guitar 4x12/2x12/1x12 = tan grille; 1x15 + bass = black.
+    'Cab_ORANGEPPC412':      u => rbCitrusCab(u, { w: 448, h: 430, grille: 'tan', piping: true, badgeY: 0.24, badgeS: 1.15 }),
+    'Cab_ORANGEPPC212OB':    u => rbCitrusCab(u, { w: 500, h: 384, grille: 'tan', piping: true, badgeY: 0.16, badgeS: 1.05 }),
+    'Cab_ORANGEJIMMYBEAN':   u => rbCitrusCab(u, { w: 448, h: 430, black: true, grille: 'tan', piping: true, badgeY: 0.24, badgeS: 1.15 }),
+    'Cab_CS1120C':           u => rbCitrusCab(u, { w: 470, h: 376, grille: 'tan', piping: true, badgeY: 0.16, badgeS: 1.05 }),
+    'Cab_CS1515C':           u => rbCitrusCab(u, { w: 440, h: 424, grille: 'black', badgeY: 0.30, badgeS: 1.1 }),
+    'Bass_Cab_ORANGEOBC810': u => rbCitrusCab(u, { w: 300, h: 580, grille: 'black', badgeY: 0.40, badgeS: 0.92 }),
+    'Bass_Cab_ORANGEOBC115': u => rbCitrusCab(u, { w: 460, h: 400, grille: 'black', port: true, badgeY: 0.30, badgeS: 1.0 }),
+    // Vox/"Box" cabs (rbBoxCab): colour diamond grille cloth + chrome/gold "BOX"
+    // wordmark (PKBebas). BT410C = navy 4x10; BT1120C = black BC112; BT1121C =
+    // cream 1x12 (AC15); EN212C = cream AC30 2x12.
+    'Cab_BT410C':  u => rbBoxCab(u, { w: 448, h: 440, tolex: 'navy', grille: 'diamond', piping: '#efe7d2', logo: 'gold', logoL: true, port: true, corners: true }),
+    'Cab_BT1120C': u => rbBoxCab(u, { w: 470, h: 420, tolex: 'black', grille: 'blackdiamond', piping: '#f0f0ee', logo: 'chrome', logoL: true, corners: true }),
+    'Cab_BT1121C': u => rbBoxCab(u, { w: 500, h: 384, tolex: 'cream', grille: 'diamond', logo: 'chrome', logoL: false }),
+    'Cab_EN212C':  u => rbBoxCab(u, { w: 500, h: 424, tolex: 'black', grille: 'diamond', logoPanel: true, piping: '#f0efe9', logo: 'gold', corners: true, logoS: 1.05 }),
+    // Fender/"Bender" cabs (rbBenderCab): black tolex, silverface grille (grid or
+    // horizontal stripe), chrome diagonal "Bender" script (PKInk, the amps' font).
+    'Cab_TW410C':      u => rbBenderCab(u, { w: 360, h: 500, grille: 'grid', logoL: true, corners: 'black' }),   // Bassman 4x10
+    'Bass_Cab_TW215BC': u => rbBenderCab(u, { w: 380, h: 520, grille: 'grid', logoL: true, corners: 'white' }),  // Bass 2x15
+    'Cab_TW110C':      u => rbBenderCab(u, { w: 500, h: 370, grille: 'stripe', logoL: false, corners: 'black' }), // Deluxe 1x12
+    'Cab_TW112C':      u => rbBenderCab(u, { w: 460, h: 418, grille: 'stripe', logoL: true, corners: 'black' }),  // Supernova 1x12
+    // Marsten 1x12 Combo — black tolex, cream salt-and-pepper grille, gold piping,
+    // chrome "MARSTEN" plate top-right.
+    'Cab_AT0112C': u => `<svg viewBox="0 0 440 420" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="tx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#242426"/><stop offset=".5" stop-color="#141416"/><stop offset="1" stop-color="#0b0b0c"/></linearGradient>
+        <pattern id="dm${u}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H9M0 4.5H9" stroke="#000" stroke-opacity=".24" stroke-width="1"/></pattern>
+        <pattern id="sp${u}" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="4" fill="#c9bd97"/><rect width="2" height="2" fill="#e3d9ba"/><rect x="2" y="2" width="2" height="2" fill="#e3d9ba"/><rect x="2" y="0" width="2" height="2" fill="#9a8d63"/><rect x="0" y="2" width="2" height="2" fill="#9a8d63"/></pattern>
+        <linearGradient id="gd${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2ca80"/><stop offset="1" stop-color="#9c7e42"/></linearGradient>
+        <linearGradient id="cr${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef0f2"/><stop offset=".5" stop-color="#b6babe"/><stop offset="1" stop-color="#d2d5d8"/></linearGradient></defs>
+        <rect x="1" y="1" width="438" height="418" rx="14" fill="url(#tx${u})" stroke="#000" stroke-width="2"/>
+        <rect x="1" y="1" width="438" height="418" rx="14" fill="url(#dm${u})"/>
+        <rect x="24" y="22" width="392" height="376" rx="6" fill="#0a0a0b"/>
+        <rect x="29" y="27" width="382" height="366" rx="4" fill="url(#sp${u})"/>
+        <rect x="27" y="25" width="386" height="370" rx="5" fill="none" stroke="url(#gd${u})" stroke-width="2"/>
+        <g transform="translate(290 54)"><rect x="0" y="0" width="104" height="30" rx="3" fill="#101012" stroke="url(#cr${u})" stroke-width="2.4"/><text x="52" y="16" text-anchor="middle" dominant-baseline="central" font-family="PKBebas,Georgia,serif" font-size="18" letter-spacing="3" fill="url(#cr${u})">MARSTEN</text></g>
+        <g fill="url(#gd${u})"><circle cx="15" cy="15" r="3"/><circle cx="425" cy="15" r="3"/><circle cx="15" cy="405" r="3"/><circle cx="425" cy="405" r="3"/></g></svg>`,
+    // Marsten 1x12 Vintage (Marshall 1912) — black grille, white piping + maroon,
+    // white "Marsten" script, gold "1912 LEAD" plate.
+    'Cab_AT1121C': u => `<svg viewBox="0 0 482 416" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="tx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#242426"/><stop offset=".5" stop-color="#141416"/><stop offset="1" stop-color="#0b0b0c"/></linearGradient>
+        <pattern id="dm${u}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H9M0 4.5H9" stroke="#000" stroke-opacity=".24" stroke-width="1"/></pattern>
+        <pattern id="wv${u}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#0c0c0d"/><path d="M0 0H6M0 3H6" stroke="#1c1c20" stroke-width="1"/><path d="M0 0V6M3 0V6" stroke="#171719" stroke-width="1"/></pattern>
+        <linearGradient id="gd${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2ca80"/><stop offset="1" stop-color="#9c7e42"/></linearGradient></defs>
+        <rect x="1" y="1" width="480" height="414" rx="14" fill="url(#tx${u})" stroke="#000" stroke-width="2"/>
+        <rect x="1" y="1" width="480" height="414" rx="14" fill="url(#dm${u})"/>
+        <rect x="23" y="22" width="436" height="372" rx="6" fill="#070708"/>
+        <rect x="28" y="27" width="426" height="362" rx="4" fill="url(#wv${u})"/>
+        <rect x="33" y="32" width="416" height="352" rx="3" fill="none" stroke="#5f2a2a" stroke-width="2"/>
+        <rect x="27" y="26" width="428" height="364" rx="5" fill="none" stroke="#eae9e6" stroke-width="2.4"/>
+        <text x="202" y="125" text-anchor="middle" dominant-baseline="middle" font-family="PKInk,cursive" font-size="56" fill="#f2f1eb" stroke="#0a0a0a" stroke-opacity=".4" stroke-width="1.3" paint-order="stroke">Marsten</text>
+        <g transform="translate(36 358)"><rect x="0" y="0" width="90" height="28" rx="3" fill="#0d0c0a" stroke="url(#gd${u})" stroke-width="1.4"/><text x="12" y="15" dominant-baseline="central" font-family="PKBebas,Georgia,serif" font-size="19" letter-spacing="1" fill="url(#gd${u})">1912</text><text x="60" y="17" dominant-baseline="central" font-family="PKBebas,Georgia,serif" font-size="8" letter-spacing="1" fill="url(#gd${u})">LEAD</text></g>
+        <g fill="url(#gd${u})"><circle cx="15" cy="15" r="3"/><circle cx="467" cy="15" r="3"/><circle cx="15" cy="401" r="3"/><circle cx="467" cy="401" r="3"/></g></svg>`,
+    // Mesa/"Silla" cabs (rbSillaCab): black tolex, black cloth (guitar) or
+    // perforated-metal (15") grille, chrome oval "SILLA / ENGINEERING" badge.
+    'Cab_CA412C':        u => rbSillaCab(u, { w: 460, h: 430, grille: 'cloth', bx: 0.50, by: 0.44, bs: 1.05 }), // Dual Recto 4x12
+    'Cab_CA112C':        u => rbSillaCab(u, { w: 500, h: 334, grille: 'cloth', bx: 0.16, by: 0.16, bs: 0.9 }),  // 1x12
+    'Cab_CA215C':        u => rbSillaCab(u, { w: 340, h: 548, grille: 'perf', bx: 0.50, by: 0.36, bs: 0.92 }),  // 2x15
+    'Bass_Cab_CA1510BC': u => rbSillaCab(u, { w: 480, h: 370, grille: 'perf', bx: 0.56, by: 0.50, bs: 1.0 }),   // Bass 1x15
+    // Ronald JC-120 (Roland Jazz Chorus) — grey tolex, black silver-grid grille,
+    // green control strip + "JAZZ 120", silver rail, studded metal border.
+    'Cab_CS212C': u => {
+        const W = 470, H = 338, gx = 26, gy = 74, gw = W - 52, gh = H - 98;
+        let studs = '';
+        for (let x = 30; x < W - 20; x += 32) studs += `<circle cx="${x}" cy="8" r="2.2" fill="#7d6f38"/><circle cx="${x}" cy="${H - 8}" r="2.2" fill="#7d6f38"/>`;
+        for (let y = 30; y < H - 20; y += 32) studs += `<circle cx="8" cy="${y}" r="2.2" fill="#7d6f38"/><circle cx="${W - 8}" cy="${y}" r="2.2" fill="#7d6f38"/>`;
+        const body = `<rect x="20" y="14" width="${W - 40}" height="46" rx="4" fill="#20302e"/>
+            <rect x="${W - 120}" y="20" width="98" height="34" rx="3" fill="#12201d"/><text x="${W - 106}" y="42" font-family="PKCrete,serif" font-size="18" fill="#e6e8ea">JAZZ 120</text>
+            <rect x="20" y="64" width="${W - 40}" height="6" fill="#c6cace"/>
+            ${rbCabGrille(u, gx, gy, gw, gh, '#0e0e10')}${studs}`;
+        return rbCabWrap(u, W, H, body, ['#3a3d40', '#2a2c2e', '#1c1e20'], 'jc');
+    },
+    // Engel Fireball 4x12 (Engl) — red tolex, white racing stripes, black grille,
+    // chrome "ENGL" wordmark.
+    'Cab_EN4120C': u => {
+        const W = 444, H = 430, gx = 26, gy = 24, gw = W - 52, gh = H - 48;
+        const body = `${rbCabGrille(u, gx, gy, gw, gh, '#242426')}
+            <rect x="70" y="6" width="118" height="12" fill="#eceae2"/><rect x="256" y="6" width="118" height="12" fill="#eceae2"/>
+            <rect x="70" y="${H - 18}" width="118" height="12" fill="#eceae2"/><rect x="256" y="${H - 18}" width="118" height="12" fill="#eceae2"/>
+            <text x="222" y="225" text-anchor="middle" dominant-baseline="middle" font-family="PKBebas,serif" font-size="54" letter-spacing="4" fill="#d7dade" stroke="#3a3d42" stroke-width="1.3" paint-order="stroke">ENGL</text>
+            ${rbCabCorners(W, H)}`;
+        return rbCabWrap(u, W, H, body, ['#c8352a', '#a3271f', '#7f1c16'], 'perf');
+    },
+    // Lovolt 4x12 (Hiwatt) — black tolex, silver grille, white piping, black
+    // "LOVOLT" plate.
+    'Cab_GB412CMKI': u => {
+        const W = 442, H = 430, gx = 26, gy = 24, gw = W - 52, gh = H - 48;
+        const body = `${rbCabGrille(u, gx, gy, gw, gh, '#5c5f63')}
+            <rect x="${gx + 1}" y="${gy + 1}" width="${gw - 2}" height="${gh - 2}" rx="4" fill="none" stroke="#eeece4" stroke-width="2.6"/>
+            ${rbCabPlate(221, 225, 142, 34, 'LOVOLT', 'PKAnton,sans-serif', 22, '#111214', '#eef0f2', '#c8ccd0', true)}
+            ${rbCabCorners(W, H)}`;
+        return rbCabWrap(u, W, H, body, ['#242426', '#141416', '#0b0b0c'], 'silver');
+    },
+    // Raney AOR 4x12 (Laney) — grey tolex, perforated-metal grille, chrome "RANEY"
+    // plate.
+    'Cab_GB412CMKIII': u => {
+        const W = 444, H = 440, gx = 26, gy = 24, gw = W - 52, gh = H - 48;
+        const body = `${rbCabGrille(u, gx, gy, gw, gh, '#242426')}${rbCabPlate(222, 232, 134, 34, 'RANEY', 'PKAnton,sans-serif', 22, '#e6e8ea', '#1a1c1e', '#8a8e92')}${rbCabCorners(W, H, '#3a3c3e')}`;
+        return rbCabWrap(u, W, H, body, ['#34363a', '#232528', '#151618'], 'perf');
+    },
+    // PeeBee 2120 (Peavey 212) — black tolex, black grille, chrome oval "PeeBee".
+    'Cab_HG2120C': u => {
+        const W = 500, H = 330, gx = 26, gy = 24, gw = W - 52, gh = H - 48;
+        const body = `${rbCabGrille(u, gx, gy, gw, gh, '#0a0a0b')}${rbCabOval(250, 150, 68, 26, 'PeeBee', 'PKCrete,serif', 26, '#dfe2e6', '#1a1c1f', '#9a9ea3')}${rbCabCorners(W, H)}`;
+        return rbCabWrap(u, W, H, body, ['#242426', '#141416', '#0b0b0c'], 'weave');
+    },
+    // PeeBee 2x12 (Peavey Classic tweed) — tweed tolex, oxblood grille, gold
+    // "PeeBee" script.
+    'Cab_HG212C': u => {
+        const W = 500, H = 330, gx = 26, gy = 24, gw = W - 52, gh = H - 48;
+        const body = `${rbCabGrille(u, gx, gy, gw, gh, '#2c1a16')}<text x="250" y="176" text-anchor="middle" dominant-baseline="middle" font-family="PKCrete,serif" font-size="36" fill="#c9a24a" stroke="#5a4418" stroke-width="0.8" paint-order="stroke">PeeBee</text>${rbCabCorners(W, H, '#b6a877')}`;
+        return rbCabWrap(u, W, H, body, ['#cabb8c', '#b6a877', '#9a8d5f'], 'oxblood');
+    },
+    // PeeBee 2x15 (Peavey vintage) — black tolex, silver side rails, perf grille,
+    // chrome "PeeBee" script.
+    'Cab_HG215C': u => {
+        const W = 360, H = 556, gx = 52, gy = 24, gw = W - 104, gh = H - 48;
+        const body = `<rect x="20" y="20" width="26" height="${H - 40}" rx="3" fill="#c4c8cc"/><rect x="${W - 46}" y="20" width="26" height="${H - 40}" rx="3" fill="#c4c8cc"/>
+            ${rbCabGrille(u, gx, gy, gw, gh, '#1a1a1c')}<text x="${W / 2}" y="70" text-anchor="middle" dominant-baseline="middle" font-family="PKCrete,serif" font-size="30" fill="#dfe2e6" stroke="#3a3d42" stroke-width="0.8" paint-order="stroke">PeeBee</text>${rbCabCorners(W, H, '#8a8e92')}`;
+        return rbCabWrap(u, W, H, body, ['#242426', '#141416', '#0b0b0c'], 'perf');
+    },
+    // Mr. Y Maz 4x12 (Dr. Z) — black tolex, grey striated grille, the big jagged
+    // "Y" logo (parody of Dr. Z's "Z", same as the Mr. Y amps) + Legacy badge.
+    'Cab_GB412CMKII': u => {
+        const W = 444, H = 430, gx = 26, gy = 24, gw = W - 52, gh = H - 48;
+        const body = `${rbCabGrille(u, gx, gy, gw, gh, '#54565a')}
+            <rect x="${gx + gw - 60}" y="${gy + 14}" width="46" height="26" rx="3" fill="#f6f5f1" stroke="#28282c" stroke-width="1.2"/><text x="${gx + gw - 37}" y="${gy + 27}" text-anchor="middle" dominant-baseline="central" font-family="PKCrete,serif" font-size="12" fill="#1e1e22">Legacy</text>
+            <text x="222" y="228" text-anchor="middle" dominant-baseline="middle" font-family="PKAnton,sans-serif" font-size="112" fill="#eef0f2" stroke="#33234a" stroke-width="4" paint-order="stroke">Y</text>
+            ${rbCabCorners(W, H)}`;
+        return rbCabWrap(u, W, H, body, ['#242426', '#141416', '#0b0b0c'], 'zephyr');
+    },
+    // Edena (Eden) D-series bass cabs — see rbEdenCab.
+    'Bass_Cab_EDEND115XLT': u => rbEdenCab(u, 440, 424),
+    'Bass_Cab_EDEND212XLT': u => rbEdenCab(u, 452, 430),
+    'Bass_Cab_EDEND410XST': u => rbEdenCab(u, 448, 430),
+    'Bass_Cab_EDEND610XST': u => rbEdenCab(u, 470, 520),
+    // Lovolt (Hiwatt) bass 4x15 — silver grille, white piping, black "LOVOLT" plate.
+    'Bass_Cab_GB415BC': u => {
+        const W = 384, H = 540, gx = 26, gy = 24, gw = W - 52, gh = H - 48;
+        const body = `${rbCabGrille(u, gx, gy, gw, gh, '#5c5f63')}
+            <rect x="${gx + 1}" y="${gy + 1}" width="${gw - 2}" height="${gh - 2}" rx="4" fill="none" stroke="#eeece4" stroke-width="2.6"/>
+            ${rbCabPlate(W / 2, H * 0.42, 140, 32, 'LOVOLT', 'PKAnton,sans-serif', 21, '#111214', '#eef0f2', '#c8ccd0', true)}${rbCabCorners(W, H)}`;
+        return rbCabWrap(u, W, H, body, ['#242426', '#141416', '#0b0b0c'], 'silver');
+    },
+    // Freddy (Gallien-Krueger) bass cabs. 4x10 = older black-grille w/ the
+    // "FREDDY-KRUEGER" wordmark; 1x15/2x12 = Neo (chrome FK + NEO badges), silver
+    // grille on the 1x15, black on the 2x12.
+    'Bass_Cab_BT410BC': u => {
+        const W = 448, H = 430, gx = 24, gy = 22, gw = W - 48, gh = H - 44;
+        const body = `${rbCabGrille(u, gx, gy, gw, gh, '#0a0a0b')}
+            <rect x="${gx + 10}" y="${gy + 10}" width="34" height="26" rx="3" fill="#dfe2e6"/><text x="${gx + 27}" y="${gy + 24}" text-anchor="middle" dominant-baseline="central" font-family="PKAnton,serif" font-size="16" fill="#1a1c1f">FK</text>
+            <text x="${gx + 52}" y="${gy + 24}" dominant-baseline="central" font-family="PKBebas,serif" font-size="20" letter-spacing="1" fill="#eceef0">FREDDY-KRUEGER</text>${rbCabCorners(W, H)}`;
+        return rbCabWrap(u, W, H, body, ['#242426', '#141416', '#0b0b0c'], 'gkblack');
+    },
+    'Bass_Cab_BT115BC': u => {
+        const W = 440, H = 460, gx = 24, gy = 22, gw = W - 48, gh = H - 44;
+        const body = `${rbCabGrille(u, gx, gy, gw, gh, '#0a0a0b')}${rbGkBadge(W / 2, gy + 30)}${rbNeoBadge(gx + gw - 40, gy + gh - 24)}${rbCabCorners(W, H)}`;
+        return rbCabWrap(u, W, H, body, ['#242426', '#141416', '#0b0b0c'], 'gksilver');
+    },
+    'Bass_Cab_BT212BC': u => {
+        const W = 380, H = 520, gx = 24, gy = 22, gw = W - 48, gh = H - 44;
+        const body = `${rbCabGrille(u, gx, gy, gw, gh, '#0a0a0b')}${rbGkBadge(gx + 40, gy + 30)}${rbNeoBadge(gx + gw - 38, gy + gh - 24)}${rbCabCorners(W, H)}`;
+        return rbCabWrap(u, W, H, body, ['#242426', '#141416', '#0b0b0c'], 'gkblack');
+    },
+    // SBR (SWR Workingman's) 2x10 — charcoal tolex, black grid grille, white "SBR".
+    'Bass_Cab_CH210BC': u => {
+        const W = 480, H = 360, gx = 24, gy = 22, gw = W - 48, gh = H - 44;
+        const body = `${rbCabGrille(u, gx, gy, gw, gh, '#0a0a0b')}
+            <text x="${gx + 14}" y="${gy + 22}" dominant-baseline="central" font-family="PKAnton,serif" font-size="24" letter-spacing="1" fill="#eceef0">SBR</text>
+            <text x="${gx + 14}" y="${gy + 40}" dominant-baseline="central" font-family="PKBebas,serif" font-size="9" letter-spacing="1.5" fill="#b8bcc0">WORKINGMAN</text>${rbCabCorners(W, H, '#8a8e92')}`;
+        return rbCabWrap(u, W, H, body, ['#2e2e30', '#1e1e20', '#141416'], 'gkblack');
+    },
+    // Sharke (Hartke) bass cabs — aluminium cones (see rbHartkeCab).
+    'Bass_Cab_CS410BC': u => rbHartkeCab(u, { w: 448, h: 430, cones: [[0.28, 0.34, 0.22], [0.72, 0.34, 0.22], [0.28, 0.74, 0.22], [0.72, 0.74, 0.22]], lc: '#d83a2a', lx: 0.5, ly: 24, ls: 26 }),
+    'Bass_Cab_CS15BC':  u => rbHartkeCab(u, { w: 440, h: 430, cones: [[0.5, 0.56, 0.34]], lc: '#eceef0', lx: 0.5, ly: 30, ls: 30 }),
+    'Bass_Cab_CS112BC': u => rbHartkeCab(u, { w: 480, h: 360, cones: [[0.5, 0.56, 0.34]], lc: '#d83a2a', lx: 0.42, ly: 28, ls: 26 }),
+    // SBR (SWR Goliath) 4x10 — silver grid grille, "SBR" + "GOLIATH" badges, a
+    // silver diamond tweeter.
+    'Bass_Cab_CH410BC': u => {
+        const W = 380, H = 520, gx = 24, gy = 22, gw = W - 48, gh = H - 44;
+        const body = `${rbCabGrille(u, gx, gy, gw, gh, '#0a0a0b')}
+            <rect x="${gx + 8}" y="${gy + 8}" width="52" height="30" rx="3" fill="#0c0c0d" stroke="#c8ccd0" stroke-width="1.4"/><text x="${gx + 34}" y="${gy + 24}" text-anchor="middle" dominant-baseline="central" font-family="PKAnton,serif" font-size="18" fill="#dfe2e6">SBR</text>
+            <rect x="${gx + gw - 72}" y="${gy + 8}" width="64" height="26" rx="3" fill="#0c0c0d" stroke="#b8bcc0" stroke-width="1"/><text x="${gx + gw - 40}" y="${gy + 21}" text-anchor="middle" dominant-baseline="central" font-family="PKBebas,serif" font-size="12" letter-spacing="1" fill="#dfe2e6">GOLIATH</text>
+            <g transform="translate(${gx + gw * 0.5} ${gy + gh * 0.5}) rotate(45)"><rect x="-22" y="-22" width="44" height="44" rx="4" fill="#cfd3d7" stroke="#8a8e92"/></g>${rbCabCorners(W, H, '#9a9ea2')}`;
+        return rbCabWrap(u, W, H, body, ['#2e2e30', '#1e1e20', '#141416'], 'gksilver');
+    },
+    // Seismik (Seismic Audio) 3x10 — black hex grille, white "SEISMIK", side handle.
+    'Bass_Cab_CH310BC': u => {
+        const W = 460, H = 420, gx = 64, gy = 22, gw = W - 88, gh = H - 44;
+        const body = `<rect x="24" y="${H * 0.30}" width="30" height="${H * 0.34}" rx="4" fill="#080809" stroke="#000"/>
+            ${rbCabGrille(u, gx, gy, gw, gh, '#141416')}
+            <text x="${gx + gw * 0.62}" y="${gy + gh * 0.44}" text-anchor="middle" dominant-baseline="middle" font-family="PKAnton,serif" font-size="26" letter-spacing="1" fill="#eceef0">SEISMIK</text>${rbCabCorners(W, H, '#9a9ea2')}`;
+        return rbCabWrap(u, W, H, body, ['#242426', '#141416', '#0b0b0c'], 'perf');
+    },
+    // ── NOVELTY voicings (no real brand — generic iconic objects) ─────────────
+    // Gramophone — wooden box + big fluted brass morning-glory horn + crank.
+    'Cab_GRAMOPHONE': u => `<svg viewBox="0 0 440 470" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="wd${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6b3f22"/><stop offset=".5" stop-color="#4a2a15"/><stop offset="1" stop-color="#2f1a0d"/></linearGradient>
+        <radialGradient id="br${u}" cx="40%" cy="36%" r="75%"><stop offset="0" stop-color="#ffeaa6"/><stop offset=".42" stop-color="#e6b85c"/><stop offset=".76" stop-color="#a9772c"/><stop offset="1" stop-color="#6a4818"/></radialGradient></defs>
+        <rect x="96" y="300" width="252" height="150" rx="12" fill="url(#wd${u})" stroke="#000" stroke-width="2"/>
+        <rect x="112" y="316" width="220" height="118" rx="6" fill="none" stroke="#000" stroke-opacity=".35"/>
+        ${Array.from({ length: 6 }, (_, i) => `<line x1="112" y1="${330 + i * 18}" x2="332" y2="${330 + i * 18}" stroke="#000" stroke-opacity=".12"/>`).join('')}
+        <circle cx="348" cy="360" r="9" fill="#c9a24a" stroke="#6a4818"/><rect x="352" y="356" width="52" height="8" rx="4" fill="#b9933f" stroke="#6a4818"/>
+        <path d="M222 250 Q150 300 132 322" fill="none" stroke="#a9772c" stroke-width="13" stroke-linecap="round"/>
+        <ellipse cx="222" cy="150" rx="150" ry="98" fill="url(#br${u})" stroke="#6a4818" stroke-width="2.5"/>
+        <ellipse cx="222" cy="150" rx="150" ry="98" fill="none" stroke="#fff3cf" stroke-opacity=".35" stroke-width="1.4"/>
+        <ellipse cx="222" cy="152" rx="104" ry="64" fill="#4a3212"/>
+        <ellipse cx="222" cy="152" rx="104" ry="64" fill="none" stroke="#8a5f22" stroke-width="1.4"/>
+        ${Array.from({ length: 16 }, (_, i) => { const a = (i / 16) * Math.PI * 2; return `<line x1="${(222 + Math.cos(a) * 104).toFixed(1)}" y1="${(152 + Math.sin(a) * 64).toFixed(1)}" x2="${(222 + Math.cos(a) * 148).toFixed(1)}" y2="${(150 + Math.sin(a) * 96).toFixed(1)}" stroke="#6a4818" stroke-opacity=".45"/>`; }).join('')}
+        <ellipse cx="222" cy="152" rx="30" ry="18" fill="#2a1c0a"/></svg>`,
+    // Console radio — arched walnut cabinet, glowing round dial, slatted grille.
+    'Cab_CABINETRADIO': u => `<svg viewBox="0 0 360 460" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="wd${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a4a26"/><stop offset=".5" stop-color="#5a3419"/><stop offset="1" stop-color="#3a2010"/></linearGradient>
+        <radialGradient id="dl${u}" cx="50%" cy="45%" r="60%"><stop offset="0" stop-color="#ffe6a2"/><stop offset=".6" stop-color="#e0a63c"/><stop offset="1" stop-color="#7a531c"/></radialGradient>
+        <linearGradient id="cl${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c9b184"/><stop offset="1" stop-color="#9a8058"/></linearGradient></defs>
+        <path d="M28 452 L28 200 Q28 44 180 44 Q332 44 332 200 L332 452 Z" fill="url(#wd${u})" stroke="#000" stroke-width="2"/>
+        <path d="M44 210 Q44 64 180 64 Q316 64 316 210" fill="none" stroke="#000" stroke-opacity=".28" stroke-width="1.4"/>
+        <circle cx="180" cy="150" r="56" fill="url(#dl${u})" stroke="#3a2010" stroke-width="3"/>
+        <circle cx="180" cy="150" r="56" fill="none" stroke="#ffe6a2" stroke-opacity=".5" stroke-width="1"/>
+        ${Array.from({ length: 24 }, (_, i) => { const a = (i / 24) * Math.PI * 2; return `<line x1="${(180 + Math.cos(a) * 47).toFixed(1)}" y1="${(150 + Math.sin(a) * 47).toFixed(1)}" x2="${(180 + Math.cos(a) * 53).toFixed(1)}" y2="${(150 + Math.sin(a) * 53).toFixed(1)}" stroke="#4a2f12" stroke-width="1"/>`; }).join('')}
+        <line x1="180" y1="150" x2="212" y2="126" stroke="#b5322a" stroke-width="2.4" stroke-linecap="round"/><circle cx="180" cy="150" r="5" fill="#3a2010"/>
+        <rect x="70" y="238" width="220" height="150" rx="10" fill="#2a1808"/>
+        <rect x="78" y="246" width="204" height="134" rx="7" fill="url(#cl${u})"/>
+        ${Array.from({ length: 9 }, (_, i) => `<rect x="${86 + i * 22}" y="246" width="8" height="134" rx="4" fill="#4a2f16"/>`).join('')}
+        <circle cx="96" cy="418" r="15" fill="#2a1808" stroke="#c9a24a" stroke-width="1.4"/><circle cx="264" cy="418" r="15" fill="#2a1808" stroke="#c9a24a" stroke-width="1.4"/></svg>`,
+    // Jukebox — Wurlitzer-style arch, amber panels, chrome pilasters, bubble tubes.
+    'Cab_JUKEBOX': u => `<svg viewBox="0 0 380 500" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="wd${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a4a26"/><stop offset="1" stop-color="#3a2010"/></linearGradient>
+        <linearGradient id="am${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd66a"/><stop offset=".5" stop-color="#e8a02c"/><stop offset="1" stop-color="#c26a1a"/></linearGradient>
+        <linearGradient id="cr${u}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8a8e92"/><stop offset=".5" stop-color="#eef1f4"/><stop offset="1" stop-color="#8a8e92"/></linearGradient>
+        <linearGradient id="tb${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff5a4a"/><stop offset=".5" stop-color="#ffd05a"/><stop offset="1" stop-color="#4aa0ff"/></linearGradient></defs>
+        <path d="M40 492 L40 200 Q40 48 190 48 Q340 48 340 200 L340 492 Z" fill="url(#wd${u})" stroke="#000" stroke-width="2"/>
+        <path d="M64 250 L64 210 Q64 74 190 74 Q316 74 316 210 L316 250 Z" fill="url(#am${u})" stroke="#7a3c12" stroke-width="2"/>
+        ${Array.from({ length: 7 }, (_, i) => { const a = (i / 6) * Math.PI; const cx = 190 - Math.cos(a) * 126, cy = 210 - Math.sin(a) * 120; return `<line x1="190" y1="210" x2="${cx.toFixed(1)}" y2="${cy.toFixed(1)}" stroke="#c26a1a" stroke-opacity=".55" stroke-width="2"/>`; }).join('')}
+        <path d="M64 250 L64 210 Q64 74 190 74 Q316 74 316 210 L316 250" fill="none" stroke="url(#cr${u})" stroke-width="6"/>
+        <rect x="52" y="250" width="26" height="200" rx="8" fill="url(#tb${u})" stroke="#6a6d71"/><rect x="302" y="250" width="26" height="200" rx="8" fill="url(#tb${u})" stroke="#6a6d71"/>
+        ${Array.from({ length: 5 }, (_, i) => `<circle cx="65" cy="${430 - i * 40}" r="4" fill="#fff" opacity=".7"/><circle cx="315" cy="${412 - i * 40}" r="4" fill="#fff" opacity=".7"/>`).join('')}
+        <rect x="94" y="262" width="192" height="120" rx="10" fill="#1a0f06"/>
+        ${Array.from({ length: 7 }, (_, i) => `<rect x="104" y="${272 + i * 15}" width="172" height="6" rx="3" fill="url(#cr${u})" opacity=".85"/>`).join('')}
+        <rect x="94" y="398" width="192" height="70" rx="10" fill="#b5322a" stroke="#7a1f18" stroke-width="2"/>
+        <rect x="150" y="414" width="80" height="16" rx="8" fill="#ffd05a"/><circle cx="190" cy="450" r="9" fill="#1a0f06" stroke="#ffd05a"/></svg>`,
+    // Boom box — wide silver/black, twin round speakers, cassette + controls, handle.
+    'Cab_BOOMBOX': u => `<svg viewBox="0 0 560 300" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="bx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a4d52"/><stop offset=".5" stop-color="#2b2d31"/><stop offset="1" stop-color="#17181b"/></linearGradient>
+        <radialGradient id="sp${u}" cx="42%" cy="38%" r="72%"><stop offset="0" stop-color="#3a3d42"/><stop offset="1" stop-color="#0c0d0f"/></radialGradient></defs>
+        <path d="M150 60 Q150 24 200 24 L360 24 Q410 24 410 60" fill="none" stroke="#1b1c1f" stroke-width="12" stroke-linecap="round"/>
+        <rect x="20" y="58" width="520" height="220" rx="18" fill="url(#bx${u})" stroke="#000" stroke-width="2"/>
+        <rect x="20" y="58" width="520" height="26" rx="12" fill="#fff" opacity=".06"/>
+        ${[110, 450].map(cx => `<circle cx="${cx}" cy="172" r="80" fill="#0a0b0c"/><circle cx="${cx}" cy="172" r="72" fill="url(#sp${u})" stroke="#55595e" stroke-width="2"/><circle cx="${cx}" cy="172" r="50" fill="none" stroke="#6a6e73" stroke-opacity=".5"/><circle cx="${cx}" cy="172" r="24" fill="#141517" stroke="#4a4e52"/>`).join('')}
+        <rect x="212" y="96" width="136" height="80" rx="6" fill="#0c0d0f" stroke="#4a4e52"/><circle cx="246" cy="136" r="15" fill="#2a2c30" stroke="#5a5e63"/><circle cx="314" cy="136" r="15" fill="#2a2c30" stroke="#5a5e63"/>
+        ${Array.from({ length: 6 }, (_, i) => `<rect x="${218 + i * 22}" y="192" width="16" height="10" rx="2" fill="#3a3d42" stroke="#55595e"/>`).join('')}
+        ${Array.from({ length: 5 }, (_, i) => `<rect x="${216 + i * 26}" y="216" width="6" height="40" rx="3" fill="#23252a"/><circle cx="${219 + i * 26}" cy="${230 + (i % 2) * 12}" r="4.5" fill="#cfd3d7"/>`).join('')}</svg>`,
+    // Audiophile hi-fi — sleek matte-black tower, tweeter + mid + woofer.
+    'Cab_AUDIOPHILE': u => `<svg viewBox="0 0 300 480" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="bd${u}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0c0d0f"/><stop offset=".5" stop-color="#26282c"/><stop offset="1" stop-color="#0a0b0d"/></linearGradient>
+        <radialGradient id="cn${u}" cx="42%" cy="38%" r="72%"><stop offset="0" stop-color="#33363b"/><stop offset="1" stop-color="#08090a"/></radialGradient>
+        <radialGradient id="tw${u}" cx="42%" cy="36%" r="70%"><stop offset="0" stop-color="#e9edf1"/><stop offset=".6" stop-color="#9a9ea3"/><stop offset="1" stop-color="#4a4e52"/></radialGradient></defs>
+        <rect x="66" y="18" width="168" height="446" rx="16" fill="url(#bd${u})" stroke="#000" stroke-width="2"/>
+        <rect x="74" y="26" width="10" height="430" rx="5" fill="#fff" opacity=".08"/>
+        <circle cx="150" cy="92" r="26" fill="#0a0b0c"/><circle cx="150" cy="92" r="19" fill="url(#tw${u})"/>
+        <circle cx="150" cy="188" r="42" fill="#0a0b0c"/><circle cx="150" cy="188" r="35" fill="url(#cn${u})" stroke="#44474c"/><circle cx="150" cy="188" r="13" fill="#141517"/>
+        <circle cx="150" cy="330" r="66" fill="#0a0b0c"/><circle cx="150" cy="330" r="58" fill="url(#cn${u})" stroke="#44474c" stroke-width="2"/><circle cx="150" cy="330" r="40" fill="none" stroke="#4a4e52" stroke-opacity=".5"/><circle cx="150" cy="330" r="20" fill="#141517" stroke="#3a3d40"/>
+        <rect x="132" y="426" width="36" height="12" rx="3" fill="#3a3d42" stroke="#55595e"/></svg>`,
+    // Vintage hi-fi — walnut cabinet, tan grille cloth, drivers behind the cloth.
+    'Cab_VINTAGEHIFI': u => `<svg viewBox="0 0 360 440" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="wd${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6e4526"/><stop offset="1" stop-color="#3f2512"/></linearGradient>
+        <linearGradient id="cl${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cbb488"/><stop offset="1" stop-color="#9c8258"/></linearGradient>
+        <pattern id="cw${u}" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M0 0H5M0 2.5H5" stroke="#7a6440" stroke-opacity=".35"/><path d="M0 0V5M2.5 0V5" stroke="#e0cfa6" stroke-opacity=".3"/></pattern></defs>
+        <rect x="26" y="18" width="308" height="404" rx="10" fill="url(#wd${u})" stroke="#000" stroke-width="2"/>
+        <rect x="46" y="38" width="268" height="364" rx="6" fill="url(#cl${u})"/>
+        <rect x="46" y="38" width="268" height="364" rx="6" fill="url(#cw${u})"/>
+        <rect x="46" y="38" width="268" height="364" rx="6" fill="none" stroke="#2f1c0e" stroke-width="2"/>
+        <circle cx="180" cy="300" r="82" fill="#000" opacity=".16"/><circle cx="180" cy="300" r="82" fill="none" stroke="#2f1c0e" stroke-opacity=".3" stroke-width="1.4"/>
+        <circle cx="180" cy="118" r="36" fill="#000" opacity=".14"/><circle cx="180" cy="118" r="36" fill="none" stroke="#2f1c0e" stroke-opacity=".28"/>
+        <rect x="150" y="392" width="60" height="16" rx="3" fill="#2f1c0e"/></svg>`,
+    // PA full-range (compact) — black moulded box, metal grille, integrated horn.
+    'Cab_PA600C': u => `<svg viewBox="0 0 360 460" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="bx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2c2f"/><stop offset=".5" stop-color="#161719"/><stop offset="1" stop-color="#0b0c0d"/></linearGradient>
+        <pattern id="pf${u}" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#1c1d20"/><circle cx="4" cy="4" r="2.4" fill="#050506"/></pattern></defs>
+        <path d="M74 26 L286 26 L322 452 L38 452 Z" fill="url(#bx${u})" stroke="#000" stroke-width="2"/>
+        <path d="M88 44 L272 44 L302 436 L58 436 Z" fill="url(#pf${u})" stroke="#000" stroke-opacity=".5"/>
+        <ellipse cx="180" cy="330" rx="96" ry="90" fill="#000" opacity=".22"/><ellipse cx="180" cy="330" rx="96" ry="90" fill="none" stroke="#3a3d40" stroke-opacity=".4"/>
+        <rect x="112" y="86" width="136" height="70" rx="10" fill="#000" opacity=".28"/><path d="M120 92 L240 92 L232 150 L128 150 Z" fill="none" stroke="#3a3d40" stroke-opacity=".45"/>
+        <rect x="150" y="16" width="60" height="14" rx="7" fill="#0a0b0c" stroke="#3a3d40"/></svg>`,
+    // PA full-range — taller black moulded box, single driver + bullet horn.
+    'Cab_PA999C': u => `<svg viewBox="0 0 340 470" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="bx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2c2f"/><stop offset=".5" stop-color="#161719"/><stop offset="1" stop-color="#0b0c0d"/></linearGradient>
+        <pattern id="pf${u}" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#202124"/><circle cx="4" cy="4" r="2.3" fill="#060607"/></pattern>
+        <radialGradient id="hn${u}" cx="46%" cy="40%" r="70%"><stop offset="0" stop-color="#4a4e52"/><stop offset="1" stop-color="#111214"/></radialGradient></defs>
+        <rect x="40" y="20" width="260" height="430" rx="14" fill="url(#bx${u})" stroke="#000" stroke-width="2"/>
+        <rect x="56" y="36" width="228" height="398" rx="8" fill="url(#pf${u})" stroke="#000" stroke-opacity=".5"/>
+        <circle cx="170" cy="320" r="98" fill="#000" opacity=".22"/><circle cx="170" cy="320" r="98" fill="none" stroke="#3a3d40" stroke-opacity=".4"/>
+        <ellipse cx="170" cy="130" rx="78" ry="50" fill="url(#hn${u})" stroke="#3a3d40"/><ellipse cx="170" cy="130" rx="26" ry="17" fill="#0a0b0c" stroke="#4a4e52"/>
+        <rect x="150" y="454" width="40" height="12" rx="6" fill="#0a0b0c" stroke="#3a3d40"/></svg>`,
+    // PA 15" two-way — black box, wide horn on top, big 15" woofer grille below.
+    'Cab_PA1152C': u => `<svg viewBox="0 0 380 470" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="bx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2c2f"/><stop offset=".5" stop-color="#161719"/><stop offset="1" stop-color="#0b0c0d"/></linearGradient>
+        <pattern id="pf${u}" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#202124"/><circle cx="4" cy="4" r="2.3" fill="#060607"/></pattern>
+        <linearGradient id="hn${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3d42"/><stop offset="1" stop-color="#141517"/></linearGradient></defs>
+        <rect x="30" y="20" width="320" height="430" rx="12" fill="url(#bx${u})" stroke="#000" stroke-width="2"/>
+        <path d="M64 52 L316 52 L288 168 L92 168 Z" fill="url(#hn${u})" stroke="#000" stroke-opacity=".5"/>
+        <path d="M150 60 L230 60 L206 160 L174 160 Z" fill="#0a0b0c" stroke="#4a4e52"/><ellipse cx="190" cy="110" rx="14" ry="10" fill="#26282b"/>
+        <circle cx="190" cy="320" r="118" fill="#0a0b0c"/><circle cx="190" cy="320" r="110" fill="url(#pf${u})" stroke="#3a3d40" stroke-width="2"/>
+        <circle cx="190" cy="320" r="110" fill="#000" opacity=".14"/><circle cx="190" cy="320" r="74" fill="none" stroke="#3a3d40" stroke-opacity=".4"/><circle cx="190" cy="320" r="30" fill="#141517" stroke="#3a3d40"/></svg>`,
+};
+// Shared Citrus/Orange badge: the colour crest (quartered shield + crown) with
+// the "Citrus" bubble-logo plaque below (PKGraffiti — the amps' Orange font).
+// Ids suffixed per instance (u) so two Orange cabs in one document don't collide.
+function rbCitrusBadge(u, cx, ty, s) {
+    const sw = 26 * s, sh = 19 * s, top = ty + 11 * s, sx = cx;
+    const shield = `M${sx - sw / 2} ${top} L${sx + sw / 2} ${top} L${sx + sw / 2} ${top + sh * 0.5} Q${sx + sw / 2} ${top + sh * 0.95} ${sx} ${top + sh} Q${sx - sw / 2} ${top + sh * 0.95} ${sx - sw / 2} ${top + sh * 0.5} Z`;
+    const crown = `M${sx - sw * 0.44} ${top} L${sx - sw * 0.44} ${top - 8 * s} L${sx - sw * 0.20} ${top - 2 * s} L${sx} ${top - 10 * s} L${sx + sw * 0.20} ${top - 2 * s} L${sx + sw * 0.44} ${top - 8 * s} L${sx + sw * 0.44} ${top} Z`;
+    const lx = cx - 40 * s, ly = ty + 42 * s, lw = 80 * s, lh = 24 * s;
+    return `<clipPath id="sh${u}"><path d="${shield}"/></clipPath>
+        <path d="${crown}" fill="#ecab26" stroke="#1a1614" stroke-width="0.8"/>
+        <g clip-path="url(#sh${u})"><rect x="${sx - sw / 2}" y="${top}" width="${sw / 2}" height="${sh * 0.55}" fill="#dc3a2e"/><rect x="${sx}" y="${top}" width="${sw / 2}" height="${sh * 0.55}" fill="#409e58"/><rect x="${sx - sw / 2}" y="${top + sh * 0.5}" width="${sw / 2}" height="${sh * 0.6}" fill="#3a74ce"/><rect x="${sx}" y="${top + sh * 0.5}" width="${sw / 2}" height="${sh * 0.6}" fill="#ecab26"/></g>
+        <path d="${shield}" fill="none" stroke="#f7f5f0" stroke-width="2.2"/><path d="${shield}" fill="none" stroke="#1a1614" stroke-width="1"/>
+        <rect x="${lx}" y="${ly}" width="${lw}" height="${lh}" rx="3" fill="#f7f6f1" stroke="#1a1614" stroke-width="1.4"/>
+        <text x="${cx}" y="${ly + lh * 0.60}" text-anchor="middle" dominant-baseline="middle" font-family="PKGraffiti,cursive" font-size="${18 * s}" fill="#1a1614">Citrus</text>`;
+}
+// Full Orange cab from opts: {w,h, black?, grille:'tan'|'black', piping?, port?,
+// badgeY (fraction of grille height), badgeS}.
+function rbCitrusCab(u, o) {
+    const W = o.w, H = o.h;
+    const tol = o.black
+        ? '<stop offset="0" stop-color="#2a2a2c"/><stop offset=".5" stop-color="#161618"/><stop offset="1" stop-color="#0c0c0d"/>'
+        : '<stop offset="0" stop-color="#f5872c"/><stop offset=".5" stop-color="#e2710f"/><stop offset="1" stop-color="#bd5d0c"/>';
+    const gr = o.grille === 'black'
+        ? '<rect width="6" height="6" fill="#0c0c0d"/><path d="M0 0H6M0 3H6" stroke="#1c1c20" stroke-width="1"/><path d="M0 0V6M3 0V6" stroke="#171719" stroke-width="1"/>'
+        : '<rect width="6" height="6" fill="#c3b184"/><path d="M0 0H6M0 3H6" stroke="#a89768" stroke-width="1"/><path d="M0 0V6M3 0V6" stroke="#dcca9c" stroke-opacity=".6" stroke-width="1"/>';
+    const gx = o.port ? 74 : 26, gy = 24, gw = W - gx - 26, gh = H - 48;
+    const port = o.port ? `<rect x="30" y="30" width="34" height="${H - 60}" rx="5" fill="#080809" stroke="#000" stroke-width="1"/>` : '';
+    const piping = o.piping ? `<rect x="${gx + 3}" y="${gy + 3}" width="${gw - 6}" height="${gh - 6}" rx="4" fill="none" stroke="#efeee8" stroke-width="2.4"/>` : '';
+    const k = 40;
+    const corners = `<g fill="#0a0a0b" stroke="#000" stroke-width="0.5"><path d="M1 34 V15 A14 14 0 0 1 15 1 H${k} Q18 3 15 14 Q3 18 1 ${k} Z"/><path d="M${W - 1} 34 V15 A14 14 0 0 0 ${W - 15} 1 H${W - k} Q${W - 18} 3 ${W - 15} 14 Q${W - 3} 18 ${W - 1} ${k} Z"/><path d="M1 ${H - 34} V${H - 15} A14 14 0 0 0 15 ${H - 1} H${k} Q18 ${H - 3} 15 ${H - 14} Q3 ${H - 18} 1 ${H - k} Z"/><path d="M${W - 1} ${H - 34} V${H - 15} A14 14 0 0 1 ${W - 15} ${H - 1} H${W - k} Q${W - 18} ${H - 3} ${W - 15} ${H - 14} Q${W - 3} ${H - 18} ${W - 1} ${H - k} Z"/></g>`;
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="tx${u}" x1="0" y1="0" x2="0" y2="1">${tol}</linearGradient>
+        <pattern id="dm${u}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H9M0 4.5H9" stroke="#000" stroke-opacity=".12" stroke-width="1"/><path d="M2 0H11" stroke="#fff" stroke-opacity=".06" stroke-width="1"/></pattern>
+        <pattern id="gr${u}" width="6" height="6" patternUnits="userSpaceOnUse">${gr}</pattern></defs>
+        <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="14" fill="url(#tx${u})" stroke="#000" stroke-width="2"/>
+        <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="14" fill="url(#dm${u})"/>
+        ${port}
+        <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="6" fill="#0c0b09"/>
+        <rect x="${gx + 5}" y="${gy + 5}" width="${gw - 10}" height="${gh - 10}" rx="4" fill="url(#gr${u})"/>
+        ${piping}
+        ${rbCitrusBadge(u, gx + gw / 2, gy + gh * o.badgeY, o.badgeS)}
+        ${corners}</svg>`;
+}
+// Vox/"Box" cabs: cream/black/navy tolex, the signature colour diamond grille
+// cloth (or a subtle black-on-black diamond), cream/white piping, a chrome/gold
+// "BOX" wordmark (PKBebas — the amps' Box font). opts: {w,h, tolex, grille,
+// piping?, logo:'chrome'|'gold', logoL (logo on the left), logoS?, port?, corners?}.
+function rbBoxCab(u, o) {
+    const W = o.w, H = o.h;
+    const TOL = { cream: ['#efe6cf', '#ded2b2', '#c9bd98'], black: ['#26262a', '#161618', '#0c0c0d'], navy: ['#232a36', '#151a22', '#0c0f14'] };
+    const t = TOL[o.tolex] || TOL.black;
+    let pat, gbg;
+    if (o.grille === 'blackdiamond') {
+        pat = `<pattern id="di${u}" width="30" height="30" patternUnits="userSpaceOnUse"><rect width="30" height="30" fill="#0d0d0e"/><path d="M-2 32 L32 -2 M-2 -2 L32 32" stroke="#242427" stroke-width="1.5"/></pattern>`;
+        gbg = '#0c0c0d';
+    } else {
+        pat = `<pattern id="di${u}" width="28" height="28" patternUnits="userSpaceOnUse"><rect width="28" height="28" fill="#33261a"/><path d="M-2 30 L30 -2 M-2 -2 L30 30" stroke="#c2a668" stroke-width="1.5"/><path d="M-2 30 L30 -2" transform="translate(3.5,0)" stroke="#b5482e" stroke-width="0.7"/><path d="M-2 -2 L30 30" transform="translate(-3.5,0)" stroke="#5f7d3c" stroke-width="0.7"/></pattern>`;
+        gbg = '#2a1f14';
+    }
+    const gx = 26, gy = 24, gw = W - 52, gh = H - 48;
+    // logoPanel (AC30): a black band across the top carries the logo, split from
+    // the grille by a gold stripe; the grille fills the area below it.
+    const panelH = o.logoPanel ? Math.round(gh * 0.24) : 0;
+    const grY = gy + panelH, grH = gh - panelH;
+    const panel = o.logoPanel
+        ? `<rect x="${gx}" y="${gy}" width="${gw}" height="${panelH + 4}" rx="5" fill="#141416"/><rect x="${gx}" y="${grY - 2}" width="${gw}" height="4" fill="#bfa25a"/>`
+        : '';
+    const piping = o.piping ? `<rect x="${gx + 2}" y="${gy + 2}" width="${gw - 4}" height="${gh - 4}" rx="4" fill="none" stroke="${o.piping}" stroke-width="3"/>` : '';
+    const lx = o.logoPanel ? gx + gw * 0.135 : (o.logoL ? gx + gw * 0.16 : gx + gw * 0.84);
+    const ly = o.logoPanel ? gy + panelH * 0.54 : grY + grH * 0.13;
+    const lfill = o.logo === 'gold' ? '#c9ab5e' : '#d9dde2';
+    const lstroke = o.logo === 'gold' ? '#6a5320' : '#3a3d42';
+    const logo = `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-family="PKBebas,Georgia,serif" font-size="${34 * (o.logoS || 1)}" letter-spacing="2" fill="${lfill}" stroke="${lstroke}" stroke-width="1.1" paint-order="stroke">BOX</text>`;
+    const port = o.port ? `<rect x="${W - 58}" y="${H * 0.34}" width="22" height="${H * 0.28}" rx="4" fill="#0a0a0b" stroke="#000"/>` : '';
+    const k = 38;
+    const corners = o.corners ? `<g fill="#0a0a0b"><path d="M1 32 V15 A14 14 0 0 1 15 1 H${k} Q17 3 15 13 Q3 17 1 ${k} Z"/><path d="M${W - 1} 32 V15 A14 14 0 0 0 ${W - 15} 1 H${W - k} Q${W - 17} 3 ${W - 15} 13 Q${W - 3} 17 ${W - 1} ${k} Z"/><path d="M1 ${H - 32} V${H - 15} A14 14 0 0 0 15 ${H - 1} H${k} Q17 ${H - 3} 15 ${H - 13} Q3 ${H - 17} 1 ${H - k} Z"/><path d="M${W - 1} ${H - 32} V${H - 15} A14 14 0 0 1 ${W - 15} ${H - 1} H${W - k} Q${W - 17} ${H - 3} ${W - 15} ${H - 13} Q${W - 3} ${H - 17} ${W - 1} ${H - k} Z"/></g>` : '';
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="tx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${t[0]}"/><stop offset=".5" stop-color="${t[1]}"/><stop offset="1" stop-color="${t[2]}"/></linearGradient>
+        <pattern id="dm${u}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H9M0 4.5H9" stroke="#000" stroke-opacity=".10" stroke-width="1"/></pattern>
+        ${pat}</defs>
+        <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="13" fill="url(#tx${u})" stroke="#000" stroke-width="2"/>
+        <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="13" fill="url(#dm${u})"/>
+        ${port}
+        <rect x="${gx}" y="${grY}" width="${gw}" height="${grH}" rx="5" fill="${gbg}"/>
+        <rect x="${gx + 4}" y="${grY + 4}" width="${gw - 8}" height="${grH - 8}" rx="3" fill="url(#di${u})"/>
+        ${panel}
+        ${piping}
+        ${logo}
+        ${corners}</svg>`;
+}
+// Fender/"Bender" cabs: black tolex, silverface grille (grid or horizontal
+// stripe), a chrome diagonal "Bender" script (PKInk — the amps' Bender font).
+// opts: {w,h, grille:'grid'|'stripe', logoL (logo on the left), logoS?,
+// corners:'black'|'white'}.
+function rbBenderCab(u, o) {
+    const W = o.w, H = o.h;
+    const pat = o.grille === 'stripe'
+        ? `<pattern id="sg${u}" width="4" height="5" patternUnits="userSpaceOnUse"><rect width="4" height="5" fill="#a9adb1"/><rect width="4" height="1.6" fill="#e7e9ea"/><rect y="2.6" width="4" height="1.6" fill="#45484b"/></pattern>`
+        : `<pattern id="sg${u}" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="#adb1b5"/><path d="M0 0H5M0 2.5H5" stroke="#797d81" stroke-width="0.7"/><path d="M0 0V5M2.5 0V5" stroke="#c8ccd0" stroke-opacity=".7" stroke-width="0.7"/></pattern>`;
+    const gx = 24, gy = 22, gw = W - 48, gh = H - 44;
+    // Centre the "Bender" script a fixed distance from the grille edge (≈ its
+    // half-width + a margin for the tilt/skew) so it never spills off the side on
+    // a narrow cab (the old fraction-of-width inset clipped the 4x10 / 2x15).
+    const fs = 40 * (o.logoS || 1);
+    const pad = fs * 1.6 + 16;
+    const lx = o.logoL ? gx + pad : gx + gw - pad, ly = gy + gh * 0.10;
+    const logo = `<g transform="translate(${lx} ${ly}) rotate(-8) skewX(-10)"><text x="0" y="0" text-anchor="middle" dominant-baseline="middle" font-family="PKInk,cursive" font-size="${fs}" fill="#e9ebee" stroke="#26282b" stroke-width="2.2" paint-order="stroke">Bender</text></g>`;
+    const cc = o.corners === 'white' ? '#e8e6df' : '#0a0a0b';
+    const k = 36;
+    const corners = `<g fill="${cc}"><path d="M1 32 V15 A14 14 0 0 1 15 1 H${k} Q17 3 15 13 Q3 17 1 ${k} Z"/><path d="M${W - 1} 32 V15 A14 14 0 0 0 ${W - 15} 1 H${W - k} Q${W - 17} 3 ${W - 15} 13 Q${W - 3} 17 ${W - 1} ${k} Z"/><path d="M1 ${H - 32} V${H - 15} A14 14 0 0 0 15 ${H - 1} H${k} Q17 ${H - 3} 15 ${H - 13} Q3 ${H - 17} 1 ${H - k} Z"/><path d="M${W - 1} ${H - 32} V${H - 15} A14 14 0 0 1 ${W - 15} ${H - 1} H${W - k} Q${W - 17} ${H - 3} ${W - 15} ${H - 13} Q${W - 3} ${H - 17} ${W - 1} ${H - k} Z"/></g>`;
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="tx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#242426"/><stop offset=".5" stop-color="#141416"/><stop offset="1" stop-color="#0b0b0c"/></linearGradient>
+        <pattern id="dm${u}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H9M0 4.5H9" stroke="#000" stroke-opacity=".22" stroke-width="1"/></pattern>
+        ${pat}</defs>
+        <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="13" fill="url(#tx${u})" stroke="#000" stroke-width="2"/>
+        <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="13" fill="url(#dm${u})"/>
+        <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="5" fill="#5c5f63"/>
+        <rect x="${gx + 4}" y="${gy + 4}" width="${gw - 8}" height="${gh - 8}" rx="3" fill="url(#sg${u})"/>
+        <rect x="${gx + 2}" y="${gy + 2}" width="${gw - 4}" height="${gh - 4}" rx="4" fill="none" stroke="#0c0c0d" stroke-width="2"/>
+        ${logo}
+        ${corners}</svg>`;
+}
+// Mesa/"Silla" chrome oval badge: "SILLA" (PKAnton, the amps' Silla font) over an
+// "ENGINEERING" strip — the Mesa Engineering oval, cloned.
+function rbSillaBadge(u, cx, cy, s) {
+    const rx = 56 * s, ry = 22 * s;
+    return `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="#0e0e11" stroke="#cfd3d8" stroke-width="2.6"/>
+        <ellipse cx="${cx}" cy="${cy}" rx="${rx - 4}" ry="${ry - 4}" fill="none" stroke="#6a6e73" stroke-width="0.8"/>
+        <text x="${cx}" y="${cy - 3 * s}" text-anchor="middle" dominant-baseline="middle" font-family="PKAnton,sans-serif" font-size="${22 * s}" letter-spacing="0.5" fill="#eef0f2">SILLA</text>
+        <rect x="${cx - 30 * s}" y="${cy + 6 * s}" width="${60 * s}" height="${9 * s}" rx="1.5" fill="#c8ccd0"/>
+        <text x="${cx}" y="${cy + 10.8 * s}" text-anchor="middle" dominant-baseline="middle" font-family="PKBebas,sans-serif" font-size="${7 * s}" letter-spacing="1.4" fill="#141416">ENGINEERING</text>`;
+}
+// Mesa/"Silla" cab: black tolex, black cloth or perforated-metal grille, the
+// chrome oval badge, chrome grille screws + black corners. opts: {w,h,
+// grille:'cloth'|'perf', bx,by (badge centre as a fraction of the grille), bs}.
+function rbSillaCab(u, o) {
+    const W = o.w, H = o.h;
+    const pat = o.grille === 'perf'
+        ? `<pattern id="gr${u}" width="7" height="7" patternUnits="userSpaceOnUse"><rect width="7" height="7" fill="#2b2b2d"/><circle cx="3.5" cy="3.5" r="2.5" fill="#0b0b0c"/></pattern>`
+        : `<pattern id="gr${u}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#0c0c0d"/><path d="M0 0H6M0 3H6" stroke="#1c1c20" stroke-width="1"/><path d="M0 0V6M3 0V6" stroke="#171719" stroke-width="1"/></pattern>`;
+    const gbg = o.grille === 'perf' ? '#242426' : '#0a0a0b';
+    const gx = 24, gy = 22, gw = W - 48, gh = H - 44;
+    const screws = `<g fill="#c6cace"><circle cx="${gx + 12}" cy="${gy + 12}" r="3.2"/><circle cx="${gx + gw - 12}" cy="${gy + 12}" r="3.2"/><circle cx="${gx + 12}" cy="${gy + gh - 12}" r="3.2"/><circle cx="${gx + gw - 12}" cy="${gy + gh - 12}" r="3.2"/></g>`;
+    const bx = gx + gw * o.bx, by = gy + gh * o.by;
+    const k = 36;
+    const corners = `<g fill="#0a0a0b"><path d="M1 32 V15 A14 14 0 0 1 15 1 H${k} Q17 3 15 13 Q3 17 1 ${k} Z"/><path d="M${W - 1} 32 V15 A14 14 0 0 0 ${W - 15} 1 H${W - k} Q${W - 17} 3 ${W - 15} 13 Q${W - 3} 17 ${W - 1} ${k} Z"/><path d="M1 ${H - 32} V${H - 15} A14 14 0 0 0 15 ${H - 1} H${k} Q17 ${H - 3} 15 ${H - 13} Q3 ${H - 17} 1 ${H - k} Z"/><path d="M${W - 1} ${H - 32} V${H - 15} A14 14 0 0 1 ${W - 15} ${H - 1} H${W - k} Q${W - 17} ${H - 3} ${W - 15} ${H - 13} Q${W - 3} ${H - 17} ${W - 1} ${H - k} Z"/></g>`;
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="tx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#242426"/><stop offset=".5" stop-color="#141416"/><stop offset="1" stop-color="#0b0b0c"/></linearGradient>
+        <pattern id="dm${u}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H9M0 4.5H9" stroke="#000" stroke-opacity=".24" stroke-width="1"/></pattern>
+        ${pat}</defs>
+        <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="13" fill="url(#tx${u})" stroke="#000" stroke-width="2"/>
+        <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="13" fill="url(#dm${u})"/>
+        <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="5" fill="${gbg}"/>
+        <rect x="${gx + 3}" y="${gy + 3}" width="${gw - 6}" height="${gh - 6}" rx="3" fill="url(#gr${u})"/>
+        <rect x="${gx + 1}" y="${gy + 1}" width="${gw - 2}" height="${gh - 2}" rx="4" fill="none" stroke="#000" stroke-opacity=".5" stroke-width="1.5"/>
+        ${screws}
+        ${rbSillaBadge(u, bx, by, o.bs || 1)}
+        ${corners}</svg>`;
+}
+// ── Shared cab primitives (used by the assorted single-brand cabs below) ──
+// [tileW, tileH, tileMarkup] per grille cloth/metal.
+const RB_CAB_PAT = {
+    weave:   ['6', '6', '<rect width="6" height="6" fill="#0c0c0d"/><path d="M0 0H6M0 3H6" stroke="#1c1c20" stroke-width="1"/><path d="M0 0V6M3 0V6" stroke="#171719" stroke-width="1"/>'],
+    silver:  ['5', '5', '<rect width="5" height="5" fill="#adb1b5"/><path d="M0 0H5M0 2.5H5" stroke="#797d81" stroke-width="0.7"/><path d="M0 0V5M2.5 0V5" stroke="#c8ccd0" stroke-opacity=".7" stroke-width="0.7"/>'],
+    perf:    ['7', '7', '<rect width="7" height="7" fill="#2b2b2d"/><circle cx="3.5" cy="3.5" r="2.5" fill="#0b0b0c"/>'],
+    oxblood: ['6', '5', '<rect width="6" height="5" fill="#3a221e"/><path d="M0 0H6M0 2.5H6" stroke="#4d2f28" stroke-width="1"/><path d="M0 0V5M3 0V5" stroke="#301b18" stroke-width="1"/>'],
+    jc:      ['7', '7', '<rect width="7" height="7" fill="#0e0e10"/><path d="M0 0H7M0 3.5H7M0 0V7M3.5 0V7" stroke="#5f6268" stroke-width="0.6"/>'],
+    zephyr:  ['4', '5', '<rect width="4" height="5" fill="#6a6d71"/><rect width="4" height="1.6" fill="#87898d"/><rect y="2.6" width="4" height="1.6" fill="#4c4e52"/>'],
+    gkblack: ['8', '8', '<rect width="8" height="8" fill="#2c2c2f"/><rect x="1" y="1" width="6" height="6" fill="#080809"/>'],
+    gksilver:['8', '8', '<rect width="8" height="8" fill="#b6babe"/><rect x="1" y="1" width="6" height="6" fill="#0c0c0d"/>'],
+};
+function rbCabCorners(W, H, col) {
+    col = col || '#0a0a0b'; const k = 36;
+    return `<g fill="${col}"><path d="M1 32 V15 A14 14 0 0 1 15 1 H${k} Q17 3 15 13 Q3 17 1 ${k} Z"/><path d="M${W - 1} 32 V15 A14 14 0 0 0 ${W - 15} 1 H${W - k} Q${W - 17} 3 ${W - 15} 13 Q${W - 3} 17 ${W - 1} ${k} Z"/><path d="M1 ${H - 32} V${H - 15} A14 14 0 0 0 15 ${H - 1} H${k} Q17 ${H - 3} 15 ${H - 13} Q3 ${H - 17} 1 ${H - k} Z"/><path d="M${W - 1} ${H - 32} V${H - 15} A14 14 0 0 1 ${W - 15} ${H - 1} H${W - k} Q${W - 17} ${H - 3} ${W - 15} ${H - 13} Q${W - 3} ${H - 17} ${W - 1} ${H - k} Z"/></g>`;
+}
+function rbCabOval(cx, cy, rx, ry, txt, font, fs, fill, tc, rim) {
+    return `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${fill}" stroke="${rim}" stroke-width="2.4"/><ellipse cx="${cx}" cy="${cy}" rx="${rx - 4}" ry="${ry - 4}" fill="none" stroke="${rim}" stroke-opacity=".5" stroke-width="0.8"/><text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-family="${font}" font-size="${fs}" fill="${tc}">${txt}</text>`;
+}
+function rbCabPlate(cx, cy, w, h, txt, font, fs, fill, tc, rim, dots) {
+    let s = `<rect x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" rx="3" fill="${fill}" stroke="${rim}" stroke-width="2.2"/><text x="${cx}" y="${cy + 1}" text-anchor="middle" dominant-baseline="middle" font-family="${font}" font-size="${fs}" letter-spacing="1" fill="${tc}">${txt}</text>`;
+    if (dots) s += `<circle cx="${cx - w / 2 + 9}" cy="${cy}" r="2" fill="${tc}"/><circle cx="${cx + w / 2 - 9}" cy="${cy}" r="2" fill="${tc}"/>`;
+    return s;
+}
+function rbCabGrille(u, gx, gy, gw, gh, gbg, rx) {
+    rx = rx || 5;
+    return `<rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="${rx}" fill="${gbg}"/><rect x="${gx + 3}" y="${gy + 3}" width="${gw - 6}" height="${gh - 6}" rx="${Math.max(rx - 2, 2)}" fill="url(#gp${u})"/>`;
+}
+// Wrap a body in the tolex box + defs (tolex gradient tx, diagonal hatch dm, and
+// the chosen grille pattern gp). tol = [top, mid, bottom] stop colours.
+function rbCabWrap(u, W, H, body, tol, patKey, extraDefs) {
+    const p = RB_CAB_PAT[patKey];
+    const ed = `<pattern id="gp${u}" width="${p[0]}" height="${p[1]}" patternUnits="userSpaceOnUse">${p[2]}</pattern>`;
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="tx${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${tol[0]}"/><stop offset=".5" stop-color="${tol[1]}"/><stop offset="1" stop-color="${tol[2]}"/></linearGradient>
+        <pattern id="dm${u}" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H9M0 4.5H9" stroke="#000" stroke-opacity=".2" stroke-width="1"/></pattern>${ed}${extraDefs || ''}</defs>
+        <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="13" fill="url(#tx${u})" stroke="#000" stroke-width="2"/>
+        <rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="13" fill="url(#dm${u})"/>${body}</svg>`;
+}
+// David Eden red square badge (gold "E" monogram + EDENA), top-left of the grille.
+function rbEdenBadge(x, y) {
+    return `<rect x="${x}" y="${y}" width="46" height="52" rx="3" fill="#a01c1c" stroke="#e8cf7a" stroke-width="1.6"/><text x="${x + 23}" y="${y + 11}" text-anchor="middle" dominant-baseline="central" font-family="PKBebas,serif" font-size="8" letter-spacing="1" fill="#e8cf7a">DAVID</text><rect x="${x + 11}" y="${y + 16}" width="24" height="22" rx="2" fill="#c9a24a"/><text x="${x + 23}" y="${y + 28}" text-anchor="middle" dominant-baseline="central" font-family="PKAnton,serif" font-size="18" fill="#3a1a0a">E</text><text x="${x + 23}" y="${y + 45}" text-anchor="middle" dominant-baseline="central" font-family="PKBebas,serif" font-size="10" letter-spacing="1.5" fill="#e8cf7a">EDENA</text>`;
+}
+// GK "FK" chrome pill + "NEO" pill (the Freddy/Gallien-Krueger Neo badges).
+function rbGkBadge(cx, cy) {
+    return `<rect x="${cx - 26}" y="${cy - 15}" width="52" height="30" rx="6" fill="#dfe2e6" stroke="#8a8e92" stroke-width="1.4"/><text x="${cx}" y="${cy + 1}" text-anchor="middle" dominant-baseline="middle" font-family="PKAnton,serif" font-size="20" fill="#1a1c1f">FK</text>`;
+}
+function rbNeoBadge(cx, cy) {
+    return `<rect x="${cx - 24}" y="${cy - 11}" width="48" height="22" rx="4" fill="#0c0c0d" stroke="#c8ccd0" stroke-width="1.2"/><text x="${cx}" y="${cy + 1}" text-anchor="middle" dominant-baseline="middle" font-family="PKBebas,serif" font-size="13" letter-spacing="2" fill="#dfe2e6">NEO</text>`;
+}
+// Edena (Eden) bass cab: black tolex, hex/perf grille, red Eden badge + a gold
+// tweeter block (top corners), black corners. Shared by the whole D-series.
+function rbEdenCab(u, W, H) {
+    const gx = 24, gy = 22, gw = W - 48, gh = H - 44;
+    const body = `${rbCabGrille(u, gx, gy, gw, gh, '#1a1a1c')}
+        <rect x="${gx + gw - 52}" y="${gy + 8}" width="40" height="40" rx="3" fill="#6a4a1a"/><rect x="${gx + gw - 48}" y="${gy + 12}" width="32" height="32" rx="2" fill="#8a6a2a"/>
+        ${rbEdenBadge(gx + 8, gy + 8)}${rbCabCorners(W, H)}`;
+    return rbCabWrap(u, W, H, body, ['#242426', '#141416', '#0b0b0c'], 'perf');
+}
+// Sharke (Hartke) aluminium-cone speaker: the brand's signature silver cone
+// (radial gradient url(#cone<u>)) + concentric rings + black dust cap.
+function rbHartkeCone(u, cx, cy, r) {
+    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#0a0a0b"/><circle cx="${cx}" cy="${cy}" r="${r * 0.86}" fill="url(#cone${u})"/><circle cx="${cx}" cy="${cy}" r="${r * 0.86}" fill="none" stroke="#585c60" stroke-width="1"/><circle cx="${cx}" cy="${cy}" r="${r * 0.6}" fill="none" stroke="#7c8084" stroke-opacity=".5" stroke-width="1"/><circle cx="${cx}" cy="${cy}" r="${r * 0.34}" fill="#0d0d0e" stroke="#3a3d40" stroke-width="1"/>`;
+}
+// Sharke (Hartke) bass cab: black hex grille with the aluminium cone(s), silver
+// metal corners, "Sharke" wordmark. opts: {w,h, cones:[[ox,oy,rFrac],...],
+// lc (logo colour), lx (logo x frac), ly (logo y px), ls (logo size)}.
+function rbHartkeCab(u, o) {
+    const W = o.w, H = o.h, gx = 24, gy = 22, gw = W - 48, gh = H - 44;
+    let cones = '';
+    for (const c of o.cones) cones += rbHartkeCone(u, gx + gw * c[0], gy + gh * c[1], gh * c[2]);
+    const logo = `<text x="${gx + gw * o.lx}" y="${gy + o.ly}" text-anchor="middle" dominant-baseline="middle" font-family="PKBebas,serif" font-size="${o.ls}" fill="${o.lc}">Sharke</text>`;
+    const body = `${rbCabGrille(u, gx, gy, gw, gh, '#141416')}${cones}${logo}${rbCabCorners(W, H, '#9a9ea2')}`;
+    return rbCabWrap(u, W, H, body, ['#242426', '#141416', '#0b0b0c'], 'perf', `<radialGradient id="cone${u}" cx=".4" cy=".38" r=".7"><stop offset="0" stop-color="#d6d9dd"/><stop offset="1" stop-color="#8f9397"/></radialGradient>`);
+}
+// Resolve a runtime gear id to its canonical RB_CAB_ART key. Handles: exact match,
+// a trailing mic/pos suffix (_5c), and — crucially — CASE differences, because the
+// RS gear ids (rs_to_real.json) title-case the novelty cabs (Cab_Gramophone) while
+// the art/catalog keys are upper-case (Cab_GRAMOPHONE). Without the case-insensitive
+// step those 6 cabs rendered blank everywhere the piece.type id was used (the room),
+// even though the swap rail — which passes the catalog key — looked fine.
+let _rbCabArtLc = null;
+function rbCabArtCanonKey(gear) {
+    if (!gear) return null;
+    if (RB_CAB_ART[gear]) return gear;
+    const stripped = String(gear).replace(/_[a-z0-9]{2}$/i, '');
+    if (RB_CAB_ART[stripped]) return stripped;
+    if (!_rbCabArtLc) { _rbCabArtLc = {}; for (const k in RB_CAB_ART) _rbCabArtLc[k.toLowerCase()] = k; }
+    const hit = _rbCabArtLc[String(gear).toLowerCase()] || _rbCabArtLc[stripped.toLowerCase()];
+    if (hit) return hit;
+    // Generic RS placeholder cab ("Cabinets") — a tone that never got promoted to
+    // a specific modeled cab. Show a neutral default so the Studio cab face / Cab
+    // Room aren't blank (the audio side maps it to the same default IR).
+    if (/^cabinets?$/i.test(String(gear))) return RB_DEFAULT_CAB_GEAR;
+    return null;
+}
+const RB_DEFAULT_CAB_GEAR = 'Cab_EN212C';        // guitar 2x12 fallback for generic cabs
+const RB_DEFAULT_BASS_CAB_GEAR = 'Bass_Cab_AT810BC';   // SVT 8x10 — bass default
+// Resolve the generic RS "Cabinets" placeholder to a bass or guitar default cab
+// based on the tone's amp (bass amp / DI preamp → bass), so the shown cab art
+// matches the slot-sensitive default IR the backend picks. Non-generic gears pass
+// through unchanged.
+function rbResolveGenericCab(cabGear, ampGear) {
+    if (!/^cabinets?$/i.test(String(cabGear || ''))) return cabGear;
+    return /^(Bass_|DI_Amp)/i.test(String(ampGear || '')) ? RB_DEFAULT_BASS_CAB_GEAR : RB_DEFAULT_CAB_GEAR;
+}
+function rbCabArtFor(gear, uid) {
+    const key = rbCabArtCanonKey(gear);
+    return key ? RB_CAB_ART[key]('c' + (uid == null ? 0 : uid)) : '';
+}
+// Art aspect (width/height of the SVG viewBox) per cab — used to letterbox the
+// art inside the Cab Room canvas AND to clamp the mic to the cab (not the gaps).
+// Aspect of the DRAWN cab body (matches each SVG's tight viewBox), so the room
+// face + cab-room fit have no invisible transparent border around the art.
+const RB_CAB_ART_ASPECT = {
+    'Bass_Cab_AT1150BC': 412 / 440, 'Bass_Cab_AT810BC': 292 / 552,
+    'Cab_MARSHALL1960A': 440 / 434, 'Cab_MARSHALL1960AX': 436 / 430,
+    'Cab_MARSHALL1960TV': 372 / 440, 'Cab_MARSHALL1936': 520 / 360,
+    'Cab_ORANGEPPC412': 448 / 430, 'Cab_ORANGEPPC212OB': 500 / 384,
+    'Cab_ORANGEJIMMYBEAN': 448 / 430, 'Cab_CS1120C': 470 / 376,
+    'Cab_CS1515C': 440 / 424, 'Bass_Cab_ORANGEOBC810': 300 / 580,
+    'Bass_Cab_ORANGEOBC115': 460 / 400,
+    'Cab_BT410C': 448 / 440, 'Cab_BT1120C': 470 / 420,
+    'Cab_BT1121C': 500 / 384, 'Cab_EN212C': 500 / 424,
+    'Cab_AT0112C': 440 / 420, 'Cab_AT1121C': 482 / 416,
+    'Cab_TW410C': 360 / 500, 'Bass_Cab_TW215BC': 380 / 520,
+    'Cab_TW110C': 500 / 370, 'Cab_TW112C': 460 / 418,
+    'Cab_CA412C': 460 / 430, 'Cab_CA112C': 500 / 334,
+    'Cab_CA215C': 340 / 548, 'Bass_Cab_CA1510BC': 480 / 370,
+    'Cab_CS212C': 470 / 338, 'Cab_EN4120C': 444 / 430,
+    'Cab_GB412CMKI': 442 / 430, 'Cab_GB412CMKIII': 444 / 440,
+    'Cab_HG2120C': 500 / 330, 'Cab_HG212C': 500 / 330, 'Cab_HG215C': 360 / 556,
+    'Cab_GB412CMKII': 444 / 430,
+    'Bass_Cab_EDEND115XLT': 440 / 424, 'Bass_Cab_EDEND212XLT': 452 / 430,
+    'Bass_Cab_EDEND410XST': 448 / 430, 'Bass_Cab_EDEND610XST': 470 / 520,
+    'Bass_Cab_GB415BC': 384 / 540,
+    'Bass_Cab_BT410BC': 448 / 430, 'Bass_Cab_BT115BC': 440 / 460, 'Bass_Cab_BT212BC': 380 / 520,
+    'Bass_Cab_CH210BC': 480 / 360,
+    'Bass_Cab_CS410BC': 448 / 430, 'Bass_Cab_CS15BC': 440 / 430, 'Bass_Cab_CS112BC': 480 / 360,
+    'Bass_Cab_CH410BC': 380 / 520, 'Bass_Cab_CH310BC': 460 / 420,
+    // Novelty voicings
+    'Cab_GRAMOPHONE': 440 / 470, 'Cab_CABINETRADIO': 360 / 460, 'Cab_JUKEBOX': 380 / 500,
+    'Cab_BOOMBOX': 560 / 300, 'Cab_AUDIOPHILE': 300 / 480, 'Cab_VINTAGEHIFI': 360 / 440,
+    'Cab_PA600C': 360 / 460, 'Cab_PA999C': 340 / 470, 'Cab_PA1152C': 380 / 470,
+};
+function rbCabArtAspect(gear) {
+    const key = rbCabArtCanonKey(gear);   // same case-insensitive resolution as the art
+    return key ? (RB_CAB_ART_ASPECT[key] || 0) : 0;
+}
+// The [x,y,w,h] rect the art occupies inside the WxH canvas (preserveAspectRatio
+// meet). aspect 0 → full canvas.
+function rbCabArtRect(aspect) {
+    const W = RB_CABROOM_W, H = RB_CABROOM_H;
+    if (!aspect) return [0, 0, W, H];
+    let bw, bh;
+    if (aspect < W / H) { bh = H; bw = H * aspect; } else { bw = W; bh = W / aspect; }
+    return [(W - bw) / 2, (H - bh) / 2, bw, bh];
+}
+// Badge fonts as base64 so cab art can be an <img> (SVG-in-img can't use the
+// document's @font-face). Bebas = model plates; Ink = the Marsten cursive brand
+// script; Graffiti = the Citrus/Orange bubble logo — all matching the amps'
+// brand fonts. Fetched once; art data-URLs rebuild when they land.
+const RB_CAB_FONTS = { PKBebas: 'bebas', PKInk: 'ink', PKGraffiti: 'graffiti', PKAnton: 'anton', PKCrete: 'crete' };
+const _rbCabFontB64 = {};   // family -> base64
+const _rbCabArtUrl = {};
+async function rbLoadCabFont() {
+    const missing = Object.entries(RB_CAB_FONTS).filter(([fam]) => !_rbCabFontB64[fam]);
+    if (!missing.length) return;
+    await Promise.all(missing.map(async ([fam, name]) => {
+        try {
+            const bytes = new Uint8Array(await (await fetch(`${window.RB_API}/asset/font/${name}`)).arrayBuffer());
+            let bin = ''; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+            _rbCabFontB64[fam] = btoa(bin);
+        } catch (_) {}
+    }));
+    for (const k in _rbCabArtUrl) delete _rbCabArtUrl[k];
+}
+// Cab recreation as an <img> src (data URL) — the cab's "photo" everywhere it
+// used to show the RS gear photo: room face, Gear cards, catalog thumbs, nodes.
+function rbCabArtDataUrl(gear) {
+    const key = rbCabArtCanonKey(gear);   // case-insensitive (Cab_Gramophone → Cab_GRAMOPHONE)
+    if (!key) return '';
+    if (_rbCabArtUrl[key]) return _rbCabArtUrl[key];
+    let svg = RB_CAB_ART[key]('u');
+    if (!/xmlns=/.test(svg)) svg = svg.replace(/^<svg /, '<svg xmlns="http://www.w3.org/2000/svg" ');
+    let faces = '';
+    for (const fam in _rbCabFontB64) faces += `@font-face{font-family:'${fam}';src:url('data:font/ttf;base64,${_rbCabFontB64[fam]}')}`;
+    if (faces) {
+        const fs = `<style>${faces}</style>`;
+        svg = svg.includes('<defs>') ? svg.replace('<defs>', '<defs>' + fs) : svg.replace(/(<svg[^>]*>)/, '$1' + fs);
+    }
+    const url = 'data:image/svg+xml;charset=utf8,' + encodeURIComponent(svg);
+    // Cache only once ALL badge fonts are embedded, so a script/bubble-logo cab
+    // isn't frozen with a missing font before the .ttf lands.
+    const allLoaded = Object.keys(RB_CAB_FONTS).every(f => _rbCabFontB64[f]);
+    if (allLoaded) _rbCabArtUrl[key] = url;
+    return url;
+}
+
 function rbStudioPieceStem(p) {
     const vp = rbEffVstPath(p);
     if (!vp) return '';
     return vp.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 function rbStudioPedalImg(p) {
+    // Custom gear: draw the user's own layout, never the plugin's native face.
+    if (p && p._custom_ui && window.RBPedalCanvas && window.RBPedalCanvas.layoutDataURL) {
+        let vals = {};
+        try { vals = rbCustomUiValues(p) || {}; } catch (_) {}
+        try { return window.RBPedalCanvas.layoutDataURL(p._custom_ui, vals); } catch (_) {}
+    }
     const stem = rbStudioPieceStem(p);
     if (stem && window.RBPedalCanvas && window.RBPedalCanvas.has(stem)) {
         // Render the face at the piece's SAVED knob values (not plugin defaults)
@@ -3968,7 +4878,10 @@ function rbStudioGroupDefault() {
         const cat = (p.category || p.rs_category || '').toLowerCase();
         const slot = (p.slot || '').toLowerCase();
         const entry = { p, idx };
-        if (cat === 'amp' || slot === 'amp' || slot === 'master_default') g.amp.push(entry);
+        // A full-chain NAM is the whole rig in one node — show it as the central
+        // "amp" box so every visualizer renders a single node (no cab/pedals).
+        if (rbIsFullChainPiece(p) || cat === 'fullchain' || slot === 'full_chain') g.amp.push(entry);
+        else if (cat === 'amp' || slot === 'amp' || slot === 'master_default') g.amp.push(entry);
         else if (cat === 'cab' || slot === 'cabinet') g.cab.push(entry);
         else if (cat === 'rack' || slot === 'rack') g.rack.push(entry);
         else g.pedal.push(entry);   // pedals + anything else goes on the floor
@@ -3980,9 +4893,84 @@ function rbStudioGroupDefault() {
     return g;
 }
 
+// The mic setup shown on the Studio-room cab: the mic POSITION (fx/fy 0..1 over the
+// cab) + model chosen in the Cab Room, read from the tone's persisted payload
+// (rbCabRoomSaveMicPx). Falls back to the cab piece's IR name for the model, then to
+// a sensible default. Used to draw the room mic stand so the main menu mirrors where
+// the mic actually sits.
+function rbStudioRoomMicSetup(cabPiece) {
+    let fx = 0.5, fy = 0.44, mic = null, angle = 0;
+    try {
+        const saved = JSON.parse(localStorage.getItem(rbCabRoomMicKey({})) || 'null');
+        if (Array.isArray(saved) && saved.length >= 2 && isFinite(saved[0]) && isFinite(saved[1])) {
+            fx = saved[0]; fy = saved[1];
+            if (typeof saved[2] === 'string') mic = saved[2];
+            if (isFinite(saved[3])) angle = saved[3];
+        }
+    } catch (_) {}
+    if (!mic && cabPiece) { try { const s = rbCabRoomStateFromPiece(cabPiece); if (s && s.mic) mic = s.mic; } catch (_) {} }
+    if (!mic || !RB_MIC_ART[mic]) mic = 'sm57';
+    fx = Math.min(0.92, Math.max(0.08, fx)); fy = Math.min(0.92, Math.max(0.08, fy));
+    return { fx, fy, mic, angle };
+}
+
+// Draw the room mic on a BOOM STAND over the cab: the boom reaches the mic point
+// (fx,fy); the vertical pole rises from the floor to a pivot near the mic height,
+// so a high mic → tall pole, a low mic → short pole. The mic is rotated to lie
+// along the boom (capsule at the point, body toward the pivot) so it reads natural.
+// Coordinate space: viewBox 0..100 in x = cab width, 0..150 in y where 0..100 is the
+// cab and 100..122 is a short floor strip below it (parent .rb-amp-cab is
+// overflow:visible), so the tripod base sits just below the cab on the floor.
+let _rbRoomStandN = 0;
+function rbStudioRoomMicStandHtml(s, cabAspect) {
+    const asp = cabAspect && cabAspect > 0 ? cabAspect : 1;
+    const mx = +(s.fx * 100).toFixed(1), my = +(s.fy * 100).toFixed(1);
+    const side = s.fx < 0.55 ? 1 : -1;                       // pole on the side away from the mic
+    const bx = Math.min(88, Math.max(12, mx + side * 26));   // pole/base x
+    // Mic sits capsule-UP (natural). The boom grips its BODY ~40% of the mic length
+    // BELOW the capsule; that clip point is BOTH the boom end AND the mic's rotation
+    // origin (CSS .rb-room-mic), so the 45 deg tilt pivots on the clip and the mic
+    // never leaves the boom. (fx,fy)=capsule → clip sits lower, so the stand is low.
+    const micH = 0.13 * (320 / 120) * 100 * asp;
+    const clipY = Math.min(108, +(my + micH * 0.40).toFixed(1));   // boom grabs the body, below the capsule
+    const pivotY = Math.max(6, +(clipY - 3).toFixed(1));           // boom ~ horizontal into the clip
+    const uid = 'rs' + (++_rbRoomStandN);
+    // Dark stand (black tube + thin edge highlight): a mic stand is black, and the
+    // bright chrome read as "white". Outline + dark body + faint highlight.
+    const seg = (x1, y1, x2, y2, w) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#050506" stroke-width="${w + 1.4}" stroke-linecap="round"/>`
+        + `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#2c3036" stroke-width="${w}" stroke-linecap="round"/>`
+        + `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#5a5f66" stroke-width="${Math.max(0.5, w * 0.28)}" stroke-linecap="round"/>`;
+    const stand = `<svg class="rb-room-stand" viewBox="0 0 100 122" preserveAspectRatio="none" aria-hidden="true">`
+        + `<ellipse cx="${bx}" cy="116" rx="14" ry="2.6" fill="#000" opacity=".42"/>`
+        + `<path d="M${bx - 12} 116 L${bx} 109 L${bx + 12} 116" fill="none" stroke="#050506" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>`
+        + `<path d="M${bx - 12} 116 L${bx} 109 L${bx + 12} 116" fill="none" stroke="#2c3036" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`
+        + seg(bx, 110, bx, pivotY, 3)                         // vertical pole
+        + seg(bx, pivotY, mx, clipY, 2.6)                     // boom arm → mic BODY clip
+        + `<circle cx="${mx}" cy="${clipY}" r="2.6" fill="#26282c" stroke="#050506" stroke-width="1"/></svg>`;   // mic clip (= rotation origin)
+    const mic = `<div class="rb-room-mic${s.angle ? ' rb-cabmic-ang' : ''}" style="left:${mx}%;top:${clipY}%">${rbMicOnCabHtml(s.mic, uid)}</div>`;
+    return stand + mic;
+}
+
+// Re-inject the room mic stand on every .rb-amp-cab face (after a cab room close or
+// a fast cab swap) so mic/position changes show without a full room re-render.
+function rbStudioRefreshRoomMic() {
+    const g = rbStudioGroupDefault();
+    const piece = (g.cab && g.cab[0]) ? g.cab[0].p : null;
+    const hasArt = piece && rbCabArtDataUrl(piece.type || piece.rs_gear);
+    const asp = piece ? rbCabArtAspect(piece.type || piece.rs_gear) : 1;
+    document.querySelectorAll('#rb-studio-room .rb-amp-cab').forEach(el => {
+        el.querySelectorAll('.rb-room-stand, .rb-room-mic').forEach(n => n.remove());
+        if (hasArt) el.insertAdjacentHTML('beforeend', rbStudioRoomMicStandHtml(rbStudioRoomMicSetup(piece), asp));
+    });
+}
+
 function rbRenderStudioRoom() {
     const el = document.getElementById('rb-studio-room');
     if (!el) return;
+    // Custom gear loaded from a saved tone lacks its UI until opened — attach it
+    // up front so the room shows the created face on first paint (re-render once
+    // the gear map arrives if it wasn't cached yet).
+    try { rbEnsureChainCustomUi(rbStudioCurrentChain(), () => { try { rbRenderStudioRoom(); } catch (_) {} }); } catch (_) {}
     // Re-rendering wipes any open focus layer / bar / swap rail (room children),
     // so clear the focus state + tear down its editor VST — otherwise switching
     // tones mid-focus strands a broken, can't-exit focus view.
@@ -3994,6 +4982,12 @@ function rbRenderStudioRoom() {
     const g = rbStudioGroupDefault();
     const amp = g.amp[0];
     const cabName = g.cab[0] ? (g.cab[0].p.real_name || 'Cab') : 'Cab';
+    // Resolve a generic "Cabinets" placeholder to the slot-sensitive default cab
+    // (bass vs guitar, from the amp) so the room cab face shows the same cab the
+    // backend actually plays.
+    const cabGear = g.cab[0] ? rbResolveGenericCab(
+        g.cab[0].p.type || g.cab[0].p.rs_gear,
+        amp && amp.p && (amp.p.type || amp.p.rs_gear)) : null;
     const knobs = RB_STUDIO_KNOB_ANGLES
         .map(deg => `<span class="rb-knob" style="--rb-knob-rot:${deg}deg"></span>`).join('');
 
@@ -4029,6 +5023,10 @@ function rbRenderStudioRoom() {
     const extraSlots = RB_AMP_EXTRA_SLOTS[amps.length] || [];
     const ampStack = (entry, i) => {
         const nm = entry.p.real_name || entry.p.type || 'Amp';
+        const cabArtUrl = rbCabArtDataUrl(cabGear);   // recreated cab as an <img> src (or '')
+        const cabAspect = rbCabArtAspect(cabGear);    // real width/height → sizes the room cab
+        // Mic on a boom stand over the cab, at the position/model chosen in the Cab Room.
+        const micStand = cabArtUrl ? rbStudioRoomMicStandHtml(rbStudioRoomMicSetup(g.cab[0] && g.cab[0].p), cabAspect) : '';
         const img = rbStudioPedalImg(entry.p);
         const head = img
             ? `<div class="rb-amp-face"><img src="${img}" alt="${rbEsc(nm)}"></div>`
@@ -4042,7 +5040,9 @@ function rbRenderStudioRoom() {
         return `<div class="${cls}" data-amp-idx="${entry.idx}"${style}
                      onclick="rbStudioClickAmp(${entry.idx})" title="${rbEsc(nm)} — click to zoom in">
                     ${head}
-                    <div class="rb-amp-cab" title="${rbEsc(cabName)}"></div>
+                    <div class="rb-amp-cab${cabArtUrl ? ' has-art' : ''}" title="${rbEsc(cabName)} — click: Cab Room"
+                         style="cursor:pointer${cabArtUrl && cabAspect ? `;aspect-ratio:${cabAspect}` : ''}"
+                         onclick="event.stopPropagation(); rbStudioOpenCabRoom()">${cabArtUrl ? `<img src="${cabArtUrl}" alt="">${micStand}` : ''}</div>
                 </div>`;
     };
     const ampHtml = amps.map(ampStack).join('');
@@ -4190,12 +5190,24 @@ if (!window.__rbStudioScaleHook) {
 }
 
 // ── Mute output (topbar button, available from every menu) ───────────────
+// Apply the user mute to the engine. setMonitorMute alone only silences the
+// live-input MONITOR — the processed guitar plays through the 'chain' gain, so a
+// real "mute output" must ALSO zero that (this is why the load sequence mutes
+// with BOTH). Un-mute restores the chain to its last computed target.
+async function rbApplyUserMute(muted) {
+    const api = rbAudioApi();
+    if (!api) return;
+    try {
+        if (typeof api.setMonitorMute === 'function') await api.setMonitorMute(!!muted);
+        if (typeof api.setGain === 'function') {
+            const target = muted ? 0 : rbClampChainGainTarget(window.__rbPendingChainGainTarget ?? 1.0);
+            await api.setGain('chain', target);
+        }
+    } catch (_) {}
+}
 async function rbToggleMute() {
     rbState._userMuted = !rbState._userMuted;
-    try {
-        const api = rbAudioApi();
-        if (api && typeof api.setMonitorMute === 'function') await api.setMonitorMute(!!rbState._userMuted);
-    } catch (_) {}
+    await rbApplyUserMute(rbState._userMuted);
     rbSyncMuteBtn();
 }
 function rbSyncMuteBtn() {
@@ -4330,6 +5342,12 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
     const piece = (rbStudioCurrentChain())[idx];
     const face = faceEl;
     if (!piece || !face) return;
+    // Custom gear renders ITS OWN layout (interactive), driving the plugin params
+    // its controls are mapped to — never the plugin's native window.
+    if (piece._custom_ui && window.RBPedalCanvas && window.RBPedalCanvas.specFromLayout) {
+        rbStudioMakeCustomFaceInteractive(idx, face, piece);
+        return;
+    }
     const api = rbAudioApi();
     const stem = rbCanvasStem(piece);
     if (!(window.RBPedalCanvas && (window.RBPedalCanvas.has(stem) || (piece._vst_param_meta || []).length))) return;
@@ -4384,6 +5402,39 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
     // try { rbStartGrMeterPoll(canvas, piece, idx, stem); } catch (_) {}
     // Redraw once the amp has finished growing to its focused size so the
     // canvas backing store matches the larger on-screen size (stays crisp).
+    setTimeout(draw, 520);
+}
+
+// Interactive editor for CUSTOM gear: draw the user's own layout and, when a
+// control is mapped to a real plugin parameter, drive that param live. Controls
+// with no mapping (hand-added) are cosmetic. Mirrors rbStudioMakeFaceInteractive
+// but sources the spec from the saved layout instead of a bundled stem.
+function rbStudioMakeCustomFaceInteractive(idx, face, piece) {
+    const PC = window.RBPedalCanvas;
+    const layout = piece._custom_ui;
+    face.innerHTML = `<canvas class="rb-amp-face-canvas" style="width:100%;display:block;cursor:ns-resize;touch-action:none"></canvas>`;
+    const canvas = face.querySelector('canvas');
+    // control id → real plugin param (logical id in the filtered list).
+    const idToParam = {};
+    (layout.controls || []).forEach(c => { if (typeof c.param === 'number') idToParam[c.id] = c.param; });
+    const draw = () => {
+        let values = {};
+        try { values = rbCustomUiValues(piece) || {}; } catch (_) {}
+        canvas.__rbVals = values;
+        PC.attachSpec(canvas, PC.specFromLayout(layout), {
+            values,
+            interactive: true,
+            onChange: (ctrlId, val) => {
+                const logical = idToParam[ctrlId];
+                if (typeof logical !== 'number') return;   // cosmetic control
+                piece._vst_logical = piece._vst_logical || {};
+                piece._vst_logical[logical] = val;
+                rbStudioApplyKnobToEngine(piece, idx, logical, val);
+            },
+        });
+    };
+    if (PC.ready) PC.ready().then(draw);
+    draw();
     setTimeout(draw, 520);
 }
 
@@ -4716,9 +5767,15 @@ function rbStudioFitFocusStage(stage, piece, room) {
     if (!stage || !room) return;
     let aspect = 0.6;   // default portrait-ish (w/h)
     try {
-        const spec = window.RBPedalCanvas && window.RBPedalCanvas.specs
-            && window.RBPedalCanvas.specs[rbCanvasStem(piece)];
-        if (spec && spec.w && spec.h) aspect = spec.w / spec.h;
+        if (piece && piece._custom_ui && piece._custom_ui.w && piece._custom_ui.h) {
+            // Custom gear has no bundled spec — use ITS OWN layout aspect so a wide
+            // rack/amp fills the box instead of being squished into a portrait one.
+            aspect = piece._custom_ui.w / piece._custom_ui.h;
+        } else {
+            const spec = window.RBPedalCanvas && window.RBPedalCanvas.specs
+                && window.RBPedalCanvas.specs[rbCanvasStem(piece)];
+            if (spec && spec.w && spec.h) aspect = spec.w / spec.h;
+        }
     } catch (_) {}
     const rr = room.getBoundingClientRect();
     // Racks read bigger than pedals (wide units against a wall) — give them more
@@ -4817,18 +5874,36 @@ async function rbStudioChainSlotIdForPiece(api, pieceIdx) {
         const arr = rbStudioCurrentChain();
         const piece = arr[pieceIdx];
         if (!piece) return null;
+        const loaded = await api.getChainState();
+        if (!Array.isArray(loaded)) return null;
+        const slotId = (slot) => slot.id != null ? slot.id : (slot.slotId != null ? slot.slotId : null);
+        // A CAB is a type-2 (IR/convolution) slot with NO vst_path, so the VST
+        // match below skipped it and setBypass was never called — that's why
+        // toggling the cab's bypass in the node editor did nothing. Match the Nth
+        // cab piece to the Nth type-2 slot by order (a chain has few IR slots and
+        // path strings differ after the override/DI-blend rewrite, so order is the
+        // robust key).
+        if (piece.rs_category === 'cab') {
+            let cabRank = 0;
+            for (let k = 0; k < pieceIdx; k++) if (arr[k] && arr[k].rs_category === 'cab') cabRank++;
+            let seen = 0;
+            for (const slot of loaded) {
+                if (!slot || Number(slot.type) !== 2) continue;  // type 2 = IR / cab
+                if (seen++ < cabRank) continue;
+                return slotId(slot);
+            }
+            return null;
+        }
         const effPath = rbEffVstPath(piece);
         if (!effPath) return null;                          // NAM / no VST → nothing to edit live
         let dupSkip = 0;
         for (let k = 0; k < pieceIdx; k++) if (rbEffVstPath(arr[k]) === effPath) dupSkip++;
-        const loaded = await api.getChainState();
-        if (!Array.isArray(loaded)) return null;
         let seen = 0;
         for (const slot of loaded) {
             if (!slot || Number(slot.type) !== 0) continue;  // type 0 = VST
             if (slot.path !== effPath) continue;
             if (seen++ < dupSkip) continue;
-            return slot.id != null ? slot.id : null;
+            return slotId(slot);
         }
         return null;
     } catch (_) { return null; }
@@ -4879,6 +5954,7 @@ async function rbStudioLoadFocusVst(idx, faceEl, growMs) {
     const room = document.getElementById('rb-studio-room');
     const piece = (rbStudioCurrentChain())[idx];
     if (!room || !piece || !faceEl) return;
+    await rbEnsureCustomUi(piece);           // reloaded custom gear → re-attach its UI
     const api = rbAudioApi();
     const vstPath = rbEffVstPath(piece);
     if (!vstPath || !api) return;            // static face stays; nothing to load
@@ -4978,6 +6054,11 @@ async function rbStudioFinalizeFocusEdit(api, idx) {
                             const nm = p.name ?? p.label;
                             const v = p.value ?? p.current;
                             if (typeof v !== 'number') return;
+                            // DPF host meta-params are not knobs — storing them
+                            // poisoned saved states ("Buffer Size"/"Sample Rate"
+                            // keys reapplied to the plugin on every song load).
+                            const lo = String(nm || '').toLowerCase();
+                            if (lo === 'buffer size' || lo === 'sample rate') return;
                             if (id != null && merged[id] == null) merged[id] = v;
                             if (nm && merged[nm] == null) merged[nm] = v;
                         });
@@ -5013,13 +6094,19 @@ async function rbStudioOpenSwap(idx, kind) {
     let panel = document.getElementById('rb-swap-panel');
     if (!panel) { panel = document.createElement('div'); panel.id = 'rb-swap-panel'; room.appendChild(panel); }
     panel.className = 'rb-swap-panel';
+    // Preserve the search across a swap: swapping rebuilds the whole rail, so
+    // without this the query resets to empty and the list jumps to the top —
+    // annoying right after you searched for and picked a cab. Cleared on close.
+    const _savedSearch = rbState._swapSearch || '';
+    const _kindLabel = kind === 'pedal' ? 'pedals' : (kind === 'rack' ? 'racks' : (kind === 'cab' ? 'cabs' : 'amps'));
     panel.innerHTML = `
         <div class="rb-swap-head">
-            <input type="text" placeholder="Search ${kind === 'pedal' ? 'pedals' : (kind === 'rack' ? 'racks' : 'amps')}…" oninput="rbStudioRenderSwapList(this.value)">
+            <input type="text" placeholder="Search ${_kindLabel}…" value="${rbEsc(_savedSearch)}"
+                   oninput="rbState._swapSearch=this.value; rbStudioRenderSwapList(this.value)">
         </div>
         <div id="rb-swap-list" class="rb-swap-list" onscroll="rbStudioScheduleCarousel()"></div>`;
     room.classList.add('rb-swap-active');
-    rbStudioRenderSwapList('');
+    rbStudioRenderSwapList(_savedSearch);
     rbStudioPinSwapRail();   // pin to the viewport's right edge (covers the host's margin)
     if (!rbState._swapResizeHooked) {
         rbState._swapResizeHooked = true;
@@ -5044,11 +6131,16 @@ function rbStudioPinSwapRail() {
 function rbStudioCloseSwap() {
     const room = document.getElementById('rb-studio-room');
     const panel = document.getElementById('rb-swap-panel');
+    rbState._swapSearch = '';   // reset the persisted rail search when the rail closes
     if (room) room.classList.remove('rb-swap-active');
     if (panel) { panel.classList.remove('rb-swap-open'); setTimeout(() => { try { panel.remove(); } catch (_) {} }, 320); }
 }
 
 function rbStudioAmpThumb(g) {
+    const customUrl = rbGearCustomArt(g);             // custom gear's created face
+    if (customUrl) return `<img src="${customUrl}" alt="">`;
+    const cabUrl = g && rbCabArtDataUrl(g.rs_gear);   // recreated cab beats the RS photo
+    if (cabUrl) return `<img src="${cabUrl}" alt="">`;
     const stem = rbGearCanvasStem(g);
     if (stem && window.RBPedalCanvas && window.RBPedalCanvas.has(stem)) {
         try { return `<img src="${window.RBPedalCanvas.dataURL(stem, {})}" alt="">`; } catch (_) {}
@@ -5063,16 +6155,32 @@ function rbStudioRenderSwapList(search) {
     const idx = rbState._studioFocusIdx;
     const cur = (rbStudioCurrentChain())[idx];
     const curGear = cur && cur.type;
+    const curBase = (curGear || '').replace(/_[a-z0-9]{2}$/i, '');
     const q = rbNorm(search || '').trim();
-    let items = ((rbState.gearCatalog && rbState.gearCatalog[kind]) || [])
-        .filter(g => rbGearHasVst(g) && (!q || rbGearSearchHaystack(g).includes(q)));
+    let items;
+    if (kind === 'cab') {
+        // Cabs aren't VSTs — list the FULL cab catalog (all 49, clone names)
+        // instead of the VST-filtered gear_catalog, so any cab is swappable.
+        const cabs = (rbState.realCabCatalog && rbState.realCabCatalog.cabs) || {};
+        items = Object.entries(cabs)
+            .map(([rs_gear, e]) => ({ rs_gear, real_name: e.name || rs_gear }))
+            .filter(g => !q || rbNorm(g.real_name + ' ' + g.rs_gear).includes(q))
+            // Alphabetical by display name (the catalog's own order is by type —
+            // guitar then bass; the rail should read A→Z like the Gear list).
+            .sort((a, b) => a.real_name.localeCompare(b.real_name, undefined, { numeric: true, sensitivity: 'base' }));
+    } else {
+        items = ((rbState.gearCatalog && rbState.gearCatalog[kind]) || [])
+            .filter(g => rbGearHasVst(g) && (!q || rbGearSearchHaystack(g).includes(q)));
+    }
     if (!items.length) {
-        list.innerHTML = `<div style="text-align:center;color:#8893a8;font-size:12px;padding:24px 0">No ${kind === 'pedal' ? 'pedals' : (kind === 'rack' ? 'racks' : 'amps')} found</div>`;
+        const label = kind === 'pedal' ? 'pedals' : (kind === 'rack' ? 'racks' : (kind === 'cab' ? 'cabs' : 'amps'));
+        list.innerHTML = `<div style="text-align:center;color:#8893a8;font-size:12px;padding:24px 0">No ${label} found</div>`;
         return;
     }
     list.innerHTML = items.map(g => {
         const name = g.real_name || g.rs_gear;
-        return `<div class="rb-swap-item ${g.rs_gear === curGear ? 'rb-swap-current' : ''}"
+        const isCur = g.rs_gear === curGear || g.rs_gear === curBase;
+        return `<div class="rb-swap-item ${isCur ? 'rb-swap-current' : ''}"
                      onclick="rbStudioSwapToGear(${rbEsc(JSON.stringify(g.rs_gear))})" title="${rbEsc(name)}">
             <span class="rb-swap-thumb">${rbStudioAmpThumb(g)}</span>
             <span class="rb-swap-name">${rbEsc(name)}</span>
@@ -5118,6 +6226,10 @@ async function rbStudioReloadLiveChainAfterSwap() {
     // The old version only rebuilt the mega-chain, so an amp swap while sitting
     // on the default/test tone didn't sound until the user re-selected the tone.
     try { await rbState._studioPersistPromise; } catch (_) {}
+    // Keep the node-editor graph in step with the (now-mutated) chain — a swap or
+    // add done in the Studio must reach an already-seeded graph (amps, pedals,
+    // racks, cabs all funnel through here).
+    try { rbAdvSyncFromChain(); } catch (_) {}
     try {
         const v = rbState.studioView || { source: 'default' };
         if (v.source === 'default') {
@@ -5150,6 +6262,32 @@ async function rbStudioReloadLiveChainAfterSwap() {
 
 function rbStudioSwapToGear(rsGear) {
     const kind = rbState._swapKind || 'amp';
+    if (kind === 'cab') {
+        // Cabs swap by rs_gear (IR), not by VST. Song: /gear/replace_with via
+        // rbStudioCabSwap, which reopens the Cab Room (re-entering focus + rail).
+        // Explorer: just re-audition the chosen cab.
+        const q = rbState._swapSearch || '';   // keep the query across the rebuild
+        const v = rbState.studioView || {};
+        if (v.source === 'song' && _rbCabRoom['studio'] && _rbCabRoom['studio']._studio) {
+            rbStudioCabSwap(rsGear);
+        } else {
+            // Default / saved tone: we own the chain array directly, so persist
+            // the chosen cab into it (create the cabinet piece if missing) — the
+            // old path only re-auditioned, so the pick never showed in the room,
+            // seeded the node editor, or survived a restart.
+            rbState._lastExploreCab = rsGear;
+            rbStudioCabApplyLocal(rsGear);
+        }
+        // The swap rebuilds the room + rail ASYNCHRONOUSLY (monitor reload), which
+        // can wipe the search after we restore it — re-assert it a few times so
+        // the rail keeps showing the searched result instead of jumping to the top.
+        [80, 300, 650].forEach(t => setTimeout(() => {
+            rbState._swapSearch = q;
+            const inp = document.querySelector('#rb-swap-panel .rb-swap-head input');
+            if (inp) { if (inp.value !== q) inp.value = q; try { rbStudioRenderSwapList(q); } catch (_) {} }
+        }, t));
+        return;
+    }
     const g = ((rbState.gearCatalog && rbState.gearCatalog[kind]) || []).find(x => x.rs_gear === rsGear);
     if (!g) return;
     // Add mode (empty pedalboard / rack tower): create a new piece, append it to
@@ -5164,7 +6302,7 @@ function rbStudioSwapToGear(rsGear) {
             _vst_kind: 'vst', _vst_path: vp, _vst_format: g.vst_format || 'VST3',
             assigned: { kind: 'vst', vst_path: vp, vst_format: g.vst_format || 'VST3', vst_state: null },
         };
-        
+        if (g.custom && g.ui) newPiece._custom_ui = g.ui;   // show the created face
         rbStudioCurrentChain().push(newPiece);
         rbState._studioPedalAddMode = false;
         try { rbStudioPersist(); } catch (_) {}
@@ -5188,6 +6326,7 @@ function rbStudioSwapToGear(rsGear) {
             _vst_kind: 'vst', _vst_path: vp, _vst_format: g.vst_format || 'VST3',
             assigned: { kind: 'vst', vst_path: vp, vst_format: g.vst_format || 'VST3', vst_state: null },
         };
+        if (g.custom && g.ui) newPiece._custom_ui = g.ui;   // show the created face
         rbStudioCurrentChain().push(newPiece);
         rbState._studioAmpAddMode = false;
         try { rbStudioPersist(); } catch (_) {}
@@ -5210,6 +6349,9 @@ function rbStudioSwapToGear(rsGear) {
     piece.category = kind; piece.rs_category = kind;
     piece._vst_path = vstPath; piece._vst_format = g.vst_format || 'VST3';
     piece.assigned = { kind: 'vst', vst_path: vstPath, vst_format: g.vst_format || 'VST3', vst_state: null };
+    // Swap in the new gear's custom UI (or CLEAR a stale one) — otherwise the
+    // previous gear's face would bleed onto the newly-swapped gear.
+    if (g.custom && g.ui) piece._custom_ui = g.ui; else delete piece._custom_ui;
     // Reset captured state for the new gear (loads at its own defaults).
     piece._vst_state = null; piece._vst_params = null; piece._vst_logical = null;
     piece._vst_param_meta = null; piece._vst_slot_id = null; piece._vst_opaque = null;
@@ -5217,8 +6359,14 @@ function rbStudioSwapToGear(rsGear) {
     rbStudioReloadLiveChainAfterSwap();   // rebuild the live song chain so the swap sounds without re-selecting the tone
     if (kind === 'amp') {
         // Show the new amp face immediately, then reload focus (loads its VST +
-        // knobs and re-renders the rail with the new amp centred).
-        const face = document.querySelector('#rb-studio-room .rb-amp-face');
+        // knobs and re-renders the rail with the new amp centred). Target THIS
+        // amp's stack by its chain index — a bare `.rb-amp-face` grabbed the FIRST
+        // amp, so swapping amp 2 stamped its photo onto amp 1 in a parallel rig
+        // (and both showed the new face until the room was re-rendered).
+        const stack = document.querySelector('#rb-studio-room .rb-amp-stack.rb-amp-focused')
+                   || document.querySelector(`#rb-studio-room .rb-amp-stack[data-amp-idx="${idx}"]`);
+        const face = (stack && stack.querySelector('.rb-amp-face'))
+                  || document.querySelector('#rb-studio-room .rb-amp-face');
         if (face) { const img = rbStudioPedalImg(piece); face.innerHTML = img ? `<img src="${img}" alt="${rbEsc(piece.real_name)}">` : ''; }
         rbStudioFocusAmp(idx);
     } else {
@@ -5669,8 +6817,31 @@ async function rbStudioLoadMonitor() {
 window.rbStudioLoadMonitor = rbStudioLoadMonitor;
 
 // Map a Studio chain (pieces) to the save payload the backend expects.
+// A full-chain NAM is a single baked capture (amp+pedals+cab in one .nam). In
+// memory it is one piece flagged `_fullchain`; it serialises to a single stage
+// with slot=full_chain / kind=nam_fullchain and the ABSOLUTE .nam path. Returns
+// null for a normal piece so callers can fall through to their usual mapping.
+function rbIsFullChainPiece(p) {
+    return !!(p && (p._fullchain || p.kind === 'nam_fullchain'
+        || (p.assigned && p.assigned.kind === 'nam_fullchain')));
+}
+function rbFullChainPayloadPiece(p) {
+    if (!rbIsFullChainPiece(p)) return null;
+    return {
+        slot: 'full_chain',
+        rs_gear_type: p.type || '__full_chain_nam__',
+        kind: 'nam_fullchain',
+        file: p._fullchain_file || (p.assigned && p.assigned.file) || null,
+        params: {},
+        assigned_mode: 'manual',
+        bypassed: !!p._bypassed,
+    };
+}
+
 function rbStudioChainToPayload(chain) {
     return (chain || []).map(p => {
+        const fc = rbFullChainPayloadPiece(p);
+        if (fc) return fc;
         const isVst = p._vst_kind === 'vst' || (p.assigned && p.assigned.kind === 'vst' && p.assigned.vst_path);
         const cat = (p.category || p.rs_category || '').toLowerCase();
         const slot = p.slot || (cat === 'amp' ? 'amp' : cat === 'cab' ? 'cabinet' : cat === 'rack' ? 'rack' : 'pre_pedal');
@@ -5683,6 +6854,277 @@ function rbStudioChainToPayload(chain) {
         const kind = rbEffKind(p) || (file ? (cat === 'cab' ? 'ir' : 'nam') : 'none');
         return { slot, rs_gear_type: p.type, kind, file, params: {}, assigned_mode: 'manual', bypassed: !!p._bypassed };
     });
+}
+
+// ── Load a full-chain NAM (replaces the WHOLE current tone) ──────────────
+// Some .nam captures bake amp + pedals + rack + cab into one neural model, so
+// they don't fit any single amp/pedal/cab slot. Loading one REPLACES the entire
+// current chain with a single full-chain piece, then persists + reloads so every
+// visualizer (studio room, chain strip, node editor) shows one node. Scope
+// follows the active studio view: Default, a saved tone, or the loaded song's
+// selected tone — the fixed corner button does global + per-song replacement.
+//
+// `file` is stored verbatim: an ABSOLUTE path for a directory pick (referenced
+// in place) or a RELATIVE nam_models path for a tone3000 download (already
+// copied into the library). _resolve_model_path handles both server-side.
+async function rbApplyFullChainNam(file, name) {
+    if (!file) return;
+    name = name || String(file).split(/[\\/]/).pop().replace(/\.nam$/i, '');
+    const piece = {
+        // rs_gear_type carries the NAM name so the label survives a reload
+        // (get_song rebuilds real_name from rs_gear_type). Full-chain identity
+        // is carried by _fullchain / assigned.kind, not by this string.
+        type: name,
+        real_name: name,
+        name,
+        category: 'fullchain',
+        rs_category: 'fullchain',
+        slot: 'full_chain',
+        _fullchain: true,
+        _fullchain_file: file,
+        _bypassed: false,
+        assigned: { kind: 'nam_fullchain', file },
+    };
+    // Replace the ENTIRE current chain in place — keep the same array reference
+    // so rbStudioCurrentChain()'s song/saved/default binding still points at it.
+    const chain = rbStudioCurrentChain();
+    chain.length = 0;
+    chain.push(piece);
+    // Persist to the active scope (song tone / saved tone / default) and WAIT so
+    // the reload reads the freshly-saved preset, then re-audition + redraw.
+    try {
+        rbStudioPersist();
+        if (rbState._studioPersistPromise) { try { await rbState._studioPersistPromise; } catch (_) {} }
+    } catch (e) { console.warn('[rig_builder] full-chain persist failed:', e); }
+    try { rbRenderStudioRoom(); rbStudioRenderToneChips(); } catch (_) {}
+    try { await rbStudioLoadMonitor(); } catch (_) {}
+    // If the node editor is open, reseed it (chain length changed → one node).
+    try {
+        if (rbState.currentTab === 'advanced' && typeof rbAdvResetToChain === 'function') {
+            rbAdvResetToChain();
+        }
+    } catch (_) {}
+}
+
+// ── Reusable tone3000 browser (shared by the full-chain modal + add-gear) ────
+// A compact tone3000 search: category chips (full rig / amp / pedal / …), a
+// query box, and a results list where each tone EXPANDS to show its individual
+// captures (gain/EQ variants) so the user downloads the exact one they want.
+// Optionally offers a "from directory" pick. State lives per-instance in
+// rbT3kCtxs[id]; a tone3000 download calls ctx.onUse(file, kind, name); a
+// directory pick calls ctx.onDir(path, kind) (falls back to onUse). Mount with
+// rbT3kMount({id, containerId, onUse, onDir?, allowDir?, allowDirExts?, forceCategory?}).
+const rbT3kCtxs = {};
+const RB_T3K_CATS = [
+    { key: '', label: 'All' },
+    { key: 'full-rig', label: 'Full rig' },
+    { key: 'amp', label: 'Amp' },
+    { key: 'pedal', label: 'Pedal' },
+    { key: 'outboard', label: 'Outboard' },
+    { key: 'ir', label: 'IR / Cab' },
+];
+function rbT3kMount(opts) {
+    const ctx = Object.assign({
+        query: '', gears: opts.forceCategory || opts.initialCat || '', searching: false,
+        results: null, expanded: null, captures: {},
+    }, opts);
+    rbT3kCtxs[opts.id] = ctx;
+    rbT3kRender(ctx);
+    return ctx;
+}
+function rbT3kRender(ctx) {
+    const host = document.getElementById(ctx.containerId);
+    if (host) host.innerHTML = rbT3kHtml(ctx);
+}
+function rbT3kHtml(ctx) {
+    const dirBtn = ctx.allowDir
+        ? `<button class="rb-fc-dir" onclick="rbT3kPickDir('${ctx.id}')">📁 Choose from directory…</button>
+           <div class="rb-fc-or">— or search tone3000 —</div>` : '';
+    const chips = ctx.forceCategory ? '' : `<div class="rb-t3k-chips">${
+        RB_T3K_CATS.map(c => `<button class="rb-t3k-chip ${ctx.gears === c.key ? 'on' : ''}" onclick="rbT3kSetCat('${ctx.id}','${c.key}')">${c.label}</button>`).join('')
+    }</div>`;
+    let results = '';
+    const r = ctx.results;
+    if (ctx.searching) results = `<div class="rb-fc-hint">searching tone3000…</div>`;
+    else if (r && !r.has_api_access) results = `<div class="rb-fc-hint rb-fc-warn">Connect tone3000 in Setup → tone3000 to search in-app.</div>`;
+    else if (r && (!r.candidates || !r.candidates.length)) results = `<div class="rb-fc-hint">No results — try a brand / model.</div>`;
+    else if (r) results = r.candidates.slice(0, 20).map(c => rbT3kCandHtml(ctx, c)).join('');
+    return `${dirBtn}${chips}
+        <div class="rb-fc-search">
+            <input id="rb-t3k-q-${ctx.id}" type="text" value="${rbEsc(ctx.query || '')}" placeholder="brand / model…"
+                   onkeydown="if(event.key==='Enter')rbT3kSearch('${ctx.id}')">
+            <button onclick="rbT3kSearch('${ctx.id}')">Search</button>
+        </div>
+        ${results ? `<div class="rb-fc-results">${results}</div>` : ''}`;
+}
+function rbT3kCandHtml(ctx, c) {
+    const expanded = ctx.expanded === c.id;
+    const caps = ctx.captures[c.id];
+    const photo = (c.images && c.images[0])
+        ? `<img src="${rbEsc(c.images[0])}" alt="" loading="lazy" class="rb-fc-thumb" onerror="this.style.visibility='hidden'">`
+        : `<div class="rb-fc-thumb rb-fc-thumb-empty">t3k</div>`;
+    let capsHtml = '';
+    if (expanded) {
+        if (caps === 'loading') capsHtml = `<div class="rb-fc-hint">loading captures…</div>`;
+        else if (caps === 'error') capsHtml = `<div class="rb-fc-hint rb-fc-warn">couldn't load captures</div>`;
+        else if (Array.isArray(caps)) {
+            if (!caps.length) capsHtml = `<div class="rb-fc-hint">no captures in this tone</div>`;
+            else {
+                // A tone can hold hundreds of captures (one per gain step) — offer
+                // a filter so the user doesn't scroll. Its rows re-render in place
+                // (rbT3kCapFilter updates only #rb-t3k-caplist), keeping focus.
+                const search = caps.length > 6
+                    ? `<div class="rb-t3k-capsearch"><input id="rb-t3k-capq-${ctx.id}" type="text"
+                           value="${rbEsc(ctx.capFilter || '')}" placeholder="🔍 filter ${caps.length} captures…"
+                           oninput="rbT3kCapFilter('${ctx.id}', this.value)"></div>` : '';
+                capsHtml = `${search}<div id="rb-t3k-caplist-${ctx.id}" class="rb-t3k-caplist">${rbT3kCapRowsHtml(ctx, c.id, caps)}</div>`;
+            }
+        }
+    }
+    // The WHOLE row toggles the capture list (no download button here) — a tone
+    // can hold several captures (gain/EQ variants) and the user picks one below.
+    // The tone3000 page link stops propagation so it doesn't also toggle.
+    return `<div class="rb-fc-row rb-t3k-cand ${expanded ? 'open' : ''}" onclick="rbT3kToggle('${ctx.id}',${c.id})" title="Click to see this tone's captures">
+            ${photo}
+            <div class="rb-fc-row-main">
+                <div class="rb-fc-row-title">${rbEsc(c.title)}</div>
+                <div class="rb-fc-row-sub"><a href="${rbEsc(c.url || '#')}" target="_blank" class="rb-t3k-link" onclick="event.stopPropagation()">tone3000 ↗</a> · ${rbEsc(c.license || 'unknown')} · ${c.downloads_count || 0} dl</div>
+            </div>
+            <span class="rb-t3k-more">${expanded ? '▾ hide' : '▸ options'}</span>
+        </div>${expanded ? `<div class="rb-t3k-caps">${capsHtml}</div>` : ''}`;
+}
+// Rows for the expanded tone's captures, filtered by ctx.capFilter. Split out so
+// the filter box can refresh just this list without re-rendering the browser.
+function rbT3kCapRowsHtml(ctx, toneId, caps) {
+    const q = (ctx.capFilter || '').toLowerCase().trim();
+    const list = q ? caps.filter(m => (m.name || '').toLowerCase().includes(q)) : caps;
+    if (!list.length) return `<div class="rb-fc-hint">no captures match “${rbEsc(ctx.capFilter)}”</div>`;
+    return list.map(m => `<div class="rb-t3k-cap">
+            <span class="rb-t3k-cap-name" title="${rbEsc(m.name)}">${rbEsc(m.name)}</span>
+            ${m.size ? `<span class="rb-t3k-cap-size">${rbEsc(m.size)}</span>` : ''}
+            <button class="rb-fc-use" onclick="rbT3kUse('${ctx.id}',this,${toneId},${m.model_id})">⬇ Download</button>
+        </div>`).join('');
+}
+window.rbT3kCapFilter = function (id, val) {
+    const c = rbT3kCtxs[id]; if (!c) return;
+    c.capFilter = val;
+    const caps = c.captures[c.expanded];
+    const host = document.getElementById(`rb-t3k-caplist-${id}`);
+    if (host && Array.isArray(caps)) host.innerHTML = rbT3kCapRowsHtml(c, c.expanded, caps);
+};
+window.rbT3kSetCat = function (id, key) {
+    const c = rbT3kCtxs[id]; if (!c) return;
+    c.gears = key; c.expanded = null;
+    rbT3kRender(c);
+    if (c.query) rbT3kSearch(id);
+};
+window.rbT3kSearch = async function (id) {
+    const c = rbT3kCtxs[id]; if (!c) return;
+    const el = document.getElementById(`rb-t3k-q-${id}`);
+    if (el) c.query = (el.value || '').trim();
+    if (!c.query) return;
+    c.searching = true; c.expanded = null; c.captures = {};
+    rbT3kRender(c);
+    const params = { rs_gear: '', query_override: c.query, limit: '20' };
+    if (c.gears) params.gears_override = c.gears;
+    try { c.results = await (await fetch(`${window.RB_API}/search?${new URLSearchParams(params)}`)).json(); }
+    catch (e) { c.results = { has_api_access: true, candidates: [] }; }
+    c.searching = false;
+    rbT3kRender(c);
+};
+window.rbT3kToggle = async function (id, toneId) {
+    const c = rbT3kCtxs[id]; if (!c) return;
+    if (c.expanded === toneId) { c.expanded = null; rbT3kRender(c); return; }
+    c.expanded = toneId;
+    c.capFilter = '';                       // fresh filter per opened tone
+    if (!c.captures[toneId]) {
+        c.captures[toneId] = 'loading';
+        rbT3kRender(c);
+        try {
+            const d = await (await fetch(`${window.RB_API}/tone3000/captures/${toneId}`)).json();
+            c.captures[toneId] = Array.isArray(d.captures) ? d.captures : [];
+        } catch (e) { c.captures[toneId] = 'error'; }
+    }
+    if (c.expanded === toneId) rbT3kRender(c);
+};
+window.rbT3kUse = async function (id, btn, toneId, modelId) {
+    const c = rbT3kCtxs[id]; if (!c) return;
+    const old = btn.textContent;
+    btn.disabled = true; btn.textContent = '…';
+    let d;
+    try {
+        const body = { rs_gear: '', tone3000_id: toneId };
+        if (modelId != null) body.model_id = modelId;
+        if (c.gears === 'ir') body.is_ir = true;
+        const r = await fetch(`${window.RB_API}/audition_candidate`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        d = await r.json();
+        if (!r.ok || !d.file) throw new Error(d.error || 'download failed');
+    } catch (e) {
+        btn.disabled = false; btn.textContent = old;
+        return alert(`Couldn't download: ${e.message || e}`);
+    }
+    let nm;
+    const caps = c.captures[toneId];
+    if (modelId != null && Array.isArray(caps)) { const m = caps.find(x => x.model_id === modelId); nm = m && m.name; }
+    if (!nm) { const cand = ((c.results && c.results.candidates) || []).find(x => x.id === toneId); nm = cand && cand.title; }
+    c.onUse(d.file, d.kind || 'nam', nm);
+};
+window.rbT3kPickDir = async function (id) {
+    const c = rbT3kCtxs[id]; if (!c) return;
+    const host = window.feedBackDesktop;
+    if (!host || typeof host.pickFile !== 'function') return alert('File picker not available in this build.');
+    let path;
+    try {
+        const exts = c.allowDirExts || ['nam', 'wav'];
+        const picked = await host.pickFile([{ name: 'NAM / IR', extensions: exts }, { name: 'All Files', extensions: ['*'] }]);
+        if (!picked) return;
+        path = Array.isArray(picked) ? picked[0] : picked;
+    } catch (e) { return alert(`Pick failed: ${e && e.message ? e.message : e}`); }
+    if (!path) return;
+    const kind = /\.wav$/i.test(path) ? 'ir' : 'nam';
+    if (c.onDir) c.onDir(path, kind); else c.onUse(path, kind);
+};
+
+// ── Full-chain NAM chooser modal (uses the shared tone3000 browser) ──────────
+const rbFcState = { open: false };
+window.rbStudioLoadFullChainNam = function rbStudioLoadFullChainNam() { rbFcOpen(); };
+window.rbFcOpen = function rbFcOpen() {
+    rbFcState.open = true;
+    const modal = document.getElementById('rb-fullchain-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    const body = document.getElementById('rb-fullchain-body');
+    if (body) {
+        body.innerHTML = `<div class="rb-fc-scope">Replaces <b>${rbEsc(rbFcScopeLabel())}</b> with the chosen full-chain NAM.</div>
+            <div id="rb-fc-t3k"></div>`;
+        rbT3kMount({
+            id: 'fullchain',
+            containerId: 'rb-fc-t3k',
+            allowDir: true,
+            allowDirExts: ['nam'],
+            // Directory pick → referenced by ABSOLUTE path (user's earlier choice).
+            onDir: (path) => { rbFcClose(); rbApplyFullChainNam(path); },
+            // tone3000 download → RELATIVE nam_models path (copied into library).
+            onUse: (file, kind, name) => { rbFcClose(); rbApplyFullChainNam(file, name); },
+        });
+    }
+    requestAnimationFrame(() => document.getElementById('rb-t3k-q-fullchain')?.focus());
+};
+window.rbFcClose = function rbFcClose() {
+    rbFcState.open = false;
+    document.getElementById('rb-fullchain-modal')?.classList.add('hidden');
+};
+// A short label of what the load will replace, so the user knows the scope.
+function rbFcScopeLabel() {
+    const v = rbState.studioView || { source: 'default' };
+    if (v.source === 'song') {
+        const t = rbState.songTones && rbState.songTones.tones && rbState.songTones.tones[v.toneIdx];
+        return `song tone “${(t && t.name) || 'Tone'}”`;
+    }
+    if (v.source === 'saved') return `saved tone “${v.name}”`;
+    return 'the Default tone';
 }
 
 // Save the current Studio chain as a user-named tone. Electron blocks
@@ -5932,6 +7374,49 @@ async function rbPreloadCuratedVariants() {
     }
 }
 
+// Download tone3000 amp captures (clean/crunch/dist) and create ONE new gear
+// per amp — auto-switched by mapped volume, editable thresholds. Builds the
+// library only; Rescan all then maps songs onto them. Shares the preload
+// progress UI + polling.
+async function rbDownloadTone3000Gears() {
+    if (!confirm('Download tone3000 amp tones as new gear?\n\n'
+               + 'Downloads each curated amp\'s clean / crunch / dist captures and '
+               + 'creates ONE new gear per amp that auto-switches between them by the '
+               + 'song\'s mapped volume.\n\n'
+               + 'Existing gear is NOT touched — the new gears start unassigned. '
+               + 'Run "Rescan all" in General settings afterward to map your songs '
+               + 'onto them.\n\nContinue?')) return;
+    let jobId = null;
+    try {
+        jobId = await rbStartCapabilityJob('rig-builder.tone3000-gears', 'Download tone3000 gain-variant gears', {
+            logicalJobKey: 'rig-builder.tone3000-gears',
+            targetKind: 'curated-captures',
+            targetRef: 'tone3000-gears',
+        });
+        rbState._preloadJobId = jobId;
+        const r = await fetch(`${RB_API}/download_tone3000_gears`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || r.status);
+        if (d.started === false) {
+            if (d.reason === 'no_amps_with_variants') {
+                rbFinishCapabilityJob(jobId, true, 'No amps with gain variants to download');
+                alert('No curated amps with clean/crunch/dist variants were found.');
+                return;
+            }
+            rbFinishCapabilityJob(jobId, true, 'Download already running');
+            alert('Already running — progress is shown below.');
+            rbPreloadStartPolling();
+            return;
+        }
+        rbPreloadStartPolling();
+    } catch (e) {
+        if (jobId) rbFinishCapabilityJob(jobId, false, e.message || e, 'external-dependency');
+        alert(`Could not start download: ${e.message || e}`);
+    }
+}
+
 // Live progress polling for the curated-variants preload. Polls the
 // backend's /preload_status every 500ms while a run is in flight,
 // stops automatically when `running` flips to false, and surfaces the
@@ -6076,10 +7561,17 @@ async function rbPurgeNams(filter, label) {
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || r.status);
         rbLoadManageTab();
+        // Custom gears whose files were deleted are gone now — refresh the catalog
+        // so they drop out of the browser too.
+        const removed = (d.removed_gears || []).length;
+        if (removed) { rbState.gearCatalog = null; try { rbLoadCatalog(); } catch (_) {} }
         rbFinishCapabilityJob(jobId, true, `Purged ${d.deleted_count || 0} cached capture files`);
+        const extra = removed ? ` and removed ${removed} gear${removed > 1 ? 's' : ''}` : '';
         if ((d.errors || []).length) {
-            alert(`Purged ${d.deleted_count} files. ${d.errors.length} errors:\n` +
+            alert(`Purged ${d.deleted_count} files${extra}. ${d.errors.length} errors:\n` +
                   d.errors.slice(0, 5).join('\n'));
+        } else if (removed) {
+            alert(`Purged ${d.deleted_count} files${extra}.`);
         }
     } catch (e) {
         rbFinishCapabilityJob(jobId, false, e.message || e, 'storage');
@@ -6094,7 +7586,7 @@ async function rbLoadCoverage() {
     if (!el) return;   // coverage card removed from Settings
     const s = rbState.status;
     if (!s || !s.rs_to_real_loaded) {
-        el.innerHTML = '<span class="text-yellow-500">rs_to_real.json no cargado.</span>';
+        el.innerHTML = '<span class="text-yellow-500">rs_to_real.json not loaded.</span>';
         return;
     }
     const cats = s.rs_to_real_by_category || {};
@@ -6110,15 +7602,53 @@ async function rbLoadCoverage() {
 // assigned_mode (manual swaps are discarded). Destructive → confirm first.
 async function rbFactoryReset() {
     if (!confirm(
-        'Reset ALL tones to the factory mapping?\n\n' +
-        'Every piece is re-resolved to its default bundled VST / capture / IR. '
-        + 'Your manual gear swaps are DISCARDED (assigned_mode is ignored). '
+        'Reset the whole plugin to factory defaults?\n\n' +
+        'Every tone is re-resolved to its default bundled VST / capture / IR, and '
+        + 'ALL gear redirects (custom + auto tone3000 mappings) are cleared so gear '
+        + 'plays its own native VST again. Your manual gear swaps are DISCARDED. '
         + 'Per-tone bypass is kept. This cannot be undone.'
     )) return;
     await rbStartBatch('factory');
 }
 
-async function rbStartBatch(mode) {
+// "Map gear to songs": a small modal to pick which categories get mapped.
+function rbOpenMapModal() {
+    document.querySelectorAll('.rb-map-modal').forEach(m => m.remove());
+    const cats = [['amp', 'Amps'], ['pedal', 'Pedals'], ['rack', 'Racks'], ['cab', 'Cabs']];
+    const modal = document.createElement('div');
+    modal.className = 'rb-map-modal fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6';
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    modal.innerHTML = `
+        <div class="bg-dark-700 border border-gray-800 rounded-xl p-6 max-w-sm w-full">
+            <h3 class="text-white font-semibold mb-1">Map gear to songs</h3>
+            <p class="text-gray-500 text-sm mb-4">Pick which gear categories to (re)map. Checked ones get mapped; the rest are left untouched.</p>
+            <div class="space-y-2 mb-5">
+                ${cats.map(([k, lbl]) => `
+                    <label class="flex items-center gap-2 text-sm text-gray-200 cursor-pointer">
+                        <input type="checkbox" class="rb-map-cat accent-emerald-500 w-4 h-4" value="${k}" checked>
+                        ${lbl}
+                    </label>`).join('')}
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="this.closest('.rb-map-modal').remove()"
+                        class="bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Cancel</button>
+                <button onclick="rbConfirmMapModal(this)"
+                        class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-sm transition">Map selected</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+}
+
+function rbConfirmMapModal(btn) {
+    const modal = btn.closest('.rb-map-modal');
+    const categories = Array.from(modal.querySelectorAll('.rb-map-cat:checked')).map(c => c.value);
+    if (!categories.length) { alert('Pick at least one category.'); return; }
+    modal.remove();
+    // All four selected → no filter (map everything).
+    rbStartBatch('all', categories.length === 4 ? [] : categories);
+}
+
+async function rbStartBatch(mode, categories) {
     mode = mode || 'all';
     const btns = document.querySelectorAll('.rb-batch-btn');
     btns.forEach(b => { b.disabled = true; });
@@ -6133,7 +7663,7 @@ async function rbStartBatch(mode) {
         const r = await fetch(`${RB_API}/batch_all`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode }),
+            body: JSON.stringify({ mode, categories: categories || [] }),
         });
         if (!r.ok) {
             const err = await r.json().catch(() => ({}));
@@ -6148,7 +7678,9 @@ async function rbStartBatch(mode) {
     } finally {
         btns.forEach(b => { b.disabled = false; });
     }
-    document.getElementById('rb-batch-progress').classList.remove('hidden');
+    // There may be more than one progress block (Map all in tone3000, Reset to
+    // factory in General) — reveal every instance.
+    document.querySelectorAll('.rb-batch-progress').forEach(el => el.classList.remove('hidden'));
     if (rbState.batchPoll) clearInterval(rbState.batchPoll);
     rbState.batchPoll = setInterval(rbPollBatch, 1000);
     rbPollBatch();
@@ -6175,25 +7707,21 @@ async function rbPollBatch() {
     const pct = st.total ? Math.round(100 * st.progress / st.total) : 0;
     rbUpdateCapabilityJob(rbState._batchJobId, { mode: st.total ? 'determinate' : 'indeterminate', percent: pct, step: 'mapping', message: `${st.progress || 0} / ${st.total || 0}` });
     // The user may have navigated away from the batch panel — the poll keeps
-    // running for the capability job, so every DOM write is optional.
-    const pctEl = document.getElementById('rb-batch-pct');
-    if (pctEl) pctEl.textContent = `${pct}%`;
-    const countEl = document.getElementById('rb-batch-count');
-    if (countEl) countEl.textContent = `${st.progress} / ${st.total}`;
-    const barEl = document.getElementById('rb-batch-bar');
-    if (barEl) barEl.style.width = `${pct}%`;
-
-    const assignedEl = document.getElementById('rb-batch-assigned');
-    if (assignedEl && st.assigned) {
-        assignedEl.textContent = `${st.assigned} tones persisted`;
-        assignedEl.classList.remove('hidden');
+    // running for the capability job, so every DOM write is optional. Update
+    // EVERY progress block (there can be one per Setup sub-tab).
+    document.querySelectorAll('.rb-batch-pct').forEach(el => { el.textContent = `${pct}%`; });
+    document.querySelectorAll('.rb-batch-count').forEach(el => { el.textContent = `${st.progress} / ${st.total}`; });
+    document.querySelectorAll('.rb-batch-bar').forEach(el => { el.style.width = `${pct}%`; });
+    if (st.assigned) {
+        document.querySelectorAll('.rb-batch-assigned').forEach(el => {
+            el.textContent = `${st.assigned} tones persisted`;
+            el.classList.remove('hidden');
+        });
     }
-
-    const log = document.getElementById('rb-batch-log');
-    if (log) {
+    document.querySelectorAll('.rb-batch-log').forEach(log => {
         log.textContent = (st.log || []).join('\n');
         log.scrollTop = log.scrollHeight;
-    }
+    });
 
     if (!st.running && rbState.batchPoll) {
         clearInterval(rbState.batchPoll);
@@ -6435,12 +7963,39 @@ async function rbListSongs() {
         el.innerHTML = `<p class="text-red-400 text-sm">Library search failed: ${rbEsc(e.message || e)}</p>`;
         return;
     }
-    const songs = Array.isArray(data.songs) ? data.songs : [];
+    const songs = rbDedupePlatformVariants(
+        Array.isArray(data.songs) ? data.songs : [], providerId);
     if (!songs.length) {
         el.innerHTML = '<p class="text-gray-500 text-sm">No matches</p>';
         return;
     }
     el.innerHTML = songs.map(song => rbRenderLibrarySongListItem(song, providerId)).join('');
+}
+
+// Some CDLC shipped both a PC (`_p`) and a Mac (`_m`) PSARC; converting BOTH
+// yields two byte-for-byte-equivalent .sloppak entries for one song (e.g.
+// jackiwan_p.sloppak + jackiwan_m.sloppak, both "I Want You Back"). They only
+// differ by that trailing platform marker, so collapse the pair in the picker
+// — keeping the PC (`_p`) variant — instead of listing the song twice. A file
+// with no `_m`/`_p` suffix, or one whose partner isn't present, is untouched.
+function rbDedupePlatformVariants(songs, providerId) {
+    const seenBase = new Map();   // platform-agnostic base -> index in `out`
+    const out = [];
+    for (const song of songs) {
+        const fn = String(rbLibraryLocalFilename(song, providerId)
+            || rbLibrarySongId(song) || '');
+        const m = fn.match(/^(.*)_([mp])\.sloppak$/i);
+        if (!m) { out.push(song); continue; }
+        const base = m[1].toLowerCase();
+        const isPC = m[2].toLowerCase() === 'p';
+        if (!seenBase.has(base)) {
+            seenBase.set(base, out.length);
+            out.push(song);
+        } else if (isPC) {
+            out[seenBase.get(base)] = song;   // prefer the PC variant
+        }
+    }
+    return out;
 }
 
 function rbRenderLibrarySongListItem(song, fallbackProviderId) {
@@ -6845,7 +8400,7 @@ function rbRenderPieceCard(p, toneIdx, pIdx, isSelected, total) {
     // this rs_gear. The onerror swaps the broken <img> for the sibling
     // placeholder via plain DOM properties — avoids HTML-in-attribute
     // escaping bugs.
-    const imgUrl = `${window.RB_API}/gear_photo/${encodeURIComponent(p.type)}${_RB_GEAR_PHOTO_CB}`;
+    const imgUrl = rbCabArtDataUrl(p.type) || `${window.RB_API}/gear_photo/${encodeURIComponent(p.type)}${_RB_GEAR_PHOTO_CB}`;
     const onerr = "this.style.display='none'; var n=this.nextElementSibling; if(n) n.classList.remove('hidden');";
     // For pieces backed by one of our canvas-UI VSTs, show the recreated
     // plugin face (at the piece's current param values) instead of RS art.
@@ -7042,7 +8597,7 @@ function rbRenderPieceEditor(p, toneIdx, pIdx, filename) {
     // Big photo for the editor (same source as the chain cards).
     // Same sibling-swap pattern as rbRenderPieceCard — see comment there
     // for why we avoid the `JSON.stringify` inside an attribute approach.
-    const imgUrl = `${window.RB_API}/gear_photo/${encodeURIComponent(p.type)}${_RB_GEAR_PHOTO_CB}`;
+    const imgUrl = rbCabArtDataUrl(p.type) || `${window.RB_API}/gear_photo/${encodeURIComponent(p.type)}${_RB_GEAR_PHOTO_CB}`;
     const onerrBig = "this.style.display='none'; var n=this.nextElementSibling; if(n) n.classList.remove('hidden');";
     // Plugin-UI face for our canvas-backed VSTs (current param values).
     const pStemBig = rbCanvasStem(p);
@@ -7446,6 +9001,14 @@ async function rbToneEditVst(toneIdx, pIdx) {
         piece._vst_slot_id = null;
         return;
     }
+    // Custom gear: make sure its saved layout is attached (reloaded pieces lose
+    // it), then render the CREATED UI — never the plugin's native window.
+    await rbEnsureCustomUi(piece);
+    if (piece._custom_ui && !rbEffVstPath(piece)) {
+        // NAM/IR-backed custom gear: cosmetic face, no plugin to drive.
+        editor.classList.remove('hidden');
+        return rbToneRenderCustomFace(toneIdx, pIdx, piece, editor);
+    }
     if (!api) return alert('Native VST hosting not available');
     const vstPath = rbEffVstPath(piece);
     if (!vstPath) return alert('This piece has no VST assigned yet.');
@@ -7549,18 +9112,17 @@ async function rbToneEditVst(toneIdx, pIdx) {
                 }
             } catch (_) { /* mapping is best-effort; defaults remain on failure */ }
         }
-        // Editor priority: (1) faithful in-app canvas recreation; (2) for VSTs we
-        // HAVEN'T recreated, the plugin's OWN native window on top (the real UI,
-        // not generic sliders); (3) generic in-app sliders only when the plugin
-        // has no native window (UI-less, e.g. a headless filter).
-        if (rbHasCanvasUI(piece)) {
-            rbToneRenderInlineVstParams(toneIdx, pIdx);
-        } else if (await rbTryOpenNativeEditor(api, slotId)) {
-            const _nm = vstPath.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '');
-            editor.innerHTML = rbNativeEditorPanelHtml(
-                _nm, `rbToneCaptureVstState(${toneIdx}, ${pIdx})`, `rbToneEditVst(${toneIdx}, ${pIdx})`);
-        } else {
-            rbToneRenderInlineVstParams(toneIdx, pIdx);   // UI-less fallback: generic sliders
+        // Editor priority: IN-APP FIRST for every VST — a faithful canvas
+        // recreation, the custom layout, or a knob panel generated from the
+        // plugin's live parameters. The plugin's OWN native window is now
+        // opt-in (an "Open plugin window" button in the inline header). Only a
+        // truly UI-less plugin with NO params falls straight to the window.
+        if (!rbToneRenderInlineVstParams(toneIdx, pIdx)) {
+            if (await rbTryOpenNativeEditor(api, slotId)) {
+                const _nm = vstPath.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '');
+                editor.innerHTML = rbNativeEditorPanelHtml(
+                    _nm, `rbToneCaptureVstState(${toneIdx}, ${pIdx})`, `rbToneEditVst(${toneIdx}, ${pIdx})`);
+            }
         }
     } catch (e) {
         editor.innerHTML = `<div class="text-xs text-red-400">load failed: ${rbEsc(rbFriendlyVstLoadError(e))}</div>`;
@@ -7597,7 +9159,25 @@ function rbCanvasStem(piece) {
 }
 // True if we have an in-app canvas recreation of this piece's plugin UI.
 function rbHasCanvasUI(piece) {
+    // Custom gear always has an in-app face (its layout) → never the native window.
+    if (piece && piece._custom_ui) return true;
     return !!(window.RBPedalCanvas && window.RBPedalCanvas.has(rbCanvasStem(piece)));
+}
+
+// Values object (keyed by the custom layout's control id) for drawing a custom
+// gear's face at the piece's saved knob positions. A control tagged with a real
+// plugin `param` (logical id) reads that param's saved value; others default.
+function rbCustomUiValues(piece) {
+    const out = {};
+    const layout = piece && piece._custom_ui;
+    if (!layout || !Array.isArray(layout.controls)) return out;
+    const logical = (piece._vst_logical) || {};
+    layout.controls.forEach(c => {
+        if (typeof c.param === 'number' && typeof logical[c.param] === 'number') {
+            out[c.id] = logical[c.param];
+        }
+    });
+    return out;
 }
 
 // Try to open the plugin's OWN native window. Returns true if it opened, false
@@ -7608,6 +9188,28 @@ async function rbTryOpenNativeEditor(api, slotId) {
     if (!api || typeof api.openPluginEditor !== 'function' || slotId == null) return false;
     try { await api.openPluginEditor(slotId); return true; }
     catch (e) { console.warn('[rig_builder] this plugin has no native editor window:', e); return false; }
+}
+
+// Opt-in: open the REAL plugin window for a gear already loaded in the in-app
+// editor (its slot is live). The in-app param UI stays; this just also pops the
+// vendor UI for anyone who wants the exact original interface.
+async function rbToneOpenNativeWindow(toneIdx, pIdx) {
+    const api = rbAudioApi();
+    const piece = rbState.songTones && rbState.songTones.tones[toneIdx] && rbState.songTones.tones[toneIdx].chain[pIdx];
+    if (!api || !piece) return;
+    if (piece._vst_slot_id == null) { alert('Load the gear first (open its editor), then try again.'); return; }
+    if (!(await rbTryOpenNativeEditor(api, piece._vst_slot_id))) {
+        alert("This plugin has no native editor window (it's UI-less).");
+    }
+}
+async function rbMasterOpenNativeWindow(role, idx) {
+    const api = rbAudioApi();
+    const piece = rbState.master && rbState.master[role] && rbState.master[role][idx];
+    if (!api || !piece) return;
+    if (piece._vst_slot_id == null) { alert('Load the gear first (open its editor), then try again.'); return; }
+    if (!(await rbTryOpenNativeEditor(api, piece._vst_slot_id))) {
+        alert("This plugin has no native editor window (it's UI-less).");
+    }
 }
 
 // Inline panel shown when a non-recreated VST is being edited in its own native
@@ -7686,10 +9288,139 @@ function rbCanvasThumbValues(piece) {
     return byName;
 }
 
+// Re-attach a custom gear's UI layout (+ its source) to a piece that lost it —
+// e.g. a piece rebuilt from a saved song, where the backend chain rows carry the
+// rs_gear but not our custom layout. Looks it up by rs_gear from a cached map of
+// the user's custom gear (fetched once). Without this, a reloaded custom piece
+// falls back to the plugin's NATIVE window instead of the created UI.
+// Fetch (once) the user's custom gear into rbState._customGearMap.
+function rbLoadCustomGearMap() {
+    if (!rbState._customGearPromise) {
+        rbState._customGearPromise = fetch(`${window.RB_API}/custom_gear`)
+            .then(r => r.json())
+            .then(d => {
+                rbState._customGearMap = {};
+                (d.gear || []).forEach(x => { if (x && x.rs_gear) rbState._customGearMap[x.rs_gear] = x; });
+                return rbState._customGearMap;
+            })
+            .catch(() => (rbState._customGearMap = {}));
+    }
+    return rbState._customGearPromise;
+}
+
+// Attach a custom gear's saved UI + source to a piece from the ALREADY-loaded
+// map (sync, no fetch). No-op if the map isn't loaded yet or it's not custom.
+function rbAttachCustomUiSync(piece) {
+    if (!piece) return;
+    const t = piece.type || piece.rs_gear || '';
+    if (t.indexOf('custom_') !== 0) return;
+    const rec = rbState._customGearMap && rbState._customGearMap[t];
+    if (!rec) return;
+    // Give the piece the user's chosen name so views (node editor, Studio cards)
+    // show it instead of the raw "custom_rack_xxxx" id it loads with. Runs even
+    // when the UI is already attached (name may still be the raw id).
+    if (!piece.real_name || piece.real_name === t) {
+        const nm = rec.real_name || rec.name;
+        if (nm) piece.real_name = nm;
+    }
+    if (piece._custom_ui) return;
+    if (rec.ui) piece._custom_ui = rec.ui;
+    if (rec.vst_path && !piece._vst_path) {
+        piece._vst_path = rec.vst_path; piece._vst_format = rec.vst_format || 'VST3';
+    } else if (rec.file && !piece._uploaded_file && !(piece.assigned && piece.assigned.file)) {
+        const ck = rec.kind === 'ir' ? 'ir' : 'nam';
+        piece._uploaded_file = rec.file; piece._uploaded_kind = ck;
+        piece.assigned = { kind: ck, file: rec.file, assigned_mode: 'manual' };
+    }
+}
+
+// Ensure every custom piece in a chain has its UI attached so it renders on the
+// FIRST paint (not only after being selected). If the map isn't loaded yet,
+// fetch it and call onReady() so the caller can re-render.
+function rbEnsureChainCustomUi(chain, onReady) {
+    if (!Array.isArray(chain)) return;
+    const pending = chain.filter(p => p && !p._custom_ui && (p.type || p.rs_gear || '').indexOf('custom_') === 0);
+    if (!pending.length) return;
+    if (rbState._customGearMap) { pending.forEach(rbAttachCustomUiSync); return; }
+    rbLoadCustomGearMap().then(() => {
+        let changed = false;
+        pending.forEach(p => { const before = p._custom_ui; rbAttachCustomUiSync(p); if (!before && p._custom_ui) changed = true; });
+        if (changed && onReady) { try { onReady(); } catch (_) {} }
+    });
+}
+
+async function rbEnsureCustomUi(piece) {
+    if (!piece || piece._custom_ui) return;
+    const t = piece.type || piece.rs_gear || '';
+    if (t.indexOf('custom_') !== 0) return;
+    if (!rbState._customGearMap) await rbLoadCustomGearMap();
+    rbAttachCustomUiSync(piece);
+}
+
+// Interactive tone-editor face for CUSTOM gear: the user's layout, knobs mapped
+// to the real plugin params they carry, persisting into the song like the normal
+// canvas editor.
+function rbToneRenderCustomFace(toneIdx, pIdx, piece, editor) {
+    const PC = window.RBPedalCanvas;
+    const layout = piece._custom_ui;
+    const vstName = (rbEffVstPath(piece) || '').split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '');
+    editor.innerHTML = `
+        <div class="flex items-center justify-between mb-1">
+            <div class="text-[11px] text-purple-300 font-semibold">Custom UI · ${rbEsc(piece.real_name || vstName || 'Gear')}</div>
+            <div class="flex items-center gap-1">
+                ${rbEffVstPath(piece) ? `<button onclick="rbToneOpenNativeWindow(${toneIdx}, ${pIdx})"
+                        title="Open the plugin's own (real) editor window"
+                        class="bg-dark-700 hover:bg-dark-600 text-gray-300 text-[10px] px-2 py-0.5 rounded">🪟 Plugin window</button>` : ''}
+                <button onclick="rbToneCaptureVstState(${toneIdx}, ${pIdx})"
+                        title="Snapshot the current parameter values into this tone's saved state"
+                        class="bg-amber-700/60 hover:bg-amber-600/60 text-amber-100 text-[10px] px-2 py-0.5 rounded">📸 Capture state</button>
+                <button onclick="rbToneEditVst(${toneIdx}, ${pIdx})"
+                        title="Close inline editor"
+                        class="text-[10px] text-gray-400 hover:text-gray-200 px-1">✕</button>
+            </div>
+        </div>
+        <div class="flex justify-center">
+            <canvas id="rb-tone-vst-canvas-${toneIdx}-${pIdx}" style="width:100%;max-width:360px;cursor:ns-resize;touch-action:none"></canvas>
+        </div>
+        <div class="text-[10px] text-gray-500 text-center mt-1">Drag a knob up/down to adjust</div>`;
+    const canvas = document.getElementById(`rb-tone-vst-canvas-${toneIdx}-${pIdx}`);
+    const api = rbAudioApi();
+    const idToParam = {};
+    (layout.controls || []).forEach(c => { if (typeof c.param === 'number') idToParam[c.id] = c.param; });
+    const draw = () => {
+        const model = rbCanvasParamModel(piece);   // idMap: logical → real engine id
+        let values = {};
+        try { values = rbCustomUiValues(piece) || {}; } catch (_) {}
+        PC.attachSpec(canvas, PC.specFromLayout(layout), {
+            values,
+            interactive: true,
+            onChange: (ctrlId, val) => {
+                const logical = idToParam[ctrlId];
+                if (typeof logical !== 'number') return;   // cosmetic control
+                const realId = (model.idMap && model.idMap[logical] != null) ? model.idMap[logical] : logical;
+                if (piece._vst_slot_id != null && api) { try { api.setParameter(piece._vst_slot_id, realId, val); } catch (_) {} }
+                piece._vst_params = piece._vst_params || {};
+                piece._vst_params[realId] = val;
+                piece._vst_logical = piece._vst_logical || {};
+                piece._vst_logical[logical] = val;
+                rbStampVstState(piece);
+                rbDebouncedToneSave(toneIdx, pIdx);
+            },
+        });
+    };
+    if (PC.ready) PC.ready().then(draw);
+    draw();
+    return true;
+}
+
 function rbToneRenderInlineVstParams(toneIdx, pIdx) {
     const editor = document.getElementById(`rb-tone-vst-editor-${toneIdx}-${pIdx}`);
     if (!editor) return false;
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
+    // Custom gear: draw the user's own layout (never the plugin's stem/native UI).
+    if (piece && piece._custom_ui && window.RBPedalCanvas && window.RBPedalCanvas.specFromLayout) {
+        return rbToneRenderCustomFace(toneIdx, pIdx, piece, editor);
+    }
     const params = rbFilterVstParams((piece && piece._vst_param_meta) || []);
     const effVstPath = rbEffVstPath(piece);
     const vstName = effVstPath.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '');
@@ -7701,6 +9432,9 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
             <div class="flex items-center justify-between mb-1">
                 <div class="text-[11px] text-purple-300 font-semibold">In-feedBack editor · ${rbEsc(vstName)}</div>
                 <div class="flex items-center gap-1">
+                    <button onclick="rbToneOpenNativeWindow(${toneIdx}, ${pIdx})"
+                            title="Open the plugin's own (real) editor window"
+                            class="bg-dark-700 hover:bg-dark-600 text-gray-300 text-[10px] px-2 py-0.5 rounded">🪟 Plugin window</button>
                     <button onclick="rbToneCaptureVstState(${toneIdx}, ${pIdx})"
                             title="Snapshot the current parameter values into this tone's saved state"
                             class="bg-amber-700/60 hover:bg-amber-600/60 text-amber-100 text-[10px] px-2 py-0.5 rounded">📸 Capture state</button>
@@ -7726,6 +9460,11 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
                     if (piece._vst_slot_id != null && api) { try { api.setParameter(piece._vst_slot_id, realId, val); } catch (_) {} }
                     piece._vst_params = piece._vst_params || {};
                     piece._vst_params[realId] = val;
+                    // A param can live in _vst_params under TWO aliases (numeric
+                    // id + NAME, both persisted). Update the name alias too when
+                    // it already exists, or the stale name value overrides this
+                    // fresh drag on the next song load ("edits don't save").
+                    rbSyncParamNameAlias(piece, realId, val);
                     // Keep the LOGICAL-id value too so the song thumbnail redraws
                     // the right knob on a fresh load (the spec draws by logical id).
                     piece._vst_logical = piece._vst_logical || {};
@@ -7815,6 +9554,7 @@ async function rbToneSetVstParam(toneIdx, pIdx, paramId, value, valueDisplayEl) 
     // the latest values — not just an explicit Capture state click.
     piece._vst_params = piece._vst_params || {};
     piece._vst_params[paramId] = v;
+    rbSyncParamNameAlias(piece, paramId, v);   // keep the NAME alias fresh too
     rbStampVstState(piece);   // refresh params (opaque is captured at save time)
     // Debounced auto-save so the user doesn't lose drags after navigating
     // away from the song. 500 ms after the last drag we hit /save_preset.
@@ -8337,6 +10077,10 @@ async function rbReloadDefaultTone() {
         // store pan), so the panning would be lost on app restart. Restore it
         // from the saved graph (localStorage holds node.pan) + re-apply stereo.
         try { rbRestorePanFromGraph(); await rbStudioApplyStereoToEngine(); } catch (_) {}
+        // Pre-warm the cab variants so the FIRST Cab Room entry is instant (Studio
+        // view only, deferred so it never blocks the tone load).
+        if (ok && document.getElementById('rb-studio-room'))
+            setTimeout(() => { try { rbStudioWarmCabVariants(); } catch (_) {} }, 1500);
         return ok;
     }
     catch (e) { return false; }
@@ -8503,6 +10247,8 @@ async function rbAfterMasterEdit(role) {
 async function rbPersistMasterChain(role) {
     const arr = rbState.master[role] || [];
     const pieces = arr.map(p => {
+        const fc = rbFullChainPayloadPiece(p);
+        if (fc) return fc;
         const isVst = p._vst_kind === 'vst' || (p.assigned && p.assigned.kind === 'vst' && p.assigned.vst_path);
         if (isVst) {
             return {
@@ -8578,6 +10324,7 @@ async function rbMasterEditVst(role, idx) {
         piece._vst_slot_id = null;
         return;
     }
+    await rbEnsureCustomUi(piece);   // custom gear → created UI, not the native window
     if (!api) {
         alert('Native VST hosting not available');
         return;
@@ -8626,17 +10373,14 @@ async function rbMasterEditVst(role, idx) {
             const v  = param.value ?? param.current;
             if (id != null && typeof v === 'number') piece._vst_params[id] = v;
         }
-        // Editor priority: (1) faithful in-app canvas recreation; (2) the
-        // plugin's OWN native window for VSTs we haven't recreated; (3) generic
-        // in-app sliders only when the plugin is UI-less (no native window).
-        if (rbHasCanvasUI(piece)) {
-            rbMasterRenderInlineVstParams(role, idx);
-        } else if (await rbTryOpenNativeEditor(api, slotId)) {
-            const _nm = vstPath.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '');
-            editor.innerHTML = rbNativeEditorPanelHtml(
-                _nm, `rbMasterCaptureVstState('${role}', ${idx})`, `rbMasterEditVst('${role}', ${idx})`);
-        } else {
-            rbMasterRenderInlineVstParams(role, idx);   // UI-less fallback: generic sliders
+        // In-app FIRST for every VST (see rbToneEditVst). The native window is
+        // opt-in via the inline header; only a param-less plugin falls to it.
+        if (!rbMasterRenderInlineVstParams(role, idx)) {
+            if (await rbTryOpenNativeEditor(api, slotId)) {
+                const _nm = vstPath.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '');
+                editor.innerHTML = rbNativeEditorPanelHtml(
+                    _nm, `rbMasterCaptureVstState('${role}', ${idx})`, `rbMasterEditVst('${role}', ${idx})`);
+            }
         }
     } catch (e) {
         editor.innerHTML = `<div class="text-xs text-red-400">load failed: ${rbEsc(rbFriendlyVstLoadError(e))}</div>`;
@@ -8658,6 +10402,9 @@ function rbMasterRenderInlineVstParams(role, idx) {
             <div class="flex items-center justify-between mb-1">
                 <div class="text-[11px] text-purple-300 font-semibold">In-feedBack editor · ${rbEsc(vstName)}</div>
                 <div class="flex items-center gap-1">
+                    <button onclick="rbMasterOpenNativeWindow('${role}', ${idx})"
+                            title="Open the plugin's own (real) editor window"
+                            class="bg-dark-700 hover:bg-dark-600 text-gray-300 text-[10px] px-2 py-0.5 rounded">🪟 Plugin window</button>
                     <button onclick="rbMasterCaptureVstState('${role}', ${idx})"
                             title="Snapshot the current parameter values into the master chain's saved state"
                             class="bg-amber-700/60 hover:bg-amber-600/60 text-amber-100 text-[10px] px-2 py-0.5 rounded">📸 Capture state</button>
@@ -8683,6 +10430,11 @@ function rbMasterRenderInlineVstParams(role, idx) {
                     if (piece._vst_slot_id != null && api) { try { api.setParameter(piece._vst_slot_id, realId, val); } catch (_) {} }
                     piece._vst_params = piece._vst_params || {};
                     piece._vst_params[realId] = val;
+                    // A param can live in _vst_params under TWO aliases (numeric
+                    // id + NAME, both persisted). Update the name alias too when
+                    // it already exists, or the stale name value overrides this
+                    // fresh drag on the next song load ("edits don't save").
+                    rbSyncParamNameAlias(piece, realId, val);
                 },
             });
         };
@@ -8973,9 +10725,28 @@ function rbMasterAddPieceVstFromPath(role, vstPath) {
     return rbMasterAddPieceVst(role, path, fmt, name);
 }
 
+// If a picked gear is a custom (user-authored) one, attach its saved VST or
+// NAM/IR source to the freshly-created chain piece so it plays immediately
+// rather than landing unassigned. No-op for regular game gear.
+function rbAttachCustomSource(piece, entry) {
+    if (!entry || !entry.custom) return;
+    if (entry.ui) piece._custom_ui = entry.ui;   // show the user's face, not the native window
+    if (entry.vst_path) {
+        piece._vst_path = entry.vst_path;
+        piece._vst_format = entry.vst_format || 'VST3';
+        piece._vst_state = entry.vst_state || null;
+        piece._vst_kind = 'vst';
+    } else if (entry.file) {
+        const ck = entry.kind === 'ir' ? 'ir' : 'nam';
+        piece._uploaded_file = entry.file;
+        piece._uploaded_kind = ck;
+        piece.assigned = { kind: ck, file: entry.file, assigned_mode: 'manual' };
+    }
+}
+
 function rbMasterAddPiece(role, rsGearType, category) {
     const catalogEntry = (_rbGearsCatalog || []).find(g => g.rs_gear === rsGearType) || {};
-    rbState.master[role].push({
+    const piece = {
         type: rsGearType,
         slot: `master_${role}`,
         rs_category: category,
@@ -8985,7 +10756,9 @@ function rbMasterAddPiece(role, rsGearType, category) {
         model: catalogEntry.model || '',
         assigned: null,
         _bypassed: false,
-    });
+    };
+    rbAttachCustomSource(piece, catalogEntry);
+    rbState.master[role].push(piece);
     // Close picker.
     const picker = document.getElementById(`rb-master-${role}-picker`);
     if (picker) { picker.classList.add('hidden'); picker.innerHTML = ''; }
@@ -9482,6 +11255,7 @@ async function rbAddPiece(toneIdx, filename, rsGearType, category) {
         bypassed: false,
         rs_irs: [],
     };
+    rbAttachCustomSource(newPiece, catalogEntry);
     tone.chain.push(newPiece);
     tone.chain_source = 'edited';
     // Close the modal so the user sees the freshly-added piece.
@@ -9557,11 +11331,18 @@ function rbVstCategoryLabel(p) {
 // Build <optgroup>-grouped <option>s from rbState.knownVsts, applying a text
 // filter (name / manufacturer / category) and the hide-instruments flag.
 // Shared by both pickers so the Songs and Gear panels stay in sync.
-function rbBuildVstOptions(stagedPath, filter, hideInstruments) {
+function rbBuildVstOptions(stagedPath, filter, hideInstruments, extraPredicate) {
     const known = rbState.knownVsts || [];
     const q = (filter || '').trim().toLowerCase();
+    // De-dupe by resolved path so a plugin listed by more than one source
+    // (engine scan + our bundled cache, or VST3 + AU) shows once per path.
+    const seenPath = new Set();
     const matches = known.filter(p => {
+        if (extraPredicate && !extraPredicate(p)) return false;
         if (hideInstruments && p.isInstrument) return false;
+        const key = (p.path || p.name || '');
+        if (seenPath.has(key)) return false;
+        seenPath.add(key);
         if (!q) return true;
         return ((p.name || '') + ' ' + (p.manufacturer || '') + ' ' + (p.category || ''))
             .toLowerCase().includes(q);
@@ -10286,21 +12067,43 @@ async function rbLoadAndEditVst(toneIdx, pIdx) {
 // {"params": {paramId: value, ...}} JSON shape). Matches stages to chain
 // JSON by index — assumes loadPreset preserves order, which is what the
 // audio_engine plugin code path also relies on (see bundle screen.js).
+// Keep the NAME alias of a param in sync with a fresh numeric-id edit.
+// _vst_params can hold the same param under BOTH its numeric id and its
+// name (the finalize read-back adds name entries). If only the numeric
+// entry were updated on a drag, the stale name entry would win at song
+// load (rbReapplyVstParamsToChain resolves names via getParameters) and
+// the user's edit would appear "not saved".
+function rbSyncParamNameAlias(piece, realId, val) {
+    try {
+        const meta = piece && piece._vst_param_meta;
+        if (!Array.isArray(meta)) return;
+        const m = meta.find((p, i) => (p.id ?? p.paramId ?? p.index ?? i) === realId);
+        const nm = m && (m.name ?? m.label);
+        if (nm && piece._vst_params && piece._vst_params[nm] != null)
+            piece._vst_params[nm] = val;
+    } catch (_) {}
+}
+
 async function rbReapplyVstParamsToChain(api, chainSpec) {
+    // Verbose per-stage/per-param VST re-apply trace — OFF by default; enable with
+    // window.RB_DEBUG / localStorage 'rbDebug' (same flag as rbDebugLog).
+    const _dbg = (() => { try { return !!(window.RB_DEBUG || localStorage.getItem('rbDebug')); } catch (_) { return false; } })();
+    const _log = _dbg ? console.log.bind(console) : () => {};
+    const _warn = _dbg ? console.warn.bind(console) : () => {};
     if (typeof api.getChainState !== 'function' || typeof api.setParameter !== 'function') {
-        console.warn('[rig_builder reapply] api.getChainState or setParameter missing — walker skipped');
+        _warn('[rig_builder reapply] api.getChainState or setParameter missing — walker skipped');
         return;
     }
     let loaded;
     try { loaded = await api.getChainState(); } catch (e) {
-        console.warn('[rig_builder reapply] getChainState failed:', e);
+        _warn('[rig_builder reapply] getChainState failed:', e);
         return;
     }
     if (!Array.isArray(loaded)) {
-        console.warn('[rig_builder reapply] getChainState returned non-array:', loaded);
+        _warn('[rig_builder reapply] getChainState returned non-array:', loaded);
         return;
     }
-    console.log(`[rig_builder reapply] chain has ${loaded.length} loaded stage(s); spec has ${chainSpec.length}`);
+    _log(`[rig_builder reapply] chain has ${loaded.length} loaded stage(s); spec has ${chainSpec.length}`);
     // Walk the SPEC and the LOADED state together. We rely on
     // index alignment — both lists are in signal-flow order.
     for (let i = 0; i < chainSpec.length && i < loaded.length; i++) {
@@ -10325,7 +12128,7 @@ async function rbReapplyVstParamsToChain(api, chainSpec) {
         }
         if (!params || Object.keys(params).length === 0) continue;
         const slotId = slot.id ?? slot.slotId ?? i;
-        console.log(`[rig_builder reapply] stage ${i} (slot ${slotId}): ${Object.keys(params).length} params to apply — keys: ${Object.keys(params).slice(0, 5).join(', ')}${Object.keys(params).length > 5 ? '…' : ''}`);
+        _log(`[rig_builder reapply] stage ${i} (slot ${slotId}): ${Object.keys(params).length} params to apply — keys: ${Object.keys(params).slice(0, 5).join(', ')}${Object.keys(params).length > 5 ? '…' : ''}`);
 
         // Resolve param NAMES (string keys) to IDs via getParameters(),
         // same pattern as the manual ⇶ Apply RS settings flow. Keys that
@@ -10349,49 +12152,100 @@ async function rbReapplyVstParamsToChain(api, chainSpec) {
                         const pname = (p.name ?? p.label ?? '').toLowerCase();
                         if (pname) nameToId[pname] = pid;
                     });
-                    console.log(`[rig_builder reapply] slot ${slotId}: getParameters returned ${paramList.length} params; first 5 names: ${paramList.slice(0, 5).map(p => p.name || p.label).join(' | ')}`);
+                    _log(`[rig_builder reapply] slot ${slotId}: getParameters returned ${paramList.length} params; first 5 names: ${paramList.slice(0, 5).map(p => p.name || p.label).join(' | ')}`);
                 } else {
-                    console.warn(`[rig_builder reapply] slot ${slotId}: getParameters returned non-array:`, paramList);
+                    _warn(`[rig_builder reapply] slot ${slotId}: getParameters returned non-array:`, paramList);
                 }
             } catch (e) {
-                console.warn(`[rig_builder reapply] slot ${slotId}: getParameters threw:`, e);
+                _warn(`[rig_builder reapply] slot ${slotId}: getParameters threw:`, e);
             }
         }
 
         let appliedCount = 0;
         const failed = [];
+        // Resolve EVERY key to its targetId first, then apply ONCE per id.
+        // A param can be saved under TWO aliases — its numeric id (what a
+        // live knob drag stages) and its NAME (added by the finalize
+        // read-back, possibly sessions ago). Object.entries orders integer
+        // keys first, so the name entry applied LAST and a stale name value
+        // overwrote the user's fresh edit on every song load ("my Studio
+        // tone edits don't save"). Numeric-id entries now take precedence.
+        // DPF host meta-params (Buffer Size / Sample Rate) leaked into old
+        // saved states — they're not knobs, skip them entirely.
+        const idToName = {};
+        if (nameToId) for (const [nm, npid] of Object.entries(nameToId)) idToName[npid] = nm;
+        const byTarget = new Map();   // targetId -> {v, numeric}
         for (const [pid, v] of Object.entries(params)) {
             // Resolve by NAME first (handles numeric-named params like the
             // graphic-EQ bands); fall back to a numeric paramId only when no
             // param name matches the key.
             let targetId = nameToId ? nameToId[String(pid).toLowerCase()] : undefined;
+            let numericKey = false;
             if (targetId == null) {
                 const asNum = parseInt(pid, 10);
-                if (!isNaN(asNum) && String(asNum) === String(pid).trim()) targetId = asNum;
+                if (!isNaN(asNum) && String(asNum) === String(pid).trim()) { targetId = asNum; numericKey = true; }
             }
             if (targetId == null || isNaN(targetId)) {
                 failed.push(pid);
                 continue;
             }
+            const rname = String(idToName[targetId] || '').toLowerCase();
+            if (rname === 'buffer size' || rname === 'sample rate') continue;
+            const prev = byTarget.get(targetId);
+            if (!prev || (numericKey && !prev.numeric)) byTarget.set(targetId, { v, numeric: numericKey });
+        }
+        for (const [targetId, entry] of byTarget) {
             // Engine takes normalized [0,1]. Old states may still carry raw
             // dB/Hz values from before the apply_vst_state.py normalization
             // fix — clamp defensively so they don't pin params to the wrong
             // extreme (the symptom that produced "Gain -2328 dB" in the
             // editor). New states are already normalized so clamp is a no-op
             // for them.
-            const clamped = Math.max(0, Math.min(1, parseFloat(v)));
+            const clamped = Math.max(0, Math.min(1, parseFloat(entry.v)));
             try {
                 await api.setParameter(slotId, targetId, clamped);
                 appliedCount++;
             } catch (e) {
-                console.warn(`[rig_builder reapply] setParameter slot=${slotId} param=${pid}(${targetId}):`, e);
-                failed.push(`${pid}(setParam threw)`);
+                _warn(`[rig_builder reapply] setParameter slot=${slotId} param=${targetId}:`, e);
+                failed.push(`${targetId}(setParam threw)`);
             }
         }
         if (failed.length) {
-            console.warn(`[rig_builder reapply] slot ${slotId}: applied ${appliedCount} params, failed: ${failed.join(', ')}`);
+            _warn(`[rig_builder reapply] slot ${slotId}: applied ${appliedCount} params, failed: ${failed.join(', ')}`);
         } else {
-            console.log(`[rig_builder reapply] slot ${slotId}: applied ${appliedCount} params ✓`);
+            _log(`[rig_builder reapply] slot ${slotId}: applied ${appliedCount} params ✓`);
+        }
+    }
+
+    // ── Double-cab guard ─────────────────────────────────────────────────
+    // Every modeled amp ships an internal 4x12 "Cab Sim" voice (a fallback so
+    // the amp is auditionable WITHOUT a cab), defaulted ON. When the tone also
+    // carries a real cabinet IR, both stack -> a dark, over-filtered double
+    // cab. Nothing set that param, so it stayed at the plugin default (1.0).
+    // Fix centralized here (runs on every chain load, all playback paths): if
+    // the chain has a real cab stage, force every amp's "Cab Sim" param to 0.
+    // Resolved BY NAME via getParameters, so it covers all amps automatically.
+    // The internal cab still works when auditioning an amp with no cab.
+    const hasRealCab = chainSpec.some(s => s && (s.type === 2
+        || String((s && s.slot) || '').toLowerCase() === 'cabinet'));
+    if (hasRealCab && typeof api.getParameters === 'function') {
+        for (let i = 0; i < loaded.length; i++) {
+            const slot = loaded[i];
+            if (!slot || slot.type !== 0) continue;     // VST stages only (amps are VSTs)
+            const slotId = slot.id ?? slot.slotId ?? i;
+            try {
+                const pl = await api.getParameters(slotId);
+                if (!Array.isArray(pl)) continue;
+                const cab = pl.find((p, idx) => {
+                    const nm = String(p.name ?? p.label ?? '').toLowerCase();
+                    return nm === 'cab sim' || nm === 'cabsim';
+                });
+                if (!cab) continue;                     // not an amp with a cab-sim -> skip
+                const cabId = cab.id ?? cab.paramId ?? cab.index;
+                if (cabId == null) continue;
+                await api.setParameter(slotId, cabId, 0);
+                _log(`[rig_builder reapply] real cab present -> muted internal Cab Sim on slot ${slotId}`);
+            } catch (_) {}
         }
     }
 }
@@ -10654,6 +12508,9 @@ async function rbPersistTone(toneIdx, filename) {
     const tone = rbState.songTones.tones[toneIdx];
     filename = filename || rbState.currentSongFile;
     const pieces = tone.chain.map(p => {
+        // Full-chain NAM replaces the whole tone with one baked capture.
+        const fc = rbFullChainPayloadPiece(p);
+        if (fc) return fc;
         // VST takes priority over NAM/IR when the user has explicitly
         // picked one (either pending via _vst_path or persisted via assigned).
         const pendingVst = p._vst_kind === 'vst' && p._vst_path;
@@ -10825,8 +12682,17 @@ async function rbStopPreview() {
     } catch (_) { /* best-effort */ }
     rbState._previewStartedAudio = false;
     rbState._previewPayload = null;
-    // After a Listen/audition stops, fall back to the idle default tone.
-    setTimeout(() => rbReloadDefaultTone().catch(() => {}), 150);
+    // After a Listen/audition stops, fall back to the idle default tone —
+    // pero SOLO si nada nuevo empezó: cambiar rápido entre audiciones (p.ej.
+    // arrastrar el mic del Cab Room) hace stop→load-nueva, y este timer de
+    // 150 ms pisaba la audición entrante con el default (sonaba "normal",
+    // sin cab). rbAuditionFile marca _auditionId ANTES de cargar, así que
+    // este guard lo ve aunque la carga siga en vuelo.
+    setTimeout(() => {
+        if (rbState._previewMode || rbState._auditionId
+            || rbState.listeningTone !== null) return;
+        rbReloadDefaultTone().catch(() => {});
+    }, 150);
     // Restore whichever button label was showing "⏸ Stop".
     if (wasListening !== null) {
         const b = document.getElementById(`rb-listen-${wasListening}`);
@@ -11066,6 +12932,1313 @@ async function rbAfterGearChange(toneIdx) {
 // against typical curated 3-tier amps (Marshall JCM800, Twin, etc.).
 // Returns 1.0 (no extra trim) for unknown levels so non-variant amps
 // audition exactly as before.
+// ── Real Cab: CAB ROOM del catálogo (Gear → Cabs) ───────────────────────
+// El panel de cada cab dibuja el gabinete físico (caja + rejilla + sus
+// parlantes reales 1x12/2x12/4x12/4x10…) con un MICRÓFONO ARRASTRABLE:
+// arrastra = posición sobre el cono · slider = distancia · botones = tipo de
+// mic · 45° = off-axis. Al soltar, el backend sintetiza el IR del modelo
+// físico (/cab/synthesize) y se AUDICIONA al tiro (rbAuditionFile). El botón
+// ★ lo asigna como el sonido del cab en TODAS las canciones.
+const _rbCabRoom = {};   // safeId → estado {mic, x, dist_in, angle_deg, micPx}
+
+function rbRealCabEntryFor(gear) {
+    const cat = rbState.realCabCatalog;
+    if (!cat || !gear) return null;
+    return cat.cabs[gear] || cat.cabs[String(gear).replace(/_[a-z0-9]+$/i, '')] || null;
+}
+
+async function rbLoadRealCabCatalog() {
+    rbLoadCabFont();   // so cab-art <img>s render the badge font (fire-and-forget)
+    try {
+        const r = await fetch(`${window.RB_API}/cab/catalog`);
+        if (r.ok) rbState.realCabCatalog = await r.json();
+    } catch (_) { /* sin catálogo = foto estática */ }
+}
+
+const RB_SPEAKER_LABELS = {
+    g12m: 'Greenback G12M', blue: 'Alnico Blue', v30: 'Vintage 30',
+    g12t75: 'G12T-75', g12h: 'G12H', c12n: 'Jensen C12N', p10q: 'Jensen P10Q', mod12110: 'Jensen MOD 12-110', evm15l: 'EV EVM15L', evm12l: 'EV EVM12L',
+    // parlantes de BAJO
+    bp102: 'Legend BP102', cb158: 'Legend CB158',
+    deltalite2510: 'Deltalite 2510', deltalite2512: 'Deltalite 2512',
+    p15n: 'Jensen P15N', c15n: 'Jensen C15N', pulse15: 'Pulse 15',
+    // voicings NOVELTY (radio/gramófono/jukebox/boombox/hi-fi/PA)
+    gramophone: 'Bocina acústica', cabinetradio: 'Radio de consola',
+    jukebox: 'Jukebox', boombox: 'Boombox', audiophile: 'Hi-Fi plano',
+    vintagehifi: 'Hi-Fi vintage', pa600c: 'PA full-range',
+    pa999c: 'PA full-range', pa1152c: 'PA 15"+horn',
+};
+
+// ── Recreated microphone artwork (copyright-free clones) ─────────────────────
+// Inline SVG per mic model — shown BOTH sitting on the speaker (the mic over the
+// cone) AND as the thumbnail in the Studio Cab Room's left mic rail, mirroring how
+// amps/pedals/racks/cabs recreate the real-unit LOOK with no brand marks or logos.
+// Drawn PORTRAIT (grille/capsule at the TOP so it lands at the mic point, body
+// hanging down over the grille). Each gradient id is suffixed (u) so multiple
+// instances on the page never collide. viewBox is a shared 120×320 so the mic
+// rail can rotate them uniformly into a diagonal product-shot pose.
+const RB_MIC_ART = {
+    // Dynamic 57 — instrument dynamic seen from the SIDE (as it sits on the cone):
+    // the silver front mesh faces AWAY, so it isn't drawn. Short rounded grille cage
+    // with VERTICAL cage bars, a THIN neck band, then the long dark barrel.
+    sm57: u => `<svg viewBox="0 0 120 320" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="b${u}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#141517"/><stop offset=".22" stop-color="#3d4044"/><stop offset=".5" stop-color="#4c5055"/><stop offset=".8" stop-color="#26282b"/><stop offset="1" stop-color="#0f1012"/></linearGradient>
+        <linearGradient id="cg${u}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0a0b0c"/><stop offset=".28" stop-color="#2f3236"/><stop offset=".5" stop-color="#3d4145"/><stop offset=".72" stop-color="#2a2c2f"/><stop offset="1" stop-color="#08090a"/></linearGradient>
+        <clipPath id="c${u}"><path d="M40 106 V70 a20 20 0 0 1 40 0 V106 Z"/></clipPath></defs>
+        <rect x="41" y="122" width="38" height="180" rx="17" fill="url(#b${u})" stroke="#000" stroke-opacity=".45"/>
+        <rect x="47" y="132" width="7" height="158" rx="3.5" fill="#fff" opacity=".10"/>
+        <rect x="39" y="188" width="42" height="5" fill="#000" opacity=".24"/>
+        <rect x="41" y="108" width="38" height="15" rx="4" fill="#111214" stroke="#000" stroke-opacity=".5"/>
+        <rect x="41" y="110" width="38" height="2" fill="#5c6065" opacity=".4"/>
+        <path d="M40 108 V70 a20 20 0 0 1 40 0 V108 Z" fill="url(#cg${u})" stroke="#000" stroke-opacity=".5"/>
+        <g clip-path="url(#c${u})">${Array.from({ length: 8 }, (_, i) => `<rect x="${(42 + i * 4.6).toFixed(1)}" y="48" width="2.4" height="60" fill="#08090a"/><rect x="${(44.3 + i * 4.6).toFixed(1)}" y="48" width="1.3" height="60" fill="#80858a" opacity=".42"/>`).join('')}</g>
+        <path d="M44 62 a18 18 0 0 1 32 0" fill="none" stroke="#fff" stroke-opacity=".12" stroke-width="2"/></svg>`,
+    // MD421 — large dynamic: broad rounded MESH-MEMBRANE grille head (perforated,
+    // wider than the body), tapering "fish" body, recessed rolloff switch window.
+    md421: u => `<svg viewBox="0 0 120 320" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="a${u}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0d0e10"/><stop offset=".5" stop-color="#3a3d42"/><stop offset=".68" stop-color="#2b2e32"/><stop offset="1" stop-color="#0a0b0d"/></linearGradient>
+        <radialGradient id="h${u}" cx="40%" cy="32%" r="80%"><stop offset="0" stop-color="#484c52"/><stop offset=".7" stop-color="#222427"/><stop offset="1" stop-color="#121315"/></radialGradient>
+        <pattern id="m${u}" width="4.8" height="4.8" patternUnits="userSpaceOnUse"><circle cx="1.2" cy="1.2" r="1.15" fill="#7a7f86" opacity=".5"/><circle cx="3.6" cy="3.6" r="1.15" fill="#7a7f86" opacity=".5"/></pattern>
+        <clipPath id="hc${u}"><rect x="30" y="22" width="60" height="108" rx="20"/></clipPath></defs>
+        <path d="M30 120 L90 120 L74 290 Q60 303 46 290 Z" fill="url(#a${u})" stroke="#000" stroke-opacity=".45"/>
+        <path d="M43 130 Q40 212 48 284" fill="none" stroke="#fff" stroke-opacity=".10" stroke-width="6" stroke-linecap="round"/>
+        <rect x="48" y="206" width="25" height="48" rx="5" fill="#090a0b" stroke="#2a2d31"/>
+        <rect x="53" y="213" width="15" height="8" rx="2" fill="#8a8f95" opacity=".5"/>
+        <rect x="56" y="226" width="10" height="21" rx="3" fill="#3a3d42"/>
+        <rect x="49" y="286" width="22" height="13" rx="3" fill="#141517" stroke="#000" stroke-opacity=".4"/>
+        <rect x="30" y="22" width="60" height="108" rx="20" fill="url(#h${u})" stroke="#000" stroke-opacity=".5"/>
+        <g clip-path="url(#hc${u})"><rect x="30" y="22" width="60" height="108" fill="url(#m${u})"/></g>
+        <rect x="30" y="22" width="60" height="108" rx="20" fill="none" stroke="#000" stroke-opacity=".4"/>
+        <path d="M39 44 a16 16 0 0 1 20 -9" fill="none" stroke="#fff" stroke-opacity=".14" stroke-width="3" stroke-linecap="round"/></svg>`,
+    // KM84 — small-diaphragm condenser pencil: bright metal tube, knurl rings, badge.
+    km84: u => `<svg viewBox="0 0 120 320" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="a${u}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#83888e"/><stop offset=".3" stop-color="#eef1f4"/><stop offset=".54" stop-color="#c3c8cd"/><stop offset="1" stop-color="#74797f"/></linearGradient></defs>
+        <rect x="44" y="40" width="32" height="262" rx="16" fill="url(#a${u})" stroke="#585c61"/>
+        <rect x="49" y="48" width="6" height="246" rx="3" fill="#fff" opacity=".48"/>
+        <ellipse cx="60" cy="46" rx="16" ry="8" fill="#e6e9ec"/>
+        <rect x="44" y="64" width="32" height="3.5" fill="#585c61" opacity=".55"/>
+        <rect x="44" y="72" width="32" height="3.5" fill="#585c61" opacity=".55"/>
+        <rect x="44" y="80" width="32" height="3.5" fill="#585c61" opacity=".55"/>
+        <g transform="translate(60,178) rotate(45)"><rect x="-11" y="-11" width="22" height="22" rx="3" fill="#2a2d30" stroke="#dadde1" stroke-width="1.4"/></g></svg>`,
+    // Ribbon R121 — satin body, horizontal ribbon-window slats, green oval badge.
+    r121: u => `<svg viewBox="0 0 120 320" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="a${u}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#828589"/><stop offset=".32" stop-color="#e7e9ea"/><stop offset=".6" stop-color="#bfc2c4"/><stop offset="1" stop-color="#747679"/></linearGradient></defs>
+        <rect x="40" y="30" width="40" height="272" rx="18" fill="url(#a${u})" stroke="#5a5d60"/>
+        <rect x="46" y="40" width="7" height="254" rx="3.5" fill="#fff" opacity=".42"/>
+        <rect x="44" y="46" width="32" height="88" rx="6" fill="#1a1b1d"/>
+        ${Array.from({ length: 7 }, (_, i) => `<rect x="47" y="${52 + i * 11}" width="26" height="6" rx="3" fill="#c9cccf" opacity=".85"/>`).join('')}
+        <ellipse cx="60" cy="180" rx="17" ry="9" fill="#1d5b3a" stroke="#e0e3e6" stroke-width="1.5"/>
+        <ellipse cx="60" cy="180" rx="10" ry="4.5" fill="#2f7d52" opacity=".7"/>
+        <circle cx="60" cy="288" r="3" fill="#6b6e71"/></svg>`,
+    // Large-diaphragm condenser — mesh head basket over a matte nickel body.
+    tlm103: u => `<svg viewBox="0 0 120 320" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="a${u}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3b3e43"/><stop offset=".4" stop-color="#7d828a"/><stop offset=".6" stop-color="#6a6f76"/><stop offset="1" stop-color="#2e3136"/></linearGradient>
+        <radialGradient id="g${u}" cx="44%" cy="38%" r="72%"><stop offset="0" stop-color="#5b616a"/><stop offset="1" stop-color="#1a1c1f"/></radialGradient>
+        <pattern id="m${u}" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M0 0H7M0 3.5H7" stroke="#0a0b0c" stroke-opacity=".5"/><path d="M0 0V7M3.5 0V7" stroke="#0a0b0c" stroke-opacity=".32"/></pattern></defs>
+        <rect x="30" y="120" width="60" height="182" rx="20" fill="url(#a${u})" stroke="#1a1c1f"/>
+        <rect x="38" y="132" width="8" height="160" rx="4" fill="#fff" opacity=".18"/>
+        <rect x="28" y="26" width="64" height="104" rx="20" fill="url(#g${u})"/>
+        <rect x="28" y="26" width="64" height="104" rx="20" fill="url(#m${u})"/>
+        <rect x="28" y="26" width="64" height="104" rx="20" fill="none" stroke="#0f1012" stroke-opacity=".6"/>
+        <rect x="26" y="118" width="68" height="11" rx="5" fill="#26282b" stroke="#000" stroke-opacity=".4"/></svg>`,
+    // Tube condenser — vintage bottle silhouette, gold-tinted dual-mesh basket.
+    tube: u => `<svg viewBox="0 0 120 320" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"><defs>
+        <linearGradient id="a${u}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#544b3d"/><stop offset=".35" stop-color="#cbba8f"/><stop offset=".55" stop-color="#b1a071" /><stop offset="1" stop-color="#4a4133"/></linearGradient>
+        <radialGradient id="g${u}" cx="44%" cy="36%" r="74%"><stop offset="0" stop-color="#8d7f5b"/><stop offset="1" stop-color="#2a261c"/></radialGradient>
+        <pattern id="m${u}" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M0 0H8M0 4H8" stroke="#1c180f" stroke-opacity=".45"/><path d="M0 0V8M4 0V8" stroke="#1c180f" stroke-opacity=".3"/></pattern></defs>
+        <path d="M32 132 q-5 88 6 148 q22 15 44 0 q11 -60 6 -148 z" fill="url(#a${u})" stroke="#2a261c"/>
+        <rect x="40" y="150" width="8" height="120" rx="4" fill="#fff" opacity=".2"/>
+        <rect x="30" y="162" width="60" height="7" rx="3" fill="#3f3829" opacity=".7"/>
+        <rect x="30" y="184" width="60" height="7" rx="3" fill="#3f3829" opacity=".7"/>
+        <rect x="24" y="24" width="72" height="114" rx="26" fill="url(#g${u})"/>
+        <rect x="24" y="24" width="72" height="114" rx="26" fill="url(#m${u})"/>
+        <rect x="24" y="24" width="72" height="114" rx="26" fill="none" stroke="#1c180f" stroke-opacity=".6"/>
+        <rect x="22" y="130" width="76" height="12" rx="5" fill="#5f5540" stroke="#000" stroke-opacity=".4"/></svg>`,
+};
+function rbMicArtSvg(mic, u) { const fn = RB_MIC_ART[mic] || RB_MIC_ART.sm57; return fn(String(u == null ? '' : u).replace(/[^a-z0-9]/gi, '')); }
+// The mic sitting on the cone (Studio) — suffixed by safeId+mic so the on-cab
+// instance never shares gradient ids with the rail thumbnails.
+function rbMicOnCabHtml(mic, safeId) { return rbMicArtSvg(mic, (safeId || 'x') + mic); }
+// Rail catalog thumbnail — same art, laid diagonally by CSS (.rb-mic-thumb).
+function rbMicThumbHtml(mic) { return `<span class="rb-mic-thumb">${rbMicArtSvg(mic, 't' + mic)}</span>`; }
+// Repaint the on-cab mic art in place (Studio DOM mic) after a mic change.
+function rbCabRoomUpdateMicArt(safeId) {
+    const st = _rbCabRoom[safeId]; if (!st) return;
+    const el = document.getElementById(`rb-cabmic-${safeId}`);
+    if (el) el.innerHTML = rbMicOnCabHtml(st.mic, safeId);
+}
+
+const RB_CABROOM_W = 560, RB_CABROOM_H = 340;
+
+function rbCabRoomLayout(entry) {
+    // [cx, cy, r] de cada parlante en el canvas
+    const n = entry.drivers || 1;
+    if (n === 1) return [[280, 170, 118]];
+    if (n === 2) return [[152, 170, 104], [408, 170, 104]];
+    if (n === 3) return [[104, 170, 76], [280, 170, 76], [456, 170, 76]];
+    if (n === 6) return [[104, 92, 66], [280, 92, 66], [456, 92, 66],
+                         [104, 248, 66], [280, 248, 66], [456, 248, 66]];
+    if (n >= 8) return [[104, 68, 56], [280, 68, 56], [456, 68, 56],
+                        [104, 170, 56], [456, 170, 56],
+                        [104, 272, 56], [280, 272, 56], [456, 272, 56]];
+    return [[152, 92, 80], [408, 92, 80], [152, 248, 80], [408, 248, 80]];
+}
+
+// Speaker positions in the cab-art's OWN aspect space (W = aspect*100, H = 100),
+// so the silhouettes drawn on the recreated cab AND the mic→x mapping agree. The
+// grid orientation follows the real cab: tall cabs (2x15, 6x10, 8x10) stack in
+// more rows, wide cabs (2x12) in more columns (verified vs the reference photos).
+function rbCabSpeakerPositionsPhys(entry, aspect) {
+    const a = aspect && aspect > 0 ? aspect : 1;
+    const W = a * 100, H = 100;
+    const n = (entry && entry.drivers) || 1;
+    let cols, rows;
+    if (n === 1) { cols = 1; rows = 1; }
+    else if (n === 2) { if (a < 1) { cols = 1; rows = 2; } else { cols = 2; rows = 1; } }
+    else if (n === 3) { if (a < 1) { cols = 1; rows = 3; } else { cols = 3; rows = 1; } }
+    else if (n === 4) { cols = 2; rows = 2; }
+    else if (n === 6) { if (a < 1) { cols = 2; rows = 3; } else { cols = 3; rows = 2; } }
+    else if (n === 8) { cols = 2; rows = 4; }
+    else { cols = Math.ceil(Math.sqrt(n)); rows = Math.ceil(n / cols); }
+    const mx = W * 0.10, my = H * 0.09;              // grille inset (tolex frame)
+    const gw = W - 2 * mx, gh = H - 2 * my;
+    const cw = gw / cols, ch = gh / rows;
+    const r = Math.min(cw, ch) * 0.46;
+    const pos = [];
+    for (let i = 0; i < n; i++) {
+        const c = i % cols, ro = Math.floor(i / cols);
+        pos.push([mx + (c + 0.5) * cw, my + (ro + 0.5) * ch, r]);
+    }
+    return pos;
+}
+
+// Speaker-cone silhouettes faintly visible THROUGH the grille cloth (so the player
+// can aim the mic). A single SCREEN-blended LIGHT overlay self-adapts to the grille
+// colour WITHOUT any per-cab data: screen(bg,src)=1-(1-bg)(1-src), so the same light
+// cone lands hard on a black grille (high contrast ⇒ notorious on dark cabs) yet
+// barely shifts a cream/white one (low contrast ⇒ subtle on light cabs like
+// Orange/Fender). pointer-events:none so it never blocks the mic drag. viewBox
+// aspect == fit aspect → circles stay round. Parent .rb-cab-fit isolates the blend
+// so it only mixes with the cab art behind it, not the page.
+function rbCabSpeakerSilhouettesSvg(entry, aspect) {
+    const a = aspect && aspect > 0 ? aspect : 1;
+    const W = a * 100, H = 100;
+    const pos = rbCabSpeakerPositionsPhys(entry, a);
+    const id = 'spk' + (rbState._spkUid = (rbState._spkUid || 0) + 1);
+    const body = pos.map(([cx, cy, r]) => {
+        const c = cx.toFixed(2), y = cy.toFixed(2);
+        return `<circle cx="${c}" cy="${y}" r="${r.toFixed(2)}" fill="url(#${id})"/>`
+            + `<circle cx="${c}" cy="${y}" r="${(r * 0.94).toFixed(2)}" fill="none" stroke="#eef4ff" stroke-opacity=".20" stroke-width=".7"/>`
+            + `<circle cx="${c}" cy="${y}" r="${(r * 0.66).toFixed(2)}" fill="none" stroke="#dbe6ff" stroke-opacity=".11" stroke-width=".5"/>`
+            + `<circle cx="${c}" cy="${y}" r="${(r * 0.38).toFixed(2)}" fill="none" stroke="#eef4ff" stroke-opacity=".15" stroke-width=".6"/>`;
+    }).join('');
+    return `<svg class="rb-cab-spk rb-spk-lite" viewBox="0 0 ${W.toFixed(1)} ${H}" preserveAspectRatio="none" aria-hidden="true">`
+        + `<defs><radialGradient id="${id}" cx="50%" cy="43%" r="55%">`
+        + `<stop offset="0%" stop-color="#eef3ff" stop-opacity=".26"/>`
+        + `<stop offset="44%" stop-color="#cdd8f2" stop-opacity=".07"/>`
+        + `<stop offset="74%" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>${body}</svg>`;
+}
+
+function rbCabRoomBuild(g, entry, safeId, opts) {
+    const box = document.getElementById(`rb-cabroom-${safeId}`);
+    if (!box) return;
+    const st = _rbCabRoom[safeId] = _rbCabRoom[safeId]
+        || { mic: 'sm57', x: 0.15, dist_in: 1.0, angle_deg: 0, micPx: null,
+             speaker: (entry.speakers && entry.speakers[0]) || entry.speaker };
+    st._studio = (opts && opts.studio) || null;
+    st._opts = opts || null;
+    st._gear = g.rs_gear;
+    if (opts && opts.init) Object.assign(st, opts.init);
+    // Restore the saved VISUAL mic spot (cosmetic; the acoustic x/dist/angle come
+    // from the IR name via opts.init). Without this the mic icon jumped back to an
+    // x-derived canonical position on reopen even though the sound was correct.
+    if (st._micFx == null && !st.micPx) {
+        try {
+            const saved = JSON.parse(localStorage.getItem(rbCabRoomMicKey(st)) || 'null');
+            if (Array.isArray(saved) && saved.length >= 2   // >=2: payload now also carries [mic, angle]
+                && isFinite(saved[0]) && isFinite(saved[1])) {
+                // Studio DOM mic: positioned from _micFx/_micFy (line ~11894).
+                st._micFx = saved[0]; st._micFy = saved[1];
+                // Canvas mic (gear/node-editor): positioned from micPx.
+                st.micPx = [saved[0] * RB_CABROOM_W, saved[1] * RB_CABROOM_H];
+            }
+        } catch (_) {}
+    }
+    const cabArt = rbCabArtFor(g.rs_gear);   // recreated cab SVG (or '')
+    st._hasArt = !!cabArt;
+    st._artAspect = rbCabArtAspect(g.rs_gear);
+    const mics = [['sm57', 'Dynamic 57'], ['md421', 'MD421'], ['km84', 'KM84'],
+                  ['r121', 'Ribbon R121'], ['tlm103', 'Condenser'], ['tube', 'Tube']];
+    const micBtns = mics.map(([k, lbl]) =>
+        `<button data-mic="${k}" onclick="rbCabRoomSetMic('${safeId}','${g.rs_gear}','${k}')"
+                 class="rb-cabroom-mic px-2.5 py-1 rounded border text-xs ${st.mic === k
+                     ? 'bg-violet-700/60 text-violet-100 border-violet-500/60 font-semibold'
+                     : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-violet-900/40'}">${lbl}</button>`).join(' ');
+    // New left-rail layout (mic buttons + distance stacked at left) is Studio-only;
+    // Gear catalog + node editor keep the old horizontal layout below the cab.
+    const isStudioLayout = (safeId === 'studio');
+    const speakerBtns = (entry.speakers && entry.speakers.length > 1)
+        ? entry.speakers.map(sp =>
+            `<button data-spk="${sp}" onclick="rbCabRoomSetSpeaker('${safeId}','${g.rs_gear}','${sp}')"
+                     class="rb-cabroom-spk px-2 py-1 rounded border text-xs ${st.speaker === sp
+                         ? 'bg-amber-700/60 text-amber-100 border-amber-500/60 font-semibold'
+                         : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-amber-900/40'}">${RB_SPEAKER_LABELS[sp] || sp}</button>`).join(' ')
+        : '';
+    const stageInner = `${cabArt ? `<div class="rb-cabroom-art" style="position:absolute;inset:0;border-radius:.5rem;overflow:hidden;background:#0a0a0b;display:flex;align-items:center;justify-content:center">${cabArt}</div>` : ''}
+                <canvas id="rb-cabroom-cv-${safeId}" width="${RB_CABROOM_W}" height="${RB_CABROOM_H}"
+                        class="rounded-lg border border-gray-800 cursor-crosshair w-full"
+                        style="touch-action:none;position:relative;${cabArt ? 'background:transparent' : ''}"></canvas>`;
+    const distSlider = `<input type="range" min="0" max="6" step="0.5" value="${st.dist_in}"
+                oninput="rbCabRoomSetDist('${safeId}','${g.rs_gear}',this.value)" class="flex-1" style="min-width:0">
+        <span id="rb-cabroom-dist-${safeId}" class="text-[10px] text-gray-400" style="width:22px">${st.dist_in}"</span>`;
+    const angBtn = `<button id="rb-cabroom-ang-${safeId}" onclick="rbCabRoomToggleAngle('${safeId}','${g.rs_gear}')"
+            class="text-xs px-2 py-1 rounded border ${st.angle_deg ? 'bg-violet-700/60 text-violet-100 border-violet-500/60' : 'bg-dark-800 text-gray-400 border-gray-700'}">45°</button>`;
+    const oldControls = `<div style="position:relative;width:100%">${stageInner}</div>
+            <div class="flex items-center gap-1.5 flex-wrap">${micBtns}</div>
+            ${speakerBtns ? `<div class="flex items-center gap-1.5 flex-wrap"><span class="text-[11px] text-gray-500">speaker:</span>${speakerBtns}</div>` : ''}
+            <div class="flex items-center gap-2"><span class="text-[11px] text-gray-500 whitespace-nowrap">distance</span>${distSlider}${angBtn}</div>`;
+    if (isStudioLayout) {
+        // Studio: the cab fills the centre, transparent, no panel chrome. The mic
+        // is a DOM element ON the cab (drag to move) sized to the cab's real
+        // aspect — tall cabs fill top-to-bottom, square cabs (1x15) sit smaller +
+        // centred. Mic picker is the left rail; the cab catalog is the right rail.
+        const _fx = (st._micFx != null ? st._micFx : 0.5), _fy = (st._micFy != null ? st._micFy : 0.44);
+        const _a = st._artAspect || 1, _fitH = _a < 0.85 ? 100 : 76;
+        box.innerHTML = `<div class="rb-cab-center">
+            <div class="rb-cab-fit" id="rb-cabfit-${safeId}" style="aspect-ratio:${_a};height:${_fitH}%">
+                ${cabArt}
+                ${rbCabSpeakerSilhouettesSvg(entry, _a)}
+                <div class="rb-cabmic ${st.angle_deg ? 'rb-cabmic-ang' : ''}" id="rb-cabmic-${safeId}" style="left:${_fx * 100}%;top:${_fy * 100}%">${rbMicOnCabHtml(st.mic, safeId)}</div>
+            </div></div>`;
+    } else {
+        box.innerHTML = `
+        <div class="bg-dark-800/60 border border-gray-800/50 rounded-lg p-3 space-y-2">
+            <div class="flex items-center gap-2">
+                <span class="text-sm text-violet-300 font-medium">🎙 ${rbEsc(entry.name || 'Cab Room')}</span>
+                <span class="text-[11px] text-gray-500">drag the mic — plays on release · ${entry.drivers}x${entry.size_in} ${entry.back === 'closed' ? 'closed' : 'open-back'}</span>
+            </div>
+            ${oldControls}
+            ${(opts && opts.selector) ? `
+            <div class="flex items-center gap-2">
+                <span class="text-[11px] text-gray-500">cab:</span>
+                <select onchange="rbCabRoomExplore('${safeId}', this.value)"
+                        class="flex-1 bg-dark-800 border border-gray-700 rounded text-xs text-gray-300 px-1 py-1">
+                    ${Object.entries(rbState.realCabCatalog.cabs).map(([k, e]) =>
+                        `<option value="${k}" ${g.rs_gear.startsWith(k) ? 'selected' : ''}>${rbEsc(e.name || k)}</option>`).join('')}
+                </select>
+            </div>` : ''}
+            <div class="flex items-center gap-2">
+                <button id="rb-cabroom-play-${safeId}" onclick="rbCabRoomListen('${safeId}','${g.rs_gear}')"
+                        class="bg-violet-700 hover:bg-violet-600 text-white text-xs px-3 py-1.5 rounded">▶ Listen</button>
+                <button onclick="rbCabRoomAssign('${safeId}','${g.rs_gear}')"
+                        class="bg-emerald-800/70 hover:bg-emerald-700 text-emerald-100 text-xs px-3 py-1.5 rounded border border-emerald-600/40"
+                        title="Use this mic position as this cab's sound in ALL songs">★ Use in all songs</button>
+                <span id="rb-cabroom-status-${safeId}" class="text-[11px] text-gray-500"></span>
+            </div>
+        </div>`;
+    }
+    if (isStudioLayout) {
+        rbCabRoomBuildMicRail(safeId, g, entry, micBtns, speakerBtns, distSlider, angBtn);
+        const fit = document.getElementById(`rb-cabfit-${safeId}`);
+        if (fit) {
+            fit.addEventListener('pointerdown', e => rbCabMicDrag(e, safeId, g.rs_gear, true));
+            fit.addEventListener('pointermove', e => rbCabMicDrag(e, safeId, g.rs_gear, false));
+            fit.addEventListener('pointerup', () => rbCabRoomDrop(safeId, g.rs_gear));
+        }
+        return;   // no canvas in the Studio layout
+    }
+    const cv = box.querySelector('canvas');
+    if (!cv) return;
+    cv.addEventListener('pointerdown', e => rbCabRoomPointer(e, safeId, g.rs_gear, true));
+    cv.addEventListener('pointermove', e => rbCabRoomPointer(e, safeId, g.rs_gear, false));
+    cv.addEventListener('pointerup', () => rbCabRoomDrop(safeId, g.rs_gear));
+    rbCabRoomDraw(safeId, entry);
+}
+
+// DOM mic drag for the Studio cab (aspect-correct, no canvas). fx/fy are 0..1
+// over the cab; st.x maps the horizontal offset from centre to the cone param.
+function rbCabMicDrag(e, safeId, gear, isDown) {
+    if (!isDown && e.buttons !== 1) return;
+    const fit = e.currentTarget;
+    fit.setPointerCapture?.(e.pointerId);
+    const st = _rbCabRoom[safeId];
+    if (!st) return;
+    const rect = fit.getBoundingClientRect();
+    let fx = (e.clientX - rect.left) / rect.width;
+    let fy = (e.clientY - rect.top) / rect.height;
+    fx = Math.min(Math.max(fx, 0.05), 0.95);
+    fy = Math.min(Math.max(fy, 0.05), 0.95);
+    st._micFx = fx; st._micFy = fy;
+    // Distance to the NEAREST speaker (in the cab-art aspect space, matching the
+    // drawn silhouettes) drives the cone→edge IR param — so aiming the mic BELOW
+    // or to the SIDE of a cone now changes the sound, not only horizontal-from-
+    // centre. 0 = dead-centre on a cone (on-axis), 1 = at/beyond the cone rim.
+    const _a = st._artAspect && st._artAspect > 0 ? st._artAspect : 1;
+    const _px = fx * _a * 100, _py = fy * 100;
+    let _best = null;
+    for (const [sx, sy, r] of rbCabSpeakerPositionsPhys(rbCabRoomEntry(gear), _a)) {
+        const d = Math.hypot(_px - sx, _py - sy) / r;
+        if (_best === null || d < _best) _best = d;
+    }
+    st.x = Math.min(1, Math.max(0, _best == null ? Math.abs(fx - 0.5) * 2 : _best));
+    const mic = document.getElementById(`rb-cabmic-${safeId}`);
+    if (mic) { mic.style.left = (fx * 100) + '%'; mic.style.top = (fy * 100) + '%'; }
+    st._dirty = true;
+}
+
+// Studio-only LEFT rail: mic picker + speaker + distance, mirroring the cab
+// catalog rail on the right. Buttons reuse the rb-cabroom-mic/spk classes + ids
+// so the existing handlers (now document-scoped) drive them.
+function rbCabRoomBuildMicRail(safeId, g, entry, micBtns, speakerBtns, distSlider, angBtn) {
+    const room = document.getElementById('rb-studio-room');
+    if (!room) return;
+    let rail = document.getElementById('rb-mic-rail');
+    if (!rail) { rail = document.createElement('div'); rail.id = 'rb-mic-rail'; room.appendChild(rail); }
+    rail.className = 'rb-mic-rail';
+    const st = _rbCabRoom[safeId];
+    const MICS = [['sm57', 'Dynamic 57'], ['md421', 'MD421'], ['km84', 'KM84'],
+                  ['r121', 'Ribbon R121'], ['tlm103', 'Condenser'], ['tube', 'Tube']];
+    // Same item shape as the cab catalog: thumb (mic photo later) + name.
+    const items = MICS.map(([k, lbl]) =>
+        `<div class="rb-swap-item rb-cabroom-mic ${st.mic === k ? 'rb-swap-current' : ''}" data-mic="${k}"
+              onclick="rbCabRoomSetMic('${safeId}','${g.rs_gear}','${k}')" title="${lbl}">
+            <span class="rb-swap-thumb rb-mic-swap-thumb">${rbMicThumbHtml(k)}</span>
+            <span class="rb-swap-name">${lbl}</span></div>`).join('');
+    rail.innerHTML = `
+        <div class="rb-swap-head" style="justify-content:center"><span class="rb-mic-h">Microphone</span></div>
+        <div class="rb-mic-list">${items}</div>
+        <div class="rb-mic-foot">
+            ${speakerBtns ? `<div class="rb-mic-sec"><div class="rb-mic-h">Speaker</div><div class="rb-mic-btns">${speakerBtns}</div></div>` : ''}
+            <div class="rb-mic-sec"><div class="rb-mic-h">Distance</div><div class="flex items-center gap-1">${distSlider}</div>${angBtn}</div>
+        </div>`;
+    rbCabRoomPinMicRail();
+    if (!rbState._micRailResizeHooked) {
+        rbState._micRailResizeHooked = true;
+        window.addEventListener('resize', () => { try { rbCabRoomPinMicRail(); } catch (_) {} });
+    }
+    requestAnimationFrame(() => rail.classList.add('rb-swap-open'));
+}
+function rbCabRoomPinMicRail() {
+    const room = document.getElementById('rb-studio-room');
+    const rail = document.getElementById('rb-mic-rail');
+    if (!room || !rail) return;
+    // Bigger top offset than the right rail: the floating "← Room" bar sits
+    // top-LEFT, so the left rail must clear it.
+    const r = room.getBoundingClientRect(), topOff = 104;
+    rail.style.position = 'fixed'; rail.style.left = Math.max(0, r.left) + 'px'; rail.style.right = 'auto';
+    rail.style.top = (r.top + topOff) + 'px'; rail.style.bottom = 'auto';
+    rail.style.height = Math.max(0, r.height - topOff) + 'px';
+}
+function rbCabRoomCloseMicRail() {
+    const rail = document.getElementById('rb-mic-rail');
+    if (rail) { rail.classList.remove('rb-swap-open'); setTimeout(() => { try { rail.remove(); } catch (_) {} }, 300); }
+}
+
+function rbCabRoomDraw(safeId, entry) {
+    const cv = document.getElementById(`rb-cabroom-cv-${safeId}`);
+    const st = _rbCabRoom[safeId];
+    if (!cv || !st) return;
+    const g = cv.getContext('2d');
+    const W = RB_CABROOM_W, H = RB_CABROOM_H;
+    g.clearRect(0, 0, W, H);
+    // With recreated art behind the canvas, draw ONLY the mic on a transparent
+    // canvas so the real cab shows through; else draw the generic tolex + cones.
+    if (!st._hasArt) {
+        // caja tolex + marco + rejilla
+        g.fillStyle = '#171310'; g.fillRect(0, 0, W, H);
+        g.strokeStyle = '#3c3226'; g.lineWidth = 10; g.strokeRect(5, 5, W - 10, H - 10);
+        g.save(); g.beginPath(); g.rect(16, 16, W - 32, H - 32); g.clip();
+        g.fillStyle = '#221b12'; g.fillRect(16, 16, W - 32, H - 32);
+        g.strokeStyle = 'rgba(130,108,74,.15)'; g.lineWidth = 1.2;
+        for (let i = -H; i < W; i += 8) {
+            g.beginPath(); g.moveTo(i, 16); g.lineTo(i + H, H - 16); g.stroke();
+            g.beginPath(); g.moveTo(i + H, 16); g.lineTo(i, H - 16); g.stroke();
+        }
+        // parlantes
+        for (const [cx, cy, r] of rbCabRoomLayout(entry)) {
+            g.beginPath(); g.arc(cx, cy, r, 0, 7);
+            g.fillStyle = 'rgba(6,5,3,.78)'; g.fill();
+            g.strokeStyle = 'rgba(205,185,150,.55)'; g.lineWidth = 3; g.stroke();
+            g.beginPath(); g.arc(cx, cy, r * 0.66, 0, 7);
+            g.strokeStyle = 'rgba(150,130,100,.3)'; g.lineWidth = 1.2; g.stroke();
+            g.beginPath(); g.arc(cx, cy, r * 0.28, 0, 7);
+            g.fillStyle = 'rgba(34,27,19,.95)'; g.fill();
+            g.strokeStyle = 'rgba(205,185,150,.45)'; g.lineWidth = 1.5; g.stroke();
+        }
+        g.restore();
+    }
+    // micrófono (punto + caña), escala con la distancia
+    const [mx, my] = rbCabRoomMicPx(safeId, entry);
+    const sc = 1.0 - 0.3 * (st.dist_in / 6.0);
+    g.beginPath(); g.moveTo(mx, my); g.lineTo(mx + 42 * sc, my + 54 * sc);
+    g.strokeStyle = '#cbb9ff'; g.lineWidth = 4 * sc; g.stroke();
+    g.beginPath(); g.arc(mx, my, 12 * sc, 0, 7);
+    g.fillStyle = st.angle_deg ? '#8f6fff' : '#b39dff'; g.fill();
+    g.strokeStyle = '#f0eaff'; g.lineWidth = 2; g.stroke();
+}
+
+function rbCabRoomMicPx(safeId, entry) {
+    const st = _rbCabRoom[safeId];
+    if (st.micPx) return st.micPx;
+    if (st._hasArt) {   // start the mic on the cab (upper-centre of the art rect)
+        const [ax, ay, aw, ah] = rbCabArtRect(st._artAspect);
+        return [ax + aw * (0.4 + st.x * 0.2), ay + ah * 0.42];
+    }
+    const [cx, cy, r] = rbCabRoomLayout(entry)[0];
+    return [cx + st.x * r, cy];
+}
+
+function rbCabRoomEntry(gear) { return rbRealCabEntryFor(gear); }
+
+function rbCabRoomPointer(e, safeId, gear, isDown) {
+    if (!isDown && e.buttons !== 1) return;
+    const cv = e.currentTarget;
+    cv.setPointerCapture?.(e.pointerId);
+    const entry = rbCabRoomEntry(gear);
+    const st = _rbCabRoom[safeId];
+    if (!entry || !st) return;
+    const rect = cv.getBoundingClientRect();
+    let px = (e.clientX - rect.left) * (RB_CABROOM_W / rect.width);
+    let py = (e.clientY - rect.top) * (RB_CABROOM_H / rect.height);
+    // Keep the mic INSIDE the cab: with recreated art the cab is letterboxed, so
+    // clamp to the art rect (not the whole canvas); else the whole canvas.
+    if (st._hasArt) {
+        const [ax, ay, aw, ah] = rbCabArtRect(st._artAspect), m = 16;
+        px = Math.min(Math.max(px, ax + m), ax + aw - m);
+        py = Math.min(Math.max(py, ay + m), ay + ah - m);
+    } else {
+        px = Math.min(Math.max(px, 20), RB_CABROOM_W - 20);
+        py = Math.min(Math.max(py, 20), RB_CABROOM_H - 20);
+    }
+    // x = distancia radial al centro del parlante MÁS CERCANO / su radio
+    let best = null;
+    for (const [cx, cy, r] of rbCabRoomLayout(entry)) {
+        const d = Math.hypot(px - cx, py - cy) / r;
+        if (best === null || d < best) best = d;
+    }
+    st.x = Math.min(Math.max(best, 0.0), 1.0);
+    st.micPx = [px, py];
+    st._dirty = true;
+    rbCabRoomDraw(safeId, entry);
+}
+
+function rbCabRoomDrop(safeId, gear) {
+    const st = _rbCabRoom[safeId];
+    if (!st || !st._dirty) return;
+    st._dirty = false;
+    if (st._studio && st._studio.local) {
+        // Instant preview via the preloaded variants (setBypass, no reload) when
+        // available — that avoids the ~1 s pre-load-mute silence on every mic
+        // move. The exact position is then baked + persisted in the BACKGROUND
+        // without a monitor reload (debounced). Only if variants aren't loaded
+        // (e.g. idle default tone) fall back to the full synth+reload.
+        if (st._variantMap) {
+            rbCabRoomSwitchVariant(safeId).then(ok => {
+                if (ok) {
+                    rbCabRoomAutoPersistLocal(safeId);   // saves micPx + debounced synth persist
+                } else {
+                    rbCabRoomSaveMicPx(st);
+                    rbStudioCabApplyLocal(null, { reopen: false });
+                }
+            });
+            return;
+        }
+        rbCabRoomSaveMicPx(st);
+        rbStudioCabApplyLocal(null, { reopen: false });
+        return;
+    }
+    rbCabRoomListen(safeId, gear, true);   // song: instant preview via preloaded variant
+    rbCabRoomPersistSong(safeId);           // + persist the new mic/pos to the preset (background)
+}
+
+async function rbCabRoomSynth(safeId, gear, assign) {
+    const st = _rbCabRoom[safeId];
+    const status = document.getElementById(`rb-cabroom-status-${safeId}`);
+    if (status) status.textContent = '⏳ rendering…';
+    const r = await fetch(`${window.RB_API}/cab/synthesize`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gear_type: gear, mic: st.mic, x: st.x,
+                               dist_in: st.dist_in, angle_deg: st.angle_deg,
+                               speaker: st.speaker || undefined,
+                               assign: !!assign }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.status);
+    if (status) status.textContent = '';
+    return d;
+}
+
+window.rbCabRoomListen = async function (safeId, gear, restart) {
+    const stx = _rbCabRoom[safeId];
+    if (stx && stx._studio) {
+        // Cambio EN CONTEXTO e instantáneo vía las variantes pre-cargadas
+        // (setBypass) → mantiene amp + pedales sonando.
+        if (await rbCabRoomSwitchVariant(safeId)) return;
+        // No precargadas aún: cargar el tono COMPLETO con las 12 variantes
+        // (amp+pedales incluidos), NO caer a la audición de "cab solo" — esa
+        // reemplaza la cadena y dejaba de sonar el amp (se oía la guitarra
+        // casi limpia). Un reintento de switch tras la carga suena la posición.
+        if (await rbCabRoomPreloadVariants(safeId, gear)) {
+            await rbCabRoomSwitchVariant(safeId);
+            return;
+        }
+        // Preload imposible (p.ej. sin song piece) → NO tocar cab-solo;
+        // pedir Aplicar para no matar el amp.
+        const status = document.getElementById(`rb-cabroom-status-${safeId}`);
+        if (status) status.textContent = 'use "✓ Apply to tone" to hear the change in context';
+        return;
+    }
+    try {
+        const d = await rbCabRoomSynth(safeId, gear, false);
+        const btnId = `rb-cabroom-play-${safeId}`;
+        // rbAuditionFile TOGGLEA (mismo botón sonando → pausa). Los cambios
+        // del Cab Room (drag/mic/parlante/distancia) deben REINICIAR con el
+        // IR nuevo, no pausar — limpiar el estado de toggle primero.
+        if (restart && rbState._auditionId === btnId) rbState._auditionId = null;
+        await rbAuditionFile(d.name, 'ir', btnId);
+    } catch (e) {
+        const s = document.getElementById(`rb-cabroom-status-${safeId}`);
+        if (s) s.textContent = '✗ ' + (e.message || e);
+    }
+};
+
+window.rbCabRoomAssign = async function (safeId, gear) {
+    try {
+        const d = await rbCabRoomSynth(safeId, gear, true);
+        const s = document.getElementById(`rb-cabroom-status-${safeId}`);
+        if (s) s.textContent = `★ asignado a ${d.assigned} tono(s)`;
+    } catch (e) {
+        const s = document.getElementById(`rb-cabroom-status-${safeId}`);
+        if (s) s.textContent = '✗ ' + (e.message || e);
+    }
+};
+
+// Stable key for the mic's VISUAL 2D spot (localStorage). The synth only saves
+// the radial `x` (cone/edge/offaxis), which the sound depends on, but NOT the
+// exact 2D pixel spot the user dragged to — so on reopen the mic icon jumped to
+// an x-derived canonical spot ("no se guarda la ubicación"). We persist the
+// normalized micPx here (cosmetic, survives restart) keyed by tone + cab.
+function rbCabRoomMicKey(st) {
+    // Key by TONE only (NOT the cab gear — its mic/pos suffix is unstable across
+    // opens, so a gear-based key mismatched save vs restore). A tone has one cab.
+    const v = rbState.studioView || {};
+    const src = v.source || 'default';
+    const name = src === 'saved' ? (v.name || '')
+        : (src === 'song' ? (rbState.currentSongFile || '') : 'default');
+    return `rb_cabmicpx_${src}_${name}`;
+}
+function rbCabRoomSaveMicPx(st) {
+    try {
+        let p = null;
+        if (st && typeof st._micFx === 'number' && typeof st._micFy === 'number')
+            p = [st._micFx, st._micFy];                    // Studio DOM mic (already 0..1)
+        else if (st && st.micPx)
+            p = [st.micPx[0] / RB_CABROOM_W, st.micPx[1] / RB_CABROOM_H];   // canvas mic
+        // Append the mic model + angle so the Studio-room mic stand can show the
+        // right mic without reopening the Cab Room (reader tolerates the old
+        // 2-element payload). Keep [fx, fy] first for back-compat.
+        if (p) { p.push(st.mic || 'sm57', st.angle_deg || 0); localStorage.setItem(rbCabRoomMicKey(st), JSON.stringify(p)); }
+    } catch (_) {}
+}
+
+// Save the current mic/speaker/dist/angle into the Studio tone (debounced, in the
+// BACKGROUND, no monitor reload) so changes made with the CONTROLS survive leave/
+// return — before, only a mic DRAG persisted; the buttons/slider merely previewed
+// (rbCabRoomListen), so their changes reverted to default on reopen.
+// Persist a mic/pos change on a SONG tone to its cab preset piece — reuses the
+// tested /gear/replace_with path (preset-scoped) to swap the RS mic/pos suffix, in
+// the BACKGROUND (debounced, no reload — the preloaded-variant switch already made
+// it sound right). Without this, song mic changes only PREVIEWED and reverted to
+// the piece's default on cab-room reopen (default/saved tones persisted via
+// rbCabRoomAutoPersistLocal; songs had no persist path at all).
+function rbCabRoomPersistSong(safeId) {
+    const st = _rbCabRoom[safeId];
+    if (!st || !st._studio || st._studio.local) return;          // songs only
+    if ((rbState.studioView || {}).source !== 'song') return;
+    const info = st._studio;                                     // {toneIdx, pIdx}
+    const tone = rbState.songTones && rbState.songTones.tones && rbState.songTones.tones[info.toneIdx];
+    const piece = tone && tone.chain && tone.chain[info.pIdx];
+    if (!tone || !piece || tone.preset_id == null) return;       // need a preset to scope to (never bulk-swap)
+    rbCabRoomSaveMicPx(st);                                       // visual spot + mic/angle (localStorage)
+    // Encode mic+pos → RS suffix. mic_suffixes maps char→mic; fold the 6 UI mics
+    // down to the 4 acoustic archetypes (_RB_CR_MIC_TOK) that actually have IRs.
+    const micS = (rbState.realCabCatalog || {}).mic_suffixes || {};
+    const tokChar = {};
+    for (const ch in micS) { const tok = _RB_CR_MIC_TOK[micS[ch]]; if (tok && !(tok in tokChar)) tokChar[tok] = ch; }
+    const micChar = tokChar[_RB_CR_MIC_TOK[st.mic] || 'dyn'] || Object.keys(micS)[0] || '5';
+    const posChar = ({ cone: 'c', edge: 'e', offaxis: 'o' })[rbCabRoomSnapPos(st)] || 'c';
+    const cur = String(piece.type || '');
+    const to = `${cur.replace(/_[a-z0-9]{2}$/i, '')}_${micChar}${posChar}`;
+    if (to === cur) return;                                       // already on this mic/pos
+    clearTimeout(st._songPersistT);
+    st._songPersistT = setTimeout(async () => {
+        try {
+            const r = await fetch(`${window.RB_API}/gear/replace_with`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ from_rs_gear: cur, to_rs_gear: to, preset_id: tone.preset_id }),
+            });
+            if (r.ok) piece.type = to;   // reflect locally so a reopen reads the new mic/pos
+        } catch (_) {}
+    }, 450);
+}
+
+function rbCabRoomAutoPersistLocal(safeId) {
+    const st = _rbCabRoom[safeId];
+    if (!st || !st._studio) return;
+    if (!st._studio.local) { rbCabRoomPersistSong(safeId); return; }   // songs: persist to the preset
+    rbCabRoomSaveMicPx(st);
+    clearTimeout(st._localPersistT);
+    st._localPersistT = setTimeout(() => {
+        rbStudioCabApplyLocal(null, { reopen: false, skipReload: true }).catch(() => {});
+    }, 450);
+}
+
+window.rbCabRoomSetSpeaker = function (safeId, gear, sp) {
+    const st = _rbCabRoom[safeId];
+    if (!st) return;
+    st.speaker = sp;
+    document.querySelectorAll('.rb-cabroom-spk').forEach(b => {
+        const on = b.dataset.spk === sp;
+        b.className = `rb-cabroom-spk px-2.5 py-1 rounded border text-xs ${on
+            ? 'bg-amber-700/60 text-amber-100 border-amber-500/60 font-semibold'
+            : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-amber-900/40'}`;
+    });
+    rbCabRoomListen(safeId, gear, true);
+    rbCabRoomAutoPersistLocal(safeId);
+};
+
+window.rbCabRoomSetMic = function (safeId, gear, mic) {
+    const st = _rbCabRoom[safeId];
+    if (!st) return;
+    st.mic = mic;
+    document.querySelectorAll('.rb-cabroom-mic').forEach(b => {
+        const on = b.dataset.mic === mic;
+        if (b.classList.contains('rb-swap-item')) {   // Studio catalog item
+            b.classList.toggle('rb-swap-current', on);
+        } else {                                        // Gear/node-editor button
+            b.className = `rb-cabroom-mic px-2.5 py-1 rounded border text-xs ${on
+                ? 'bg-violet-700/60 text-violet-100 border-violet-500/60 font-semibold'
+                : 'bg-dark-800 text-gray-300 border-gray-700 hover:bg-violet-900/40'}`;
+        }
+    });
+    rbCabRoomUpdateMicArt(safeId);   // repaint the mic sitting on the cone (Studio)
+    rbCabRoomDraw(safeId, rbCabRoomEntry(gear));
+    rbCabRoomListen(safeId, gear, true);
+    rbCabRoomAutoPersistLocal(safeId);
+};
+
+window.rbCabRoomSetDist = function (safeId, gear, v) {
+    const st = _rbCabRoom[safeId];
+    if (!st) return;
+    st.dist_in = parseFloat(v);
+    const lbl = document.getElementById(`rb-cabroom-dist-${safeId}`);
+    if (lbl) lbl.textContent = `${st.dist_in}"`;
+    rbCabRoomDraw(safeId, rbCabRoomEntry(gear));
+    clearTimeout(st._distT);
+    st._distT = setTimeout(() => {
+        rbCabRoomListen(safeId, gear, true);
+        rbCabRoomAutoPersistLocal(safeId);
+    }, 400);
+};
+
+window.rbCabRoomToggleAngle = function (safeId, gear) {
+    const st = _rbCabRoom[safeId];
+    if (!st) return;
+    st.angle_deg = st.angle_deg ? 0 : 45;
+    const b = document.getElementById(`rb-cabroom-ang-${safeId}`);
+    if (b) b.className = `text-xs px-2 py-1 rounded border ${st.angle_deg
+        ? 'bg-violet-700/60 text-violet-100 border-violet-500/60'
+        : 'bg-dark-800 text-gray-400 border-gray-700'}`;
+    const dm = document.getElementById(`rb-cabmic-${safeId}`);
+    if (dm) dm.classList.toggle('rb-cabmic-ang', !!st.angle_deg);
+    rbCabRoomDraw(safeId, rbCabRoomEntry(gear));
+    rbCabRoomListen(safeId, gear, true);
+    rbCabRoomAutoPersistLocal(safeId);
+};
+
+// ── Cab Room en THE STUDIO ──────────────────────────────────────────────
+// Click en la caja del cab (bajo el amp) → overlay con el Cab Room wired al
+// TONO: se inicializa con el mic/posición que la canción usa (sufijo del
+// gear, p.ej. _5c = 57@Cone) y cada cambio PERSISTE en el tono y recarga el
+// monitor (se oye en contexto con amp+pedales). El select de cab hace swap
+// por-canción (/gear/replace_with con preset_id).
+function rbStudioCabPiece() {
+    const chain = rbStudioCurrentChain() || [];
+    for (let i = 0; i < chain.length; i++) {
+        const p = chain[i];
+        if ((p.slot || '').toLowerCase() === 'cabinet' || p.rs_category === 'cab')
+            return { piece: p, pIdx: i };
+    }
+    return null;
+}
+
+function rbCabRoomStateFromPiece(piece) {
+    // 1) si ya usa un IR realcab custom, parsear sus parámetros del nombre.
+    // IMPORTANTE: incluir `piece.file` — tras salir y volver, la pieza se
+    // re-trae del backend en ese campo (NO en _uploaded_file, que es runtime y se
+    // pierde), así que sin él la posición/mic/parlante volvían a default.
+    const f = piece._uploaded_file || (piece.assigned && piece.assigned.file)
+              || piece.file || (piece.assigned && piece.assigned.ir_file) || '';
+    // Nombre completo: realcab_<spk>_<drivers>x<size><c|o>_<mic>_x###_d###_a##.wav
+    // → recupera TAMBIÉN el speaker (antes se perdía y volvía al default).
+    let m = /realcab_([a-z0-9]+)_(\d+x\d+[co])_([a-z0-9]+)_x(\d{3})_d(\d{3})_a(\d{2})\.wav$/i.exec(String(f));
+    if (m) return { speaker: m[1], mic: m[3], x: parseInt(m[4], 10) / 100,
+                    dist_in: parseInt(m[5], 10) / 10, angle_deg: parseInt(m[6], 10), micPx: null };
+    // Fallback para nombres viejos sin el token de configuración (mic/pos solo).
+    m = /realcab_.*_([a-z0-9]+)_x(\d{3})_d(\d{3})_a(\d{2})\.wav$/i.exec(String(f));
+    if (m) return { mic: m[1], x: parseInt(m[2], 10) / 100,
+                    dist_in: parseInt(m[3], 10) / 10, angle_deg: parseInt(m[4], 10), micPx: null };
+    // 2) si no, del sufijo RS del gear (lo que la canción dice usar)
+    const cat = rbState.realCabCatalog || {};
+    const suf = /_([a-z0-9]{2})$/i.exec(String(piece.type || ''));
+    if (suf && cat.mic_suffixes && cat.pos_suffixes) {
+        const mic = cat.mic_suffixes[suf[1][0]];
+        const pos = cat.pos_suffixes[suf[1][1]];
+        if (mic && pos) return { mic, x: pos.x, dist_in: pos.dist_in,
+                                 angle_deg: pos.angle_deg || 0, micPx: null };
+    }
+    return {};
+}
+
+window.rbStudioOpenCabRoom = function rbStudioOpenCabRoom() {
+    const room = document.getElementById('rb-studio-room');
+    if (!room) return;
+    // Toggle: clicking the cab again (or its close) exits the cab focus.
+    if (document.getElementById('rb-studio-cabroom')) { rbStudioCloseCabFocus(); return; }
+    // The catalog may not have loaded yet — the initial fetch can fail while a
+    // factory-reset re-download keeps the backend busy, and it isn't retried. Load
+    // it ON DEMAND and reopen instead of dead-ending on the "no cargado" alert.
+    if (!rbState.realCabCatalog) {
+        rbLoadRealCabCatalog().finally(() => {
+            if (rbState.realCabCatalog) rbStudioOpenCabRoom();
+            else alert('Cab catalog not loaded yet — try again in a moment.');
+        });
+        return;
+    }
+    const v = rbState.studioView || { source: 'default' };
+    const isSong = v.source === 'song';
+    // Edit the cab piece of WHATEVER tone the Studio shows (song / default /
+    // saved) — not only songs. For default/saved the picks persist into the
+    // chain array (rbStudioCabApplyLocal); for songs via /gear/replace_with.
+    const found = rbStudioCabPiece();
+    // Sin pieza de cab todavía: se elige un cab del catálogo; al seleccionarlo
+    // se crea+persiste la pieza (default/saved) o se hace swap (canción).
+    let gearName, entry;
+    if (found) {
+        gearName = found.piece.type || found.piece.rs_gear;
+        entry = rbRealCabEntryFor(gearName);
+    }
+    if (!entry) {
+        const cat = rbState.realCabCatalog;
+        if (!cat) { alert('Cab catalog not loaded yet.'); return; }
+        gearName = rbState._lastExploreCab || 'Cab_EN212C';
+        entry = cat.cabs[gearName] || cat.cabs[Object.keys(cat.cabs)[0]];
+    }
+    // Enter focus — zoom/dim the room like the amp & pedal editors do.
+    rbState._studioFocusKind = 'cab';
+    rbState._studioFocusIdx = found ? found.pIdx : -1;
+    room.classList.add('rb-focus-active');
+    // Floating "← Room" bar (reuses the amp focus bar element + styles).
+    let bar = document.getElementById('rb-studio-focus-bar');
+    if (!bar) { bar = document.createElement('div'); bar.id = 'rb-studio-focus-bar'; room.appendChild(bar); }
+    bar.className = 'rb-focus-bar2';
+    bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseCabFocus()">← Room</button>
+        <div class="rb-focus-actions" style="min-width:80px"></div>`;
+    requestAnimationFrame(() => bar.classList.add('rb-focus-open'));
+    // The cab room (drawn cab + mic) is the main editor — sits centre-left so
+    // the catalog rail can pin to the right (mirrors amp: gear left, rail right).
+    const ov = document.createElement('div');
+    ov.id = 'rb-studio-cabroom';
+    // Centred between the two rails (mic left, catalog right), no panel chrome —
+    // the cab fills the middle like a focused amp/pedal.
+    ov.style.cssText = 'position:absolute; left:50%; top:8%; transform:translateX(-50%); z-index:60; width:min(46%,520px); height:74%;';
+    ov.innerHTML = `<div class="relative" style="height:100%"><div id="rb-cabroom-studio" style="height:100%"></div></div>`;
+    room.appendChild(ov);
+    delete _rbCabRoom['studio'];   // estado fresco por apertura
+    rbCabRoomBuild({ rs_gear: gearName }, entry, 'studio', {
+        selector: false,   // the catalog rail replaces the old cab dropdown
+        // Song: {toneIdx,pIdx} drives the preloaded-variant swap via preset id.
+        // Default/saved: {local:true} tells the cab room to bake mic changes into
+        // the chain piece + persist (rbStudioCabApplyLocal) instead.
+        studio: isSong
+            ? (found ? { toneIdx: v.toneIdx, pIdx: found.pIdx } : null)
+            : { local: true, pIdx: found ? found.pIdx : -1 },
+        init: found ? rbCabRoomStateFromPiece(found.piece) : {},
+    });
+    // Preload the 12 mic/pos variants for instant (silent-gap-free) mic swapping.
+    // Songs AND Studio saved tones can do this (both resolve a preset id); the
+    // idle default tone can't (preload returns false → drop falls back to reload).
+    if (found) rbCabRoomPreloadVariants('studio', gearName).catch(() => {});
+    // Catalog on the right — reuse the amp/pedal swap rail with kind='cab'.
+    rbStudioOpenSwap(rbState._studioFocusIdx, 'cab');
+};
+
+// Tear down the cab focus (own path — no VST/knob teardown, unlike the
+// amp/pedal rbStudioCloseFocus). Closes the rail, the ← Room bar and the
+// cab-room overlay, and un-zooms the room.
+window.rbStudioCloseCabFocus = function rbStudioCloseCabFocus() {
+    const room = document.getElementById('rb-studio-room');
+    try { rbStudioCloseSwap(); } catch (_) {}
+    const bar = document.getElementById('rb-studio-focus-bar');
+    if (bar) { bar.classList.remove('rb-focus-open'); setTimeout(() => { try { bar.remove(); } catch (_) {} }, 220); }
+    try { rbCabRoomCloseMicRail(); } catch (_) {}
+    const ov = document.getElementById('rb-studio-cabroom');
+    if (ov) ov.remove();
+    delete _rbCabRoom['studio'];
+    if (room) room.classList.remove('rb-focus-active');
+    rbState._studioFocusKind = null;
+    try { rbStudioRefreshRoomMic(); } catch (_) {}   // reflect the mic move/model in the room
+};
+
+window.rbCabRoomExplore = function (safeId, newBase) {
+    rbState._lastExploreCab = newBase;
+    const cat = rbState.realCabCatalog;
+    const entry = cat && cat.cabs[newBase];
+    if (!entry) return;
+    const st = _rbCabRoom[safeId] || {};
+    const opts = st._opts || { selector: true };
+    delete _rbCabRoom[safeId];
+    rbCabRoomBuild({ rs_gear: newBase }, entry, safeId, opts);
+    rbCabRoomListen(safeId, newBase, true);
+};
+
+// ── Variantes pre-cargadas: cambio de mic/posición EN CONTEXTO e instantáneo ──
+// Al abrir el Cab Room de un tono, el monitor se carga UNA vez con la cadena
+// completa donde el stage del cab se expande a las 12 variantes RC_ (4 mics ×
+// 3 posiciones), todas bypasseadas menos la activa. Cambiar mic/posición =
+// api.setBypass (instantáneo) → se oye CON amp y pedales, sin recargar. La
+// posición fina exacta se persiste con "✓ Aplicar al tono" (una recarga).
+const _RB_CR_MIC_TOK = { sm57: 'dyn', tlm103: 'cond', r121: 'ribbon', tube: 'tube',
+                         md421: 'dyn', km84: 'cond' };   // 421/km84 → arquetipo más cercano
+
+// Filesystem-safe clone-name slug — MUST match clone_slug() in
+// tools/generate_real_cab_irs.py and the layout of assets/cab_irs/<Clone>/.
+function rbCloneSlug(name) {
+    return String(name || '').trim().replace(/\./g, '')
+        .replace(/[^0-9A-Za-z_-]+/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+function rbCabRoomSnapPos(st) {
+    if ((st.angle_deg || 0) >= 22) return 'offaxis';
+    return (st.x < 0.5) ? 'cone' : 'edge';
+}
+
+// Pre-install the 12 cab variants in the engine ONCE when the Studio loads, so the
+// FIRST Cab Room entry uses the instant replaceIR fast path instead of a full
+// reload (that reload — the amp VSTs tearing down + rebuilding — is the one-time
+// wait/flash on first entry). Deferred + guarded; no-op if already warm, if the
+// user is already in the cab room, or if there isn't exactly one cab slot loaded.
+let _rbCabWarming = false;
+async function rbStudioWarmCabVariants() {
+    if (_rbCabWarming) return;
+    if (document.getElementById('rb-studio-cabroom')) return;   // already in the cab room
+    const api = rbAudioApi();
+    if (!api || typeof api.getChainState !== 'function' || typeof api.replaceIR !== 'function') return;
+    try {
+        const loaded = await api.getChainState();
+        if (!Array.isArray(loaded)) return;
+        const cabs = loaded.filter(sl => sl && Number(sl.type) === 2
+            && /\/(cabs|realcab)\//i.test(String(sl.path || '').replace(/\\/g, '/')));
+        if (cabs.length !== 1) return;   // 0 = no cab; ≥12 = already warm (re-warms after a song leaves 1 cab)
+        const found = rbStudioCabPiece();
+        if (!found || !found.piece || !found.piece.type) return;
+        const gear = String(found.piece.type);
+        const st = _rbCabRoom['studio'] = _rbCabRoom['studio']
+            || { mic: 'sm57', x: 0.15, dist_in: 1.0, angle_deg: 0, micPx: null };
+        st._studio = st._studio || { local: true, pIdx: found.pIdx };
+        Object.assign(st, rbCabRoomStateFromPiece(found.piece));
+        st._artAspect = rbCabArtAspect(gear);
+        _rbCabWarming = true;
+        try { await rbCabRoomPreloadVariants('studio', gear); } finally { _rbCabWarming = false; }
+    } catch (_) { _rbCabWarming = false; }
+}
+
+async function rbCabRoomPreloadVariants(safeId, gear) {
+    const st = _rbCabRoom[safeId];
+    const info = st && st._studio;
+    const api = rbAudioApi();
+    if (!info || !api) return false;
+    const status = document.getElementById(`rb-cabroom-status-${safeId}`);
+    if (status) status.textContent = '⏳ cargando el tono con las variantes del cab…';
+    try {
+        // Fetch a clean chain payload for whatever tone is live, so the instant
+        // (silent-gap-free) mic swap works everywhere: songs persist by toneIdx →
+        // native_preset_full; Studio SAVED tones have a preset id → same endpoint;
+        // the idle DEFAULT tone has none but exposes /default_tone/native.
+        let payload = null;
+        if (info.toneIdx != null) {
+            const presetId = await rbPersistTone(info.toneIdx, rbState.currentSongFile);
+            if (presetId == null) return false;
+            const r = await fetch(`${window.RB_API}/native_preset_full/${presetId}`);
+            if (r.ok) payload = await r.json();
+        } else {
+            const view = rbState.studioView || {};
+            if (view.source === 'saved') {
+                const t = (rbState.savedTones || []).find(x => x.name === view.name);
+                if (t && t.id != null) {
+                    const r = await fetch(`${window.RB_API}/native_preset_full/${t.id}`);
+                    if (r.ok) payload = await r.json();
+                }
+            } else if (view.source === 'default') {
+                const r = await fetch(`${window.RB_API}/default_tone/native`);
+                if (r.ok) payload = await r.json();
+            }
+        }
+        if (!payload) return false;
+        const chain = payload && payload.native_preset && payload.native_preset.chain;
+        if (!Array.isArray(chain) || !chain.length) return false;
+        let ci = chain.findIndex(sg => sg && sg.type === 2
+            && ((sg.slot || '') === 'cabinet' || /(^|\/)(cabs|realcab|rocksmith)\//i.test(sg.path || '')));
+        if (ci < 0) ci = chain.findIndex(sg => sg && sg.type === 2);
+        if (ci < 0) return false;
+        const orig = chain[ci];
+        const cat = rbState.realCabCatalog || {};
+        let base = gear;
+        if (!(cat.cabs && cat.cabs[base]) && base.includes('_'))
+            base = base.replace(/_[a-z0-9]{2}$/i, '');
+        if (!(cat.cabs && cat.cabs[base])) return false;
+        // New layout: cabs live in per-cab clone-named subfolders
+        // (cabs/<Clone>/<mic>_<pos>.wav), so derive the folder from the catalog
+        // clone name — NOT the old flat `RC_<gear>_<mic>_<pos>.wav`.
+        const sub = rbCloneSlug((cat.cabs[base] && cat.cabs[base].name) || base);
+        const m = /^(.*nam_irs)\//i.exec((orig.path || '').replace(/\\/g, '/'));
+        const root = m ? m[1] : null;
+        if (!root) return false;
+        let stObj = null;
+        try { stObj = JSON.parse(atob(orig.state || '')); } catch (_) { stObj = null; }
+        const activeKey = `${_RB_CR_MIC_TOK[st.mic] || 'dyn'}_${rbCabRoomSnapPos(st)}`;
+        const variants = [];
+        const vmap = {};
+        for (const mic of ['dyn', 'cond', 'ribbon', 'tube']) {
+            for (const pos of ['cone', 'edge', 'offaxis']) {
+                const key = `${mic}_${pos}`;
+                const path = `${root}/cabs/${sub}/${key}.wav`;
+                const stage = Object.assign({}, orig, {
+                    name: `${sub}/${key}`, path,
+                    bypassed: key !== activeKey,
+                });
+                if (stObj && stObj.irPath) {
+                    const o2 = Object.assign({}, stObj, { irPath: path });
+                    stage.state = btoa(JSON.stringify(o2));
+                }
+                vmap[key] = variants.length;
+                variants.push(stage);
+            }
+        }
+        // FAST PATH: if the engine already has our cab-variant IR slots loaded
+        // (reopening the Cab Room, or a cab SWAP), swap ONLY their IRs in place via
+        // the engine's replaceIR — no full loadPreset, so the amp VST above is NOT
+        // re-instantiated (that teardown/rebuild is the ~1-2 s wait when changing
+        // cabs). Slot ids are preserved, so params/stereo stay applied. Falls
+        // through to the full reload below on any mismatch or if replaceIR is
+        // absent (older engine build).
+        if (typeof api.replaceIR === 'function') {
+            try {
+                const loaded = await api.getChainState();
+                if (Array.isArray(loaded)) {
+                    const idxs = [];
+                    loaded.forEach((sl, i) => {
+                        if (sl && Number(sl.type) === 2
+                            && /\/(cabs|realcab)\//i.test(String(sl.path || '').replace(/\\/g, '/'))) idxs.push(i);
+                    });
+                    const ok = idxs.length === variants.length
+                        && idxs.every((vv, i) => i === 0 || vv === idxs[i - 1] + 1);
+                    if (ok) {
+                        for (let k = 0; k < variants.length; k++) {
+                            const sl = loaded[idxs[k]];
+                            const id = (sl && sl.id != null) ? sl.id
+                                : (sl && sl.slotId != null) ? sl.slotId : idxs[k];
+                            // replaceIR resolves false (never rejects) on a bad
+                            // slot/missing IR/prepare fault — throw so we land in
+                            // the catch below and fall through to the full reload,
+                            // rather than reporting an instant swap that didn't
+                            // actually change the cab audio.
+                            if (!(await api.replaceIR(id, variants[k].path)))
+                                throw new Error('replaceIR failed');
+                            if (typeof api.setBypass === 'function')
+                                await api.setBypass(id, !!variants[k].bypassed);
+                        }
+                        chain.splice(ci, 1, ...variants);   // keep the JS chain model in sync
+                        st._variantBase = idxs[0];
+                        st._variantMap = vmap;
+                        st._variantActive = activeKey;
+                        rbState._defaultToneActive = true;
+                        if (status) status.textContent = `✓ instant change — ${activeKey.replace('_', ' @ ')}`;
+                        return true;
+                    }
+                }
+            } catch (_) { /* fall through to the full reload */ }
+        }
+        chain.splice(ci, 1, ...variants);
+        delete payload.id;
+        await rbCloseActiveVstEditor();
+        await rbLoadNativePresetPayload(api, payload, { mode: 'preview', authorization: 'user-action' });
+        await rbStudioFinishMonitorLoad(api, chain);
+        rbState._defaultToneActive = true;
+        st._variantBase = ci;
+        st._variantMap = vmap;
+        st._variantActive = activeKey;
+        if (status) status.textContent = `✓ in context — change mic/position instantly (${activeKey.replace('_', ' @ ')})`;
+        return true;
+    } catch (e) {
+        if (status) status.textContent = '⚠ variants unavailable — using cab-only audition';
+        return false;
+    }
+}
+
+async function rbCabRoomSwitchVariant(safeId) {
+    const st = _rbCabRoom[safeId];
+    if (!st || !st._variantMap) return false;
+    const api = rbAudioApi();
+    if (!api || typeof api.setBypass !== 'function') return false;
+    const key = `${_RB_CR_MIC_TOK[st.mic] || 'dyn'}_${rbCabRoomSnapPos(st)}`;
+    if (st._variantMap[key] == null) return false;
+    try {
+        let ids = null;
+        try {
+            const loaded = await api.getChainState();
+            if (Array.isArray(loaded))
+                ids = loaded.map((sl, i) => (sl && (sl.id ?? sl.slotId)) ?? i);
+        } catch (_) {}
+        const slotOf = idx => (ids ? ids[st._variantBase + idx] : st._variantBase + idx);
+        if (st._variantActive && st._variantActive !== key
+            && st._variantMap[st._variantActive] != null)
+            await api.setBypass(slotOf(st._variantMap[st._variantActive]), true);
+        await api.setBypass(slotOf(st._variantMap[key]), false);
+        st._variantActive = key;
+        const status = document.getElementById(`rb-cabroom-status-${safeId}`);
+        if (status) status.textContent = `✓ playing in context: ${key.replace('_', ' @ ')} — "Apply" saves the exact position`;
+        return true;
+    } catch (_) { return false; }
+}
+
+async function rbStudioCabRoomApply(safeId, gear) {
+    const st = _rbCabRoom[safeId];
+    const info = st && st._studio;
+    if (!info) return;
+    const status = document.getElementById(`rb-cabroom-status-${safeId}`);
+    // Apply EXPLÍCITO (botón): recarga la cadena completa del monitor UNA
+    // vez (re-instancia el amp VST → ~2 s de silencio; más en amps pesados).
+    // La exploración con drags usa la audición rápida del cab solo.
+    if (status) status.textContent = '⏳ guardando y recargando el tono…';
+    clearTimeout(st._applyT);
+    st._applyT = setTimeout(async () => {
+        try {
+            const d = await rbCabRoomSynth(safeId, gear, false);
+            const piece = rbState.songTones?.tones?.[info.toneIdx]?.chain?.[info.pIdx];
+            if (!piece) throw new Error('pieza no encontrada');
+            piece._uploaded_file = d.name;
+            piece._uploaded_kind = 'ir';
+            await rbPersistTone(info.toneIdx, rbState.currentSongFile);
+            try { rbStudioLoadMonitor(); } catch (_) {}
+            if (status) status.textContent = '✓ aplicado — cargando tono… (~2 s de silencio, normal)';
+            setTimeout(() => {
+                if (status && status.textContent.startsWith('✓ aplicado — cargando'))
+                    status.textContent = '✓ playing with the new position';
+            }, 2600);
+        } catch (e) {
+            if (status) status.textContent = '✗ ' + (e.message || e);
+        }
+    }, 0);
+}
+
+window.rbStudioCabSwap = async function (newBase) {
+    const st = _rbCabRoom['studio'];
+    const info = st && st._studio;
+    const v = rbState.studioView || {};
+    if (!info || v.source !== 'song') return;
+    const tone = rbState.songTones?.tones?.[info.toneIdx];
+    const piece = tone?.chain?.[info.pIdx];
+    if (!tone || !piece) return;
+    const cur = String(piece.type || '');
+    const suf = /_([a-z0-9]{2})$/i.exec(cur);
+    const to = newBase + (suf ? '_' + suf[1] : '');
+    const status = document.getElementById('rb-cabroom-status-studio');
+    if (status) status.textContent = '⏳ cambiando cab…';
+    try {
+        const r = await fetch(`${window.RB_API}/gear/replace_with`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from_rs_gear: cur, to_rs_gear: to,
+                                   preset_id: tone.preset_id }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || r.status);
+        // refresh liviano del tono + reabrir el cab room con el cab nuevo
+        const fresh = await rbFetchSong(rbState.currentSongFile);
+        if (fresh && !fresh.error) { rbState.songTones = fresh; try { rbSeedBypass(fresh); } catch (_) {} }
+        try { rbStudioShowSongTone(info.toneIdx); } catch (_) {}
+        const ov = document.getElementById('rb-studio-cabroom');
+        if (ov) ov.remove();
+        rbStudioOpenCabRoom();
+    } catch (e) {
+        if (status) status.textContent = '✗ ' + (e.message || e);
+    }
+};
+
+// In-place cab SWAP for a Studio tone: replace the 12 loaded cab-variant IRs with
+// the new cab's (engine replaceIR — no chain rebuild, amp/params untouched) and
+// repaint ONLY the cab-art element. No studio-room re-render, no cab-room rebuild,
+// no payload re-fetch → near-instant, no amp flash. Returns false (→ caller falls
+// back to the full reopen) if the 12 variants aren't loaded or replaceIR is absent.
+async function rbStudioFastCabSwapInPlace(base) {
+    const st = _rbCabRoom['studio'];
+    const api = rbAudioApi();
+    if (!st || !st._variantMap || st._variantBase == null
+        || !api || typeof api.replaceIR !== 'function') return false;
+    const cat = rbState.realCabCatalog || {};
+    const entry = cat.cabs && cat.cabs[base];
+    if (!entry) return false;
+    const sub = rbCloneSlug(entry.name || base);
+    try {
+        const loaded = await api.getChainState();
+        if (!Array.isArray(loaded)) return false;
+        const ids = loaded.map((sl, i) => (sl && (sl.id != null ? sl.id : sl.slotId)) != null
+            ? (sl.id != null ? sl.id : sl.slotId) : i);
+        const cabSlot = loaded.find(sl => sl && Number(sl.type) === 2
+            && /\/(cabs|realcab)\//i.test(String(sl.path || '').replace(/\\/g, '/')));
+        const m = /^(.*nam_irs)\//i.exec(String(cabSlot && cabSlot.path || '').replace(/\\/g, '/'));
+        const root = m ? m[1] : null;
+        if (!root) return false;
+        // Swap every variant's IR to the new cab (same mic_pos key → same slot).
+        for (const [key, vi] of Object.entries(st._variantMap)) {
+            const slotId = ids[st._variantBase + vi];
+            // Throw on a false result (bad slot / missing IR / prepare fault) so
+            // the catch returns false and the caller does the full reopen — don't
+            // repaint to the new cab while the engine still plays the old IR.
+            if (slotId != null && !(await api.replaceIR(slotId, `${root}/cabs/${sub}/${key}.wav`)))
+                throw new Error('replaceIR failed');
+        }
+        // Repaint ONLY the cab-art element (art + speaker silhouettes + mic), in
+        // place — the fit element keeps its drag handlers, the variant state stays.
+        st.speaker = null;
+        st._hasArt = !!rbCabArtFor(base);
+        st._artAspect = rbCabArtAspect(base);
+        st._gear = base;
+        const fit = document.getElementById('rb-cabfit-studio');
+        if (fit) {
+            const a = st._artAspect || 1;
+            const _fx = (st._micFx != null ? st._micFx : 0.5), _fy = (st._micFy != null ? st._micFy : 0.44);
+            fit.style.aspectRatio = a;
+            fit.style.height = (a < 0.85 ? 100 : 76) + '%';
+            fit.innerHTML = `${rbCabArtFor(base)}${rbCabSpeakerSilhouettesSvg(entry, a)}`
+                + `<div class="rb-cabmic ${st.angle_deg ? 'rb-cabmic-ang' : ''}" id="rb-cabmic-studio" style="left:${_fx * 100}%;top:${_fy * 100}%">${rbMicOnCabHtml(st.mic, 'studio')}</div>`;
+        }
+        // Reflect the pick in the catalog rail (highlight) without rebuilding it.
+        document.querySelectorAll('#rb-swap-rail .rb-swap-item').forEach(el => {
+            try { el.classList.toggle('rb-swap-current', el.dataset && el.dataset.gear && el.dataset.gear.startsWith(base)); } catch (_) {}
+        });
+        // Also refresh the main Studio-room cab face(s) BEHIND the overlay, so
+        // leaving the Cab Room shows the NEW cab at once — this fast path skips
+        // rbRenderStudioRoom, so without this the room kept the old cab until a
+        // full reload. Mirrors the in-place amp-face update in rbStudioSwapToGear.
+        try {
+            const url = rbCabArtDataUrl(base), asp = rbCabArtAspect(base), nm = entry.name || base;
+            document.querySelectorAll('#rb-studio-room .rb-amp-cab').forEach(el => {
+                el.classList.toggle('has-art', !!url);
+                el.title = `${nm} — click: Cab Room`;
+                el.style.aspectRatio = (url && asp) ? asp : '';
+                let img = el.querySelector('img');
+                if (url) { if (!img) { img = document.createElement('img'); img.alt = ''; el.insertBefore(img, el.firstChild); } img.src = url; }
+                else if (img) img.remove();
+            });
+            rbStudioRefreshRoomMic();   // re-place the mic stand on the new cab
+        } catch (_) {}
+        return true;
+    } catch (_) { return false; }
+}
+
+// Cab apply for the DEFAULT tone or a SAVED tone (no song). Songs go through
+// rbStudioCabSwap (/gear/replace_with by preset id); here we own the chain array
+// directly. Find or create the cabinet piece, point it at `rsGear` (or keep the
+// current cab when null — a mic-position drag), synthesize an IR at the cab
+// room's mic position so it actually colours the sound (native_preset_full only
+// emits a cab stage when kind='ir' with a file), then persist via
+// rbStudioPersist (default_tone/save or saved_tone/save) so the pick shows in the
+// room, seeds the node editor, and survives a restart. `opts.reopen` (default
+// true) re-renders the room + reopens the cab room on the new cab — used when
+// switching cabs from the rail; a mic drag passes reopen:false to stay in place.
+window.rbStudioCabApplyLocal = async function (rsGear, opts) {
+    opts = opts || {};
+    const reopen = opts.reopen !== false;
+    const chain = rbStudioCurrentChain();
+    const status = document.getElementById('rb-cabroom-status-studio');
+    if (status) status.textContent = '⏳ aplicando cab…';
+    let found = rbStudioCabPiece();
+    let piece = found ? found.piece : null;
+    // Base cab id — strip any RS mic/pos suffix (we bind OUR synthesized IR, so
+    // the piece carries the bare base name the art + catalog are keyed by).
+    const base = String(rsGear || (piece && piece.type) || rbState._lastExploreCab || '')
+        .replace(/_[a-z0-9]{2}$/i, '');
+    if (!base) { if (status) status.textContent = ''; return; }
+    try {
+        // Rail swap (rsGear set): drop the current speaker so the synth uses the
+        // target cab's default — the backend 400s a speaker not offered for that
+        // cab, which would leave it silent (no IR). A mic drag (rsGear null) keeps
+        // the same cab, so its speaker stays.
+        const st = _rbCabRoom['studio'];
+        if (rsGear && st) st.speaker = null;
+        // IR at the cab room's current mic position (defaults on a fresh open).
+        let irName = null;
+        if (rsGear) {
+            // Cab SWAP: use the PRECOMPUTED override IR (cabs/<Clone>/<mic>_<pos>.wav)
+            // instead of the ~3.6 s physics-model /cab/synthesize — that render was
+            // the whole "tarda en cargar". The exact realcab is synthesized lazily
+            // only when the user then drags the mic on the new cab (backgrounded).
+            const cat = rbState.realCabCatalog || {};
+            const sub = rbCloneSlug((cat.cabs && cat.cabs[base] && cat.cabs[base].name) || base);
+            const mic = (st && _RB_CR_MIC_TOK[st.mic]) || 'dyn';
+            const pos = st ? rbCabRoomSnapPos(st) : 'cone';
+            irName = `cabs/${sub}/${mic}_${pos}.wav`;
+        } else {
+            try { const d = await rbCabRoomSynth('studio', base, false); irName = d && d.name; } catch (_) {}
+        }
+        if (!piece) { piece = { _bypassed: false }; chain.push(piece); }
+        piece.type = base;
+        piece.slot = 'cabinet';
+        piece.category = 'cab'; piece.rs_category = 'cab';
+        const catEntry = (rbState.realCabCatalog && rbState.realCabCatalog.cabs
+                          && rbState.realCabCatalog.cabs[base]) || {};
+        piece.real_name = catEntry.name || piece.real_name || base;
+        // Cabs have no VST — clear any stale VST assignment left on the piece.
+        piece._vst_kind = null; piece._vst_path = null; piece._vst_state = null;
+        if (irName) {
+            piece._uploaded_file = irName;
+            piece._uploaded_kind = 'ir';
+            piece.assigned = { kind: 'ir', file: irName, assigned_mode: 'manual' };
+        }
+        try { rbStudioPersist(); } catch (_) {}
+        // skipReload: the caller (mic drag) already updated the LIVE sound via the
+        // instant variant switch, so skip the monitor reload whose pre-load mute
+        // is the audible ~1 s silence. Still sync the node editor to the new cab.
+        if (opts.skipReload) {
+            try { rbAdvSyncFromChain(); } catch (_) {}
+        } else if (reopen) {
+            // The reopen below re-preloads the cab room, which loads the engine via
+            // the fast in-place replaceIR path when possible — so skip THIS full
+            // reload (doing both was a redundant double-load on every cab swap).
+            try { rbAdvSyncFromChain(); } catch (_) {}
+        } else {
+            await rbStudioReloadLiveChainAfterSwap();   // persist reaches DB → reload the live monitor (also syncs the node editor)
+        }
+        if (status) status.textContent = '';
+        if (reopen) {
+            // FAST cab swap: replace the 12 cab IRs in place + repaint ONLY the cab
+            // art element — no studio-room re-render (no amp flash), no cab-room
+            // teardown/rebuild, no payload re-fetch. That whole reopen was the
+            // remaining "se demora". Only when swapping (rsGear) with the 12
+            // variants already loaded; otherwise fall back to the full reopen.
+            if (!(rsGear && await rbStudioFastCabSwapInPlace(base))) {
+                try { rbRenderStudioRoom(); } catch (_) {}   // room now shows the cab art
+                const ov = document.getElementById('rb-studio-cabroom');
+                if (ov) ov.remove();
+                rbStudioOpenCabRoom();   // re-enter focus on the new cab (rail + mic)
+            }
+        }
+    } catch (e) {
+        if (status) status.textContent = '✗ ' + (e.message || e);
+    }
+};
+
 function rbAuditionGainForVariantLevel(level) {
     const TRIM_DB = {
         clean:    0,
@@ -11091,6 +14264,10 @@ async function rbAuditionFile(file, kind, btnId, gain, rsGear) {
     await rbStopPreview();   // stop any other preview/audition first
     const api = rbNativeAudio();
     if (!api) { alert('Audio engine unavailable. Open the “NAM” plugin once to initialize it.'); return; }
+    // Reservar la audición YA (antes del load): el fallback-al-default de
+    // rbStopPreview corre a los 150 ms y solo respeta audiciones marcadas.
+    rbState._auditionId = auditionKey;
+    console.log(`[rig_builder audition] ▶ ${kind || 'nam'} · ${file}${(typeof gain === 'number' && isFinite(gain)) ? ' · gain=' + gain : ''}`);
     // Stash the button's original label (e.g. "▶ clean", "▶ Listen")
     // so we can restore it after the user stops or switches buttons.
     // The previous implementation hard-coded "▶" on restore, which
@@ -11138,6 +14315,7 @@ async function rbAuditionFile(file, kind, btnId, gain, rsGear) {
             btn.textContent = labelTail ? `⏸ ${labelTail}` : '⏸';
         }
     } catch (e) {
+        if (rbState._auditionId === auditionKey) rbState._auditionId = null;
         if (btn) {
             btn.disabled = false;
             btn.textContent = btn.dataset.origLabel || '▶';
@@ -11274,10 +14452,21 @@ function rbGearTypeTags(g) {
 }
 
 function rbGearInstrument(g) {
+    // Custom (user-authored) gear stores its own instrument choice.
+    if (g && g.custom && g.instrument) return String(g.instrument).toLowerCase();
     const category = (g && g.category || '').toLowerCase();
     if (category === 'rack') return 'all';
     const rs = String(g && g.rs_gear || '');
     return /^Bass_/i.test(rs) || /(^|_)Bass(_|$)/i.test(rs) ? 'bass' : 'guitar';
+}
+
+// PNG data-URL of a custom gear's editable UI layout (its "face"), or null for
+// non-custom gear / gear without a saved layout. Custom gear draws from its
+// serializable `ui` layout via RBPedalCanvas.layoutDataURL rather than a
+// bundled-VST stem.
+function rbGearCustomArt(g) {
+    if (!g || !g.ui || !window.RBPedalCanvas || !window.RBPedalCanvas.layoutDataURL) return null;
+    try { return window.RBPedalCanvas.layoutDataURL(g.ui, {}); } catch (_) { return null; }
 }
 
 function rbGearHasVst(g) {
@@ -11311,6 +14500,22 @@ function rbGearIsAssigned(g) {
     return rbGearHasVst(g) || !!(g && (g.assigned || g.file));
 }
 
+// Assignment status under the NEW model: a real gear (game amp/pedal/rack or a
+// custom gear) is "assigned" when it covers ≥1 game-gear slot (assigned_rs). A
+// game gear whose slot was redirected to another gear covers nothing → shows
+// unassigned. Cabs/other keep the legacy meaning.
+function rbGearEffectiveAssigned(g) {
+    if (!g) return false;
+    // Custom / user-added gear (incl. auto tone3000): a "new" gear that reads
+    // assigned only once it covers a game slot (i.e. it's been mapped to songs).
+    if (g.custom) return Array.isArray(g.assigned_rs) && g.assigned_rs.length > 0;
+    // Native gear: the game's factory roster is assigned by default. Exceptions:
+    // a post-factory DLC/new gear (is_new, e.g. BS103) or one whose slot is
+    // redirected away to a custom gear both read unassigned.
+    if (g.is_new || g.mapped_custom) return false;
+    return true;
+}
+
 function rbGearSearchHaystack(g) {
     return rbNorm(
         (g.real_name || '') + ' ' +
@@ -11321,8 +14526,37 @@ function rbGearSearchHaystack(g) {
     ) + rbGearTypeTags(g);
 }
 
+// What backs a gear: a real VST, a NAM capture, or an IR (cab). Used by the
+// NAM/VST/IR sidebar filter. Returns null when nothing is resolved yet.
+function rbGearBacking(g) {
+    if (!g) return null;
+    if (rbGearHasVst(g)) return 'vst';
+    const file = g.file || (g.assigned && g.assigned.file) || '';
+    if (g.kind === 'ir' || (g.assigned && g.assigned.kind === 'ir') || /\.wav$/i.test(file)) return 'ir';
+    if (g.kind === 'nam' || (g.assigned && g.assigned.kind === 'nam') || /\.nam$/i.test(file)) return 'nam';
+    return null;
+}
+
+// Toggle one backing type in the multi-select filter (empty set = show all).
+function rbToggleBackingFilter(kind) {
+    const set = rbState.gearBackingFilter || (rbState.gearBackingFilter = {});
+    set[kind] = !set[kind];
+    document.querySelectorAll('.rb-backing-btn').forEach(b => {
+        const on = !!set[b.dataset.rbBacking];
+        b.style.background = on ? 'rgba(120,160,220,.22)' : '';
+        b.style.borderColor = on ? 'rgba(120,160,220,.6)' : '';
+        b.style.color = on ? '#cfe0ff' : '';
+    });
+    rbApplyGearFilters();
+}
+
 function rbGearMatchesFilters(g, search, onlyUnassigned, instrument) {
-    if (onlyUnassigned && rbGearIsAssigned(g)) return false;
+    if (onlyUnassigned && rbGearEffectiveAssigned(g)) return false;
+    const bf = rbState.gearBackingFilter;
+    if (bf && (bf.nam || bf.vst || bf.ir)) {
+        const b = rbGearBacking(g);
+        if (!b || !bf[b]) return false;
+    }
     if (instrument && instrument !== 'all') {
         const gi = rbGearInstrument(g);
         if (gi !== 'all' && gi !== instrument) return false;
@@ -11395,12 +14629,12 @@ function rbRenderGearCategoryMenu(filtered) {
 
 function rbRenderGearListItem(g) {
     const selected = rbState.gearSelected === g.rs_gear;
-    const assigned = rbGearIsAssigned(g);
+    const assigned = rbGearEffectiveAssigned(g);
     const instrument = rbGearInstrument(g);
-    const rsArt = `${window.RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}${_RB_GEAR_PHOTO_CB}`;
+    const rsArt = rbCabArtDataUrl(g.rs_gear) || `${window.RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}${_RB_GEAR_PHOTO_CB}`;
     const stem = rbGearCanvasStem(g);
-    const vstArt = (stem && window.RBPedalCanvas && window.RBPedalCanvas.has(stem))
-        ? window.RBPedalCanvas.dataURL(stem, {}) : null;
+    const vstArt = rbGearCustomArt(g) || ((stem && window.RBPedalCanvas && window.RBPedalCanvas.has(stem))
+        ? window.RBPedalCanvas.dataURL(stem, {}) : null);
     const thumbW = vstArt ? 84 : 56;
     const sub = [
         instrument === 'all' ? 'all instruments' : instrument,
@@ -11429,10 +14663,19 @@ function rbRenderGearListItem(g) {
 function rbCatalogVisualForGear(g, size) {
     const isVst = rbGearHasVst(g);
     const gStem = isVst ? g.vst_path.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '') : '';
-    const canvasArt = (gStem && window.RBPedalCanvas && window.RBPedalCanvas.has(gStem))
-        ? window.RBPedalCanvas.dataURL(gStem, {}) : null;
+    const customArt = rbGearCustomArt(g);
+    const canvasArt = customArt || ((gStem && window.RBPedalCanvas && window.RBPedalCanvas.has(gStem))
+        ? window.RBPedalCanvas.dataURL(gStem, {}) : null);
     const minHeight = size === 'large' ? '360px' : '96px';
     const height = size === 'large' ? '52vh' : '96px';
+    // Custom gear always renders its own editable face (even NAM/IR-backed gear
+    // that has no VST) — its layout IS the visual.
+    if (customArt) {
+        return `<div class="bg-dark-900 border border-purple-800/30 rounded-xl overflow-hidden flex items-center justify-center"
+                    style="min-height:${minHeight};height:${height}">
+                    <img src="${customArt}" alt="" style="max-width:100%;max-height:100%;object-fit:contain">
+                </div>`;
+    }
     if (rbGearUsesVstOnlyVisual(g)) {
         if (isVst) {
             if (canvasArt) {
@@ -11458,7 +14701,7 @@ function rbCatalogVisualForGear(g, size) {
                 </div>
             </div>`;
     }
-    const rsArt = `${window.RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}${_RB_GEAR_PHOTO_CB}`;
+    const rsArt = rbCabArtDataUrl(g.rs_gear) || `${window.RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}${_RB_GEAR_PHOTO_CB}`;
     const fallback = g.image
         ? `<img src="${rbEsc(g.image)}" alt="" loading="lazy"
                  style="display:none;max-width:100%;max-height:100%;object-fit:contain"
@@ -11499,6 +14742,116 @@ function rbOpenSelectedGearVst(g) {
     );
 }
 
+// Interactive in-app editor for a CUSTOM gear shown in the Gear catalog detail:
+// loads the plugin in isolation and renders the created face (custom mode) or a
+// panel generated from the plugin's real params (original mode), with knobs that
+// drive the plugin live so you can HEAR what each control does. NAM/IR gear (no
+// plugin) shows its static face. A 🪟 button opens the real plugin window.
+async function rbCatalogCustomEditInline(g) {
+    const PC = window.RBPedalCanvas;
+    if (!g || !PC) return;
+    const safeId = g.rs_gear.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const host = document.getElementById(`rb-cg-cat-face-${safeId}`);
+    if (!host) return;
+    const vstPath = g.vst_path || '';
+
+    // Shared render state — the plugin load (async) later fills slotId + model
+    // (for live audio + reading the plugin's current values).
+    let slotId = null;
+    let model = { idMap: {}, values: {} };
+    // NAM/IR gears (incl. auto-downloaded tone3000 gears) ship no saved UI — fall
+    // back to a default face so they render instead of hanging on "Loading…".
+    let layout = g.ui ? PC.normalizeLayout(g.ui)
+               : (!vstPath && PC.defaultFace ? PC.defaultFace(g.category, null, { title: g.real_name || '' }) : null);
+    const idToParam = {};
+    const mapParams = () => {
+        Object.keys(idToParam).forEach(k => delete idToParam[k]);
+        ((layout && layout.controls) || []).forEach(c => { if (typeof c.param === 'number') idToParam[c.id] = c.param; });
+    };
+    mapParams();
+
+    // Draw the created face directly onto the canvas (NO static photo → no flash).
+    const renderFace = () => {
+        if (!layout) return;
+        let canvas = document.getElementById(`rb-cg-cat-canvas-${safeId}`);
+        if (!canvas) {
+            host.innerHTML = `
+                <div class="flex items-center justify-between mb-1">
+                    <div class="text-[11px] text-purple-300 font-semibold">In-feedBack editor · ${rbEsc(g.real_name || '')}</div>
+                    <button onclick="rbCatalogOpenNative()" title="Open the plugin's own (real) editor window"
+                            class="bg-dark-700 hover:bg-dark-600 text-gray-300 text-[10px] px-2 py-0.5 rounded">🪟 Plugin window</button>
+                </div>
+                <div style="text-align:center">
+                    <canvas id="rb-cg-cat-canvas-${safeId}" style="cursor:ns-resize;touch-action:none;display:inline-block;vertical-align:top"></canvas>
+                </div>
+                <div class="text-[10px] text-gray-500 text-center mt-1">Drag a knob up/down to hear what it does</div>`;
+            canvas = document.getElementById(`rb-cg-cat-canvas-${safeId}`);
+        }
+        const spec = PC.specFromLayout(layout);
+        // CONTAIN: fill the available width (small saved sizes aren't shown tiny).
+        const wrap = canvas.parentElement;
+        const availW = Math.max(280, ((wrap && wrap.clientWidth) ? wrap.clientWidth : 460) - 8);
+        const scale = Math.min(availW / spec.w, 430 / spec.h);
+        canvas.style.maxWidth = 'none';
+        canvas.style.width = Math.round(spec.w * scale) + 'px';
+        const values = {};
+        (layout.controls || []).forEach(c => { if (typeof c.param === 'number' && typeof model.values[c.param] === 'number') values[c.id] = model.values[c.param]; });
+        PC.attachSpec(canvas, spec, {
+            values, interactive: true,
+            onChange: (ctrlId, val) => {
+                const logical = idToParam[ctrlId];
+                if (typeof logical !== 'number' || slotId == null) return;   // cosmetic / not loaded yet
+                const realId = (model.idMap && model.idMap[logical] != null) ? model.idMap[logical] : logical;
+                try { (rbNativeAudio ? rbNativeAudio() : rbAudioApi()).setParameter(slotId, realId, val); } catch (_) {}
+            },
+        });
+    };
+
+    if (layout) {
+        renderFace();
+        if (PC.ready) PC.ready().then(() => { if (rbState.gearSelected === g.rs_gear) renderFace(); });
+    } else {
+        host.innerHTML = `<div class="text-xs text-gray-500 p-4 text-center">Loading ${rbEsc(g.real_name || 'plugin')}…</div>`;
+    }
+
+    // Load the plugin in the BACKGROUND to wire the knobs to live audio.
+    if (!vstPath) return;
+    const api = rbNativeAudio ? rbNativeAudio() : rbAudioApi();
+    if (!api || typeof api.loadVST !== 'function') return;
+    const loadToken = rbStandaloneVstLoadToken();
+    try {
+        await rbCloseActiveVstEditor().catch(() => {});
+        if (rbState.listeningTone !== null || rbState._auditionId) await rbStopPreview().catch(() => {});
+        const sid = await rbSafeLoadStandaloneVst(api, vstPath);
+        if (!rbStandaloneVstLoadActive(loadToken) || rbState.gearSelected !== g.rs_gear || !document.body.contains(host)) return;
+        const baseStage = { type: 0, slot: g.category === 'amp' ? 'amp' : 'pedal', path: vstPath, format: g.vst_format || 'VST3', rs_gear: g.rs_gear, bypassed: false };
+        await rbApplyCatalogGearVstParams(api, sid, vstPath, g.rs_gear).catch(() => {});
+        const chainForLeveling = await rbAppendFinalLevelerToStandaloneVstChain(api, baseStage).catch(() => null);
+        await rbMakeStandaloneVstAudible(api).catch(() => {});
+        if (chainForLeveling) await rbStartFinalChainNormalizer(chainForLeveling).catch(() => {});
+        setTimeout(() => rbSignalChainLoaded().catch(() => {}), 250);
+        let raw = [];
+        try { raw = (typeof api.getParameters === 'function' ? await api.getParameters(sid) : []) || []; } catch (_) {}
+        if (rbState.gearSelected !== g.rs_gear || !document.body.contains(host)) return;
+        slotId = sid;
+        rbState._cgCatSlotId = sid;
+        rbStashGearVstParamNames(g.rs_gear, raw);
+        model = rbBuildCanvasModel(raw, null);
+        if (!layout) { layout = PC.smartLayout(g.category, rbFilterVstParams(raw), { title: g.real_name || '' }); mapParams(); }
+        renderFace();   // re-draw with the plugin's live values + audio wiring
+    } catch (_) { /* the face is already shown */ }
+}
+
+async function rbCatalogOpenNative(slotId) {
+    const api = rbAudioApi();
+    const sid = (slotId != null) ? slotId : rbState._cgCatSlotId;
+    if (api && sid != null) {
+        if (!(await rbTryOpenNativeEditor(api, sid))) alert("This plugin has no native editor window (it's UI-less).");
+    } else {
+        alert('The plugin is still loading — try again in a moment.');
+    }
+}
+
 function rbRenderGearDetail(g) {
     const el = document.getElementById('rb-gear-detail');
     if (!el) return;
@@ -11510,11 +14863,26 @@ function rbRenderGearDetail(g) {
     }
     const safeId = g.rs_gear.replace(/[^a-zA-Z0-9_-]/g, '_');
     const isVst = rbGearHasVst(g);
-    const assignedLine = isVst
-        ? `<span class="text-purple-300 break-all">VST: ${rbEsc(g.vst_path.split(/[\\/]/).pop())}</span>`
-        : rbGearIsAssigned(g)
-            ? `<span class="text-emerald-300 break-all">${rbEsc(g.tone3000_title || rbLibShortName(g.file) || 'assigned')}</span>`
-            : `<span class="text-gray-500">unassigned</span>`;
+    const isCustom = !!g.custom;
+    // A GAME gear (amp/pedal/rack) is now PLAYED BY a real gear (custom or a
+    // bundled default). A CUSTOM gear is ASSIGNED TO the game gears it covers —
+    // and that assignment is edited from the custom gear's own detail.
+    // A game gear (amp/pedal/rack) and a custom gear are treated IDENTICALLY —
+    // both are real gears with the same "Assigned to game gears" panel. The only
+    // difference is native gear has no Edit/Delete. Cabs keep the Cab Room.
+    const isGameGear = !isCustom && g.category !== 'cab';
+    const isMappableGear = isGameGear || isCustom;
+    const assignedRs = Array.isArray(g.assigned_rs) ? g.assigned_rs : [];
+    const assignLabel = isMappableGear ? 'Assigned to' : 'Current assignment';
+    const assignedLine = isMappableGear
+        ? (assignedRs.length
+            ? `<span class="text-purple-300 break-all">${rbEsc(assignedRs.slice(0, 4).join(', '))}${assignedRs.length > 4 ? ` +${assignedRs.length - 4}` : ''}</span>`
+            : `<span class="text-gray-500">Unassigned</span>`)
+        : isVst
+            ? `<span class="text-purple-300 break-all">VST: ${rbEsc(g.vst_path.split(/[\\/]/).pop())}</span>`
+            : rbGearIsAssigned(g)
+                ? `<span class="text-emerald-300 break-all">${rbEsc(g.tone3000_title || rbLibShortName(g.file) || 'assigned')}</span>`
+                : `<span class="text-gray-500">unassigned</span>`;
     const instrument = rbGearInstrument(g);
     const t3kHeaderLink = g.tone3000_url
         ? `<a href="${rbEsc(g.tone3000_url)}" target="_blank" title="View on tone3000"
@@ -11531,6 +14899,18 @@ function rbRenderGearDetail(g) {
     const searchBtn = `<button onclick="rbOpenSuggest('${rbEsc(g.rs_gear)}')"
                                 class="text-gray-400 hover:text-gray-200 text-xs px-2 py-1.5">🔍 Search tone3000</button>`;
     const editVstBtn = ''
+    const customActions = '';
+    // Top-right actions: custom gear → Edit/Delete; native game gear → Reset (to
+    // its default assignment + knob mapping).
+    const headerActions = isCustom
+        ? `<button onclick="rbEditCustomGear('${rbEsc(g.rs_gear)}')" title="Edit this custom gear"
+                   class="bg-purple-900/30 hover:bg-purple-900/50 text-purple-200 border border-purple-700/40 px-2 py-1 rounded text-xs">✎ Edit</button>
+           <button onclick="rbDeleteCustomGear('${rbEsc(g.rs_gear)}')" title="Delete this custom gear"
+                   class="bg-red-900/30 hover:bg-red-900/50 text-red-300 border border-red-800/40 px-2 py-1 rounded text-xs">🗑</button>`
+        : (isGameGear
+            ? `<button onclick="rbResetGear('${rbEsc(g.rs_gear)}')" title="Reset assignment + knob mapping to default"
+                       class="bg-dark-700 hover:bg-dark-600 text-gray-300 border border-gray-700/50 px-2 py-1 rounded text-xs">↺ Reset</button>`
+            : '');
     const variantAuditions = Array.isArray(g.variants) && g.variants.length
         ? `<div class="flex items-center gap-1 flex-wrap">${g.variants.map(v => {
             const vId = `rb-aud-${_rbCatalogSeq++}`;
@@ -11548,41 +14928,335 @@ function rbRenderGearDetail(g) {
             return `<button id="${vId}" onclick="rbAuditionFile('${rbEsc(v.ir_file).replace(/'/g,"\\'")}','ir','${vId}')"
                             class="text-[10px] px-2 py-0.5 rounded ${aud}">▶ ${rbEsc(v.label || v.suffix)}</button>`;
         }).join('')}</div>` : '';
-    const visualBlock = rbCatalogVisualForGear(g, 'large');
+    // Real Cab: los cabinets del catálogo muestran el CAB ROOM interactivo
+    // (canvas con mic arrastrable) en vez de la foto estática.
+    const cabRoomEntry = (g.category === 'cab') ? rbRealCabEntryFor(g.rs_gear) : null;
+    const visualBlock = cabRoomEntry
+        ? `<div id="rb-cabroom-${safeId}"></div>`
+        : rbCatalogVisualForGear(g, 'large');
 
     el.innerHTML = `<div class="bg-dark-700/40 border border-gray-800/50 rounded-xl p-4 space-y-4">
         <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
-                <h3 class="text-white text-xl font-semibold leading-tight break-words">${rbEsc(g.real_name || g.rs_gear)}</h3>
+                <h3 class="text-white text-xl font-semibold leading-tight break-words">${rbEsc((cabRoomEntry && cabRoomEntry.name) || g.real_name || g.rs_gear)}</h3>
                 <div class="text-xs text-gray-500 mt-1">
-                    ${rbEsc(g.rs_gear)} · ${rbEsc(RB_GEAR_LABEL[g.category] || g.category || 'gear')} · ${rbEsc(instrument === 'all' ? 'all instruments' : instrument)}
+                    ${isCustom ? '<span class="text-purple-300">✦ custom</span> · ' : ''}${rbEsc(RB_GEAR_LABEL[g.category] || g.category || 'gear')} · ${rbEsc(instrument === 'all' ? 'all instruments' : instrument)}
                 </div>
             </div>
-            ${t3kHeaderLink}
+            <div class="flex items-center gap-1.5 flex-shrink-0">${headerActions}${t3kHeaderLink}</div>
         </div>
         <div id="rb-cat-edit-${safeId}" class="hidden bg-purple-900/10 border border-purple-800/30 rounded p-2"></div>
-        ${isVst ? '' : visualBlock}
+        ${isCustom
+            ? `<div id="rb-cg-cat-face-${safeId}">${visualBlock}</div>`
+            : (isVst ? '' : visualBlock)}
+        ${rbGainVariantEditorHtml(g)}
         <div class="bg-dark-800/50 border border-gray-800/40 rounded-lg p-3 space-y-2">
-            <div class="text-xs text-gray-400">Current assignment: ${assignedLine}</div>
-            ${variantAuditions}
-            ${micAuditions}
-            <div class="flex flex-wrap items-center gap-1.5">
-                ${editVstBtn}
-                ${variantsBtn}
-                ${libraryBtn}
-                <div class="flex-1"></div>
-                ${searchBtn}
-            </div>
+            ${isMappableGear
+                ? `<div id="rb-cg-assign-${safeId}" class="text-xs text-gray-500">Loading assignments…</div>`
+                : `<div class="text-xs text-gray-400">${assignLabel}: ${assignedLine}</div>
+                   ${variantAuditions}
+                   ${micAuditions}
+                   <div class="flex flex-wrap items-center gap-1.5">
+                    ${editVstBtn}${variantsBtn}${libraryBtn}<div class="flex-1"></div>${searchBtn}
+                   </div>`}
             <div id="rb-cat-lib-${safeId}" class="hidden bg-indigo-900/10 border border-indigo-800/30 rounded p-2"></div>
             <div id="rb-cat-variants-${safeId}" class="hidden bg-emerald-900/10 border border-emerald-800/30 rounded p-2"></div>
         </div>
     </div>`;
 
-    if (isVst) {
-    setTimeout(() => {
-        rbOpenSelectedGearVst(g);
-    }, 0);
+    // Native and custom gear are treated the SAME: show the gear's own VST
+    // editor + the "Assigned to game gears" panel. (Custom uses the in-app
+    // canvas editor; native uses its bundled-VST editor.)
+    if (isCustom) {
+        setTimeout(() => rbCatalogCustomEditInline(g), 0);
+        setTimeout(() => rbLoadCustomAssignments(g), 0);
+    } else if (isGameGear) {
+        if (isVst) setTimeout(() => rbOpenSelectedGearVst(g), 0);
+        setTimeout(() => rbLoadCustomAssignments(g), 0);
+    } else if (isVst) {
+        setTimeout(() => rbOpenSelectedGearVst(g), 0);
+    }
+    if (cabRoomEntry) {
+        setTimeout(() => rbCabRoomBuild(g, cabRoomEntry, safeId), 0);
+    }
 }
+
+// Editable clean/crunch/dist switch-point editor for auto-downloaded tone3000
+// gears. Each level owns a game-Gain range [lo, hi]; playback picks the level
+// whose range contains the song's mapped Gain.
+function rbGainVariantEditorHtml(g) {
+    if (!g || !g.gain_variants) return '';
+    const gv = g.gain_variants;
+    const safeId = g.rs_gear.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const order = ['clean', 'crunch', 'dist'];
+    const levels = Object.keys(gv).sort((a, b) => {
+        const ai = order.indexOf(a), bi = order.indexOf(b);
+        return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    });
+    const rows = levels.map(lvl => {
+        const v = gv[lvl] || {};
+        const rng = Array.isArray(v.rs_gain_range) ? v.rs_gain_range : [0, 100];
+        const fname = (v.file || '').split('/').pop();
+        return `<div class="flex items-center gap-1.5 text-xs py-0.5">
+            <span class="w-14 text-gray-300 capitalize">${rbEsc(lvl)}</span>
+            <span class="text-gray-600">Gain</span>
+            <input type="number" min="0" max="100" value="${Math.round(rng[0])}" data-gv-lvl="${rbEsc(lvl)}" data-gv-end="lo"
+                   class="w-12 bg-dark-900 border border-gray-800 rounded px-1 py-0.5 text-gray-200 text-center outline-none">
+            <span class="text-gray-600">–</span>
+            <input type="number" min="0" max="100" value="${Math.round(rng[1])}" data-gv-lvl="${rbEsc(lvl)}" data-gv-end="hi"
+                   class="w-12 bg-dark-900 border border-gray-800 rounded px-1 py-0.5 text-gray-200 text-center outline-none">
+            ${fname ? `<span class="text-gray-600 truncate flex-1 min-w-0" title="${rbEsc(v.file)}">${rbEsc(fname)}</span>` : ''}
+        </div>`;
+    }).join('');
+    return `<div class="bg-emerald-900/10 border border-emerald-800/30 rounded-lg p-3 mb-2">
+        <div class="flex items-center justify-between mb-1">
+            <span class="text-[11px] uppercase tracking-wide text-emerald-300/80">Volume switch points · game Gain 0–100</span>
+            <button onclick="rbSaveGainVariantRanges('${rbEsc(g.rs_gear)}','${safeId}')"
+                    class="text-[11px] text-emerald-300 hover:text-emerald-200">Save</button>
+        </div>
+        <div id="rb-gv-${safeId}">${rows}</div>
+        <div id="rb-gv-status-${safeId}" class="text-[10px] text-gray-500 mt-1">Auto-switches by each song's mapped Gain.</div>
+    </div>`;
+}
+
+async function rbSaveGainVariantRanges(rsGear, safeId) {
+    const host = document.getElementById(`rb-gv-${safeId}`);
+    if (!host) return;
+    const ranges = {};
+    host.querySelectorAll('input[data-gv-lvl]').forEach(inp => {
+        const lvl = inp.dataset.gvLvl, end = inp.dataset.gvEnd;
+        if (!ranges[lvl]) ranges[lvl] = [0, 100];
+        const val = Math.max(0, Math.min(100, parseFloat(inp.value) || 0));
+        ranges[lvl][end === 'lo' ? 0 : 1] = val;
+    });
+    const status = document.getElementById(`rb-gv-status-${safeId}`);
+    try {
+        const r = await fetch(`${window.RB_API}/custom_gear_gain_ranges`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rs_gear: rsGear, ranges }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || r.status);
+        const g = rbFindGear(rsGear); if (g) g.gain_variants = d.gain_variants;
+        if (status) { status.textContent = 'Saved — applies on next song load / Rescan all.'; status.className = 'text-[10px] text-emerald-400 mt-1'; }
+    } catch (e) {
+        if (status) { status.textContent = 'Error: ' + (e.message || e); status.className = 'text-[10px] text-red-400 mt-1'; }
+    }
+}
+
+// ── Assign panel: a real gear (native OR custom) covers game gear slots ──────
+async function rbLoadCustomAssignments(g) {
+    const safeId = g.rs_gear.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const host = document.getElementById(`rb-cg-assign-${safeId}`);
+    if (!host) return;
+    let data;
+    try { data = await (await fetch(`${window.RB_API}/custom_assignments/${encodeURIComponent(g.rs_gear)}`)).json(); }
+    catch (e) { host.innerHTML = `<div class="text-xs text-red-400">Error: ${rbEsc(e.message)}</div>`; return; }
+    rbState._assignData = rbState._assignData || {};
+    rbState._assignData[g.rs_gear] = data;
+    if (rbState.gearSelected !== g.rs_gear) return;
+    host.innerHTML = rbRenderCustomAssignPanel(g.rs_gear, data);
+}
+
+// Cache of a gear's FULL real VST parameter names (from getParameters), keyed by
+// rs_gear. The knob-mapping panel maps a game knob → one of THESE — the actual
+// plugin params — not just the subset the shipped table happens to translate.
+// Filled whenever the gear's VST loads in the detail editor (game or custom).
+function rbStashGearVstParamNames(rsGear, rawParams) {
+    if (!rsGear) return;
+    const names = [];
+    const seen = new Set();
+    for (const p of rbFilterVstParams(rawParams || [])) {
+        const n = String((p && (p.name ?? p.label)) || '').trim();
+        if (n && !seen.has(n)) { seen.add(n); names.push(n); }
+    }
+    if (!names.length) return;
+    rbState._gearVstParamNames = rbState._gearVstParamNames || {};
+    rbState._gearVstParamNames[rsGear] = names;
+    // Re-render the assign panel in place if it's showing this gear.
+    if (rbState.gearSelected === rsGear) {
+        const safeId = rsGear.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const host = document.getElementById(`rb-cg-assign-${safeId}`);
+        const data = rbState._assignData && rbState._assignData[rsGear];
+        if (host && data) host.innerHTML = rbRenderCustomAssignPanel(rsGear, data);
+    }
+}
+
+function rbRenderCustomAssignPanel(customId, data) {
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const catLabel = RB_CG_ADD_LABEL[data.category] || 'gear';
+    const paramLabel = (RB_CG_ADD_LABEL[data.category] || 'gear').toLowerCase();
+    const assigned = data.assigned || {};
+    const assignedKeys = Object.keys(assigned);
+    // Mapping TARGETS: the gear's full real VST params (from getParameters) when
+    // the plugin has loaded; else the backend's subset. Always union in any param
+    // already chosen in a saved map so it stays selectable before the VST loads.
+    const liveNames = (rbState._gearVstParamNames && rbState._gearVstParamNames[customId]) || null;
+    const cps = (() => {
+        const out = [];
+        const seen = new Set();
+        const push = v => { const s = String(v || '').trim(); if (s && !seen.has(s)) { seen.add(s); out.push(s); } };
+        (liveNames || data.custom_params || []).forEach(push);
+        assignedKeys.forEach(rs => Object.values((assigned[rs] && assigned[rs].params) || {}).forEach(push));
+        return out;
+    })();
+    const q = (data._filter || '').toLowerCase();
+    // One ISLAND per assigned game gear: big name + a pressable knob-mapping.
+    const islands = assignedKeys.map(rs => {
+        const a = assigned[rs];
+        const rsSafe = rs.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const open = !!(data._openKnobs && data._openKnobs[rs]);
+        const knobRows = (a.knobs || []).map(k => {
+            const cur = (a.params && a.params[k]) || '';
+            const opts = `<option value="">—</option>` +
+                cps.map(p => `<option value="${rbEsc(p)}"${p === cur ? ' selected' : ''}>${rbEsc(p)}</option>`).join('');
+            return `<div class="flex items-center gap-2 text-xs py-1">
+                <span class="w-28 text-gray-300 truncate" title="${rbEsc(k)}">${rbEsc(k)}</span>
+                <span class="text-gray-600">→</span>
+                <select data-cga-rs="${rbEsc(rs)}" data-cga-knob="${rbEsc(k)}" class="flex-1 bg-dark-800 border border-gray-800 rounded px-2 py-1 text-gray-200 outline-none">${opts}</select>
+            </div>`;
+        }).join('');
+        return `<div class="bg-dark-900/60 border border-purple-800/30 rounded-lg p-3 mb-2">
+            <div class="flex items-center gap-2 mb-1">
+                <span class="flex-1 text-sm text-purple-100 font-semibold truncate">${rbEsc(a.name)}${a.self ? ' <span class="text-gray-500 text-xs font-normal">(itself)</span>' : ''}</span>
+                ${a.self
+                    ? ''
+                    : `<button onclick="rbCustomAssignRemove('${rbEsc(customId)}','${rbEsc(rs)}')" class="text-red-400 hover:text-red-300 text-[11px]">✕ remove</button>`}
+            </div>
+            <button onclick="rbCustomAssignExpand('${rbEsc(customId)}','${rbEsc(rs)}')"
+                    class="w-full text-left text-xs text-cyan-300 hover:text-cyan-200 border border-gray-800/60 rounded px-2 py-1.5 bg-dark-800/40">
+                ${open ? '▾' : '▸'} Knob mapping ${a.knobs && a.knobs.length ? `<span class="text-gray-600">(${a.knobs.length})</span>` : ''}
+            </button>
+            <div id="rb-cga-knobs-${safeId}-${rsSafe}" class="${open ? '' : 'hidden'} pt-2">
+                <div class="text-[10px] text-gray-500 mb-1">Game knob → ${rbEsc(paramLabel)} parameter</div>
+                ${knobRows || '<div class="text-[11px] text-gray-600">This game gear has no known knobs.</div>'}
+            </div>
+        </div>`;
+    }).join('');
+    const addable = (data.options || [])
+        .filter(o => !assigned[o.rs_gear] && (!q || (o.name || '').toLowerCase().includes(q)))
+        .slice(0, 40)
+        .map(o => `<button onclick="rbCustomAssignAdd('${rbEsc(customId)}','${rbEsc(o.rs_gear)}')"
+                        class="w-full text-left px-2 py-1 rounded text-[11px] text-gray-300 hover:bg-dark-700">＋ ${rbEsc(o.name)}</button>`).join('');
+    const addOpen = !!data._addOpen;
+    return `
+        <div>
+            <div class="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Assigned to game ${rbEsc(catLabel.toLowerCase())}s</div>
+            ${assignedKeys.length ? islands : '<div class="text-[11px] text-gray-500 mb-2">Not assigned to any game gear yet.</div>'}
+            <div class="bg-dark-900/40 border border-gray-800/50 rounded-lg p-2">
+                <button onclick="rbCustomAssignToggleAdd('${rbEsc(customId)}')"
+                        class="text-xs text-purple-300 hover:text-purple-200">${addOpen ? '▾' : '＋'} Assign a game ${rbEsc(paramLabel)}</button>
+                ${addOpen ? `<div class="mt-2">
+                    <input type="text" placeholder="🔍 search game ${rbEsc(paramLabel)}…" value="${rbEsc(data._filter || '')}"
+                           oninput="rbCustomAssignFilter('${rbEsc(customId)}', this.value)"
+                           class="w-full bg-dark-900 border border-gray-800 rounded text-[11px] text-gray-200 px-2 py-1 mb-1">
+                    <div class="max-h-44 overflow-y-auto">${addable || '<div class="text-[11px] text-gray-600 px-2">no matches</div>'}</div>
+                </div>` : ''}
+            </div>
+            <div class="pt-2"><button onclick="rbSaveCustomAssignments('${rbEsc(customId)}')" class="bg-purple-700 hover:bg-purple-600 text-white text-xs px-4 py-1.5 rounded transition">💾 Save</button></div>
+            <div id="rb-cga-msg-${safeId}" class="text-[11px] mt-1"></div>
+        </div>`;
+}
+
+function rbCustomAssignToggleAdd(customId) {
+    const data = rbState._assignData && rbState._assignData[customId];
+    if (!data) return;
+    rbCustomAssignCapture(customId);
+    data._addOpen = !data._addOpen;
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const host = document.getElementById(`rb-cg-assign-${safeId}`);
+    if (host) host.innerHTML = rbRenderCustomAssignPanel(customId, data);
+}
+
+function rbCustomAssignFilter(customId, v) {
+    const data = rbState._assignData && rbState._assignData[customId];
+    if (!data) return;
+    data._filter = v;
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const host = document.getElementById(`rb-cg-assign-${safeId}`);
+    if (host) host.innerHTML = rbRenderCustomAssignPanel(customId, data);
+    const inp = host && host.querySelector('input[placeholder^="🔍"]');
+    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+}
+
+function rbCustomAssignExpand(customId, rs) {
+    const data = rbState._assignData && rbState._assignData[customId];
+    if (!data) return;
+    rbCustomAssignCapture(customId);
+    data._openKnobs = data._openKnobs || {};
+    data._openKnobs[rs] = !data._openKnobs[rs];
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const host = document.getElementById(`rb-cg-assign-${safeId}`);
+    if (host) host.innerHTML = rbRenderCustomAssignPanel(customId, data);
+}
+
+async function rbResetGear(rsGear) {
+    if (!confirm('Reset this gear to its default assignment and knob mapping?')) return;
+    try {
+        const r = await fetch(`${window.RB_API}/gear_reset`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gear: rsGear }),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+    } catch (e) { alert('Reset failed: ' + (e.message || e)); return; }
+    if (rbState._assignData) delete rbState._assignData[rsGear];
+    await rbLoadCatalog();
+    rbState.gearSelected = rsGear;
+    rbApplyGearFilters();
+}
+
+// Snapshot the current knob-param picks from the DOM into state before re-render.
+function rbCustomAssignCapture(customId) {
+    const data = rbState._assignData && rbState._assignData[customId];
+    if (!data) return;
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    document.querySelectorAll(`#rb-cg-assign-${safeId} select[data-cga-rs]`).forEach(s => {
+        const rs = s.dataset.cgaRs, knob = s.dataset.cgaKnob;
+        if (data.assigned[rs]) { data.assigned[rs].params = data.assigned[rs].params || {}; if (s.value) data.assigned[rs].params[knob] = s.value; else delete data.assigned[rs].params[knob]; }
+    });
+}
+
+function rbCustomAssignAdd(customId, rs) {
+    const data = rbState._assignData && rbState._assignData[customId];
+    if (!data) return;
+    rbCustomAssignCapture(customId);
+    const o = (data.options || []).find(x => x.rs_gear === rs);
+    if (o && !data.assigned[rs]) data.assigned[rs] = { name: o.name, knobs: o.knobs || [], params: {} };
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const host = document.getElementById(`rb-cg-assign-${safeId}`);
+    if (host) host.innerHTML = rbRenderCustomAssignPanel(customId, data);
+}
+
+function rbCustomAssignRemove(customId, rs) {
+    const data = rbState._assignData && rbState._assignData[customId];
+    if (!data) return;
+    rbCustomAssignCapture(customId);
+    delete data.assigned[rs];
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const host = document.getElementById(`rb-cg-assign-${safeId}`);
+    if (host) host.innerHTML = rbRenderCustomAssignPanel(customId, data);
+}
+
+async function rbSaveCustomAssignments(customId) {
+    const data = rbState._assignData && rbState._assignData[customId];
+    if (!data) return;
+    rbCustomAssignCapture(customId);
+    const safeId = customId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const msg = document.getElementById(`rb-cga-msg-${safeId}`);
+    const assigned = {};
+    Object.keys(data.assigned).forEach(rs => { assigned[rs] = data.assigned[rs].params || {}; });
+    try {
+        const r = await fetch(`${window.RB_API}/custom_assignments`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ custom: customId, assigned }),
+        });
+        const d = await r.json();
+        if (!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
+        if (msg) { msg.className = 'text-[11px] text-emerald-400'; msg.textContent = `✓ Saved — covers ${d.assigned_count} game gear(s).`; }
+        try { await rbLoadCatalog(); } catch (_) {}
+    } catch (e) {
+        if (msg) { msg.className = 'text-[11px] text-red-400'; msg.textContent = 'Save failed: ' + (e.message || e); }
+    }
 }
 
 function rbApplyGearFilters() {
@@ -11596,6 +15270,7 @@ function rbApplyGearFilters() {
 
     const filtered = rbFilteredGearByCategory(search, onlyUnassigned, instrument);
     rbRenderGearCategoryMenu(filtered);
+    rbRenderGearAddButton();
 
     const activeCat = rbState.gearBrowserCategory || 'amp';
     const activeList = filtered[activeCat] || [];
@@ -11668,6 +15343,830 @@ function rbClearGearFilters() {
     rbState.gearSelected = null;
     rbState.gearCollapsedCats.clear();
     rbApplyGearFilters();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  Custom gear — "Add amp / pedal / rack / cab"
+//
+//  The Gear browser gets an "Add <type>" button above the catalog list; it
+//  opens a form in the detail pane (right) with: a name, a VST/NAM·IR source
+//  picker, an EDITABLE custom-UI preview (click a control to change its
+//  kind/colour/label), and Save. Saving POSTs /custom_gear; the gear then shows
+//  in the browser, the node-editor palette, and the per-song picker.
+// ══════════════════════════════════════════════════════════════════════════
+const RB_CG_ADD_LABEL = { amp: 'Amp', pedal: 'Pedal', rack: 'Rack', cab: 'Cab' };
+
+// px-per-layout-unit scale for a preview canvas, derived from the container so
+// that the W slider's MAX fills the available width (and the H max fits the box
+// height). A single scale keeps W→width / H→height independent and undistorted.
+const RB_CG_W_MAX = 680, RB_CG_H_MAX = 540;
+function rbCgFitScale(canvas, boxInnerH) {
+    const wrap = canvas && canvas.parentElement;
+    const availW = Math.max(280, ((wrap && wrap.clientWidth) ? wrap.clientWidth : 460) - 16);
+    return Math.min(availW / RB_CG_W_MAX, (boxInnerH || 446) / RB_CG_H_MAX);
+}
+let rbCgState = null;
+
+function rbRenderGearAddButton() {
+    const el = document.getElementById('rb-gear-add-btn');
+    if (!el) return;
+    const cat = rbState.gearBrowserCategory || 'amp';
+    const label = RB_CG_ADD_LABEL[cat] || 'Gear';
+    el.innerHTML = `<button onclick="rbOpenAddCustomGear('${cat}')"
+        class="w-full mb-2 flex items-center justify-center gap-1.5 bg-purple-900/30 hover:bg-purple-900/50 text-purple-200 border border-purple-700/40 rounded-lg px-3 py-2 text-sm font-medium transition">
+        ＋ Add ${label}</button>`;
+}
+
+async function rbOpenAddCustomGear(cat, editRec) {
+    cat = (cat || 'amp').toLowerCase();
+    const PC = window.RBPedalCanvas;
+    let name, instrument, kind, vst_path, vst_format, file, layout, editRsGear = null;
+    if (editRec) {
+        editRsGear = editRec.rs_gear;
+        name = editRec.real_name || '';
+        instrument = editRec.instrument || 'all';
+        kind = editRec.kind || (editRec.vst_path ? 'vst' : 'nam');
+        vst_path = editRec.vst_path || '';
+        vst_format = editRec.vst_format || 'VST3';
+        file = editRec.file || '';
+        layout = (editRec.ui && PC) ? PC.normalizeLayout(editRec.ui)
+                                    : (PC ? PC.defaultFace(cat, null, { title: name }) : null);
+    } else {
+        name = '';
+        instrument = cat === 'rack' ? 'all' : 'guitar';
+        kind = ''; vst_path = ''; vst_format = 'VST3'; file = '';
+        layout = PC ? PC.defaultFace(cat, null, { title: '' }) : null;
+    }
+    // Amp gain variants (clean/crunch/dist → NAM file), rehydrated when editing.
+    const _variants = {};
+    const _gv = editRec && editRec.gain_variants;
+    if (_gv && typeof _gv === 'object') {
+        for (const lvl of ['clean', 'crunch', 'dist']) {
+            const f = _gv[lvl] && _gv[lvl].file;
+            if (f) _variants[lvl] = f;
+        }
+    }
+    rbCgState = {
+        cat, name, instrument, kind, vst_path, vst_format, file, layout,
+        values: {}, editRsGear, files: null, _fileFilter: '', _editIdx: -1, _variants,
+        sourceTab: (kind === 'nam' || kind === 'ir' || (!vst_path && file)) ? 'file' : 'vst',
+    };
+    const el = document.getElementById('rb-gear-detail');
+    if (el) el.innerHTML = rbCgFormHtml();
+    if (!rbState.knownVsts || !rbState.knownVsts.length) {
+        try { await rbLoadKnownVsts(); } catch (_) { /* best-effort */ }
+    }
+    if (!rbCgState) return;      // cancelled while VSTs loaded
+    rbCgRenderSource();
+    rbCgRenderPreview();
+    // Amps: load the NAM library so the gain-variant selects populate.
+    if (rbCgState.cat === 'amp' && rbCgState.files == null) rbCgLoadFiles();
+}
+
+function rbCgFormHtml() {
+    const s = rbCgState;
+    const typeLabel = RB_CG_ADD_LABEL[s.cat] || 'Gear';
+    return `
+    <div class="bg-dark-700/50 border border-purple-800/40 rounded-xl p-4 space-y-4">
+        <div class="flex items-center justify-between">
+            <h3 class="text-white font-semibold text-sm">${s.editRsGear ? 'Edit' : 'Add'} ${typeLabel}</h3>
+            <button onclick="rbCancelAddCustomGear()" class="text-gray-400 hover:text-gray-200 text-xs">✕ Cancel</button>
+        </div>
+
+        <div>
+            <label class="block text-[11px] uppercase tracking-wide text-gray-500 mb-1">Name</label>
+            <input id="rb-cg-name" type="text" value="${rbEsc(s.name)}" placeholder="e.g. My Custom ${typeLabel}"
+                   oninput="rbCgOnName(this.value)"
+                   class="w-full bg-dark-800 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100 outline-none focus:border-purple-500/50">
+        </div>
+
+        <div class="flex items-center gap-2">
+            <label class="text-[11px] uppercase tracking-wide text-gray-500">Instrument</label>
+            <select onchange="rbCgOnInstrument(this.value)" class="bg-dark-800 border border-gray-800 rounded px-2 py-1 text-xs text-gray-200 outline-none">
+                <option value="guitar"${s.instrument === 'guitar' ? ' selected' : ''}>Guitar</option>
+                <option value="bass"${s.instrument === 'bass' ? ' selected' : ''}>Bass</option>
+                <option value="all"${s.instrument === 'all' ? ' selected' : ''}>Both</option>
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-[11px] uppercase tracking-wide text-gray-500 mb-1">Sound source (VST or NAM/IR)</label>
+            <div class="inline-flex gap-1 bg-dark-800/60 border border-gray-800 rounded-lg p-0.5 mb-2">
+                <button onclick="rbCgSetSourceTab('vst')" id="rb-cg-tab-vst" class="px-3 py-1 rounded text-xs text-gray-400 transition">VST / AU</button>
+                <button onclick="rbCgSetSourceTab('file')" id="rb-cg-tab-file" class="px-3 py-1 rounded text-xs text-gray-400 transition">NAM · IR</button>
+            </div>
+            <div id="rb-cg-source"></div>
+            <div id="rb-cg-source-current" class="text-[11px] text-gray-500 mt-1"></div>
+        </div>
+
+        ${rbCgVariantsHtml()}
+
+        <div>
+            <div class="flex items-center justify-between mb-1">
+                <label class="text-[11px] uppercase tracking-wide text-gray-500">In-app UI</label>
+                <div class="flex items-center gap-3 flex-wrap">
+                    <label class="text-[10px] text-gray-400 flex items-center gap-1" title="Background template">Style
+                        <select onchange="rbCgOnTemplate(this.value)" class="bg-dark-800 border border-gray-800 rounded px-1 py-0.5 text-[10px] text-gray-200 outline-none">
+                            ${(window.RBPedalCanvas && window.RBPedalCanvas.templates ? window.RBPedalCanvas.templates(s.cat) : [{key:'default',label:'Default'}]).map(t => `<option value="${t.key}"${((s.layout && s.layout.template) || 'default') === t.key ? ' selected' : ''}>${rbEsc(t.label)}</option>`).join('')}
+                        </select>
+                    </label>
+                    <label class="text-[10px] text-gray-400 flex items-center gap-1">Body
+                        <input type="color" value="${window.RBPedalCanvas ? window.RBPedalCanvas.rgbToHex(s.layout ? s.layout.body : [40,42,48]) : '#282a30'}"
+                               oninput="rbCgOnBodyColor(this.value)"
+                               style="width:26px;height:20px;border:1px solid #3a3a44;border-radius:4px;background:#232329;cursor:pointer;padding:0">
+                    </label>
+                    <label class="text-[10px] text-gray-400 flex items-center gap-1" title="Set every knob's colour at once">All knobs
+                        <input type="color" value="${window.RBPedalCanvas ? window.RBPedalCanvas.rgbToHex((s.layout && s.layout.controls[0]) ? s.layout.controls[0].color : [200,200,200]) : '#c8c8c8'}"
+                               oninput="rbCgOnAllColor(this.value)"
+                               style="width:26px;height:20px;border:1px solid #3a3a44;border-radius:4px;background:#232329;cursor:pointer;padding:0">
+                    </label>
+                    <label class="text-[10px] text-gray-400 flex items-center gap-1" title="Resize every knob at once">Size
+                        <input type="range" min="0.02" max="0.13" step="0.004"
+                               value="${(s.layout && s.layout.controls[0] && s.layout.controls[0].r) || 0.06}"
+                               oninput="rbCgOnAllSize(this.value)" style="width:64px;accent-color:#8b5cf6">
+                    </label>
+                    <label class="text-[10px] text-gray-400 flex items-center gap-1" title="How wide the gear is (left↔right)">W
+                        <input type="range" min="240" max="680" step="20"
+                               value="${(s.layout && s.layout.w) || 400}"
+                               oninput="rbCgOnWidth(this.value)" style="width:64px;accent-color:#8b5cf6">
+                    </label>
+                    <label class="text-[10px] text-gray-400 flex items-center gap-1" title="How tall the gear is (top↕bottom)">H
+                        <input type="range" min="220" max="540" step="20"
+                               value="${(s.layout && s.layout.h) || 400}"
+                               oninput="rbCgOnHeight(this.value)" style="width:64px;accent-color:#8b5cf6">
+                    </label>
+                    <button onclick="rbCgAddControl()" class="text-[11px] text-purple-300 hover:text-purple-200">＋ Control</button>
+                    <span class="text-[10px] text-gray-600">drag to move · click to edit</span>
+                </div>
+            </div>
+            <div class="bg-dark-900/60 border border-gray-800/60 rounded-xl p-3 flex items-center justify-center" style="height:470px;overflow:auto">
+                <canvas id="rb-cg-canvas" style="cursor:pointer;display:block"></canvas>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 pt-1">
+            <button onclick="rbSaveCustomGear()" id="rb-cg-save"
+                    class="flex-1 bg-purple-700 hover:bg-purple-600 text-white rounded-lg px-4 py-2 text-sm font-medium transition">
+                💾 Save ${typeLabel}
+            </button>
+            ${s.editRsGear ? `<button onclick="rbDeleteCustomGear('${rbEsc(s.editRsGear)}')" class="bg-red-900/40 hover:bg-red-900/60 text-red-300 border border-red-800/40 rounded-lg px-3 py-2 text-sm transition">🗑</button>` : ''}
+        </div>
+        <div id="rb-cg-msg" class="text-xs"></div>
+    </div>`;
+}
+
+function rbCgSetSourceTab(tab) {
+    if (!rbCgState) return;
+    rbCgState.sourceTab = tab;
+    rbCgRenderSource();
+}
+
+function rbCgRenderSource() {
+    const s = rbCgState; if (!s) return;
+    for (const t of ['vst', 'file']) {
+        const b = document.getElementById('rb-cg-tab-' + t);
+        if (b) {
+            const on = s.sourceTab === t;
+            b.classList.toggle('bg-purple-700', on);
+            b.classList.toggle('text-white', on);
+            b.classList.toggle('text-gray-400', !on);
+        }
+    }
+    const host = document.getElementById('rb-cg-source');
+    if (host) host.innerHTML = s.sourceTab === 'file' ? rbCgFilePickerHtml() : rbCgVstPickerHtml();
+    if (s.sourceTab === 'file') {
+        rbCgRenderSrcMode();                  // render the chosen source mode (tone3000 / directory / downloaded)
+    }
+    rbCgUpdateSourceLabel();
+}
+
+// A custom gear is meant to wrap YOUR OWN / an installed VST — never one of the
+// bundled Rig Builder effects, which are already the game's built-in gear.
+// Exclude those (they also arrived from several sources, causing duplicates).
+function rbCgIsExternalVst(p) {
+    if (!p) return false;
+    if (p.bundled) return false;
+    if ((p.manufacturer || '') === 'Rig Builder') return false;
+    if (/[\\/]rig_builder[\\/]vst[\\/]/i.test(p.path || '')) return false;
+    return true;
+}
+
+function rbCgVstPickerHtml() {
+    const known = rbState.knownVsts || [];
+    const external = known.filter(rbCgIsExternalVst);
+    if (!external.length) return `<div class="text-xs text-gray-500">No external plugins found. Scan your installed VST3/AU in Settings → VST / Audio Unit, or use the NAM · IR tab. (Rig Builder's bundled effects are excluded — they're already built-in gear.)</div>`;
+    const opts = rbBuildVstOptions(rbCgState.vst_path || '', '', true, rbCgIsExternalVst);
+    return `
+    <div class="flex items-center gap-2 mb-1">
+        <input id="rb-cg-vst-search" type="text" placeholder="🔍 filter by name / brand" oninput="rbCgFilterVst()"
+               class="flex-1 bg-dark-900 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1">
+        <label class="text-[10px] text-gray-400 flex items-center gap-1 whitespace-nowrap">
+            <input id="rb-cg-vst-hideinst" type="checkbox" checked onchange="rbCgFilterVst()"> hide instruments
+        </label>
+    </div>
+    <select id="rb-cg-vst-select" size="6" onchange="rbCgOnVstChange(this)"
+            class="w-full bg-dark-900 border border-gray-800 rounded text-xs text-gray-200 px-1 py-1">${opts}</select>`;
+}
+
+function rbCgFilterVst() {
+    const sel = document.getElementById('rb-cg-vst-select');
+    if (!sel) return;
+    const input = document.getElementById('rb-cg-vst-search');
+    const cb = document.getElementById('rb-cg-vst-hideinst');
+    sel.innerHTML = rbBuildVstOptions(rbCgState.vst_path || '', input ? input.value : '', cb ? cb.checked : true, rbCgIsExternalVst);
+}
+
+async function rbCgOnVstChange(sel) {
+    const path = sel.value; if (!path || !rbCgState) return;
+    const p = (rbState.knownVsts || []).find(x => x.path === path);
+    rbCgState.vst_path = path;
+    rbCgState.vst_format = (p && p.format) || 'VST3';
+    rbCgState.kind = 'vst';
+    rbCgState.file = '';
+    rbCgUpdateSourceLabel();
+    // Rebuild the UI so it has ONE knob per real sound-changing parameter of the
+    // chosen plugin (the engine's Buffer Size / Sample Rate / Bypass / MIDI junk
+    // is filtered out by rbFilterVstParams — same rule the chain editor uses).
+    await rbCgApplyVstParamLayout(path);
+}
+
+// Load the picked VST in isolation, read its parameter list, and regenerate the
+// default face from the sound-affecting params (their real names as labels).
+// Best-effort: if the engine isn't available or the load fails, the current
+// type-default face is kept. Preserves the user's body colour + name.
+async function rbCgApplyVstParamLayout(path) {
+    const s = rbCgState; if (!s || !window.RBPedalCanvas) return;
+    const seq = (s._paramSeq = (s._paramSeq || 0) + 1);
+    const status = document.getElementById('rb-cg-source-current');
+    if (status) status.textContent = 'Reading plugin parameters…';
+    let params = null;
+    try { params = await rbCgFetchVstParams(path); } catch (_) { /* best-effort */ }
+    if (!rbCgState || rbCgState !== s || s._paramSeq !== seq) return;   // stale / cancelled
+    if (params && params.length) {
+        const body = s.layout ? s.layout.body : null;
+        const tpl = s.layout ? s.layout.template : null;
+        const title = s.name || (s.layout && s.layout.title) || '';
+        // Smart layout: group + order by function, map each param to the right
+        // control (switch / stepped selector / knob), and carry discrete labels.
+        s.layout = window.RBPedalCanvas.smartLayout(s.cat, params, { title });
+        if (body) s.layout.body = body;
+        if (tpl) s.layout.template = tpl;      // keep the user's chosen background
+        rbCgRenderPreview();
+    }
+    rbCgUpdateSourceLabel();
+}
+
+async function rbCgFetchVstParams(vstPath) {
+    const api = rbAudioApi();
+    if (!api || typeof api.getParameters !== 'function' || typeof rbLoadVSTWhenReady !== 'function') return null;
+    try {
+        if (api.clearChain) await api.clearChain();
+        if (typeof api.startAudio === 'function') await api.startAudio().catch(() => {});
+        const slotId = await rbLoadVSTWhenReady(api, vstPath);
+        if (slotId == null || slotId < 0) return null;
+        const raw = await api.getParameters(slotId).catch(() => null);
+        const filtered = raw ? rbFilterVstParams(raw) : null;
+        // For discrete "mode" params (numSteps 3..16), read the value label at
+        // each step so the face can print them around the knob (Pultec-style).
+        if (filtered && typeof api.setParameter === 'function') {
+            for (const p of filtered) {
+                const steps = p.numSteps || 0;
+                if (steps > 2 && steps <= 16) {
+                    try { p.ticks = await rbCgEnumParamTicks(api, slotId, p, steps); } catch (_) { /* skip */ }
+                }
+            }
+        }
+        return filtered;
+    } catch (_) { return null; }
+}
+
+// Step a discrete param through its positions and collect the plugin's value
+// text at each (e.g. "200","300","500","700","1000"). Returns the ordered,
+// de-duped list, or null if it couldn't read at least two distinct labels.
+async function rbCgEnumParamTicks(api, slotId, p, steps) {
+    const pid = p.id ?? p.paramId ?? p.index;
+    if (pid == null) return null;
+    const out = [];
+    for (let i = 0; i < steps; i++) {
+        const v = steps > 1 ? i / (steps - 1) : 0;
+        try {
+            await api.setParameter(slotId, pid, v);
+            const fresh = await api.getParameters(slotId).catch(() => null);
+            const cur = fresh && fresh.find(x => (x.id ?? x.paramId ?? x.index) === pid);
+            const t = cur && (cur.text ?? cur.display);
+            if (t != null && String(t).trim()) out.push(String(t).trim());
+        } catch (_) { /* skip this step */ }
+    }
+    const uniq = out.filter((t, i) => i === 0 || t !== out[i - 1]);
+    return uniq.length >= 2 ? uniq.slice(0, 16) : null;
+}
+
+function rbCgOnBodyColor(hex) {
+    if (!rbCgState || !rbCgState.layout || !window.RBPedalCanvas) return;
+    rbCgState.layout.body = window.RBPedalCanvas.hexToRgb(hex);
+    rbCgRenderPreview();
+}
+
+function rbCgOnTemplate(key) {
+    if (!rbCgState || !rbCgState.layout) return;
+    rbCgState.layout.template = key || 'default';
+    rbCgRenderPreview();
+}
+
+// Gear face width/height (left↔right / top↕bottom). Controls are fractional so
+// they stay proportionally placed; the preview always scales the WHOLE face to
+// fit its box, so nothing is ever cut off.
+function rbCgOnWidth(v) {
+    if (!rbCgState || !rbCgState.layout) return;
+    rbCgState.layout.w = Math.max(240, Math.min(680, parseInt(v, 10) || 400));
+    rbCgRenderPreview();
+}
+function rbCgOnHeight(v) {
+    if (!rbCgState || !rbCgState.layout) return;
+    rbCgState.layout.h = Math.max(220, Math.min(540, parseInt(v, 10) || 400));
+    rbCgRenderPreview();
+}
+
+async function rbCgLoadFiles() {
+    const s = rbCgState; if (!s) return;
+    try {
+        const [namR, irR] = await Promise.all([
+            fetch(`${window.RB_API}/local_files?kind=nam`).then(r => r.json()).catch(() => ({ files: [] })),
+            fetch(`${window.RB_API}/local_files?kind=ir`).then(r => r.json()).catch(() => ({ files: [] })),
+        ]);
+        s.files = [
+            ...((namR.files || []).map(f => ({ ...f, kind: 'nam' }))),
+            ...((irR.files || []).map(f => ({ ...f, kind: 'ir' }))),
+        ];
+    } catch (_) { s.files = []; }
+    if (rbCgState === s && s.sourceTab === 'file') {
+        // Refresh ONLY the local list so the mounted tone3000 browser (and its
+        // in-flight search state) survives.
+        const localHost = document.getElementById('rb-cg-local');
+        if (localHost) localHost.innerHTML = rbCgLocalHtml();
+        rbCgUpdateSourceLabel();
+    }
+    if (rbCgState === s) rbCgRefreshVariants();   // fill the amp gain-variant selects
+}
+
+// The NAM·IR source offers THREE ways to get a model, shown ONE AT A TIME via a
+// segmented selector (so the panel isn't three stacked searchers): tone3000
+// search, a directory pick, or the already-downloaded library. Default: tone3000.
+function rbCgFilePickerHtml() {
+    const mode = (rbCgState && rbCgState._srcMode) || 't3k';
+    const seg = (m, label) => `<button onclick="rbCgSetSrcMode('${m}')" class="rb-cg-srcseg ${mode === m ? 'on' : ''}">${label}</button>`;
+    return `<div class="rb-cg-srcsegs">${seg('t3k', '🔎 tone3000')}${seg('dir', '📁 Directory')}${seg('local', '💾 Downloaded')}</div>
+        <div id="rb-cg-srcmode"></div>`;
+}
+function rbCgSetSrcMode(mode) {
+    if (!rbCgState) return;
+    rbCgState._srcMode = mode;
+    const host = document.getElementById('rb-cg-source');
+    if (host) host.innerHTML = rbCgFilePickerHtml();   // refresh the segmented highlight
+    rbCgRenderSrcMode();
+}
+function rbCgRenderSrcMode() {
+    const s = rbCgState; if (!s) return;
+    const host = document.getElementById('rb-cg-srcmode');
+    if (!host) return;
+    const mode = s._srcMode || 't3k';
+    if (mode === 'dir') {
+        host.innerHTML = `<button class="rb-fc-dir" onclick="rbCgPickDir()">📁 Choose ${s.cat === 'cab' ? 'IR .wav' : '.nam'} from directory…</button>
+            <div class="rb-fc-hint">The file is copied into your library so it always resolves.</div>`;
+    } else if (mode === 'local') {
+        host.innerHTML = `<div id="rb-cg-local">${rbCgLocalHtml()}</div>`;
+        if (s.files == null) rbCgLoadFiles();
+    } else {   // tone3000
+        host.innerHTML = `<div id="rb-cg-t3k"></div>`;
+        rbCgMountT3k();
+    }
+}
+function rbCgLocalHtml() {
+    const s = rbCgState;
+    if (!s || s.files == null) return `<div class="text-xs text-gray-500">loading files…</div>`;
+    if (!s.files.length) return `<div class="text-xs text-gray-500">No downloaded NAM/IR files yet — search tone3000 or pick from a directory.</div>`;
+    return `<input type="text" placeholder="🔍 filter downloaded files…" value="${rbEsc(s._fileFilter || '')}"
+                   oninput="rbCgSetFileFilter(this.value)"
+                   class="w-full bg-dark-900 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1 mb-1">
+               <div id="rb-cg-file-rows" class="max-h-40 overflow-y-auto space-y-0.5">${rbCgFileRowsHtml()}</div>`;
+}
+async function rbCgPickDir() {
+    const s = rbCgState; if (!s) return;
+    const host = window.feedBackDesktop;
+    if (!host || typeof host.pickFile !== 'function') return alert('File picker not available in this build.');
+    let path;
+    try {
+        const exts = s.cat === 'cab' ? ['wav'] : ['nam'];
+        const picked = await host.pickFile([{ name: 'NAM / IR', extensions: exts }, { name: 'All Files', extensions: ['*'] }]);
+        if (!picked) return;
+        path = Array.isArray(picked) ? picked[0] : picked;
+    } catch (e) { return alert(`Pick failed: ${e && e.message ? e.message : e}`); }
+    if (!path) return;
+    const kind = /\.wav$/i.test(path) ? 'ir' : 'nam';
+    rbCgImportDir(path, kind);
+}
+
+// ── Amp gain variants (clean/crunch/dist) for a custom NAM amp ───────────────
+// Some amps ship a capture per gain step; assigning clean/crunch/dist NAMs lets
+// playback auto-pick one by the song's mapped Gain (backend `gain_variants` +
+// _pick_amp_gain_variant — the same model the auto-tone3000 "map songs" flow
+// builds). Only shown for amps. Each level picks from the DOWNLOADED NAM library
+// (download the different-gain captures in the source above first). Clean falls
+// back to the main source when left blank.
+const RB_CG_VARIANT_LEVELS = [
+    ['clean', 'Gain 0–33'],
+    ['crunch', 'Gain 34–66'],
+    ['dist', 'Gain 67–100'],
+];
+function rbCgVariantsHtml() {
+    const s = rbCgState;
+    if (!s || s.cat !== 'amp') return '';
+    return `<div>
+        <label class="block text-[11px] uppercase tracking-wide text-gray-500 mb-1">Alternate gains — optional</label>
+        <div class="text-[10px] text-gray-500 mb-2">Assign a different-gain NAM per level so the song's Gain knob auto-picks one. Download the captures in the source above first; clean defaults to the main source.</div>
+        <div id="rb-cg-variants">${rbCgVariantRowsHtml()}</div>
+    </div>`;
+}
+function rbCgVariantRowsHtml() {
+    const s = rbCgState;
+    if (!s) return '';
+    const nams = (s.files || []).filter(f => f.kind === 'nam');
+    const v = s._variants || {};
+    const opts = (cur) => `<option value="">${'— none —'}</option>` +
+        nams.map(f => `<option value="${rbEsc(f.name)}"${cur === f.name ? ' selected' : ''}>${rbEsc(f.name)}</option>`).join('');
+    return RB_CG_VARIANT_LEVELS.map(([lvl, range]) => `<div class="rb-cg-varrow">
+            <span class="rb-cg-varlvl">${lvl}</span>
+            <span class="rb-cg-varrange">${range}</span>
+            <select onchange="rbCgSetVariant('${lvl}', this.value)" class="rb-cg-varsel">${opts(v[lvl] || '')}</select>
+        </div>`).join('');
+}
+function rbCgSetVariant(level, file) {
+    const s = rbCgState; if (!s) return;
+    s._variants = s._variants || {};
+    if (file) s._variants[level] = file; else delete s._variants[level];
+}
+function rbCgRefreshVariants() {
+    const host = document.getElementById('rb-cg-variants');
+    if (host) host.innerHTML = rbCgVariantRowsHtml();
+}
+
+// The add-gear NAM·IR tab reuses the shared tone3000 browser (no directory button
+// of its own — that's the dedicated Directory mode). tone3000 downloads land as a
+// RELATIVE library path (accepted as-is); the Directory mode IMPORTS into the
+// library first (the gear resolver needs a path under nam_models/nam_irs). Chips
+// default to the gear's tone3000 category but stay switchable.
+function rbCgMountT3k() {
+    const s = rbCgState; if (!s || s.sourceTab !== 'file') return;
+    if (!document.getElementById('rb-cg-t3k')) return;
+    const initialCat = { amp: 'amp', cab: 'ir', pedal: 'pedal', rack: 'outboard' }[s.cat] || '';
+    rbT3kMount({
+        id: 'addgear',
+        containerId: 'rb-cg-t3k',
+        allowDir: false,
+        initialCat,
+        onUse: (file, kind) => rbCgAcceptSource(file, kind),
+    });
+}
+function rbCgAcceptSource(file, kind) {
+    const s = rbCgState; if (!s) return;
+    s.file = file;
+    s.kind = kind || 'nam';
+    s.vst_path = '';
+    s.files = null;            // force a fresh local list (now includes the new file)
+    rbCgLoadFiles();
+    rbCgUpdateSourceLabel();
+}
+async function rbCgImportDir(path, kind) {
+    const s = rbCgState; if (!s) return;
+    try {
+        const r = await fetch(`${window.RB_API}/import_local_model`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path, kind, category: s.cat }),
+        });
+        const d = await r.json();
+        if (!r.ok || !d.file) throw new Error(d.error || 'import failed');
+        rbCgAcceptSource(d.file, d.kind || kind);
+    } catch (e) {
+        alert(`Couldn't import: ${e.message || e}`);
+    }
+}
+
+function rbCgFileRowsHtml() {
+    const s = rbCgState;
+    const q = (s._fileFilter || '').toLowerCase();
+    const list = (s.files || [])
+        .filter(f => !q || (f.name + ' ' + (f.title || '')).toLowerCase().includes(q))
+        .slice(0, 300);
+    if (!list.length) return `<div class="text-[11px] text-gray-600 px-2 py-1">no match</div>`;
+    return list.map(f => {
+        const on = f.name === s.file;
+        return `<button onclick="rbCgPickFile('${rbEsc(f.name)}','${f.kind}')"
+                    class="w-full text-left px-2 py-1 rounded text-[11px] ${on ? 'bg-purple-800/40 text-purple-100' : 'text-gray-300 hover:bg-dark-700'}">
+                    <span class="opacity-60">[${f.kind}]</span> ${rbEsc(f.title || f.name)}</button>`;
+    }).join('');
+}
+
+function rbCgSetFileFilter(v) {
+    if (!rbCgState) return;
+    rbCgState._fileFilter = v;
+    rbCgRenderFileRows();
+}
+
+function rbCgRenderFileRows() {
+    const el = document.getElementById('rb-cg-file-rows');
+    if (el) el.innerHTML = rbCgFileRowsHtml();
+}
+
+function rbCgPickFile(name, kind) {
+    if (!rbCgState) return;
+    rbCgState.file = name;
+    rbCgState.kind = kind;
+    rbCgState.vst_path = '';
+    rbCgRenderFileRows();
+    rbCgUpdateSourceLabel();
+}
+
+function rbCgUpdateSourceLabel() {
+    const el = document.getElementById('rb-cg-source-current');
+    if (!el || !rbCgState) return;
+    const s = rbCgState;
+    let txt = '(no source selected)';
+    if (s.kind === 'vst' && s.vst_path) txt = 'VST: ' + s.vst_path.split(/[\\/]/).pop();
+    else if (s.file) txt = (s.kind || 'file').toUpperCase() + ': ' + s.file;
+    el.textContent = txt;
+}
+
+function rbCgOnName(v) {
+    if (!rbCgState) return;
+    rbCgState.name = v;
+    if (rbCgState.layout) rbCgState.layout.title = v;
+    rbCgRenderPreview();
+}
+
+function rbCgOnInstrument(v) { if (rbCgState) rbCgState.instrument = v; }
+
+// ── editable UI preview + per-control popover editor ────────────────────────
+function rbCgRenderPreview() {
+    const s = rbCgState; const PC = window.RBPedalCanvas;
+    const canvas = document.getElementById('rb-cg-canvas');
+    if (!canvas || !PC || !s || !s.layout) return;
+    s.spec = PC.specFromLayout(s.layout);
+    // Single scale from the container: canvas width = w·scale, height = h·scale.
+    // W slider → width, H slider → height (independent). At the W max the gear
+    // fills the available width; the H max fits the box height.
+    canvas.style.maxWidth = 'none';
+    canvas.style.width = Math.round(s.spec.w * rbCgFitScale(canvas, 446)) + 'px';
+    PC.attachSpec(canvas, s.spec, { interactive: false, values: s.values });
+    canvas.onmousedown = rbCgCanvasMouseDown;   // drag to move, click to edit
+    if (!s._fontsRepaint && PC.ready) {
+        s._fontsRepaint = true;
+        PC.ready().then(() => {
+            try {
+                if (rbCgState === s && document.getElementById('rb-cg-canvas') === canvas) {
+                    PC.attachSpec(canvas, PC.specFromLayout(s.layout), { interactive: false, values: s.values });
+                }
+            } catch (_) { /* ignore */ }
+        });
+    }
+}
+
+// Hit-test the control nearest the pointer (in spec-pixel space), or -1.
+function rbCgHitControl(canvas, clientX, clientY) {
+    const s = rbCgState; if (!s || !s.layout) return -1;
+    const rect = canvas.getBoundingClientRect();
+    const fx = (clientX - rect.left) / rect.width;
+    const fy = (clientY - rect.top) / rect.height;
+    const w = s.layout.w, h = s.layout.h;
+    let best = -1, bestD = Infinity;
+    (s.layout.controls || []).forEach((c, i) => {
+        const dx = (fx - c.cx) * w, dy = (fy - c.cy) * h;
+        const rad = Math.max((c.r || 0.06) * w * 1.7, (c.hs || 0.03) * w * 2, 24);
+        const d = Math.hypot(dx, dy);
+        if (d <= rad && d < bestD) { best = i; bestD = d; }
+    });
+    return best;
+}
+
+// Press a control to DRAG it (reposition); a press without movement opens the
+// edit popover. Empty-space click closes any open popover.
+function rbCgCanvasMouseDown(ev) {
+    const s = rbCgState; if (!s || !s.layout) return;
+    if (ev.button !== 0) return;
+    const canvas = ev.currentTarget;
+    const idx = rbCgHitControl(canvas, ev.clientX, ev.clientY);
+    if (idx < 0) { rbCgCloseControlPopover(); return; }
+    ev.preventDefault();
+    const startX = ev.clientX, startY = ev.clientY;
+    const ctrl = s.layout.controls[idx];
+    let moved = false;
+    const move = (e) => {
+        if (!moved && (Math.abs(e.clientX - startX) > 3 || Math.abs(e.clientY - startY) > 3)) {
+            moved = true;
+            rbCgCloseControlPopover();   // don't leave the popover behind while dragging
+        }
+        if (!moved) return;
+        const r = canvas.getBoundingClientRect();
+        const fx = (e.clientX - r.left) / r.width;
+        const fy = (e.clientY - r.top) / r.height;
+        ctrl.cx = Math.max(0.03, Math.min(0.97, fx));
+        ctrl.cy = Math.max(0.05, Math.min(0.95, fy));
+        rbCgRenderPreview();
+    };
+    const up = (e) => {
+        window.removeEventListener('mousemove', move, true);
+        window.removeEventListener('mouseup', up, true);
+        if (!moved) rbCgOpenControlPopover(idx, e.clientX, e.clientY);
+    };
+    window.addEventListener('mousemove', move, true);
+    window.addEventListener('mouseup', up, true);
+}
+
+function rbCgOpenControlPopover(idx, clientX, clientY) {
+    const s = rbCgState; if (!s) return;
+    const c = s.layout.controls[idx]; if (!c) return;
+    rbCgCloseControlPopover();
+    const hex = window.RBPedalCanvas.rgbToHex(c.color);
+    const pop = document.createElement('div');
+    pop.id = 'rb-cg-pop';
+    pop.style.cssText = 'position:fixed;z-index:9999;';
+    pop.innerHTML = `
+      <div style="background:#1a1a1f;border:1px solid #3a3a44;border-radius:10px;padding:10px;width:200px;box-shadow:0 8px 28px rgba(0,0,0,.55)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:11px;color:#c7c9d1;text-transform:uppercase;letter-spacing:.04em">Edit control</span>
+          <button onclick="rbCgCloseControlPopover()" style="color:#8a8d98;font-size:12px;cursor:pointer">✕</button>
+        </div>
+        <div style="font-size:10px;color:#7e8290;margin-bottom:2px">Type</div>
+        <div style="display:flex;gap:4px;margin-bottom:8px">
+          ${['knob', 'slider', 'switch'].map(k => `<button onclick="rbCgSetControlKind(${idx},'${k}')" style="flex:1;padding:4px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid ${c.kind === k ? '#8b5cf6' : '#3a3a44'};background:${c.kind === k ? 'rgba(139,92,246,.25)' : '#232329'};color:#d5d7de">${k}</button>`).join('')}
+        </div>
+        <div style="font-size:10px;color:#7e8290;margin-bottom:2px">Size</div>
+        <input type="range" min="0.02" max="0.13" step="0.004" value="${c.r || 0.06}"
+               oninput="rbCgSetControlSize(${idx},this.value)"
+               style="width:100%;margin-bottom:8px;accent-color:#8b5cf6">
+        <div style="font-size:10px;color:#7e8290;margin-bottom:2px">Label</div>
+        <input value="${rbEsc(c.label || '')}" oninput="rbCgSetControlLabel(${idx},this.value)"
+               style="width:100%;box-sizing:border-box;background:#232329;border:1px solid #3a3a44;border-radius:6px;padding:4px 6px;font-size:11px;color:#e2e3e8;margin-bottom:8px">
+        <div style="font-size:10px;color:#7e8290;margin-bottom:2px">Colour</div>
+        <input type="color" value="${hex}" oninput="rbCgSetControlColor(${idx},this.value)"
+               style="width:100%;height:28px;background:#232329;border:1px solid #3a3a44;border-radius:6px;margin-bottom:8px;cursor:pointer">
+        <button onclick="rbCgDeleteControl(${idx})"
+                style="width:100%;padding:5px;border-radius:6px;font-size:11px;cursor:pointer;background:rgba(220,60,60,.18);border:1px solid rgba(220,60,60,.35);color:#eb8f8f">🗑 Remove control</button>
+      </div>`;
+    document.body.appendChild(pop);
+    const pw = 210, ph = 300;
+    let x = clientX + 8, y = clientY + 8;
+    if (x + pw > window.innerWidth) x = Math.max(8, window.innerWidth - pw - 8);
+    if (y + ph > window.innerHeight) y = Math.max(8, window.innerHeight - ph - 8);
+    pop.style.left = x + 'px';
+    pop.style.top = y + 'px';
+    s._editIdx = idx;
+}
+
+function rbCgCloseControlPopover() {
+    const p = document.getElementById('rb-cg-pop');
+    if (p) p.remove();
+    if (rbCgState) rbCgState._editIdx = -1;
+}
+
+function rbCgSetControlKind(i, k) {
+    if (!rbCgState) return;
+    rbCgState.layout.controls[i].kind = k;
+    rbCgRenderPreview();
+    // reopen so the highlighted type button reflects the change
+    const p = document.getElementById('rb-cg-pop');
+    if (p) { const r = p.getBoundingClientRect(); rbCgOpenControlPopover(i, r.left - 8, r.top - 8); }
+}
+
+function rbCgSetControlLabel(i, v) {
+    if (!rbCgState) return;
+    rbCgState.layout.controls[i].label = v;
+    rbCgRenderPreview();
+}
+
+function rbCgSetControlColor(i, hex) {
+    if (!rbCgState || !window.RBPedalCanvas) return;
+    rbCgState.layout.controls[i].color = window.RBPedalCanvas.hexToRgb(hex);
+    rbCgRenderPreview();
+}
+
+function rbCgSetControlSize(i, v) {
+    if (!rbCgState) return;
+    const r = Math.max(0.02, Math.min(0.14, parseFloat(v) || 0.06));
+    const c = rbCgState.layout.controls[i];
+    c.r = r;
+    c.hs = Math.max(0.015, r * 0.6);
+    rbCgRenderPreview();
+}
+
+// Set EVERY control's colour at once (bulk), leaving the per-control picker in
+// the popover for one-off overrides.
+function rbCgOnAllColor(hex) {
+    if (!rbCgState || !rbCgState.layout || !window.RBPedalCanvas) return;
+    const col = window.RBPedalCanvas.hexToRgb(hex);
+    rbCgState.layout.controls.forEach(c => { c.color = col.slice(); });
+    rbCgRenderPreview();
+}
+
+// Resize EVERY control at once (bulk); the per-control popover slider still
+// overrides individual sizes afterward.
+function rbCgOnAllSize(v) {
+    if (!rbCgState || !rbCgState.layout) return;
+    const r = Math.max(0.02, Math.min(0.14, parseFloat(v) || 0.06));
+    rbCgState.layout.controls.forEach(c => { c.r = r; c.hs = Math.max(0.015, r * 0.6); });
+    rbCgRenderPreview();
+}
+
+function rbCgDeleteControl(i) {
+    if (!rbCgState) return;
+    rbCgState.layout.controls.splice(i, 1);
+    rbCgCloseControlPopover();
+    rbCgRenderPreview();
+}
+
+function rbCgAddControl() {
+    const s = rbCgState; if (!s || !s.layout || !window.RBPedalCanvas) return;
+    const L = s.layout;
+    const id = (L.controls.length ? Math.max(...L.controls.map(c => c.id || 0)) + 1 : 0);
+    const color = window.RBPedalCanvas.hexToRgb(L.controls[0] ? L.controls[0].color : '#888888');
+    const cy = s.cat === 'cab' ? 0.72 : s.cat === 'amp' ? 0.55 : s.cat === 'rack' ? 0.5 : 0.34;
+    L.controls.push({ id, kind: 'knob', label: 'New', cx: 0.5, cy, r: 0.07, hs: 0.032, color });
+    rbCgRenderPreview();
+}
+
+async function rbSaveCustomGear() {
+    const s = rbCgState; if (!s) return;
+    const msg = document.getElementById('rb-cg-msg');
+    const setErr = (t) => { if (msg) { msg.className = 'text-xs text-red-400'; msg.textContent = t; } };
+    const name = ((document.getElementById('rb-cg-name') || {}).value || s.name || '').trim();
+    if (!name) return setErr('Enter a name.');
+    if (!s.vst_path && !s.file) return setErr('Pick a VST or a NAM/IR file as the sound source.');
+    s.name = name;
+    if (s.layout) s.layout.title = name;
+    const body = {
+        rs_gear: s.editRsGear || undefined,
+        category: s.cat, name, instrument: s.instrument,
+        kind: s.kind, vst_path: s.vst_path || '', vst_format: s.vst_format || 'VST3',
+        file: s.file || '', ui: s.layout,
+    };
+    // Amp gain variants: send clean/crunch/dist NAMs so playback auto-switches by
+    // the song's Gain. Clean defaults to the main source. Only meaningful once a
+    // second level (crunch or dist) is set.
+    const _v = s._variants || {};
+    if (s.cat === 'amp' && (_v.crunch || _v.dist)) {
+        const ranges = { clean: [0, 33], crunch: [34, 66], dist: [67, 100] };
+        const gv = {};
+        for (const lvl of ['clean', 'crunch', 'dist']) {
+            const f = (lvl === 'clean') ? (_v.clean || s.file) : _v[lvl];
+            if (f) gv[lvl] = { file: f, rs_gain_range: ranges[lvl] };
+        }
+        body.gain_variants = gv;
+    }
+    const btn = document.getElementById('rb-cg-save');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    try {
+        const r = await fetch(`${window.RB_API}/custom_gear`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await r.json();
+        if (!r.ok || data.error) throw new Error(data.error || ('HTTP ' + r.status));
+        const newId = data.gear && data.gear.rs_gear;
+        rbCgCloseControlPopover();
+        rbState.gearBrowserCategory = s.cat;
+        rbCgState = null;
+        await rbLoadCatalog();               // re-fetch → shows in browser + palette source
+        if (newId) rbState.gearSelected = newId;
+        rbApplyGearFilters();
+        try { rbAdvPaletteRender(); } catch (_) { /* palette may not be built yet */ }
+    } catch (e) {
+        setErr('Save failed: ' + (e.message || e));
+        if (btn) { btn.disabled = false; btn.textContent = '💾 Save'; }
+    }
+}
+
+async function rbDeleteCustomGear(rsGear) {
+    if (!confirm('Delete this custom gear? This cannot be undone.')) return;
+    try {
+        const r = await fetch(`${window.RB_API}/custom_gear/${encodeURIComponent(rsGear)}`, { method: 'DELETE' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+    } catch (e) { alert('Delete failed: ' + (e.message || e)); return; }
+    rbCgCloseControlPopover();
+    rbCgState = null;
+    rbState.gearSelected = null;
+    await rbLoadCatalog();
+    rbApplyGearFilters();
+    try { rbAdvPaletteRender(); } catch (_) { /* ignore */ }
+}
+
+function rbCancelAddCustomGear() {
+    rbCgCloseControlPopover();
+    rbCgState = null;
+    rbApplyGearFilters();
+}
+
+function rbEditCustomGear(rsGear) {
+    const g = rbFindGear(rsGear);
+    if (g && g.custom) rbOpenAddCustomGear(g.category, g);
 }
 
 // One-line card used in compact mode. Drops the photo to a thumbnail
@@ -11747,7 +16246,7 @@ function rbRenderCatalogCard(g) {
     // trick avoids the HTML-in-attribute escaping issue we hit in the
     // song editor — onerror just hides this img and reveals the next
     // sibling, which is the next photo source down the chain.
-    const rsArt = `${window.RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}${_RB_GEAR_PHOTO_CB}`;
+    const rsArt = rbCabArtDataUrl(g.rs_gear) || `${window.RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}${_RB_GEAR_PHOTO_CB}`;
     const onerrChain = "this.style.display='none'; var n=this.nextElementSibling; if(n){ if(n.tagName==='IMG'){n.style.display=''} else {n.classList.remove('hidden')} }";
     // For gears we've built a VST canvas UI for, show the recreated plugin
     // face as the thumbnail (instead of the game art). dataURL renders
@@ -11841,7 +16340,7 @@ function rbRenderCatalogCard(g) {
         const btns = g.variants.map(v => {
             const vId = `rb-aud-${_rbCatalogSeq++}`;
             if (!v.available || !v.file) {
-                return `<button disabled title="NAM not downloaded — Setup → Download all curated variants"
+                return `<button disabled title="NAM not downloaded — Setup → tone3000 → Download automatic tone3000 tones"
                                 class="text-[10px] px-2 py-0.5 rounded bg-dark-800/50 text-gray-600 cursor-not-allowed">▶ ${rbEsc(v.level)}</button>`;
             }
             // Per-level perceptual trim: clean=1.0, crunch=0.71 (-3 dB),
@@ -13092,6 +17591,7 @@ async function rbCatalogEditInline(safeId, vstPath, vstFormat, rsGear, stem) {
         let model = { values: {}, idMap: {}, logicalParams: [] };
         try {
             const raw = (typeof api.getParameters === 'function' ? await api.getParameters(slotId) : []) || [];
+            rbStashGearVstParamNames(rsGear, raw);
             model = rbBuildCanvasModel(raw, null);
         } catch (_) {}
         // No faithful in-app canvas recreation → open the plugin's OWN native
@@ -13379,10 +17879,8 @@ async function rbLoadSettings() {
     // setting is still `curated_only`; the UI just shows the opposite.
     const allowFuzzy = document.getElementById('rb-allow-tone3000-fallback');
     if (allowFuzzy) allowFuzzy.checked = !s.curated_only;
-    // "Bypass all the game cabs" — reflects the persisted setting; toggling
-    // it POSTs to /settings which bulk-flips preset_pieces.bypassed for cabs.
-    const bypassCabs = document.getElementById('rb-bypass-all-cabs');
-    if (bypassCabs) bypassCabs.checked = !!s.bypass_all_cabs;
+    // ("Bypass all cabs" was removed — cabs are always on now that the modeled
+    // cabs replaced the game cabs.)
     // Mirror the persisted flag onto the runtime mirror so RbMegaChain
     // sees it even if the user never opens Settings. rbLoadSettings is
     // called from rbInit so this runs at page-load.
@@ -13507,27 +18005,6 @@ async function rbSetAllowTone3000Fallback(checked) {
             body: JSON.stringify({ curated_only: !checked }),
         });
     } catch (e) { /* best-effort */ }
-}
-
-// "Bypass all the game cabs" toggle. Posting bypass_all_cabs to /settings
-// bulk-flips preset_pieces.bypassed for every cabinet stage (backend side-
-// effect), so every tone skips its RS cab and the user can add their own.
-async function rbSetBypassAllCabs(checked) {
-    const status = document.getElementById('rb-bypass-all-cabs-status');
-    if (status) status.textContent = checked ? 'Bypassing every cab…' : 'Re-enabling cabs…';
-    try {
-        const r = await fetch(`${window.RB_API}/settings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bypass_all_cabs: !!checked }),
-        });
-        if (!r.ok) throw new Error('save failed');
-        if (status) status.textContent = checked
-            ? '✓ All cabs bypassed. Add your own cab/IR per tone; reopen the song to hear it.'
-            : '✓ Cabs re-enabled.';
-    } catch (e) {
-        if (status) status.textContent = '⚠ Could not save — try again.';
-    }
 }
 
 // Triggered from the Suggest modal: download a specific tone3000
@@ -13778,7 +18255,7 @@ function rbAdvRestore() {
                 id: n.id, kind: 'gear', pieceIdx: n.pieceIdx, kindLabel: n.kindLabel,
                 rsGear: n.rsGear || p.type || null,
                 label: p.real_name || p.type || 'Gear',
-                img: rbStudioPedalImg(p) || null, bypassed: !!p._bypassed,
+                img: rbAdvPieceImg(p), bypassed: !!p._bypassed,
                 x: n.x, y: n.y, pan,
                 stereoOut: rbAdvPieceCanStereoOut(p, n.rsGear) || !!n.stereoOut,
             });
@@ -13969,7 +18446,7 @@ function rbAdvResetToChain() {
     const mk = (e, kindLabel) => ({
         id: nid++, kind: 'gear', pieceIdx: e.idx,
         label: e.p.real_name || e.p.type || 'Gear', kindLabel,
-        img: rbStudioPedalImg(e.p) || null,
+        img: rbAdvPieceImg(e.p),
         bypassed: !!e.p.bypassed, x: 0, y: 0,
         pan: (typeof e.p._pan === 'number' ? e.p._pan : 0),   // stereo pan (St-1)
         stereoOut: rbAdvPieceCanStereoOut(e.p, e.p.type),
@@ -14031,6 +18508,10 @@ function rbAdvAutoLayout() {
 // — NEVER the RS gear photo (/gear_photo/...), which must not be shown. Returns a
 // data URL when the VST's canvas face is available, else null (text placeholder).
 function rbAdvGearImg(g) {
+    const customUrl = rbGearCustomArt(g);   // custom gear's editable face
+    if (customUrl) return customUrl;
+    const cabUrl = g && rbCabArtDataUrl(g.rs_gear || g.type);   // recreated cab photo
+    if (cabUrl) return cabUrl;
     const vp = g && (g.vst_path || g._vst_path);
     if (!vp || !window.RBPedalCanvas) return null;
     const stem = vp.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -14041,6 +18522,16 @@ function rbAdvGearImg(g) {
 }
 function rbAdvGearInitials(g) {
     return rbEsc(((g && (g.real_name || g.name || g.rs_gear)) || 'G').slice(0, 2).toUpperCase());
+}
+// Node thumbnail for a CHAIN piece: the recreated cab photo for cabs (they have
+// no VST face), else the VST canvas face. Cabs seeded/restored from the chain
+// used rbStudioPedalImg alone, which returns null for a cab → the node showed no
+// picture; prefer the cab art so the graph mirrors the room.
+function rbAdvPieceImg(p) {
+    if (!p) return null;
+    const cabUrl = rbCabArtDataUrl(p.type || p.rs_gear);
+    if (cabUrl) return cabUrl;
+    return rbStudioPedalImg(p) || null;
 }
 
 // ── Palette (left) ──────────────────────────────────────────────────────
@@ -14055,11 +18546,17 @@ function rbAdvPaletteRender() {
     const host = document.getElementById('rb-adv-palette-list');
     if (!host) return;
     const cat = rbAdvState().palette;
+    // Only one cab is allowed, but picking another one now REPLACES it in place
+    // (rbAdvAddGearNode → rbAdvReplaceCabNode), so the palette stays live — just
+    // hint that a pick will swap the current cab rather than add a second.
+    const cabSwap = rbAdvGearIsCab(cat, '') && rbAdvHasCab();
     const q = rbNorm(((document.getElementById('rb-adv-pal-search') || {}).value || '').trim());
     const items = ((rbState.gearCatalog && rbState.gearCatalog[cat]) || [])
         .filter(g => !q || rbNorm(`${g.name || ''} ${g.rs_gear || ''} ${g.real_name || ''}`).includes(q));
     if (!items.length) { host.innerHTML = `<div class="rb-adv-pal-empty">No ${cat}s${q ? ' match' : ' yet'}.</div>`; return; }
-    host.innerHTML = items.map(g => {
+    host.innerHTML = (cabSwap
+        ? `<div class="rb-adv-pal-empty" style="padding:6px 8px;line-height:1.35">Every amp shares one cab — picking another cab replaces the one on the graph.</div>`
+        : '') + items.map(g => {
         const name = rbEsc(g.name || g.real_name || g.rs_gear || 'Gear');
         const img = rbAdvGearImg(g);   // VST face only — never the RS gear photo
         const thumb = img
@@ -14221,6 +18718,21 @@ function rbAdvRenderCanvas() {
     const svg = document.getElementById('rb-adv-cables');
     const canvas = document.getElementById('rb-adv-canvas');
     if (!layer || !svg || !canvas) return;
+    // Attach custom-gear UI up front so node thumbnails show the created face
+    // without needing to open each node first, then refresh those nodes' images.
+    try { rbEnsureChainCustomUi(rbStudioCurrentChain(), () => { try { rbAdvRenderCanvas(); } catch (_) {} }); } catch (_) {}
+    try {
+        const chain = rbStudioCurrentChain();
+        adv.nodes.forEach(n => {
+            if (n.kind === 'gear' && typeof n.pieceIdx === 'number' && n.pieceIdx >= 0) {
+                const p = chain[n.pieceIdx];
+                if (p && p._custom_ui) { const im = rbAdvPieceImg(p); if (im) n.img = im; }
+                // Refresh the label once the custom name resolves (loads as the
+                // raw "custom_..." id, becomes the user's name after enrich).
+                if (p && p.real_name && p.real_name !== n.label) n.label = p.real_name;
+            }
+        });
+    } catch (_) {}
     layer.innerHTML = adv.nodes.map(rbAdvNodeHtml).join('');
     // size content so the canvas scrolls and nodes/cables stay aligned
     let maxX = 0, maxY = 0;
@@ -14380,6 +18892,7 @@ async function rbAdvEditNode(id) {
     if (!n || n.kind !== 'gear' || typeof n.pieceIdx !== 'number' || n.pieceIdx < 0) return;
     const piece = rbStudioCurrentChain()[n.pieceIdx];
     if (!piece) return;
+    await rbEnsureCustomUi(piece);           // reloaded custom gear → re-attach its UI
     const stem = rbCanvasStem(piece);
     const host = document.querySelector('#rb-tab-advanced .rb-adv-main') || document.getElementById('rb-tab-advanced');
     let panel = document.getElementById('rb-adv-editor');
@@ -14387,6 +18900,52 @@ async function rbAdvEditNode(id) {
     panel = document.createElement('div');
     panel.id = 'rb-adv-editor';
     panel.className = 'rb-adv-editor';
+    // Custom gear: show the user's own face (interactive) in the node editor —
+    // never the plugin's native window. (Editing the gear itself is done from the
+    // Gear catalog's ✎ Edit button, not here.)
+    if (piece._custom_ui && window.RBPedalCanvas && window.RBPedalCanvas.specFromLayout) {
+        panel.innerHTML = `<div class="rb-adv-editor-bar">
+                <span class="rb-adv-editor-name">${rbEsc(piece.real_name || piece.type || 'Gear')}</span>
+                <button class="rb-adv-editor-close" onclick="rbAdvCloseEditor()">✕</button>
+            </div>
+            <div class="rb-adv-editor-face rb-amp-face"></div>`;
+        host.appendChild(panel);
+        // Size the card from the custom layout's aspect (same as built-in gear
+        // below), so a wide rack/amp isn't left at the tiny default card width.
+        try {
+            const cl = piece._custom_ui;
+            const aspect = (cl.w && cl.h) ? (cl.w / cl.h) : 1.5;
+            let natW = 560;
+            const maxH = (window.innerHeight || 800) * 0.62;
+            if (natW / aspect > maxH) natW = Math.round(maxH * aspect);
+            natW = Math.min(natW, 640);
+            panel.style.width = `min(${Math.round(natW) + 28}px, 94vw)`;
+        } catch (_) {}
+        rbState._advEditPieceIdx = n.pieceIdx;
+        rbStudioMakeFaceInteractive(n.pieceIdx, panel.querySelector('.rb-adv-editor-face'));
+        return;
+    }
+    // Cabinet → Cab Room (Real Cab) dentro del editor del Advanced. Con un
+    // tono de canción cargado, los cambios PERSISTEN al tono (modo studio);
+    // si no, funciona como explorador con audición.
+    const _isCabPiece = (piece.slot || '').toLowerCase() === 'cabinet' || piece.rs_category === 'cab';
+    const _cabEntry = _isCabPiece ? rbRealCabEntryFor(piece.type || piece.rs_gear) : null;
+    if (_cabEntry) {
+        const v = rbState.studioView || {};
+        panel.innerHTML = `<div class="rb-adv-editor-bar">
+                <span class="rb-adv-editor-name">${rbEsc(_cabEntry.name || piece.type || 'Cab')}</span>
+                <button class="rb-adv-editor-close" onclick="rbAdvCloseEditor()">✕</button>
+            </div>
+            <div id="rb-cabroom-adv" style="padding:8px;"></div>`;
+        host.appendChild(panel);
+        delete _rbCabRoom['adv'];
+        rbCabRoomBuild({ rs_gear: piece.type || piece.rs_gear }, _cabEntry, 'adv', {
+            selector: true,
+            studio: (v.source === 'song') ? { toneIdx: v.toneIdx, pIdx: n.pieceIdx } : null,
+            init: rbCabRoomStateFromPiece(piece),
+        });
+        return;
+    }
     if (!(window.RBPedalCanvas && (window.RBPedalCanvas.has(stem) || (piece._vst_param_meta || []).length))) {
         panel.innerHTML = `<div class="rb-adv-editor-bar">
                 <span class="rb-adv-editor-name">${rbEsc(piece.real_name || piece.type || 'Gear')}</span>
@@ -14499,6 +19058,7 @@ async function rbAdvDeleteNode(id) {
     }));
     adv.nodes = adv.nodes.filter(x => x.id !== id);
     rbAdvRenderCanvas();
+    try { rbAdvPaletteRender(); } catch (_) {}   // removing a cab re-unlocks the palette
     rbAdvPersist();
     try { await rbStudioPersist(); } catch (_) {}
     try { if (rbState._studioPersistPromise) await rbState._studioPersistPromise; } catch (_) {}
@@ -14715,9 +19275,111 @@ function rbAdvBindCanvasOnce() {
 // HTML5 drag-and-drop is flaky in the Electron webview (custom MIME types get
 // dropped mid-drag on Windows/Chromium), so a plain click is the reliable way
 // to add an amp/pedal/rack/VST to the node graph.
+// Cab detection + the single-cab rule. The native engine runs ONE shared cab on
+// the merged bus (every amp plays through it) — a per-amp cab can't be routed
+// (it falls back to a serial chain), so the node editor allows only one cab.
+function rbAdvGearIsCab(cat, rsGear) {
+    return /^cabs?$/i.test(cat || '') || /^(bass_)?cab_/i.test(rsGear || '');
+}
+function rbAdvNodeIsCab(n) {
+    return !!n && n.kind === 'gear' && rbAdvGearIsCab(n.kindLabel, n.rsGear);
+}
+function rbAdvHasCab() {
+    return rbAdvState().nodes.some(rbAdvNodeIsCab);
+}
+
+// Synthesize a cab IR at a neutral default mic position WITHOUT needing an open
+// Cab Room — so a cab added or replaced from the node-editor palette actually
+// colours the sound (native_preset_full only emits a cab stage for kind='ir').
+async function rbSynthCabIrDefault(gear) {
+    if (!gear) return null;
+    try {
+        const r = await fetch(`${window.RB_API}/cab/synthesize`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gear_type: gear, mic: 'sm57', x: 0.15, dist_in: 1.0, angle_deg: 0 }),
+        });
+        const d = await r.json();
+        return (r.ok && d && d.name) ? d.name : null;
+    } catch (_) { return null; }
+}
+
+// Replace the existing cab (node + its chain piece) with a newly picked one —
+// point the piece at the new cab, synth its IR, persist, and refresh the node's
+// face/label so the single shared cab swaps in place (no add, no delete).
+async function rbAdvReplaceCabNode(node, data) {
+    const base = String(data.rs_gear || '').replace(/_[a-z0-9]{2}$/i, '');
+    if (!node || !base) return;
+    const lookup = ((rbState.gearCatalog && rbState.gearCatalog[data.cat]) || [])
+        .find(g => g.rs_gear === data.rs_gear) || null;
+    const catEntry = (rbState.realCabCatalog && rbState.realCabCatalog.cabs
+                      && rbState.realCabCatalog.cabs[base]) || {};
+    // Locate the piece this node points at (fall back to the chain's cab piece).
+    const chain = rbStudioCurrentChain();
+    let piece = (typeof node.pieceIdx === 'number' && node.pieceIdx >= 0) ? chain[node.pieceIdx] : null;
+    if (!piece) { const f = rbStudioCabPiece(); if (f) { piece = f.piece; node.pieceIdx = f.pIdx; } }
+    if (!piece) { piece = { _bypassed: false }; chain.push(piece); node.pieceIdx = chain.length - 1; }
+    piece.type = base; piece.slot = 'cabinet';
+    piece.category = 'cab'; piece.rs_category = 'cab';
+    piece.real_name = catEntry.name || (lookup && lookup.real_name) || base;
+    piece._vst_kind = null; piece._vst_path = null; piece._vst_state = null;
+    const irName = await rbSynthCabIrDefault(base);
+    if (irName) {
+        piece._uploaded_file = irName; piece._uploaded_kind = 'ir';
+        piece.assigned = { kind: 'ir', file: irName, assigned_mode: 'manual' };
+    }
+    // Refresh the node's face + label in place.
+    node.rsGear = base;
+    node.kindLabel = data.cat;
+    node.label = piece.real_name;
+    node.img = rbAdvPieceImg(piece);
+    node.stereoOut = false;
+    rbAdvRenderCanvas();
+    rbAdvPersist();
+    try { rbStudioPersist(); } catch (_) {}
+    try { if (rbState._studioPersistPromise) await rbState._studioPersistPromise; } catch (_) {}
+    try { rbRenderStudioRoom(); } catch (_) {}
+    try { await rbStudioReloadLiveChainAfterSwap(); } catch (_) {}
+}
+
+// Sync the node-editor graph to whatever gear the chain now has — called after
+// any Studio swap/add so the two views agree. The graph is cached in rbState._adv
+// and rbLoadAdvanced won't re-read the chain while it stays seeded, so a
+// Studio-side change (swap an amp/pedal/rack/cab) would otherwise never reach an
+// already-seeded graph. A same-shape swap refreshes each node's identity in
+// place (rsGear/label/photo); a structural change (piece added/removed) forces a
+// clean reseed the next time Advanced opens.
+function rbAdvSyncFromChain() {
+    const adv = rbState._adv;
+    if (!adv || !Array.isArray(adv.nodes)) return;
+    const chain = rbStudioCurrentChain();
+    const gearNodes = adv.nodes.filter(n => n.kind === 'gear');
+    if (gearNodes.length !== chain.length) { adv.seeded = false; return; }
+    let changed = false;
+    for (const n of gearNodes) {
+        const p = (typeof n.pieceIdx === 'number' && n.pieceIdx >= 0) ? chain[n.pieceIdx] : null;
+        if (!p) { adv.seeded = false; return; }   // pieceIdx map stale → reseed on open
+        const rs = p.type || n.rsGear;
+        if (n.rsGear !== rs) changed = true;       // a swap changed this slot's gear
+        n.rsGear = rs;
+        n.label = p.real_name || p.type || 'Gear';
+        n.img = rbAdvPieceImg(p);
+        n.stereoOut = rbAdvPieceCanStereoOut(p, rs);
+    }
+    if (changed) {
+        try { rbAdvPersist(); } catch (_) {}
+        try { rbAdvRenderCanvas(); } catch (_) {}
+    }
+}
+
 function rbAdvAddGearNode(data, x, y) {
     if (!data || !data.rs_gear) return null;
     const adv = rbAdvState();
+    // Only ONE cab allowed (all amps share it) — so picking a cab when one is
+    // already on the graph REPLACES it in place instead of being rejected.
+    if (rbAdvGearIsCab(data.cat, data.rs_gear)) {
+        const existing = adv.nodes.find(rbAdvNodeIsCab);
+        if (existing) { rbAdvReplaceCabNode(existing, data).catch(() => {}); return existing; }
+    }
     const id = Math.max(0, ...adv.nodes.map(n => n.id)) + 1;
     // Resolve the gear's VST face from the catalog (copyright-free) — never the
     // RS gear photo that came off the drag payload.
@@ -14732,6 +19394,7 @@ function rbAdvAddGearNode(data, x, y) {
     };
     adv.nodes.push(node);
     rbAdvRenderCanvas();
+    try { rbAdvPaletteRender(); } catch (_) {}   // refresh cab lock in the palette
     rbAdvMaterializeGear(node).catch(() => {});
     return node;
 }
@@ -14766,11 +19429,29 @@ async function rbAdvMaterializeGear(node) {
         make: catalogEntry.make || '', model: catalogEntry.model || '',
         assigned: null, _bypassed: false,
     };
+    if (catItem.custom && catItem.ui) piece._custom_ui = catItem.ui;   // user's face in the editor
     if (catItem.vst_path) {
         piece._vst_path = catItem.vst_path;
         piece._vst_format = catItem.vst_format || 'VST3';
         piece._vst_state = catItem.vst_state || null;
         piece._vst_kind = 'vst';
+    } else if (catItem.custom && catItem.file) {
+        // Custom gear backed by a NAM/IR file (no VST) — attach its file so the
+        // dropped node actually plays that capture, not silence.
+        const ck = catItem.kind === 'ir' ? 'ir' : 'nam';
+        piece._uploaded_file = catItem.file; piece._uploaded_kind = ck;
+        piece.assigned = { kind: ck, file: catItem.file, assigned_mode: 'manual' };
+    }
+    // Cabs have no VST — synth a default-position IR so the added cab actually
+    // colours the sound (else native_preset_full skips a fileless cab piece).
+    // A custom cab that already carries its own IR file keeps it.
+    if (isCab && !piece._uploaded_file) {
+        const irName = await rbSynthCabIrDefault(piece.type);
+        if (irName) {
+            piece._uploaded_file = irName; piece._uploaded_kind = 'ir';
+            piece.assigned = { kind: 'ir', file: irName, assigned_mode: 'manual' };
+        }
+        node.img = rbAdvPieceImg(piece);   // recreated cab photo on the node
     }
     const chain = rbStudioCurrentChain();
     chain.push(piece);
@@ -14829,8 +19510,11 @@ async function rbAdvOnPanInput(id, val) {
 // the chain behaves exactly as before. Feature-detected: a no-op on an engine
 // without setPan/setBranch (the currently shipped build), so nothing breaks there.
 // Diagnostics relay: renderer console isn't visible from a terminal run, so
-// mirror routing decisions to the backend (prints as [python:stdout] [rb-debug]).
+// Dev-only stereo/routing trace, mirrored to the backend relay ([python:stdout]
+// [rb-debug]). OFF by default — enable with `window.RB_DEBUG = true` or
+// localStorage 'rbDebug' when diagnosing parallel/pan routing.
 function rbDebugLog(msg) {
+    try { if (!(window.RB_DEBUG || localStorage.getItem('rbDebug'))) return; } catch (_) { return; }
     try { console.log('[rb-stereo]', msg); } catch (_) {}
     try {
         fetch('/api/plugins/rig_builder/debug_log', {

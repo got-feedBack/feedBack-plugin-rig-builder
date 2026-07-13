@@ -431,8 +431,8 @@ protected:
         {
             float oL, oR;
             core.process(3.2f * inL[i], 3.2f * inR[i], oL, oR);
-            outL[i] = rbAmpLvl(0.205f * oL);
-            outR[i] = rbAmpLvl(0.205f * oR);
+            outL[i] = rbAmpLvl(0.499f * oL);
+            outR[i] = rbAmpLvl(0.499f * oR);
         }
     }
 

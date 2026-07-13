@@ -280,6 +280,12 @@ public:
             supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
         const float pushed = smoothstepRange(0.28f, 0.88f, preDrive);
         const float mPush = smoothstep(master);
+        // roar = the CRANKED top of the sweep (Live at Leeds is a maxed DR103).
+        // The clean-headroom fixes (pass3-5) overshot and flattened the whole
+        // gain sweep — maxed volumes no longer distorted at all. Extra drive
+        // ramps in ONLY past ~60% (100W breaks later than the DR504); low and
+        // normal settings keep the clean Hiwatt headroom.
+        const float roar = smoothstepRange(0.50f, 1.0f, preDrive);
 
         float x = inputHp.process(in * 2.0f);  // pass5: global input boost cut hard (5.0->2.0) — the tube grids saw too many volts, still distorting
         x = pickupLoad.process(x);
@@ -289,10 +295,12 @@ public:
         // Gentle drive: the Hiwatt has huge headroom, so it stays clean until cranked.
         float bch = brightCapShelf.process(brightBody.process(x));
         bch = vBright.process(brightMiller.process(bch) *
-                              (0.8f + 3.6f * brightVol) * bplus.preamp);   // pass3: much more headroom (was 2.0+16.0 orig); clean until ~65%
+                              (0.8f + 3.6f * brightVol
+                               + 7.0f * smoothstepRange(0.50f, 1.0f, brightVol)) * bplus.preamp);   // pass3 + roar (was 2.0+16.0 orig)
         float nch = normalBody.process(x);
         nch = vNormal.process(normalMiller.process(nch) *
-                              (0.6f + 2.6f * normalVol) * bplus.preamp);   // pass3 (was 1.5+11.0 orig)
+                              (0.6f + 2.6f * normalVol
+                               + 4.2f * smoothstepRange(0.50f, 1.0f, normalVol)) * bplus.preamp);   // pass3 + roar (was 1.5+11.0 orig)
 
         // jumpered mix
         float y = brightG * (0.34f + 0.66f * brightVol) * bch + normalG * (0.30f + 0.62f * normalVol) * nch;
@@ -300,7 +308,7 @@ public:
         // recovery (ECC83) into the tone stack
         y = interstageHp.process(y);
         y = vRecovery.process(recoveryMiller.process(y) *
-                              (1.0f + 3.0f * preDrive) * bplus.preamp);   // pass4: recovery was the real distorter (8.7x at mid vol) — was 1.5+8.0
+                              (1.0f + 3.0f * preDrive + 4.8f * roar) * bplus.preamp);   // pass4 + roar: back toward the original, only when cranked
         y = cathodeLp.process(y);
 
         y = toneStack.process(y) * toneMk;
@@ -315,7 +323,7 @@ public:
         // CLEAN LINEAR phase-inverter — THIS was the gate (the Koren LTP cut small signals to silence
         // at low drive). Linear here = no gating; the REAL Koren EL34 power amp (below) keeps the
         // authentic power-tube breakup. Modest gain so the EL34 stays clean until the Master cranks.
-        y = y * bplus.screen * 0.42f;
+        y = y * bplus.screen * (0.42f + 0.28f * roar * mPush);
         lastPowerLoad = 0.60f * std::fabs(y) + 0.10f * pushed;
         lastScreenLoad = 0.38f * std::fabs(y) + 0.05f * preDrive;
 
@@ -344,7 +352,7 @@ public:
             + 0.010f * std::fabs((pres - 0.5f) * 16.0f);
         const float cleanMakeup = 1.0f + 1.0f * std::exp(-preDrive / 0.30f);
         const float level = (0.36f + 0.10f * (1.0f - preDrive)) * cleanMakeup /
-            ((1.0f + 0.40f * mPush + 0.20f * pushed) * toneEnergy);
+            ((1.0f + 0.40f * mPush + 0.20f * pushed + 1.05f * roar) * toneEnergy);
         return softClip(y * level) * 0.97f;
     }
 };

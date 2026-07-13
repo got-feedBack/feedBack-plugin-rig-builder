@@ -162,6 +162,15 @@ class Tone3000Client:
                         2 ** attempt + 0.5 * attempt)
                     time.sleep(sleep_s)
                     continue
+                if e.code == 403:
+                    # Forbidden — the token is invalid/revoked or the account
+                    # lacks access (e.g. a stale credential surviving a factory
+                    # reset). Treat it like a dead 401: mark disconnected and
+                    # return None so callers short-circuit (has_api_access gate)
+                    # instead of re-requesting every gear and spamming a 403
+                    # traceback on each. The gear falls back to bundled/pending.
+                    self.has_api_access = False
+                    return None
                 raise
 
     # ── OAuth (PKCE) ────────────────────────────────────────────────────

@@ -1,0 +1,795 @@
+{
+  "_comment": "Real Cab: mapeo de los cabs RS de guitarra al modelo físico (rb_core/cab_synth.py). La CONFIG (drivers/size/back/baffle) se decodifica del nombre RS (0112C=1x12 combo, 412=4x12, 410=4x10, 215=2x15, OB=open-back). speaker_confidence: high = familia conocida (Marshall/Orange/ENGL/TW/AT-Vox); low = por refinar con las fotos/manifiestos del juego. Los drivers marcados TODO en cab_synth.DRIVERS caen a la curva más parecida hasta digitalizar su datasheet. Bass cabs: NO están aquí — siguen con IRs RS. | 'name' = nombre parodia para la UI (Marsten/Box/Silla/Engel/Heavey/Citrus/Bender). 'speakers' = opciones reales de swap (primera = default) — el Cab Room deja elegir el parlante.",
+  "mic_suffixes": {
+    "5": "sm57",
+    "c": "tlm103",
+    "r": "r121",
+    "t": "tube"
+  },
+  "pos_suffixes": {
+    "c": {
+      "x": 0.15,
+      "dist_in": 1.0,
+      "angle_deg": 0
+    },
+    "e": {
+      "x": 0.85,
+      "dist_in": 1.0,
+      "angle_deg": 0
+    },
+    "o": {
+      "x": 0.3,
+      "dist_in": 2.0,
+      "angle_deg": 45
+    }
+  },
+  "cabs": {
+    "Cab_AT0112C": {
+      "speaker": "g12m",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "open",
+      "baffle_m": 0.5,
+      "speaker_confidence": "medium",
+      "name": "Marsten 1x12 Combo",
+      "speakers": [
+        "g12m",
+        "g12h",
+        "v30"
+      ]
+    },
+    "Cab_AT1121C": {
+      "speaker": "g12m",
+      "drivers": 2,
+      "size_in": 12,
+      "back": "open",
+      "baffle_m": 0.7,
+      "speaker_confidence": "medium",
+      "name": "Marsten 1x12 Vintage",
+      "speakers": [
+        "g12m",
+        "g12h",
+        "blue"
+      ]
+    },
+    "Cab_BT1120C": {
+      "speaker": "blue",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "open",
+      "baffle_m": 0.5,
+      "speaker_confidence": "high",
+      "name": "Box 1x12",
+      "speakers": [
+        "blue",
+        "g12h",
+        "g12m"
+      ]
+    },
+    "Cab_BT1121C": {
+      "speaker": "blue",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "open",
+      "baffle_m": 0.5,
+      "speaker_confidence": "high",
+      "name": "Box 1x12 Alnico",
+      "speakers": [
+        "blue",
+        "g12h",
+        "g12m"
+      ]
+    },
+    "Cab_BT410C": {
+      "speaker": "p10q",
+      "drivers": 4,
+      "size_in": 10,
+      "back": "open",
+      "baffle_m": 0.6,
+      "speaker_confidence": "medium",
+      "name": "Box 4x10",
+      "speakers": [
+        "p10q"
+      ]
+    },
+    "Cab_CA112C": {
+      "speaker": "evm12l",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "open",
+      "baffle_m": 0.5,
+      "speaker_confidence": "high",
+      "name": "Silla 1x12",
+      "speakers": [
+        "evm12l",
+        "v30",
+        "g12t75"
+      ]
+    },
+    "Cab_CA215C": {
+      "speaker": "evm15l",
+      "drivers": 2,
+      "size_in": 15,
+      "back": "closed",
+      "baffle_m": 0.8,
+      "speaker_confidence": "high",
+      "name": "Silla 2x15",
+      "speakers": [
+        "evm15l",
+        "g12h"
+      ]
+    },
+    "Cab_CA412C": {
+      "speaker": "v30",
+      "drivers": 4,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.76,
+      "speaker_confidence": "high",
+      "name": "Silla Dual Recto 4x12",
+      "speakers": [
+        "v30",
+        "g12t75"
+      ]
+    },
+    "Cab_CS1120C": {
+      "speaker": "v30",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.5,
+      "speaker_confidence": "high",
+      "name": "Citrus PPC112",
+      "speakers": [
+        "v30",
+        "g12h",
+        "g12m"
+      ]
+    },
+    "Cab_CS1515C": {
+      "speaker": "g12h",
+      "drivers": 1,
+      "size_in": 15,
+      "back": "closed",
+      "baffle_m": 0.6,
+      "speaker_confidence": "medium",
+      "name": "Citrus 1x15",
+      "speakers": [
+        "g12h",
+        "evm15l",
+        "c15n"
+      ]
+    },
+    "Cab_CS212C": {
+      "speaker": "mod12110",
+      "drivers": 2,
+      "size_in": 12,
+      "back": "open",
+      "baffle_m": 0.76,
+      "speaker_confidence": "high",
+      "name": "Ronald JC-120 2x12",
+      "speakers": [
+        "mod12110",
+        "c12n",
+        "v30"
+      ]
+    },
+    "Cab_EN212C": {
+      "speaker": "blue",
+      "drivers": 2,
+      "size_in": 12,
+      "back": "open",
+      "baffle_m": 0.7,
+      "speaker_confidence": "high",
+      "name": "Box AC30 2x12",
+      "speakers": [
+        "blue",
+        "g12h",
+        "g12m"
+      ]
+    },
+    "Cab_EN4120C": {
+      "speaker": "v30",
+      "drivers": 4,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.76,
+      "speaker_confidence": "high",
+      "name": "Engel Fireball 4x12",
+      "speakers": [
+        "v30",
+        "g12t75"
+      ]
+    },
+    "Cab_GB412CMKI": {
+      "speaker": "g12h",
+      "drivers": 4,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.76,
+      "speaker_confidence": "medium",
+      "name": "Lovolt 4x12",
+      "speakers": [
+        "g12h",
+        "g12m",
+        "g12t75"
+      ]
+    },
+    "Cab_GB412CMKII": {
+      "speaker": "g12h",
+      "drivers": 4,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.76,
+      "speaker_confidence": "high",
+      "name": "Mr. Y Maz 4x12",
+      "speakers": [
+        "g12h",
+        "g12m",
+        "blue"
+      ]
+    },
+    "Cab_GB412CMKIII": {
+      "speaker": "g12t75",
+      "drivers": 4,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.76,
+      "speaker_confidence": "high",
+      "name": "Raney AOR 4x12",
+      "speakers": [
+        "g12t75",
+        "v30"
+      ]
+    },
+    "Cab_HG2120C": {
+      "speaker": "g12t75",
+      "drivers": 2,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.66,
+      "speaker_confidence": "low",
+      "name": "PeeBee 2120",
+      "speakers": [
+        "g12t75",
+        "v30"
+      ]
+    },
+    "Cab_HG212C": {
+      "speaker": "g12t75",
+      "drivers": 2,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.66,
+      "speaker_confidence": "low",
+      "name": "PeeBee 2x12",
+      "speakers": [
+        "g12t75",
+        "v30"
+      ]
+    },
+    "Cab_HG215C": {
+      "speaker": "g12h",
+      "drivers": 2,
+      "size_in": 15,
+      "back": "closed",
+      "baffle_m": 0.8,
+      "speaker_confidence": "low",
+      "name": "PeeBee 2x15",
+      "speakers": [
+        "g12h",
+        "g12t75"
+      ]
+    },
+    "Cab_MARSHALL1936": {
+      "speaker": "g12t75",
+      "drivers": 2,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.66,
+      "speaker_confidence": "high",
+      "name": "Marsten 1936 2x12",
+      "speakers": [
+        "g12t75",
+        "g12m",
+        "v30"
+      ]
+    },
+    "Cab_MARSHALL1960A": {
+      "speaker": "g12t75",
+      "drivers": 4,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.76,
+      "speaker_confidence": "high",
+      "name": "Marsten 1960A 4x12",
+      "speakers": [
+        "g12t75",
+        "g12m",
+        "v30",
+        "g12h"
+      ]
+    },
+    "Cab_MARSHALL1960AX": {
+      "speaker": "g12m",
+      "drivers": 4,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.76,
+      "speaker_confidence": "high",
+      "name": "Marsten 1960AX 4x12",
+      "speakers": [
+        "g12m",
+        "g12h",
+        "v30"
+      ]
+    },
+    "Cab_MARSHALL1960TV": {
+      "speaker": "g12m",
+      "drivers": 4,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.76,
+      "speaker_confidence": "high",
+      "name": "Marsten 1960TV 4x12",
+      "speakers": [
+        "g12m",
+        "g12h",
+        "blue"
+      ]
+    },
+    "Cab_ORANGEJIMMYBEAN": {
+      "speaker": "v30",
+      "drivers": 4,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.76,
+      "speaker_confidence": "low",
+      "name": "Citrus Jimmy Bean 4x12",
+      "speakers": [
+        "v30",
+        "g12h"
+      ]
+    },
+    "Cab_ORANGEPPC212OB": {
+      "speaker": "v30",
+      "drivers": 2,
+      "size_in": 12,
+      "back": "open",
+      "baffle_m": 0.66,
+      "speaker_confidence": "high",
+      "name": "Citrus PPC212 Open-Back",
+      "speakers": [
+        "v30",
+        "g12h",
+        "g12m"
+      ]
+    },
+    "Cab_ORANGEPPC412": {
+      "speaker": "v30",
+      "drivers": 4,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.76,
+      "speaker_confidence": "high",
+      "name": "Citrus PPC412",
+      "speakers": [
+        "v30",
+        "g12h"
+      ]
+    },
+    "Cab_TW110C": {
+      "speaker": "c12n",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "open",
+      "baffle_m": 0.45,
+      "speaker_confidence": "high",
+      "name": "Bender Deluxe 1x12",
+      "speakers": [
+        "c12n",
+        "p10q",
+        "blue"
+      ]
+    },
+    "Cab_TW112C": {
+      "speaker": "g12m",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "open",
+      "baffle_m": 0.5,
+      "speaker_confidence": "high",
+      "name": "Bender Supernova 1x12",
+      "speakers": [
+        "g12m",
+        "c12n",
+        "blue",
+        "v30"
+      ]
+    },
+    "Cab_TW410C": {
+      "speaker": "p10q",
+      "drivers": 4,
+      "size_in": 10,
+      "back": "open",
+      "baffle_m": 0.6,
+      "speaker_confidence": "high",
+      "name": "Bender Bassman 4x10",
+      "speakers": [
+        "p10q",
+        "c12n"
+      ]
+    },
+    "Bass_Cab_AT810BC": {
+      "name": "Sampleg SVT 8x10",
+      "speaker": "bp102",
+      "speakers": [
+        "bp102",
+        "deltalite2510"
+      ],
+      "drivers": 8,
+      "size_in": 10,
+      "back": "closed",
+      "baffle_m": 0.66,
+      "speaker_confidence": "high"
+    },
+    "Bass_Cab_AT1150BC": {
+      "name": "Sampleg 1x15",
+      "speaker": "cb158",
+      "speakers": [
+        "cb158",
+        "p15n",
+        "evm15l",
+        "pulse15"
+      ],
+      "drivers": 1,
+      "size_in": 15,
+      "back": "ported",
+      "baffle_m": 0.6,
+      "speaker_confidence": "medium"
+    },
+    "Bass_Cab_BT115BC": {
+      "name": "Freddy 1x15",
+      "speaker": "cb158",
+      "speakers": [
+        "cb158",
+        "p15n",
+        "pulse15"
+      ],
+      "drivers": 1,
+      "size_in": 15,
+      "back": "ported",
+      "baffle_m": 0.55,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_BT212BC": {
+      "name": "Freddy 2x12",
+      "speaker": "deltalite2512",
+      "speakers": [
+        "deltalite2512",
+        "evm12l"
+      ],
+      "drivers": 2,
+      "size_in": 12,
+      "back": "ported",
+      "baffle_m": 0.66,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_BT410BC": {
+      "name": "Freddy 4x10",
+      "speaker": "bp102",
+      "speakers": [
+        "bp102",
+        "deltalite2510"
+      ],
+      "drivers": 4,
+      "size_in": 10,
+      "back": "ported",
+      "baffle_m": 0.6,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_CA1510BC": {
+      "name": "Silla Bass 1x15",
+      "speaker": "evm15l",
+      "speakers": [
+        "evm15l",
+        "cb158"
+      ],
+      "drivers": 1,
+      "size_in": 15,
+      "back": "ported",
+      "baffle_m": 0.6,
+      "speaker_confidence": "medium"
+    },
+    "Bass_Cab_CH210BC": {
+      "name": "SBR 2x10",
+      "speaker": "deltalite2510",
+      "speakers": [
+        "deltalite2510",
+        "bp102"
+      ],
+      "drivers": 2,
+      "size_in": 10,
+      "back": "ported",
+      "baffle_m": 0.58,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_CH310BC": {
+      "name": "Seismik 3x10",
+      "speaker": "deltalite2510",
+      "speakers": [
+        "deltalite2510",
+        "bp102"
+      ],
+      "drivers": 3,
+      "size_in": 10,
+      "back": "ported",
+      "baffle_m": 0.6,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_CH410BC": {
+      "name": "SBR 4x10",
+      "speaker": "deltalite2510",
+      "speakers": [
+        "deltalite2510",
+        "bp102"
+      ],
+      "drivers": 4,
+      "size_in": 10,
+      "back": "ported",
+      "baffle_m": 0.6,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_CS112BC": {
+      "name": "Sharke 1x12",
+      "speaker": "deltalite2512",
+      "speakers": [
+        "deltalite2512",
+        "evm12l"
+      ],
+      "drivers": 1,
+      "size_in": 12,
+      "back": "ported",
+      "baffle_m": 0.48,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_CS15BC": {
+      "name": "Sharke 1x15",
+      "speaker": "cb158",
+      "speakers": [
+        "cb158",
+        "pulse15"
+      ],
+      "drivers": 1,
+      "size_in": 15,
+      "back": "ported",
+      "baffle_m": 0.55,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_CS410BC": {
+      "name": "Sharke 4x10",
+      "speaker": "bp102",
+      "speakers": [
+        "bp102",
+        "deltalite2510"
+      ],
+      "drivers": 4,
+      "size_in": 10,
+      "back": "ported",
+      "baffle_m": 0.6,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_EDEND115XLT": {
+      "name": "Edena D115XLT",
+      "speaker": "cb158",
+      "speakers": [
+        "cb158",
+        "pulse15"
+      ],
+      "drivers": 1,
+      "size_in": 15,
+      "back": "ported",
+      "baffle_m": 0.58,
+      "speaker_confidence": "medium"
+    },
+    "Bass_Cab_EDEND212XLT": {
+      "name": "Edena D212XLT",
+      "speaker": "deltalite2512",
+      "speakers": [
+        "deltalite2512"
+      ],
+      "drivers": 2,
+      "size_in": 12,
+      "back": "ported",
+      "baffle_m": 0.66,
+      "speaker_confidence": "medium"
+    },
+    "Bass_Cab_EDEND410XST": {
+      "name": "Edena D410XST",
+      "speaker": "deltalite2510",
+      "speakers": [
+        "deltalite2510",
+        "bp102"
+      ],
+      "drivers": 4,
+      "size_in": 10,
+      "back": "ported",
+      "baffle_m": 0.6,
+      "speaker_confidence": "high"
+    },
+    "Bass_Cab_EDEND610XST": {
+      "name": "Edena D610XST",
+      "speaker": "deltalite2510",
+      "speakers": [
+        "deltalite2510"
+      ],
+      "drivers": 6,
+      "size_in": 10,
+      "back": "ported",
+      "baffle_m": 0.66,
+      "speaker_confidence": "high"
+    },
+    "Bass_Cab_GB415BC": {
+      "name": "Lovolt Bass 4x15",
+      "speaker": "cb158",
+      "speakers": [
+        "cb158",
+        "evm15l"
+      ],
+      "drivers": 4,
+      "size_in": 15,
+      "back": "ported",
+      "baffle_m": 0.9,
+      "speaker_confidence": "low"
+    },
+    "Bass_Cab_ORANGEOBC115": {
+      "name": "Citrus OBC115",
+      "speaker": "cb158",
+      "speakers": [
+        "cb158",
+        "pulse15",
+        "p15n"
+      ],
+      "drivers": 1,
+      "size_in": 15,
+      "back": "closed",
+      "baffle_m": 0.6,
+      "speaker_confidence": "medium"
+    },
+    "Bass_Cab_ORANGEOBC810": {
+      "name": "Citrus OBC810",
+      "speaker": "bp102",
+      "speakers": [
+        "bp102",
+        "deltalite2510"
+      ],
+      "drivers": 8,
+      "size_in": 10,
+      "back": "closed",
+      "baffle_m": 0.66,
+      "speaker_confidence": "high"
+    },
+    "Bass_Cab_TW215BC": {
+      "name": "Bender Bass 2x15",
+      "speaker": "c15n",
+      "speakers": [
+        "c15n",
+        "p15n",
+        "cb158"
+      ],
+      "drivers": 2,
+      "size_in": 15,
+      "back": "ported",
+      "baffle_m": 0.85,
+      "speaker_confidence": "medium"
+    },
+    "Cab_CABINETRADIO": {
+      "name": "Console Radio",
+      "voicing": "cabinetradio",
+      "speaker": "g12m",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.5,
+      "speaker_confidence": "n/a",
+      "speakers": [],
+      "novelty": true
+    },
+    "Cab_GRAMOPHONE": {
+      "name": "Gramophone",
+      "voicing": "gramophone",
+      "speaker": "g12m",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.5,
+      "speaker_confidence": "n/a",
+      "speakers": [],
+      "novelty": true
+    },
+    "Cab_JUKEBOX": {
+      "name": "Jukebox",
+      "voicing": "jukebox",
+      "speaker": "g12m",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.5,
+      "speaker_confidence": "n/a",
+      "speakers": [],
+      "novelty": true
+    },
+    "Cab_BOOMBOX": {
+      "name": "Boom Box",
+      "voicing": "boombox",
+      "speaker": "g12m",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.5,
+      "speaker_confidence": "n/a",
+      "speakers": [],
+      "novelty": true
+    },
+    "Cab_AUDIOPHILE": {
+      "name": "Audiophile Hi-Fi",
+      "voicing": "audiophile",
+      "speaker": "g12m",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.5,
+      "speaker_confidence": "n/a",
+      "speakers": [],
+      "novelty": true
+    },
+    "Cab_VINTAGEHIFI": {
+      "name": "Vintage Hi-Fi",
+      "voicing": "vintagehifi",
+      "speaker": "g12m",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.5,
+      "speaker_confidence": "n/a",
+      "speakers": [],
+      "novelty": true
+    },
+    "Cab_PA600C": {
+      "name": "PS-600 PA",
+      "voicing": "pa600c",
+      "speaker": "g12m",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.5,
+      "speaker_confidence": "n/a",
+      "speakers": [],
+      "novelty": true
+    },
+    "Cab_PA999C": {
+      "name": "PA-999C",
+      "voicing": "pa999c",
+      "speaker": "g12m",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.5,
+      "speaker_confidence": "n/a",
+      "speakers": [],
+      "novelty": true
+    },
+    "Cab_PA1152C": {
+      "name": "PS-115.2C PA",
+      "voicing": "pa1152c",
+      "speaker": "g12m",
+      "drivers": 1,
+      "size_in": 12,
+      "back": "closed",
+      "baffle_m": 0.5,
+      "speaker_confidence": "n/a",
+      "speakers": [],
+      "novelty": true
+    }
+  }
+}

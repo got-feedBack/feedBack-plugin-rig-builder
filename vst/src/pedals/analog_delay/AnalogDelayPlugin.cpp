@@ -34,8 +34,12 @@ class AnalogDelayPlugin : public Plugin
         c.feedback = params[kFeedback];
         c.mix = params[kMix];
         c.tone = 0.55f;
-        c.rate = 0.08f;
-        c.depth = 0.18f;
+        // MF-104M panel: SHORT/LONG doubles the delay window; the LFO section
+        // modulates the BBD clock. Defaults equal the old hardcoded values.
+        c.range = params[kRange] < 0.5f ? 0.5f : 1.0f;   // 0.5 = neutral window
+        c.rate = params[kRate];
+        c.depth = params[kAmount];
+        c.shape = params[kWaveform];
         core.setControls(c);
     }
 

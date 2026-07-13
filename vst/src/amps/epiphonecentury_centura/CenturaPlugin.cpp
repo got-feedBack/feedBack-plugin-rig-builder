@@ -213,7 +213,7 @@ public:
 };
 
 static constexpr float kCenturaMakeup = 3.50f;   // tuned offline (-14 dBFS @ kDef)
-static constexpr float kCenturaLvl    = 0.571f;
+static constexpr float kCenturaLvl    = 0.722f;
 
 class CenturaPlugin : public Plugin {
     CenturaChannel L, R;

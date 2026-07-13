@@ -71,7 +71,7 @@
   // square toggle switch. Default = red (Eden Bass Boost / Mid Shift, Wah Auto…).
   // dark=true = the black push-button look of the GK 800RB voicing/pad switches:
   // black cap with a grey rocker nub that rides up when engaged + a green pip.
-  function switchSquare(d, cx, cy, hs, on, dark) { const c = d.ctx;
+  function switchSquare(d, cx, cy, hs, on, dark, col) { const c = d.ctx;
     if (dark) {
       rr(c, cx-hs, cy-hs, hs*2, hs*2, 3); c.fillStyle = on ? rgb(54,58,54) : rgb(26,26,28); c.fill();
       rr(c, cx-hs, cy-hs, hs*2, hs*2, 3); c.strokeStyle = rgb(96,98,102); c.lineWidth = 1.2; c.stroke();
@@ -80,7 +80,11 @@
       if (on) { c.beginPath(); c.arc(cx, cy+hs*0.55, hs*0.18, 0, 7); c.fillStyle = rgb(70,210,80); c.fill(); }
       return;
     }
-    rr(c, cx-hs, cy-hs, hs*2, hs*2, 3); c.fillStyle = on ? rgb(208,40,36) : rgb(78,22,20); c.fill();
+    // col (optional [r,g,b]) overrides the default red cap so custom gear can
+    // recolour a switch; off state uses a dimmed version of the same hue.
+    const onC  = col ? rgb(col[0], col[1], col[2]) : rgb(208,40,36);
+    const offC = col ? rgb(col[0]*0.38, col[1]*0.38, col[2]*0.38) : rgb(78,22,20);
+    rr(c, cx-hs, cy-hs, hs*2, hs*2, 3); c.fillStyle = on ? onC : offC; c.fill();
     rr(c, cx-hs, cy-hs, hs*2, hs*2, 3); c.strokeStyle = rgb(20,12,10); c.lineWidth = 1.5; c.stroke();
     if (on) { c.beginPath(); c.arc(cx, cy, hs*0.34, 0, 7); c.fillStyle = rgb(255,180,170); c.fill(); } }
 
@@ -118,11 +122,14 @@
 
   // horizontal slider/fader (Maestro-style): recessed track + draggable cap with
   // a white indicator line. val 0..1 left→right. Wired via spec.sliders in attach().
-  function hSlider(d, x0, x1, y, val) { const c = d.ctx, s = d.s;
+  function hSlider(d, x0, x1, y, val, col) { const c = d.ctx, s = d.s;
     rr(c, x0, y-2.5*s, x1-x0, 5*s, 2.5*s); c.fillStyle = rgb(18,18,20); c.fill();
     rr(c, x0, y-2.5*s, x1-x0, 5*s, 2.5*s); c.strokeStyle = rgb(64,66,70); c.lineWidth = 0.8*s; c.stroke();
     const cx = x0 + clamp(val,0,1)*(x1-x0), cw = 13*s, ch = 22*s;
-    const g = c.createLinearGradient(cx-cw/2, y-ch/2, cx+cw/2, y+ch/2); g.addColorStop(0, rgb(48,48,52)); g.addColorStop(1, rgb(18,18,20));
+    // col (optional [r,g,b]) tints the draggable cap for custom gear.
+    const capHi = col ? rgb(clamp(col[0]+30,0,255),clamp(col[1]+30,0,255),clamp(col[2]+30,0,255)) : rgb(48,48,52);
+    const capLo = col ? rgb(col[0]*0.45,col[1]*0.45,col[2]*0.45) : rgb(18,18,20);
+    const g = c.createLinearGradient(cx-cw/2, y-ch/2, cx+cw/2, y+ch/2); g.addColorStop(0, capHi); g.addColorStop(1, capLo);
     rr(c, cx-cw/2, y-ch/2, cw, ch, 3*s); c.fillStyle = g; c.fill();
     rr(c, cx-cw/2, y-ch/2, cw, ch, 3*s); c.strokeStyle = rgb(8,8,10); c.lineWidth = 1*s; c.stroke();
     c.beginPath(); c.moveTo(cx, y-ch/2+3*s); c.lineTo(cx, y+ch/2-3*s); c.strokeStyle = rgb(228,230,234); c.lineWidth = 1.4*s; c.stroke(); }
@@ -444,12 +451,6 @@
     tick:rgb(74,76,82), ptr:rgb(40,42,48),
     draw(d){ const {ctx:c,W,H,s}=d; ibanezBody(d); const dk=rgb(46,48,54);
       knobIds.forEach(k=> textSpaced(d,k.cx*d.W,.235*d.H,F.barlow,k.lblPx||8,dk,k.lbl,0.2));
-      // decorative MODE slider on the panel
-      const mx=W*.26, my=H*.315, mw=W*.20, mh=8*s;
-      rr(c,mx,my-mh/2,mw,mh,3*s); c.fillStyle=rgb(70,72,78); c.fill();
-      rr(c,mx+mw*0.34,my-mh*1.1,mw*0.22,mh*2.2,2*s); c.fillStyle=rgb(228,230,234); c.fill();
-      rr(c,mx+mw*0.34,my-mh*1.1,mw*0.22,mh*2.2,2*s); c.strokeStyle=rgb(90,92,98); c.lineWidth=0.8*s; c.stroke();
-      textSpaced(d,mx+mw/2,my+13*s,F.barlow,6.5,dk,'MODE',0.4);
       // red status LED
       ledDot(d, W*.66, H*.315, true, 224,60,52);
       // OUT / IN jack legends
@@ -1372,14 +1373,6 @@
       // knob labels (RS names)
       textSpaced(d,.35*W,.225*H,F.barlow,9,ink,'TONE',0.3);
       textSpaced(d,.65*W,.225*H,F.barlow,9,ink,'MIX',0.3);
-      // decorative toggles (Bright/Pure, Mids/Low)
-      const tog=(tx,up)=>{ const tw=8*s,th=18*s,ty=H*.155; rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.fillStyle=rgb(24,24,26); c.fill();
-        rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.strokeStyle=rgb(8,8,10); c.lineWidth=0.8*s; c.stroke();
-        const ly=ty+(up?-1:1)*th*0.2; const lg=c.createLinearGradient(tx-3*s,ly-4*s,tx+3*s,ly+4*s); lg.addColorStop(0,rgb(228,230,234)); lg.addColorStop(1,rgb(150,153,160));
-        rr(c,tx-3.2*s,ly-5*s,6.4*s,10*s,2*s); c.fillStyle=lg; c.fill(); };
-      tog(.165*W,true); tog(.835*W,false);
-      textSpaced(d,.165*W,.235*H,F.barlow,5.5,ink,'BRIGHT',0.1); textSpaced(d,.165*W,.265*H,F.barlow,5.5,ink,'PURE',0.1);
-      textSpaced(d,.835*W,.235*H,F.barlow,5.5,ink,'MIDS',0.1); textSpaced(d,.835*W,.265*H,F.barlow,5.5,ink,'LOW',0.1);
       // wordmark + brand
       textC(d,.46*W,.420*H,F.anton,48,ink,'OCTUP');
       textSpaced(d,.50*W,.500*H,F.barlow,11,ink,'FALCON',1.5);
@@ -1407,11 +1400,6 @@
       textSpaced(d,.245*W,.165*H,F.barlow,8.5,wt,'PITCH1',0.2);
       textSpaced(d,.500*W,.120*H,F.barlow,8,wt,'TONE',0.3);
       textSpaced(d,.755*W,.165*H,F.barlow,8.5,wt,'MIX',0.3);
-      // blue slide switches (MF-102 signature)
-      const blueSlide=(sx)=>{ const sw=22*s, sh=11*s, sy=H*.43; rr(c,sx-sw/2,sy-sh/2,sw,sh,3*s); c.fillStyle=rgb(28,30,36); c.fill();
-        rr(c,sx-sw/2,sy-sh/2,sw,sh,3*s); c.strokeStyle=rgb(10,10,12); c.lineWidth=0.8*s; c.stroke();
-        rr(c,sx-sw*0.40,sy-sh*0.30,sw*0.5,sh*0.6,2*s); c.fillStyle=rgb(74,142,212); c.fill(); };
-      blueSlide(.245*W); blueSlide(.755*W);
       // centre LED column (LEVEL / LFO / BYPASS)
       [['LEVEL',.34],['LFO',.43],['BYPASS',.52]].forEach(p=>{ textSpaced(d,.50*W,(p[1]-0.035)*H,F.barlow,5.5,wt,p[0],0.2); ledDot(d,.50*W,p[1]*H,true,150,196,255); });
       // foog logo + model + footswitch
@@ -1522,12 +1510,6 @@
       textSpaced(d,.40*W,.095*H,F.anton,18,wt,'RING MODULATOR',0.5);
       c.strokeStyle=wt; c.lineWidth=1.4*s; c.beginPath();
       for(let i=0;i<=30;i++){ const x=.31*W+i*(.20*W/30), y=.155*H+Math.sin(i*0.8)*3.5*s*(0.4+i/30); i?c.lineTo(x,y):c.moveTo(x,y); } c.stroke();
-      // PITCH RANGE HIGH/LOW toggle (decorative)
-      const tx=.905*W, ty=.135*H, tw=8*s, th=18*s; rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.fillStyle=rgb(150,153,160); c.fill();
-      rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.strokeStyle=rgb(70,72,78); c.lineWidth=0.8*s; c.stroke();
-      c.beginPath(); c.arc(tx,ty-th*0.22,2.4*s,0,7); c.fillStyle=rgb(232,234,238); c.fill();
-      textSpaced(d,.905*W,.052*H,F.barlow,6,wt,'HIGH',0.2); textSpaced(d,.905*W,.215*H,F.barlow,6,wt,'LOW',0.2);
-      textSpaced(d,.795*W,.135*H,F.barlow,6,wt,'PITCH RANGE',0.1);
       // silver scale strips behind each slider (engine draws the sliders on top)
       [.30,.42,.54,.66].forEach(y=>{ rr(c,.33*W,(y-0.045)*H,.59*W,.09*H,4*s); c.fillStyle=rgb(182,184,190); c.fill();
         c.strokeStyle=rgb(64,66,70); c.lineWidth=0.8*s; for(let i=0;i<=10;i++){ const xx=.33*W+i*(.59*W/10); c.beginPath(); c.moveTo(xx,(y-0.028)*H); c.lineTo(xx,(y+0.028)*H); c.stroke(); } });
@@ -1577,7 +1559,7 @@
       footRound(d,W*.80,H*.705,20*s); } };
 
   // Enbiggenator — TC Electronic Mimiq Doubler-style: cream box, three black
-  // knobs, a DUBS 1/2/3 toggle, big grey block wordmark, true-bypass stomp,
+  // knobs, big grey block wordmark, true-bypass stomp,
   // side jacks. Parody (LC Quimical / Mime). RS knob names. Rate0 Depth1 Mix2.
   P.mime = { w:280,h:470, knobs:[
       {id:0,cx:.55,cy:.155,r:.066,style:'davies'},
@@ -1589,14 +1571,6 @@
       const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(228,224,212)); bg.addColorStop(1,rgb(206,202,190));
       rr(c,m,m,W-2*m,H-2*m,12*s); c.fillStyle=bg; c.fill();
       rr(c,m,m,W-2*m,H-2*m,12*s); c.strokeStyle='rgba(0,0,0,0.3)'; c.lineWidth=2*s; c.stroke();
-      // DUBS 1/2/3 toggle (decorative)
-      const tx=.20*W, ty=.165*H, tw=8*s, th=24*s;
-      rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.fillStyle=rgb(40,40,44); c.fill();
-      rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.strokeStyle=rgb(10,10,12); c.lineWidth=0.8*s; c.stroke();
-      const lg=c.createLinearGradient(tx-4*s,ty-th*0.32,tx+4*s,ty-th*0.12); lg.addColorStop(0,rgb(228,230,234)); lg.addColorStop(1,rgb(150,153,160));
-      rr(c,tx-3.5*s,ty-th*0.40,7*s,9*s,2*s); c.fillStyle=lg; c.fill();
-      textSpaced(d,.295*W,.095*H,F.barlow,7,ink,'DUBS',0.3);
-      ['1','2','3'].forEach((n,i)=> textSpaced(d,.285*W,(.128+i*.034)*H,F.barlow,6,ink,n,0.1));
       // knob labels (RS names)
       textSpaced(d,.55*W,.072*H,F.barlow,8,ink,'RATE',0.3);
       textSpaced(d,.34*W,.252*H,F.barlow,8,ink,'DEPTH',0.3);
@@ -1901,7 +1875,7 @@
       footRound(d,W*.80,H*.82,16*s); textSpaced(d,.80*W,.95*H,F.barlow,7.5,wt,'HARD / SOFT',0.3); } };
 
   // Trem Ole — Keeley DynaTrem-style: crimson brushed top panel with 4 black
-  // fluted knobs + a 3-way mode toggle, over a tan tweed grille-cloth bottom
+  // fluted knobs, over a tan tweed grille-cloth bottom
   // with a gold 'DYNA-TREM' plaque + script brand + chrome stomp. Parody
   // (Peeley). RS knob names. Sens0 Attack1 Release2 Mix3.
   P.dynatrem = { w:280,h:460, knobs:[
@@ -1937,17 +1911,6 @@
       textSpaced(d,.745*W,.080*H,F.barlow,9,wt,'ATTACK',0.4);
       textSpaced(d,.255*W,.280*H,F.barlow,9,wt,'RELEASE',0.3);
       textSpaced(d,.745*W,.280*H,F.barlow,9,wt,'MIX',0.4);
-      // 3-way mode toggle + printed mode legends (centre, between top knobs)
-      textC(d,.455*W,.145*H,F.barlow,5,wt,'DYNAMIC RATE','right');
-      textC(d,.455*W,.178*H,F.barlow,5,wt,'DYNAMIC DEPTH','right');
-      textC(d,.455*W,.211*H,F.barlow,5,wt,'HARMONIC TREM','right');
-      const tx=.585*W, ty=.178*H, tw=8*s, th=21*s;
-      rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.fillStyle=rgb(16,16,18); c.fill();
-      rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.strokeStyle=rgb(6,6,8); c.lineWidth=s; c.stroke();
-      const lvy=ty-th*0.15;
-      const lg=c.createLinearGradient(tx-4*s,lvy-5*s,tx+4*s,lvy+5*s); lg.addColorStop(0,rgb(228,230,236)); lg.addColorStop(1,rgb(150,153,160));
-      rr(c,tx-3.5*s,lvy-5.5*s,7*s,11*s,2*s); c.fillStyle=lg; c.fill();
-      rr(c,tx-3.5*s,lvy-5.5*s,7*s,11*s,2*s); c.strokeStyle=rgb(70,72,78); c.lineWidth=0.8*s; c.stroke();
       // 'REVERB' printed label (lower-left of red panel)
       textSpaced(d,.255*W,.460*H,F.barlow,7,cream,'REVERB',0.4);
       // brand script + gold DYNA-TREM plaque on the tweed
@@ -1978,13 +1941,9 @@
       const px=W*.085, py=H*.085, pw=W*.83, ph=H*.80;
       rr(c,px,py,pw,ph,8*s); c.fillStyle=rgb(20,20,22); c.fill();
       rr(c,px,py,pw,ph,8*s); c.strokeStyle=rgb(224,226,230); c.lineWidth=1.6*s; c.stroke();
-      // Vibe LED + label + mini toggle (top-left)
+      // Vibe LED + label (top-left)
       ledDot(d,W*.175,H*.150,true,234,238,242);
       textSpaced(d,W*.265,H*.150,F.barlow,7,wt,'VIBE',0.3);
-      const vt=W*.355, vy=H*.150, vw=7*s, vh=17*s;
-      rr(c,vt-vw/2,vy-vh/2,vw,vh,2.5*s); c.fillStyle=rgb(150,153,160); c.fill();
-      rr(c,vt-vw/2,vy-vh/2,vw,vh,2.5*s); c.strokeStyle=rgb(70,72,78); c.lineWidth=0.8*s; c.stroke();
-      c.beginPath(); c.arc(vt,vy-vh*0.22,2.4*s,0,7); c.fillStyle=rgb(232,234,238); c.fill();
       // knob labels (RS names)
       textSpaced(d,.29*W,.435*H,F.barlow,9.5,wt,'SPEED',0.5);
       textSpaced(d,.71*W,.435*H,F.barlow,9.5,wt,'MIX',0.5);
@@ -2213,20 +2172,6 @@
       textSpaced(d,.12*W,.165*H,F.barlow,8.5,wt,'TIME',0.3);
       textSpaced(d,.50*W,.165*H,F.barlow,8,wt,'FEEDBACK',0.2);
       textSpaced(d,.88*W,.165*H,F.barlow,8.5,wt,'MIX',0.3);
-      // decorative bat toggles
-      const tog=(tx,up)=>{ const tw=11*s, th=20*s, ty=H*.37;
-        rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.fillStyle=rgb(26,26,28); c.fill();
-        rr(c,tx-tw/2,ty-th/2,tw,th,3*s); c.strokeStyle=rgb(6,6,8); c.lineWidth=0.9*s; c.stroke();
-        const ly=ty+(up?-1:1)*th*0.20; const lg=c.createLinearGradient(tx-4*s,ly-5*s,tx+4*s,ly+5*s);
-        lg.addColorStop(0,rgb(40,40,42)); lg.addColorStop(1,rgb(14,14,16));
-        rr(c,tx-4*s,ly-6*s,8*s,12*s,2*s); c.fillStyle=lg; c.fill(); };
-      tog(.26*W,true); tog(.38*W,false); tog(.62*W,true); tog(.73*W,false);
-      const dim=rgb(176,176,172);
-      textSpaced(d,.26*W,.205*H,F.barlow,6.5,dim,'ECHO',0.2); textSpaced(d,.26*W,.535*H,F.barlow,6.5,dim,'REVERB',0.2);
-      textSpaced(d,.38*W,.205*H,F.barlow,6.5,dim,'BRIGHT',0.2); textSpaced(d,.38*W,.535*H,F.barlow,6.5,dim,'NORMAL',0.2);
-      textSpaced(d,.675*W,.115*H,F.barlow,6.5,dim,'DELAY',0.2);
-      textSpaced(d,.62*W,.205*H,F.barlow,6.5,dim,'LONG',0.2); textSpaced(d,.73*W,.205*H,F.barlow,6.5,dim,'SHORT',0.2);
-      textSpaced(d,.675*W,.535*H,F.barlow,6.5,dim,'DELAY OFF',0.2);
       // faded-teal lower panel
       const ty0=H*.62, ty1=H*.91; const tg=c.createLinearGradient(0,ty0,0,ty1); tg.addColorStop(0,rgb(156,210,202)); tg.addColorStop(1,rgb(120,184,176));
       rr(c,W*.035,ty0,W*.93,ty1-ty0,5*s); c.fillStyle=tg; c.fill();
@@ -2486,7 +2431,7 @@
       textSpaced(d,.50*W,.930*H,F.barlow,6.5,red,'MECHANISMS OF MUSIC',0.4); } };
 
   // Tube Spring — Source Audio True Spring-style: brushed gunmetal box, two cream
-  // knobs, a SHORT/LONG/TANK toggle, script wordmark with a spring squiggle, chrome
+  // knobs, script wordmark with a spring squiggle, chrome
   // stomp + brand. Parody (Index Audio / Real Spring Reverb). RS knob names.
   // Mix0 Depth1.
   P.realspring = { w:280,h:420, knobs:[
@@ -2504,15 +2449,6 @@
       ledDot(d,W*.50,H*.085,true,224,60,50);
       textSpaced(d,.27*W,.085*H,F.barlow,9.5,wt,'MIX',0.4);
       textSpaced(d,.73*W,.085*H,F.barlow,9.5,wt,'DEPTH',0.4);
-      // SHORT/LONG/TANK 3-way toggle (decorative)
-      const tx=.50*W, ty=.43*H;
-      rr(c,tx-5*s,ty-9*s,10*s,18*s,3*s); c.fillStyle=rgb(30,30,32); c.fill();
-      rr(c,tx-5*s,ty-9*s,10*s,18*s,3*s); c.strokeStyle=rgb(8,8,10); c.lineWidth=s; c.stroke();
-      const lg=c.createLinearGradient(tx-4*s,ty-6*s,tx+4*s,ty); lg.addColorStop(0,rgb(228,230,236)); lg.addColorStop(1,rgb(140,143,150));
-      rr(c,tx-3.5*s,ty-7*s,7*s,8*s,2*s); c.fillStyle=lg; c.fill();
-      textSpaced(d,.355*W,.415*H,F.barlow,6.5,wt,'SHORT',0.2);
-      textSpaced(d,.50*W,.375*H,F.barlow,6.5,wt,'LONG',0.2);
-      textSpaced(d,.645*W,.415*H,F.barlow,6.5,wt,'TANK',0.2);
       // 'Real Spring' script + spring squiggle + 'REVERB'
       textC(d,.50*W,.575*H,F.ink,38,wt,'Real Spring');
       c.strokeStyle=wt; c.lineWidth=1.8*s; c.beginPath();
@@ -2618,16 +2554,6 @@
       textC(d,.50*W,.392*H,F.crete,12,gold,'Level');
       textC(d,.66*W,.392*H,F.crete,12,gold,'Mode');
       textC(d,.82*W,.392*H,F.crete,12,gold,'Voltage');
-      // two decorative 3-way mode toggles
-      const tog=(tx,ty)=>{ const w0=11*s,h0=25*s;
-        rr(c,tx-w0/2,ty-h0/2,w0,h0,4*s); c.fillStyle=rgb(18,20,28); c.fill();
-        rr(c,tx-w0/2,ty-h0/2,w0,h0,4*s); c.strokeStyle=rgb(8,9,14); c.lineWidth=1*s; c.stroke();
-        const g=c.createLinearGradient(tx-5*s,ty-8*s,tx+5*s,ty+8*s); g.addColorStop(0,rgb(232,234,240)); g.addColorStop(1,rgb(150,153,162));
-        rr(c,tx-5*s,ty-9*s,10*s,15*s,3*s); c.fillStyle=g; c.fill();
-        rr(c,tx-5*s,ty-9*s,10*s,15*s,3*s); c.strokeStyle=rgb(70,72,80); c.lineWidth=0.8*s; c.stroke(); };
-      tog(.135*W,.435*H); tog(.865*W,.435*H);
-      textC(d,.135*W,.498*H,F.crete,13,gold,'Highs');
-      textC(d,.865*W,.498*H,F.crete,13,gold,'Boost');
       // gold serif logo
       textC(d,.5*W,.560*H,F.crete,30,gold,'CARL');
       textC(d,.5*W,.610*H,F.crete,30,gold,'UNLIMITED');
@@ -2670,8 +2596,8 @@
     tick:rgb(150,152,158), ptr:rgb(238,240,244),
     draw(d,values){ const {ctx:c,W,H,s}=d; foogBody(d); const wt=rgb(226,228,232), dim=rgb(155,158,164);
       textC(d,.325*W,.060*H,F.crete,18,wt,'foogermooger');
-      textC(d,.665*W,.058*H,F.barlow,15,wt,'FM-108M');
-      textC(d,.675*W,.088*H,F.barlow,9,wt,'CLUSTER FLUX');
+      textC(d,.675*W,.052*H,F.crete,13,wt,'FM108');
+      textC(d,.675*W,.080*H,F.barlow,7,wt,'CLUSTERFLUX');
 
       const panel=(x,y,w,h,title)=>{
         rr(c,x*W,y*H,w*W,h*H,8*s); c.strokeStyle=wt; c.lineWidth=1.5*s; c.stroke();
@@ -2697,136 +2623,220 @@
       textC(d,.710*W,.178*H,F.barlow,9.5,wt,'SHAPE');
       textC(d,.710*W,.405*H,F.barlow,9.5,wt,'RATE');
       textC(d,.710*W,.590*H,F.barlow,9.5,wt,'AMOUNT');
-      ledDot(d,.593*W,.352*H,true,220,70,65);
+      ledDot(d,.618*W,.408*H,true,220,70,65);
       ledDot(d,.315*W,.750*H,true,120,52,48);
-      ledDot(d,.505*W,.750*H,true,140,140,100);
-      ledDot(d,.710*W,.750*H,true,140,140,100);
+      ledDot(d,.505*W,.750*H,true,110,205,120);
+      ledDot(d,.710*W,.750*H,true,110,205,120);
       textC(d,.315*W,.785*H,F.barlow,7.5,dim,'MIDI');
       textC(d,.505*W,.785*H,F.barlow,7.5,dim,'LEVEL');
-      textC(d,.710*W,.785*H,F.barlow,7.5,dim,'BYPASS');
-      textC(d,.320*W,.865*H,F.barlow,10,wt,'LFO TAP TEMPO');
-      textC(d,.710*W,.865*H,F.barlow,10,wt,'BYPASS');
+      textC(d,.710*W,.785*H,F.barlow,7.5,dim,'ACTIVE');
+      textC(d,.320*W,.865*H,F.barlow,10,wt,'LFO SYNC');
+      textC(d,.710*W,.865*H,F.barlow,10,wt,'ACTIVE');
       footRound(d,.320*W,.915*H,15*s);
       footRound(d,.710*W,.915*H,15*s);
       textC(d,.500*W,.982*H,F.crete,18,wt,'foog');
 
       // Range switch is drawn manually; sw3 only provides the invisible hit-area.
       const on = values && values[1] > 0.5;
-      rr(c,.266*W,.435*H,.098*W,.035*H,2*s); c.fillStyle=rgb(120,25,22); c.fill();
-      rr(c,(on?.315:.266)*W,.430*H,.050*W,.048*H,2*s); c.fillStyle=rgb(228,50,42); c.fill();
+      rr(c,.253*W,.437*H,.124*W,.030*H,3*s); c.fillStyle=rgb(110,26,22); c.fill();
+      rr(c,(on?.315:.253)*W,.431*H,.062*W,.042*H,3*s); c.fillStyle=rgb(226,58,46); c.fill();
+      rr(c,(on?.315:.253)*W,.431*H,.062*W,.042*H,3*s); c.strokeStyle=rgb(60,16,12); c.lineWidth=s; c.stroke();
     } };
   P.fm107 = P.fm108;
 
-  // Analog Delay — Moog MF-104M-style: the foog (moogerfooger) template.
-  // RS knob names. 3 RS knobs: Time0 Feedback1 Mix2.
-  P.fm104 = foogSpec(300,420,
-    [{id:0,cx:.32,cy:.33,lbl:'TIME'},{id:1,cx:.68,cy:.33,lbl:'FEEDBACK',lblPx:7.5},
-     {id:2,cx:.50,cy:.63,lbl:'MIX'}],
-    'FM104');
-
-  // Bob Filter — Moog MF-105 MuRF-style: custom foog layout (not the simple
-  // foogSpec box) — two knob rows, decorative LFO switch, the signature
-  // 8-band FILTERS slider bank, an LED row + foog logo + stomp.
-  // Real controls: Drive0 Output1 Pattern2 Rate3 Envelope4 Mix5 Mode6.
-  P.fm105 = { w:340,h:500, knobs:[
-      {id:0,cx:.20,cy:.165,r:.064,style:'moog'},
-      {id:1,cx:.50,cy:.165,r:.064,style:'moog'},
-      {id:2,cx:.80,cy:.165,r:.064,style:'moog'},
-      {id:3,cx:.24,cy:.345,r:.062,style:'moog'},
-      {id:4,cx:.50,cy:.345,r:.062,style:'moog'},
-      {id:5,cx:.74,cy:.345,r:.062,style:'moog'}],
-    switches:[{id:6,cx:.90,cy:.345,hs:.032}],
+  // Analog Delay — Moog MF-104M full real panel (photo): DELAY box (TIME with
+  // .1-.6 dial marks + SHORT/LONG white rocker + FEEDBACK), center column
+  // (DRIVE / OUTPUT LEVEL / MIX), LFO box (WAVEFORM / RATE .05-50 / AMOUNT),
+  // TIME-red LEVEL-yellow BYPASS-green LEDs, TAP TEMPO + BYPASS stomps.
+  // Params: Drive0 Output1 Time2 Feedback3 Mix4 Range5 Rate6 Amount7 Wave8.
+  P.fm104 = { w:340,h:520, knobs:[
+      {id:2,cx:.245,cy:.200,r:.066,style:'moog'},   // TIME
+      {id:3,cx:.245,cy:.475,r:.058,style:'moog'},   // FEEDBACK
+      {id:0,cx:.50,cy:.160,r:.042,style:'moog'},    // DRIVE
+      {id:1,cx:.50,cy:.330,r:.042,style:'moog'},    // OUTPUT LEVEL
+      {id:4,cx:.50,cy:.490,r:.042,style:'moog'},    // MIX
+      {id:8,cx:.755,cy:.200,r:.054,style:'moog'},   // LFO WAVEFORM
+      {id:6,cx:.755,cy:.390,r:.056,style:'moog'},   // LFO RATE
+      {id:7,cx:.755,cy:.565,r:.056,style:'moog'}],  // LFO AMOUNT
+    switches:[{id:5,cx:.245,cy:.330,hs:.036}],
     tick:rgb(150,152,158), ptr:rgb(238,240,244),
-    draw(d,values){ const {ctx:c,W,H,s}=d; foogBody(d); const wt=rgb(226,228,232), dim=rgb(150,152,158);
-      // brand + model
-      textC(d,.34*W,.052*H,F.crete,17,wt,'foogermooger');
-      textC(d,.74*W,.052*H,F.crete,15,wt,'FM105');
-      // knob labels (real panel names) above each knob
-      const KL=[['DRIVE',.20,.165],['OUTPUT',.50,.165],['PATTERN',.80,.165],
-                ['RATE',.24,.345],['ENVELOPE',.50,.345],['MIX',.74,.345]];
-      KL.forEach(k=> textSpaced(d,k[1]*W,(k[2]-.072-.018)*H,F.barlow,8,wt,k[0],0.3));
-      // MODE is the Bass/Mids range selector (engine draws the toggle via `switches`).
-      const mv=(values&&values[6]!=null)?values[6]:1;
-      textSpaced(d,.90*W,(.345-.072-.018)*H,F.barlow,7.5,wt,'MODE',0.3);
-      textSpaced(d,.90*W,.410*H,F.barlow,6.2,mv<0.5?wt:dim,'MIDS',0.2);
-      textSpaced(d,.90*W,.440*H,F.barlow,6.2,mv>=0.5?wt:dim,'BASS',0.2);
-      // decorative LFO slide switch between the 2nd-row knobs
-      const slide=(sx,on,lbl)=>{ const sw=15*s, sh=8*s, sy=.345*H;
-        rr(c,sx-sw/2,sy-sh/2,sw,sh,3*s); c.fillStyle=rgb(38,38,42); c.fill();
-        rr(c,sx-sw/2,sy-sh/2,sw,sh,3*s); c.strokeStyle=rgb(10,10,12); c.lineWidth=0.8*s; c.stroke();
-        rr(c,sx+(on?1:-1)*sw*0.18-sw*0.16,sy-sh/2+1.2*s,sw*0.32,sh-2.4*s,2*s); c.fillStyle=rgb(228,230,234); c.fill();
-        textSpaced(d,sx,(.345-.030)*H,F.barlow,5.5,wt,lbl,0.2); };
-      slide(.375*W,true,'LFO');
-      // FILTERS slider bank (decorative, MuRF signature)
-      const bx=W*.105, bw=W*.81, by=H*.45, bh=H*.20;
-      rr(c,bx,by,bw,bh,7*s); c.strokeStyle=wt; c.lineWidth=1.6*s; c.stroke();
-      c.save(); c.translate(bx+10*s,by+bh/2); c.rotate(-Math.PI/2); textSpaced(d,0,0,F.barlow,8,wt,'FILTERS',0.6); c.restore();
-      const caps=[.30,.60,.25,.82,.18,.48,.70,.38], n=8, tx0=W*.24, tx1=W*.86, tTop=by+bh*0.20, tBot=by+bh*0.86;
-      for(let i=0;i<n;i++){ const x=tx0+i*(tx1-tx0)/(n-1);
-        c.strokeStyle=rgb(150,152,158); c.lineWidth=1.4*s; c.beginPath(); c.moveTo(x,tTop); c.lineTo(x,tBot); c.stroke();
-        const cy2=tTop+caps[i]*(tBot-tTop);
-        const cg=c.createRadialGradient(x-2*s,cy2-2*s,1*s,x,cy2,7*s); cg.addColorStop(0,rgb(238,240,244)); cg.addColorStop(1,rgb(150,153,160));
-        rr(c,x-6*s,cy2-4*s,12*s,8*s,2.5*s); c.fillStyle=cg; c.fill();
-        rr(c,x-6*s,cy2-4*s,12*s,8*s,2.5*s); c.strokeStyle=rgb(40,42,46); c.lineWidth=0.8*s; c.stroke(); }
-      // LED row + labels
-      [['DRIVE',.30],['BYPASS',.50],['RATE',.70]].forEach(p=>{ ledDot(d,p[1]*W,.695*H,true,150,196,255); textSpaced(d,p[1]*W,.730*H,F.barlow,6.5,wt,p[0],0.2); });
-      // foog logo + footswitch
-      textC(d,.50*W,.795*H,F.crete,22,wt,'foog');
-      footRound(d,W*.50,H*.885,18*s); } };
+    draw(d,values){ const {ctx:c,W,H,s}=d; foogBody(d); const wt=rgb(230,232,236), dim=rgb(150,152,158);
+      textC(d,.32*W,.045*H,F.crete,15,wt,'foogermooger');
+      textC(d,.78*W,.034*H,F.crete,13,wt,'FM104');
+      textC(d,.78*W,.060*H,F.barlow,7,wt,'ANALOG DELAY');
+      const panel=(x,y,w,h,title)=>{
+        rr(c,x*W,y*H,w*W,h*H,8*s); c.strokeStyle=wt; c.lineWidth=1.5*s; c.stroke();
+        rr(c,(x+w*.5-.09)*W,(y-.015)*H,.18*W,.030*H,4*s); c.fillStyle=rgb(240,240,238); c.fill();
+        textC(d,(x+w*.5)*W,(y+.0005)*H,F.barlow,10,rgb(22,22,25),title); };
+      panel(.085,.105,.32,.53,'DELAY');
+      panel(.595,.105,.32,.53,'LFO');
+      // labels ABOVE their knobs (like the photo)
+      textSpaced(d,.245*W,.140*H,F.barlow,8.5,wt,'TIME',0.25);
+      textSpaced(d,.245*W,.412*H,F.barlow,8,wt,'FEEDBACK',0.2);
+      textSpaced(d,.50*W,.103*H,F.barlow,8.5,wt,'DRIVE',0.25);
+      textSpaced(d,.50*W,.258*H,F.barlow,7.5,wt,'OUTPUT',0.2);
+      textSpaced(d,.50*W,.278*H,F.barlow,7.5,wt,'LEVEL',0.2);
+      textSpaced(d,.50*W,.434*H,F.barlow,8.5,wt,'MIX',0.25);
+      textSpaced(d,.755*W,.328*H,F.barlow,8,wt,'RATE',0.25);
+      textSpaced(d,.755*W,.502*H,F.barlow,8,wt,'AMOUNT',0.2);
+      // TIME dial marks (.1-.6, photo)
+      textC(d,.170*W,.157*H,F.barlow,6,dim,'.2'); textC(d,.320*W,.157*H,F.barlow,6,dim,'.3');
+      textC(d,.160*W,.252*H,F.barlow,6,dim,'.1'); textC(d,.330*W,.252*H,F.barlow,6,dim,'.6');
+      // FEEDBACK 0-10
+      textC(d,.175*W,.437*H,F.barlow,6,dim,'4'); textC(d,.315*W,.437*H,F.barlow,6,dim,'6');
+      textC(d,.168*W,.528*H,F.barlow,6,dim,'0'); textC(d,.322*W,.528*H,F.barlow,6,dim,'10');
+      // WAVEFORM glyphs hugging the wave knob (sine/tri/square/S&H)
+      textC(d,.678*W,.163*H,F.barlow,7,dim,'∿'); textC(d,.832*W,.163*H,F.barlow,7,dim,'⊓');
+      textC(d,.672*W,.238*H,F.barlow,7,dim,'∧'); textC(d,.838*W,.238*H,F.barlow,7,dim,'⌁');
+      // RATE .05-50 (photo)
+      textC(d,.680*W,.352*H,F.barlow,6,dim,'.8'); textC(d,.830*W,.352*H,F.barlow,6,dim,'3');
+      textC(d,.668*W,.443*H,F.barlow,6,dim,'.05'); textC(d,.842*W,.443*H,F.barlow,6,dim,'50');
+      // AMOUNT 0-10
+      textC(d,.685*W,.527*H,F.barlow,6,dim,'4'); textC(d,.825*W,.527*H,F.barlow,6,dim,'6');
+      textC(d,.678*W,.618*H,F.barlow,6,dim,'0'); textC(d,.832*W,.618*H,F.barlow,6,dim,'10');
+      // SHORT/LONG white rocker (id5), photo-style
+      const rv=(values&&values[5]!=null)?values[5]:0;
+      textSpaced(d,.180*W,.301*H,F.barlow,6.6,rv<0.5?wt:dim,'SHORT',0.15);
+      textSpaced(d,.312*W,.301*H,F.barlow,6.6,rv>=0.5?wt:dim,'LONG',0.15);
+      rr(c,.170*W,.318*H,.150*W,.026*H,3*s); c.fillStyle=rgb(60,60,64); c.fill();
+      rr(c,(rv>=0.5?.245:.170)*W,.313*H,.075*W,.036*H,3*s); c.fillStyle=rgb(238,238,236); c.fill();
+      rr(c,(rv>=0.5?.245:.170)*W,.313*H,.075*W,.036*H,3*s); c.strokeStyle=rgb(40,40,44); c.lineWidth=s; c.stroke();
+      // LED row (photo: TIME red / LEVEL yellow / BYPASS green)
+      const led=(x,lbl,r2,g2,b2)=>{ ledDot(d,x*W,.672*H,true,r2,g2,b2); textSpaced(d,x*W,.700*H,F.barlow,6.5,wt,lbl,0.2); };
+      led(.245,'TIME',225,60,60); led(.50,'LEVEL',215,200,70); led(.755,'BYPASS',90,200,110);
+      // stomps + foog logo
+      textSpaced(d,.28*W,.752*H,F.barlow,8.5,wt,'TAP TEMPO',0.3);
+      textSpaced(d,.72*W,.752*H,F.barlow,8.5,wt,'BYPASS',0.3);
+      footRound(d,W*.28,H*.815,15*s);
+      footRound(d,W*.72,H*.815,15*s);
+      textC(d,.50*W,.930*H,F.crete,24,wt,'foog'); } };
 
-  // Auto Filter — Mu-Tron III-style: brushed-silver box, blue control panel with
+  // Bob Filter — Moog MF-101 Lowpass Filter (envelope filter), from the real
+  // panel photo: black face + wood rails, boxed ENVELOPE / FILTER sections with
+  // white header pills, big silver knobs, orange rockers, 3 LEDs center column,
+  // foog logo bottom-right. Params: Drive0 Output1 Cutoff2 Resonance3
+  // Envelope4 Attack5 Release6 Mix7 Mode8(2/4-pole).
+  P.fm101 = { w:320,h:500, knobs:[
+      {id:4,cx:.27,cy:.215,r:.072,style:'moog'},   // AMOUNT (env amount)
+      {id:7,cx:.27,cy:.505,r:.066,style:'moog'},   // MIX
+      {id:0,cx:.50,cy:.205,r:.048,style:'moog'},   // DRIVE
+      {id:2,cx:.73,cy:.215,r:.072,style:'moog'},   // CUTOFF
+      {id:3,cx:.73,cy:.505,r:.066,style:'moog'}],  // RESONANCE
+    switches:[{id:5,cx:.27,cy:.365,hs:.036},{id:8,cx:.73,cy:.365,hs:.036}],
+    tick:rgb(150,152,158), ptr:rgb(238,240,244),
+    draw(d,values){ const {ctx:c,W,H,s}=d; foogBody(d); const wt=rgb(230,232,236), dim=rgb(150,152,158);
+      // header (photo: moogerfooger™ + LOWPASS FILTER two lines)
+      textC(d,.33*W,.045*H,F.crete,15,wt,'foogermooger');
+      textC(d,.78*W,.036*H,F.barlow,9,wt,'LOWPASS');
+      textC(d,.78*W,.060*H,F.barlow,9,wt,'FILTER');
+      // boxed sections with white header pills (ENVELOPE / FILTER)
+      const panel=(x,y,w,h,title)=>{
+        rr(c,x*W,y*H,w*W,h*H,8*s); c.strokeStyle=wt; c.lineWidth=1.5*s; c.stroke();
+        rr(c,(x+w*.5-.105)*W,(y-.016)*H,.21*W,.032*H,4*s); c.fillStyle=rgb(240,240,238); c.fill();
+        textC(d,(x+w*.5)*W,(y+.001)*H,F.barlow,10.5,rgb(22,22,25),title); };
+      panel(.095,.115,.35,.475,'ENVELOPE');
+      panel(.555,.115,.35,.475,'FILTER');
+      // knob labels
+      textSpaced(d,.27*W,.158*H,F.barlow,8.5,wt,'AMOUNT',0.25);
+      textSpaced(d,.27*W,.425*H,F.barlow,8.5,wt,'MIX',0.25);
+      textSpaced(d,.50*W,.142*H,F.barlow,8.5,wt,'DRIVE',0.25);
+      textSpaced(d,.73*W,.158*H,F.barlow,8.5,wt,'CUTOFF',0.25);
+      textSpaced(d,.73*W,.425*H,F.barlow,8,wt,'RESONANCE',0.2);
+      // dial numbers (photo): 0-10 on amount/mix/resonance, freq marks on cutoff
+      const nums=(cx,cy,r,labels)=>{ const angs=[135,180,225,270,315,405];
+        labels.forEach((t,i)=>{ const a=(angs[i])*Math.PI/180;
+          textC(d,cx*W+Math.cos(a)*(r+.032)*W,cy*H+Math.sin(a)*(r+.032)*W*(H/W)*0+Math.sin(a)*(r+.030)*H*0.72,F.barlow,6,dim,t); }); };
+      nums(.27,.215,.072,['0','2','4','6','8','10']);
+      nums(.27,.505,.066,['0','2','4','6','8','10']);
+      nums(.73,.505,.066,['0','2','4','6','8','10']);
+      textC(d,.635*W,.185*H,F.barlow,6,dim,'250'); textC(d,.825*W,.185*H,F.barlow,6,dim,'1K');
+      textC(d,.645*W,.275*H,F.barlow,6,dim,'20');  textC(d,.815*W,.275*H,F.barlow,6,dim,'12K');
+      // the two orange rockers (photo): SMOOTH/FAST (env attack) + 2-POLE/4-POLE
+      const rocker=(cx,cy,val,l1,l2)=>{
+        const tw=W*.150, th=H*.030;
+        textSpaced(d,(cx-.075)*W,(cy-.028)*H,F.barlow,6.4,val<0.5?wt:dim,l1,0.15);
+        textSpaced(d,(cx+.075)*W,(cy-.028)*H,F.barlow,6.4,val>=0.5?wt:dim,l2,0.15);
+        rr(c,(cx-.075)*W,cy*H-th/2,tw,th,3*s); c.fillStyle=rgb(120,40,10); c.fill();
+        rr(c,(val>=0.5?cx:cx-.075)*W,cy*H-th*0.63,tw*.5,th*1.27,3*s); c.fillStyle=rgb(235,120,30); c.fill();
+        rr(c,(val>=0.5?cx:cx-.075)*W,cy*H-th*0.63,tw*.5,th*1.27,3*s); c.strokeStyle=rgb(60,25,8); c.lineWidth=s; c.stroke(); };
+      // SMOOTH/FAST drives the env ATTACK param (id5): SMOOTH=slow(1), FAST=quick(0).
+      const av=(values&&values[5]!=null)?values[5]:0.15;
+      rocker(.27,.365,av<0.5?1:0,'SMOOTH','FAST');   // painted: right=FAST when attack is fast
+      const mv=(values&&values[8]!=null)?values[8]:1;
+      rocker(.73,.365,mv,'2-POLE','4-POLE');
+      // LED column (photo: LEVEL / ENV / BYPASS)
+      const led=(y,lbl,r2,g2,b2)=>{ ledDot(d,.50*W,y*H,true,r2,g2,b2); textSpaced(d,.50*W,(y-.028)*H,F.barlow,6.5,wt,lbl,0.2); };
+      led(.335,'LEVEL',220,70,60);
+      led(.435,'ENV',255,120,40);
+      led(.535,'BYPASS',150,196,255);
+      // big centered foog logo + stomp (photo)
+      textC(d,.50*W,.660*H,F.crete,30,wt,'foog');
+      footRound(d,W*.50,H*.815,17*s); } };
+
+    // Auto Filter — Mu-Tron III-style: brushed-silver box, blue control panel with
   // black scaled knobs, rainbow maker logo + a red POWER lever, wordmark + brand
   // + chrome stomp. Parody (Bu-Tron III / auditronics). Real controls:
   // Gain0 Peak1 Mode2 Range3 Direction4.
   P.butroniii = { w:300,h:470, knobs:[
-      {id:0,cx:.24,cy:.330,r:.064,style:'pointer',cap:[26,26,28]},
-      {id:1,cx:.56,cy:.330,r:.064,style:'pointer',cap:[26,26,28]}],
-    sw3:[{id:2,cx:.190,cy:.145}],
-    switches:[{id:3,cx:.805,cy:.188,hs:.034},{id:4,cx:.805,cy:.365,hs:.034}],
-    tick:rgb(200,210,230), ptr:rgb(240,242,246),
-    draw(d,values){ const {ctx:c,W,H,s}=d; const m=8*s, wt=rgb(238,240,244), dim=rgb(185,195,220), dk=rgb(30,30,34);
-      // brushed-silver box
+      {id:2,cx:.27,cy:.115,r:.060,style:'pointer',cap:[24,24,26]},   // MODE (LP..HP)
+      {id:1,cx:.27,cy:.300,r:.062,style:'pointer',cap:[24,24,26]},   // PEAK
+      {id:0,cx:.27,cy:.490,r:.068,style:'pointer',cap:[24,24,26]}],  // GAIN
+    switches:[{id:3,cx:.73,cy:.345,hs:.038},{id:4,cx:.73,cy:.445,hs:.038}],
+    tick:rgb(215,222,240), ptr:rgb(240,242,246),
+    draw(d,values){ const {ctx:c,W,H,s}=d; const m=8*s, wt=rgb(240,242,246), dim=rgb(160,168,190), dk=rgb(30,30,34);
+      // brushed-silver body (photo: aluminum wedge)
       c.fillStyle=rgb(8,8,10); c.fillRect(0,0,W,H);
-      const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(196,198,202)); bg.addColorStop(1,rgb(162,164,170));
+      const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(200,202,206)); bg.addColorStop(1,rgb(168,170,176));
       rr(c,m,m,W-2*m,H-2*m,12*s); c.fillStyle=bg; c.fill();
       c.save(); rr(c,m,m,W-2*m,H-2*m,12*s); c.clip(); c.strokeStyle='rgba(255,255,255,0.10)'; c.lineWidth=1;
-      for(let y=m;y<H*.58;y+=3*s){ c.beginPath(); c.moveTo(m,y); c.lineTo(W-m,y); c.stroke(); } c.restore();
+      for(let y=m;y<H*.62;y+=3*s){ c.beginPath(); c.moveTo(m,y); c.lineTo(W-m,y); c.stroke(); } c.restore();
       rr(c,m,m,W-2*m,H-2*m,12*s); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=2*s; c.stroke();
-      // blue control panel
-      rr(c,W*.07,H*.05,W*.86,H*.505,8*s); c.fillStyle=rgb(34,70,150); c.fill();
-      rr(c,W*.07,H*.05,W*.86,H*.505,8*s); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=1.4*s; c.stroke();
-      // rainbow maker logo (top-right of panel)
-      const lx=W*.74, ly=H*.085, bw=6*s, bh=20*s;
-      [[214,52,52],[70,176,90],[64,120,212]].forEach((col,i)=>{ rr(c,lx+i*(bw+2*s),ly,bw,bh,1.5*s); c.fillStyle=rgb(col[0],col[1],col[2]); c.fill(); });
-      // knob labels (real names) below each knob
-      [['GAIN',.24,.330,8],['PEAK',.56,.330,8]]
-        .forEach(k=> textSpaced(d,k[1]*W,(k[2]+.085)*H,F.barlow,k[3],wt,k[0],0.2));
-      // 3-way MODE selector (LP/BP/HP) — lever drawn by engine via sw3.
-      textSpaced(d,.185*W,.072*H,F.barlow,7,wt,'MODE',0.3);
-      textSpaced(d,.305*W,.118*H,F.barlow,6.5,wt,'HP',0.2);
-      textSpaced(d,.305*W,.150*H,F.barlow,6.5,wt,'BP',0.2);
-      textSpaced(d,.305*W,.182*H,F.barlow,6.5,wt,'LP',0.2);
-      // Range and Direction toggles (switch hit areas are provided in `switches`).
+      // blue control face with rounded black frame (photo)
+      rr(c,W*.055,H*.032,W*.89,H*.585,10*s); c.fillStyle=rgb(16,16,20); c.fill();
+      rr(c,W*.07,H*.045,W*.86,H*.560,8*s); c.fillStyle=rgb(46,62,158); c.fill();
+      // black inset (right block that holds the three sliders)
+      rr(c,W*.50,H*.275,W*.43,H*.330,10*s); c.fillStyle=rgb(16,16,18); c.fill();
+      c.fillRect(W*.80,H*.045,W*.13,H*.30);   // (photo: black wraps the top-right corner too)
+      c.fillStyle=rgb(46,62,158); rr(c,W*.50,H*.045,W*.30,H*.23,6*s); c.fill();
+      // rainbow "U" logo (white tile + blue/pink verticals + green base)
+      const lx=W*.665,ly=H*.075,lw=W*.145,lh=H*.105;
+      rr(c,lx,ly,lw,lh,4*s); c.fillStyle=rgb(238,240,242); c.fill();
+      c.fillStyle=rgb(64,120,212); c.fillRect(lx+lw*.22,ly+lh*.16,lw*.16,lh*.52);
+      c.fillStyle=rgb(232,110,170); c.fillRect(lx+lw*.62,ly+lh*.16,lw*.16,lh*.52);
+      c.fillStyle=rgb(70,176,110); c.fillRect(lx+lw*.22,ly+lh*.58,lw*.56,lh*.20);
+      // knob arc labels + names (photo: LP..HP over MODE, 0-10 scales)
+      textSpaced(d,.165*W,.058*H,F.barlow,7,wt,'LP',0.2);
+      textSpaced(d,.375*W,.058*H,F.barlow,7,wt,'HP',0.2);
+      textSpaced(d,.165*W,.185*H,F.barlow,8.5,wt,'MODE',0.3);
+      textSpaced(d,.155*W,.372*H,F.barlow,8.5,wt,'PEAK',0.3);
+      textSpaced(d,.150*W,.568*H,F.barlow,8.5,wt,'GAIN',0.3);
+      // ── the three colored slide switches (photo: RANGE blue / DRIVE grey / POWER red)
+      const slider=(cy,val,cap,l1,l2,name,live)=>{
+        const tx=W*.73, tw=W*.17, th=H*.030;
+        rr(c,tx-tw/2,cy*H-th/2,tw,th,3*s); c.fillStyle=rgb(30,30,34); c.fill();
+        const on=val>=0.5, capw=tw*.48;
+        rr(c,on?tx: tx-capw, cy*H-th*0.80, capw, th*1.6, 3*s);
+        c.fillStyle=rgb(cap[0],cap[1],cap[2]); c.fill();
+        rr(c,on?tx: tx-capw, cy*H-th*0.80, capw, th*1.6, 3*s);
+        c.strokeStyle='rgba(0,0,0,0.5)'; c.lineWidth=s; c.stroke();
+        textSpaced(d,.585*W,cy*H,F.barlow,6.2,(!on&&live)?wt:dim,l1,0.15);
+        textSpaced(d,.875*W,cy*H,F.barlow,6.2,(on&&live)?wt:dim,l2,0.15);
+        textSpaced(d,.73*W,(cy+.043)*H,F.barlow,7.5,wt,name,0.35); };
       const rv=(values&&values[3]!=null)?values[3]:1;
       const dv=(values&&values[4]!=null)?values[4]:1;
-      textSpaced(d,.805*W,.108*H,F.barlow,7,wt,'RANGE',0.3);
-      textSpaced(d,.805*W,.230*H,F.barlow,6.2,rv<0.5?wt:dim,'LOW',0.2);
-      textSpaced(d,.805*W,.260*H,F.barlow,6.2,rv>=0.5?wt:dim,'HIGH',0.2);
-      textSpaced(d,.805*W,.285*H,F.barlow,7,wt,'DIRECTION',0.3);
-      textSpaced(d,.805*W,.405*H,F.barlow,6.2,dv<0.5?wt:dim,'DOWN',0.2);
-      textSpaced(d,.805*W,.435*H,F.barlow,6.2,dv>=0.5?wt:dim,'UP',0.2);
-      // decorative POWER lever (red, ON) lower-right of panel
-      const px=W*.80, py=H*.475;
-      rr(c,px-9*s,py-7*s,18*s,14*s,3*s); c.fillStyle=rgb(28,30,38); c.fill();
-      rr(c,px+1*s,py-9*s,8*s,13*s,2*s); c.fillStyle=rgb(206,44,44); c.fill();
-      textSpaced(d,px,py+15*s,F.barlow,6,wt,'POWER',0.2);
-      textSpaced(d,px-16*s,py,F.barlow,5,wt,'OFF',0.1); textSpaced(d,px+16*s,py,F.barlow,5,wt,'ON',0.1);
-      // wordmark + chrome stomp + brand
-      textSpaced(d,.42*W,.625*H,F.anton,24,dk,'BU-TRON III',0.5);
-      footRound(d,W*.50,H*.79,22*s);
-      textSpaced(d,.78*W,.93*H,F.barlow,8.5,dk,'auditronics',0.2); } };
+      slider(.345,rv,[92,150,224],'LOW','HIGH','RANGE',true);
+      slider(.445,dv,[168,170,176],'DOWN','UP','DRIVE',true);
+      slider(.545,1,[214,48,44],'OFF','ON','POWER',false);
+      // engraved nameplate on the wedge slope (photo: MU-TRON III strip)
+      rr(c,W*.14,H*.630,W*.72,H*.052,4*s); c.fillStyle='rgba(0,0,0,0.10)'; c.fill();
+      textSpaced(d,.50*W,.656*H,F.anton,22,dk,'BU-TRON III',0.6);
+      c.strokeStyle='rgba(30,30,34,0.55)'; c.lineWidth=1.2*s;
+      c.beginPath(); c.moveTo(W*.15,H*.678); c.lineTo(W*.85,H*.678); c.stroke();
+      // flat lower body: chrome stomp + brand
+      footRound(d,W*.50,H*.800,20*s);
+      textSpaced(d,.76*W,.930*H,F.barlow,9,dk,'auditronics',0.2); } };
 
-  // Custom Drive - Fulltone OCD-style: cream box, three black knobs, an HP/LP voice
+    // Custom Drive - Fulltone OCD-style: cream box, three black knobs, an HP/LP voice
   // toggle + blue LED, fat black wordmark + script brand. Parody (ExtraTone / CDO).
   // Real controls: Drive0 Tone1 Voice2 Volume3.
   P.cdo = { w:280,h:480, knobs:[
@@ -7322,7 +7332,7 @@
     (spec.switches || []).forEach(s => {
       const on = (values && values[s.id] != null) ? values[s.id] > 0.5 : false;
       if (s.style === 'bat') batToggle(d, s.cx * d.W, s.cy * d.H, (s.hs || .013) * d.W, on);
-      else switchSquare(d, s.cx * d.W, s.cy * d.H, s.hs * d.W, on, s.dark);
+      else switchSquare(d, s.cx * d.W, s.cy * d.H, s.hs * d.W, on, s.dark, s.col);
     });
     (spec.sw3 || []).forEach(s => {
       // `hidden` sw3 entries are click-only (the spec draws its own visual, e.g.
@@ -7335,7 +7345,7 @@
     });
     (spec.sliders || []).forEach(sl => {
       const v = (values && values[sl.id] != null) ? values[sl.id] : 0.5;
-      hSlider(d, sl.x0 * d.W, sl.x1 * d.W, sl.y * d.H, v);
+      hSlider(d, sl.x0 * d.W, sl.x1 * d.W, sl.y * d.H, v, sl.col);
     });
     (spec.faders || []).forEach(fd => {
       const v = (values && values[fd.id] != null) ? values[fd.id] : 0.5;
@@ -7348,7 +7358,11 @@
   }
   function attach(canvas, stem, opts) {
     opts = opts || {};
-    const spec = P[stem] || (opts.params ? buildGeneric(stem, opts.params) : null);
+    // `stem` may be a spec OBJECT (custom user gear built via specFromLayout)
+    // instead of a registry key — use it directly in that case.
+    const spec = (stem && typeof stem === 'object')
+      ? stem
+      : (P[stem] || (opts.params ? buildGeneric(stem, opts.params) : null));
     if (!spec) return false;
     const values = opts.values || {};
     drawSpec(canvas, spec, values);
@@ -7490,5 +7504,647 @@
     try { return cv.toDataURL('image/png'); } catch (_) { return null; }
   }
 
-  window.RBPedalCanvas = { ready, has: s => !!P[s], attach, render, dataURL, specs: P };
+  // ══════════════════════════════════════════════════════════════════════════
+  //  Custom user gear — serializable UI "layouts" + editable specs
+  //
+  //  A LAYOUT is the JSON-safe description of a custom gear's face, persisted
+  //  with the gear (rig_builder_custom_gear.json → ui:). Shape:
+  //    { type:'amp'|'cab'|'pedal'|'rack', title, w, h, body:[r,g,b],
+  //      controls:[ {id, kind:'knob'|'slider'|'switch', label, cx, cy, r, hs,
+  //                  color:[r,g,b]} ] }   (cx/cy/r/hs are fractions of w/h)
+  //
+  //  specFromLayout() turns a layout into a P-style spec that drawSpec()/attach()
+  //  render — so custom gear rides the SAME draw + interaction path as the
+  //  bundled pedals. NAM/IR gear (no plugin params) gets a default face too.
+  // ══════════════════════════════════════════════════════════════════════════
+  const _CL = (v) => v < 0 ? 0 : v > 255 ? 255 : v | 0;
+  function hexToRgb(hex) {
+    if (Array.isArray(hex)) return [_CL(hex[0]), _CL(hex[1]), _CL(hex[2])];
+    const m = /^#?([0-9a-fA-F]{6})$/.exec((hex || '').trim());
+    if (!m) return [120, 122, 128];
+    const n = parseInt(m[1], 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function rgbToHex(c) {
+    const a = Array.isArray(c) ? c : hexToRgb(c);
+    return '#' + [_CL(a[0]), _CL(a[1]), _CL(a[2])].map(v => v.toString(16).padStart(2, '0')).join('');
+  }
+
+  const RB_CTRL_KINDS = ['knob', 'slider', 'switch'];
+  const _DEF_LABELS = {
+    amp:   ['Gain', 'Bass', 'Mid', 'Treble', 'Presence', 'Master'],
+    cab:   ['Level', 'Low', 'High'],
+    pedal: ['Drive', 'Tone', 'Level'],
+    rack:  ['Input', 'Mix', 'Output'],
+  };
+  const _DEF_BODY   = { amp: [58, 60, 66], cab: [42, 34, 28], pedal: [38, 120, 150], rack: [46, 48, 54] };
+  const _DEF_ACCENT = { amp: [222, 214, 186], cab: [206, 180, 150], pedal: [232, 232, 226], rack: [120, 200, 150] };
+  // Taller amp + rack faces so the knobs sit at a sensible size (they looked
+  // oversized on the short defaults). Pedal/cab kept as-is.
+  // Less-wide amp/cab/rack so they render at a size closer to the (tall) pedal
+  // in the narrow editor/catalog panels instead of a short wide strip.
+  const _DEF_DIMS   = { amp: [560, 440], cab: [540, 420], pedal: [300, 430], rack: [600, 380] };
+  // panel rect [x, y, w, h] as fractions — where the controls are laid out.
+  const _DEF_PANEL  = { amp: [0.07, 0.32, 0.86, 0.54], cab: [0.10, 0.60, 0.80, 0.26],
+                        pedal: [0.16, 0.16, 0.68, 0.38], rack: [0.14, 0.34, 0.74, 0.40] };
+
+  // ── smart-layout classification: group a VST's parameter by its NAME so the
+  //    generated face orders + colours related controls together (a musically
+  //    sensible drive → EQ → mod → time → mix → level flow). `big` groups get a
+  //    slightly larger knob (the "hero" controls: gain, master/volume). ────────
+  const _SMART_GROUPS = [
+    { key: 'drive', ord: 0, big: true,  color: [214, 120, 90],
+      rx: /gain|drive|dist|fuzz|overdrive|\bod\b|pre[\s-]?amp|crunch|\bsat|sustain/ },
+    { key: 'eq',    ord: 1, big: false, color: [150, 170, 214],
+      rx: /bass|\blow\b|\bmid|treble|\bhigh\b|presence|contour|tone|\beq\b|freq|\bhz\b|\bq\b|body|colou?r|character|shift/ },
+    { key: 'mod',   ord: 2, big: false, color: [214, 182, 110],
+      rx: /depth|feed\s?back|regen|resonance|\breso|width|intensity|\brate\b|speed|shape|sweep/ },
+    { key: 'time',  ord: 3, big: false, color: [120, 194, 200],
+      rx: /time|delay|\btempo|subdiv|pre[\s-]?delay|decay|\bsize\b|room|hall|space/ },
+    { key: 'mix',   ord: 4, big: false, color: [176, 146, 214],
+      rx: /mix|blend|\bwet\b|\bdry\b|balance|amount/ },
+    { key: 'level', ord: 5, big: true,  color: [130, 200, 150],
+      rx: /level|volume|master|output|\bout\b|\bvol\b|make[\s-]?up|trim/ },
+  ];
+  const _SMART_MISC = { key: 'misc', ord: 6, big: false, color: [150, 152, 158] };
+  // Classic on/off amp toggles that read better as a switch than a knob.
+  const _SMART_SWITCH_RX = /\b(bright|standby|power|deep|\bfat\b|thick|boost|voicing|active|fizz|scoop)\b/;
+
+  function _smartClassify(name) {
+    const n = (name || '').toLowerCase();
+    for (const g of _SMART_GROUPS) if (g.rx.test(n)) return g;
+    return _SMART_MISC;
+  }
+
+  function _normType(t) {
+    t = (t || 'pedal').toLowerCase();
+    return ({ amps: 'amp', cabs: 'cab', pedals: 'pedal', racks: 'rack' })[t] || t;
+  }
+
+  // Build a fresh default layout for a gear type from a list of control labels
+  // (falls back to sensible per-type defaults). All controls start as knobs in
+  // the type's accent colour; the editor lets the user change kind/colour/label.
+  function defaultFace(type, labels, opts) {
+    opts = opts || {};
+    type = _normType(type);
+    if (!_DEF_DIMS[type]) type = 'pedal';
+    // A cab is a speaker box — no knobs by default (it's an IR / cabinet). Only
+    // add controls if labels were explicitly passed (e.g. a cab VST with params).
+    if (type === 'cab' && !(labels && labels.length)) {
+      const [cw, ch] = _DEF_DIMS.cab;
+      return { type, title: opts.title || '', template: _DEF_TEMPLATE.cab, w: cw, h: ch, body: (_DEF_BODY.cab || [42, 34, 28]).slice(), controls: [] };
+    }
+    labels = (labels && labels.length) ? labels.slice(0, 12) : (_DEF_LABELS[type] || ['Gain', 'Tone', 'Level']);
+    const [w, h] = _DEF_DIMS[type];
+    const [px, py, pw, ph] = _DEF_PANEL[type];
+    const n = labels.length;
+    const maxCols = type === 'pedal' ? 3 : (type === 'rack' ? 6 : 4);
+    const cols = Math.min(n, maxCols), rows = Math.ceil(n / cols);
+    const accent = (_DEF_ACCENT[type] || [86, 150, 210]).slice();
+    // Size the knob from the CELL in pixels (fits both width and height, leaving
+    // room for the label below), then express it as a fraction of width. The
+    // hard cap stops a wide face (amp/rack) from getting oversized knobs.
+    const cellWpx = (pw * w) / cols, cellHpx = (ph * h) / rows;
+    const rPx = Math.min(cellWpx * 0.28, cellHpx * 0.30, 40);
+    const r = rPx / w;
+    const hs = Math.min(rPx * 0.7, 22) / w;
+    const controls = labels.map((lb, i) => {
+      const cc = i % cols, rw = Math.floor(i / cols);
+      // Nudge each knob toward the top of its cell so the label fits below it.
+      const cellTopBias = rows > 1 ? 0.40 : 0.42;
+      return {
+        id: i, kind: 'knob', label: lb,
+        cx: px + pw * ((cc + 0.5) / cols),
+        cy: py + ph * ((rw + cellTopBias) / rows),
+        r, hs, color: accent.slice(),
+      };
+    });
+    return { type, title: opts.title || '', template: _DEF_TEMPLATE[type] || 'box', w, h, body: (_DEF_BODY[type] || [40, 42, 48]).slice(), controls };
+  }
+
+  // Smart layout from a plugin's REAL parameters: order + colour controls by
+  // their function (drive → EQ → mod → time → mix → level), make the hero
+  // controls (gain, master) a touch bigger, and honour each param's step count —
+  // a 2-state param becomes a switch, a >2-step "mode" param (e.g. a Pultec
+  // band-select) becomes a STEPPED selector knob (a drag/click snaps to the next
+  // position instead of sweeping continuously). `params` = the getParameters()
+  // array (name/label + optional numSteps), already filtered to sound params.
+  function smartLayout(type, params, opts) {
+    opts = opts || {};
+    type = _normType(type);
+    if (!_DEF_DIMS[type]) type = 'pedal';
+    const [w, h] = _DEF_DIMS[type];
+    const [px, py, pw, ph] = _DEF_PANEL[type];
+    const items = (params || []).slice(0, 12).map((p, i) => {
+      const name = String((p && (p.name || p.label)) || ('P' + (i + 1))).trim();
+      const g = _smartClassify(name);
+      const steps = (p && (p.numSteps || p.stepCount)) || 0;
+      const ticks = (p && Array.isArray(p.ticks)) ? p.ticks : null;
+      let kind = 'knob', select = 0;
+      if (steps === 2 || _SMART_SWITCH_RX.test(name.toLowerCase())) kind = 'switch';
+      else if (steps > 2 && steps <= 16) { kind = 'knob'; select = steps; }   // stepped "mode" knob
+      // _i is this param's LOGICAL index (position in the filtered param list) —
+      // preserved as `param` so the live editor can drive the right plugin param
+      // even after the smart sort reorders the controls.
+      return { name: name.slice(0, 14), color: g.color.slice(), big: !!g.big, ord: g.ord, kind, select, ticks, param: i, _i: i };
+    });
+    // Stable sort into the musical group order.
+    items.sort((a, b) => (a.ord - b.ord) || (a._i - b._i));
+    const n = items.length || 1;
+    const maxCols = type === 'pedal' ? 3 : (type === 'rack' ? 6 : 4);
+    const cols = Math.min(n, maxCols) || 1, rows = Math.ceil(n / cols) || 1;
+    const cellWpx = (pw * w) / cols, cellHpx = (ph * h) / rows;
+    const baseR = Math.min(cellWpx * 0.27, cellHpx * 0.28, 38) / w;
+    const controls = items.map((it, idx) => {
+      const cc = idx % cols, rw = Math.floor(idx / cols);
+      const r = it.kind === 'switch' ? baseR * 0.6 : (it.big ? baseR * 1.16 : baseR);
+      const cellTopBias = rows > 1 ? 0.40 : 0.42;
+      const ctrl = {
+        id: idx, kind: it.kind, label: it.name,
+        cx: px + pw * ((cc + 0.5) / cols),
+        cy: py + ph * ((rw + cellTopBias) / rows),
+        r, hs: Math.min(r * 0.6, 0.03), color: it.color,
+      };
+      if (it.select > 2) ctrl.select = it.select;   // carries into the spec knob as a stepper
+      if (it.ticks && it.ticks.length >= 2) ctrl.ticks = it.ticks.slice(0, 16);   // value labels around the knob
+      if (typeof it.param === 'number') ctrl.param = it.param;   // → real plugin param (logical id)
+      return ctrl;
+    });
+    return { type, title: opts.title || '', template: _DEF_TEMPLATE[type] || 'box', w, h, body: (_DEF_BODY[type] || [40, 42, 48]).slice(), controls };
+  }
+
+  // Coerce any stored/edited layout into a well-formed one (colours → [r,g,b],
+  // ids present, kinds valid). Tolerant of hand-edited / partial JSON.
+  function normalizeLayout(layout) {
+    const type = _normType(layout && layout.type);
+    const dims = _DEF_DIMS[type] || _DEF_DIMS.pedal;
+    const ctrls = ((layout && layout.controls) || []).map((c, i) => ({
+      id: (c.id != null ? c.id : i),
+      kind: RB_CTRL_KINDS.indexOf(c.kind) >= 0 ? c.kind : 'knob',
+      label: c.label || '',
+      cx: (typeof c.cx === 'number') ? c.cx : 0.5,
+      cy: (typeof c.cy === 'number') ? c.cy : 0.5,
+      r: (typeof c.r === 'number') ? c.r : 0.06,
+      hs: (typeof c.hs === 'number') ? c.hs : 0.032,
+      color: hexToRgb(c.color || _DEF_ACCENT[type] || [120, 122, 128]),
+      // Optional discrete-mode metadata (stepped selector knobs + the value
+      // labels drawn around them, e.g. a Pultec's 200/300/500/700/1000).
+      ...(c.select > 2 ? { select: c.select } : {}),
+      ...(Array.isArray(c.ticks) && c.ticks.length ? { ticks: c.ticks.slice(0, 16) } : {}),
+      ...(typeof c.param === 'number' ? { param: c.param } : {}),
+    }));
+    return {
+      type, title: (layout && layout.title) || '',
+      template: (layout && layout.template) || _DEF_TEMPLATE[type] || 'box',
+      w: (layout && layout.w) || dims[0], h: (layout && layout.h) || dims[1],
+      body: hexToRgb((layout && layout.body) || _DEF_BODY[type] || [40, 42, 48]),
+      controls: ctrls,
+    };
+  }
+
+  // ── per-type faceplates (drawn under the controls) ──────────────────────────
+  function _brushed(d, b) {
+    const { ctx: c, W, H } = d;
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, rgb(_CL(b[0] + 20), _CL(b[1] + 20), _CL(b[2] + 20)));
+    g.addColorStop(1, rgb(_CL(b[0] - 16), _CL(b[1] - 16), _CL(b[2] - 16)));
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.strokeStyle = 'rgba(255,255,255,0.028)'; c.lineWidth = 1;
+    for (let y = 0; y < H; y += 3) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
+    c.strokeStyle = rgb(18, 18, 22); c.lineWidth = 3; c.strokeRect(2, 2, W - 4, H - 4);
+  }
+  function faceAmp(d, L) {
+    const { ctx: c, W, H } = d; _brushed(d, L.body);
+    rr(c, W * 0.06, H * 0.06, W * 0.88, H * 0.17, 7); c.fillStyle = rgb(14, 14, 16); c.fill();
+    rr(c, W * 0.06, H * 0.06, W * 0.88, H * 0.17, 7); c.strokeStyle = rgb(6, 6, 8); c.lineWidth = 2; c.stroke();
+    textC(d, W * 0.5, H * 0.148, F.bebas, 30, rgb(228, 229, 233), (L.title || 'AMP').toUpperCase());
+    rr(c, W * 0.05, H * 0.30, W * 0.90, H * 0.60, 8); c.fillStyle = rgb(24, 24, 28); c.fill();
+    rr(c, W * 0.05, H * 0.30, W * 0.90, H * 0.60, 8); c.strokeStyle = rgb(8, 8, 10); c.lineWidth = 2; c.stroke();
+  }
+  function faceCab(d, L) {
+    const { ctx: c, W, H } = d;
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, rgb(_CL(L.body[0] + 14), _CL(L.body[1] + 12), _CL(L.body[2] + 10)));
+    g.addColorStop(1, rgb(_CL(L.body[0] - 12), _CL(L.body[1] - 12), _CL(L.body[2] - 12)));
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    // grille cloth (dot weave) in the upper region
+    rr(c, W * 0.06, H * 0.06, W * 0.88, H * 0.46, 8); c.fillStyle = rgb(20, 18, 16); c.fill();
+    c.save(); rr(c, W * 0.06, H * 0.06, W * 0.88, H * 0.46, 8); c.clip();
+    c.fillStyle = 'rgba(210,200,180,0.10)';
+    for (let y = H * 0.08; y < H * 0.52; y += 9) for (let x = W * 0.08; x < W * 0.92; x += 9) {
+      c.beginPath(); c.arc(x, y, 1.5, 0, 7); c.fill();
+    }
+    c.restore();
+    rr(c, W * 0.06, H * 0.06, W * 0.88, H * 0.46, 8); c.strokeStyle = rgb(10, 8, 6); c.lineWidth = 2; c.stroke();
+    textC(d, W * 0.5, H * 0.565, F.bebas, 22, rgb(224, 214, 196), (L.title || 'CAB').toUpperCase());
+    rr(c, W * 0.08, H * 0.60, W * 0.84, H * 0.30, 6); c.fillStyle = rgb(26, 22, 18); c.fill();
+  }
+  function facePedal(d, L) {
+    const b = L.body || [40, 120, 150];
+    box(d, b[0], b[1], b[2], false);   // no screws
+    textC(d, d.W * 0.5, d.H * 0.085, F.bebas, 22, rgb(245, 245, 240), (L.title || 'PEDAL').toUpperCase());
+  }
+  function faceRack(d, L) {
+    const { ctx: c, W, H } = d, b = L.body;
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, rgb(_CL(b[0] + 16), _CL(b[1] + 16), _CL(b[2] + 16)));
+    g.addColorStop(1, rgb(_CL(b[0] - 14), _CL(b[1] - 14), _CL(b[2] - 14)));
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    // rack ears
+    c.fillStyle = rgb(_CL(b[0] - 22), _CL(b[1] - 22), _CL(b[2] - 22));
+    c.fillRect(0, 0, W * 0.055, H); c.fillRect(W * 0.945, 0, W * 0.055, H);
+    c.strokeStyle = rgb(16, 16, 20); c.lineWidth = 2; c.strokeRect(2, 2, W - 4, H - 4);
+    // green LCD nameplate
+    rr(c, W * 0.09, H * 0.14, W * 0.30, H * 0.34, 4); c.fillStyle = rgb(12, 30, 16); c.fill();
+    rr(c, W * 0.09, H * 0.14, W * 0.30, H * 0.34, 4); c.strokeStyle = rgb(40, 90, 50); c.lineWidth = 1.5; c.stroke();
+    textC(d, W * 0.24, H * 0.31, F.barlow, 20, rgb(120, 240, 150), (L.title || 'RACK').toUpperCase());
+  }
+  // "Flat + screws" template — a Pultec MEQ5-style faceplate: a single solid
+  // colour with a thin bevel and four corner pallet screws. Works for any type.
+  function faceFlat(d, L) {
+    const { ctx: c, W, H } = d, b = L.body;
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, rgb(_CL(b[0] + 16), _CL(b[1] + 16), _CL(b[2] + 16)));
+    g.addColorStop(1, rgb(_CL(b[0] - 14), _CL(b[1] - 14), _CL(b[2] - 14)));
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.strokeStyle = rgb(_CL(b[0] - 42), _CL(b[1] - 42), _CL(b[2] - 42)); c.lineWidth = 3;
+    c.strokeRect(2.5, 2.5, W - 5, H - 5);
+    const m = Math.min(W, H) * 0.06;                       // corner pallet screws
+    [[m, m], [W - m, m], [m, H - m], [W - m, H - m]].forEach(p => screw(d, p[0], p[1]));
+    if (L.title) textC(d, W * 0.5, H * 0.11, F.bebas, 22, rgb(238, 238, 233), L.title.toUpperCase());
+  }
+  // ── PEDAL templates (reuse the existing stompbox body-makers) ──────────────
+  function faceChief(d, L) {   // Boss-compact stompbox
+    const b = L.body || [60, 120, 150];
+    chiefBody(d, b[0], b[1], b[2]);
+    if (L.title) textC(d, d.W * 0.5, d.H * 0.045, F.bebas, 15, rgb(245, 245, 240), L.title.toUpperCase());
+  }
+  function faceIbanez(d, L) {   // Ibanez Tonelok-style silver enclosure (fixed finish)
+    ibanezBody(d);
+    if (L.title) textC(d, d.W * 0.5, d.H * 0.045, F.bebas, 14, rgb(44, 46, 52), L.title.toUpperCase());
+  }
+  function faceFoog(d, L) {     // Moogerfooger-style granite + wood sides (fixed finish)
+    foogBody(d);
+    if (L.title) textC(d, d.W * 0.5, d.H * 0.05, F.bebas, 14, rgb(232, 227, 216), L.title.toUpperCase());
+  }
+  function facePlainBox(d, L) { // plain enclosure, no screws (the pedal default)
+    const b = L.body || [40, 120, 150];
+    box(d, b[0], b[1], b[2], false);
+    if (L.title) textC(d, d.W * 0.5, d.H * 0.075, F.bebas, 20, rgb(245, 245, 240), L.title.toUpperCase());
+  }
+  // ── AMP templates ──────────────────────────────────────────────────────────
+  function faceAmpTolex(d, L) { // tolex-covered head with a gold control strip
+    const { ctx: c, W, H } = d, b = L.body;
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, rgb(_CL(b[0] + 8), _CL(b[1] + 8), _CL(b[2] + 8)));
+    g.addColorStop(1, rgb(_CL(b[0] - 18), _CL(b[1] - 18), _CL(b[2] - 18)));
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.strokeStyle = 'rgba(0,0,0,0.10)'; c.lineWidth = 1;               // tolex weave
+    for (let y = 0; y < H; y += 5) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
+    c.strokeStyle = 'rgba(240,238,230,0.55)'; c.lineWidth = 2; c.strokeRect(W * 0.03, H * 0.05, W * 0.94, H * 0.90);
+    rr(c, W * 0.05, H * 0.32, W * 0.90, H * 0.52, 6);                  // gold control strip
+    const sg = c.createLinearGradient(0, H * 0.32, 0, H * 0.84);
+    sg.addColorStop(0, rgb(64, 56, 34)); sg.addColorStop(0.5, rgb(154, 132, 72)); sg.addColorStop(1, rgb(70, 60, 36));
+    c.fillStyle = sg; c.fill();
+    rr(c, W * 0.05, H * 0.32, W * 0.90, H * 0.52, 6); c.strokeStyle = rgb(30, 26, 14); c.lineWidth = 2; c.stroke();
+    textC(d, W * 0.5, H * 0.19, F.bebas, 26, rgb(238, 232, 214), (L.title || 'AMP').toUpperCase());
+  }
+  function faceRackStd(d, L) {  // 1U studio faceplate (as the Studio Delay etc. use)
+    rackFace(d, { accent: L.body || [90, 110, 150], title: (L.title || 'RACK').toUpperCase() }, []);
+  }
+
+  // ── Generic colour-driven faceplates (respect the Body colour) ──────────────
+  function _tt(d, L, col, cyFrac, px) {
+    if (L.title) textC(d, d.W * 0.5, d.H * cyFrac, F.bebas, px || 22, col, L.title.toUpperCase());
+  }
+  function _frame(d, col, lw) {
+    const { ctx: c, W, H } = d; c.strokeStyle = col; c.lineWidth = lw || 3;
+    c.strokeRect((lw || 3) / 2, (lw || 3) / 2, W - (lw || 3), H - (lw || 3));
+  }
+  function faceBrushed(d, L) { _brushed(d, L.body); _tt(d, L, rgb(232, 233, 237), 0.09); }
+  function faceMatte(d, L) {
+    const { ctx: c, W, H } = d, b = L.body;
+    c.fillStyle = rgb(_CL(b[0]), _CL(b[1]), _CL(b[2])); c.fillRect(0, 0, W, H);
+    rr(c, W * 0.04, H * 0.04, W * 0.92, H * 0.92, 14); c.strokeStyle = 'rgba(255,255,255,0.10)'; c.lineWidth = 2; c.stroke();
+    rr(c, W * 0.04, H * 0.04, W * 0.92, H * 0.92, 14); c.strokeStyle = 'rgba(0,0,0,0.35)'; c.lineWidth = 1; c.stroke();
+    _tt(d, L, rgb(240, 240, 236), 0.10);
+  }
+  function faceCarbon(d, L) {
+    // Real carbon-fibre twill: dark charcoal base + two low-contrast diagonal
+    // thread sets (NOT a white/grey checkerboard, which read like a transparency
+    // pattern). Body colour tints the base only slightly.
+    const { ctx: c, W, H, s } = d, b = L.body;
+    const g = c.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, rgb(_CL(20 + b[0] * 0.10), _CL(20 + b[1] * 0.10), _CL(22 + b[2] * 0.10)));
+    g.addColorStop(0.5, rgb(_CL(12 + b[0] * 0.08), _CL(12 + b[1] * 0.08), _CL(14 + b[2] * 0.08)));
+    g.addColorStop(1, rgb(_CL(24 + b[0] * 0.10), _CL(24 + b[1] * 0.10), _CL(26 + b[2] * 0.10)));
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.save(); c.beginPath(); c.rect(0, 0, W, H); c.clip();
+    const step = 6 * s;
+    c.lineWidth = 2 * s; c.strokeStyle = 'rgba(150,152,158,0.10)';          // ↘ threads (light)
+    for (let x = -H; x < W; x += step) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x + H, H); c.stroke(); }
+    c.lineWidth = 2 * s; c.strokeStyle = 'rgba(0,0,0,0.28)';                 // ↗ threads (dark)
+    for (let x = 0; x < W + H; x += step) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x - H, H); c.stroke(); }
+    c.lineWidth = 0.8 * s; c.strokeStyle = 'rgba(190,192,198,0.06)';        // sheen highlight
+    for (let x = -H; x < W; x += step * 2) { c.beginPath(); c.moveTo(x + 1.5 * s, 0); c.lineTo(x + 1.5 * s + H, H); c.stroke(); }
+    c.restore(); _frame(d, rgb(16, 16, 18), 3); _tt(d, L, rgb(226, 228, 234), 0.09);
+  }
+  function faceWood(d, L) {
+    const { ctx: c, W, H } = d, b = L.body;
+    const base = [Math.max(60, b[0]), Math.max(38, b[1] * 0.7), Math.max(22, b[2] * 0.5)];
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, rgb(_CL(base[0] + 16), _CL(base[1] + 12), _CL(base[2] + 8)));
+    g.addColorStop(1, rgb(_CL(base[0] - 18), _CL(base[1] - 14), _CL(base[2] - 10)));
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.strokeStyle = 'rgba(60,36,18,0.32)'; c.lineWidth = 1;
+    for (let i = 0; i < 14; i++) {
+      const y = H * (i + 0.5) / 14; c.beginPath(); c.moveTo(0, y);
+      for (let x = 0; x <= W; x += W / 12) c.lineTo(x, y + Math.sin((x / W) * 6 + i) * 3);
+      c.stroke();
+    }
+    _frame(d, rgb(40, 26, 14), 4); _tt(d, L, rgb(245, 235, 215), 0.10);
+  }
+  function faceChrome(d, L) {
+    const { ctx: c, W, H } = d;
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, rgb(214, 218, 224)); g.addColorStop(0.45, rgb(150, 156, 164));
+    g.addColorStop(0.5, rgb(120, 126, 134)); g.addColorStop(0.55, rgb(172, 178, 186)); g.addColorStop(1, rgb(120, 124, 130));
+    c.fillStyle = g; c.fillRect(0, 0, W, H); _frame(d, rgb(70, 74, 80), 3); _tt(d, L, rgb(40, 42, 48), 0.10);
+  }
+  function faceVintage(d, L) {
+    const { ctx: c, W, H } = d, b = L.body;
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, rgb(236, 226, 198)); g.addColorStop(1, rgb(210, 198, 168));
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.fillStyle = rgb(_CL(b[0]), _CL(b[1]), _CL(b[2])); c.fillRect(0, H * 0.03, W, H * 0.05);
+    _frame(d, rgb(150, 132, 96), 3); _tt(d, L, rgb(70, 54, 32), 0.17);
+  }
+  function faceMarsten(d, L) { marstenGoldHead(d, (L.title || '').toUpperCase()); }   // gold amp head (fixed finish)
+  function faceCabVintage(d, L) {
+    const { ctx: c, W, H } = d, b = L.body;
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, rgb(_CL(b[0] + 10), _CL(b[1] + 8), _CL(b[2] + 6)));
+    g.addColorStop(1, rgb(_CL(b[0] - 14), _CL(b[1] - 12), _CL(b[2] - 10)));
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    rr(c, W * 0.06, H * 0.06, W * 0.88, H * 0.62, 8); c.fillStyle = rgb(24, 20, 16); c.fill();
+    c.save(); rr(c, W * 0.06, H * 0.06, W * 0.88, H * 0.62, 8); c.clip();
+    c.strokeStyle = 'rgba(200,186,160,0.10)'; c.lineWidth = 1.4;
+    for (let x = -H; x < W; x += 7) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x + H, H); c.stroke(); }
+    for (let x = -H; x < W; x += 7) { c.beginPath(); c.moveTo(x, H); c.lineTo(x + H, 0); c.stroke(); }
+    c.restore();
+    rr(c, W * 0.06, H * 0.06, W * 0.88, H * 0.62, 8); c.strokeStyle = rgb(12, 10, 8); c.lineWidth = 2; c.stroke();
+    _tt(d, L, rgb(224, 214, 196), 0.74, 20);
+  }
+
+  // ── distinct AMP archetypes (control panel sits in the knob band; the top /
+  //    body / framing differ so they read as different amps, not just colours) ──
+  function _ampPanel(d, grad, piping) {   // panel across the knob band + optional white piping
+    const { ctx: c, W, H } = d;
+    rr(c, W * 0.045, H * 0.26, W * 0.91, H * 0.66, 7); c.fillStyle = grad; c.fill();
+    rr(c, W * 0.045, H * 0.26, W * 0.91, H * 0.66, 7); c.strokeStyle = 'rgba(0,0,0,0.5)'; c.lineWidth = 2; c.stroke();
+    if (piping) { c.strokeStyle = 'rgba(232,228,214,0.55)'; c.lineWidth = 2; c.strokeRect(W * 0.025, H * 0.04, W * 0.95, H * 0.92); }
+  }
+  function faceBlackface(d, L) {   // black tolex + brushed SILVER control panel
+    const { ctx: c, W, H } = d;
+    c.fillStyle = rgb(17, 17, 19); c.fillRect(0, 0, W, H);
+    c.strokeStyle = 'rgba(255,255,255,0.02)'; c.lineWidth = 1;
+    for (let y = 0; y < H; y += 4) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
+    const g = c.createLinearGradient(0, H * 0.26, 0, H * 0.92);
+    g.addColorStop(0, rgb(210, 214, 220)); g.addColorStop(0.5, rgb(168, 172, 180)); g.addColorStop(1, rgb(144, 148, 156));
+    _ampPanel(d, g, true);
+    c.save(); rr(c, W * 0.045, H * 0.26, W * 0.91, H * 0.66, 7); c.clip();     // brushed lines
+    c.strokeStyle = 'rgba(255,255,255,0.08)'; c.lineWidth = 1;
+    for (let x = 0; x < W; x += 2) { c.beginPath(); c.moveTo(x, H * 0.26); c.lineTo(x, H * 0.92); c.stroke(); }
+    c.restore();
+    _tt(d, L, rgb(232, 232, 228), 0.155, 22);
+  }
+  function facePlexi(d, L) {   // black + brass/gold plexi control panel + piping
+    const { ctx: c, W, H } = d;
+    c.fillStyle = rgb(14, 13, 15); c.fillRect(0, 0, W, H);
+    const g = c.createLinearGradient(0, H * 0.26, 0, H * 0.92);
+    g.addColorStop(0, rgb(190, 158, 78)); g.addColorStop(0.5, rgb(158, 128, 60)); g.addColorStop(1, rgb(120, 96, 44));
+    _ampPanel(d, g, true);
+    rr(c, W * 0.30, H * 0.05, W * 0.40, H * 0.15, 5); c.fillStyle = rgb(10, 10, 12); c.fill();   // black logo plate
+    rr(c, W * 0.30, H * 0.05, W * 0.40, H * 0.15, 5); c.strokeStyle = rgb(150, 124, 60); c.lineWidth = 1.5; c.stroke();
+    _tt(d, L, rgb(214, 182, 96), 0.125, 20);
+  }
+  function _tweedWeave(d) {
+    const { ctx: c, W, H, s } = d;
+    const bg = c.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, rgb(206, 170, 98)); bg.addColorStop(0.5, rgb(190, 154, 86)); bg.addColorStop(1, rgb(168, 132, 70));
+    c.fillStyle = bg; c.fillRect(0, 0, W, H);
+    c.save(); c.beginPath(); c.rect(0, 0, W, H); c.clip();
+    c.lineWidth = 1.4 * s; c.strokeStyle = 'rgba(232,206,150,0.45)';
+    for (let x = -H; x < W; x += 5 * s) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x + H, H); c.stroke(); }
+    c.lineWidth = 1 * s; c.strokeStyle = 'rgba(120,92,46,0.40)';
+    for (let x = -H; x < W; x += 5 * s) { c.beginPath(); c.moveTo(x + 2.5 * s, 0); c.lineTo(x + 2.5 * s + H, H); c.stroke(); }
+    c.restore();
+  }
+  function faceTweed(d, L) {   // lacquered tweed cloth + dark chrome control chassis + handle
+    const { ctx: c, W, H, s } = d;
+    _tweedWeave(d);
+    // leather strap handle (top centre)
+    const hx0 = W * 0.38, hx1 = W * 0.62, hcy = H * 0.10, hth = H * 0.045;
+    const lg = c.createLinearGradient(0, hcy - hth, 0, hcy + hth); lg.addColorStop(0, rgb(108, 66, 38)); lg.addColorStop(1, rgb(56, 30, 16));
+    rr(c, hx0, hcy - hth, hx1 - hx0, 2 * hth, hth); c.fillStyle = lg; c.fill();
+    rr(c, hx0, hcy - hth, hx1 - hx0, 2 * hth, hth); c.strokeStyle = rgb(32, 18, 10); c.lineWidth = 1.2 * s; c.stroke();
+    const g = c.createLinearGradient(0, H * 0.26, 0, H * 0.92);
+    g.addColorStop(0, rgb(44, 44, 48)); g.addColorStop(0.5, rgb(24, 24, 27)); g.addColorStop(1, rgb(14, 14, 16));
+    _ampPanel(d, g, false);
+    _tt(d, L, rgb(228, 224, 214), 0.205, 20);
+  }
+
+  // ── more CAB styles (cabs have no default knobs — pure speaker-box faces) ────
+  function faceCab4x12(d, L) {   // 4x12: grille with four visible speaker cones
+    const { ctx: c, W, H } = d, b = L.body;
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, rgb(_CL(b[0] + 8), _CL(b[1] + 6), _CL(b[2] + 4))); g.addColorStop(1, rgb(_CL(b[0] - 16), _CL(b[1] - 14), _CL(b[2] - 12)));
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    rr(c, W * 0.05, H * 0.05, W * 0.90, H * 0.90, 10); c.fillStyle = rgb(20, 18, 16); c.fill();
+    const cone = (cx, cy, r) => {
+      c.beginPath(); c.arc(cx, cy, r, 0, 7); c.fillStyle = rgb(30, 28, 26); c.fill();
+      c.strokeStyle = rgb(70, 66, 60); c.lineWidth = 2; c.stroke();
+      c.beginPath(); c.arc(cx, cy, r * 0.62, 0, 7); const rg = c.createRadialGradient(cx - r * 0.2, cy - r * 0.2, r * 0.1, cx, cy, r * 0.7);
+      rg.addColorStop(0, rgb(60, 56, 52)); rg.addColorStop(1, rgb(26, 24, 22)); c.fillStyle = rg; c.fill();
+      c.beginPath(); c.arc(cx, cy, r * 0.20, 0, 7); c.fillStyle = rgb(18, 16, 15); c.fill();   // dust cap
+    };
+    const r = Math.min(W, H) * 0.17;
+    cone(W * 0.30, H * 0.30, r); cone(W * 0.70, H * 0.30, r); cone(W * 0.30, H * 0.70, r); cone(W * 0.70, H * 0.70, r);
+    rr(c, W * 0.05, H * 0.05, W * 0.90, H * 0.90, 10); c.strokeStyle = rgb(10, 9, 8); c.lineWidth = 3; c.stroke();
+    if (L.title) { rr(c, W * 0.36, H * 0.905, W * 0.28, H * 0.055, 3); c.fillStyle = rgb(12, 11, 10); c.fill(); _tt(d, L, rgb(200, 200, 196), 0.933, 12); }
+  }
+  function faceCabMarsten(d, L) {   // grille + gold logo bar
+    faceCab(d, { ...L, title: '' });
+    const { ctx: c, W, H } = d;
+    rr(c, W * 0.30, H * 0.905, W * 0.40, H * 0.06, 4); const g = c.createLinearGradient(0, H * 0.905, 0, H * 0.965);
+    g.addColorStop(0, rgb(224, 198, 130)); g.addColorStop(1, rgb(150, 124, 68)); c.fillStyle = g; c.fill();
+    rr(c, W * 0.30, H * 0.905, W * 0.40, H * 0.06, 4); c.strokeStyle = rgb(90, 72, 34); c.lineWidth = 1.5; c.stroke();
+    if (L.title) textC(d, W * 0.5, H * 0.935, F.bebas, 15, rgb(40, 30, 12), L.title.toUpperCase());
+  }
+  function faceCabBender(d, L) {   // silver sparkle grille + script logo
+    const { ctx: c, W, H } = d;
+    c.fillStyle = rgb(28, 26, 24); c.fillRect(0, 0, W, H);
+    rr(c, W * 0.05, H * 0.05, W * 0.90, H * 0.90, 8); c.fillStyle = rgb(140, 140, 146); c.fill();
+    c.save(); rr(c, W * 0.05, H * 0.05, W * 0.90, H * 0.90, 8); c.clip();
+    // sparkle
+    for (let i = 0; i < 380; i++) {
+      const x = (i * 97) % W, y = (i * 53) % H, v = (i * 29) % 3;
+      c.fillStyle = v === 0 ? 'rgba(255,255,255,0.20)' : v === 1 ? 'rgba(0,0,0,0.16)' : 'rgba(210,214,220,0.14)';
+      c.fillRect(x, y, 2, 2);
+    }
+    c.strokeStyle = 'rgba(0,0,0,0.10)'; c.lineWidth = 1;
+    for (let x = -H; x < W; x += 8) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x + H, H); c.stroke(); }
+    c.restore();
+    rr(c, W * 0.05, H * 0.05, W * 0.90, H * 0.90, 8); c.strokeStyle = rgb(60, 60, 64); c.lineWidth = 3; c.stroke();
+    if (L.title) { setFont(d, F.ink, 26); c.fillStyle = rgb(40, 40, 46); c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(L.title, W * 0.5, H * 0.5); }
+  }
+  function faceCabBox(d, L) {   // closed-back wood cab (no grille) + badge + screws
+    faceWood(d, { ...L, title: '' });
+    const { ctx: c, W, H } = d;
+    rr(c, W * 0.34, H * 0.42, W * 0.32, H * 0.16, 5); c.fillStyle = rgb(20, 18, 16); c.fill();
+    rr(c, W * 0.34, H * 0.42, W * 0.32, H * 0.16, 5); c.strokeStyle = rgb(150, 120, 70); c.lineWidth = 1.5; c.stroke();
+    if (L.title) textC(d, W * 0.5, H * 0.50, F.bebas, 18, rgb(210, 186, 130), L.title.toUpperCase());
+    const m = Math.min(W, H) * 0.06;
+    [[m, m], [W - m, m], [m, H - m], [W - m, H - m]].forEach(p => screw(d, p[0], p[1]));
+  }
+
+  // Background styles, scoped by gear type. Each type's PRIMARY style (used when
+  // no template is set / for legacy 'default') is `_DEF_TEMPLATE`.
+  const _TEMPLATES = {
+    // amp — structurally distinct archetypes first
+    ampstd:    { label: 'Amp panel',      types: ['amp'],  draw: faceAmp },
+    blackface: { label: 'Blackface',      types: ['amp'],  draw: faceBlackface },
+    plexi:     { label: 'Plexi (gold)',   types: ['amp'],  draw: facePlexi },
+    tweed:     { label: 'Tweed combo',    types: ['amp'],  draw: faceTweed },
+    tolex:     { label: 'Tolex head',     types: ['amp'],  draw: faceAmpTolex },
+    marsten:   { label: 'Amp head (gold)', types: ['amp'], draw: faceMarsten },
+    // rack
+    panel:   { label: 'LCD panel',      types: ['rack'], draw: faceRack },
+    rackstd: { label: 'Studio rack',    types: ['rack'], draw: faceRackStd },
+    // pedal
+    box:     { label: 'Plain box',      types: ['pedal'], draw: facePlainBox },
+    chief:   { label: 'Chief (Boss)',   types: ['pedal'], draw: faceChief },
+    ibanez:  { label: 'Ibanez',         types: ['pedal'], draw: faceIbanez },
+    foog:    { label: 'Moog / Foog',    types: ['pedal'], draw: faceFoog },
+    // cab — pure speaker-box faces (NO flat, NO default knobs)
+    grille:  { label: 'Grille',         types: ['cab'],  draw: faceCab },
+    grille2: { label: 'Vintage grille', types: ['cab'],  draw: faceCabVintage },
+    fourx12: { label: '4x12 speakers',  types: ['cab'],  draw: faceCab4x12 },
+    cabmars: { label: 'Marsten cab',    types: ['cab'],  draw: faceCabMarsten },
+    cabbend: { label: 'Bender sparkle', types: ['cab'],  draw: faceCabBender },
+    cabbox:  { label: 'Closed box',     types: ['cab'],  draw: faceCabBox },
+    // shared finishes (materials) — kept lean on amps so they don't all look alike
+    brushed: { label: 'Brushed metal',  types: ['rack'], draw: faceBrushed },
+    matte:   { label: 'Matte',          types: ['amp', 'pedal', 'rack'], draw: faceMatte },
+    carbon:  { label: 'Carbon fibre',   types: ['amp', 'pedal', 'rack'], draw: faceCarbon },
+    wood:    { label: 'Wood',           types: ['amp', 'pedal', 'rack', 'cab'], draw: faceWood },
+    chrome:  { label: 'Chrome',         types: ['pedal', 'rack'], draw: faceChrome },
+    vintage: { label: 'Vintage cream',  types: ['pedal'], draw: faceVintage },
+    flat:    { label: 'Flat + screws',  types: ['pedal', 'rack'], draw: faceFlat },
+  };
+  const _TEMPLATE_ORDER = [
+    'ampstd', 'blackface', 'plexi', 'tweed', 'tolex', 'marsten',
+    'panel', 'rackstd',
+    'box', 'chief', 'ibanez', 'foog',
+    'grille', 'grille2', 'fourx12', 'cabmars', 'cabbend', 'cabbox',
+    'brushed', 'matte', 'carbon', 'wood', 'chrome', 'vintage', 'flat',
+  ];
+  const _DEF_TEMPLATE = { amp: 'ampstd', cab: 'grille', pedal: 'box', rack: 'panel' };
+
+  // Styles offered for a gear type — the type's primary first, then the rest.
+  function templates(type) {
+    type = _normType(type);
+    const prim = _DEF_TEMPLATE[type];
+    const keys = _TEMPLATE_ORDER.filter(k => {
+      const t = _TEMPLATES[k];
+      return t && (!type || !t.types || t.types.indexOf(type) >= 0);
+    });
+    if (prim && keys.indexOf(prim) > 0) { keys.splice(keys.indexOf(prim), 1); keys.unshift(prim); }
+    return keys.map(k => ({ key: k, label: _TEMPLATES[k].label }));
+  }
+
+  function _bodyDrawFor(L) {
+    const t = L.template && _TEMPLATES[L.template];
+    if (t && (!t.types || t.types.indexOf(L.type) >= 0)) return t.draw;
+    // Legacy 'default' / unknown / wrong-type → the type's primary style.
+    const prim = _TEMPLATES[_DEF_TEMPLATE[L.type]];
+    if (prim) return prim.draw;
+    return L.type === 'amp' ? faceAmp : L.type === 'cab' ? faceCab : L.type === 'rack' ? faceRack : facePedal;
+  }
+
+  function _drawLabels(d, L) {
+    const { W, H } = d;
+    (L.controls || []).forEach(ct => {
+      if (!ct.label) return;
+      const lx = ct.cx * W;
+      const below = ct.kind === 'knob' ? (ct.r * W * 1.12 + 8)
+        : ct.kind === 'slider' ? 15
+          : (ct.hs * W + 11);
+      textC(d, lx, ct.cy * H + below, F.barlow, 11, rgb(208, 210, 216), ct.label.toUpperCase());
+    });
+  }
+
+  // Turn a layout into a drawable/attachable P-style spec.
+  function specFromLayout(layout) {
+    const L = normalizeLayout(layout);
+    const knobs = [], sliders = [], switches = [];
+    L.controls.forEach(ct => {
+      if (ct.kind === 'slider') {
+        const half = Math.max(0.05, ct.r * 1.6);
+        sliders.push({ id: ct.id, x0: ct.cx - half, x1: ct.cx + half, y: ct.cy, col: ct.color });
+      } else if (ct.kind === 'switch') {
+        switches.push({ id: ct.id, cx: ct.cx, cy: ct.cy, hs: ct.hs || 0.032, col: ct.color });
+      } else {
+        const k = { id: ct.id, cx: ct.cx, cy: ct.cy, r: ct.r || 0.06, style: 'pointer', cap: ct.color };
+        if (ct.select > 2) k.select = ct.select;   // stepped "mode" knob (snaps to positions)
+        knobs.push(k);
+      }
+    });
+    const body = _bodyDrawFor(L);
+    return {
+      w: L.w, h: L.h, ptr: rgb(228, 226, 214), tick: rgb(120, 122, 128),
+      knobs, sliders, switches, _layout: L,
+      draw(d) { body(d, L); _drawLabels(d, L); _drawTicks(d, L); },
+    };
+  }
+
+  // Draw the discrete value labels around a stepped/mode knob (e.g. a Pultec
+  // band selector's 200 / 300 / 500 / 700 / 1000). `ticks` is the ordered list
+  // of value strings captured from the plugin; positions fan across the knob's
+  // 270° sweep, matching where the pointer lands at each step.
+  function _drawTicks(d, L) {
+    const { W, H } = d;
+    (L.controls || []).forEach(ct => {
+      if (ct.kind !== 'knob' || !Array.isArray(ct.ticks) || ct.ticks.length < 2) return;
+      const cx = ct.cx * W, cy = ct.cy * H, R = (ct.r || 0.06) * W;
+      const n = ct.ticks.length;
+      for (let i = 0; i < n; i++) {
+        const a = (135 + (i / (n - 1)) * 270) * Math.PI / 180;
+        const lr = R * 1.62;
+        textC(d, cx + Math.cos(a) * lr, cy + Math.sin(a) * lr, F.barlow, 8.5,
+              rgb(198, 200, 208), String(ct.ticks[i]));
+      }
+    });
+  }
+
+  // attach()/dataURL() equivalents that take a spec OBJECT (custom gear) rather
+  // than a registry stem.
+  function attachSpec(canvas, spec, opts) { return attach(canvas, spec, opts || {}); }
+  function dataURLSpec(spec, values) {
+    if (!spec) return null;
+    const cv = document.createElement('canvas'); cv.style.width = '220px';
+    Object.defineProperty(cv, 'clientWidth', { value: 220, configurable: true });
+    // Guard the draw so a single bad control/face never voids the whole photo —
+    // return whatever rendered instead of null (which showed "no photo").
+    try { drawSpec(cv, spec, values || {}); } catch (e) { try { console.warn('[rig_builder] face draw failed', e); } catch (_) {} }
+    try { return cv.toDataURL('image/png'); } catch (_) { return null; }
+  }
+  // Convenience: layout → PNG data URL (used for the catalog/photo thumbnails).
+  function layoutDataURL(layout, values) { return dataURLSpec(specFromLayout(layout), values); }
+
+  window.RBPedalCanvas = {
+    ready, has: s => !!P[s], attach, render, dataURL, specs: P,
+    // custom-gear API
+    defaultFace, smartLayout, normalizeLayout, specFromLayout, attachSpec, dataURLSpec,
+    layoutDataURL, hexToRgb, rgbToHex, CTRL_KINDS: RB_CTRL_KINDS, templates,
+  };
 })();

@@ -73,9 +73,14 @@ struct DualRectCore {
             g1 = 0.18f + 2.2f*gA; g2 = 0.22f + 1.7f*gA; g3 = 0.26f + 1.3f*gA; g4 = 1.0f; nStages = 3;   // pass3: bases+scale lowered, crunch distorted too early
             modeGain = 0.7f + 0.3f*pMode;
         } else {                  // RED — THE heavy-metal channel: deep 4-stage cascade (drives v4 too)
-            g1 = 0.2f + 5.0f*gA; g2 = 0.22f + 4.0f*gA; g3 = 0.28f + 3.0f*gA;   // pass3: bases+scale lowered, distorted at ~15% gain
-            g4 = 0.45f + 4.0f*gA; nStages = 3;   // 4th driven stage = the Recto sustain/aggression (real = 5 stages)
-            modeGain = 0.7f + 0.3f*pMode;        // Raw looser, Modern hottest
+            // pass5: more metal gain from ~2 o'clock up. The gain knob is
+            // pGain^2.5-tapered, so 2pm≈gA0.41 was only reaching ~half drive and
+            // the top felt weak for modern metal. Raised the per-stage scale
+            // (5/4/3/4 -> 7/5.4/4/5.2) so the upper knob range roars, while the
+            // low bases keep low settings ~unchanged (calibrated clean-ish edge).
+            g1 = 0.2f + 7.0f*gA; g2 = 0.22f + 5.4f*gA; g3 = 0.28f + 4.0f*gA;
+            g4 = 0.45f + 5.2f*gA; nStages = 3;   // 4th driven stage = the Recto sustain/aggression (real = 5 stages)
+            modeGain = 0.8f + 0.25f*pMode;       // Raw floor up 0.7->0.8 (more beef even loose), Modern hottest
         }
         g1 *= modeGain; g2 *= modeGain; g3 *= modeGain; g4 *= modeGain;
 

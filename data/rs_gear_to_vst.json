@@ -1,6 +1,6 @@
 {
  "_meta": {
-  "description": "Seed catalog: the game gear type \u2192 recommended VST3/AU plugins. Free plugins only. Used by /vst/suggest endpoint and the per-piece VST panel hint.",
+  "description": "Seed catalog: the game gear type → recommended VST3/AU plugins. Free plugins only. Used by /vst/suggest endpoint and the per-piece VST panel hint.",
   "version": 7,
   "updated": "2026-06-23",
   "notes": "v7: bundled clones only; adds Electar Model M and Electric Hawaiian aliases to EpicallCentura. Every gear resolves to its Rig Builder bundled VST (or NAM if none). No external/third-party plugins."
@@ -390,7 +390,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/DL-3.vst3",
    "free": true,
-   "notes": "Bundled Boss DM-2 analog (BBD) delay \u2014 warm repeats that darken cumulatively via a feedback-loop low-pass + gentle saturation. Maps RS Time/Feedback/Mix/Filter."
+   "notes": "Bundled Boss DM-2 analog (BBD) delay — warm repeats that darken cumulatively via a feedback-loop low-pass + gentle saturation. Maps RS Time/Feedback/Mix/Filter."
   }
  ],
  "Bass_Pedal_BassFilterEcho": [
@@ -400,7 +400,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/SE-3.vst3",
    "free": true,
-   "notes": "Bundled vintage tape echo \u2014 same engine as the Filter Delay but voiced like tape: darker, more saturated repeats with wow & flutter. Maps RS Time/Feedback/Mix/Filter."
+   "notes": "Bundled vintage tape echo — same engine as the Filter Delay but voiced like tape: darker, more saturated repeats with wow & flutter. Maps RS Time/Feedback/Mix/Filter."
   }
  ],
  "Pedal_SpringReverb": [
@@ -527,7 +527,7 @@
    "format": "VST3",
    "bundled": "vst/racks/HZX.vst3",
    "free": true,
-   "notes": "Bundled dbx 160 model \u2014 true-RMS feed-forward VCA compressor (dbx 202 RMS detector + log VCA, OverEasy soft knee). Threshold/Ratio/Attack/Release map 1:1 to RS."
+   "notes": "Bundled dbx 160 model — true-RMS feed-forward VCA compressor (dbx 202 RMS detector + log VCA, OverEasy soft knee). Threshold/Ratio/Attack/Release map 1:1 to RS."
   }
  ],
  "Rack_StudioEQ": [
@@ -600,7 +600,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/Bass Wah.vst3",
    "free": true,
-   "notes": "Bundled Cry Baby Bass Wah (105Q) model \u2014 resonant band-pass swept across 100 Hz-1.6 kHz by Pedal position, the input envelope (Sens) and an LFO (Speed) when Auto is on, with a little dry blend to keep bass body. Maps RS Auto/Pedal/Sens/Speed."
+   "notes": "Bundled Cry Baby Bass Wah (105Q) model — resonant band-pass swept across 100 Hz-1.6 kHz by Pedal position, the input envelope (Sens) and an LFO (Speed) when Auto is on, with a little dry blend to keep bass body. Maps RS Auto/Pedal/Sens/Speed."
   }
  ],
  "Pedal_ModernWah": [
@@ -625,17 +625,15 @@
    "notes": "Bundled Lofinator-style lo-fi filter based on the local schematic. The plugin exposes the real Drive, Level, Lo and Hi controls; Rocksmith FilterType/Mix are translated in the mapping table."
   }
  ],
- "Pedal_BobFilter": [
-  {
-   "name": "BobFilter",
-   "manufacturer": "Rig Builder",
-   "format": "VST3",
-   "url": "",
-   "free": true,
-   "bundled": "vst/pedals/FM105.vst3",
-   "notes": "Bundled Moog/MuRF-style analog filter based on the local MF-105 schematic. The plugin exposes Drive, Output, Pattern, Rate, Envelope, Mix and Mode; Rocksmith Sens/Attack/Release/Mix/Filter are translated in the mapping table."
-  }
- ],
+ "Pedal_BobFilter": {
+  "name": "FM101",
+  "manufacturer": "Rig Builder",
+  "format": "VST3",
+  "url": "",
+  "free": true,
+  "bundled": "vst/pedals/FM101.vst3",
+  "notes": "Bundled Moog MF-101 Lowpass Filter style ENVELOPE filter (rebuilt; the previous MuRF sequencer model never tracked the pick). Envelope follower sweeping a 4-pole tanh transistor ladder with resonance; panel Drive, Output, Cutoff, Resonance, Envelope, Attack, Release, Mix, Mode(2/4-pole). RS Sens/Attack/Release/Mix/Filter map to Envelope/Attack/Release/Mix/Mode."
+ },
  "Pedal_AutoFilter": [
   {
    "name": "AutoFilter",
@@ -764,7 +762,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/Mouse.vst3",
    "free": true,
-   "notes": "Bundled Pro Co RAT model \u2014 LM308 high-gain + hard 1N4148 clip + passive RAT Filter. Real controls are Distortion/Filter/Volume; RS Gain maps to Distortion, RS Filter/Tone map through the inverted RAT Filter, and Volume is pinned by the curated mapping."
+   "notes": "Bundled Pro Co RAT model — LM308 high-gain + hard 1N4148 clip + passive RAT Filter. Real controls are Distortion/Filter/Volume; RS Gain maps to Distortion, RS Filter/Tone map through the inverted RAT Filter, and Volume is pinned by the curated mapping."
   }
  ],
  "Bass_Pedal_BassOverdrive": [
@@ -774,7 +772,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/BLACKBRASS.vst3",
    "free": true,
-   "notes": "Bundled Darkglass Microtubes B3K model \u2014 J201/TL072 front end, CD4049UBE CMOS clipping and clean blend. Real controls are Blend/Drive/Level plus Attack/Grunt switches; RS Tone/Filter drive the two quantized switches and Level is pinned by the curated mapping."
+   "notes": "Bundled Darkglass Microtubes B3K model — J201/TL072 front end, CD4049UBE CMOS clipping and clean blend. Real controls are Blend/Drive/Level plus Attack/Grunt switches; RS Tone/Filter drive the two quantized switches and Level is pinned by the curated mapping."
   }
  ],
  "Pedal_FuzzWasHe": [
@@ -828,7 +826,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/Bass Big Buzz.vst3",
    "free": true,
-   "notes": "Bundled EHX Bass Big Muff Pi model \u2014 BC547 gain stages, dual 1N4148 clipping cells, Big Muff tone stack and Bass/Dry switch. Real controls are Sustain/Tone/Volume plus Bass/Dry; RS Filter drives the quantized switch and Volume is pinned by the curated mapping."
+   "notes": "Bundled EHX Bass Big Muff Pi model — BC547 gain stages, dual 1N4148 clipping cells, Big Muff tone stack and Bass/Dry switch. Real controls are Sustain/Tone/Volume plus Bass/Dry; RS Filter drives the quantized switch and Volume is pinned by the curated mapping."
   }
  ],
  "Pedal_OctaveUp": [
@@ -871,7 +869,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/SO-2.vst3",
    "free": true,
-   "notes": "Bundled Boss OC-2 model \u2014 monophonic analog octaver: comparator + flip-flop frequency divider (one octave down), envelope-tracked, with a Tone low-pass and dry/sub Mix. Maps RS Mix/Tone."
+   "notes": "Bundled Boss OC-2 model — monophonic analog octaver: comparator + flip-flop frequency divider (one octave down), envelope-tracked, with a Tone low-pass and dry/sub Mix. Maps RS Mix/Tone."
   }
  ],
  "Pedal_BitCruncher": [
@@ -995,7 +993,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/ENBIGGEN.vst3",
    "free": true,
-   "notes": "Bundled 'Enbiggenator' \u2014 a fictional RS pedal modeled as an LFO-modulated resonant band-pass (sci-fi vibe/wobble). Maps RS Rate/Depth/Mix/Filter."
+   "notes": "Bundled 'Enbiggenator' — a fictional RS pedal modeled as an LFO-modulated resonant band-pass (sci-fi vibe/wobble). Maps RS Rate/Depth/Mix/Filter."
   }
  ],
  "Pedal_SendInTheClones": [
@@ -1015,7 +1013,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/WT-DX.vst3",
    "free": true,
-   "notes": "Bundled Eden WTDI model \u2014 preamp Gain drive + optical Compressor + 3-band active EQ (Bass/Mid/Treble \u00b115 dB) + Eden Enhance contour. The two red switches are LoShift (Bass Boost) and MidShift, modeled as toggles. Maps all 8 RS knobs."
+   "notes": "Bundled Eden WTDI model — preamp Gain drive + optical Compressor + 3-band active EQ (Bass/Mid/Treble ±15 dB) + Eden Enhance contour. The two red switches are LoShift (Bass Boost) and MidShift, modeled as toggles. Maps all 8 RS knobs."
   }
  ],
  "Rack_StereoAnalogVibe": [
@@ -1045,7 +1043,7 @@
    "format": "VST3",
    "bundled": "vst/racks/StudioChorus.vst3",
    "free": true,
-   "notes": "Bundled Boss RCE-10 Chorus Ensemble model \u2014 12-bit digital chorus with NE572-style companding, pre/de-emphasis, R-2R quantization, effect EQ/level and stereo output spread. Maps all 7 RS knobs (Rate in Hz)."
+   "notes": "Bundled Boss RCE-10 Chorus Ensemble model — 12-bit digital chorus with NE572-style companding, pre/de-emphasis, R-2R quantization, effect EQ/level and stereo output spread. Maps all 7 RS knobs (Rate in Hz)."
   }
  ],
  "Rack_StudioDelay": [
@@ -1095,7 +1093,7 @@
    "format": "VST3",
    "bundled": "vst/racks/TapeEcho.vst3",
    "free": true,
-   "notes": "Bundled Roland RE-201 Space Echo model \u2014 stereo tape echo, dark saturated repeats with wow & flutter + cross-feed. Maps RS Time(ms)/Feedback/Filter/Stereo/Mix."
+   "notes": "Bundled Roland RE-201 Space Echo model — stereo tape echo, dark saturated repeats with wow & flutter + cross-feed. Maps RS Time(ms)/Feedback/Filter/Stereo/Mix."
   }
  ],
  "Amp_CA100": [
@@ -1326,7 +1324,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/SamplegSBTCL.vst3",
-   "notes": "the game's Amp_AT20 is the Ampeg SVT-CL (the gear map's generic name is 'Marshall JCM 1'). It reuses the SAME bundled amp as Bass_Amp_BT975B \u2014 the Sampleg SBT-CL (Ampeg SVT-CL parody) \u2014 so AT-20 songs play the SVT-CL model. RS Gain/Bass/Mid/Treble map exactly as the BT975B."
+   "notes": "the game's Amp_AT20 is the Ampeg SVT-CL (the gear map's generic name is 'Marshall JCM 1'). It reuses the SAME bundled amp as Bass_Amp_BT975B — the Sampleg SBT-CL (Ampeg SVT-CL parody) — so AT-20 songs play the SVT-CL model. RS Gain/Bass/Mid/Treble map exactly as the BT975B."
   }
  ],
  "Amp_AT120": [
@@ -1414,7 +1412,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/BenderFumble800.vst3",
-   "notes": "Bundled Fender Rumble Bass (1995) style all-tube dual-channel bass head (the game 'CS300B'): circuit-real model from the service schematics (drawings 048406 preamp / 048411 power) \u2014 two 12AX7 preamp channels (A vintage / B), each Volume + passive Fender TMB (Treble/Bass/Middle) + Mid-cut switch, blended by MIX, into a 12AT7 LTP phase inverter + 6x6550 push-pull power amp. RS Gain->B Volume; RS Bass/Mid/Treble->B Bass/Middle/Treble. (Display: Bender Fumble Bass.)"
+   "notes": "Bundled Fender Rumble Bass (1995) style all-tube dual-channel bass head (the game 'CS300B'): circuit-real model from the service schematics (drawings 048406 preamp / 048411 power) — two 12AX7 preamp channels (A vintage / B), each Volume + passive Fender TMB (Treble/Bass/Middle) + Mid-cut switch, blended by MIX, into a 12AT7 LTP phase inverter + 6x6550 push-pull power amp. RS Gain->B Volume; RS Bass/Mid/Treble->B Bass/Middle/Treble. (Display: Bender Fumble Bass.)"
   }
  ],
  "Bass_Amp_EdenE300": [
@@ -1425,7 +1423,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/AidenGT300.vst3",
-   "notes": "Bundled Eden WT-300 'Traveler' Valve-Tech style hybrid bass preamp (the game 'EdenE300'): component-level model from the Eden WT-300 preamp schematic (2-19-93) \u2014 12AX7 input, Eden opto Comp, Enhance contour, Bass/Treble shelves, 3-band semi-parametric EQ (30-300/200-2k/1.2-12k), Master. RS Gain->Gain; RS Bass/Mid/Treble->Bass/EQ2 mid/Treble."
+   "notes": "Bundled Eden WT-300 'Traveler' Valve-Tech style hybrid bass preamp (the game 'EdenE300'): component-level model from the Eden WT-300 preamp schematic (2-19-93) — 12AX7 input, Eden opto Comp, Enhance contour, Bass/Treble shelves, 3-band semi-parametric EQ (30-300/200-2k/1.2-12k), Master. RS Gain->Gain; RS Bass/Mid/Treble->Bass/EQ2 mid/Treble."
   }
  ],
  "Bass_Amp_EdenWT550": [
@@ -1458,7 +1456,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/Lovolt100.vst3",
-   "notes": "Bundled Custom Hiwatt 100 (DR103) style all-tube head (the game 'HT100B'): component-level model from the documented DR103 circuit + factory spec \u2014 12AX7 Normal/Bright preamp, British (FMV) Bass/Middle/Treble tone stack, Presence (NFB), 4x EL34 push-pull (~100 W, big clean Hiwatt headroom). RS Gain->Normal Vol; RS Bass/Mid/Treble->tone stack."
+   "notes": "Bundled Custom Hiwatt 100 (DR103) style all-tube head (the game 'HT100B'): component-level model from the documented DR103 circuit + factory spec — 12AX7 Normal/Bright preamp, British (FMV) Bass/Middle/Treble tone stack, Presence (NFB), 4x EL34 push-pull (~100 W, big clean Hiwatt headroom). RS Gain->Normal Vol; RS Bass/Mid/Treble->tone stack."
   }
  ],
  "Bass_Amp_HT400B": [
@@ -1469,7 +1467,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/SillaBoogieBass400.vst3",
-   "notes": "Bundled Mesa/Boogie Bass 400+ style all-tube head (the game 'HT400B'): component-level model from the Bass 400+ panel + circuit \u2014 12AX7 preamp (Volume 1/2, pull-Bright), passive Middle/Bass/Treble (pull-Shift) tone stack, Mesa 6-band graphic EQ (40/100/250/625/1560/3900), 12x 6L6 push-pull (~500 W, huge clean tube headroom). RS Gain->Volume 1; RS Bass/Mid/Treble->tone stack."
+   "notes": "Bundled Mesa/Boogie Bass 400+ style all-tube head (the game 'HT400B'): component-level model from the Bass 400+ panel + circuit — 12AX7 preamp (Volume 1/2, pull-Bright), passive Middle/Bass/Treble (pull-Shift) tone stack, Mesa 6-band graphic EQ (40/100/250/625/1560/3900), 12x 6L6 push-pull (~500 W, huge clean tube headroom). RS Gain->Volume 1; RS Bass/Mid/Treble->tone stack."
   }
  ],
  "Bass_Amp_OrangeAD200B": [

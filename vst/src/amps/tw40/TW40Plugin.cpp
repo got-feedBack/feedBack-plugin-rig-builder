@@ -27,7 +27,7 @@ protected:
     void sampleRateChanged(double r) override { core.setSampleRate(kOS*(float)r); os.reset(); applyAll(); }
     void run(const float** in, float** out, uint32_t frames) override { const float* i0=in[0]; float* oL=out[0]; float* oR=out[1];
         for(uint32_t i=0;i<frames;++i){ float ub[kOS]; os.upsample(i0[i],ub);
-            for(int k=0;k<kOS;++k) ub[k]=rbAmpLvl(0.50f*core.process(ub[k])); const float y=os.downsample(ub); oL[i]=y; oR[i]=y; } }
+            for(int k=0;k<kOS;++k) ub[k]=rbAmpLvl(0.722f*core.process(ub[k])); const float y=os.downsample(ub); oL[i]=y; oR[i]=y; } }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TW40Plugin)
 };
 Plugin* createPlugin(){ return new TW40Plugin(); }

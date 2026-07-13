@@ -125,24 +125,36 @@ class AutoFilterCore
     float mode = kAutoFilterDef[kMode];
     float range = kAutoFilterDef[kRange];
     float direction = kAutoFilterDef[kDirection];
+    float attack = kAutoFilterDef[kAttack];
+    float release = kAutoFilterDef[kRelease];
 
     Svf filter;
 
     float dcIn = 0.0f;
     float env = 0.0f;     // fast electronic full-wave rectifier
     float opto = 0.0f;    // slow LED→LDR photocell (the Mu-Tron lag)
+    float slowLvl = 0.0f; // ~600ms/2s playing-level tracker (detector reference)
     float lastCutoff = 300.0f;
 
     float rectAtkA = 0.0f, rectRelA = 0.0f;
     float optoAtkA = 0.0f, optoRelA = 0.0f;
+    float slowAtkA = 0.0f, slowRelA = 0.0f;
 
     void updateCoeffs()
     {
-        // Fixed time constants — a real Mu-Tron III has NO attack/release pots.
+        // A real Mu-Tron III has FIXED opto times (no attack/release pots), but
+        // the game's Auto Tone gear authors Attack/Release per tone — so the
+        // pots SCALE the authentic NSL-32 constants (log, 0.25x..4x; 0.5 = stock).
+        const float fA = std::pow(4.0f, 2.0f * (clamp01(attack) - 0.5f));
+        const float fR = std::pow(4.0f, 2.0f * (clamp01(release) - 0.5f));
         rectAtkA = onePoleCoeffMs(3.0f, sampleRate);    // precision rectifier, fast
         rectRelA = onePoleCoeffMs(15.0f, sampleRate);
-        optoAtkA = onePoleCoeffMs(55.0f, sampleRate);   // NSL-32 rise time TR
-        optoRelA = onePoleCoeffMs(90.0f, sampleRate);   // NSL-32 decay TD (+ CdS tail)
+        optoAtkA = onePoleCoeffMs(55.0f * fA, sampleRate);   // NSL-32 rise TR (scaled)
+        optoRelA = onePoleCoeffMs(90.0f * fR, sampleRate);   // NSL-32 decay TD (scaled)
+        // playing-level tracker: much slower than any note so it can't eat the
+        // per-note sweep — it only re-references the detector to the chain level
+        slowAtkA = onePoleCoeffMs(600.0f, sampleRate);
+        slowRelA = onePoleCoeffMs(2000.0f, sampleRate);
     }
 
     int modeIndex() const
@@ -158,7 +170,7 @@ public:
     void reset()
     {
         filter.reset();
-        dcIn = env = opto = 0.0f;
+        dcIn = env = opto = slowLvl = 0.0f;
         lastCutoff = 300.0f;
         updateCoeffs();
     }
@@ -174,6 +186,8 @@ public:
     void setMode(float v)      { mode = clamp01(v); }
     void setRange(float v)     { range = clamp01(v); }
     void setDirection(float v) { direction = clamp01(v); }
+    void setAttack(float v)    { attack = clamp01(v); updateCoeffs(); }
+    void setRelease(float v)   { release = clamp01(v); updateCoeffs(); }
 
     float process(float in)
     {
@@ -182,11 +196,26 @@ public:
         const float x = in - dcIn;
 
         // --- envelope detector (GAIN = sensitivity only) ---
-        const float detDrive = 1.0f + 9.0f * gain;            // input sensitivity into the rectifier
-        const float rect = std::fabs(x) * detDrive;
+        // The detector is REFERENCED TO THE PLAYING LEVEL, not to absolute
+        // sample values: in the game the BU-TRON can sit after a booster/drive
+        // (chain levels vary >12 dB between tones), and any fixed law either
+        // parks the filter open on hot chains (env >> knee all song — the
+        // reported "raise Gain and the wah dies") or barely moves on quiet
+        // ones. The tracker is far slower (600ms/2s) than any note, so the
+        // per-note pick→decay traversal — the quack — passes through intact;
+        // it only cancels the static chain level, like a player trimming the
+        // real pedal's Gain for their rig.
+        const float mag = std::fabs(x);
+        slowLvl += (mag > slowLvl ? slowAtkA : slowRelA) * (mag - slowLvl);
+        const float xn = mag / (0.05f + 2.6f * slowLvl);      // ~1.0 at pick peaks
+        // GAIN = depth: how hard the normalized signal drives the LED.
+        const float detDrive = (0.7f + 4.3f * gain) * 0.35f;
+        const float rect = xn * detDrive;
         env += (rect > env ? rectAtkA : rectRelA) * (rect - env);
-        // LED → LDR photocell lag: the smooth Mu-Tron "vowel" sweep
-        const float optoTarget = clamp01(env);
+        // LED → LDR photocell lag: the smooth Mu-Tron "vowel" sweep. Log CV law
+        // (a photocell is genuinely log-ish, R ∝ I^-γ) — keeps slope near the
+        // top instead of flattening like clamp01/first-order knees did.
+        const float optoTarget = clamp01(0.455f * std::log2(1.0f + 1.6f * env));
         opto += (optoTarget > opto ? optoAtkA : optoRelA) * (optoTarget - opto);
 
         // sweep 0..1; DIRECTION DOWN inverts the CV (filter closes on attack)
@@ -241,6 +270,10 @@ class AutoFilterPlugin : public Plugin
         right.setRange(params[kRange]);
         left.setDirection(params[kDirection]);
         right.setDirection(params[kDirection]);
+        left.setAttack(params[kAttack]);
+        right.setAttack(params[kAttack]);
+        left.setRelease(params[kRelease]);
+        right.setRelease(params[kRelease]);
     }
 
 public:

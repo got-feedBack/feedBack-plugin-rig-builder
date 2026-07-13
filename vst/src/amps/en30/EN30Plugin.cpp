@@ -126,7 +126,7 @@ protected:
             float ub[kOS];
             os.upsample(3.2f * in0[i], ub);
             for (int k = 0; k < kOS; ++k)                  // core + Top-Boost scoop + soft-clip at 4x
-                ub[k] = rbAmpLvl(0.891f * scoop.process(core.process(ub[k])));
+                ub[k] = rbAmpLvl(1.477f * scoop.process(core.process(ub[k])));
             const float y = os.downsample(ub);
             outL[i] = y;
             outR[i] = y;   // dual-mono: one core, same signal both sides = centered/balanced

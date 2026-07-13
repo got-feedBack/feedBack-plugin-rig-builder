@@ -62,6 +62,97 @@
     /* When a song's tonebar is shown it covers the top strip — drop the Advanced
        button below it so it stays reachable while a song is loaded. */
     #rb-stage-wrap.rb-songbar-on .rb-studio-adv-btn{ top:58px; }
+    /* Full-chain NAM loader: fixed bottom-left, always present (song or not). */
+    .rb-studio-fullchain-btn{ position:absolute; bottom:16px; left:16px; z-index:20; cursor:pointer;
+        padding:7px 13px; border-radius:9px; font-size:13px; font-weight:500; color:#d8ffe6;
+        background:rgba(20,58,40,.62); border:1px solid rgba(90,220,150,.34);
+        box-shadow:0 6px 18px rgba(0,0,0,.4); backdrop-filter:blur(6px);
+        transition:background .15s, color .15s, transform .12s; }
+    .rb-studio-fullchain-btn:hover{ background:rgba(28,84,58,.85); color:#fff; transform:translateY(-1px); }
+    /* Hide it in gear/pedal focus edit (same as the Advanced button). */
+    #rb-stage-wrap:has(#rb-studio-room.rb-focus-active) .rb-studio-fullchain-btn,
+    #rb-stage-wrap:has(#rb-studio-room.rb-pfocus) .rb-studio-fullchain-btn{ display:none !important; }
+
+    /* ── Full-chain NAM chooser modal ─────────────────────────────────────── */
+    .rb-fc-modal{ position:fixed; inset:0; z-index:120; display:flex; align-items:center;
+        justify-content:center; background:rgba(6,10,16,.62); backdrop-filter:blur(3px); }
+    .rb-fc-modal.hidden{ display:none; }
+    .rb-fc-card{ width:min(460px,92vw); max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
+        background:#141a24; border:1px solid rgba(120,170,240,.22); border-radius:14px;
+        box-shadow:0 24px 70px rgba(0,0,0,.6); }
+    .rb-fc-head{ display:flex; align-items:center; justify-content:space-between; padding:13px 16px;
+        font-size:14px; font-weight:600; color:#eaf1ff; border-bottom:1px solid rgba(255,255,255,.07); }
+    .rb-fc-x{ cursor:pointer; color:#9fb0c8; background:none; border:none; font-size:15px; padding:2px 6px; border-radius:6px; }
+    .rb-fc-x:hover{ color:#fff; background:rgba(255,255,255,.1); }
+    .rb-fc-body{ padding:14px 16px; overflow-y:auto; }
+    .rb-fc-scope{ font-size:12px; color:#9fb0c8; margin-bottom:12px; }
+    .rb-fc-scope b{ color:#d8ffe6; font-weight:600; }
+    .rb-fc-dir{ width:100%; cursor:pointer; padding:10px 12px; border-radius:9px; font-size:13px; font-weight:500;
+        color:#d8ffe6; background:rgba(20,58,40,.6); border:1px solid rgba(90,220,150,.34); transition:background .15s; }
+    .rb-fc-dir:hover{ background:rgba(28,84,58,.85); color:#fff; }
+    .rb-fc-or{ text-align:center; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+        color:#6b7a90; margin:13px 0 10px; }
+    .rb-fc-search{ display:flex; gap:6px; }
+    .rb-fc-search input{ flex:1; min-width:0; background:#0e131b; border:1px solid rgba(255,255,255,.1);
+        border-radius:8px; color:#e6edf7; font-size:13px; padding:8px 10px; }
+    .rb-fc-search button{ cursor:pointer; padding:8px 14px; border-radius:8px; font-size:13px; color:#cfe0ff;
+        background:rgba(30,46,76,.7); border:1px solid rgba(120,170,240,.34); }
+    .rb-fc-search button:hover{ background:rgba(48,72,118,.85); color:#fff; }
+    .rb-fc-results{ margin-top:10px; display:flex; flex-direction:column; gap:3px; max-height:340px; overflow-y:auto; }
+    .rb-fc-hint{ font-size:12px; color:#8a98ad; padding:8px 2px; }
+    .rb-fc-hint.rb-fc-warn{ color:#ffcf7a; }
+    .rb-fc-row{ display:flex; align-items:center; gap:9px; padding:6px 7px; border-radius:8px; }
+    .rb-fc-row:hover{ background:rgba(255,255,255,.05); }
+    .rb-fc-thumb{ width:36px; height:36px; object-fit:cover; border-radius:6px; background:#0e131b; flex:0 0 auto; }
+    .rb-fc-thumb-empty{ display:flex; align-items:center; justify-content:center; font-size:9px; color:#4b5568; }
+    .rb-fc-row-main{ flex:1; min-width:0; text-decoration:none; }
+    .rb-fc-row-title{ font-size:12px; color:#dbe4f2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .rb-fc-row-main:hover .rb-fc-row-title{ color:#fff; }
+    .rb-fc-row-sub{ font-size:10px; color:#6b7a90; }
+    .rb-fc-use{ cursor:pointer; white-space:nowrap; flex:0 0 auto; font-size:11px; padding:5px 9px; border-radius:7px;
+        color:#d8ffe6; background:rgba(24,96,60,.8); border:1px solid rgba(90,220,150,.4); }
+    .rb-fc-use:hover{ background:rgba(30,120,74,.95); color:#fff; }
+    .rb-fc-use:disabled{ opacity:.6; cursor:default; }
+    /* Shared tone3000 browser: category chips + per-tone capture list. */
+    .rb-t3k-chips{ display:flex; flex-wrap:wrap; gap:5px; margin:8px 0; }
+    .rb-t3k-chip{ cursor:pointer; font-size:11px; padding:3px 9px; border-radius:999px; color:#9fb0c8;
+        background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12); transition:background .12s, color .12s; }
+    .rb-t3k-chip:hover{ background:rgba(255,255,255,.1); color:#e6edf7; }
+    .rb-t3k-chip.on{ background:rgba(48,72,118,.85); border-color:rgba(120,170,240,.5); color:#fff; }
+    .rb-t3k-cand{ align-items:center; }
+    .rb-t3k-exp{ cursor:pointer; flex:0 0 auto; width:20px; text-align:center; color:#8a98ad; background:none;
+        border:none; font-size:12px; padding:2px; border-radius:5px; }
+    .rb-t3k-exp:hover{ color:#fff; background:rgba(255,255,255,.1); }
+    .rb-t3k-caps{ margin:1px 0 8px 30px; border-left:2px solid rgba(120,170,240,.2); padding-left:8px; }
+    .rb-t3k-caplist{ display:flex; flex-direction:column; gap:2px; max-height:230px; overflow-y:auto; }
+    .rb-t3k-capsearch input{ width:100%; box-sizing:border-box; margin:2px 0 5px; background:#0e131b;
+        border:1px solid rgba(255,255,255,.1); border-radius:7px; color:#e6edf7; font-size:11px; padding:5px 8px; }
+    .rb-t3k-cap{ display:flex; align-items:center; gap:8px; padding:3px 4px; border-radius:6px; }
+    .rb-t3k-cap:hover{ background:rgba(255,255,255,.04); }
+    .rb-t3k-cap-name{ flex:1; min-width:0; font-size:11px; color:#cdd7e6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .rb-t3k-cap-size{ flex:0 0 auto; font-size:9px; text-transform:uppercase; color:#6b7a90; }
+    /* Whole-row expander: the candidate row is clickable; the pill on the right
+       makes "there's more inside" obvious (no separate download button here). */
+    .rb-t3k-cand{ cursor:pointer; }
+    .rb-t3k-cand:hover{ background:rgba(255,255,255,.05); }
+    .rb-t3k-more{ flex:0 0 auto; font-size:11px; color:#9fb0c8; white-space:nowrap; padding:3px 10px; border-radius:999px;
+        background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); }
+    .rb-t3k-cand:hover .rb-t3k-more{ color:#fff; background:rgba(48,72,118,.7); border-color:rgba(120,170,240,.4); }
+    .rb-t3k-cand.open .rb-t3k-more{ color:#fff; background:rgba(48,72,118,.9); border-color:rgba(120,170,240,.5); }
+    .rb-t3k-link{ color:#8fb3ef; text-decoration:none; }
+    .rb-t3k-link:hover{ color:#cfe0ff; text-decoration:underline; }
+    /* Add-gear source selector: pick ONE of tone3000 / directory / downloaded. */
+    .rb-cg-srcsegs{ display:inline-flex; flex-wrap:wrap; gap:4px; margin-bottom:9px; }
+    .rb-cg-srcseg{ cursor:pointer; font-size:12px; padding:5px 11px; border-radius:8px; color:#9fb0c8;
+        background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12); transition:background .12s, color .12s; }
+    .rb-cg-srcseg:hover{ background:rgba(255,255,255,.1); color:#e6edf7; }
+    .rb-cg-srcseg.on{ background:rgba(48,72,118,.85); border-color:rgba(120,170,240,.5); color:#fff; }
+    /* Amp gain-variant rows (clean/crunch/dist → downloaded NAM). */
+    .rb-cg-varrow{ display:flex; align-items:center; gap:8px; margin-bottom:5px; }
+    .rb-cg-varlvl{ flex:0 0 46px; font-size:11px; font-weight:600; text-transform:capitalize; color:#cdd7e6; }
+    .rb-cg-varrange{ flex:0 0 74px; font-size:10px; color:#6b7a90; white-space:nowrap; }
+    .rb-cg-varsel{ flex:1; min-width:0; background:#0e131b; border:1px solid rgba(255,255,255,.12); border-radius:7px;
+        color:#e6edf7; font-size:11px; padding:5px 7px; }
     /* Gear focus (amp/pedal/rack editor open, catalog on the right): hide the
        floating "⚙ Advanced" button AND the song-tones bar. The focus bar's
        "← Room" back button sits at top:0/z-index:7, but the tonebar is at
@@ -355,6 +446,26 @@
             repeating-linear-gradient(45deg, rgba(255,255,255,.03) 0 2px, transparent 2px 5px),
             repeating-linear-gradient(-45deg, rgba(0,0,0,.22) 0 2px, transparent 2px 5px);
         box-shadow:inset 0 0 0 1px rgba(255,255,255,.04); }
+    /* Recreated cab artwork present → drop the generic grille + let the SVG show
+       on a dark backdrop (it fits inside, letterboxed for non-square cabs). */
+    /* Recreated cab in the room: no generic grille/backdrop, no fixed shadow —
+       the cab art (sized to the cab's real aspect inline) is the whole face, and
+       it rides the amp stack's 3D transform so depth is preserved. */
+    .rb-amp-cab.has-art{ background:transparent; box-shadow:none; border:0; overflow:visible; }
+    .rb-amp-cab.has-art::before{ display:none; }
+    .rb-amp-cab.has-art > img{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
+    /* Mic on a boom stand over the room cab (position/model from the Cab Room). The
+       stand SVG extends below the cab to the floor; the mic sits at the boom tip. */
+    .rb-amp-cab .rb-room-stand{ position:absolute; left:0; top:0; width:100%; height:122%;
+        overflow:visible; pointer-events:none; z-index:1; }
+    /* Mic sits capsule-UP (natural). Anchored by its BODY clip point (~55% down the
+       art) at the boom tip; the capsule then sticks up above it. The 45° option
+       rotates around that SAME clip point so the mic stays on the boom. */
+    .rb-room-mic{ position:absolute; width:13%; aspect-ratio:120/320; transform-origin:50% 55%;
+        transform:translate(-50%,-55%); z-index:2; pointer-events:none;
+        filter:drop-shadow(0 2px 4px rgba(0,0,0,.5)); }
+    .rb-room-mic.rb-cabmic-ang{ transform:translate(-50%,-55%) rotate(38deg); }
+    .rb-room-mic svg{ width:100%; height:100%; display:block; }
 
     /* camera = perspective viewport. On focus the viewpoint re-aims toward the
        amp's corner (perspective-origin shifts there) so it reads as the camera
@@ -432,6 +543,42 @@
     .rb-swap-thumb img{ width:100%; height:100%; object-fit:contain; }
     .rb-swap-name{ flex:1 1 auto; min-width:0; font-size:12.5px; color:#e8eef8; font-weight:500; line-height:1.25;
         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    /* Studio Cab Room: LEFT mic rail — same look/size as the right cab rail. */
+    .rb-mic-rail{ position:absolute; top:0; left:0; bottom:0; width:min(320px,30%); z-index:8;
+        display:flex; flex-direction:column; gap:12px; padding:16px 14px;
+        background:linear-gradient(180deg, rgba(48,74,134,.15), rgba(30,52,100,.20));
+        -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+        border-right:1px solid rgba(120,160,220,.14);
+        transform:translateX(-100%); opacity:0;
+        transition:transform .35s cubic-bezier(.33,0,.2,1), opacity .3s ease; }
+    .rb-mic-rail.rb-swap-open{ transform:none; opacity:1; }
+    .rb-mic-list{ flex:1 1 auto; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:2px; }
+    .rb-mic-list::-webkit-scrollbar{ width:0; }
+    .rb-mic-foot{ flex:0 0 auto; display:flex; flex-direction:column; gap:10px;
+        border-top:1px solid rgba(120,160,220,.14); padding-top:12px; }
+    .rb-mic-sec{ display:flex; flex-direction:column; gap:6px; }
+    .rb-mic-h{ font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:#8a97b0; font-weight:700; }
+    .rb-mic-btns{ display:flex; flex-wrap:wrap; gap:5px; }
+    /* Studio cab centre: transparent, fills the middle at the cab's real aspect. */
+    .rb-cab-center{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+    .rb-cab-fit{ position:relative; max-width:100%; cursor:crosshair; touch-action:none; isolation:isolate; }
+    .rb-cab-fit > svg{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+    /* Speaker-cone silhouettes faintly visible through the grille — never block the mic drag.
+       Two blended layers self-adapt to grille colour: light(screen)=more on dark cabs,
+       dark(multiply)=subtle on light cabs (see rbCabSpeakerSilhouettesSvg). */
+    .rb-cab-spk{ pointer-events:none; z-index:2; }
+    .rb-spk-lite{ mix-blend-mode:screen; }
+    /* The chosen mic recreated as SVG art, sitting capsule-at-the-point over the
+       cone. transform-origin near the capsule so the 45° toggle pivots on it. */
+    .rb-cabmic{ position:absolute; width:34px; height:96px; transform:translate(-50%,-16%);
+        transform-origin:50% 10%; z-index:3; pointer-events:none;
+        filter:drop-shadow(0 6px 11px rgba(0,0,0,.6)); transition:transform .18s ease; }
+    .rb-cabmic svg{ width:100%; height:100%; display:block; }
+    .rb-cabmic-ang{ transform:translate(-50%,-16%) rotate(38deg); }
+    /* Mic rail thumbnail: reuse the portrait art laid diagonally like a product shot. */
+    .rb-mic-swap-thumb{ overflow:hidden; }
+    .rb-mic-thumb{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+    .rb-mic-thumb svg{ height:158%; width:auto; transform:rotate(50deg); }
 
     /* floating control bar shown in focus mode */
     .rb-focus-bar2{ position:absolute; top:0; left:0; right:0; z-index:7; display:flex; align-items:center;
@@ -934,6 +1081,23 @@
         <button class="rb-studio-adv-btn" onclick="rbShowTab('advanced')" title="Open the advanced node-graph chain editor">
             ⚙ Advanced
         </button>
+        <!-- Full-chain NAM loader: always docked bottom-left (with or without a song).
+             Replaces the CURRENT tone (Default / saved / song) with a single baked .nam. -->
+        <button class="rb-studio-fullchain-btn" onclick="rbStudioLoadFullChainNam()"
+                title="Replace the current tone with a full-chain .nam (amp+pedals+cab baked in one capture) — from a directory or tone3000">
+            🎛 Full-chain NAM
+        </button>
+    </div>
+
+    <!-- Full-chain NAM chooser (directory or tone3000). Overlays the whole shell. -->
+    <div id="rb-fullchain-modal" class="rb-fc-modal hidden" onclick="if(event.target===this)rbFcClose()">
+        <div class="rb-fc-card">
+            <div class="rb-fc-head">
+                <span>🎛 Load full-chain NAM</span>
+                <button class="rb-fc-x" onclick="rbFcClose()" title="Close">✕</button>
+            </div>
+            <div id="rb-fullchain-body" class="rb-fc-body"></div>
+        </div>
     </div>
 
     <!-- Songs — a bottom search dock that doesn't cover the studio room -->
@@ -965,24 +1129,9 @@
                         class="rb-gear-filter-btn px-3 py-1.5 rounded text-xs text-gray-300 transition">
                     All gear
                 </button>
-                <button onclick="rbGearFilter('files')" data-rb-gear-filter="files"
-                        class="rb-gear-filter-btn px-3 py-1.5 rounded text-xs text-gray-300 transition">
-                    Files
-                </button>
                 <button onclick="rbShowTab('advanced')" title="Open the node-graph chain editor"
                         class="rb-gear-filter-btn px-3 py-1.5 rounded text-xs text-cyan-300 transition">
                     ⚙ Advanced
-                </button>
-            </div>
-            <div class="flex gap-2 flex-wrap">
-                <button onclick="rbPreloadCuratedVariants()"
-                        title="Single action: rename any cryptic legacy files to readable names, download every gain_variants entry curated in rs_to_real.json, then wire each one back to the preset_pieces rows that need it."
-                        class="bg-emerald-900/30 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/40 px-3 py-1.5 rounded text-xs transition">
-                    ⬇ Download all curated variants
-                </button>
-                <button onclick="rbPurgeNams({}, 'EVERYTHING — every NAM and IR')"
-                        class="bg-red-900/30 hover:bg-red-900/60 text-red-300 border border-red-800/40 px-3 py-1.5 rounded text-xs transition">
-                    🗑 Purge all
                 </button>
             </div>
         </div>
@@ -1003,11 +1152,22 @@
                         <option value="bass">Bass</option>
                     </select>
                     <div id="rb-gear-category-menu" class="grid grid-cols-2 gap-2"></div>
+                    <!-- Backing-type filter: show gear by what powers it. Multi-
+                         select — pick any combination (all off = show everything). -->
+                    <div class="flex items-center gap-1.5" title="Filter by what backs each gear">
+                        <button type="button" data-rb-backing="nam" onclick="rbToggleBackingFilter('nam')"
+                                class="rb-backing-btn flex-1 px-2 py-1 rounded text-xs text-gray-400 border border-gray-800 bg-dark-800 transition">NAM</button>
+                        <button type="button" data-rb-backing="vst" onclick="rbToggleBackingFilter('vst')"
+                                class="rb-backing-btn flex-1 px-2 py-1 rounded text-xs text-gray-400 border border-gray-800 bg-dark-800 transition">VST</button>
+                        <button type="button" data-rb-backing="ir" onclick="rbToggleBackingFilter('ir')"
+                                class="rb-backing-btn flex-1 px-2 py-1 rounded text-xs text-gray-400 border border-gray-800 bg-dark-800 transition">IR</button>
+                    </div>
                     <label class="text-xs text-gray-400 flex items-center gap-1.5 whitespace-nowrap cursor-pointer hover:text-gray-200 transition">
                         <input type="checkbox" id="rb-gear-only-unassigned" onchange="rbApplyGearFilters()" class="rounded">
                         Only unassigned
                     </label>
                     <div id="rb-gear-list-summary" class="text-xs text-gray-500"></div>
+                    <div id="rb-gear-add-btn"></div>
                     <div id="rb-catalog" class="space-y-1 text-sm max-h-[80vh] overflow-y-auto pr-1">Loading…</div>
                 </aside>
                 <section id="rb-gear-detail" class="min-w-0">Loading…</section>
@@ -1049,22 +1209,6 @@
             </div>
         </div>
 
-        <!-- View: Files (downloaded NAM/IR inventory) -->
-        <div id="rb-gear-view-files" class="rb-gear-view hidden">
-            <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-4 mb-4">
-                <div class="flex items-center justify-between gap-3 flex-wrap">
-                    <div>
-                        <h3 class="text-white font-semibold text-sm">Downloaded captures</h3>
-                        <p class="text-gray-500 text-xs mt-1" id="rb-manage-summary">Loading inventory…</p>
-                    </div>
-                    <button onclick="rbLoadManageTab()"
-                            class="bg-dark-600 hover:bg-dark-500 text-gray-200 px-3 py-1.5 rounded text-xs transition">
-                        ↻ Refresh
-                    </button>
-                </div>
-            </div>
-            <div id="rb-manage-buckets" class="space-y-4"></div>
-        </div>
     </div>
 
     <!-- Master chain — global pre/post FX wrapper -->
@@ -1163,6 +1307,18 @@
          DOM ids used by JS — only the layout was reorganised. -->
     <div id="rb-tab-settings" class="rb-tab-panel rb-overlay hidden">
 
+        <!-- Setup sub-tabs: General settings (library-wide + preferences) and
+             tone3000 (account, downloads, Files). -->
+        <div class="inline-flex gap-1 bg-dark-800/50 border border-gray-800/50 rounded-lg p-1 mb-6">
+            <button id="rb-setup-sub-general" onclick="rbSetupSubtab('general')"
+                    class="rb-setup-sub-btn px-4 py-1.5 rounded text-sm text-gray-300 transition">General settings</button>
+            <button id="rb-setup-sub-tone3000" onclick="rbSetupSubtab('tone3000')"
+                    class="rb-setup-sub-btn px-4 py-1.5 rounded text-sm text-gray-300 transition">tone3000</button>
+        </div>
+
+        <!-- ════════════════ GENERAL SETTINGS ════════════════ -->
+        <div id="rb-setup-general">
+
         <!-- Rig Builder master ON/OFF — turn the whole thing off if you don't use it. -->
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
             <h3 class="text-white font-semibold mb-2">Rig Builder</h3>
@@ -1200,103 +1356,6 @@
             </div>
         </div>
 
-        <!-- Connect tone3000 first — it's the prerequisite for in-app
-             candidate listing and automatic downloads, so it leads Settings. -->
-        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
-            <h3 class="text-white font-semibold mb-3">Connect tone3000 account</h3>
-            <p class="text-gray-500 text-sm mb-3">
-                Sign in to tone3000 to list candidates in-app and unlock
-                automatic downloads — <strong>no API key to paste</strong>.
-                This opens tone3000 in your browser; you approve once and come
-                back. The plugin only receives a temporary, revocable token.
-            </p>
-            <div class="flex gap-3 items-center">
-                <button id="rb-oauth-btn" onclick="rbOauthConnect()" class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-sm transition">Connect with tone3000</button>
-                <button id="rb-oauth-disconnect" onclick="rbOauthDisconnect()" class="hidden bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Disconnect</button>
-                <span id="rb-oauth-status" class="text-xs text-gray-500"></span>
-            </div>
-        </div>
-
-        <!-- Capture-download progress, mirrored from the Gear → Files
-             preload so the user can watch tone3000 captures download
-             without leaving Setup (e.g. right after a reset re-triggers
-             downloads). Driven by the same GET /preload_status poll as the
-             Gear tab; hidden unless a run is in flight or just finished. -->
-        <div id="rb-setup-preload" class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6 hidden">
-            <h3 class="text-white font-semibold mb-2">Downloading captures from tone3000</h3>
-            <div class="flex items-center gap-3 mb-2 text-sm text-gray-400">
-                <span id="rb-setup-preload-pct">0%</span>
-                <span id="rb-setup-preload-count">0 / 0</span>
-            </div>
-            <div class="h-2 bg-dark-800 rounded-full overflow-hidden">
-                <div id="rb-setup-preload-bar" class="h-full bg-accent transition-all" style="width:0%"></div>
-            </div>
-            <p id="rb-setup-preload-current" class="text-gray-500 text-xs mt-2"></p>
-            <p id="rb-setup-preload-summary" class="text-xs mt-2 hidden"></p>
-        </div>
-
-        <!-- Batch operations (was Dashboard) -->
-        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
-            <h3 class="text-white font-semibold mb-2">Scan library &amp; auto-assign captures</h3>
-            <p class="text-gray-500 text-sm mb-3">
-                Walks every sloppak song in your library and, for each
-                gear in each tone, resolves a NAM / IR / VST in this order:
-                <span class="text-gray-400">(1)</span> reuse an assignment you've already made for that gear in
-                another song, <span class="text-gray-400">(2)</span> your curated picks
-                (<code class="bg-dark-800 px-1 rounded">default_captures.json</code> +
-                <code class="bg-dark-800 px-1 rounded">gain_variants</code>),
-                <span class="text-gray-400">(3)</span> a fresh tone3000 search + download —
-                unless you turn that step off below.
-            </p>
-            <label class="flex items-start gap-2 mb-4 text-sm cursor-pointer">
-                <input type="checkbox" id="rb-allow-tone3000-fallback"
-                       onchange="rbSetAllowTone3000Fallback(this.checked)"
-                       class="mt-1 accent-amber-500">
-                <span class="text-gray-300">
-                    <span class="font-medium text-amber-300">⚠ Allow tone3000 fuzzy fallback</span>
-                    <span class="text-gray-500 ml-1">(opt-out from curated-only)</span>
-                    <div class="text-gray-500 mt-1 leading-snug">
-                        Leave <strong class="text-gray-400">unchecked</strong> (recommended) and the plugin
-                        will only use the curated 1-to-1 mappings in
-                        <code class="bg-dark-800 px-1 rounded">rs_to_real.json</code> +
-                        <code class="bg-dark-800 px-1 rounded">default_captures.json</code>.
-                        Gears without a curated default land in
-                        <span class="text-amber-300">pending</span> — you assign them
-                        manually via Gear → 📚 Library / 🎚 Variants.
-                    </div>
-                    <div class="text-gray-500 mt-1 leading-snug">
-                        Check this box only if your library has lots of uncurated
-                        gear and you want the plugin to fuzzy-search tone3000 and
-                        auto-download a "best guess" capture for each. The shipped
-                        repo is fully curated, so most users should leave it off.
-                    </div>
-                </span>
-            </label>
-            <div class="flex flex-wrap gap-3">
-                <button class="rb-batch-btn bg-accent hover:bg-accent/80 text-white px-5 py-2 rounded-xl text-sm transition"
-                        onclick="rbStartBatch('all')"
-                        title="Rescan every song. Re-resolves captures with the current/default presets. Preserves per-tone bypass + manual swaps (assigned_mode='manual')">
-                    Rescan all (keeps manual edits)
-                </button>
-                <button class="rb-batch-btn bg-red-700 hover:bg-red-600 text-white px-5 py-2 rounded-xl text-sm transition"
-                        onclick="rbFactoryReset()"
-                        title="Reset every tone to the default factory mapping. Re-resolves ALL pieces — including your manual gear swaps (assigned_mode is ignored). Per-tone bypass is kept. Cannot be undone.">
-                    Reset to factory (ignores manual)
-                </button>
-            </div>
-            <div id="rb-batch-progress" class="hidden mt-4">
-                <div class="flex items-center gap-3 mb-2 text-sm text-gray-400">
-                    <span id="rb-batch-pct">0%</span>
-                    <span id="rb-batch-count">0 / 0</span>
-                    <span id="rb-batch-assigned" class="text-green-400 hidden"></span>
-                </div>
-                <div class="h-2 bg-dark-800 rounded-full overflow-hidden">
-                    <div id="rb-batch-bar" class="h-full bg-accent transition-all" style="width:0%"></div>
-                </div>
-                <pre id="rb-batch-log" class="mt-3 text-xs text-gray-500 max-h-48 overflow-auto bg-dark-900/50 p-2 rounded"></pre>
-            </div>
-        </div>
-
         <!-- Play a specific tone — override the song's tone with a chosen user tone. -->
         <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
             <h3 class="text-white font-semibold mb-3">Play a specific tone</h3>
@@ -1314,27 +1373,6 @@
                     disabled>
                 <option value="">Default tone</option>
             </select>
-        </div>
-
-        <!-- Cabinets — bypass the cab IRs and use your own -->
-        <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
-            <h3 class="text-white font-semibold mb-2">Cabinets</h3>
-            <label class="flex items-start gap-2 text-sm cursor-pointer">
-                <input type="checkbox" id="rb-bypass-all-cabs"
-                       onchange="rbSetBypassAllCabs(this.checked)"
-                       class="mt-1 accent-amber-500">
-                <span class="text-gray-300">
-                    <span class="font-medium text-amber-300">Bypass all cabs</span>
-                    <div class="text-gray-500 mt-1 leading-snug">
-                        Skips the cab IR in every tone (the signal passes
-                        through un-cab'd) so you can add your own cab / IR per tone
-                        instead. Flipping this rewrites the bypass flag on every
-                        cabinet stage; reopen the song to hear the change. Catalog
-                        auditions (▶) still play cabs so you can compare.
-                    </div>
-                    <div id="rb-bypass-all-cabs-status" class="text-emerald-400 mt-1 leading-snug"></div>
-                </span>
-            </label>
         </div>
 
         <!-- Original Settings panels below -->
@@ -1383,6 +1421,160 @@
             </div>
             <div id="rb-plugin-update-version" class="text-xs text-gray-500 mt-2"></div>
         </div>
+
+        <!-- Reset to factory — kept at the VERY bottom: takes the whole plugin
+             back to its default (factory) state. -->
+        <div class="bg-dark-700/50 border border-red-900/40 rounded-xl p-5 mt-6">
+            <h3 class="text-white font-semibold mb-2">Reset to factory</h3>
+            <p class="text-gray-500 text-sm mb-3">
+                Takes everything back to the default plugin: every tone is
+                re-resolved to its default bundled VST / capture / IR, and all gear
+                redirects (custom + auto tone3000 mappings) are cleared so gear plays
+                its own native VST again. Your manual gear swaps are <strong>discarded</strong>;
+                per-tone bypass is kept. This cannot be undone.
+            </p>
+            <button class="rb-batch-btn bg-red-700 hover:bg-red-600 text-white px-5 py-2 rounded-xl text-sm transition"
+                    onclick="rbFactoryReset()"
+                    title="Reset the whole plugin to factory defaults. Clears gear redirects and re-resolves every tone. Cannot be undone.">
+                Reset to factory
+            </button>
+            <div class="rb-batch-progress hidden mt-4">
+                <div class="flex items-center gap-3 mb-2 text-sm text-gray-400">
+                    <span class="rb-batch-pct">0%</span>
+                    <span class="rb-batch-count">0 / 0</span>
+                    <span class="rb-batch-assigned text-green-400 hidden"></span>
+                </div>
+                <div class="h-2 bg-dark-800 rounded-full overflow-hidden">
+                    <div class="rb-batch-bar h-full bg-accent transition-all" style="width:0%"></div>
+                </div>
+                <pre class="rb-batch-log mt-3 text-xs text-gray-500 max-h-48 overflow-auto bg-dark-900/50 p-2 rounded"></pre>
+            </div>
+        </div>
+
+        </div><!-- /#rb-setup-general -->
+
+        <!-- ════════════════ TONE3000 ════════════════ -->
+        <div id="rb-setup-tone3000" class="hidden">
+
+            <!-- Connect tone3000 — prerequisite for listing candidates + downloads. -->
+            <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+                <h3 class="text-white font-semibold mb-3">Connect tone3000 account</h3>
+                <p class="text-gray-500 text-sm mb-3">
+                    Sign in to tone3000 to list candidates in-app and unlock
+                    automatic downloads — <strong>no API key to paste</strong>.
+                    This opens tone3000 in your browser; you approve once and come
+                    back. The plugin only receives a temporary, revocable token.
+                </p>
+                <div class="flex gap-3 items-center">
+                    <button id="rb-oauth-btn" onclick="rbOauthConnect()" class="bg-accent hover:bg-accent/80 text-white px-4 py-2 rounded-lg text-sm transition">Connect with tone3000</button>
+                    <button id="rb-oauth-disconnect" onclick="rbOauthDisconnect()" class="hidden bg-dark-600 hover:bg-dark-500 text-gray-300 px-4 py-2 rounded-lg text-sm transition">Disconnect</button>
+                    <span id="rb-oauth-status" class="text-xs text-gray-500"></span>
+                </div>
+            </div>
+
+            <!-- Fuzzy fallback — placed ABOVE the download/map actions so its
+                 warning ("this can pull bad NAMs") is seen BEFORE you download. -->
+            <div class="bg-dark-700/50 border border-amber-900/40 rounded-xl p-5 mb-6">
+                <label class="flex items-start gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" id="rb-allow-tone3000-fallback"
+                           onchange="rbSetAllowTone3000Fallback(this.checked)"
+                           class="mt-1 accent-amber-500">
+                    <span class="text-gray-300">
+                        <span class="font-medium text-amber-300">⚠ Allow tone3000 fuzzy fallback</span>
+                        <span class="text-gray-500 ml-1">(opt-out from curated-only)</span>
+                        <div class="text-gray-500 mt-1 leading-snug">
+                            Heads-up: with this ON, downloads/maps may pull a
+                            <strong class="text-amber-300">"best guess" capture that sounds wrong</strong>
+                            for gear without a curated match. Leave it
+                            <strong class="text-gray-400">unchecked</strong> (recommended) and the plugin
+                            only uses the curated 1-to-1 mappings in
+                            <code class="bg-dark-800 px-1 rounded">rs_to_real.json</code> +
+                            <code class="bg-dark-800 px-1 rounded">default_captures.json</code>;
+                            gear without a curated default lands in
+                            <span class="text-amber-300">pending</span> instead.
+                        </div>
+                        <div class="text-gray-500 mt-1 leading-snug">
+                            Check this only if your library has lots of uncurated gear
+                            and you want the plugin to fuzzy-search tone3000 and
+                            auto-download a guess for each.
+                        </div>
+                    </span>
+                </label>
+            </div>
+
+            <!-- Download tone3000 tones as NEW gain-variant gear (clean/crunch/dist
+                 in one gear, auto-switched by the song's mapped volume). Does NOT
+                 touch existing gear — it only builds your library; Map gear to songs
+                 then maps songs to them. -->
+            <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+                <h3 class="text-white font-semibold mb-2">Download automatic tone3000 tones</h3>
+                <p class="text-gray-500 text-sm mb-3">
+                    Downloads each curated amp's clean / crunch / dist captures from
+                    tone3000 and creates <strong>one new gear per amp</strong> that
+                    holds all three — auto-selected by the song's mapped volume, with
+                    editable switch levels. It only builds your gear library (the new
+                    gears start <span class="text-gray-400">unassigned</span>); use
+                    <span class="text-gray-400">Map gear to songs</span> below to map
+                    your songs onto them.
+                </p>
+                <button onclick="rbDownloadTone3000Gears()"
+                        class="bg-emerald-900/30 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-800/40 px-4 py-2 rounded-lg text-sm transition">
+                    ⬇ Download automatic tone3000 tones
+                </button>
+            </div>
+
+            <!-- Map the song library onto gear (redirects amp slots onto the auto
+                 tone3000 gears; preserves manual swaps). -->
+            <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-5 mb-6">
+                <h3 class="text-white font-semibold mb-2">Map library to gear</h3>
+                <p class="text-gray-500 text-sm mb-3">
+                    Walks every song and, for each gear in each tone, resolves a
+                    NAM / IR / VST — reusing an assignment you already made, then your
+                    curated picks, then (optionally) a fresh tone3000 search. Also
+                    redirects amp slots onto the auto tone3000 gears you downloaded.
+                    Preserves per-tone bypass + your manual swaps.
+                </p>
+                <button class="rb-batch-btn bg-accent hover:bg-accent/80 text-white px-5 py-2 rounded-xl text-sm transition"
+                        onclick="rbOpenMapModal()"
+                        title="Pick which gear categories to map onto your songs.">
+                    Map gear to songs
+                </button>
+                <div class="rb-batch-progress hidden mt-4">
+                    <div class="flex items-center gap-3 mb-2 text-sm text-gray-400">
+                        <span class="rb-batch-pct">0%</span>
+                        <span class="rb-batch-count">0 / 0</span>
+                        <span class="rb-batch-assigned text-green-400 hidden"></span>
+                    </div>
+                    <div class="h-2 bg-dark-800 rounded-full overflow-hidden">
+                        <div class="rb-batch-bar h-full bg-accent transition-all" style="width:0%"></div>
+                    </div>
+                    <pre class="rb-batch-log mt-3 text-xs text-gray-500 max-h-48 overflow-auto bg-dark-900/50 p-2 rounded"></pre>
+                </div>
+            </div>
+
+            <!-- Files: downloaded NAM/IR inventory (moved here from the Gear tab). -->
+            <div class="bg-dark-700/50 border border-gray-800/50 rounded-xl p-4 mb-4">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                        <h3 class="text-white font-semibold text-sm">Files · downloaded captures</h3>
+                        <p class="text-gray-500 text-xs mt-1" id="rb-manage-summary">Loading inventory…</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="rbLoadManageTab()"
+                                class="bg-dark-600 hover:bg-dark-500 text-gray-200 px-3 py-1.5 rounded text-xs transition">
+                            ↻ Refresh
+                        </button>
+                        <button onclick="rbPurgeNams({}, 'EVERYTHING — every NAM and IR')"
+                                class="bg-red-900/30 hover:bg-red-900/60 text-red-300 border border-red-800/40 px-3 py-1.5 rounded text-xs transition">
+                            🗑 Purge all
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="rb-manage-buckets" class="space-y-4"></div>
+
+        </div><!-- /#rb-setup-tone3000 -->
+
     </div>
     </div><!-- /#rb-stage-wrap -->
 </div>
