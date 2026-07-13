@@ -11158,7 +11158,15 @@ def setup(app, context):
         _used_vst = {Path(bb["vst_path"]).name.lower()
                      for bb in best.values() if bb.get("vst_path")}
         _bundled_cat = {"amps": "amp", "pedals": "pedal", "racks": "rack"}
+        # Internal DSP that ships in vst/ but is NOT user-facing "gear": the master
+        # RB Final Leveler + our generic Studio* rack utilities (StudioEQ, StudioComp,
+        # StudioGraphicEQ…). They leaked in here as "Extra_…"; never surface them.
+        def _is_internal_bundle(nm: str) -> bool:
+            n = (nm or "").strip().lower()
+            return n == "rb final leveler" or n.startswith("studio")
         for bp in _bundled_vst_plugins():
+            if _is_internal_bundle(bp["name"]):
+                continue
             fname = Path(bp["path"]).name
             if fname.lower() in _used_vst:
                 continue
