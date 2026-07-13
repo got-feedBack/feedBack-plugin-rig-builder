@@ -1110,8 +1110,8 @@
       {id:3,cx:.812,cy:.250,r:.062,style:'pointer',cap:[236,140,42]} ],// TURBO (Mode I/II)
     tick:rgb(60,40,16), ptr:rgb(40,26,10),
     draw(d,vals){ const {ctx:c,W,H,s}=d; chiefBody(d,240,132,26); const w=rgb(242,244,246);
-      // CHECK LED (top centre of the plate)
-      ledDot(d,.500*W,.115*H,true,224,60,52); textSpaced(d,.500*W,.075*H,F.barlow,7,w,'CHECK',0.12);
+      // CHECK LED (top centre of the plate) — label well above the LED glow
+      textSpaced(d,.500*W,.055*H,F.barlow,7,w,'CHECK',0.12); ledDot(d,.500*W,.118*H,true,224,60,52);
       // white divider between the main knobs and the TURBO section
       c.strokeStyle='rgba(238,240,242,0.7)'; c.lineWidth=1.6*s;
       c.beginPath(); c.moveTo(.705*W,.115*H); c.lineTo(.705*W,.36*H); c.stroke();
@@ -1138,12 +1138,12 @@
   // 5 Effect(Normal/Effect footsw) 6 InputSens(High/Low slide).
   P.chorusensemble = { w:600, h:400,
     knobs:[
-      {id:0,cx:.205,cy:.235,r:.045,style:'boss'},   // LEVEL
-      {id:1,cx:.470,cy:.235,r:.045,style:'boss'},   // CHORUS INTENSITY
-      {id:2,cx:.645,cy:.235,r:.045,style:'boss'},   // VIBRATO DEPTH
-      {id:3,cx:.775,cy:.235,r:.045,style:'boss'} ], // VIBRATO RATE
+      {id:0,cx:.205,cy:.255,r:.036,style:'boss'},   // LEVEL
+      {id:1,cx:.470,cy:.255,r:.036,style:'boss'},   // CHORUS INTENSITY
+      {id:2,cx:.650,cy:.255,r:.036,style:'boss'},   // VIBRATO DEPTH
+      {id:3,cx:.775,cy:.255,r:.036,style:'boss'} ], // VIBRATO RATE
     sw3:[
-      {id:6,cx:.110,cy:.250,hw:16,hh:26,two:true,hidden:true},   // HIGH/LOW slide
+      {id:6,cx:.110,cy:.255,hw:16,hh:24,two:true,hidden:true},   // HIGH/LOW slide
       {id:5,cx:.300,cy:.720,hw:44,hh:44,two:true,hidden:true},   // normal/effect footswitch
       {id:4,cx:.720,cy:.720,hw:44,hh:44,two:true,hidden:true} ], // vibrato/chorus footswitch
     ptr:rgb(238,240,242),
@@ -1176,38 +1176,38 @@
       scr(px+9*s,py+9*s); scr(px+pw-9*s,py+9*s); scr(px+9*s,py+ph-9*s);
       // panel legends
       const leg=(x,y,t,sz,col)=>textSpaced(d,x*W,y*H,F.barlow,sz||7,col||ink,t,0.04);
-      // input pill + mono/stereo output
-      c.strokeStyle=ink; c.lineWidth=1*s; rr(c,.085*W,.135*H,.058*W,.035*H,7*s); c.stroke(); leg(.114,.153,'input',6.5);
-      leg(.235,.135,'mono   stereo',6); leg(.235,.170,'output',6.5);
-      // LEVEL knob + HIGH/LOW slide
-      leg(.205,.335,'level',7); leg(.205,.365,'control',5.5);
+      // input pill + mono/stereo output (top-left, above the LEVEL knob)
+      c.strokeStyle=ink; c.lineWidth=1*s; rr(c,.070*W,.125*H,.056*W,.032*H,7*s); c.stroke(); leg(.098,.142,'input',6);
+      leg(.235,.130,'mono  stereo',5.5); leg(.235,.158,'output',6);
       // ── HIGH/LOW slide switch (id 6) ──
       const hi=(vals&&vals[6]!=null)?vals[6]:0;
-      const hx=.110*W, hy=.235*H, hw2=13*s, hh2=34*s;
+      const hx=.110*W, hy=.255*H, hw2=13*s, hh2=30*s;
       rr(c,hx-hw2/2,hy-hh2/2,hw2,hh2,3*s); c.fillStyle=rgb(28,28,28); c.fill(); c.strokeStyle=rgb(70,70,68); c.lineWidth=1*s; c.stroke();
       const slY = hi>=0.5 ? hy-hh2*0.25 : hy+hh2*0.25;
       const sg=c.createLinearGradient(hx-hw2/2,0,hx+hw2/2,0); sg.addColorStop(0,rgb(140,142,142)); sg.addColorStop(0.5,rgb(210,212,212)); sg.addColorStop(1,rgb(140,142,142));
       rr(c,hx-hw2/2+1*s,slY-6*s,hw2-2*s,12*s,2*s); c.fillStyle=sg; c.fill();
-      leg(.150,.205,'high',6,hi>=0.5?orange:ink); leg(.150,.290,'low',6,hi<0.5?ink:'rgba(30,30,30,0.6)');
+      leg(.150,.220,'high',6,hi>=0.5?orange:ink); leg(.150,.300,'low',6,hi<0.5?ink:'rgba(30,30,30,0.6)');
+      // LEVEL control label (below its knob)
+      leg(.205,.360,'level control',6);
       // CHIEF logo box (parody of the BOSS "b")
-      rr(c,.345*W,.195*H,.052*W,.075*H,4*s); c.fillStyle=orange; c.fill();
-      textC(d,.371*W,.233*H,F.crete,20,rgb(250,246,240),'b');
-      // chorus intensity
-      leg(.470,.140,'chorus',6.5); leg(.470,.170,'intensity',6.5);
-      // vibrato depth/rate (linked bar)
-      leg(.710,.140,'vibrato',6.5);
-      c.strokeStyle=ink; c.lineWidth=1.4*s; c.beginPath(); c.moveTo(.645*W,.235*H); c.lineTo(.775*W,.235*H); c.stroke();
-      leg(.645,.335,'depth',6.5); leg(.775,.335,'rate',6.5);
+      rr(c,.345*W,.215*H,.050*W,.078*H,4*s); c.fillStyle=orange; c.fill();
+      textC(d,.370*W,.255*H,F.crete,20,rgb(250,246,240),'b');
+      // chorus intensity (above its knob)
+      leg(.470,.130,'chorus',6.5); leg(.470,.158,'intensity',6.5);
+      // vibrato: header spanning depth+rate + a linking bar, labels below
+      leg(.712,.128,'vibrato',6.5);
+      c.strokeStyle=ink; c.lineWidth=1.4*s; c.beginPath(); c.moveTo(.650*W,.255*H); c.lineTo(.775*W,.255*H); c.stroke();
+      leg(.650,.360,'depth',6.5); leg(.775,.360,'rate',6.5);
       // power rocker (far right, decorative)
-      rr(c,.885*W,.155*H,.045*W,.16*H,3*s); c.fillStyle=rgb(24,24,24); c.fill(); c.strokeStyle=rgb(80,80,78); c.lineWidth=1*s; c.stroke();
-      rr(c,.888*W,.16*H,.039*W,.075*H,2*s); c.fillStyle=rgb(50,50,50); c.fill();
-      leg(.905,.335,'power',6);
+      rr(c,.880*W,.185*H,.045*W,.145*H,3*s); c.fillStyle=rgb(24,24,24); c.fill(); c.strokeStyle=rgb(80,80,78); c.lineWidth=1*s; c.stroke();
+      rr(c,.883*W,.19*H,.039*W,.068*H,2*s); c.fillStyle=rgb(50,50,50); c.fill();
+      leg(.903,.360,'power',6);
       // peak level LED
-      ledDot(d,.205*W,.405*H,true,224,62,52); leg(.255,.405,'peak level',5.5);
+      ledDot(d,.145*W,.410*H,true,224,62,52); leg(.205,.410,'peak level',5.5);
       // ── "CHIEF Chorus Ensemble" wordmark (bottom of the silver panel) ──
-      textSpaced(d,.415*W,.405*H,F.anton,17,rgb(28,28,30),'CHIEF',0.04);
-      c.save(); c.textAlign='left'; c.textBaseline='middle'; setFont(d,F.crete,26);
-      c.fillStyle=orange; c.fillText('Chorus Ensemble',.505*W,.405*H); c.restore();
+      textSpaced(d,.415*W,.415*H,F.anton,15,rgb(28,28,30),'CHIEF',0.04);
+      c.save(); c.textAlign='left'; c.textBaseline='middle'; setFont(d,F.crete,22);
+      c.fillStyle=orange; c.fillText('Chorus Ensemble',.500*W,.415*H); c.restore();
       // ── two footswitch stomps (lower olive area) ──
       const stomp=(cx,cy,litTop,litBot,topL,botL,on)=>{
         // red status LED above
