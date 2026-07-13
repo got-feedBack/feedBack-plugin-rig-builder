@@ -25,7 +25,7 @@ static inline float dn(float v){ return std::fabs(v)<1.0e-15f?0.f:v; }
 class ChorusEnsembleCore {
     float sampleRate=48000.f;
     float level=0.6f, intensity=0.62f, depth=0.5f, rate=0.45f;
-    bool  vibrato=false;
+    bool  vibrato=false, effectOn=true, inputHigh=false;
 
     rbmod::HighPass  inputHP;
     rbmod::LowPass   inputLP, bbdLP1, bbdLP2;
@@ -55,6 +55,8 @@ public:
     void setDepth(float v){ depth=clamp01(v); }
     void setRate(float v){ rate=clamp01(v); }
     void setMode(float v){ vibrato=(v>=0.5f); }
+    void setEffect(float v){ effectOn=(v>=0.5f); }
+    void setInputSens(float v){ inputHigh=(v>=0.5f); }
 
     void reset(){
         inputHP.reset(); inputLP.reset(); bbdLP1.reset(); bbdLP2.reset();
@@ -69,10 +71,13 @@ public:
         const float sn  = std::sin(rbmod::kTwoPi*lfoPhase);
         const float lfo = vibrato ? sn : tri;
 
-        // ── preamp (TA7504S): a touch of gain + gentle soft saturation ──
+        // ── preamp (TA7504S): a touch of gain + gentle soft saturation. The
+        //    HIGH/LOW input-sensitivity switch (S1) drives it harder in HIGH
+        //    (the CE-1 "preamp boost" warmth) or stays clean in LOW. ──
         float x = inputHP.process(in);
         pre += 0.5f*(x - pre);                     // mild slew/warmth
-        x = std::tanh(1.12f*x);
+        const float preGain = inputHigh ? 2.7f : 1.12f;
+        x = std::tanh(preGain * x) * (inputHigh ? 0.72f : 1.0f);   // High: more drive, level-matched
         x = inputLP.process(x);
 
         // ── BBD delay: base + LFO-swept (MN3002, clock 60-200 kHz) ──
@@ -88,7 +93,11 @@ public:
 
         // ── stereo Ensemble output ──
         float L, R;
-        if (vibrato) {
+        if (!effectOn) {
+            // NORMAL: effect off, but the preamp still colours the signal — the
+            // CE-1's famous "preamp only" path (buffered, warm, mono).
+            L = R = x;
+        } else if (vibrato) {
             L = R = wet;                             // 100% wet pitch modulation
         } else {
             const float dry = x;

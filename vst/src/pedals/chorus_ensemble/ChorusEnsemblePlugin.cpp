@@ -29,6 +29,8 @@ class ChorusEnsemblePlugin : public Plugin {
         core.setDepth(params[kDepth]);
         core.setRate(params[kRate]);
         core.setMode(params[kMode]);
+        core.setEffect(params[kEffect]);
+        core.setInputSens(params[kInputSens]);
     }
 
 public:
@@ -49,7 +51,7 @@ protected:
     void initParameter(uint32_t i, Parameter& p) override {
         if (i>=(uint32_t)kParamCount) return;
         p.hints = kParameterIsAutomatable;
-        if (i==(uint32_t)kMode) p.hints |= kParameterIsBoolean;
+        if (i==(uint32_t)kMode || i==(uint32_t)kEffect || i==(uint32_t)kInputSens) p.hints |= kParameterIsBoolean;
         p.name = kChorusEnsembleNames[i]; p.symbol = kChorusEnsembleSymbols[i];
         p.ranges.min = kChorusEnsembleMin[i]; p.ranges.max = kChorusEnsembleMax[i]; p.ranges.def = kChorusEnsembleDef[i];
     }
