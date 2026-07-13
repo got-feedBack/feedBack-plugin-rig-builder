@@ -1098,6 +1098,27 @@
     [{id:0,cx:.25,lbl:'SPEED'},{id:1,cx:.50,lbl:'MIX'},{id:2,cx:.75,lbl:'WAVEFORM',lblPx:7}],
     'Tremolo',null,'TR-2');
 
+  // Turbo Distortion — Boss DS-2-style: Chief (Boss-compact) body in the DS-2
+  // bright blue. 4 knobs: LEVEL0(id2) TONE1(id1) DIST2(id0) TURBO3(id3, the
+  // Mode I/II rotary). Turbo knob shows I (CCW) / II (CW) marks.
+  P.turbodistortion = { w:300, h:480,
+    knobs:[
+      {id:2,cx:.175,cy:.235,r:.058,style:'boss'},   // LEVEL
+      {id:1,cx:.385,cy:.235,r:.058,style:'boss'},   // TONE
+      {id:0,cx:.595,cy:.235,r:.058,style:'boss'},   // DIST
+      {id:3,cx:.805,cy:.235,r:.058,style:'boss'} ], // TURBO (Mode I/II)
+    ptr:rgb(238,240,242),
+    draw(d,vals){ const {ctx:c,W,H,s}=d; chiefBody(d,40,105,182); const w=rgb(238,240,242);
+      textSpaced(d,.175*W,.135*H,F.barlow,8,w,'LEVEL',0.15);
+      textSpaced(d,.385*W,.135*H,F.barlow,8.5,w,'TONE',0.15);
+      textSpaced(d,.595*W,.135*H,F.barlow,8.5,w,'DIST',0.15);
+      textSpaced(d,.805*W,.135*H,F.barlow,8,w,'TURBO',0.12);
+      // Mode I / II marks flanking the TURBO knob
+      const tv=(vals&&vals[3]!=null)?vals[3]:0;
+      textSpaced(d,.735*W,.300*H,F.barlow,8,tv<0.5?rgb(250,232,120):'rgba(238,240,242,0.55)','I',0);
+      textSpaced(d,.878*W,.300*H,F.barlow,8,tv>=0.5?rgb(250,232,120):'rgba(238,240,242,0.55)','II',0);
+      chiefName(d,'Turbo','Distortion','DS-2'); } };
+
   // Multi-Vibe — Boss VB-2-style: Chief body in the VB-2 bright blue.
   // RS knob names. 3 RS knobs: Speed0 Mix1 Waveform2.
   P.vb2 = chiefSpec(300,480,[50,140,212],
