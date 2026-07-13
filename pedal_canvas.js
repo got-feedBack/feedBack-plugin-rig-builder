@@ -1098,25 +1098,38 @@
     [{id:0,cx:.25,lbl:'SPEED'},{id:1,cx:.50,lbl:'MIX'},{id:2,cx:.75,lbl:'WAVEFORM',lblPx:7}],
     'Tremolo',null,'TR-2');
 
-  // Turbo Distortion — Boss DS-2-style: Chief (Boss-compact) body in the DS-2
-  // bright blue. 4 knobs: LEVEL0(id2) TONE1(id1) DIST2(id0) TURBO3(id3, the
-  // Mode I/II rotary). Turbo knob shows I (CCW) / II (CW) marks.
+  // Turbo Distortion — Boss DS-2: Chief (Boss-compact) body in the DS-2 bright
+  // ORANGE, ORANGE knobs on the black plate, a CHECK LED, and the TURBO section
+  // split off on the right with a white line + (REMOTE) I/II marks (matches the
+  // real photo). 4 knobs: LEVEL0(id2) TONE1(id1) DIST2(id0) TURBO3(id3, I/II).
   P.turbodistortion = { w:300, h:480,
     knobs:[
-      {id:2,cx:.175,cy:.235,r:.058,style:'boss'},   // LEVEL
-      {id:1,cx:.385,cy:.235,r:.058,style:'boss'},   // TONE
-      {id:0,cx:.595,cy:.235,r:.058,style:'boss'},   // DIST
-      {id:3,cx:.805,cy:.235,r:.058,style:'boss'} ], // TURBO (Mode I/II)
-    ptr:rgb(238,240,242),
-    draw(d,vals){ const {ctx:c,W,H,s}=d; chiefBody(d,40,105,182); const w=rgb(238,240,242);
-      textSpaced(d,.175*W,.135*H,F.barlow,8,w,'LEVEL',0.15);
-      textSpaced(d,.385*W,.135*H,F.barlow,8.5,w,'TONE',0.15);
-      textSpaced(d,.595*W,.135*H,F.barlow,8.5,w,'DIST',0.15);
-      textSpaced(d,.805*W,.135*H,F.barlow,8,w,'TURBO',0.12);
-      // Mode I / II marks flanking the TURBO knob
+      {id:2,cx:.175,cy:.250,r:.062,style:'pointer',cap:[236,140,42]},  // LEVEL
+      {id:1,cx:.385,cy:.250,r:.062,style:'pointer',cap:[236,140,42]},  // TONE
+      {id:0,cx:.595,cy:.250,r:.062,style:'pointer',cap:[236,140,42]},  // DIST
+      {id:3,cx:.812,cy:.250,r:.062,style:'pointer',cap:[236,140,42]} ],// TURBO (Mode I/II)
+    tick:rgb(60,40,16), ptr:rgb(40,26,10),
+    draw(d,vals){ const {ctx:c,W,H,s}=d; chiefBody(d,240,132,26); const w=rgb(242,244,246);
+      // CHECK LED (top centre of the plate)
+      ledDot(d,.500*W,.115*H,true,224,60,52); textSpaced(d,.500*W,.075*H,F.barlow,7,w,'CHECK',0.12);
+      // white divider between the main knobs and the TURBO section
+      c.strokeStyle='rgba(238,240,242,0.7)'; c.lineWidth=1.6*s;
+      c.beginPath(); c.moveTo(.705*W,.115*H); c.lineTo(.705*W,.36*H); c.stroke();
+      // knob labels (top)
+      textSpaced(d,.175*W,.150*H,F.barlow,8.5,w,'LEVEL',0.12);
+      textSpaced(d,.385*W,.150*H,F.barlow,9,w,'TONE',0.12);
+      textSpaced(d,.595*W,.150*H,F.barlow,9,w,'DIST',0.12);
+      // knob range marks (bottom): MIN/MAX · LO/HI · MIN/MAX
+      const mk=(cx,a,b)=>{ c.fillStyle=w;
+        c.beginPath(); c.arc((cx-.045)*W,.335*H,1.6*s,0,7); c.fill(); c.beginPath(); c.arc((cx+.045)*W,.335*H,1.6*s,0,7); c.fill();
+        textSpaced(d,(cx-.045)*W,.365*H,F.barlow,6,w,a,0); textSpaced(d,(cx+.045)*W,.365*H,F.barlow,6,w,b,0); };
+      mk(.175,'MIN','MAX'); mk(.385,'LO','HI'); mk(.595,'MIN','MAX');
+      // TURBO section: (REMOTE) I / II marks above, TURBO label below
       const tv=(vals&&vals[3]!=null)?vals[3]:0;
-      textSpaced(d,.735*W,.300*H,F.barlow,8,tv<0.5?rgb(250,232,120):'rgba(238,240,242,0.55)','I',0);
-      textSpaced(d,.878*W,.300*H,F.barlow,8,tv>=0.5?rgb(250,232,120):'rgba(238,240,242,0.55)','II',0);
+      textSpaced(d,.812*W,.075*H,F.barlow,6,w,'(REMOTE)',0.04);
+      textSpaced(d,.775*W,.135*H,F.barlow,7.5,tv<0.5?rgb(255,240,140):w,'I',0);
+      textSpaced(d,.850*W,.135*H,F.barlow,7.5,tv>=0.5?rgb(255,240,140):w,'II',0);
+      textSpaced(d,.812*W,.360*H,F.barlow,8.5,w,'TURBO',0.12);
       chiefName(d,'Turbo','Distortion','DS-2'); } };
 
   // Chorus Ensemble — Boss CE-1: the big OLIVE-GREEN desktop BBD unit with a

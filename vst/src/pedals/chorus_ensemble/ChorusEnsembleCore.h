@@ -2,9 +2,11 @@
 #define CHORUS_ENSEMBLE_CORE_H
 //
 // ChorusEnsembleCore — Boss CE-1 Chorus Ensemble, from the factory service
-// notes (ET-10D). MN3002 BBD (1024 stages, clock 60-200 kHz -> ~2.6..8.5 ms),
-// TA7504S preamp, LFO-modulated clock, Q10 output LPF (kills clock leak, gives
-// the dark BBD warmth), a noise-killer gate, and the STEREO "Ensemble" output.
+// notes (ET-10D) + the MN3002 datasheet. MN3002 BBD = 512 stages (delay
+// 0.32-25.6 ms over its 10-800 kHz clock range; the CE-1 clocks it 60-200 kHz
+// -> ~1.3..4.3 ms), THD 0.4%, S/N 70 dB, insertion loss ~10 dB, response
+// fi <= 0.3*fcp. TA7504S preamp, LFO-modulated clock, Q10 output LPF (kills
+// clock leak + the dark BBD warmth), noise-killer gate, STEREO "Ensemble" out.
 //
 //   IN -> preamp -> input LP -> BBD (delay set by clock + LFO) -> output LP
 //      -> compander (BBD level ride) -> stereo mix:
@@ -80,10 +82,12 @@ public:
         x = std::tanh(preGain * x) * (inputHigh ? 0.72f : 1.0f);   // High: more drive, level-matched
         x = inputLP.process(x);
 
-        // ── BBD delay: base + LFO-swept (MN3002, clock 60-200 kHz) ──
-        const float baseMs = 5.2f;
-        const float widthMs = vibrato ? (0.6f + 3.4f*depth)     // vibrato: deep sweep
-                                      : (0.4f + 2.6f*intensity); // chorus: gentler
+        // ── BBD delay (MN3002 = 512 STAGES per datasheet, NOT 1024): delay =
+        //    512/(2·fcp). At the CE-1's 60-200 kHz clock -> ~1.3..4.3 ms.
+        //    Centre ~2.9 ms, LFO-swept within that window. ──
+        const float baseMs = 2.9f;
+        const float widthMs = vibrato ? (0.5f + 2.1f*depth)     // vibrato: deeper sweep
+                                      : (0.3f + 1.3f*intensity); // chorus: tight ~1.3-4.3 ms
         const float delayMs = baseMs + widthMs*lfo;
         bbd.write(x);
         float wet = bbd.read(delayMs*0.001f*sampleRate);
