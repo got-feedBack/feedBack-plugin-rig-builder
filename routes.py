@@ -2608,6 +2608,24 @@ def _apply_cab_override(ir_path):
                 pp = Path(s)
                 # RS IRs live at <irs_root>/rocksmith/<file>; swap the tail.
                 return str(pp.parent.parent / rel) if pp.is_absolute() else rel
+
+    # Fallback: the cab HAS an override + a clone on disk, but the RS mic-map has
+    # no entry matching this file — the PA/hi-fi novelty voicings (Cab_PA600C /
+    # Cab_PA999C) are absent from the Wwise map, so the by-basename match above
+    # can't fire and the tone would keep playing the raw Rocksmith IR. Parse the
+    # cab key straight from the filename (cab_pa600c_00.wav -> cab_pa600c) and
+    # map to the clone's neutral Dynamic Cone so it STILL plays parody, never
+    # Rocksmith. (These voicings are character curves — position-agnostic.)
+    stem = re.sub(r"_\d+$", "", Path(s).stem).lower()
+    for cab_key, ovr in overrides.items():
+        if not isinstance(ovr, dict) or cab_key.lower() != stem:
+            continue
+        ir_dir = str(ovr.get("ir_dir") or "cabs").strip("/")
+        prefix = str(ovr.get("prefix") or "")
+        neutral = f"{prefix}_dyn_cone" if prefix else "dyn_cone"
+        rel = f"{ir_dir}/{neutral}.wav"
+        pp = Path(s)
+        return str(pp.parent.parent / rel) if pp.is_absolute() else rel
     return ir_path
 
 
