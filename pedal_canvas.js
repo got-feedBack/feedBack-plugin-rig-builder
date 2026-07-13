@@ -5542,8 +5542,9 @@
       {id:0,cx:.822,cy:.775,r:.019,style:'pointer',cap:[22,21,23]} ],// INPUT GAIN
     // pull switches (push-pull pots on the real amp) drawn as small PULL buttons.
     sw3:[
-      {id:7,cx:.822,cy:.648,hw:30,hh:9,two:true,hidden:true},   // INPUT GAIN pull = RHYTHM CLIP
-      {id:8,cx:.930,cy:.775,hw:26,hh:9,two:true,hidden:true} ], // CAB SIM
+      {id:7,cx:.822,cy:.648,hw:30,hh:9,two:true,hidden:true} ], // INPUT GAIN pull = RHYTHM CLIP
+    // (Cab Sim id 8 is NOT exposed — the host auto-mutes the internal cab when a
+    //  real cab is present; it's not a user control.)
     draw(d,vals){ const {ctx:c,W,H,s}=d;
       const sil=rgb(196,198,201), silHi=rgb(220,222,225), silLo=rgb(150,152,156),
             pnl=rgb(236,234,228), pnlHi=rgb(246,245,240), pnlLo=rgb(210,208,202),
@@ -5626,13 +5627,10 @@
       c.beginPath(); c.arc(ix,iy,9*s,0,7); c.fillStyle=rgb(18,16,16); c.fill();
       c.strokeStyle=chr; c.lineWidth=2*s; c.stroke(); c.beginPath(); c.arc(ix,iy,2.8*s,0,7); c.fillStyle=rgb(56,54,50); c.fill();
       textSpaced(d,ix,lblY,F.barlow,7.5,ink,'INPUT',0.04);
-      // ── CAB SIM toggle (id 8) — right of the INPUT jack ──
-      const cs=(vals&&vals[8]!=null)?vals[8]:1;
-      const csx=.935*W, csy=py+ph*.44;
-      rr(c,csx-25*s,csy-9*s,50*s,18*s,4*s); c.fillStyle=cs>=0.5?rgb(70,170,96):rgb(44,44,48); c.fill();
-      c.strokeStyle=rgb(16,16,18); c.lineWidth=1*s; c.stroke();
-      textSpaced(d,csx,csy+0.5*s,F.barlow,6.5,cs>=0.5?rgb(238,250,242):'rgba(220,222,226,0.7)',cs>=0.5?'CAB ON':'CAB OFF',0.03);
-      textSpaced(d,csx,lblY,F.barlow,6.5,ink,'CAB SIM',0.03);
+      // (No CAB SIM control on the face: the internal 4x12 fallback is muted
+      //  automatically by the host when a real cab is in the chain — see the
+      //  double-cab guard in rbReapplyVstParamsToChain. Nothing for the user
+      //  to toggle, matching every other amp face.)
       // ── parody maker ──
       textSpaced(d,(px+pw)-46*s,py+ph*.92,F.bebas,11,rgb(70,68,66),'MARSTEN',0.08); } };
 
