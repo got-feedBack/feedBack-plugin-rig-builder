@@ -69,6 +69,30 @@
         box-shadow:0 6px 18px rgba(0,0,0,.4); backdrop-filter:blur(6px);
         transition:background .15s, color .15s, transform .12s; }
     .rb-studio-fullchain-btn:hover{ background:rgba(28,84,58,.85); color:#fff; transform:translateY(-1px); }
+    /* Full-chain override: grey the board when active + a banner with a toggle.
+       A `filter`/`opacity` on the 3D stage FLATTENS the room (breaks translateZ/
+       rotateY → gear changes size/position), so only disable interaction here and
+       grey the 2D leaf FACES below. */
+    #rb-studio-room.rb-fullchain-active .rb-studio-stage{ pointer-events:none; }
+    #rb-studio-room.rb-fullchain-active .rb-amp-face img,
+    #rb-studio-room.rb-fullchain-active .rb-amp-head,
+    #rb-studio-room.rb-fullchain-active .rb-amp-cab img,
+    #rb-studio-room.rb-fullchain-active .rb-pedal img,
+    #rb-studio-room.rb-fullchain-active .rb-pedal-fallback,
+    #rb-studio-room.rb-fullchain-active .rb-rack img,
+    #rb-studio-room.rb-fullchain-active .rb-rack-fallback{ filter:grayscale(1) brightness(.7); transition:filter .2s; }
+    .rb-fc-banner{ position:absolute; top:14px; left:50%; transform:translateX(-50%); z-index:30; display:flex; align-items:center;
+        gap:10px; padding:8px 12px; border-radius:11px; font-size:13px; color:#eaf1ff; backdrop-filter:blur(6px);
+        box-shadow:0 8px 22px rgba(0,0,0,.45); }
+    #rb-stage-wrap.rb-songbar-on #rb-studio-room .rb-fc-banner{ top:58px; }
+    .rb-fc-banner.on{ background:rgba(24,84,54,.82); border:1px solid rgba(90,220,150,.5); }
+    .rb-fc-banner.off{ background:rgba(40,46,60,.82); border:1px solid rgba(255,255,255,.16); color:#b9c4d6; }
+    .rb-fc-banner b{ color:#fff; }
+    .rb-fc-banner-btn{ cursor:pointer; font-size:12px; padding:4px 11px; border-radius:8px; color:#fff;
+        background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.28); }
+    .rb-fc-banner-btn:hover{ background:rgba(255,255,255,.24); }
+    .rb-fc-banner-x{ cursor:pointer; color:inherit; background:none; border:none; font-size:14px; padding:2px 5px; border-radius:6px; opacity:.75; }
+    .rb-fc-banner-x:hover{ opacity:1; background:rgba(255,255,255,.14); }
     /* Hide it in gear/pedal focus edit (same as the Advanced button). */
     #rb-stage-wrap:has(#rb-studio-room.rb-focus-active) .rb-studio-fullchain-btn,
     #rb-stage-wrap:has(#rb-studio-room.rb-pfocus) .rb-studio-fullchain-btn{ display:none !important; }
