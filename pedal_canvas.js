@@ -1125,15 +1125,15 @@
       textSpaced(d,.595*W,.150*H,F.barlow,9,w,'DIST',0.12);
       // knob range marks (bottom): MIN/MAX · LO/HI · MIN/MAX
       const mk=(cx,a,b)=>{ c.fillStyle=w;
-        c.beginPath(); c.arc((cx-.045)*W,.335*H,1.6*s,0,7); c.fill(); c.beginPath(); c.arc((cx+.045)*W,.335*H,1.6*s,0,7); c.fill();
-        textSpaced(d,(cx-.045)*W,.365*H,F.barlow,6,w,a,0); textSpaced(d,(cx+.045)*W,.365*H,F.barlow,6,w,b,0); };
+        c.beginPath(); c.arc((cx-.045)*W,.300*H,1.6*s,0,7); c.fill(); c.beginPath(); c.arc((cx+.045)*W,.300*H,1.6*s,0,7); c.fill();
+        textSpaced(d,(cx-.045)*W,.322*H,F.barlow,6,w,a,0); textSpaced(d,(cx+.045)*W,.322*H,F.barlow,6,w,b,0); };
       mk(.175,'MIN','MAX'); mk(.385,'LO','HI'); mk(.595,'MIN','MAX');
       // TURBO section: (REMOTE) I / II marks above, TURBO label below
       const tv=(vals&&vals[3]!=null)?vals[3]:0;
       textSpaced(d,.812*W,.075*H,F.barlow,6,w,'(REMOTE)',0.04);
       textSpaced(d,.775*W,.135*H,F.barlow,7.5,tv<0.5?rgb(255,240,140):w,'I',0);
       textSpaced(d,.850*W,.135*H,F.barlow,7.5,tv>=0.5?rgb(255,240,140):w,'II',0);
-      textSpaced(d,.812*W,.360*H,F.barlow,8.5,w,'TURBO',0.12);
+      textSpaced(d,.812*W,.322*H,F.barlow,8.5,w,'TURBO',0.12);
       // ── TURBO 2-position selector knob (orange, pointer SNAPS to I up-left /
       //    II up-right — the two marks above; it's a selector, not a pot) ──
       { const tcx=.812*W, tcy=.250*H, tR=.062*W;
