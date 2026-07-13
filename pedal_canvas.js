@@ -1121,6 +1121,48 @@
       textSpaced(d,.245*W,.858*H,F.barlow,8.5,ink,'BATT.',0.5);
       textSpaced(d,.238*W,.921*H,F.barlow,8.5,ink,'OFF',0.6); } };
 
+  // Micro Amp — MXR Micro Amp (M133): a cream crinkle-finish box, one big glossy
+  // black GAIN knob, the MXR-style rounded-rect logo (parody: NYR), a red LED,
+  // a chrome footswitch and 'micro amp' along the bottom. Parody brand
+  // (MXR -> NYR). Own panel: one knob, Gain0.
+  P.microamp = { w:300,h:490,
+    knobs:[{id:0,cx:.50,cy:.175,r:.110,style:'boss',cap:[16,16,18]}],
+    ptr:rgb(238,238,240),
+    draw(d,values){ const {ctx:c,W,H,s}=d; const ink=rgb(32,29,24);
+      c.fillStyle=rgb(8,8,8); c.fillRect(0,0,W,H);
+      const bx=W*.05, by=H*.03, bw=W*.90, bh=H*.94;
+      // cream crinkle-finish body
+      const bg=c.createLinearGradient(0,by,0,by+bh);
+      bg.addColorStop(0,rgb(224,216,192)); bg.addColorStop(.5,rgb(208,199,172)); bg.addColorStop(1,rgb(194,185,158));
+      rr(c,bx,by,bw,bh,14*s); c.fillStyle=bg; c.fill();
+      c.save(); rr(c,bx,by,bw,bh,14*s); c.clip();
+      // crinkle speckle
+      for(let i=0;i<900;i++){ const x=bx+(i*97.13)%bw, y=by+(i*57.31)%bh, b=(i*29)%7;
+        c.fillStyle=`rgba(${b<3?'255,250,236':'118,110,90'},${0.05+0.045*(b%3)})`; c.fillRect(x,y,1.3*s,1.3*s); }
+      const vg=c.createRadialGradient(W*.5,H*.5,H*.18,W*.5,H*.5,H*.62);
+      vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.15)'); c.fillStyle=vg; c.fillRect(bx,by,bw,bh);
+      c.restore();
+      rr(c,bx,by,bw,bh,14*s); c.strokeStyle=rgb(150,142,120); c.lineWidth=1.6*s; c.stroke();
+      // chrome jack nuts on the sides
+      for(const jx of [bx-2*s, bx+bw-14*s]){ const jy=H*.44;
+        const jg=c.createLinearGradient(jx,0,jx+16*s,0); jg.addColorStop(0,rgb(120,122,126)); jg.addColorStop(.5,rgb(214,216,220)); jg.addColorStop(1,rgb(120,122,126));
+        rr(c,jx,jy,16*s,H*.075,3*s); c.fillStyle=jg; c.fill(); c.strokeStyle=rgb(90,90,94); c.lineWidth=1*s; c.stroke(); }
+      // GAIN label
+      textSpaced(d,.50*W,.325*H,F.barlow,11,ink,'GAIN',1.6);
+      // NYR logo — MXR-style rounded-rect border + bold letters
+      const lx=.50*W, ly=.445*H, lw=W*.42, lh=H*.072;
+      rr(c,lx-lw/2,ly-lh/2,lw,lh,lh*0.48); c.strokeStyle=ink; c.lineWidth=3.4*s; c.stroke();
+      textC(d,lx,ly+1.5*s,F.anton,30,ink,'NYR');
+      // red LED
+      ledDot(d,.50*W,.565*H,true,226,52,42);
+      // chrome footswitch (decorative — the host handles bypass)
+      footRound(d,.50*W,.685*H,23*s);
+      // 'micro amp' wordmark
+      textC(d,.50*W,.855*H,F.crete,35,ink,'micro amp');
+      // OUTPUT / INPUT side labels
+      c.save(); c.translate(.10*W,.475*H); c.rotate(-Math.PI/2); textSpaced(d,0,0,F.barlow,9,ink,'OUTPUT',1.3); c.restore();
+      c.save(); c.translate(.90*W,.475*H); c.rotate(-Math.PI/2); textSpaced(d,0,0,F.barlow,9,ink,'INPUT',1.3); c.restore(); } };
+
   // BZ-1 - Chief compact FZ-3-style silicon fuzz.
   // Real controls: Fuzz0 Tone1 Volume2.
   P.bz1 = chiefSpec(300,480,[188,191,196],
