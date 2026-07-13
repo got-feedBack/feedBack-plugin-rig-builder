@@ -1051,6 +1051,76 @@
       textSpaced(d,.50*W,.805*H,F.barlow,8.5,rgb(228,216,174),'OCTAVE  FUZZ',2.0);
       ledDot(d,W*.50,H*.845,true,224,62,52); footRound(d,W*.50,H*.910,20*s); } };
 
+  // Fuzz Rite — Mosrite FuzzRite: a raw brushed-aluminium box, two chrome knobs
+  // (VOLUME left, DEPTH right), the vintage 'FUZZ rite BY (N) nosrite of
+  // California' screen print, AMP./INST. + ON/BATT./OFF marks. Parody brand
+  // (Mosrite -> nosrite). Own panel: Depth0 Volume1.
+  P.fuzzrite = { w:300,h:490,
+    knobs:[
+      {id:1,cx:.255,cy:.115,r:.070,style:'boss',cap:[150,152,156]},
+      {id:0,cx:.745,cy:.115,r:.070,style:'boss',cap:[150,152,156]}],
+    ptr:rgb(40,40,44),
+    draw(d,values){ const {ctx:c,W,H,s}=d; const ink=rgb(24,24,26);
+      c.fillStyle=rgb(8,8,9); c.fillRect(0,0,W,H);
+      const bx=W*.06, by=H*.035, bw=W*.88, bh=H*.925;
+      // brushed aluminium body
+      const bg=c.createLinearGradient(bx,0,bx+bw,0);
+      bg.addColorStop(0,rgb(150,151,154)); bg.addColorStop(.28,rgb(202,203,206));
+      bg.addColorStop(.55,rgb(178,179,182)); bg.addColorStop(1,rgb(150,151,154));
+      rr(c,bx,by,bw,bh,10*s); c.fillStyle=bg; c.fill();
+      c.save(); rr(c,bx,by,bw,bh,10*s); c.clip();
+      // vertical brush streaks
+      for(let i=0;i<160;i++){ const x=bx+ (i*7.13*s)%(bw); const a=0.04+0.05*((i*37)%5)/5;
+        c.strokeStyle=`rgba(${i%2?'255,255,255':'90,90,94'},${a})`; c.lineWidth=0.8*s;
+        c.beginPath(); c.moveTo(x,by); c.lineTo(x,by+bh); c.stroke(); }
+      // top/bottom shading + vintage grime
+      const vg=c.createLinearGradient(0,by,0,by+bh); vg.addColorStop(0,'rgba(255,255,255,0.10)');
+      vg.addColorStop(.5,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.16)'); c.fillStyle=vg; c.fillRect(bx,by,bw,bh);
+      c.fillStyle='rgba(120,116,104,0.10)';
+      for(let i=0;i<40;i++){ const x=bx+14*s+((i*53)%Math.floor(bw-28*s)), y=by+18*s+((i*97)%Math.floor(bh-36*s));
+        c.beginPath(); c.arc(x,y,(1+(i%3))*0.7*s,0,7); c.fill(); }
+      c.restore();
+      rr(c,bx,by,bw,bh,10*s); c.strokeStyle=rgb(120,120,124); c.lineWidth=1.6*s; c.stroke();
+      screw(d,bx+13*s,by+13*s); screw(d,bx+bw-13*s,by+13*s);
+      screw(d,bx+13*s,by+bh-13*s); screw(d,bx+bw-13*s,by+bh-13*s);
+      // knob labels + input-mode marks
+      textSpaced(d,.255*W,.205*H,F.barlow,9.5,ink,'VOLUME',0.6);
+      textSpaced(d,.745*W,.205*H,F.barlow,9.5,ink,'DEPTH',0.8);
+      textSpaced(d,.175*W,.285*H,F.barlow,8,ink,'AMP.',0.4);
+      textSpaced(d,.825*W,.285*H,F.barlow,8,ink,'INST.',0.4);
+      // 'FUZZ rite' (bold + light) with a ®
+      setFont(d,F.anton,34); c.textBaseline='alphabetic'; const wF=c.measureText('FUZZ').width;
+      setFont(d,F.crete,30); const wR=c.measureText('rite').width; const gap=9*s;
+      const tot=wF+gap+wR, x0=.50*W-tot/2, yT=.435*H;
+      c.textAlign='left'; c.fillStyle=ink; setFont(d,F.anton,34); c.fillText('FUZZ',x0,yT);
+      setFont(d,F.crete,30); c.fillText('rite',x0+wF+gap,yT);
+      setFont(d,F.barlow,10); c.fillText('®',x0+wF+gap+wR+2*s,yT-14*s);
+      c.textBaseline='middle';
+      textSpaced(d,.50*W,.485*H,F.barlow,8.5,ink,'BY',1.2);
+      // (N) starburst logo + 'nosrite' script
+      const lx=.335*W, ly=.545*H, lr=13*s;
+      c.save(); c.translate(lx,ly);
+      c.fillStyle=ink; for(let i=0;i<24;i++){ c.save(); c.rotate(i*Math.PI/12);
+        c.beginPath(); c.moveTo(0,-lr*1.28); c.lineTo(-lr*0.16,-lr*0.92); c.lineTo(lr*0.16,-lr*0.92); c.closePath(); c.fill(); c.restore(); }
+      c.beginPath(); c.arc(0,0,lr,0,7); c.fillStyle=ink; c.fill();
+      c.restore();
+      textC(d,lx,ly,F.anton,17,rgb(206,206,208),'N');
+      c.save(); c.font=`italic ${Math.round(30*s)}px ${F.ink}`; c.fillStyle=ink; c.textAlign='left'; c.textBaseline='middle';
+      c.fillText('nosrite', lx+lr*1.7, ly+2*s); c.restore();
+      c.save(); c.font=`italic ${Math.round(15*s)}px ${F.ink}`; c.fillStyle=ink; c.textAlign='center'; c.textBaseline='middle';
+      c.fillText('of California', .55*W, .615*H); c.restore();
+      // decorative centre toggle + ON/BATT./OFF marks (bypass is handled by the host)
+      c.beginPath(); c.arc(.50*W,.70*H,10*s,0,7);
+      const tg=c.createRadialGradient(.485*W,.685*H,2*s,.50*W,.70*H,11*s);
+      tg.addColorStop(0,rgb(60,60,64)); tg.addColorStop(1,rgb(18,18,20)); c.fillStyle=tg; c.fill();
+      c.beginPath(); c.arc(.50*W,.70*H,10*s,0,7); c.strokeStyle=rgb(150,150,154); c.lineWidth=1.4*s; c.stroke();
+      const ng=c.createRadialGradient(.492*W,.678*H,1*s,.50*W,.688*H,6*s);
+      ng.addColorStop(0,rgb(224,226,230)); ng.addColorStop(1,rgb(120,122,126));
+      c.beginPath(); c.arc(.50*W,.688*H,5.5*s,0,7); c.fillStyle=ng; c.fill();
+      textSpaced(d,.235*W,.795*H,F.barlow,8.5,ink,'ON',0.6);
+      textSpaced(d,.245*W,.858*H,F.barlow,8.5,ink,'BATT.',0.5);
+      textSpaced(d,.238*W,.921*H,F.barlow,8.5,ink,'OFF',0.6); } };
+
   // BZ-1 - Chief compact FZ-3-style silicon fuzz.
   // Real controls: Fuzz0 Tone1 Volume2.
   P.bz1 = chiefSpec(300,480,[188,191,196],
