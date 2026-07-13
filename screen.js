@@ -1163,14 +1163,16 @@ async function rbPreLoadMute(chainLen, targetGain, opts) {
         if (_rbUnmuteTimer) { clearTimeout(_rbUnmuteTimer); _rbUnmuteTimer = null; }
         try {
             // Restore the monitor to whatever it was before the load (dry mode
-            // forced it on; put it back so normal play isn't doubled).
-            if (typeof audio.setMonitorMute === 'function') await audio.setMonitorMute(wasMuted);
+            // forced it on; put it back so normal play isn't doubled). A user
+            // mute always wins so it survives tone/song loads.
+            if (typeof audio.setMonitorMute === 'function') await audio.setMonitorMute(wasMuted || !!rbState._userMuted);
             // Fade chain gain 0 → target over ~24 ms in 4 steps so the
             // restore doesn't click. Final value is the smart target,
             // not a fixed 1.0 — that's how we normalise across "amp +
-            // cab" and "amp only" without a user-facing knob.
+            // cab" and "amp only" without a user-facing knob. If the user
+            // muted, keep the chain at 0 (mute persists across loads).
             if (typeof audio.setGain === 'function') {
-                const restoreTarget = rbClampChainGainTarget(window.__rbPendingChainGainTarget ?? target);
+                const restoreTarget = rbState._userMuted ? 0 : rbClampChainGainTarget(window.__rbPendingChainGainTarget ?? target);
                 const steps = [restoreTarget * 0.25, restoreTarget * 0.5, restoreTarget * 0.8, restoreTarget];
                 for (const v of steps) {
                     await audio.setGain('chain', v);
@@ -5188,12 +5190,24 @@ if (!window.__rbStudioScaleHook) {
 }
 
 // ── Mute output (topbar button, available from every menu) ───────────────
+// Apply the user mute to the engine. setMonitorMute alone only silences the
+// live-input MONITOR — the processed guitar plays through the 'chain' gain, so a
+// real "mute output" must ALSO zero that (this is why the load sequence mutes
+// with BOTH). Un-mute restores the chain to its last computed target.
+async function rbApplyUserMute(muted) {
+    const api = rbAudioApi();
+    if (!api) return;
+    try {
+        if (typeof api.setMonitorMute === 'function') await api.setMonitorMute(!!muted);
+        if (typeof api.setGain === 'function') {
+            const target = muted ? 0 : rbClampChainGainTarget(window.__rbPendingChainGainTarget ?? 1.0);
+            await api.setGain('chain', target);
+        }
+    } catch (_) {}
+}
 async function rbToggleMute() {
     rbState._userMuted = !rbState._userMuted;
-    try {
-        const api = rbAudioApi();
-        if (api && typeof api.setMonitorMute === 'function') await api.setMonitorMute(!!rbState._userMuted);
-    } catch (_) {}
+    await rbApplyUserMute(rbState._userMuted);
     rbSyncMuteBtn();
 }
 function rbSyncMuteBtn() {
