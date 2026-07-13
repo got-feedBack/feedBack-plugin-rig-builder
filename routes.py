@@ -3399,7 +3399,14 @@ def _read_tones_from_sloppak(filename: str, dlc: Path) -> list[dict]:
         rel = entry.get("file")
         if not isinstance(rel, str) or not rel.strip():
             continue
-        raw = sloppak_mod.read_member_bytes(pack, rel)    # single member, no unpack
+        try:
+            raw = sloppak_mod.read_member_bytes(pack, rel)   # single member, no unpack
+        except Exception:
+            # One unreadable member (CRC error, truncated pack) must not abort the
+            # song's whole tone read — and _batch_worker runs this across the
+            # entire library, so one bad pack must not poison the batch.
+            log.warning("failed to read arrangement %r in %r", rel, filename, exc_info=True)
+            continue
         if not raw:
             continue
         try:

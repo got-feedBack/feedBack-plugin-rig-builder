@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 import zipfile
 from pathlib import Path
@@ -68,12 +69,37 @@ def _pack(path: Path, *, vocals_too: bool = False) -> Path:
     return path
 
 
+def _find_core_lib() -> Path | None:
+    """Locate the host core's lib/ (it owns the `sloppak` module this reads through).
+
+    Ordered: an explicit FEEDBACK_CORE_LIB, then a sibling checkout, then the
+    conventional dev layout. NOT a single hardcoded developer path — this file is
+    the regression guard for a 60 GB disk bug, and one that quietly skips
+    everywhere but one laptop is no guard at all.
+    """
+    env = os.environ.get("FEEDBACK_CORE_LIB")
+    candidates = [Path(env)] if env else []
+    here = Path(__file__).resolve()
+    candidates += [
+        here.parents[2] / "feedback" / "lib",          # sibling checkout
+        here.parents[2] / "feedBack" / "lib",
+        Path.home() / "Repositories" / "feedback" / "lib",
+    ]
+    for c in candidates:
+        if (c / "sloppak.py").is_file():
+            return c
+    return None
+
+
 @pytest.fixture
 def sloppak_on_path():
     """The plugin imports `sloppak` from the host core at call time."""
-    core = Path.home() / "Repositories" / "feedback" / "lib"
-    if not (core / "sloppak.py").exists():
-        pytest.skip("core lib/ not available")
+    core = _find_core_lib()
+    if core is None:
+        pytest.skip(
+            "host core lib/ not found — set FEEDBACK_CORE_LIB to the core checkout's "
+            "lib/ to run the tone-read regression tests"
+        )
     sys.path.insert(0, str(core))
     yield
     sys.path.remove(str(core))
