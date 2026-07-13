@@ -1106,12 +1106,16 @@
     knobs:[
       {id:2,cx:.175,cy:.250,r:.062,style:'pointer',cap:[236,140,42]},  // LEVEL
       {id:1,cx:.385,cy:.250,r:.062,style:'pointer',cap:[236,140,42]},  // TONE
-      {id:0,cx:.595,cy:.250,r:.062,style:'pointer',cap:[236,140,42]},  // DIST
-      {id:3,cx:.812,cy:.250,r:.062,style:'pointer',cap:[236,140,42]} ],// TURBO (Mode I/II)
+      {id:0,cx:.595,cy:.250,r:.062,style:'pointer',cap:[236,140,42]} ],// DIST
+    // TURBO is a 2-position ROTARY SELECTOR (I / II), NOT a continuous pot: it's
+    // an sw3 two:true hit-area that toggles on click, drawn manually below so the
+    // pointer snaps between the I and II marks.
+    sw3:[{id:3,cx:.812,cy:.250,hw:22,hh:22,two:true,hidden:true}],
     tick:rgb(60,40,16), ptr:rgb(40,26,10),
     draw(d,vals){ const {ctx:c,W,H,s}=d; chiefBody(d,240,132,26); const w=rgb(242,244,246);
-      // CHECK LED (top centre of the plate) — label well above the LED glow
-      textSpaced(d,.500*W,.055*H,F.barlow,7,w,'CHECK',0.12); ledDot(d,.500*W,.118*H,true,224,60,52);
+      // CHECK label — chiefBody already draws the status LED just below it
+      // (removing a second LED that used to double up here).
+      textSpaced(d,.500*W,.040*H,F.barlow,7,w,'CHECK',0.12);
       // white divider between the main knobs and the TURBO section
       c.strokeStyle='rgba(238,240,242,0.7)'; c.lineWidth=1.6*s;
       c.beginPath(); c.moveTo(.705*W,.115*H); c.lineTo(.705*W,.36*H); c.stroke();
@@ -1130,6 +1134,18 @@
       textSpaced(d,.775*W,.135*H,F.barlow,7.5,tv<0.5?rgb(255,240,140):w,'I',0);
       textSpaced(d,.850*W,.135*H,F.barlow,7.5,tv>=0.5?rgb(255,240,140):w,'II',0);
       textSpaced(d,.812*W,.360*H,F.barlow,8.5,w,'TURBO',0.12);
+      // ── TURBO 2-position selector knob (orange, pointer SNAPS to I up-left /
+      //    II up-right — the two marks above; it's a selector, not a pot) ──
+      { const tcx=.812*W, tcy=.250*H, tR=.062*W;
+        const tg=c.createRadialGradient(tcx-tR*0.35,tcy-tR*0.42,tR*0.1,tcx,tcy,tR*1.12);
+        tg.addColorStop(0,rgb(255,192,94)); tg.addColorStop(1,rgb(118,70,13));
+        c.beginPath(); c.arc(tcx,tcy,tR,0,7); c.fillStyle=tg; c.fill();
+        c.strokeStyle=rgb(8,8,10); c.lineWidth=1.4*s; c.stroke();
+        const pa = (tv>=0.5 ? 315 : 225) * Math.PI/180;   // II up-right / I up-left
+        c.beginPath(); c.moveTo(tcx+tR*0.12*Math.cos(pa),tcy+tR*0.12*Math.sin(pa));
+        c.lineTo(tcx+tR*0.94*Math.cos(pa),tcy+tR*0.94*Math.sin(pa));
+        c.lineCap='round'; c.strokeStyle=rgb(246,246,249); c.lineWidth=2.6*s; c.stroke(); c.lineCap='butt';
+        c.beginPath(); c.arc(tcx-tR*0.24,tcy-tR*0.28,tR*0.12,0,7); c.fillStyle='rgba(255,255,255,0.22)'; c.fill(); }
       chiefName(d,'Turbo','Distortion','DS-2'); } };
 
   // Chorus Ensemble — Boss CE-1: the big OLIVE-GREEN desktop BBD unit with a
