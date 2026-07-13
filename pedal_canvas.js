@@ -5897,6 +5897,41 @@
       textSpaced(d,(ix0+ix1)/2,py+ph*.06,F.barlow,7,rgb(150,42,30),mode,0.06);
       textSpaced(d,(G.px+G.pw)-44*s,py+ph*.90,F.bebas,12,rgb(40,34,24),'MARSTEN',0.08); } };
 
+  // ── MARSTEN MAJOR (Marshall Major 200W "The Pig") — same black-tolex gold-panel
+  //    head as the Plexi/JTM45 (the Major shares the cosmetic; the 4x KT88 / 200W
+  //    difference is on the back), with a 'MAJOR 200W' badge to tell them apart.
+  //    Non-master: VOLUME I / VOLUME II. 0 Presence 1 Bass 2 Middle 3 Treble
+  //    4 Volume1 5 Volume2 + Input jumper(6). (7 Cab Sim = auto, not on the face.)
+  P.marstenmajor = { w:1560, h:600, ptr:rgb(244,242,236),
+    knobs:[
+      {id:0,cx:.310,cy:.770,r:.020,style:'pointer',cap:[24,22,22]},
+      {id:1,cx:.385,cy:.770,r:.020,style:'pointer',cap:[24,22,22]},
+      {id:2,cx:.460,cy:.770,r:.020,style:'pointer',cap:[24,22,22]},
+      {id:3,cx:.535,cy:.770,r:.020,style:'pointer',cap:[24,22,22]},
+      {id:4,cx:.610,cy:.770,r:.020,style:'pointer',cap:[24,22,22]},
+      {id:5,cx:.685,cy:.770,r:.020,style:'pointer',cap:[24,22,22]} ],
+    sw3:[{id:6,cx:.857,cy:.788,hw:62,hh:42,hidden:true}],
+    draw(d,vals){ const {ctx:c,W,H,s}=d; const G=marstenGoldHead(d,'MAJOR 200W');
+      const {gold,ink,inkF,py,ph,lblY,goldLo}=G;
+      const lbl=(cx,t,sz)=>textSpaced(d,cx*W,lblY,F.barlow,sz||10,ink,t,0.03);
+      lbl(.310,'PRESENCE',8); lbl(.385,'BASS'); lbl(.460,'MIDDLE'); lbl(.535,'TREBLE');
+      lbl(.610,'VOLUME I',8); lbl(.685,'VOLUME II',7.5);
+      marstenPowerBlock(d,G,0.085);
+      const ix0=.825*W, ix1=.890*W, iy0=py+ph*.40, iy1=py+ph*.72;
+      const jack=(jx,jy)=>{ c.beginPath(); c.arc(jx,jy,8*s,0,7); c.fillStyle=rgb(16,14,14); c.fill();
+        c.strokeStyle=rgb(150,128,74); c.lineWidth=2*s; c.stroke(); c.beginPath(); c.arc(jx,jy,2.6*s,0,7); c.fillStyle=rgb(54,52,48); c.fill(); };
+      jack(ix0,iy0); jack(ix1,iy0); jack(ix0,iy1); jack(ix1,iy1);
+      textSpaced(d,(ix0+ix1)/2,lblY,F.barlow,8.5,ink,'INPUTS',0.04);
+      const inp=(vals&&vals[6]!=null)?vals[6]:0.5;
+      const plug=(jx,jy)=>{ rr(c,jx-4.6*s,jy-5.5*s,9.2*s,6.5*s,2*s); c.fillStyle=rgb(36,34,32); c.fill();
+        c.beginPath(); c.moveTo(jx,jy+6*s); c.bezierCurveTo(jx+6*s,jy+44*s, jx-34*s,jy+54*s, jx-46*s,H*0.99);
+        c.lineWidth=5*s; c.lineCap='round'; c.strokeStyle=rgb(18,18,20); c.stroke(); c.lineCap='butt'; };
+      const jumper=(x1,y1,x2,y2)=>{ const mx=(x1+x2)/2, my=Math.min(y1,y2)-13*s;
+        c.beginPath(); c.moveTo(x1,y1); c.quadraticCurveTo(mx,my,x2,y2); c.lineWidth=3.6*s; c.lineCap='round'; c.strokeStyle=rgb(18,18,20); c.stroke(); c.lineCap='butt'; };
+      let mode; if(inp<0.25){plug(ix0,iy0);mode='BRIGHT';} else if(inp<0.75){jumper(ix0,iy1,ix1,iy0);plug(ix0,iy0);mode='JUMPERED';} else {plug(ix1,iy0);mode='NORMAL';}
+      textSpaced(d,(ix0+ix1)/2,py+ph*.06,F.barlow,7,rgb(150,42,30),mode,0.06);
+      textSpaced(d,(G.px+G.pw)-44*s,py+ph*.90,F.bebas,12,rgb(40,34,24),'MARSTEN',0.08); } };
+
   // ── MARSTEN BLUESBREAKER (Marshall 1962) — JTM45 voice + Tremolo, gold combo
   //    panel. 0 Speed 1 Intensity 2 Presence 3 Bass 4 Middle 5 Treble 6 Loudness1
   //    7 Loudness2 + Input jumper(8). RS Gain -> Loudness1.
@@ -7731,7 +7766,7 @@
     lovoltdr504:1.45, lovoltdr103:1.45, samplegvh140c:1.78,
     // British / boutique heads
     boxac30:1.22, bendersupernova22:1.45, dualrect:1.45, dsl100:1.45, plexi:1.55,
-    marstenvs100:1.45, marstenjcm800:1.60, marstenjtm45:1.55, marstenbluesbreaker:1.60,
+    marstenvs100:1.45, marstenjcm800:1.60, marstenjtm45:1.55, marstenbluesbreaker:1.60, marstenmajor:1.55,
     marstendsl15:1.60, marstenjvm410:1.60, marstensilverjubilee:1.62, aor50:1.38, jc90:1.15, engelfireball:1.45,
     polystoneminibrute:1.28, ronaldjc120:1.22, tw40:1.28, superdrive45:1.45,
     markiii:1.80, markii:1.80, unparalleldc30:1.78, unparallelchieftain:1.75,
