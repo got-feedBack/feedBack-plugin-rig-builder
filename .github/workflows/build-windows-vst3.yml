@@ -158,7 +158,7 @@ jobs:
               BassWah.vst3)            echo "Bass Wah.vst3";;
               AutoSweep.vst3)          echo "Qtrix.vst3";;
               AutoFilter.vst3)         echo "BU-TRON III.vst3";;
-              BobFilter.vst3)          echo "FM105.vst3";;
+              BobFilter.vst3)          echo "FM101.vst3";;
               LoFiFilter.vst3)         echo "Lo Fi Filter.vst3";;
               BassEQ8.vst3)            echo "GEB-8.vst3";;
               AmpEQ.vst3)              echo "FBM-1.vst3";;

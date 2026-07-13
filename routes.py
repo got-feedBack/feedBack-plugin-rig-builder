@@ -660,7 +660,7 @@ _RENAMED_VST_BUNDLES = {
     # filter / envelope
     "AutoSweep.vst3":            "Qtrix.vst3",
     "AutoFilter.vst3":           "BU-TRON III.vst3",
-    "BobFilter.vst3":            "FM105.vst3",
+    "BobFilter.vst3":            "FM101.vst3",
     "LoFiFilter.vst3":           "Lo Fi Filter.vst3",
     # eq
     "BassEQ8.vst3":              "GEB-8.vst3",
