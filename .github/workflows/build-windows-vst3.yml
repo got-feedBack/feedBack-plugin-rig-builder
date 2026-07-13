@@ -158,7 +158,7 @@ jobs:
               BassWah.vst3)            echo "Bass Wah.vst3";;
               AutoSweep.vst3)          echo "Qtrix.vst3";;
               AutoFilter.vst3)         echo "BU-TRON III.vst3";;
-              BobFilter.vst3)          echo "FM105.vst3";;
+              BobFilter.vst3)          echo "FM101.vst3";;
               LoFiFilter.vst3)         echo "Lo Fi Filter.vst3";;
               BassEQ8.vst3)            echo "GEB-8.vst3";;
               AmpEQ.vst3)              echo "FBM-1.vst3";;
@@ -180,27 +180,43 @@ jobs:
               *)              echo "$1";;
             esac
           }
+          # DIAGNOSTIC: DPF on MinGW may emit either a VST3 BUNDLE
+          # (bin/<Name>.vst3/Contents/x86_64-win/<Name>.vst3) or a SINGLE-FILE
+          # .vst3 (bin/<Name>.vst3 = the DLL directly). The old find only matched
+          # the bundle form, so a single-file output injected NOTHING. Print the
+          # top-level built outputs so the layout is visible in the log.
+          echo "=== built top-level .vst3 outputs (bin/<Name>.vst3) ==="
+          find vst/src -name '*.vst3' | grep -E '/bin/[^/]+\.vst3$' | sort -u
+          echo "=========================================================="
           count=0
-          # DPF writes the built bundle under each plugin dir (bin/<Name>.vst3).
-          find vst/src -type d -path '*/Contents/x86_64-win' | while read -r win; do
-            built=$(basename "$(dirname "$(dirname "$win")")")   # <Name>.vst3
-            bundle=$(alias_of "$built")
-            # Committed bundles moved into vst/{amps,pedals,racks}/ (the reorg),
-            # so search those subdirs, not the old flat vst/<bundle>.
+          # Process substitution (NOT `find | while`) so $count survives the loop.
+          while IFS= read -r vst3; do
+            built=$(basename "$vst3")            # <Name>.vst3 (DPF NAME)
+            bundle=$(alias_of "$built")          # -> committed bundle dir name
             dst=""
             for cat in amps pedals racks; do
               [ -d "vst/$cat/$bundle" ] && dst="vst/$cat/$bundle" && break
             done
-            if [ -n "$dst" ]; then
-              dest="$dst/Contents/x86_64-win"
-              rm -rf "$dest"; mkdir -p "$dest"
-              cp -R "$win/." "$dest/"
-              echo "injected: $dst"
-              count=$((count+1))
-            else
-              echo "WARNING: built $bundle but no committed bundle vst/{amps,pedals,racks}/$bundle"
+            if [ -z "$dst" ]; then
+              echo "WARNING: built $bundle but no committed vst/{amps,pedals,racks}/$bundle"
+              continue
             fi
-          done
+            dest="$dst/Contents/x86_64-win"
+            rm -rf "$dest"; mkdir -p "$dest"
+            if [ -d "$vst3" ]; then
+              # Bundle form: copy the contents of its Contents/*-win folder.
+              win=$(find "$vst3" -type d -path '*/Contents/*-win' | head -1)
+              if [ -z "$win" ]; then
+                echo "WARNING: $built is a bundle but has no Contents/*-win"; rmdir "$dest" 2>/dev/null; continue
+              fi
+              cp -R "$win/." "$dest/"
+            else
+              # Single-file form: the .vst3 IS the DLL → place it as the win binary.
+              cp "$vst3" "$dest/$built"
+            fi
+            echo "injected: $built -> $dst"
+            count=$((count+1))
+          done < <(find vst/src -name '*.vst3' | grep -E '/bin/[^/]+\.vst3$' | sort -u)
           echo "injected $count bundles"
 
       - name: Commit the Windows binaries

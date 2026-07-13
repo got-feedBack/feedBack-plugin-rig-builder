@@ -4875,13 +4875,14 @@ function rbStudioGroupDefault() {
         // field; `rs_category` can be a stale default (e.g. the master_default
         // amp piece carries rs_category='pedal'), so it must NOT take priority.
         // Slot is the final tie-breaker (a lone master_default VST = the amp).
+        // A full-chain NAM is an OVERRIDE shown on the banner, not a board piece —
+        // keep the ORIGINAL gear in its normal slots (greyed while the override is
+        // on) so disabling the override restores exactly what's drawn.
+        if (rbIsFullChainPiece(p)) return;
         const cat = (p.category || p.rs_category || '').toLowerCase();
         const slot = (p.slot || '').toLowerCase();
         const entry = { p, idx };
-        // A full-chain NAM is the whole rig in one node — show it as the central
-        // "amp" box so every visualizer renders a single node (no cab/pedals).
-        if (rbIsFullChainPiece(p) || cat === 'fullchain' || slot === 'full_chain') g.amp.push(entry);
-        else if (cat === 'amp' || slot === 'amp' || slot === 'master_default') g.amp.push(entry);
+        if (cat === 'amp' || slot === 'amp' || slot === 'master_default') g.amp.push(entry);
         else if (cat === 'cab' || slot === 'cabinet') g.cab.push(entry);
         else if (cat === 'rack' || slot === 'rack') g.rack.push(entry);
         else g.pedal.push(entry);   // pedals + anything else goes on the floor
@@ -5096,7 +5097,24 @@ function rbRenderStudioRoom() {
             }).join('') : `<div class="rb-pedal-placeholder">＋ pedals</div>`}
         </div>`;
 
+    // Full-chain override banner: when a full-chain NAM is loaded it sits ON TOP
+    // of the original gear. Active → grey the board + "Using <name>" with Disable.
+    // Disabled → the original gear plays; a dim chip offers Enable. ✕ removes it.
+    const _fcPiece = rbFindFullChainPiece(rbStudioCurrentChain());
+    const _fcOn = !!(_fcPiece && !rbFcBypassed(_fcPiece));
+    let fcBannerHtml = '';
+    if (_fcPiece) {
+        const fcName = _fcPiece.real_name || _fcPiece.name || _fcPiece.type || 'NAM';
+        fcBannerHtml = `<div class="rb-fc-banner ${_fcOn ? 'on' : 'off'}">
+            <span class="rb-fc-banner-txt">🎛 ${_fcOn ? 'Using' : 'Full-chain (off):'} <b>${rbEsc(fcName)}</b></span>
+            <button class="rb-fc-banner-btn" onclick="rbToggleFullChainOverride(${_fcOn ? 'false' : 'true'})">${_fcOn ? 'Disable' : 'Enable'}</button>
+            <button class="rb-fc-banner-x" onclick="rbRemoveFullChainOverride()" title="Remove the full-chain override">✕</button>
+        </div>`;
+    }
+    el.classList.toggle('rb-fullchain-active', _fcOn);
+
     el.innerHTML = `
+        ${fcBannerHtml}
         <div class="rb-room-camera" id="rb-room-camera">
             <div class="rb-room-3d">
                 <div class="rb-wall rb-wall-back">
@@ -6825,6 +6843,12 @@ function rbIsFullChainPiece(p) {
     return !!(p && (p._fullchain || p.kind === 'nam_fullchain'
         || (p.assigned && p.assigned.kind === 'nam_fullchain')));
 }
+// Disabled state of a piece, tolerant of all shapes the bypass round-trips
+// through: in-memory `_bypassed`, get_song's reconstructed top-level `bypassed`,
+// and the `assigned.bypassed` block.
+function rbFcBypassed(p) {
+    return !!(p && (p._bypassed || p.bypassed || (p.assigned && p.assigned.bypassed)));
+}
 function rbFullChainPayloadPiece(p) {
     if (!rbIsFullChainPiece(p)) return null;
     return {
@@ -6834,7 +6858,7 @@ function rbFullChainPayloadPiece(p) {
         file: p._fullchain_file || (p.assigned && p.assigned.file) || null,
         params: {},
         assigned_mode: 'manual',
-        bypassed: !!p._bypassed,
+        bypassed: rbFcBypassed(p),
     };
 }
 
@@ -6856,17 +6880,43 @@ function rbStudioChainToPayload(chain) {
     });
 }
 
-// ── Load a full-chain NAM (replaces the WHOLE current tone) ──────────────
-// Some .nam captures bake amp + pedals + rack + cab into one neural model, so
-// they don't fit any single amp/pedal/cab slot. Loading one REPLACES the entire
-// current chain with a single full-chain piece, then persists + reloads so every
-// visualizer (studio room, chain strip, node editor) shows one node. Scope
-// follows the active studio view: Default, a saved tone, or the loaded song's
-// selected tone — the fixed corner button does global + per-song replacement.
+// ── Full-chain NAM OVERRIDE ──────────────────────────────────────────────
+// Some .nam captures bake amp + pedals + rack + cab into one neural model. Rather
+// than delete the tone's gear, the full-chain NAM sits ON TOP as an override: the
+// ORIGINAL pieces are kept (shown greyed with a "using <name>" banner) and the
+// capture takes over the sound while enabled. Disabling it (its `bypassed` flag)
+// restores the original gear (the VSTs). Stored as one extra preset_pieces row
+// (kind=nam_fullchain); when non-bypassed the backend emits ONLY its stage.
 //
-// `file` is stored verbatim: an ABSOLUTE path for a directory pick (referenced
-// in place) or a RELATIVE nam_models path for a tone3000 download (already
-// copied into the library). _resolve_model_path handles both server-side.
+// `file` is stored verbatim: an ABSOLUTE path for a directory pick (referenced in
+// place) or a RELATIVE nam_models path for a tone3000 download. _resolve_model_path
+// handles both server-side.
+function rbFindFullChainPiece(chain) {
+    return (chain || []).find(rbIsFullChainPiece) || null;
+}
+// The active override = a full-chain piece that is NOT disabled.
+function rbActiveFullChain(chain) {
+    const p = rbFindFullChainPiece(chain);
+    return (p && !rbFcBypassed(p)) ? p : null;
+}
+// Set a full-chain piece's disabled state on ALL shapes so it round-trips.
+function rbFcSetBypassed(p, bypassed) {
+    p._bypassed = !!bypassed;
+    p.bypassed = !!bypassed;
+    if (p.assigned) p.assigned.bypassed = !!bypassed;
+}
+async function rbFullChainApplyAndReload() {
+    try {
+        rbStudioPersist();
+        if (rbState._studioPersistPromise) { try { await rbState._studioPersistPromise; } catch (_) {} }
+    } catch (e) { console.warn('[rig_builder] full-chain persist failed:', e); }
+    try { rbRenderStudioRoom(); rbStudioRenderToneChips(); } catch (_) {}
+    try { await rbStudioLoadMonitor(); } catch (_) {}
+    // Always reseed the node-editor graph (it changes shape: single NAM when the
+    // override is on, the original gear when off) + persist it, so it's correct
+    // whether or not the Advanced tab is currently open.
+    try { if (typeof rbAdvResetToChain === 'function') rbAdvResetToChain(); } catch (_) {}
+}
 async function rbApplyFullChainNam(file, name) {
     if (!file) return;
     name = name || String(file).split(/[\\/]/).pop().replace(/\.nam$/i, '');
@@ -6882,29 +6932,32 @@ async function rbApplyFullChainNam(file, name) {
         slot: 'full_chain',
         _fullchain: true,
         _fullchain_file: file,
-        _bypassed: false,
+        _bypassed: false,          // enabled on load
         assigned: { kind: 'nam_fullchain', file },
     };
-    // Replace the ENTIRE current chain in place — keep the same array reference
-    // so rbStudioCurrentChain()'s song/saved/default binding still points at it.
+    // KEEP the original gear, drop any prior override, append the new one enabled.
     const chain = rbStudioCurrentChain();
+    const originals = chain.filter(p => !rbIsFullChainPiece(p));
     chain.length = 0;
-    chain.push(piece);
-    // Persist to the active scope (song tone / saved tone / default) and WAIT so
-    // the reload reads the freshly-saved preset, then re-audition + redraw.
-    try {
-        rbStudioPersist();
-        if (rbState._studioPersistPromise) { try { await rbState._studioPersistPromise; } catch (_) {} }
-    } catch (e) { console.warn('[rig_builder] full-chain persist failed:', e); }
-    try { rbRenderStudioRoom(); rbStudioRenderToneChips(); } catch (_) {}
-    try { await rbStudioLoadMonitor(); } catch (_) {}
-    // If the node editor is open, reseed it (chain length changed → one node).
-    try {
-        if (rbState.currentTab === 'advanced' && typeof rbAdvResetToChain === 'function') {
-            rbAdvResetToChain();
-        }
-    } catch (_) {}
+    chain.push(...originals, piece);
+    await rbFullChainApplyAndReload();
 }
+// Enable/disable the current tone's full-chain override (the banner's toggle).
+window.rbToggleFullChainOverride = async function rbToggleFullChainOverride(enabled) {
+    const fc = rbFindFullChainPiece(rbStudioCurrentChain());
+    if (!fc) return;
+    rbFcSetBypassed(fc, !enabled);   // disabled → bypassed → originals play again
+    await rbFullChainApplyAndReload();
+};
+// Remove the override entirely (back to just the original gear).
+window.rbRemoveFullChainOverride = async function rbRemoveFullChainOverride() {
+    const chain = rbStudioCurrentChain();
+    const originals = chain.filter(p => !rbIsFullChainPiece(p));
+    if (originals.length === chain.length) return;
+    chain.length = 0;
+    chain.push(...originals);
+    await rbFullChainApplyAndReload();
+};
 
 // ── Reusable tone3000 browser (shared by the full-chain modal + add-gear) ────
 // A compact tone3000 search: category chips (full rig / amp / pedal / …), a
@@ -15459,7 +15512,7 @@ function rbCgFormHtml() {
             <div id="rb-cg-source-current" class="text-[11px] text-gray-500 mt-1"></div>
         </div>
 
-        ${rbCgVariantsHtml()}
+        <div id="rb-cg-variants-host">${rbCgVariantsHtml()}</div>
 
         <div>
             <div class="flex items-center justify-between mb-1">
@@ -15537,6 +15590,9 @@ function rbCgRenderSource() {
     if (s.sourceTab === 'file') {
         rbCgRenderSrcMode();                  // render the chosen source mode (tone3000 / directory / downloaded)
     }
+    // Gain-variants section follows the source (NAM only) — refresh on tab switch.
+    const vhost = document.getElementById('rb-cg-variants-host');
+    if (vhost) vhost.innerHTML = rbCgVariantsHtml();
     rbCgUpdateSourceLabel();
 }
 
@@ -15780,7 +15836,9 @@ const RB_CG_VARIANT_LEVELS = [
 ];
 function rbCgVariantsHtml() {
     const s = rbCgState;
-    if (!s || s.cat !== 'amp') return '';
+    // Gain variants only make sense for a NAM amp — a VST/AU amp is a single
+    // plugin, not per-gain captures. Hidden on the VST tab.
+    if (!s || s.cat !== 'amp' || s.sourceTab !== 'file') return '';
     return `<div>
         <label class="block text-[11px] uppercase tracking-wide text-gray-500 mb-1">Alternate gains — optional</label>
         <div class="text-[10px] text-gray-500 mb-2">Assign a different-gain NAM per level so the song's Gain knob auto-picks one. Download the captures in the source above first; clean defaults to the main source.</div>
@@ -18451,6 +18509,25 @@ function rbAdvResetToChain() {
         pan: (typeof e.p._pan === 'number' ? e.p._pan : 0),   // stereo pan (St-1)
         stereoOut: rbAdvPieceCanStereoOut(e.p, e.p.type),
     });
+    // Full-chain override ACTIVE → the whole rig is one baked NAM. Show a single
+    // node (Input → NAM → Output), matching what actually plays; the original
+    // gear is inactive while the override is on.
+    const _chain = rbStudioCurrentChain();
+    const _fc = rbActiveFullChain(_chain);
+    if (_fc) {
+        const input = { id: nid++, kind: 'input', label: 'Input', x: 0, y: 0 };
+        const node = mk({ p: _fc, idx: _chain.indexOf(_fc) }, 'fullchain');
+        const output = { id: nid++, kind: 'output', label: 'Output', x: 0, y: 0 };
+        adv.nodes = [input, node, output];
+        adv.edges = [
+            { from: input.id, to: node.id, gain: 1.0 },
+            { from: node.id, to: output.id, gain: 1.0 },
+        ];
+        adv.seeded = true;
+        rbAdvAutoLayout();
+        rbAdvPersist();
+        return;
+    }
     const isPost = (e) => (e.p.slot || '').toLowerCase() === 'post_pedal';
     const pedals = g.pedal || [];
     const input = { id: nid++, kind: 'input', label: 'Input', x: 0, y: 0 };
