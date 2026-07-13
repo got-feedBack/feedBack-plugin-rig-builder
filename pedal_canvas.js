@@ -1119,6 +1119,75 @@
       textSpaced(d,.878*W,.300*H,F.barlow,8,tv>=0.5?rgb(250,232,120):'rgba(238,240,242,0.55)','II',0);
       chiefName(d,'Turbo','Distortion','DS-2'); } };
 
+  // Chorus Ensemble — Boss CE-1-style: the big grey desktop BBD unit (NOT a
+  // compact), a foot treadle on the right, 4 knobs + a Chorus/Vibrato switch on
+  // the left panel. ids: 0 Level 1 Intensity 2 Depth 3 Rate 4 Mode(Chorus/Vib).
+  P.chorusensemble = { w:560, h:360,
+    knobs:[
+      {id:0,cx:.110,cy:.290,r:.052,style:'boss'},   // LEVEL
+      {id:1,cx:.255,cy:.290,r:.052,style:'boss'},   // INTENSITY
+      {id:2,cx:.400,cy:.290,r:.052,style:'boss'},   // DEPTH
+      {id:3,cx:.545,cy:.290,r:.052,style:'boss'} ], // RATE
+    sw3:[{id:4,cx:.400,cy:.640,hw:34,hh:12,two:true,hidden:true}],  // CHORUS/VIBRATO
+    ptr:rgb(238,240,242),
+    draw(d,vals){ const {ctx:c,W,H,s}=d;
+      const body=rgb(150,152,150), bodyHi=rgb(178,180,178), bodyLo=rgb(112,114,112),
+            plate=rgb(58,60,62), ink=rgb(232,234,236), inkD=rgb(20,20,22), chr=rgb(190,194,200);
+      // ── grey hammertone body ──
+      c.fillStyle=rgb(10,10,11); c.fillRect(0,0,W,H);
+      const bg=c.createLinearGradient(0,0,0,H); bg.addColorStop(0,bodyHi); bg.addColorStop(0.5,body); bg.addColorStop(1,bodyLo);
+      rr(c,6*s,6*s,W-12*s,H-12*s,10*s); c.fillStyle=bg; c.fill();
+      c.save(); rr(c,6*s,6*s,W-12*s,H-12*s,10*s); c.clip();   // hammertone speckle
+      for(let i=0;i<900;i++){ const x=6*s+((i*97)%(W-12*s)), y=6*s+((i*59)%(H-12*s));
+        c.fillStyle=(i%3?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.06)'); c.fillRect(x,y,1.5*s,1.5*s); }
+      c.restore();
+      rr(c,6*s,6*s,W-12*s,H-12*s,10*s); c.strokeStyle='rgba(0,0,0,0.45)'; c.lineWidth=2*s; c.stroke();
+      const bolt=(x,y)=>{ const g=c.createRadialGradient(x-1.5*s,y-1.5*s,0.6*s,x,y,4*s); g.addColorStop(0,rgb(232,234,238)); g.addColorStop(1,rgb(120,124,130));
+        c.beginPath(); c.arc(x,y,4*s,0,7); c.fillStyle=g; c.fill(); c.strokeStyle=rgb(70,72,78); c.lineWidth=0.7*s; c.stroke(); };
+      [[.03,.05],[.03,.95],[.97,.05],[.97,.95]].forEach(p=>bolt(p[0]*W,p[1]*H));
+      // ── dark control-panel plate (left ~62%) ──
+      rr(c,.045*W,.12*H,.60*W,.78*H,7*s); c.fillStyle=plate; c.fill();
+      rr(c,.045*W,.12*H,.60*W,.78*H,7*s); c.strokeStyle='rgba(0,0,0,0.5)'; c.lineWidth=1.4*s; c.stroke();
+      // knob labels
+      const lbl=(cx,t,sz)=>textSpaced(d,cx*W,.185*H,F.barlow,sz||7.5,ink,t,0.06);
+      lbl(.110,'LEVEL'); lbl(.255,'INTENSITY',6.5); lbl(.400,'DEPTH'); lbl(.545,'RATE');
+      // ── Chorus/Vibrato slide switch (id 4) ──
+      const md=(vals&&vals[4]!=null)?vals[4]:0;
+      const swx=.400*W, swy=.640*H, sw=64*s, sh=22*s;
+      rr(c,swx-sw/2,swy-sh/2,sw,sh,5*s); c.fillStyle=rgb(24,24,26); c.fill(); c.strokeStyle='rgba(0,0,0,0.5)'; c.lineWidth=1*s; c.stroke();
+      const knobX = md>=0.5 ? swx+sw*0.24 : swx-sw*0.24;
+      const kg=c.createLinearGradient(0,swy-sh/2,0,swy+sh/2); kg.addColorStop(0,rgb(210,212,216)); kg.addColorStop(1,rgb(150,153,159));
+      rr(c,knobX-11*s,swy-sh/2+2*s,22*s,sh-4*s,4*s); c.fillStyle=kg; c.fill();
+      textSpaced(d,swx-sw*0.5-14*s,swy,F.barlow,6.5,md<0.5?rgb(250,232,120):'rgba(232,234,236,0.5)','CHOR',0.02);
+      textSpaced(d,swx+sw*0.5+12*s,swy,F.barlow,6.5,md>=0.5?rgb(250,232,120):'rgba(232,234,236,0.5)','VIB',0.02);
+      textSpaced(d,swx,.545*H,F.barlow,6,ink,'CHORUS / VIBRATO',0.05);
+      // ── peak LED + mode indicator ──
+      ledDot(d,.560*W,.640*H,true, md<0.5?70:224, md<0.5?200:70, md<0.5?96:52);
+      textSpaced(d,.560*W,.700*H,F.barlow,5.5,ink,'EFFECT',0.04);
+      ledDot(d,.100*W,.640*H,true,224,62,52); textSpaced(d,.100*W,.700*H,F.barlow,5.5,ink,'PEAK',0.04);
+      // decorative slide switches (High/Low, Normal/Effect) as engraved marks
+      textSpaced(d,.230*W,.700*H,F.barlow,5,'rgba(232,234,236,0.6)','HIGH  LOW',0.02);
+      // ── badging: engraved CHIEF logo (Boss parody) top-left of the panel,
+      //    same as the compact chief pedals; model text below ──
+      outlineText(d,.130*W,.855*H,F.bebas,22,plate,rgb(210,212,214),'CHIEF',8);
+      textSpaced(d,.375*W,.855*H,F.bebas,12,ink,'Chorus Ensemble',0.05);
+      textSpaced(d,.600*W,.855*H,F.bebas,12,rgb(232,234,236),'CE-1',0.10);
+      // ── black foot treadle (right ~30%) ──
+      const tx=.685*W, tw=.275*W, ty=.11*H, th=.78*H;
+      const tg=c.createLinearGradient(0,ty,0,ty+th); tg.addColorStop(0,rgb(46,46,50)); tg.addColorStop(1,rgb(20,20,22));
+      rr(c,tx,ty,tw,th,9*s); c.fillStyle=tg; c.fill();
+      rr(c,tx,ty,tw,14*s,9*s); c.fillStyle='rgba(255,255,255,0.09)'; c.fill();
+      rr(c,tx,ty,tw,th,9*s); c.strokeStyle='rgba(0,0,0,0.55)'; c.lineWidth=1.6*s; c.stroke();
+      // chrome hinge at the top of the treadle
+      const hg=c.createLinearGradient(tx,ty+18*s,tx+tw,ty+18*s); hg.addColorStop(0,rgb(150,153,159)); hg.addColorStop(0.5,rgb(214,217,222)); hg.addColorStop(1,rgb(150,153,159));
+      rr(c,tx+8*s,ty+13*s,tw-16*s,9*s,3*s); c.fillStyle=hg; c.fill();
+      // ribbed tread pad
+      c.save(); rr(c,tx+10*s,ty+th*0.30,tw-20*s,th*0.60,6*s); c.clip();
+      c.strokeStyle='rgba(255,255,255,0.06)'; c.lineWidth=2*s;
+      for(let yy=ty+th*0.30; yy<ty+th*0.90; yy+=7*s){ c.beginPath(); c.moveTo(tx+10*s,yy); c.lineTo(tx+tw-10*s,yy); c.stroke(); }
+      c.restore();
+      textSpaced(d,tx+tw*0.5,ty+th*0.20,F.barlow,7,rgb(200,202,206),'ON',0.1); } };
+
   // Multi-Vibe — Boss VB-2-style: Chief body in the VB-2 bright blue.
   // RS knob names. 3 RS knobs: Speed0 Mix1 Waveform2.
   P.vb2 = chiefSpec(300,480,[50,140,212],
