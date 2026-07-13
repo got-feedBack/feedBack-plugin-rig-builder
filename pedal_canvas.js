@@ -5380,6 +5380,117 @@
       // ── parody maker ──
       textSpaced(d,(px+pw)-44*s,py+ph*.90,F.bebas,12,rgb(40,34,24),'MARSTEN',0.08); } };
 
+  // ── MARSTEN SILVER JUBILEE (Marshall 2555, JCM 25/50) — SILVER levant head +
+  //    WHITE control panel (not the black/gold family). Panel L->R: POWER (red)
+  //    / STANDBY / HIGH-LOW OUTPUT rockers · MODEL text · PRESENCE BASS MIDDLE
+  //    TREBLE · OUTPUT MASTER (+channel LED) · LEAD MASTER · INPUT GAIN · INPUT.
+  //    ids: 0 Gain 1 LeadMaster 2 Bass 3 Middle 4 Treble 5 Presence 6 Master
+  //    7 RhythmClip(pull) 8 CabSim.
+  P.marstensilverjubilee = { w:1900, h:600, ptr:rgb(242,243,245),
+    knobs:[
+      {id:5,cx:.440,cy:.775,r:.019,style:'pointer',cap:[22,21,23]},  // PRESENCE
+      {id:2,cx:.502,cy:.775,r:.019,style:'pointer',cap:[22,21,23]},  // BASS
+      {id:3,cx:.564,cy:.775,r:.019,style:'pointer',cap:[22,21,23]},  // MIDDLE
+      {id:4,cx:.626,cy:.775,r:.019,style:'pointer',cap:[22,21,23]},  // TREBLE
+      {id:6,cx:.693,cy:.775,r:.019,style:'pointer',cap:[22,21,23]},  // OUTPUT MASTER
+      {id:1,cx:.760,cy:.775,r:.019,style:'pointer',cap:[22,21,23]},  // LEAD MASTER
+      {id:0,cx:.822,cy:.775,r:.019,style:'pointer',cap:[22,21,23]} ],// INPUT GAIN
+    // pull switches (push-pull pots on the real amp) drawn as small PULL buttons.
+    sw3:[
+      {id:7,cx:.822,cy:.648,hw:30,hh:9,two:true,hidden:true},   // INPUT GAIN pull = RHYTHM CLIP
+      {id:8,cx:.930,cy:.775,hw:26,hh:9,two:true,hidden:true} ], // CAB SIM
+    draw(d,vals){ const {ctx:c,W,H,s}=d;
+      const sil=rgb(196,198,201), silHi=rgb(220,222,225), silLo=rgb(150,152,156),
+            pnl=rgb(236,234,228), pnlHi=rgb(246,245,240), pnlLo=rgb(210,208,202),
+            ink=rgb(32,30,28), inkF='rgba(32,30,28,0.55)', chr=rgb(188,192,198);
+      // ── silver levant tolex body ──
+      const bgr=c.createLinearGradient(0,0,0,H); bgr.addColorStop(0,silHi); bgr.addColorStop(0.5,sil); bgr.addColorStop(1,silLo);
+      c.fillStyle=bgr; c.fillRect(0,0,W,H);
+      c.save(); c.beginPath(); c.rect(0,0,W,H); c.clip();
+      for(let yy=0; yy<H; yy+=3*s){ for(let xx=0; xx<W; xx+=3*s){ const n=((xx*13+yy*7)%17);
+        if(n<2){ c.fillStyle='rgba(255,255,255,0.10)'; c.fillRect(xx,yy,1.4*s,1.4*s); }
+        else if(n>14){ c.fillStyle='rgba(0,0,0,0.07)'; c.fillRect(xx,yy,1.4*s,1.4*s); } } }
+      c.restore();
+      const bolt=(x,y,r)=>{ r=r||3*s; const g=c.createRadialGradient(x-r*0.3,y-r*0.3,r*0.15,x,y,r);
+        g.addColorStop(0,rgb(238,240,244)); g.addColorStop(1,rgb(120,124,130));
+        c.beginPath(); c.arc(x,y,r,0,7); c.fillStyle=g; c.fill(); c.strokeStyle=rgb(70,72,78); c.lineWidth=0.7*s; c.stroke(); };
+      // ── centre handle ──
+      const hx0=.44*W,hx1=.56*W,hcy=H*.05,hh=H*.030;
+      rr(c,hx0,hcy-hh,hx1-hx0,2*hh,hh); const hg=c.createLinearGradient(0,hcy-hh,0,hcy+hh); hg.addColorStop(0,rgb(46,46,50)); hg.addColorStop(1,rgb(16,16,18));
+      c.fillStyle=hg; c.fill(); c.strokeStyle=rgb(10,10,12); c.lineWidth=1.2*s; c.stroke();
+      [hx0,hx1].forEach(bx=>bolt(bx,hcy,3*s));
+      // ── black grille (salt-and-pepper) + "Marsten" chrome script ──
+      rr(c,W*.045,H*.140,W*.91,H*.40,8*s); c.fillStyle=rgb(12,12,13); c.fill();
+      c.save(); rr(c,W*.045,H*.140,W*.91,H*.40,8*s); c.clip();
+      for(let yy=H*.14; yy<H*.55; yy+=3*s){ for(let xx=W*.045; xx<W*.955; xx+=3*s){ if(((xx*17+yy*11)%23)<2){ c.fillStyle='rgba(210,212,216,0.13)'; c.fillRect(xx,yy,1.3*s,1.3*s); } } }
+      c.restore();
+      rr(c,W*.045,H*.140,W*.91,H*.40,8*s); c.strokeStyle=rgb(30,30,32); c.lineWidth=2*s; c.stroke();
+      c.save(); c.textAlign='center'; c.textBaseline='middle';
+      setFont(d,F.ink,84); c.lineWidth=6*s; c.strokeStyle='rgba(0,0,0,0.55)'; c.strokeText('Marsten',W*.5,H*.315);
+      const lg=c.createLinearGradient(0,H*.25,0,H*.39); lg.addColorStop(0,rgb(248,249,251)); lg.addColorStop(0.5,rgb(206,209,214)); lg.addColorStop(1,rgb(150,153,158));
+      c.fillStyle=lg; c.fillText('Marsten',W*.5,H*.315); c.restore();
+      // ── "Jim Marsten" signature (chrome italic, bottom-right of the grille) ──
+      c.save(); c.textAlign='right'; c.textBaseline='middle';
+      c.font=`italic ${Math.round(30*s)}px ${F.ink}`; c.fillStyle='rgba(210,213,218,0.72)';
+      c.fillText('Jim Marsten',W*.905,H*.475); c.restore();
+      // ── corner caps ──
+      const corner=(cxx,cyy,dx,dy)=>{ const k=H*.10; c.beginPath();
+        c.moveTo(cxx,cyy+dy*k); c.lineTo(cxx,cyy); c.lineTo(cxx+dx*k,cyy);
+        c.quadraticCurveTo(cxx+dx*k*0.35,cyy+dy*k*0.35,cxx,cyy+dy*k); c.closePath();
+        c.fillStyle=rgb(12,12,13); c.fill(); bolt(cxx+dx*k*0.42,cyy+dy*k*0.42,2.6*s); };
+      corner(0,0,1,1); corner(W,0,-1,1); corner(0,H,1,-1); corner(W,H,-1,-1);
+      // ── white brushed control panel ──
+      const py=H*.63, ph=H*.29, px=W*.035, pw=W*.93, lblY=py+ph*.22;
+      const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,pnlHi); pg.addColorStop(0.5,pnl); pg.addColorStop(1,pnlLo);
+      rr(c,px,py,pw,ph,5*s); c.fillStyle=pg; c.fill();
+      c.save(); rr(c,px,py,pw,ph,5*s); c.clip(); c.strokeStyle='rgba(255,255,255,0.35)'; c.lineWidth=1;
+      for(let xx=px; xx<px+pw; xx+=2.4*s){ c.beginPath(); c.moveTo(xx,py); c.lineTo(xx,py+ph); c.stroke(); } c.restore();
+      rr(c,px,py,pw,ph,5*s); c.strokeStyle=pnlLo; c.lineWidth=1.4*s; c.stroke();
+      bolt(px+12*s,py+ph*.5,2.6*s); bolt(px+pw-12*s,py+ph*.5,2.6*s);
+      const lbl=(cx,t,sz)=>textSpaced(d,cx*W,lblY,F.barlow,sz||8,ink,t,0.03);
+      // ── left: POWER (red rocker) / STANDBY / HIGH-LOW OUTPUT ──
+      const rocker=(rx,on,red)=>{ const w=13*s,h=22*s; rr(c,rx-w*0.5,py+ph*.40-h*0.5,w,h,3*s);
+        const rg=c.createLinearGradient(0,py+ph*.40-h*0.5,0,py+ph*.40+h*0.5);
+        if(red){ rg.addColorStop(0,rgb(228,70,58)); rg.addColorStop(1,rgb(150,26,20)); } else { rg.addColorStop(0,rgb(52,52,56)); rg.addColorStop(1,rgb(20,20,22)); }
+        c.fillStyle=rg; c.fill(); c.strokeStyle=rgb(12,12,14); c.lineWidth=1*s; c.stroke();
+        c.fillStyle='rgba(255,255,255,0.20)'; rr(c,rx-w*0.5,py+ph*.40-h*0.5,w,h*0.4,3*s); c.fill(); };
+      rocker(.070*W,true,true); rocker(.112*W,false,false); rocker(.158*W,false,false);
+      textSpaced(d,.070*W,py+ph*.72,F.barlow,7,ink,'POWER',0.03);
+      textSpaced(d,.112*W,py+ph*.72,F.barlow,6.5,ink,'STANDBY',0.02);
+      textSpaced(d,.158*W,py+ph*.72,F.barlow,6,ink,'HIGH OUTPUT',0.02);
+      textSpaced(d,.158*W,py+ph*.13,F.barlow,6,inkF,'LOW',0.04);
+      // ── model text ──
+      textSpaced(d,.300*W,py+ph*.34,F.bebas,13,ink,'MARSTEN 25/50',0.10);
+      textSpaced(d,.300*W,py+ph*.60,F.bebas,13,ink,'MODEL 2555',0.10);
+      // ── knob labels ──
+      lbl(.440,'PRESENCE',7); lbl(.502,'BASS'); lbl(.564,'MIDDLE',7.5); lbl(.626,'TREBLE',7.5);
+      lbl(.693,'OUTPUT MASTER',6); lbl(.760,'LEAD MASTER',6.5); lbl(.822,'INPUT GAIN',6.5);
+      // ── channel LED (between OUTPUT MASTER + LEAD MASTER); lit = lead voice ──
+      ledDot(d,.726*W,py+ph*.30,true,224,60,52);
+      // ── OUTPUT MASTER "pull channel" caption (decorative) ──
+      textSpaced(d,.693*W,py+ph*.94,F.barlow,5.5,inkF,'pull channel',0.02);
+      // ── INPUT GAIN pull = RHYTHM CLIP (functional, id 7) ──
+      const rc=(vals&&vals[7]!=null)?vals[7]:0;
+      const rcx=.822*W, rcy=py+ph*.05;
+      rr(c,rcx-30*s,rcy-1*s,60*s,11*s,4*s); c.fillStyle=rc>=0.5?rgb(60,150,214):rgb(40,40,44); c.fill();
+      c.strokeStyle=rgb(16,16,18); c.lineWidth=1*s; c.stroke();
+      textSpaced(d,rcx,rcy+4.5*s,F.barlow,5.5,rc>=0.5?rgb(240,246,252):'rgba(220,222,226,0.7)','RHYTHM CLIP',0.02);
+      textSpaced(d,.822*W,py+ph*.94,F.barlow,5.5,inkF,'pull rhythm clip',0.02);
+      // ── INPUT jack ──
+      const ix=.878*W, iy=py+ph*.42;
+      c.beginPath(); c.arc(ix,iy,9*s,0,7); c.fillStyle=rgb(18,16,16); c.fill();
+      c.strokeStyle=chr; c.lineWidth=2*s; c.stroke(); c.beginPath(); c.arc(ix,iy,2.8*s,0,7); c.fillStyle=rgb(56,54,50); c.fill();
+      textSpaced(d,ix,lblY,F.barlow,7.5,ink,'INPUT',0.04);
+      // ── CAB SIM toggle (id 8) — right of the INPUT jack ──
+      const cs=(vals&&vals[8]!=null)?vals[8]:1;
+      const csx=.935*W, csy=py+ph*.44;
+      rr(c,csx-25*s,csy-9*s,50*s,18*s,4*s); c.fillStyle=cs>=0.5?rgb(70,170,96):rgb(44,44,48); c.fill();
+      c.strokeStyle=rgb(16,16,18); c.lineWidth=1*s; c.stroke();
+      textSpaced(d,csx,csy+0.5*s,F.barlow,6.5,cs>=0.5?rgb(238,250,242):'rgba(220,222,226,0.7)',cs>=0.5?'CAB ON':'CAB OFF',0.03);
+      textSpaced(d,csx,lblY,F.barlow,6.5,ink,'CAB SIM',0.03);
+      // ── parody maker ──
+      textSpaced(d,(px+pw)-46*s,py+ph*.92,F.bebas,11,rgb(70,68,66),'MARSTEN',0.08); } };
+
   // ── Shared "Marsten" black-tolex + gold-panel head (Plexi/JCM800/JTM45 family).
   //    Draws the tolex, gold piping, "Marsten" script + model badge, corners and
   //    the empty gold control panel; returns geometry + the bolt() helper.
@@ -7302,7 +7413,7 @@
     // British / boutique heads
     boxac30:1.22, bendersupernova22:1.45, dualrect:1.45, dsl100:1.45, plexi:1.55,
     marstenvs100:1.45, marstenjcm800:1.60, marstenjtm45:1.55, marstenbluesbreaker:1.60,
-    marstendsl15:1.60, marstenjvm410:1.60, aor50:1.38, jc90:1.15, engelfireball:1.45,
+    marstendsl15:1.60, marstenjvm410:1.60, marstensilverjubilee:1.62, aor50:1.38, jc90:1.15, engelfireball:1.45,
     polystoneminibrute:1.28, ronaldjc120:1.22, tw40:1.28, superdrive45:1.45,
     markiii:1.80, markii:1.80, unparalleldc30:1.78, unparallelchieftain:1.75,
     mrymaz38:1.45, mryems:1.45, citrusor100:1.60, citrusor50:1.60, citrusad50:1.45,
