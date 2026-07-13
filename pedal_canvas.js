@@ -1842,6 +1842,70 @@
       textC(d,.50*W,.385*H,F.ink,22,red,'Bad');
       textSpaced(d,.50*W,.925*H,F.barlow,7,wt,'CONTOUR WAH',1.0); } };
 
+  // Ibañez WH10 — the WH10V2 active op-amp wah: a black diamond-textured wedge
+  // treadle with a teal ("seafoam") name plate reading 'Ibañez WH10' and a chrome
+  // GUITAR/BASS side toggle. Parody brand (Ibanez -> Ibañez, the ñ). Own panel:
+  // Auto0 Position1 Depth2 Sens3 Range4 — DEPTH + GUITAR/BASS are the real
+  // controls; AUTO + SENS are the in-game touch-sweep affordance.
+  P.wh10wah = { w:280,h:480,
+    knobs:[
+      {id:1,cx:.315,cy:.150,r:.049,style:'boss'},
+      {id:2,cx:.500,cy:.150,r:.049,style:'boss'},
+      {id:3,cx:.685,cy:.150,r:.049,style:'boss'}],
+    switches:[
+      {id:0,cx:.120,cy:.150,hs:.024,dark:true},
+      {id:4,cx:.882,cy:.150,hs:.024,dark:true}],
+    ptr:rgb(238,240,242),
+    draw(d,values){ const {ctx:c,W,H,s}=d; const m=8*s;
+      const teal=rgb(112,199,186), ink=rgb(28,84,76), wt=rgb(236,240,242), dim=rgb(120,124,128);
+      // black plastic body
+      c.fillStyle=rgb(4,4,5); c.fillRect(0,0,W,H);
+      const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(24,24,26)); bg.addColorStop(1,rgb(10,10,12));
+      rr(c,m,m,W-2*m,H-2*m,16*s); c.fillStyle=bg; c.fill();
+      rr(c,m,m,W-2*m,H-2*m,16*s); c.strokeStyle='rgba(0,0,0,0.6)'; c.lineWidth=2*s; c.stroke();
+      // molded diamond-hatch texture (two diagonal families, each highlight+shadow)
+      c.save(); rr(c,m,m,W-2*m,H-2*m,16*s); c.clip();
+      const step=15*s;
+      for(const dir of [1,-1]){
+        for(let k=-H;k<W+H;k+=step){
+          c.beginPath(); c.moveTo(k,m); c.lineTo(k+dir*H,H-m);
+          c.strokeStyle='rgba(255,255,255,0.045)'; c.lineWidth=1.6*s; c.stroke();
+          c.beginPath(); c.moveTo(k+1.4*s,m); c.lineTo(k+dir*H+1.4*s,H-m);
+          c.strokeStyle='rgba(0,0,0,0.40)'; c.lineWidth=1.2*s; c.stroke();
+        }
+      }
+      c.restore();
+      // top control strip
+      rr(c,W*.05,H*.035,W*.90,H*.215,9*s); c.fillStyle=rgb(14,14,16); c.fill();
+      rr(c,W*.05,H*.035,W*.90,H*.215,9*s); c.strokeStyle=rgb(60,62,66); c.lineWidth=1.2*s; c.stroke();
+      // control labels (state-aware toggles)
+      const av=(values&&values[0]!=null)?values[0]:1, rv=(values&&values[4]!=null)?values[4]:0;
+      textSpaced(d,.120*W,.212*H,F.barlow,6.5,av>=0.5?teal:dim,'AUTO',0.2);
+      textSpaced(d,.315*W,.212*H,F.barlow,6.5,wt,'POSITION',0.1);
+      textSpaced(d,.500*W,.212*H,F.barlow,6.5,wt,'DEPTH',0.2);
+      textSpaced(d,.685*W,.212*H,F.barlow,6.5,wt,'SENS',0.2);
+      textSpaced(d,.882*W,.196*H,F.barlow,5.6,rv>=0.5?dim:teal,'GTR',0.1);
+      textSpaced(d,.882*W,.228*H,F.barlow,5.6,rv>=0.5?teal:dim,'BASS',0.1);
+      // teal name plate
+      const px0=.14*W, px1=.80*W, py0=.375*H, py1=.545*H, pw=px1-px0, ph=py1-py0, mx=(px0+px1)/2;
+      const pg=c.createLinearGradient(0,py0,0,py1); pg.addColorStop(0,rgb(126,210,197)); pg.addColorStop(1,rgb(92,178,166));
+      rr(c,px0,py0,pw,ph,10*s); c.fillStyle=pg; c.fill();
+      rr(c,px0,py0,pw,ph,10*s); c.strokeStyle='rgba(0,0,0,0.28)'; c.lineWidth=1.4*s; c.stroke();
+      rr(c,px0+2.4*s,py0+2.4*s,pw-4.8*s,ph-4.8*s,8*s); c.strokeStyle='rgba(255,255,255,0.22)'; c.lineWidth=1*s; c.stroke();
+      // 'Ibañez' italic script, embossed (light highlight offset + dark ink)
+      c.save(); c.font=`italic 700 ${Math.round(37*s)}px ${F.anton}`; c.textAlign='center'; c.textBaseline='middle';
+      c.fillStyle='rgba(182,236,225,0.62)'; c.fillText('Ibañez', mx-1.4*s, py0+ph*0.38-1.2*s);
+      c.fillStyle=ink; c.fillText('Ibañez', mx, py0+ph*0.38);
+      c.restore();
+      // 'WH10' blocky, embossed
+      outlineText(d,mx,py0+ph*0.75,F.anton,25,ink,'rgba(182,236,225,0.55)','WH10',1.5);
+      // chrome GUITAR/BASS side-toggle nub (decorative; the real switch is on the side)
+      const ny=py0+ph*0.30;
+      c.beginPath(); c.arc(m+3*s,ny,5.5*s,0,7);
+      const ng=c.createRadialGradient(m+1*s,ny-2*s,1*s,m+3*s,ny,6*s);
+      ng.addColorStop(0,rgb(222,224,228)); ng.addColorStop(1,rgb(120,122,126));
+      c.fillStyle=ng; c.fill(); c.strokeStyle=rgb(58,58,62); c.lineWidth=1*s; c.stroke(); } };
+
   function chiefSpec(w,h,col,knobIds,n1,n2,code,plate){
     const lum=0.299*col[0]+0.587*col[1]+0.114*col[2], ink=lum>120?rgb(16,16,20):rgb(232,234,238);
     return { w,h, knobs: knobIds.map(k=>({id:k.id,cx:k.cx,cy:.235,r:.072,style:'boss'})),
