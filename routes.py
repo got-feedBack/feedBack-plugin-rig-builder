@@ -3338,11 +3338,89 @@ def _gear_category(rs_gear: str) -> str:
 # ── PSARC / sloppak readers ──────────────────────────────────────────
 
 
+_SKIP_ARRANGEMENTS = ("Vocals", "ShowLights", "JVocals")
+
+
+def _collect_tone_defs(arr_json: dict, tones: list[dict], seen: set[str]) -> None:
+    """Accumulate an arrangement's tone definitions, de-duped by Key."""
+    arr_tones = arr_json.get("tones")
+    if not isinstance(arr_tones, dict):
+        return
+    for t in arr_tones.get("definitions") or []:
+        if not isinstance(t, dict):
+            continue
+        key = t.get("Key", "")
+        if isinstance(key, str) and key:
+            if key in seen:
+                continue
+            seen.add(key)
+        tones.append(t)
+
+
 def _read_tones_from_sloppak(filename: str, dlc: Path) -> list[dict]:
+    """Tone definitions for a song, WITHOUT unpacking it.
+
+    This used to call sloppak.load_song(), which calls resolve_source_dir() and
+    writes the entire pack — every stem — into sloppak_cache/. We only ever want
+    a few KB of tone JSON out of the arrangement files, so that was a ~45x write
+    amplification per song. Harmless once; catastrophic from _batch_worker(),
+    which runs this over the WHOLE library: a tester's cache reached 60 GB — his
+    entire 1800-song library, unpacked, none of it ever played (feedBack#TODO).
+
+    Read the manifest and the arrangement members straight out of the zip
+    instead. Both are single-member reads; nothing is written to disk.
+    """
     try:
         import sloppak as sloppak_mod
     except ImportError:
         return []
+
+    pack = dlc / filename.rstrip("/\\")
+    tones: list[dict] = []
+    seen: set[str] = set()
+
+    # read_member_bytes lands in core alongside this change. On an older core,
+    # fall back to the unpacking path rather than silently reporting no tones —
+    # a bloated cache beats a rig builder that thinks every song is tone-less.
+    if not hasattr(sloppak_mod, "read_member_bytes"):
+        return _read_tones_via_unpack(filename, dlc)
+
+    try:
+        manifest = sloppak_mod.load_manifest(pack)       # zip-form: manifest only
+    except Exception:
+        log.warning("failed to read manifest of %r", filename, exc_info=True)
+        return []
+
+    for entry in (manifest or {}).get("arrangements", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("name") or "") in _SKIP_ARRANGEMENTS:
+            continue
+        rel = entry.get("file")
+        if not isinstance(rel, str) or not rel.strip():
+            continue
+        raw = sloppak_mod.read_member_bytes(pack, rel)    # single member, no unpack
+        if not raw:
+            continue
+        try:
+            arr_json = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            log.warning("unparseable arrangement %r in %r", rel, filename)
+            continue
+        if not isinstance(arr_json, dict):
+            continue
+        # load_song() took the manifest entry's name when it had one and the
+        # arrangement JSON's otherwise; mirror both so a Vocals track with no
+        # manifest name doesn't start contributing tones it never did before.
+        if str(arr_json.get("name") or "") in _SKIP_ARRANGEMENTS:
+            continue
+        _collect_tone_defs(arr_json, tones, seen)
+    return tones
+
+
+def _read_tones_via_unpack(filename: str, dlc: Path) -> list[dict]:
+    """Downlevel-core fallback for _read_tones_from_sloppak. Unpacks the pack."""
+    import sloppak as sloppak_mod
     cache_dir = _get_sloppak_cache_dir() if _get_sloppak_cache_dir else None
     if not cache_dir and _config_dir:
         cache_dir = _config_dir / "sloppak_cache"
@@ -3354,18 +3432,9 @@ def _read_tones_from_sloppak(filename: str, dlc: Path) -> list[dict]:
     tones: list[dict] = []
     seen: set[str] = set()
     for arr in loaded.song.arrangements:
-        if arr.name in ("Vocals", "ShowLights", "JVocals"):
+        if arr.name in _SKIP_ARRANGEMENTS:
             continue
-        arr_tones = getattr(arr, "tones", None) or {}
-        for t in arr_tones.get("definitions") or []:
-            if not isinstance(t, dict):
-                continue
-            key = t.get("Key", "")
-            if isinstance(key, str) and key:
-                if key in seen:
-                    continue
-                seen.add(key)
-            tones.append(t)
+        _collect_tone_defs({"tones": getattr(arr, "tones", None) or {}}, tones, seen)
     return tones
 
 
