@@ -12216,6 +12216,38 @@ async function rbReapplyVstParamsToChain(api, chainSpec) {
             _log(`[rig_builder reapply] slot ${slotId}: applied ${appliedCount} params ✓`);
         }
     }
+
+    // ── Double-cab guard ─────────────────────────────────────────────────
+    // Every modeled amp ships an internal 4x12 "Cab Sim" voice (a fallback so
+    // the amp is auditionable WITHOUT a cab), defaulted ON. When the tone also
+    // carries a real cabinet IR, both stack -> a dark, over-filtered double
+    // cab. Nothing set that param, so it stayed at the plugin default (1.0).
+    // Fix centralized here (runs on every chain load, all playback paths): if
+    // the chain has a real cab stage, force every amp's "Cab Sim" param to 0.
+    // Resolved BY NAME via getParameters, so it covers all amps automatically.
+    // The internal cab still works when auditioning an amp with no cab.
+    const hasRealCab = chainSpec.some(s => s && (s.type === 2
+        || String((s && s.slot) || '').toLowerCase() === 'cabinet'));
+    if (hasRealCab && typeof api.getParameters === 'function') {
+        for (let i = 0; i < loaded.length; i++) {
+            const slot = loaded[i];
+            if (!slot || slot.type !== 0) continue;     // VST stages only (amps are VSTs)
+            const slotId = slot.id ?? slot.slotId ?? i;
+            try {
+                const pl = await api.getParameters(slotId);
+                if (!Array.isArray(pl)) continue;
+                const cab = pl.find((p, idx) => {
+                    const nm = String(p.name ?? p.label ?? '').toLowerCase();
+                    return nm === 'cab sim' || nm === 'cabsim';
+                });
+                if (!cab) continue;                     // not an amp with a cab-sim -> skip
+                const cabId = cab.id ?? cab.paramId ?? cab.index;
+                if (cabId == null) continue;
+                await api.setParameter(slotId, cabId, 0);
+                _log(`[rig_builder reapply] real cab present -> muted internal Cab Sim on slot ${slotId}`);
+            } catch (_) {}
+        }
+    }
 }
 
 // Schedule a VST param re-apply after a loadPreset call. Used by the
