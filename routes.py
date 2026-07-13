@@ -4339,33 +4339,46 @@ def _persist_preset_chain(
     # A bypassed piece is excluded from the primary model/IR too, so the
     # bundle's single-NAM runtime stays consistent with the saved bypass
     # (e.g. bypassing the amp leaves no primary, rather than playing it).
-    _MODEL_PRIORITY = _MODEL_SLOT_PRIORITY
-    primary_model = ""
-    for slot in _MODEL_PRIORITY:
-        for p in pieces:
-            if (
-                p.get("slot") == slot
-                and p.get("kind") == "nam"
-                and p.get("file")
-                and not p.get("bypassed")
-            ):
-                primary_model = p["file"]
+    # A full-chain NAM is the sole primary model and forces NO cab IR — the
+    # capture bakes in the whole rig including the cab. Detected first so it
+    # short-circuits the amp/rack + cab selection below.
+    full_chain_piece = next(
+        (p for p in pieces
+         if p.get("kind") == _FULL_CHAIN_KIND and p.get("file")
+         and not p.get("bypassed")),
+        None,
+    )
+    if full_chain_piece:
+        primary_model = full_chain_piece["file"]
+        primary_ir = ""
+    else:
+        _MODEL_PRIORITY = _MODEL_SLOT_PRIORITY
+        primary_model = ""
+        for slot in _MODEL_PRIORITY:
+            for p in pieces:
+                if (
+                    p.get("slot") == slot
+                    and p.get("kind") == "nam"
+                    and p.get("file")
+                    and not p.get("bypassed")
+                ):
+                    primary_model = p["file"]
+                    break
+            if primary_model:
                 break
-        if primary_model:
-            break
-    primary_ir = ""
-    for p in pieces:
-        if (p.get("slot") == "cabinet" and p.get("kind") in ("ir", "rs_ir")
-                and p.get("file") and not p.get("bypassed")):
-            primary_ir = p["file"]
-            break
-    if not primary_ir:
-        # Fall back to any IR if no cabinet-slot IR was provided (e.g.
-        # the user supplied an IR for a rack slot instead).
+        primary_ir = ""
         for p in pieces:
-            if p.get("kind") in ("ir", "rs_ir") and p.get("file") and not p.get("bypassed"):
+            if (p.get("slot") == "cabinet" and p.get("kind") in ("ir", "rs_ir")
+                    and p.get("file") and not p.get("bypassed")):
                 primary_ir = p["file"]
                 break
+        if not primary_ir:
+            # Fall back to any IR if no cabinet-slot IR was provided (e.g.
+            # the user supplied an IR for a rack slot instead).
+            for p in pieces:
+                if p.get("kind") in ("ir", "rs_ir") and p.get("file") and not p.get("bypassed"):
+                    primary_ir = p["file"]
+                    break
 
     with _lock:
         cur = conn.execute(
@@ -4431,6 +4444,28 @@ def _persist_preset_chain(
 # single NAM, and a pedal capture standing in for a missing amp sounds
 # wrong. Only an amp (or a rack pre/power amp) may be the primary model.
 _MODEL_SLOT_PRIORITY = ("amp", "rack")
+
+# A "full-chain" NAM captures amp + pedals + rack + cab in a SINGLE neural
+# model. It's stored as ONE preset_pieces row (slot=_FULL_CHAIN_SLOT,
+# kind=_FULL_CHAIN_KIND) whose `file` is an ABSOLUTE path to the user-picked
+# .nam (referenced in place — not copied into nam_models). The chain builders
+# emit just that one type-1 stage at UNITY drive and append NO cab IR (the
+# capture already includes the cab), skip the per-amp loudness trim, and skip
+# the gear-map / cab-override layers (there is no discrete gear to redirect).
+_FULL_CHAIN_KIND = "nam_fullchain"
+_FULL_CHAIN_SLOT = "full_chain"
+
+
+def _resolve_model_path(payload: str, models_dir):
+    """Resolve a preset_pieces.file for a NAM. Relative values live under
+    nam_models (sandboxed via _safe_child); a full-chain NAM stores an
+    ABSOLUTE path (user-picked, referenced in place) which we use verbatim."""
+    if not payload:
+        return None
+    p = Path(payload)
+    if p.is_absolute():
+        return p
+    return _safe_child(models_dir, payload)
 
 
 # Order in which chain pieces are sent to the audio engine as type-1 NAM
@@ -5192,24 +5227,31 @@ def _recompute_preset_primaries(conn: sqlite3.Connection, preset_id: int) -> Non
         for r in rows if not r[3]
     ]
 
-    model_file = ""
-    for slot in _MODEL_SLOT_PRIORITY:
-        for p in pieces:
-            if p["slot"] == slot and p["kind"] == "nam" and p["file"]:
-                model_file = p["file"]
+    # A full-chain NAM is the sole primary model and forces no cab IR — mirror
+    # _persist_preset_chain so a recompute never wipes the baked capture.
+    full_chain = next(
+        (p for p in pieces if p["kind"] == _FULL_CHAIN_KIND and p["file"]), None)
+    if full_chain:
+        model_file, ir_file = full_chain["file"], ""
+    else:
+        model_file = ""
+        for slot in _MODEL_SLOT_PRIORITY:
+            for p in pieces:
+                if p["slot"] == slot and p["kind"] == "nam" and p["file"]:
+                    model_file = p["file"]
+                    break
+            if model_file:
                 break
-        if model_file:
-            break
-    ir_file = ""
-    for p in pieces:
-        if p["slot"] == "cabinet" and p["kind"] in ("ir", "rs_ir") and p["file"]:
-            ir_file = p["file"]
-            break
-    if not ir_file:
+        ir_file = ""
         for p in pieces:
-            if p["kind"] in ("ir", "rs_ir") and p["file"]:
+            if p["slot"] == "cabinet" and p["kind"] in ("ir", "rs_ir") and p["file"]:
                 ir_file = p["file"]
                 break
+        if not ir_file:
+            for p in pieces:
+                if p["kind"] in ("ir", "rs_ir") and p["file"]:
+                    ir_file = p["file"]
+                    break
 
     conn.execute(
         "UPDATE presets SET model_file = ?, ir_file = ? WHERE id = ?",
@@ -8481,6 +8523,34 @@ def setup(app, context):
             # Stable, collision-resistant synthetic id.
             rs_gear = f"custom_{category}_{int(time.time()*1000)}_{secrets.token_hex(2)}"
 
+        # Amp gain variants (clean/crunch/dist → NAM file + gain range): playback
+        # auto-picks the level whose range holds the song's mapped Gain (consumed
+        # by _pick_amp_gain_variant — same shape the auto-tone3000 flow builds).
+        # Only kept for amps and only when ≥2 levels are provided; clean becomes
+        # the default file/kind so single-NAM playback still works.
+        gv_in = data.get("gain_variants")
+        gain_variants = None
+        if category == "amp" and isinstance(gv_in, dict):
+            gv_out: dict[str, dict] = {}
+            for lvl in ("clean", "crunch", "dist"):
+                e = gv_in.get(lvl)
+                f = (e.get("file") if isinstance(e, dict) else None) or None
+                if not f:
+                    continue
+                rng = e.get("rs_gain_range") if isinstance(e, dict) else None
+                if not (isinstance(rng, (list, tuple)) and len(rng) == 2):
+                    rng = _DEFAULT_GAIN_RANGES.get(lvl)
+                gv_out[lvl] = {
+                    "file": str(f),
+                    "rs_gain_range": [float(rng[0]), float(rng[1])] if rng else None,
+                }
+            if len(gv_out) >= 2:
+                gain_variants = gv_out
+                kind = "nam"
+                clean_file = (gv_out.get("clean") or {}).get("file")
+                if clean_file:
+                    file = clean_file
+
         rec = {
             "rs_gear": rs_gear,
             "category": category,
@@ -8491,6 +8561,7 @@ def setup(app, context):
             "vst_format": (data.get("vst_format") or "VST3") if vst_path else None,
             "vst_state": data.get("vst_state") if vst_path else None,
             "file": file or None,
+            "gain_variants": gain_variants,
             "make": (data.get("make") or "").strip(),
             "model": (data.get("model") or "").strip(),
             "type_tags": (data.get("type_tags") or "").strip(),
@@ -9552,6 +9623,10 @@ def setup(app, context):
         models_dir = (_config_dir / "nam_models") if _config_dir else None
         irs_dir = (_config_dir / "nam_irs") if _config_dir else None
 
+        # A full-chain NAM preset is a single baked capture: emit only its one
+        # stage and skip the cab-IR tail below (the cab is inside the capture).
+        is_full_chain = any(r[1] == _FULL_CHAIN_KIND for r in rows)
+
         # Pieces that produce an audio stage (NAM or VST), ordered by signal
         # flow. IR (type 2) is handled separately at the tail of the chain.
         def _rank(slot: str) -> int:
@@ -9601,7 +9676,11 @@ def setup(app, context):
                     vst_format, vst_state, file = rec.get("vst_format") or "VST3", rec.get("vst_state"), None
                 elif rec.get("file"):
                     kind, file, vst_path = ("ir" if rec.get("kind") == "ir" else "nam"), rec["file"], None
-            if kind == "nam" and file:
+            if kind == _FULL_CHAIN_KIND and file:
+                audio_pieces.append((_rank(slot), slot_order, "nam_full", slot,
+                                     file, gear, bool(bypassed), None, None,
+                                     params_json))
+            elif kind == "nam" and file:
                 audio_pieces.append((_rank(slot), slot_order, "nam", slot,
                                      file, gear, bool(bypassed), None, None,
                                      params_json))
@@ -9615,7 +9694,17 @@ def setup(app, context):
         chain: list[dict] = []
         missing: list[str] = []
         for _r, _o, kind, slot, payload, gear, bypassed, vst_format, vst_state, params_json in audio_pieces:
-            if kind == "nam":
+            if kind == "nam_full":
+                # Full-chain capture: absolute path, unity drive (no 2.5×
+                # guitar-amp push), and NO cab IR is appended below.
+                path = _resolve_model_path(payload, models_dir)
+                if not path or not path.exists():
+                    missing.append(payload)
+                    continue
+                chain.append(_nam_stage(path, bypassed=bypassed,
+                                        input_level=1.0, output_drive=1.0,
+                                        slot=slot, rs_gear=gear or None))
+            elif kind == "nam":
                 path = _safe_child(models_dir, payload)
                 if not path or not path.exists():
                     missing.append(payload)
@@ -9664,7 +9753,9 @@ def setup(app, context):
         # Exclude the generic "Cabinets" placeholder (often carrying a stale
         # other/*.wav download) so it drops to the _override_ir_for_cab default
         # below — a real, loudness-matched bundled cab instead of a thin/quiet IR.
-        ir_rows = [(r[0], r[2], r[3], bool(r[4]), r[1]) for r in rows
+        # A full-chain capture already bakes in the cab — never append a cab IR
+        # (and never fall back to a shipped override cab) for it.
+        ir_rows = [] if is_full_chain else [(r[0], r[2], r[3], bool(r[4]), r[1]) for r in rows
                    if r[1] in ("ir", "rs_ir") and r[2] and r[3] != "Cabinets"]
         ir_pick = next((row for row in ir_rows if row[0] == "cabinet"), None)
         if ir_pick is None and ir_rows:
@@ -9680,7 +9771,7 @@ def setup(app, context):
                                        gain=_ir_stage_gain(ir_kind, ir_path)))
             else:
                 missing.append(ir_file)
-        else:
+        elif not is_full_chain:
             # No assigned cab IR (cabinet seeded to kind='none') — fall back to
             # OUR shipped override IR so the cab loads without needing a Cab Room
             # visit (mirrors the mega-chain highway fix).
@@ -9835,9 +9926,16 @@ def setup(app, context):
             def _rank(slot: str) -> int:
                 return _CHAIN_NAM_ORDER.index(slot) if slot in _CHAIN_NAM_ORDER else len(_CHAIN_NAM_ORDER)
 
+            # Full-chain capture: one baked NAM stage, no cab IR at the tail.
+            tone_is_full_chain = any(r[1] == _FULL_CHAIN_KIND for r in rows)
+
             audio_pieces = []
             for slot, kind, file, gear, bypassed, slot_order, vst_path, vst_format, vst_state, params_json in rows:
-                if kind == "nam" and file:
+                if kind == _FULL_CHAIN_KIND and file:
+                    audio_pieces.append((_rank(slot), slot_order, "nam_full", slot,
+                                         file, gear, bool(bypassed), None, None,
+                                         params_json))
+                elif kind == "nam" and file:
                     audio_pieces.append((_rank(slot), slot_order, "nam", slot,
                                          file, gear, bool(bypassed), None, None,
                                          params_json))
@@ -9850,6 +9948,17 @@ def setup(app, context):
 
             tone_stages: list[dict] = []
             for _r, _o, kind, slot, payload, gear, persisted_bypassed, vst_format, vst_state, params_json in audio_pieces:
+                if kind == "nam_full":
+                    # Absolute path, unity drive, no cab IR (see below).
+                    path = _resolve_model_path(payload, models_dir)
+                    if not path or not path.exists():
+                        missing.append(payload)
+                        continue
+                    tone_stages.append(_nam_stage(
+                        path, bypassed=persisted_bypassed,
+                        input_level=1.0, output_drive=1.0,
+                        slot=slot, rs_gear=gear or None, tone_key=tone_key))
+                    continue
                 if kind == "nam":
                     path = _safe_child(models_dir, payload)
                     if not path or not path.exists():
@@ -9897,7 +10006,7 @@ def setup(app, context):
             # Cab IR at the tail of the tone (prefer cabinet slot). Exclude the
             # generic "Cabinets" placeholder (may carry a stale other/*.wav) so it
             # drops to the _override_ir_for_cab default — a real, matched bundled cab.
-            ir_rows = [(r[0], r[2], r[3], bool(r[4]), r[1]) for r in rows
+            ir_rows = [] if tone_is_full_chain else [(r[0], r[2], r[3], bool(r[4]), r[1]) for r in rows
                        if r[1] in ("ir", "rs_ir") and r[2] and r[3] != "Cabinets"]
             ir_pick = next((row for row in ir_rows if row[0] == "cabinet"), None)
             if ir_pick is None and ir_rows:
@@ -9912,7 +10021,7 @@ def setup(app, context):
                         gain=_ir_stage_gain(ir_kind, ir_path)))
                 else:
                     missing.append(ir_file)
-            else:
+            elif not tone_is_full_chain:
                 # No assigned cab IR (seed left the cabinet at kind='none' because
                 # the RS game IR doesn't ship) — fall back to OUR shipped override
                 # IR so the cab still loads on the highway, not just after the user
@@ -11972,18 +12081,25 @@ def setup(app, context):
     # ── Download a candidate to audition it (no assign) ───────────────
     @app.post("/api/plugins/rig_builder/audition_candidate")
     def audition_candidate(data: dict = Body(...)):
-        """Download the best model for a tone3000 tone_id into
-        nam_models/nam_irs WITHOUT assigning, so the UI can audition a
-        search candidate. Body {rs_gear, tone3000_id}. Returns {kind, file}."""
+        """Download a model for a tone3000 tone_id into nam_models/nam_irs
+        WITHOUT assigning, so the UI can audition a search candidate.
+
+        Body {rs_gear, tone3000_id, model_id?, is_ir?}. `model_id` pins a
+        SPECIFIC capture inside the tone (a gain/EQ variant) instead of the
+        best-match default; `is_ir` forces IR normalization for cab captures
+        found under the IR category. Returns {kind, file}."""
         tone3000_id = data.get("tone3000_id")
         if tone3000_id is None:
             return JSONResponse({"error": "tone3000_id required"}, 400)
         rs_gear = data.get("rs_gear") or "audition"
+        model_id = data.get("model_id")
         category = (_load_rs_to_real().get(rs_gear) or {}).get("category", "amp")
+        is_ir = bool(data.get("is_ir")) or category == "cab"
         try:
             res = _download_candidate(
-                tone3000_id=int(tone3000_id), is_ir=(category == "cab"),
+                tone3000_id=int(tone3000_id), is_ir=is_ir,
                 rs_gear=rs_gear, settings=_load_settings(),
+                model_id_override=int(model_id) if model_id is not None else None,
             )
         except Exception as e:
             log.exception("audition_candidate failed")
@@ -11992,6 +12108,52 @@ def setup(app, context):
             return JSONResponse({"error": "no downloadable model (or disk budget reached)"}, 502)
         kind, file = res
         return {"kind": kind, "file": file}
+
+    @app.post("/api/plugins/rig_builder/import_local_model")
+    def import_local_model(data: dict = Body(...)):
+        """Copy a user-picked local .nam / .wav (absolute path from the host
+        file dialog) INTO the library (nam_models/ or nam_irs/) and return its
+        DB-relative path, so it resolves like any downloaded capture. Used by the
+        'add gear from directory' flow — the normal gear resolver requires a path
+        under the library root and rejects absolute paths.
+
+        Body: {path, kind?, category?}. `kind` ('nam'|'ir') is inferred from the
+        extension when omitted; `category` (amp|pedal|rack|cab) chooses the
+        subdir. Returns {kind, file}."""
+        if _config_dir is None:
+            return JSONResponse({"error": "config_dir not initialized"}, 500)
+        raw = (data.get("path") or "").strip()
+        if not raw:
+            return JSONResponse({"error": "path required"}, 400)
+        src = Path(raw)
+        if not src.is_file():
+            return JSONResponse({"error": "file not found"}, 404)
+        ext = src.suffix.lower()
+        kind = (data.get("kind") or "").strip().lower()
+        if kind not in ("nam", "ir"):
+            kind = "ir" if ext == ".wav" else "nam"
+        cat = (data.get("category") or "").strip().lower()
+        if kind == "nam":
+            subdir = {"amp": "amps", "pedal": "pedals", "rack": "racks"}.get(cat, "other")
+            root = _config_dir / "nam_models"
+        else:
+            subdir = "cabs"
+            root = _config_dir / "nam_irs"
+        dest_dir = root / subdir
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        bare = _safe_filename(src.stem) + ext
+        dest = dest_dir / bare
+        try:
+            # Collision guard: same name, different bytes → suffix with size.
+            if dest.exists() and dest.stat().st_size != src.stat().st_size:
+                bare = f"{_safe_filename(src.stem)}_{src.stat().st_size}{ext}"
+                dest = dest_dir / bare
+            if not dest.exists():
+                shutil.copy2(src, dest)
+        except Exception as e:
+            log.exception("import_local_model failed")
+            return JSONResponse({"error": f"{type(e).__name__}: {e}"}, 500)
+        return {"kind": kind, "file": f"{subdir}/{bare}"}
 
     # ── Batch ─────────────────────────────────────────────────────────
 

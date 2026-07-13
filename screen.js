@@ -2768,7 +2768,20 @@ const RbMegaChain = (function () {
             return false;
         }
         markPending(filename);
-        const api = _api();
+        // The native audio host can still be initializing right after app boot
+        // (the very first song of a session), so _api() may return null even
+        // though the engine is about to come up. Wait for it with a bounded
+        // backoff instead of failing outright — the old immediate _markFailed
+        // here was a first-load-only "no tone" path that healed on the second
+        // entry once the engine was ready.
+        let api = _api();
+        if (!api) {
+            const _API_WAIT_DELAYS = [200, 400, 800, 1500, 2500];   // ~5.4 s total
+            for (let i = 0; i < _API_WAIT_DELAYS.length && !api; i++) {
+                await new Promise(r => setTimeout(r, _API_WAIT_DELAYS[i]));
+                api = _api();
+            }
+        }
         if (!api) {
             console.warn('[rig_builder mega-chain] buildForSong aborted — no native audio API');
             _markFailed(filename, 'Native audio engine is not available');
@@ -2788,62 +2801,91 @@ const RbMegaChain = (function () {
         // the wrong chain on top of the new song.
         const myGen = ++_buildGen;
 
-        // Fetch the mega-chain, tolerating the seeding RACE: a freshly
-        // materialized/opened song's tone_mappings are written ASYNCHRONOUSLY
-        // (background watcher / cloud_loader), so the first build at +600 ms
-        // can beat the seed and 404 — which is exactly the "no sound until I
-        // exit and reload the song" report. On a 404 we (a) kick a one-shot
-        // on-demand seed (idempotent, lock-guarded server-side; needs a
-        // tone3000 key) and (b) retry with backoff until it lands, so the user
-        // no longer has to reload by hand. A non-404 error is a real failure —
-        // don't retry, fall straight back to the cooperative path. On every
+        // Fetch the mega-chain, resolving the seeding RACE DETERMINISTICALLY.
+        // A freshly materialized/opened song's tone_mappings are written by an
+        // ASYNCHRONOUS seeder (background watcher / cloud_loader), so the first
+        // build at +600 ms can beat the seed and 404 — this is exactly the "no
+        // sound until I exit and reload the song" report. The /auto_download_song
+        // endpoint runs that same seed SYNCHRONOUSLY (it is lock-guarded and
+        // idempotent server-side, and returns only AFTER preset_pieces +
+        // tone_mappings are persisted), so instead of blindly retrying a fixed
+        // window that could expire before a network NAM download finished, we:
+        //   1. try /mega_chain once,
+        //   2. on 404 AWAIT the on-demand seed — when it returns the mapping is
+        //      guaranteed to exist (or the song is genuinely unmappable, e.g. a
+        //      feedpak, and mega_chain serves the default-tone fallback),
+        //   3. re-fetch, with a short backoff to absorb any watcher/write
+        //      ordering.
+        // A non-404 error is a real backend failure — don't retry. On every
         // terminal failure we _markFailed so the player button can explain why
         // rig tones are off (ownership visibility, audio-effects migration).
-        const _RETRY_DELAYS = [0, 1200, 2500, 4000, 6000];   // ~13.7 s total
         let mega = null;
-        for (let attempt = 0; attempt < _RETRY_DELAYS.length; attempt++) {
-            if (_RETRY_DELAYS[attempt]) {
-                await new Promise(r => setTimeout(r, _RETRY_DELAYS[attempt]));
-            }
-            if (myGen !== _buildGen) {
-                console.log('[rig_builder mega-chain] build superseded by a newer song load — abandoning retry');
-                return false;
-            }
-            let resp;
-            try {
-                resp = await fetch(`${RB_API}/mega_chain/${encodeURIComponent(filename)}`);
-            } catch (e) {
-                console.warn('[rig_builder mega-chain] fetch failed:', e);
-                _markFailed(filename, e && e.message ? e.message : 'Could not fetch this song\'s tone chain');
-                return false;
-            }
-            if (resp.ok) {
-                mega = await resp.json();
-                break;
-            }
-            if (resp.status !== 404) {
-                console.warn(`[rig_builder mega-chain] /mega_chain/${filename} → HTTP ${resp.status} — giving up (real backend error)`);
-                _markFailed(filename, `Rig Builder song chain unavailable: HTTP ${resp.status}`);
-                return false;
-            }
-            // 404 → not seeded yet. Kick the on-demand seed ONCE for this song,
-            // then keep retrying so the watcher/seed result is picked up.
+        let resp;
+        try {
+            resp = await fetch(`${RB_API}/mega_chain/${encodeURIComponent(filename)}`);
+        } catch (e) {
+            console.warn('[rig_builder mega-chain] fetch failed:', e);
+            _markFailed(filename, e && e.message ? e.message : 'Could not fetch this song\'s tone chain');
+            return false;
+        }
+        if (myGen !== _buildGen) {
+            console.log('[rig_builder mega-chain] build superseded by a newer song load — abandoning');
+            return false;
+        }
+        if (!resp.ok && resp.status === 404) {
+            // Not seeded yet. Run the on-demand seed and WAIT for it, so the
+            // mapping exists when we re-fetch — no more blind race window.
             if (_seedTried !== filename) {
                 _seedTried = filename;
-                fetch(`${RB_API}/auto_download_song`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename }),
-                }).then(r => console.log(`[rig_builder mega-chain] on-demand seed for "${filename}" → HTTP ${r.status}`))
-                  .catch(e => console.warn('[rig_builder mega-chain] on-demand seed failed:', e));
+                try {
+                    const seedResp = await fetch(`${RB_API}/auto_download_song`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ filename }),
+                    });
+                    console.log(`[rig_builder mega-chain] on-demand seed for "${filename}" → HTTP ${seedResp.status}`);
+                } catch (e) {
+                    console.warn('[rig_builder mega-chain] on-demand seed failed:', e);
+                }
             }
-            console.warn(`[rig_builder mega-chain] /mega_chain/${filename} → 404 (mappings not seeded yet — seeding + retry ${attempt + 1}/${_RETRY_DELAYS.length - 1})`);
+            if (myGen !== _buildGen) {
+                console.log('[rig_builder mega-chain] build superseded during seed — abandoning');
+                return false;
+            }
+            // Re-fetch after the (awaited) seed. The short backoff absorbs any
+            // remaining watcher/write ordering and the lazy default-tone seed.
+            const _POST_SEED_DELAYS = [0, 800, 2000];
+            for (let attempt = 0; attempt < _POST_SEED_DELAYS.length; attempt++) {
+                if (_POST_SEED_DELAYS[attempt]) {
+                    await new Promise(r => setTimeout(r, _POST_SEED_DELAYS[attempt]));
+                }
+                if (myGen !== _buildGen) {
+                    console.log('[rig_builder mega-chain] build superseded during re-fetch — abandoning');
+                    return false;
+                }
+                try {
+                    resp = await fetch(`${RB_API}/mega_chain/${encodeURIComponent(filename)}`);
+                } catch (e) {
+                    console.warn('[rig_builder mega-chain] fetch failed:', e);
+                    _markFailed(filename, e && e.message ? e.message : 'Could not fetch this song\'s tone chain');
+                    return false;
+                }
+                if (resp.ok || resp.status !== 404) break;
+                console.warn(`[rig_builder mega-chain] /mega_chain/${filename} → 404 after seed (re-fetch ${attempt + 1}/${_POST_SEED_DELAYS.length - 1})`);
+            }
+        }
+        if (resp.ok) {
+            mega = await resp.json();
+        } else if (resp.status !== 404) {
+            console.warn(`[rig_builder mega-chain] /mega_chain/${filename} → HTTP ${resp.status} — giving up (real backend error)`);
+            _markFailed(filename, `Rig Builder song chain unavailable: HTTP ${resp.status}`);
+            return false;
         }
         if (!mega) {
-            // Still no mappings after the retry window → fall back to the
+            // Still no mappings after the awaited seed → fall back to the
             // cooperative path (the bundle still plays). Run Batch all or open
             // the song in the per-song tab to seed it (needs a tone3000 key).
-            console.warn(`[rig_builder mega-chain] /mega_chain/${filename} → still no mappings after retries (no tone3000 key, or song not mappable? Run Batch all or open it in the per-song tab)`);
+            console.warn(`[rig_builder mega-chain] /mega_chain/${filename} → still no mappings after seed (no tone3000 key, or song not mappable? Run Batch all or open it in the per-song tab)`);
             _markFailed(filename, 'No mapped Rig Builder tones were found for this song');
             return false;
         }
@@ -4834,7 +4876,10 @@ function rbStudioGroupDefault() {
         const cat = (p.category || p.rs_category || '').toLowerCase();
         const slot = (p.slot || '').toLowerCase();
         const entry = { p, idx };
-        if (cat === 'amp' || slot === 'amp' || slot === 'master_default') g.amp.push(entry);
+        // A full-chain NAM is the whole rig in one node — show it as the central
+        // "amp" box so every visualizer renders a single node (no cab/pedals).
+        if (rbIsFullChainPiece(p) || cat === 'fullchain' || slot === 'full_chain') g.amp.push(entry);
+        else if (cat === 'amp' || slot === 'amp' || slot === 'master_default') g.amp.push(entry);
         else if (cat === 'cab' || slot === 'cabinet') g.cab.push(entry);
         else if (cat === 'rack' || slot === 'rack') g.rack.push(entry);
         else g.pedal.push(entry);   // pedals + anything else goes on the floor
@@ -6758,8 +6803,31 @@ async function rbStudioLoadMonitor() {
 window.rbStudioLoadMonitor = rbStudioLoadMonitor;
 
 // Map a Studio chain (pieces) to the save payload the backend expects.
+// A full-chain NAM is a single baked capture (amp+pedals+cab in one .nam). In
+// memory it is one piece flagged `_fullchain`; it serialises to a single stage
+// with slot=full_chain / kind=nam_fullchain and the ABSOLUTE .nam path. Returns
+// null for a normal piece so callers can fall through to their usual mapping.
+function rbIsFullChainPiece(p) {
+    return !!(p && (p._fullchain || p.kind === 'nam_fullchain'
+        || (p.assigned && p.assigned.kind === 'nam_fullchain')));
+}
+function rbFullChainPayloadPiece(p) {
+    if (!rbIsFullChainPiece(p)) return null;
+    return {
+        slot: 'full_chain',
+        rs_gear_type: p.type || '__full_chain_nam__',
+        kind: 'nam_fullchain',
+        file: p._fullchain_file || (p.assigned && p.assigned.file) || null,
+        params: {},
+        assigned_mode: 'manual',
+        bypassed: !!p._bypassed,
+    };
+}
+
 function rbStudioChainToPayload(chain) {
     return (chain || []).map(p => {
+        const fc = rbFullChainPayloadPiece(p);
+        if (fc) return fc;
         const isVst = p._vst_kind === 'vst' || (p.assigned && p.assigned.kind === 'vst' && p.assigned.vst_path);
         const cat = (p.category || p.rs_category || '').toLowerCase();
         const slot = p.slot || (cat === 'amp' ? 'amp' : cat === 'cab' ? 'cabinet' : cat === 'rack' ? 'rack' : 'pre_pedal');
@@ -6772,6 +6840,277 @@ function rbStudioChainToPayload(chain) {
         const kind = rbEffKind(p) || (file ? (cat === 'cab' ? 'ir' : 'nam') : 'none');
         return { slot, rs_gear_type: p.type, kind, file, params: {}, assigned_mode: 'manual', bypassed: !!p._bypassed };
     });
+}
+
+// ── Load a full-chain NAM (replaces the WHOLE current tone) ──────────────
+// Some .nam captures bake amp + pedals + rack + cab into one neural model, so
+// they don't fit any single amp/pedal/cab slot. Loading one REPLACES the entire
+// current chain with a single full-chain piece, then persists + reloads so every
+// visualizer (studio room, chain strip, node editor) shows one node. Scope
+// follows the active studio view: Default, a saved tone, or the loaded song's
+// selected tone — the fixed corner button does global + per-song replacement.
+//
+// `file` is stored verbatim: an ABSOLUTE path for a directory pick (referenced
+// in place) or a RELATIVE nam_models path for a tone3000 download (already
+// copied into the library). _resolve_model_path handles both server-side.
+async function rbApplyFullChainNam(file, name) {
+    if (!file) return;
+    name = name || String(file).split(/[\\/]/).pop().replace(/\.nam$/i, '');
+    const piece = {
+        // rs_gear_type carries the NAM name so the label survives a reload
+        // (get_song rebuilds real_name from rs_gear_type). Full-chain identity
+        // is carried by _fullchain / assigned.kind, not by this string.
+        type: name,
+        real_name: name,
+        name,
+        category: 'fullchain',
+        rs_category: 'fullchain',
+        slot: 'full_chain',
+        _fullchain: true,
+        _fullchain_file: file,
+        _bypassed: false,
+        assigned: { kind: 'nam_fullchain', file },
+    };
+    // Replace the ENTIRE current chain in place — keep the same array reference
+    // so rbStudioCurrentChain()'s song/saved/default binding still points at it.
+    const chain = rbStudioCurrentChain();
+    chain.length = 0;
+    chain.push(piece);
+    // Persist to the active scope (song tone / saved tone / default) and WAIT so
+    // the reload reads the freshly-saved preset, then re-audition + redraw.
+    try {
+        rbStudioPersist();
+        if (rbState._studioPersistPromise) { try { await rbState._studioPersistPromise; } catch (_) {} }
+    } catch (e) { console.warn('[rig_builder] full-chain persist failed:', e); }
+    try { rbRenderStudioRoom(); rbStudioRenderToneChips(); } catch (_) {}
+    try { await rbStudioLoadMonitor(); } catch (_) {}
+    // If the node editor is open, reseed it (chain length changed → one node).
+    try {
+        if (rbState.currentTab === 'advanced' && typeof rbAdvResetToChain === 'function') {
+            rbAdvResetToChain();
+        }
+    } catch (_) {}
+}
+
+// ── Reusable tone3000 browser (shared by the full-chain modal + add-gear) ────
+// A compact tone3000 search: category chips (full rig / amp / pedal / …), a
+// query box, and a results list where each tone EXPANDS to show its individual
+// captures (gain/EQ variants) so the user downloads the exact one they want.
+// Optionally offers a "from directory" pick. State lives per-instance in
+// rbT3kCtxs[id]; a tone3000 download calls ctx.onUse(file, kind, name); a
+// directory pick calls ctx.onDir(path, kind) (falls back to onUse). Mount with
+// rbT3kMount({id, containerId, onUse, onDir?, allowDir?, allowDirExts?, forceCategory?}).
+const rbT3kCtxs = {};
+const RB_T3K_CATS = [
+    { key: '', label: 'All' },
+    { key: 'full-rig', label: 'Full rig' },
+    { key: 'amp', label: 'Amp' },
+    { key: 'pedal', label: 'Pedal' },
+    { key: 'outboard', label: 'Outboard' },
+    { key: 'ir', label: 'IR / Cab' },
+];
+function rbT3kMount(opts) {
+    const ctx = Object.assign({
+        query: '', gears: opts.forceCategory || opts.initialCat || '', searching: false,
+        results: null, expanded: null, captures: {},
+    }, opts);
+    rbT3kCtxs[opts.id] = ctx;
+    rbT3kRender(ctx);
+    return ctx;
+}
+function rbT3kRender(ctx) {
+    const host = document.getElementById(ctx.containerId);
+    if (host) host.innerHTML = rbT3kHtml(ctx);
+}
+function rbT3kHtml(ctx) {
+    const dirBtn = ctx.allowDir
+        ? `<button class="rb-fc-dir" onclick="rbT3kPickDir('${ctx.id}')">📁 Choose from directory…</button>
+           <div class="rb-fc-or">— or search tone3000 —</div>` : '';
+    const chips = ctx.forceCategory ? '' : `<div class="rb-t3k-chips">${
+        RB_T3K_CATS.map(c => `<button class="rb-t3k-chip ${ctx.gears === c.key ? 'on' : ''}" onclick="rbT3kSetCat('${ctx.id}','${c.key}')">${c.label}</button>`).join('')
+    }</div>`;
+    let results = '';
+    const r = ctx.results;
+    if (ctx.searching) results = `<div class="rb-fc-hint">searching tone3000…</div>`;
+    else if (r && !r.has_api_access) results = `<div class="rb-fc-hint rb-fc-warn">Connect tone3000 in Setup → tone3000 to search in-app.</div>`;
+    else if (r && (!r.candidates || !r.candidates.length)) results = `<div class="rb-fc-hint">No results — try a brand / model.</div>`;
+    else if (r) results = r.candidates.slice(0, 20).map(c => rbT3kCandHtml(ctx, c)).join('');
+    return `${dirBtn}${chips}
+        <div class="rb-fc-search">
+            <input id="rb-t3k-q-${ctx.id}" type="text" value="${rbEsc(ctx.query || '')}" placeholder="brand / model…"
+                   onkeydown="if(event.key==='Enter')rbT3kSearch('${ctx.id}')">
+            <button onclick="rbT3kSearch('${ctx.id}')">Search</button>
+        </div>
+        ${results ? `<div class="rb-fc-results">${results}</div>` : ''}`;
+}
+function rbT3kCandHtml(ctx, c) {
+    const expanded = ctx.expanded === c.id;
+    const caps = ctx.captures[c.id];
+    const photo = (c.images && c.images[0])
+        ? `<img src="${rbEsc(c.images[0])}" alt="" loading="lazy" class="rb-fc-thumb" onerror="this.style.visibility='hidden'">`
+        : `<div class="rb-fc-thumb rb-fc-thumb-empty">t3k</div>`;
+    let capsHtml = '';
+    if (expanded) {
+        if (caps === 'loading') capsHtml = `<div class="rb-fc-hint">loading captures…</div>`;
+        else if (caps === 'error') capsHtml = `<div class="rb-fc-hint rb-fc-warn">couldn't load captures</div>`;
+        else if (Array.isArray(caps)) {
+            if (!caps.length) capsHtml = `<div class="rb-fc-hint">no captures in this tone</div>`;
+            else {
+                // A tone can hold hundreds of captures (one per gain step) — offer
+                // a filter so the user doesn't scroll. Its rows re-render in place
+                // (rbT3kCapFilter updates only #rb-t3k-caplist), keeping focus.
+                const search = caps.length > 6
+                    ? `<div class="rb-t3k-capsearch"><input id="rb-t3k-capq-${ctx.id}" type="text"
+                           value="${rbEsc(ctx.capFilter || '')}" placeholder="🔍 filter ${caps.length} captures…"
+                           oninput="rbT3kCapFilter('${ctx.id}', this.value)"></div>` : '';
+                capsHtml = `${search}<div id="rb-t3k-caplist-${ctx.id}" class="rb-t3k-caplist">${rbT3kCapRowsHtml(ctx, c.id, caps)}</div>`;
+            }
+        }
+    }
+    // The WHOLE row toggles the capture list (no download button here) — a tone
+    // can hold several captures (gain/EQ variants) and the user picks one below.
+    // The tone3000 page link stops propagation so it doesn't also toggle.
+    return `<div class="rb-fc-row rb-t3k-cand ${expanded ? 'open' : ''}" onclick="rbT3kToggle('${ctx.id}',${c.id})" title="Click to see this tone's captures">
+            ${photo}
+            <div class="rb-fc-row-main">
+                <div class="rb-fc-row-title">${rbEsc(c.title)}</div>
+                <div class="rb-fc-row-sub"><a href="${rbEsc(c.url || '#')}" target="_blank" class="rb-t3k-link" onclick="event.stopPropagation()">tone3000 ↗</a> · ${rbEsc(c.license || 'unknown')} · ${c.downloads_count || 0} dl</div>
+            </div>
+            <span class="rb-t3k-more">${expanded ? '▾ hide' : '▸ options'}</span>
+        </div>${expanded ? `<div class="rb-t3k-caps">${capsHtml}</div>` : ''}`;
+}
+// Rows for the expanded tone's captures, filtered by ctx.capFilter. Split out so
+// the filter box can refresh just this list without re-rendering the browser.
+function rbT3kCapRowsHtml(ctx, toneId, caps) {
+    const q = (ctx.capFilter || '').toLowerCase().trim();
+    const list = q ? caps.filter(m => (m.name || '').toLowerCase().includes(q)) : caps;
+    if (!list.length) return `<div class="rb-fc-hint">no captures match “${rbEsc(ctx.capFilter)}”</div>`;
+    return list.map(m => `<div class="rb-t3k-cap">
+            <span class="rb-t3k-cap-name" title="${rbEsc(m.name)}">${rbEsc(m.name)}</span>
+            ${m.size ? `<span class="rb-t3k-cap-size">${rbEsc(m.size)}</span>` : ''}
+            <button class="rb-fc-use" onclick="rbT3kUse('${ctx.id}',this,${toneId},${m.model_id})">⬇ Download</button>
+        </div>`).join('');
+}
+window.rbT3kCapFilter = function (id, val) {
+    const c = rbT3kCtxs[id]; if (!c) return;
+    c.capFilter = val;
+    const caps = c.captures[c.expanded];
+    const host = document.getElementById(`rb-t3k-caplist-${id}`);
+    if (host && Array.isArray(caps)) host.innerHTML = rbT3kCapRowsHtml(c, c.expanded, caps);
+};
+window.rbT3kSetCat = function (id, key) {
+    const c = rbT3kCtxs[id]; if (!c) return;
+    c.gears = key; c.expanded = null;
+    rbT3kRender(c);
+    if (c.query) rbT3kSearch(id);
+};
+window.rbT3kSearch = async function (id) {
+    const c = rbT3kCtxs[id]; if (!c) return;
+    const el = document.getElementById(`rb-t3k-q-${id}`);
+    if (el) c.query = (el.value || '').trim();
+    if (!c.query) return;
+    c.searching = true; c.expanded = null; c.captures = {};
+    rbT3kRender(c);
+    const params = { rs_gear: '', query_override: c.query, limit: '20' };
+    if (c.gears) params.gears_override = c.gears;
+    try { c.results = await (await fetch(`${window.RB_API}/search?${new URLSearchParams(params)}`)).json(); }
+    catch (e) { c.results = { has_api_access: true, candidates: [] }; }
+    c.searching = false;
+    rbT3kRender(c);
+};
+window.rbT3kToggle = async function (id, toneId) {
+    const c = rbT3kCtxs[id]; if (!c) return;
+    if (c.expanded === toneId) { c.expanded = null; rbT3kRender(c); return; }
+    c.expanded = toneId;
+    c.capFilter = '';                       // fresh filter per opened tone
+    if (!c.captures[toneId]) {
+        c.captures[toneId] = 'loading';
+        rbT3kRender(c);
+        try {
+            const d = await (await fetch(`${window.RB_API}/tone3000/captures/${toneId}`)).json();
+            c.captures[toneId] = Array.isArray(d.captures) ? d.captures : [];
+        } catch (e) { c.captures[toneId] = 'error'; }
+    }
+    if (c.expanded === toneId) rbT3kRender(c);
+};
+window.rbT3kUse = async function (id, btn, toneId, modelId) {
+    const c = rbT3kCtxs[id]; if (!c) return;
+    const old = btn.textContent;
+    btn.disabled = true; btn.textContent = '…';
+    let d;
+    try {
+        const body = { rs_gear: '', tone3000_id: toneId };
+        if (modelId != null) body.model_id = modelId;
+        if (c.gears === 'ir') body.is_ir = true;
+        const r = await fetch(`${window.RB_API}/audition_candidate`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        d = await r.json();
+        if (!r.ok || !d.file) throw new Error(d.error || 'download failed');
+    } catch (e) {
+        btn.disabled = false; btn.textContent = old;
+        return alert(`Couldn't download: ${e.message || e}`);
+    }
+    let nm;
+    const caps = c.captures[toneId];
+    if (modelId != null && Array.isArray(caps)) { const m = caps.find(x => x.model_id === modelId); nm = m && m.name; }
+    if (!nm) { const cand = ((c.results && c.results.candidates) || []).find(x => x.id === toneId); nm = cand && cand.title; }
+    c.onUse(d.file, d.kind || 'nam', nm);
+};
+window.rbT3kPickDir = async function (id) {
+    const c = rbT3kCtxs[id]; if (!c) return;
+    const host = window.feedBackDesktop;
+    if (!host || typeof host.pickFile !== 'function') return alert('File picker not available in this build.');
+    let path;
+    try {
+        const exts = c.allowDirExts || ['nam', 'wav'];
+        const picked = await host.pickFile([{ name: 'NAM / IR', extensions: exts }, { name: 'All Files', extensions: ['*'] }]);
+        if (!picked) return;
+        path = Array.isArray(picked) ? picked[0] : picked;
+    } catch (e) { return alert(`Pick failed: ${e && e.message ? e.message : e}`); }
+    if (!path) return;
+    const kind = /\.wav$/i.test(path) ? 'ir' : 'nam';
+    if (c.onDir) c.onDir(path, kind); else c.onUse(path, kind);
+};
+
+// ── Full-chain NAM chooser modal (uses the shared tone3000 browser) ──────────
+const rbFcState = { open: false };
+window.rbStudioLoadFullChainNam = function rbStudioLoadFullChainNam() { rbFcOpen(); };
+window.rbFcOpen = function rbFcOpen() {
+    rbFcState.open = true;
+    const modal = document.getElementById('rb-fullchain-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    const body = document.getElementById('rb-fullchain-body');
+    if (body) {
+        body.innerHTML = `<div class="rb-fc-scope">Replaces <b>${rbEsc(rbFcScopeLabel())}</b> with the chosen full-chain NAM.</div>
+            <div id="rb-fc-t3k"></div>`;
+        rbT3kMount({
+            id: 'fullchain',
+            containerId: 'rb-fc-t3k',
+            allowDir: true,
+            allowDirExts: ['nam'],
+            // Directory pick → referenced by ABSOLUTE path (user's earlier choice).
+            onDir: (path) => { rbFcClose(); rbApplyFullChainNam(path); },
+            // tone3000 download → RELATIVE nam_models path (copied into library).
+            onUse: (file, kind, name) => { rbFcClose(); rbApplyFullChainNam(file, name); },
+        });
+    }
+    requestAnimationFrame(() => document.getElementById('rb-t3k-q-fullchain')?.focus());
+};
+window.rbFcClose = function rbFcClose() {
+    rbFcState.open = false;
+    document.getElementById('rb-fullchain-modal')?.classList.add('hidden');
+};
+// A short label of what the load will replace, so the user knows the scope.
+function rbFcScopeLabel() {
+    const v = rbState.studioView || { source: 'default' };
+    if (v.source === 'song') {
+        const t = rbState.songTones && rbState.songTones.tones && rbState.songTones.tones[v.toneIdx];
+        return `song tone “${(t && t.name) || 'Tone'}”`;
+    }
+    if (v.source === 'saved') return `saved tone “${v.name}”`;
+    return 'the Default tone';
 }
 
 // Save the current Studio chain as a user-named tone. Electron blocks
@@ -9894,6 +10233,8 @@ async function rbAfterMasterEdit(role) {
 async function rbPersistMasterChain(role) {
     const arr = rbState.master[role] || [];
     const pieces = arr.map(p => {
+        const fc = rbFullChainPayloadPiece(p);
+        if (fc) return fc;
         const isVst = p._vst_kind === 'vst' || (p.assigned && p.assigned.kind === 'vst' && p.assigned.vst_path);
         if (isVst) {
             return {
@@ -12121,6 +12462,9 @@ async function rbPersistTone(toneIdx, filename) {
     const tone = rbState.songTones.tones[toneIdx];
     filename = filename || rbState.currentSongFile;
     const pieces = tone.chain.map(p => {
+        // Full-chain NAM replaces the whole tone with one baked capture.
+        const fc = rbFullChainPayloadPiece(p);
+        if (fc) return fc;
         // VST takes priority over NAM/IR when the user has explicitly
         // picked one (either pending via _vst_path or persisted via assigned).
         const pendingVst = p._vst_kind === 'vst' && p._vst_path;
@@ -15007,9 +15351,18 @@ async function rbOpenAddCustomGear(cat, editRec) {
         kind = ''; vst_path = ''; vst_format = 'VST3'; file = '';
         layout = PC ? PC.defaultFace(cat, null, { title: '' }) : null;
     }
+    // Amp gain variants (clean/crunch/dist → NAM file), rehydrated when editing.
+    const _variants = {};
+    const _gv = editRec && editRec.gain_variants;
+    if (_gv && typeof _gv === 'object') {
+        for (const lvl of ['clean', 'crunch', 'dist']) {
+            const f = _gv[lvl] && _gv[lvl].file;
+            if (f) _variants[lvl] = f;
+        }
+    }
     rbCgState = {
         cat, name, instrument, kind, vst_path, vst_format, file, layout,
-        values: {}, editRsGear, files: null, _fileFilter: '', _editIdx: -1,
+        values: {}, editRsGear, files: null, _fileFilter: '', _editIdx: -1, _variants,
         sourceTab: (kind === 'nam' || kind === 'ir' || (!vst_path && file)) ? 'file' : 'vst',
     };
     const el = document.getElementById('rb-gear-detail');
@@ -15020,6 +15373,8 @@ async function rbOpenAddCustomGear(cat, editRec) {
     if (!rbCgState) return;      // cancelled while VSTs loaded
     rbCgRenderSource();
     rbCgRenderPreview();
+    // Amps: load the NAM library so the gain-variant selects populate.
+    if (rbCgState.cat === 'amp' && rbCgState.files == null) rbCgLoadFiles();
 }
 
 function rbCgFormHtml() {
@@ -15057,6 +15412,8 @@ function rbCgFormHtml() {
             <div id="rb-cg-source"></div>
             <div id="rb-cg-source-current" class="text-[11px] text-gray-500 mt-1"></div>
         </div>
+
+        ${rbCgVariantsHtml()}
 
         <div>
             <div class="flex items-center justify-between mb-1">
@@ -15131,7 +15488,9 @@ function rbCgRenderSource() {
     }
     const host = document.getElementById('rb-cg-source');
     if (host) host.innerHTML = s.sourceTab === 'file' ? rbCgFilePickerHtml() : rbCgVstPickerHtml();
-    if (s.sourceTab === 'file' && s.files == null) rbCgLoadFiles();
+    if (s.sourceTab === 'file') {
+        rbCgRenderSrcMode();                  // render the chosen source mode (tone3000 / directory / downloaded)
+    }
     rbCgUpdateSourceLabel();
 }
 
@@ -15295,116 +15654,155 @@ async function rbCgLoadFiles() {
         ];
     } catch (_) { s.files = []; }
     if (rbCgState === s && s.sourceTab === 'file') {
-        const host = document.getElementById('rb-cg-source');
-        if (host) host.innerHTML = rbCgFilePickerHtml();
+        // Refresh ONLY the local list so the mounted tone3000 browser (and its
+        // in-flight search state) survives.
+        const localHost = document.getElementById('rb-cg-local');
+        if (localHost) localHost.innerHTML = rbCgLocalHtml();
         rbCgUpdateSourceLabel();
     }
+    if (rbCgState === s) rbCgRefreshVariants();   // fill the amp gain-variant selects
 }
 
+// The NAM·IR source offers THREE ways to get a model, shown ONE AT A TIME via a
+// segmented selector (so the panel isn't three stacked searchers): tone3000
+// search, a directory pick, or the already-downloaded library. Default: tone3000.
 function rbCgFilePickerHtml() {
+    const mode = (rbCgState && rbCgState._srcMode) || 't3k';
+    const seg = (m, label) => `<button onclick="rbCgSetSrcMode('${m}')" class="rb-cg-srcseg ${mode === m ? 'on' : ''}">${label}</button>`;
+    return `<div class="rb-cg-srcsegs">${seg('t3k', '🔎 tone3000')}${seg('dir', '📁 Directory')}${seg('local', '💾 Downloaded')}</div>
+        <div id="rb-cg-srcmode"></div>`;
+}
+function rbCgSetSrcMode(mode) {
+    if (!rbCgState) return;
+    rbCgState._srcMode = mode;
+    const host = document.getElementById('rb-cg-source');
+    if (host) host.innerHTML = rbCgFilePickerHtml();   // refresh the segmented highlight
+    rbCgRenderSrcMode();
+}
+function rbCgRenderSrcMode() {
+    const s = rbCgState; if (!s) return;
+    const host = document.getElementById('rb-cg-srcmode');
+    if (!host) return;
+    const mode = s._srcMode || 't3k';
+    if (mode === 'dir') {
+        host.innerHTML = `<button class="rb-fc-dir" onclick="rbCgPickDir()">📁 Choose ${s.cat === 'cab' ? 'IR .wav' : '.nam'} from directory…</button>
+            <div class="rb-fc-hint">The file is copied into your library so it always resolves.</div>`;
+    } else if (mode === 'local') {
+        host.innerHTML = `<div id="rb-cg-local">${rbCgLocalHtml()}</div>`;
+        if (s.files == null) rbCgLoadFiles();
+    } else {   // tone3000
+        host.innerHTML = `<div id="rb-cg-t3k"></div>`;
+        rbCgMountT3k();
+    }
+}
+function rbCgLocalHtml() {
     const s = rbCgState;
-    const local = (s.files == null)
-        ? `<div class="text-xs text-gray-500">loading files…</div>`
-        : (!s.files.length
-            ? `<div class="text-xs text-gray-500">No downloaded NAM/IR files yet — search tone3000 above or download from the Gear catalog.</div>`
-            : `<input type="text" placeholder="🔍 filter downloaded files…" value="${rbEsc(s._fileFilter || '')}"
+    if (!s || s.files == null) return `<div class="text-xs text-gray-500">loading files…</div>`;
+    if (!s.files.length) return `<div class="text-xs text-gray-500">No downloaded NAM/IR files yet — search tone3000 or pick from a directory.</div>`;
+    return `<input type="text" placeholder="🔍 filter downloaded files…" value="${rbEsc(s._fileFilter || '')}"
                    oninput="rbCgSetFileFilter(this.value)"
                    class="w-full bg-dark-900 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1 mb-1">
-               <div id="rb-cg-file-rows" class="max-h-40 overflow-y-auto space-y-0.5">${rbCgFileRowsHtml()}</div>`);
-    return `${rbCgT3kSearchHtml()}
-        <div class="text-[10px] uppercase tracking-wide text-gray-600 mt-3 mb-1">Downloaded on disk</div>
-        ${local}`;
+               <div id="rb-cg-file-rows" class="max-h-40 overflow-y-auto space-y-0.5">${rbCgFileRowsHtml()}</div>`;
+}
+async function rbCgPickDir() {
+    const s = rbCgState; if (!s) return;
+    const host = window.feedBackDesktop;
+    if (!host || typeof host.pickFile !== 'function') return alert('File picker not available in this build.');
+    let path;
+    try {
+        const exts = s.cat === 'cab' ? ['wav'] : ['nam'];
+        const picked = await host.pickFile([{ name: 'NAM / IR', extensions: exts }, { name: 'All Files', extensions: ['*'] }]);
+        if (!picked) return;
+        path = Array.isArray(picked) ? picked[0] : picked;
+    } catch (e) { return alert(`Pick failed: ${e && e.message ? e.message : e}`); }
+    if (!path) return;
+    const kind = /\.wav$/i.test(path) ? 'ir' : 'nam';
+    rbCgImportDir(path, kind);
 }
 
-// tone3000 search inside the Add-gear NAM·IR tab: find a capture, download it
-// (no assign), and use it as this new gear's source.
-function rbCgT3kSearchHtml() {
+// ── Amp gain variants (clean/crunch/dist) for a custom NAM amp ───────────────
+// Some amps ship a capture per gain step; assigning clean/crunch/dist NAMs lets
+// playback auto-pick one by the song's mapped Gain (backend `gain_variants` +
+// _pick_amp_gain_variant — the same model the auto-tone3000 "map songs" flow
+// builds). Only shown for amps. Each level picks from the DOWNLOADED NAM library
+// (download the different-gain captures in the source above first). Clean falls
+// back to the main source when left blank.
+const RB_CG_VARIANT_LEVELS = [
+    ['clean', 'Gain 0–33'],
+    ['crunch', 'Gain 34–66'],
+    ['dist', 'Gain 67–100'],
+];
+function rbCgVariantsHtml() {
     const s = rbCgState;
-    const results = s._t3kResults;
-    let rows = '';
-    if (s._t3kSearching) {
-        rows = `<div class="text-[11px] text-gray-500 px-1 py-2">searching tone3000…</div>`;
-    } else if (results && !results.has_api_access) {
-        rows = `<div class="text-[11px] text-amber-400/80 px-1 py-2">Connect tone3000 in Setup → tone3000 to search in-app.</div>`;
-    } else if (results && !results.candidates.length) {
-        rows = `<div class="text-[11px] text-gray-500 px-1 py-2">No results — try a brand/model (e.g. "Fender Twin").</div>`;
-    } else if (results) {
-        rows = results.candidates.slice(0, 12).map(c => {
-            const photo = (c.images && c.images[0])
-                ? `<img src="${rbEsc(c.images[0])}" alt="" loading="lazy" style="width:34px;height:34px;object-fit:cover" class="rounded bg-dark-900 flex-shrink-0" onerror="this.style.visibility='hidden'">`
-                : `<div class="rounded bg-dark-900 flex items-center justify-center text-gray-700 text-[8px] flex-shrink-0" style="width:34px;height:34px">no img</div>`;
-            return `
-            <div class="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-dark-700">
-                ${photo}
-                <a href="${rbEsc(c.url || '#')}" target="_blank" class="flex-1 min-w-0 hover:text-white transition" title="${rbEsc(c.title)}">
-                    <div class="text-[11px] text-gray-300 truncate">${rbEsc(c.title)}</div>
-                    <div class="text-[10px] text-gray-600">${rbEsc(c.license || 'unknown')} · ${c.downloads_count || 0} dl · ${c.favorites_count || 0} ♥</div>
-                </a>
-                <button onclick="rbCgT3kUse(this, ${c.id})"
-                        class="bg-green-700 hover:bg-green-600 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap flex-shrink-0">⬇ Use</button>
-            </div>`;
-        }).join('');
-    }
-    return `
-        <div class="border border-emerald-800/30 rounded-lg p-2 bg-emerald-900/10">
-            <div class="text-[10px] uppercase tracking-wide text-emerald-300/80 mb-1">Search tone3000</div>
-            <div class="flex gap-1">
-                <input id="rb-cg-t3k-query" type="text" value="${rbEsc(s._t3kQuery || '')}"
-                       placeholder="brand / model…" onkeydown="if(event.key==='Enter')rbCgT3kSearch()"
-                       class="flex-1 bg-dark-900 border border-gray-800 rounded text-xs text-gray-200 px-2 py-1">
-                <button onclick="rbCgT3kSearch()" class="bg-emerald-800/40 hover:bg-emerald-800/70 text-emerald-200 text-xs px-2.5 py-1 rounded">Search</button>
-            </div>
-            ${rows ? `<div class="mt-1 max-h-40 overflow-y-auto">${rows}</div>` : ''}
-        </div>`;
+    if (!s || s.cat !== 'amp') return '';
+    return `<div>
+        <label class="block text-[11px] uppercase tracking-wide text-gray-500 mb-1">Alternate gains — optional</label>
+        <div class="text-[10px] text-gray-500 mb-2">Assign a different-gain NAM per level so the song's Gain knob auto-picks one. Download the captures in the source above first; clean defaults to the main source.</div>
+        <div id="rb-cg-variants">${rbCgVariantRowsHtml()}</div>
+    </div>`;
+}
+function rbCgVariantRowsHtml() {
+    const s = rbCgState;
+    if (!s) return '';
+    const nams = (s.files || []).filter(f => f.kind === 'nam');
+    const v = s._variants || {};
+    const opts = (cur) => `<option value="">${'— none —'}</option>` +
+        nams.map(f => `<option value="${rbEsc(f.name)}"${cur === f.name ? ' selected' : ''}>${rbEsc(f.name)}</option>`).join('');
+    return RB_CG_VARIANT_LEVELS.map(([lvl, range]) => `<div class="rb-cg-varrow">
+            <span class="rb-cg-varlvl">${lvl}</span>
+            <span class="rb-cg-varrange">${range}</span>
+            <select onchange="rbCgSetVariant('${lvl}', this.value)" class="rb-cg-varsel">${opts(v[lvl] || '')}</select>
+        </div>`).join('');
+}
+function rbCgSetVariant(level, file) {
+    const s = rbCgState; if (!s) return;
+    s._variants = s._variants || {};
+    if (file) s._variants[level] = file; else delete s._variants[level];
+}
+function rbCgRefreshVariants() {
+    const host = document.getElementById('rb-cg-variants');
+    if (host) host.innerHTML = rbCgVariantRowsHtml();
 }
 
-async function rbCgT3kSearch() {
-    const s = rbCgState; if (!s) return;
-    const q = (document.getElementById('rb-cg-t3k-query') || {}).value || '';
-    s._t3kQuery = q.trim();
-    if (!s._t3kQuery) return;
-    s._t3kSearching = true;
-    rbCgRerenderSource();
-    const gears = s.cat === 'cab' ? 'cabinet' : s.cat;
-    const qs = new URLSearchParams({ rs_gear: '', query_override: s._t3kQuery, gears_override: gears, limit: '12' });
-    try {
-        const r = await fetch(`${window.RB_API}/search?${qs}`);
-        s._t3kResults = await r.json();
-    } catch (e) {
-        s._t3kResults = { has_api_access: true, candidates: [] };
-    }
-    s._t3kSearching = false;
-    if (rbCgState === s && s.sourceTab === 'file') rbCgRerenderSource();
+// The add-gear NAM·IR tab reuses the shared tone3000 browser (no directory button
+// of its own — that's the dedicated Directory mode). tone3000 downloads land as a
+// RELATIVE library path (accepted as-is); the Directory mode IMPORTS into the
+// library first (the gear resolver needs a path under nam_models/nam_irs). Chips
+// default to the gear's tone3000 category but stay switchable.
+function rbCgMountT3k() {
+    const s = rbCgState; if (!s || s.sourceTab !== 'file') return;
+    if (!document.getElementById('rb-cg-t3k')) return;
+    const initialCat = { amp: 'amp', cab: 'ir', pedal: 'pedal', rack: 'outboard' }[s.cat] || '';
+    rbT3kMount({
+        id: 'addgear',
+        containerId: 'rb-cg-t3k',
+        allowDir: false,
+        initialCat,
+        onUse: (file, kind) => rbCgAcceptSource(file, kind),
+    });
 }
-
-async function rbCgT3kUse(btn, toneId) {
+function rbCgAcceptSource(file, kind) {
     const s = rbCgState; if (!s) return;
-    const old = btn.textContent;
-    btn.disabled = true; btn.textContent = '…';
+    s.file = file;
+    s.kind = kind || 'nam';
+    s.vst_path = '';
+    s.files = null;            // force a fresh local list (now includes the new file)
+    rbCgLoadFiles();
+    rbCgUpdateSourceLabel();
+}
+async function rbCgImportDir(path, kind) {
+    const s = rbCgState; if (!s) return;
     try {
-        const r = await fetch(`${window.RB_API}/audition_candidate`, {
+        const r = await fetch(`${window.RB_API}/import_local_model`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ rs_gear: '', tone3000_id: toneId }),
+            body: JSON.stringify({ path, kind, category: s.cat }),
         });
         const d = await r.json();
-        if (!r.ok || !d.file) throw new Error(d.error || 'download failed');
-        s.file = d.file;
-        s.kind = d.kind || 'nam';
-        s.vst_path = '';
-        // Pull the new file into the local list too, then refresh.
-        s.files = null;
-        rbCgLoadFiles();
-        rbCgUpdateSourceLabel();
-        rbCgRerenderSource();
+        if (!r.ok || !d.file) throw new Error(d.error || 'import failed');
+        rbCgAcceptSource(d.file, d.kind || kind);
     } catch (e) {
-        btn.disabled = false; btn.textContent = old;
-        alert(`Couldn't download: ${e.message || e}`);
+        alert(`Couldn't import: ${e.message || e}`);
     }
-}
-
-function rbCgRerenderSource() {
-    const host = document.getElementById('rb-cg-source');
-    if (host && rbCgState && rbCgState.sourceTab === 'file') host.innerHTML = rbCgFilePickerHtml();
 }
 
 function rbCgFileRowsHtml() {
@@ -15664,6 +16062,19 @@ async function rbSaveCustomGear() {
         kind: s.kind, vst_path: s.vst_path || '', vst_format: s.vst_format || 'VST3',
         file: s.file || '', ui: s.layout,
     };
+    // Amp gain variants: send clean/crunch/dist NAMs so playback auto-switches by
+    // the song's Gain. Clean defaults to the main source. Only meaningful once a
+    // second level (crunch or dist) is set.
+    const _v = s._variants || {};
+    if (s.cat === 'amp' && (_v.crunch || _v.dist)) {
+        const ranges = { clean: [0, 33], crunch: [34, 66], dist: [67, 100] };
+        const gv = {};
+        for (const lvl of ['clean', 'crunch', 'dist']) {
+            const f = (lvl === 'clean') ? (_v.clean || s.file) : _v[lvl];
+            if (f) gv[lvl] = { file: f, rs_gain_range: ranges[lvl] };
+        }
+        body.gain_variants = gv;
+    }
     const btn = document.getElementById('rb-cg-save');
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     try {

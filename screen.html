@@ -62,6 +62,97 @@
     /* When a song's tonebar is shown it covers the top strip — drop the Advanced
        button below it so it stays reachable while a song is loaded. */
     #rb-stage-wrap.rb-songbar-on .rb-studio-adv-btn{ top:58px; }
+    /* Full-chain NAM loader: fixed bottom-left, always present (song or not). */
+    .rb-studio-fullchain-btn{ position:absolute; bottom:16px; left:16px; z-index:20; cursor:pointer;
+        padding:7px 13px; border-radius:9px; font-size:13px; font-weight:500; color:#d8ffe6;
+        background:rgba(20,58,40,.62); border:1px solid rgba(90,220,150,.34);
+        box-shadow:0 6px 18px rgba(0,0,0,.4); backdrop-filter:blur(6px);
+        transition:background .15s, color .15s, transform .12s; }
+    .rb-studio-fullchain-btn:hover{ background:rgba(28,84,58,.85); color:#fff; transform:translateY(-1px); }
+    /* Hide it in gear/pedal focus edit (same as the Advanced button). */
+    #rb-stage-wrap:has(#rb-studio-room.rb-focus-active) .rb-studio-fullchain-btn,
+    #rb-stage-wrap:has(#rb-studio-room.rb-pfocus) .rb-studio-fullchain-btn{ display:none !important; }
+
+    /* ── Full-chain NAM chooser modal ─────────────────────────────────────── */
+    .rb-fc-modal{ position:fixed; inset:0; z-index:120; display:flex; align-items:center;
+        justify-content:center; background:rgba(6,10,16,.62); backdrop-filter:blur(3px); }
+    .rb-fc-modal.hidden{ display:none; }
+    .rb-fc-card{ width:min(460px,92vw); max-height:86vh; overflow:hidden; display:flex; flex-direction:column;
+        background:#141a24; border:1px solid rgba(120,170,240,.22); border-radius:14px;
+        box-shadow:0 24px 70px rgba(0,0,0,.6); }
+    .rb-fc-head{ display:flex; align-items:center; justify-content:space-between; padding:13px 16px;
+        font-size:14px; font-weight:600; color:#eaf1ff; border-bottom:1px solid rgba(255,255,255,.07); }
+    .rb-fc-x{ cursor:pointer; color:#9fb0c8; background:none; border:none; font-size:15px; padding:2px 6px; border-radius:6px; }
+    .rb-fc-x:hover{ color:#fff; background:rgba(255,255,255,.1); }
+    .rb-fc-body{ padding:14px 16px; overflow-y:auto; }
+    .rb-fc-scope{ font-size:12px; color:#9fb0c8; margin-bottom:12px; }
+    .rb-fc-scope b{ color:#d8ffe6; font-weight:600; }
+    .rb-fc-dir{ width:100%; cursor:pointer; padding:10px 12px; border-radius:9px; font-size:13px; font-weight:500;
+        color:#d8ffe6; background:rgba(20,58,40,.6); border:1px solid rgba(90,220,150,.34); transition:background .15s; }
+    .rb-fc-dir:hover{ background:rgba(28,84,58,.85); color:#fff; }
+    .rb-fc-or{ text-align:center; font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+        color:#6b7a90; margin:13px 0 10px; }
+    .rb-fc-search{ display:flex; gap:6px; }
+    .rb-fc-search input{ flex:1; min-width:0; background:#0e131b; border:1px solid rgba(255,255,255,.1);
+        border-radius:8px; color:#e6edf7; font-size:13px; padding:8px 10px; }
+    .rb-fc-search button{ cursor:pointer; padding:8px 14px; border-radius:8px; font-size:13px; color:#cfe0ff;
+        background:rgba(30,46,76,.7); border:1px solid rgba(120,170,240,.34); }
+    .rb-fc-search button:hover{ background:rgba(48,72,118,.85); color:#fff; }
+    .rb-fc-results{ margin-top:10px; display:flex; flex-direction:column; gap:3px; max-height:340px; overflow-y:auto; }
+    .rb-fc-hint{ font-size:12px; color:#8a98ad; padding:8px 2px; }
+    .rb-fc-hint.rb-fc-warn{ color:#ffcf7a; }
+    .rb-fc-row{ display:flex; align-items:center; gap:9px; padding:6px 7px; border-radius:8px; }
+    .rb-fc-row:hover{ background:rgba(255,255,255,.05); }
+    .rb-fc-thumb{ width:36px; height:36px; object-fit:cover; border-radius:6px; background:#0e131b; flex:0 0 auto; }
+    .rb-fc-thumb-empty{ display:flex; align-items:center; justify-content:center; font-size:9px; color:#4b5568; }
+    .rb-fc-row-main{ flex:1; min-width:0; text-decoration:none; }
+    .rb-fc-row-title{ font-size:12px; color:#dbe4f2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .rb-fc-row-main:hover .rb-fc-row-title{ color:#fff; }
+    .rb-fc-row-sub{ font-size:10px; color:#6b7a90; }
+    .rb-fc-use{ cursor:pointer; white-space:nowrap; flex:0 0 auto; font-size:11px; padding:5px 9px; border-radius:7px;
+        color:#d8ffe6; background:rgba(24,96,60,.8); border:1px solid rgba(90,220,150,.4); }
+    .rb-fc-use:hover{ background:rgba(30,120,74,.95); color:#fff; }
+    .rb-fc-use:disabled{ opacity:.6; cursor:default; }
+    /* Shared tone3000 browser: category chips + per-tone capture list. */
+    .rb-t3k-chips{ display:flex; flex-wrap:wrap; gap:5px; margin:8px 0; }
+    .rb-t3k-chip{ cursor:pointer; font-size:11px; padding:3px 9px; border-radius:999px; color:#9fb0c8;
+        background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12); transition:background .12s, color .12s; }
+    .rb-t3k-chip:hover{ background:rgba(255,255,255,.1); color:#e6edf7; }
+    .rb-t3k-chip.on{ background:rgba(48,72,118,.85); border-color:rgba(120,170,240,.5); color:#fff; }
+    .rb-t3k-cand{ align-items:center; }
+    .rb-t3k-exp{ cursor:pointer; flex:0 0 auto; width:20px; text-align:center; color:#8a98ad; background:none;
+        border:none; font-size:12px; padding:2px; border-radius:5px; }
+    .rb-t3k-exp:hover{ color:#fff; background:rgba(255,255,255,.1); }
+    .rb-t3k-caps{ margin:1px 0 8px 30px; border-left:2px solid rgba(120,170,240,.2); padding-left:8px; }
+    .rb-t3k-caplist{ display:flex; flex-direction:column; gap:2px; max-height:230px; overflow-y:auto; }
+    .rb-t3k-capsearch input{ width:100%; box-sizing:border-box; margin:2px 0 5px; background:#0e131b;
+        border:1px solid rgba(255,255,255,.1); border-radius:7px; color:#e6edf7; font-size:11px; padding:5px 8px; }
+    .rb-t3k-cap{ display:flex; align-items:center; gap:8px; padding:3px 4px; border-radius:6px; }
+    .rb-t3k-cap:hover{ background:rgba(255,255,255,.04); }
+    .rb-t3k-cap-name{ flex:1; min-width:0; font-size:11px; color:#cdd7e6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .rb-t3k-cap-size{ flex:0 0 auto; font-size:9px; text-transform:uppercase; color:#6b7a90; }
+    /* Whole-row expander: the candidate row is clickable; the pill on the right
+       makes "there's more inside" obvious (no separate download button here). */
+    .rb-t3k-cand{ cursor:pointer; }
+    .rb-t3k-cand:hover{ background:rgba(255,255,255,.05); }
+    .rb-t3k-more{ flex:0 0 auto; font-size:11px; color:#9fb0c8; white-space:nowrap; padding:3px 10px; border-radius:999px;
+        background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); }
+    .rb-t3k-cand:hover .rb-t3k-more{ color:#fff; background:rgba(48,72,118,.7); border-color:rgba(120,170,240,.4); }
+    .rb-t3k-cand.open .rb-t3k-more{ color:#fff; background:rgba(48,72,118,.9); border-color:rgba(120,170,240,.5); }
+    .rb-t3k-link{ color:#8fb3ef; text-decoration:none; }
+    .rb-t3k-link:hover{ color:#cfe0ff; text-decoration:underline; }
+    /* Add-gear source selector: pick ONE of tone3000 / directory / downloaded. */
+    .rb-cg-srcsegs{ display:inline-flex; flex-wrap:wrap; gap:4px; margin-bottom:9px; }
+    .rb-cg-srcseg{ cursor:pointer; font-size:12px; padding:5px 11px; border-radius:8px; color:#9fb0c8;
+        background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12); transition:background .12s, color .12s; }
+    .rb-cg-srcseg:hover{ background:rgba(255,255,255,.1); color:#e6edf7; }
+    .rb-cg-srcseg.on{ background:rgba(48,72,118,.85); border-color:rgba(120,170,240,.5); color:#fff; }
+    /* Amp gain-variant rows (clean/crunch/dist → downloaded NAM). */
+    .rb-cg-varrow{ display:flex; align-items:center; gap:8px; margin-bottom:5px; }
+    .rb-cg-varlvl{ flex:0 0 46px; font-size:11px; font-weight:600; text-transform:capitalize; color:#cdd7e6; }
+    .rb-cg-varrange{ flex:0 0 74px; font-size:10px; color:#6b7a90; white-space:nowrap; }
+    .rb-cg-varsel{ flex:1; min-width:0; background:#0e131b; border:1px solid rgba(255,255,255,.12); border-radius:7px;
+        color:#e6edf7; font-size:11px; padding:5px 7px; }
     /* Gear focus (amp/pedal/rack editor open, catalog on the right): hide the
        floating "⚙ Advanced" button AND the song-tones bar. The focus bar's
        "← Room" back button sits at top:0/z-index:7, but the tonebar is at
@@ -990,6 +1081,23 @@
         <button class="rb-studio-adv-btn" onclick="rbShowTab('advanced')" title="Open the advanced node-graph chain editor">
             ⚙ Advanced
         </button>
+        <!-- Full-chain NAM loader: always docked bottom-left (with or without a song).
+             Replaces the CURRENT tone (Default / saved / song) with a single baked .nam. -->
+        <button class="rb-studio-fullchain-btn" onclick="rbStudioLoadFullChainNam()"
+                title="Replace the current tone with a full-chain .nam (amp+pedals+cab baked in one capture) — from a directory or tone3000">
+            🎛 Full-chain NAM
+        </button>
+    </div>
+
+    <!-- Full-chain NAM chooser (directory or tone3000). Overlays the whole shell. -->
+    <div id="rb-fullchain-modal" class="rb-fc-modal hidden" onclick="if(event.target===this)rbFcClose()">
+        <div class="rb-fc-card">
+            <div class="rb-fc-head">
+                <span>🎛 Load full-chain NAM</span>
+                <button class="rb-fc-x" onclick="rbFcClose()" title="Close">✕</button>
+            </div>
+            <div id="rb-fullchain-body" class="rb-fc-body"></div>
+        </div>
     </div>
 
     <!-- Songs — a bottom search dock that doesn't cover the studio room -->
