@@ -660,7 +660,7 @@ _RENAMED_VST_BUNDLES = {
     # filter / envelope
     "AutoSweep.vst3":            "Qtrix.vst3",
     "AutoFilter.vst3":           "BU-TRON III.vst3",
-    "BobFilter.vst3":            "FM105.vst3",
+    "BobFilter.vst3":            "FM101.vst3",
     "LoFiFilter.vst3":           "Lo Fi Filter.vst3",
     # eq
     "BassEQ8.vst3":              "GEB-8.vst3",
@@ -9745,9 +9745,11 @@ def setup(app, context):
         models_dir = (_config_dir / "nam_models") if _config_dir else None
         irs_dir = (_config_dir / "nam_irs") if _config_dir else None
 
-        # A full-chain NAM preset is a single baked capture: emit only its one
-        # stage and skip the cab-IR tail below (the cab is inside the capture).
-        is_full_chain = any(r[1] == _FULL_CHAIN_KIND for r in rows)
+        # A full-chain NAM is an OVERRIDE that coexists with the tone's original
+        # gear: when ENABLED (a non-bypassed full-chain row) it is the ONLY stage
+        # that plays (originals skipped, no cab-IR tail); when disabled/absent the
+        # original gear plays and the full-chain row is ignored.
+        is_full_chain = any(r[1] == _FULL_CHAIN_KIND and r[2] and not r[4] for r in rows)
 
         # Pieces that produce an audio stage (NAM or VST), ordered by signal
         # flow. IR (type 2) is handled separately at the tail of the chain.
@@ -9783,6 +9785,15 @@ def setup(app, context):
 
         audio_pieces = []
         for slot, kind, file, gear, bypassed, slot_order, vst_path, vst_format, vst_state, params_json in rows:
+            if is_full_chain:
+                # Override ON: only the enabled full-chain stage plays; skip the
+                # original gear (kept in the DB so disabling restores it).
+                if kind == _FULL_CHAIN_KIND and file and not bypassed:
+                    audio_pieces.append((_rank(slot), slot_order, "nam_full", slot,
+                                         file, gear, False, None, None, params_json))
+                continue
+            if kind == _FULL_CHAIN_KIND:
+                continue   # disabled/inactive override — ignore, original gear plays
             rec = _redirect.get(gear)
             if rec is not None:
                 if rec.get("gain_variants"):
@@ -9798,11 +9809,7 @@ def setup(app, context):
                     vst_format, vst_state, file = rec.get("vst_format") or "VST3", rec.get("vst_state"), None
                 elif rec.get("file"):
                     kind, file, vst_path = ("ir" if rec.get("kind") == "ir" else "nam"), rec["file"], None
-            if kind == _FULL_CHAIN_KIND and file:
-                audio_pieces.append((_rank(slot), slot_order, "nam_full", slot,
-                                     file, gear, bool(bypassed), None, None,
-                                     params_json))
-            elif kind == "nam" and file:
+            if kind == "nam" and file:
                 audio_pieces.append((_rank(slot), slot_order, "nam", slot,
                                      file, gear, bool(bypassed), None, None,
                                      params_json))
@@ -10048,16 +10055,20 @@ def setup(app, context):
             def _rank(slot: str) -> int:
                 return _CHAIN_NAM_ORDER.index(slot) if slot in _CHAIN_NAM_ORDER else len(_CHAIN_NAM_ORDER)
 
-            # Full-chain capture: one baked NAM stage, no cab IR at the tail.
-            tone_is_full_chain = any(r[1] == _FULL_CHAIN_KIND for r in rows)
+            # Full-chain OVERRIDE: when ENABLED (non-bypassed) it's the ONLY stage
+            # that plays (no cab IR); disabled/absent → the original gear plays.
+            tone_is_full_chain = any(r[1] == _FULL_CHAIN_KIND and r[2] and not r[4] for r in rows)
 
             audio_pieces = []
             for slot, kind, file, gear, bypassed, slot_order, vst_path, vst_format, vst_state, params_json in rows:
-                if kind == _FULL_CHAIN_KIND and file:
-                    audio_pieces.append((_rank(slot), slot_order, "nam_full", slot,
-                                         file, gear, bool(bypassed), None, None,
-                                         params_json))
-                elif kind == "nam" and file:
+                if tone_is_full_chain:
+                    if kind == _FULL_CHAIN_KIND and file and not bypassed:
+                        audio_pieces.append((_rank(slot), slot_order, "nam_full", slot,
+                                             file, gear, False, None, None, params_json))
+                    continue
+                if kind == _FULL_CHAIN_KIND:
+                    continue   # disabled override — ignore, original gear plays
+                if kind == "nam" and file:
                     audio_pieces.append((_rank(slot), slot_order, "nam", slot,
                                          file, gear, bool(bypassed), None, None,
                                          params_json))
@@ -11205,6 +11216,10 @@ def setup(app, context):
             if _dn:
                 _used_display.add(_dn.strip().lower())
 
+        # (Also subsumes the brother's a848a9ad guard: RB's INTERNAL DSP — the
+        # master "RB Final Leveler" + the generic Studio* rack utilities — ships
+        # in vst/ but has no vst_display_names entry, so the "no display name"
+        # check below already skips it. No separate _is_internal_bundle needed.)
         _bundled_cat = {"amps": "amp", "pedals": "pedal", "racks": "rack"}
         for bp in _bundled_vst_plugins():
             _stem = _vst_display_stem(bp["path"])
