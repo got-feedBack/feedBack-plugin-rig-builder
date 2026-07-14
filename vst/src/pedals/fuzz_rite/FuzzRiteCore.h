@@ -74,7 +74,6 @@ class FuzzRiteCore {
     DcBlock    dcA, dcB;
 
     float q2fb = 0.f;                 // C4 collector->collector feedback (1-sample state)
-    float env  = 0.f, envA = 0.f, envR = 0.f;
 
     void updateComponents(){
         inHP.setRC(sampleRate, 1.0e6f, 47.0e-9f);   // C1/R1 ~3 Hz — really just a DC block
@@ -88,57 +87,51 @@ class FuzzRiteCore {
         c4FB.setHz(sampleRate, 720.0f);              // C4 feedback path band-shaping
         outLP.setHz(sampleRate, 6200.0f);            // tame the harshest square-wave fizz
         outHP.setHz(sampleRate, 60.0f);
-        envA = 1.f - std::exp(-1.f/(0.0020f*sampleRate));   // 2 ms
-        envR = 1.f - std::exp(-1.f/(0.060f*sampleRate));    // 60 ms
     }
 
 public:
     void setSampleRate(float sr){ sampleRate = sr>1000.f?sr:48000.f; reset(); }
     void reset(){
         inHP.reset(); c2HP.reset(); c3HP.reset(); c4FB.reset(); outLP.reset(); outHP.reset();
-        dcA.reset(); dcB.reset(); q2fb=0.f; env=0.f; updateComponents();
+        dcA.reset(); dcB.reset(); q2fb=0.f; updateComponents();
     }
     void setDepth(float v){ depth = clamp01(v); }
     void setVolume(float v){ volume = clamp01(v); }
 
     inline float process(float in){
-        // envelope (for the decay gate / sputter)
-        const float lvl = std::fabs(in);
-        env += (lvl>env ? envA : envR) * (lvl - env);
-
         float x = inHP.process(in);
 
-        // ── Q1: grounded-emitter Si stage, HIGH gain, inverting. C4 feedback
-        //    from Q2 (scaled by DEPTH) injected at the input node = the gated,
-        //    sputtery instability. ──
-        const float in1 = x - 0.15f*depth*q2fb;
+        // ── Q1: grounded-emitter Si stage, HIGH gain, inverting. C4 couples
+        //    Q2's collector back here (fixed — the cap is always in circuit);
+        //    a SMALL low-frequency feedback term, part of the FuzzRite rasp. ──
+        const float in1 = x - 0.08f*q2fb;
         float A = -bjtStage(in1, 46.0f, -0.020f, 1.25f, 1.05f, 0.95f, 0.80f);
         A = dcA.process(A);
 
         // C2 interstage high-pass (thins into the nasal voice)
         const float aHP = c2HP.process(A);
 
-        // ── Q2: second grounded-emitter Si stage, inverting again -> its output
-        //    is OUT OF PHASE with Q1's. ──
-        const float q2in = c3HP.process(aHP);
+        // ── DEPTH (grounded-wiper divider between C2 and C3): it sets how hard
+        //    Q2 is DRIVEN, not an output blend. Low DEPTH = Q2 barely driven
+        //    (mild, thin fuzz); high DEPTH = Q2 slammed (full buzz). This is the
+        //    real topology — the old output-crossfade model had a near-total
+        //    cancellation null right around DEPTH ~0.56 (the reported "choppy"
+        //    broken sound at the default). ──
+        const float q2in = c3HP.process(aHP * (0.06f + 0.94f*depth));
         float B = -bjtStage(q2in, 40.0f, 0.016f, 1.15f, 1.02f, 0.92f, 0.78f);
         B = dcB.process(B);
-        q2fb = c4FB.process(B);                       // store C4 feedback for next sample
+        q2fb = c4FB.process(B);                       // C4 feedback into Q1 (next sample)
 
-        // ── DEPTH crossfade between Q1's out (aHP) and Q2's out (B, opposite
-        //    phase). The partial cancellation in the middle is the FuzzRite honk. ──
-        float out = aHP*(1.0f - 0.88f*depth) + B*(0.95f*depth);
+        // ── Output node = Q2's collector. Q1's (out-of-phase) signal arrives
+        //    there through C4 at a FIXED ratio set by the impedances — the
+        //    partial cancellation = the FuzzRite scoop/spit, but Q2 dominates
+        //    whenever it's driven, so there is never a null. ──
+        float out = B + 0.32f*aHP;
 
-        // Level compensation: the cancellation robs level as DEPTH climbs, so a
-        // gentle depth-tilt keeps the min/max-DEPTH loudness within a few dB
-        // (you still rebalance with VOL, but it isn't a 7 dB jump).
-        out *= 0.76f + 0.40f*depth;
-
-        // ── decay gate: the fuzz spits and dies as the note fades; stronger with
-        //    DEPTH up (the C4 loop starving). Soft knee so it sputters musically
-        //    instead of hard-dropping. ──
-        const float g = env/(env + 0.0042f);           // soft knee ~ -47 dBFS
-        out *= 1.0f - depth*0.34f*(1.0f - g);
+        // Level compensation: Q2 contributes less at low DEPTH, so tilt the
+        // makeup so the DEPTH sweep stays within a few dB (default lands ~-16
+        // dBFS RMS, in family with the other pedals).
+        out *= 0.70f - 0.24f*depth;
 
         out = outLP.process(out);
         out = outHP.process(out);

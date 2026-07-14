@@ -66,10 +66,14 @@ struct MajorCore {
         spkHP.reset(); spkLP1.reset(); spkLP2.reset(); spkPresence.reset(); }
 
     void recalc(){
-        inCoupling.set(sr, 125.0f);      // tight lows (the Major is punchy/tight, not woolly)
-        vBright.set(sr, 1, 250.0f, 40.0f, 25.0f, 1500.0f);
-        vNormal.set(sr, 1, 250.0f, 40.0f, 40.0f, 1500.0f);
-        v3.set(sr, 1, 250.0f, 40.0f, 55.0f, 1500.0f);
+        inCoupling.set(sr, 100.0f);      // tight-ish lows; the real Major is fuller than the Plexi
+        // Per the 1966 PA schematic + voltage chart: V1 cathodes are 820R fully
+        // bypassed by 250uF (warm, full gain) and the V1 plates sit at ~170-175V
+        // (not 250V) — lower plate voltage = earlier, softer compression when
+        // pushed. The V2 driver runs 470R/25uF at ~250V.
+        vBright.set(sr, 1, 175.0f, 40.0f, 8.0f, 820.0f);
+        vNormal.set(sr, 1, 175.0f, 40.0f, 8.0f, 820.0f);
+        v3.set(sr, 1, 250.0f, 40.0f, 22.0f, 470.0f);
 
         // Volume pots = the drive (non-master), BUT with a much lower gain span
         // than the Plexi (was 14) so the preamp stays clean deep into the sweep —
@@ -79,11 +83,14 @@ struct MajorCore {
         v3Drive = 1.0f + 3.5f * rbtube::PotTaper::audio(pV1 > pV2 ? pV1 : pV2, 1.30f);
         brightShelf.highShelf(sr, 2200.0f, 4.0f);
 
-        // Major tone stack (Yeh): fuller/darker than the bright Plexi — 250pF
-        // treble cap (vs the Plexi's zingy 220pF), 39k slope, 25k mid.
-        tone.setComponents(250e3, 1e6, 25e3, 39e3, 250e-12, 22e-9, 22e-9);
+        // Major tone stack (Yeh), per the 1966 PA schematic: Treble 250k/250pF,
+        // Bass 1M, Mid 25k, slope 56k (the JTM45/Bassman-lineage slope, deeper
+        // mid scoop than the Plexi's 33k — was wrongly 39k).
+        tone.setComponents(250e3, 1e6, 25e3, 56e3, 250e-12, 22e-9, 22e-9);
         tone.update(sr, pTreble, pMid, pBass);
-        presenceShelf.highShelf(sr, 3000.0f, (pPres-0.5f)*9.0f);
+        // PRESENCE: the real 5k/0.68u power-amp NFB presence is BOOST-ONLY
+        // (0 = flat, max = full sparkle), not a cut/boost around noon.
+        presenceShelf.highShelf(sr, 3000.0f, 9.0f*pPres);
 
         // 12AU7 LTP phase inverter — the real ECC82 splitter: low-mu, lots of
         // headroom, only hardens when really driven. This (not a 12AX7) is a big
@@ -97,7 +104,7 @@ struct MajorCore {
         power.set(sr, 1.35f, -50.0f, 0.045f, 40.0f, 11000.0f);
         power.out = 0.0090f;
         otVoice.set(sr, 12000.0f);              // KT88 top: tight and clear
-        outTilt.highShelf(sr, 2600.0f, 5.0f);
+        outTilt.highShelf(sr, 2600.0f, 3.0f);   // eased: presence is boost-only now and carries the sparkle
 
         // Internal 4x12 cab-sim voice (Cab Sim = 1)
         spkHP.set(sr, 95.0f);
@@ -108,7 +115,7 @@ struct MajorCore {
         // Loudness makeup: hold ~-16 dBFS RMS across the Volume sweep (it stays
         // cleaner than the Plexi, so the level rides up less with drive).
         const float drv = (pV1 > pV2 ? pV1 : pV2);
-        outLevel = std::pow(10.0f, 0.05f * (13.0f - 16.0f * drv + 7.0f * drv * drv));
+        outLevel = std::pow(10.0f, 0.05f * (17.0f - 16.0f * drv + 7.0f * drv * drv));
     }
 
     inline float process(float x){

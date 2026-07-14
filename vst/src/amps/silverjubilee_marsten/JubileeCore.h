@@ -73,8 +73,12 @@ struct JubileeCore {
         constexpr float kGSpan = 9.0f;     // GAIN-pot span into V1B (feeds the clipper)
         constexpr float kHp    = 110.0f;   // input coupling HP (firm lows, a touch looser than the JCM800)
         inCoupling.set(sr, kHp);
-        v1a.set(sr, 1, 250.0f, 40.0f, 25.0f, 1500.0f);   // V1A input 12AX7
-        v1b.set(sr, 1, 250.0f, 40.0f, 22.0f, 2700.0f);   // V1B gain-driven 12AX7 (colder bias -> crunch edge)
+        // Per the 2555 schematic: V1A cathode = R1 2K7 with C1 0.68u — a PARTIAL
+        // bypass (corner ~300 Hz): lows stay degenerated (tight) while mids/highs
+        // get the full gain = the Jubilee's bright JCM800-family edge. V1B = R3
+        // 1K5 fully bypassed by C4 10u.
+        v1a.set(sr, 1, 250.0f, 40.0f, 300.0f, 2700.0f);  // V1A input 12AX7 (2k7/0.68u partial bypass)
+        v1b.set(sr, 1, 250.0f, 40.0f, 22.0f, 1500.0f);   // V1B gain-driven 12AX7 (1k5/10u full bypass)
         v2.set(sr,  1, 250.0f, 40.0f, 55.0f, 1500.0f);   // V2A recovery 12AX7
 
         // GAIN pot: controlled drive into V1B, then a fixed boost INTO the diode
@@ -88,20 +92,30 @@ struct JubileeCore {
         clipInDrive = 1.3f + 3.0f * rbtube::PotTaper::audio(pGain, 1.30f);
         brightShelf.highShelf(sr, 2000.0f, 4.0f * (1.0f - pGain));
 
-        // ── Diode clipper (LED3/LED4 + 3x 1N4007 D1-D3): ASYMMETRIC. LEDs (~1.8V)
-        //    one polarity, a 3x silicon string (~2.1V) the other -> even harmonics,
-        //    the singing Jubilee compression. Rhythm Clip (pull) raises + symmetrises
-        //    the thresholds (D4/D5 added) for tighter, cleaner-headroom chord work. ──
+        // ── Diode clipper, per the 2555 schematic. LEAD (always in circuit):
+        //    LED3+LED4 (~3.2V) one polarity vs a 3x 1N4007 string (~1.9V) the
+        //    other — HIGH-threshold, strongly ASYMMETRIC (the open, singing lead
+        //    voice; the tubes do most of the compressing). RHYTHM CLIP (gain-pot
+        //    PULL) engages D4/D5 — a plain 1N4007 anti-parallel pair (~0.6V) via
+        //    R8/C6: a LOW-threshold symmetric clipper that dominates the node ->
+        //    MORE clipping, the compressed crunchy rhythm mode (this was
+        //    backwards before: rhythm ADDS clip, it doesn't add headroom). ──
         clip.setSpec(rbcomponents::diode1N4148());
-        if (pRhythm >= 0.5f) { clip.setSeries(3, 3); clip.setSourceR(15000.0f); }  // rhythm: tighter, symmetric, more headroom
-        else                 { clip.setSeries(2, 3); clip.setSourceR(9000.0f);  }  // lead: soft, asymmetric, compressed
+        if (pRhythm >= 0.5f) { clip.setSeries(1, 1); clip.setSourceR(6000.0f);  }  // rhythm: low-threshold pair = crunchy compression
+        else                 { clip.setSeries(5, 3); clip.setSourceR(10000.0f); }  // lead: 2xLED vs 3xSi = high-threshold, asymmetric
         clipDcBlock.set(sr, 40.0f);   // C21 1u coupling out of the clip node
 
         // LEAD MASTER (VR2): post-clipper level into V2A. Higher = more V2 drive.
         leadLevel = 0.25f + 1.35f * rbtube::PotTaper::audio(pLead, 1.15f);
+        // Rhythm mode clips at ~0.6V (vs the lead clipper's ~2-3V), so make up
+        // the post-clip level to keep both modes in the same loudness family.
+        if (pRhythm >= 0.5f) leadLevel *= 2.4f;
 
-        // Marshall tone stack (Yeh): Treble 220k/470pF, Bass 1M/22nF, Mid 22k/22nF, slope 33k.
-        tone.setComponents(220e3, 1e6, 22e3, 33e3, 470e-12, 22e-9, 22e-9);
+        // Jubilee tone stack (Yeh), per the 2555 schematic: Treble VR4 220k with
+        // C8 220pF (the brighter Plexi-style zing cap, NOT the JCM800's 470p),
+        // tandem Bass 1M, Mid VR5 100k (bigger than the JCM800's 22k = wider mid
+        // range), slope 33k, 22n/22n.
+        tone.setComponents(220e3, 1e6, 100e3, 33e3, 220e-12, 22e-9, 22e-9);
         tone.update(sr, pTreble, pMid, pBass);
         presenceShelf.highShelf(sr, 3000.0f, (pPres-0.5f)*10.0f);
 
@@ -113,7 +127,7 @@ struct JubileeCore {
         power.set(sr, 0.5f + 2.4f*vol, -38.0f, 0.06f, 30.0f, 11000.0f);
         power.out = 0.011f;
         otVoice.set(sr, 16000.0f);
-        outTilt.highShelf(sr, 2600.0f, 8.0f);
+        outTilt.highShelf(sr, 2600.0f, 6.0f);   // eased from 8: the 220p treble cap now carries the zing
 
         // Internal 4x12 cab-sim voice (Cab Sim = 1): G12 close-mic-ish — HP thump
         // ~95 Hz, two-pole cone roll-off ~4.4 kHz, a presence bump at 2.6 kHz.
