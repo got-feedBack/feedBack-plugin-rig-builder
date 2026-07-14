@@ -18145,6 +18145,7 @@ const RB_ADV_STEREO_OUT_STEMS = new Set([
     '134stereochorus',
     'analogchorus',
     'ch5',
+    'chorusensemble',   // CE-1: TRUE stereo Ensemble out (L=dry+wet, R=dry-wet)
     'digitalchorus',
     'cb3',
     'basschorus',
@@ -18802,8 +18803,9 @@ function rbAdvDeleteEdge(idx) {
     adv.edges.splice(idx, 1);
     rbAdvRenderCanvas();
     rbAdvPersist();
-    rbAdvApplyTopologyToChain();
-    rbAdvSyncAudio();
+    // Sync audio AFTER any pre/post flip reload, so the routing lands on the
+    // rebuilt slots (not the stale pre-reload ones).
+    rbAdvApplyTopologyToChain().then(() => rbAdvSyncAudio()).catch(() => rbAdvSyncAudio());
 }
 
 // ── Interaction: drag nodes, wire jacks ─────────────────────────────────
@@ -19182,10 +19184,21 @@ function rbAdvSyncPedalSlots() {
 }
 // Push graph-derived routing (pedal pre/post slots) into the chain + persist +
 // repaint the room. Call after any edge change.
-function rbAdvApplyTopologyToChain() {
+// When a pedal actually moved pre↔post, RELOAD the live monitor: the engine
+// assembles the play chain by slot type, so until a reload the audio kept the
+// OLD order (e.g. a chorus wired INTO two amps still played AFTER them — the
+// graph looked right but the sound didn't match). Rare event (only on a real
+// flip), so the reload cost is fine.
+async function rbAdvApplyTopologyToChain() {
     if (rbAdvSyncPedalSlots()) {
         try { rbStudioPersist(); } catch (_) {}
+        try { if (rbState._studioPersistPromise) await rbState._studioPersistPromise; } catch (_) {}
         try { rbRenderStudioRoom(); } catch (_) {}
+        try {
+            const v = rbState.studioView || { source: 'default' };
+            if (v.source === 'default') { if (rbState._defaultToneActive) await rbReloadDefaultTone(); }
+            else if (typeof rbStudioLoadMonitor === 'function') await rbStudioLoadMonitor();
+        } catch (_) {}
     }
 }
 
@@ -19205,8 +19218,8 @@ function rbAdvConnect(fromId, toId, fromPort) {
     // independent "where it sits" control.
     rbAdvRenderCanvas();
     rbAdvPersist();
-    rbAdvApplyTopologyToChain();
-    rbAdvSyncAudio();
+    // Sync audio AFTER any pre/post flip reload (see rbAdvApplyTopologyToChain).
+    rbAdvApplyTopologyToChain().then(() => rbAdvSyncAudio()).catch(() => rbAdvSyncAudio());
 }
 
 // Drop a palette gear onto the canvas → add a node AND materialise it into the
