@@ -2067,6 +2067,20 @@ def _gear_display_name(rs_gear: str, fallback: str = "") -> str:
             dn = disp.get(_vst_display_stem(bundled))
             if dn:
                 m[g] = dn
+        # Bundled-VST EXTRA gear (Extra_<PluginName>, surfaced by the gear
+        # catalog for unmapped bundled VSTs) isn't in the seed map — resolve its
+        # display name from the plugin's own stem so chain pieces / Advanced
+        # nodes show e.g. "Chorus Ensemble" instead of the raw
+        # "Extra_ChorusEnsemble" key.
+        try:
+            for bp in _bundled_vst_plugins():
+                key = "Extra_" + bp["name"]
+                if key not in m:
+                    dn = disp.get(_vst_display_stem(bp["path"]))
+                    if dn:
+                        m[key] = dn
+        except Exception:
+            pass
         _GEAR_DISPLAY_NAME_CACHE = m
     return _GEAR_DISPLAY_NAME_CACHE.get(rs_gear) or _cab_clone_name(rs_gear) or fallback
 

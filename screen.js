@@ -18450,6 +18450,7 @@ function rbAdvResetToChain() {
         img: rbAdvPieceImg(e.p),
         bypassed: !!e.p.bypassed, x: 0, y: 0,
         pan: (typeof e.p._pan === 'number' ? e.p._pan : 0),   // stereo pan (St-1)
+        phaseInv: !!e.p._phase_inv,                           // polarity flip (Ø)
         stereoOut: rbAdvPieceCanStereoOut(e.p, e.p.type),
     });
     const isPost = (e) => (e.p.slot || '').toLowerCase() === 'post_pedal';
@@ -18658,7 +18659,48 @@ function rbAdvLevelHtml(n) {
                        value="${db}" data-adv-level="${n.id}"
                        oninput="rbAdvOnLevelInput(${n.id}, this.value)">
                 <span class="rb-adv-pan-val" data-adv-level-val="${n.id}">${rbAdvLevelLabel(db)}</span>
+            </div>${rbAdvPhaseHtml(n)}`;
+}
+
+// Polarity flip (Ø) toggle, shown on amp nodes. Two amps whose circuits invert
+// differently (e.g. a 3-stage vs a 4-stage preamp — the Major vs the Jubilee)
+// partially CANCEL when their parallel branches merge; flipping ONE of them
+// puts the rig back in phase. Feature-detected (needs the engine's setPhase).
+function rbAdvPhaseHtml(n) {
+    if ((n.kindLabel || '').toLowerCase().indexOf('amp') !== 0) return '';
+    const audio = rbAudioApi();
+    if (!audio || typeof audio.setPhase !== 'function') return '';   // engine without polarity flip
+    const on = !!n.phaseInv;
+    return `<div class="rb-adv-node-pan" title="Phase invert (Ø) — flip this amp's polarity if two parallel amps cancel/thin out">
+                <button data-adv-phase="${n.id}" onclick="event.stopPropagation(); rbAdvTogglePhase(${n.id})"
+                        style="width:100%;font-size:10px;padding:1px 0;border-radius:4px;cursor:pointer;
+                               border:1px solid ${on ? 'rgba(196,120,255,0.9)' : 'rgba(148,163,184,0.35)'};
+                               background:${on ? 'rgba(147,51,234,0.35)' : 'rgba(30,41,59,0.6)'};
+                               color:${on ? '#e9d5ff' : '#94a3b8'}">Ø ${on ? 'INVERTED' : 'phase'}</button>
             </div>`;
+}
+
+// Ø handler: persist on the node + the durable piece, push live to the amp
+// slot (audio.setPhase), and re-label the button in place.
+async function rbAdvTogglePhase(id) {
+    const adv = rbAdvState();
+    const n = adv.nodes.find(x => x.id === id);
+    if (!n) return;
+    n.phaseInv = !n.phaseInv;
+    const chain = rbStudioCurrentChain();
+    if (typeof n.pieceIdx === 'number' && n.pieceIdx >= 0 && chain[n.pieceIdx])
+        chain[n.pieceIdx]._phase_inv = n.phaseInv;
+    rbAdvPersist();
+    try { rbStudioPersist(); } catch (_) {}
+    const audio = rbAudioApi();
+    if (audio && typeof audio.setPhase === 'function'
+        && typeof n.pieceIdx === 'number' && n.pieceIdx >= 0) {
+        try {
+            const slotId = await rbStudioChainSlotIdForPiece(audio, n.pieceIdx);
+            if (slotId != null) audio.setPhase(slotId, n.phaseInv);
+        } catch (_) {}
+    }
+    try { rbAdvRenderCanvas(); } catch (_) {}
 }
 
 // Level slider handler: persist on the node + the durable piece, push live to
@@ -19579,6 +19621,7 @@ async function rbStudioApplyStereoToEngine() {
     // gear add/reload doesn't wipe the OTHER gear's pan.
     const panByIdx = new Map();
     const gainByIdx = new Map();
+    const phaseByIdx = new Map();
     const adv = rbState._adv;
     if (adv && Array.isArray(adv.nodes)) {
         for (const n of adv.nodes) {
@@ -19590,6 +19633,10 @@ async function rbStudioApplyStereoToEngine() {
             if (typeof n.gainDb === 'number') {
                 gainByIdx.set(n.pieceIdx, n.gainDb);
                 if (chain[n.pieceIdx]) chain[n.pieceIdx]._gain_db = n.gainDb;
+            }
+            if (typeof n.phaseInv === 'boolean') {
+                phaseByIdx.set(n.pieceIdx, n.phaseInv);
+                if (chain[n.pieceIdx]) chain[n.pieceIdx]._phase_inv = n.phaseInv;
             }
         }
     }
@@ -19686,6 +19733,12 @@ async function rbStudioApplyStereoToEngine() {
             const db = gainByIdx.has(i) ? gainByIdx.get(i) : (typeof chain[i]._gain_db === 'number' ? chain[i]._gain_db : 0);
             if (db) { try { audio.setPostGain(slotId, Math.pow(10, db / 20)); } catch (_) {} }
         }
+        // Polarity flip (Ø): re-push after every reload (rebuilt slots come back
+        // non-inverted). Always pushed so toggling OFF also clears the engine.
+        if (typeof audio.setPhase === 'function') {
+            const inv = phaseByIdx.has(i) ? phaseByIdx.get(i) : !!chain[i]._phase_inv;
+            try { audio.setPhase(slotId, !!inv); } catch (_) {}
+        }
     }
     // TEMP DIAG (parallel debug): read back what the engine actually holds now.
     try {
@@ -19763,6 +19816,7 @@ window.rbAdvResetToChain = rbAdvResetToChain;   // already auto-layouts + render
 window.rbAdvDeleteNode = rbAdvDeleteNode;
 window.rbAdvToggleBypass = rbAdvToggleBypass;
 window.rbAdvToggleStereoOut = rbAdvToggleStereoOut;
+window.rbAdvTogglePhase = rbAdvTogglePhase;
 window.rbAdvEditNode = rbAdvEditNode;
 window.rbAdvCloseEditor = rbAdvCloseEditor;
 window.rbAdvZoom = rbAdvZoom;
