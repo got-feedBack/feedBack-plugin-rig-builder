@@ -11169,16 +11169,52 @@ def setup(app, context):
         # Surface OUR bundled VSTs that aren't mapped to ANY RS gear — the
         # "extra gear" (Silver Jubilee, DS-2, CE-1…) built for manual use. The
         # catalog is keyed off the RS gear map, so without this these never
-        # appear even though the .vst3 ships. Skip any whose VST is already
-        # represented (the mapped amps/pedals) to avoid duplicates; category
-        # comes from the vst/<amps|pedals|racks>/ subfolder.
-        _used_vst = {Path(bb["vst_path"]).name.lower()
-                     for bb in best.values() if bb.get("vst_path")}
+        # appear even though the .vst3 ships.
+        #
+        # Dedup by DISPLAY NAME, NOT by filename. The built .vst3 basenames don't
+        # match the seed's bundled filenames NOR the vst_display_names keys for
+        # most mapped game gear (e.g. AcousticSimulator.vst3 has stem
+        # "acousticsimulator" but its display key is "acousticemulator"), so the
+        # old filename compare let ~65 already-mapped game pedals duplicate as
+        # Extra_<Name>. A bundled plugin is a real EXTRA only when: (1) it carries
+        # its OWN display-name entry (a finished, renamed product — raw utilities
+        # like AmpEQ/NoiseGate have none), (2) its stem is not a seed-mapped
+        # bundled stem, and (3) that display name isn't already shown by a mapped
+        # gear. This never removes a normal catalog entry — it only gates what
+        # the Extra_ pass ADDS — so it can only prevent duplicates.
+        _disp_names = _load_vst_display_names() or {}
+        _seed_bundled_stems: set[str] = set()
+        _used_display: set[str] = set()
+        try:
+            for _arr in (_load_vst_seed_catalog() or {}).values():
+                if not isinstance(_arr, list):
+                    continue
+                for _e in _arr:
+                    if isinstance(_e, dict) and _e.get("bundled"):
+                        _st = _vst_display_stem(_e["bundled"])
+                        _seed_bundled_stems.add(_st)
+                        _dn = _disp_names.get(_st)
+                        if _dn:
+                            _used_display.add(_dn.strip().lower())
+        except Exception:
+            pass
+        # Belt-and-suspenders: names already shown by catalog entries (from the
+        # DB rows / rs_map), even if the seed doesn't list them.
+        for _g in list(best):
+            _dn = _gear_display_name(_g, "")
+            if _dn:
+                _used_display.add(_dn.strip().lower())
+
         _bundled_cat = {"amps": "amp", "pedals": "pedal", "racks": "rack"}
         for bp in _bundled_vst_plugins():
-            fname = Path(bp["path"]).name
-            if fname.lower() in _used_vst:
-                continue
+            _stem = _vst_display_stem(bp["path"])
+            dn = _disp_names.get(_stem)
+            if not dn:
+                continue                              # no display name → raw/mapped utility, not an EXTRA
+            if _stem in _seed_bundled_stems:
+                continue                              # this exact plugin backs a mapped game gear
+            if dn.strip().lower() in _used_display:
+                continue                              # a mapped gear already shows this name
             cat = _bundled_cat.get(Path(bp["path"]).parent.name.lower())
             if not cat:
                 continue
@@ -11191,6 +11227,7 @@ def setup(app, context):
                 "vst_path": bp["path"], "vst_format": bp["format"],
                 "vst_state": None, "_synth_unused": True,
             }
+            _used_display.add(dn.strip().lower())     # don't surface the same name twice
 
         # Surface EVERY cab WE model (real_cab_catalog.json — the 58 curated
         # cabs) even if no downloaded song uses it, so the Cabs catalog shows
