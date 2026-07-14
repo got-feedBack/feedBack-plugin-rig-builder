@@ -3744,6 +3744,20 @@ def _gear_category(rs_gear: str) -> str:
     info = _load_rs_to_real().get(rs_gear) or {}
     if info.get("category"):
         return info["category"]
+    # Bundled-VST EXTRA gear ("Extra_<PluginName>", surfaced by the gear catalog
+    # for unmapped bundled VSTs) is NOT in rs_to_real — its category is its
+    # vst/<amps|pedals|racks>/ folder. Without this it fell through to the
+    # 'amp' catch-all below, so e.g. the CE-1 chorus LOADED as an amp: the
+    # room stacked it on a cab, the Advanced graph labelled it AMP, and the
+    # parallel-branch routing counted it as a third amp.
+    if rs_gear.startswith("Extra_"):
+        try:
+            for bp in _bundled_vst_plugins():
+                if ("Extra_" + bp["name"]) == rs_gear:
+                    return {"amps": "amp", "pedals": "pedal", "racks": "rack"}.get(
+                        Path(bp["path"]).parent.name.lower(), "pedal")
+        except Exception:
+            pass
     name = rs_gear.lower()
     if "cab" in name:
         return "cab"

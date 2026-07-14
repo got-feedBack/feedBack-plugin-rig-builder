@@ -18547,10 +18547,13 @@ function rbAdvPaletteRender() {
     const host = document.getElementById('rb-adv-palette-list');
     if (!host) return;
     const cat = rbAdvState().palette;
-    // Only one cab is allowed, but picking another one now REPLACES it in place
-    // (rbAdvAddGearNode → rbAdvReplaceCabNode), so the palette stays live — just
-    // hint that a pick will swap the current cab rather than add a second.
-    const cabSwap = rbAdvGearIsCab(cat, '') && rbAdvHasCab();
+    // Cab hint: with ONE amp a pick REPLACES the cab in place; with a parallel
+    // rig (2+ amps) cabs can be added up to the amp count (one per amp), and
+    // only picks past that swap the last one.
+    const _advN = rbAdvState().nodes || [];
+    const _ampN = _advN.filter(n => n.kind === 'gear' && (n.kindLabel || '').toLowerCase() === 'amp').length;
+    const _cabN = _advN.filter(rbAdvNodeIsCab).length;
+    const cabSwap = rbAdvGearIsCab(cat, '') && _cabN > 0 && (_ampN < 2 || _cabN >= _ampN);
     const q = rbNorm(((document.getElementById('rb-adv-pal-search') || {}).value || '').trim());
     const items = ((rbState.gearCatalog && rbState.gearCatalog[cat]) || [])
         .filter(g => !q || rbNorm(`${g.name || ''} ${g.rs_gear || ''} ${g.real_name || ''}`).includes(q));
@@ -19387,11 +19390,17 @@ function rbAdvSyncFromChain() {
 function rbAdvAddGearNode(data, x, y) {
     if (!data || !data.rs_gear) return null;
     const adv = rbAdvState();
-    // Only ONE cab allowed (all amps share it) — so picking a cab when one is
-    // already on the graph REPLACES it in place instead of being rejected.
+    // Cab rule: with a SINGLE amp all gear shares one cab, so picking another
+    // cab REPLACES it in place. With a PARALLEL rig (2+ amps) each amp may get
+    // its OWN cab (wire amp→cab and the cab rides that amp's branch) — allow
+    // adding cabs up to the amp count; past that, replace the last one.
     if (rbAdvGearIsCab(data.cat, data.rs_gear)) {
-        const existing = adv.nodes.find(rbAdvNodeIsCab);
-        if (existing) { rbAdvReplaceCabNode(existing, data).catch(() => {}); return existing; }
+        const ampCount = adv.nodes.filter(n => n.kind === 'gear' && (n.kindLabel || '').toLowerCase() === 'amp').length;
+        const cabNodes = adv.nodes.filter(rbAdvNodeIsCab);
+        if (cabNodes.length && (ampCount < 2 || cabNodes.length >= ampCount)) {
+            const existing = cabNodes[cabNodes.length - 1];
+            rbAdvReplaceCabNode(existing, data).catch(() => {}); return existing;
+        }
     }
     const id = Math.max(0, ...adv.nodes.map(n => n.id)) + 1;
     // Resolve the gear's VST face from the catalog (copyright-free) — never the
@@ -19613,6 +19622,50 @@ async function rbStudioApplyStereoToEngine() {
         const nxt = (k >= 0) ? engineSlots[k + 1] : null;
         if (nxt && nxt.id != null && String(nxt.path || '').indexOf('_rb_unit_impulse') !== -1)
             branchOfSlot.set(nxt.id, b);
+    }
+    // Per-amp cabs (St-3): when the graph wires a branched amp into its OWN cab,
+    // the cab joins that amp's branch — each side keeps its own speaker (the
+    // classic stereo rig: chorus L→amp1→cab1, R→amp2→cab2). A cab fed by BOTH
+    // amps stays shared on the trunk (merged bus) as before. Guarded: the
+    // engine's single branch region must stay well-formed — every slot between
+    // the first and last claimed slot must itself be claimed, or SignalChain
+    // silently falls back to a fully serial chain — so if claiming the cabs
+    // would sandwich an unclaimed trunk slot (e.g. a post pedal between the
+    // amps and the cabs), the cab claims are dropped and the cabs stay shared.
+    if (hasBranch && branchOfIdx.size >= 2 && adv && Array.isArray(adv.nodes) && Array.isArray(adv.edges)) {
+        const nodeById = new Map(adv.nodes.map(n => [n.id, n]));
+        const cabFeeds = new Map();   // cab pieceIdx -> Set(branch ids feeding it)
+        for (const e of adv.edges) {
+            const from = nodeById.get(e.from), to = nodeById.get(e.to);
+            if (!from || !to || from.kind !== 'gear' || to.kind !== 'gear') continue;
+            if (typeof from.pieceIdx !== 'number' || !branchOfIdx.has(from.pieceIdx)) continue;
+            if (typeof to.pieceIdx !== 'number' || to.pieceIdx < 0) continue;
+            const tp = chain[to.pieceIdx];
+            const tcat = ((tp && (tp.rs_category || tp.category)) || '').toLowerCase();
+            if (tcat !== 'cab') continue;
+            if (!cabFeeds.has(to.pieceIdx)) cabFeeds.set(to.pieceIdx, new Set());
+            cabFeeds.get(to.pieceIdx).add(branchOfIdx.get(from.pieceIdx));
+        }
+        const cabClaims = [];
+        for (const [cabIdx, feeds] of cabFeeds) {
+            if (feeds.size !== 1) continue;               // fed by both amps → shared/trunk
+            let sid = null;
+            try { sid = await rbStudioChainSlotIdForPiece(audio, cabIdx); } catch (_) {}
+            if (sid != null) cabClaims.push([sid, feeds.values().next().value]);
+        }
+        if (cabClaims.length) {
+            const trial = new Map(branchOfSlot);
+            for (const [sid, b] of cabClaims) trial.set(sid, b);
+            const ids = engineSlots.map(s => s && s.id).filter(id => id != null);
+            const pos = ids.map((id, k) => trial.has(id) ? k : -1).filter(k => k >= 0);
+            let ok = pos.length > 0;
+            if (ok) {
+                const lo = Math.min(...pos), hi = Math.max(...pos);
+                for (let k = lo; k <= hi && ok; k++) if (!trial.has(ids[k])) ok = false;
+            }
+            if (ok) for (const [sid, b] of cabClaims) branchOfSlot.set(sid, b);
+            else rbDebugLog('per-amp cabs skipped: an unclaimed trunk slot sits inside the branch region');
+        }
     }
     if (hasBranch) {
         for (const s of engineSlots) {
