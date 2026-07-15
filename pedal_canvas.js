@@ -7356,6 +7356,23 @@
     const spec = P[stem]; if (!spec) return false;
     drawSpec(canvas, spec, values); return true;
   }
+  // Values-only redraw for a spec OBJECT (custom user gear from specFromLayout).
+  // Mirrors render() but for the custom path — repaints the knob/fader positions
+  // WITHOUT re-attaching, so a live-sync poll can refresh a custom face without
+  // stacking a fresh set of drag listeners on every tick.
+  function renderSpec(canvas, spec, values) {
+    if (!spec || typeof spec !== 'object') return false;
+    drawSpec(canvas, spec, values); return true;
+  }
+  // Values-only repaint using the spec stashed by attach() — works for registry
+  // stems, generic buildGeneric() panels, AND custom layouts alike. The reverse
+  // param-sync poll uses this so it can refresh a generic VST panel (no P[stem])
+  // when the user moves a knob in the plugin's own native window.
+  function redraw(canvas, values) {
+    const spec = canvas && canvas.__rbSpec;
+    if (!spec) return false;
+    drawSpec(canvas, spec, values); return true;
+  }
   function attach(canvas, stem, opts) {
     opts = opts || {};
     // `stem` may be a spec OBJECT (custom user gear built via specFromLayout)
@@ -7364,6 +7381,11 @@
       ? stem
       : (P[stem] || (opts.params ? buildGeneric(stem, opts.params) : null));
     if (!spec) return false;
+    // Stash the RESOLVED spec on the element so a values-only repaint (redraw())
+    // works for ANY face — registry stem, generic buildGeneric() panel, or custom
+    // layout — without re-resolving or re-attaching. The reverse param-sync poll
+    // relies on this to refresh generic VST panels (which have no P[stem]).
+    canvas.__rbSpec = spec;
     const values = opts.values || {};
     drawSpec(canvas, spec, values);
     if (!opts.interactive) return true;
@@ -8142,7 +8164,7 @@
   function layoutDataURL(layout, values) { return dataURLSpec(specFromLayout(layout), values); }
 
   window.RBPedalCanvas = {
-    ready, has: s => !!P[s], attach, render, dataURL, specs: P,
+    ready, has: s => !!P[s], attach, render, renderSpec, redraw, dataURL, specs: P,
     // custom-gear API
     defaultFace, smartLayout, normalizeLayout, specFromLayout, attachSpec, dataURLSpec,
     layoutDataURL, hexToRgb, rgbToHex, CTRL_KINDS: RB_CTRL_KINDS, templates,

@@ -618,6 +618,19 @@
     .rb-focus-bar2 .rb-focus-remove{ background:rgba(200,70,70,.16); border-color:rgba(220,95,95,.42); color:#f4d4d4; }
     .rb-focus-bar2 .rb-focus-remove:hover{ background:rgba(212,72,72,.30); color:#fff; }
 
+    /* "Open the plugin's real window" chip, top-centre of the focused gear. Uses
+       the SAME visual language as .rb-studio-adv-btn so it reads as part of the
+       game's UI, not a bolted-on overlay. Only shown for gear ADDED as a VST
+       (a plugin the user brought in — not the game's bundled gear). */
+    .rb-studio-realui-btn{ position:absolute; top:14px; left:50%; transform:translateX(-50%);
+        z-index:21; cursor:pointer; white-space:nowrap;
+        padding:7px 13px; border-radius:9px; font-size:13px; font-weight:500; color:#cfe0ff;
+        background:rgba(30,46,76,.62); border:1px solid rgba(120,170,240,.34);
+        box-shadow:0 6px 18px rgba(0,0,0,.4); backdrop-filter:blur(6px);
+        transition:background .15s, color .15s, transform .12s; }
+    .rb-studio-realui-btn:hover{ background:rgba(48,72,118,.8); color:#fff; transform:translateX(-50%) translateY(-1px); }
+    #rb-stage-wrap.rb-songbar-on .rb-studio-realui-btn{ top:58px; }
+
     /* amp face = the VST's own canvas UI render, sitting on the cab */
     .rb-amp-face{ border-radius:8px 8px 4px 4px; overflow:hidden;
         border:1px solid rgba(255,255,255,.09); background:#0e0f12;
@@ -1007,6 +1020,13 @@
     .rb-adv-editor-close{ width:24px; height:24px; border-radius:6px; border:1px solid rgba(255,255,255,.15);
         background:rgba(255,255,255,.06); color:#cfd8e6; cursor:pointer; font-size:12px; line-height:1; }
     .rb-adv-editor-close:hover{ background:rgba(255,255,255,.14); }
+    /* "🪟 Plugin window" chip in the node-editor card bar — matches the bar's
+       blue-glass language; margin-left:auto groups it with the ✕ on the right. */
+    .rb-adv-editor-realui{ margin-left:auto; padding:5px 11px; border-radius:7px;
+        border:1px solid rgba(120,170,240,.34); background:rgba(30,46,76,.62); color:#cfe0ff;
+        cursor:pointer; font-size:12px; line-height:1; white-space:nowrap;
+        transition:background .15s, color .15s; }
+    .rb-adv-editor-realui:hover{ background:rgba(48,72,118,.8); color:#fff; }
     .rb-adv-editor-face{ padding:14px; }
     /* The card width is sized per-gear in rbAdvEditNode (height-aware) so the
        canvas opens at its own proportions, not the amp's full face. Safety cap so

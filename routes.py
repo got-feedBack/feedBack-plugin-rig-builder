@@ -11173,6 +11173,16 @@ def setup(app, context):
             cat = _bundled_cat.get(Path(bp["path"]).parent.name.lower())
             if not cat:
                 continue
+            # Never surface unmapped bundled PEDALS as "Extra_…" entries. vst/pedals/
+            # ships old camelCase copies (BassEmulator.vst3) alongside the renamed
+            # spaced bundles ("Bass Emulator.vst3"); the leftover copies aren't
+            # referenced by any mapped gear, so they slipped through the exact-name
+            # dedup above and showed up either as raw "Extra_<name>" rows or — when a
+            # vst_display_names.json alias collided with a real pedal — as visual
+            # duplicates (Bass Emulator, Bass Wah, Big Buzz…). Real pedals always
+            # come from the RS gear map; anything left over here is noise.
+            if cat == "pedal":
+                continue
             key = "Extra_" + bp["name"]
             if key in best:
                 continue
