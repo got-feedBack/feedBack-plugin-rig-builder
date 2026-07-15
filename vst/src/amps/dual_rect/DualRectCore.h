@@ -70,7 +70,11 @@ struct DualRectCore {
             g1 = 0.3f + 1.8f*gA; g2 = 0.4f + 1.2f*gA; g3 = 1.0f; g4 = 1.0f; nStages = 2;
             modeGain = 1.0f + 0.8f*pMode;
         } else if (ch == 1) {     // ORANGE crunch (g4 = unity recovery)
-            g1 = 0.18f + 2.2f*gA; g2 = 0.22f + 1.7f*gA; g3 = 0.26f + 1.3f*gA; g4 = 1.0f; nStages = 3;   // pass3: bases+scale lowered, crunch distorted too early
+            // pass6 (2026-07-15): bases raised ~2x. The old 0.18/0.22/0.26 bases
+            // multiplied to -40 dB at Gain 0 — beyond the app's +24 dB loudness
+            // trim, so low-Gain tones just went QUIET. Gain 0 is now an audible
+            // clean (~-22 dB cascade floor); the knob still spans to full crunch.
+            g1 = 0.36f + 2.1f*gA; g2 = 0.42f + 1.6f*gA; g3 = 0.50f + 1.2f*gA; g4 = 1.0f; nStages = 3;
             modeGain = 0.7f + 0.3f*pMode;
         } else {                  // RED — THE heavy-metal channel: deep 4-stage cascade (drives v4 too)
             // pass5: more metal gain from ~2 o'clock up. The gain knob is
@@ -78,8 +82,12 @@ struct DualRectCore {
             // the top felt weak for modern metal. Raised the per-stage scale
             // (5/4/3/4 -> 7/5.4/4/5.2) so the upper knob range roars, while the
             // low bases keep low settings ~unchanged (calibrated clean-ish edge).
-            g1 = 0.2f + 7.0f*gA; g2 = 0.22f + 5.4f*gA; g3 = 0.28f + 4.0f*gA;
-            g4 = 0.45f + 5.2f*gA; nStages = 3;   // 4th driven stage = the Recto sustain/aggression (real = 5 stages)
+            // pass6 (2026-07-15): bases raised ~2x (0.2/0.22/0.28/0.45 ->
+            // 0.40/0.44/0.55/0.70). The old floor multiplied to -45 dB at Gain 0
+            // (near-silence + gating under the cold power bias) and the model
+            // trim clamps at +24 dB — low-Gain Recto tones collapsed in volume.
+            g1 = 0.40f + 6.9f*gA; g2 = 0.44f + 5.3f*gA; g3 = 0.55f + 3.9f*gA;
+            g4 = 0.70f + 5.0f*gA; nStages = 3;   // 4th driven stage = the Recto sustain/aggression (real = 5 stages)
             modeGain = 0.8f + 0.25f*pMode;       // Raw floor up 0.7->0.8 (more beef even loose), Modern hottest
         }
         g1 *= modeGain; g2 *= modeGain; g3 *= modeGain; g4 *= modeGain;
@@ -104,8 +112,27 @@ struct DualRectCore {
 
         // Makeup decreases with gain so the Gain knob is drive, not volume. The
         // master Output sets level on top.
-        const float base = (ch==0)?13.5f : (ch==1)?13.0f : 12.5f;
-        outLevel = (0.4f + pOutput) * std::pow(10.0f, 0.05f * (base - 7.0f * pGain));
+        // pass6 (2026-07-15): measured 11-point loudness tables for Orange/Red
+        // (Brit DI). The old line left Gain 0 ~-40 dBFS — past the app's +24 dB
+        // loudness-trim clamp (low-Gain Recto tones collapsed in volume) — and a
+        // straight deeper line overshot mid-gain into the output limiter. The
+        // table holds the driven half at ~-16 dBFS with the CLEAN end
+        // PEAK-matched (<= -3.5 dBFS, ramp-in from ~-25): everything lands
+        // within the trim's reach of the -12 LUFS target. Clean post-DSP gain —
+        // distortion points untouched.
+        static const float kRedDb[11] = {
+            28.1f, 25.5f, 22.9f, 17.5f, 13.5f, 7.3f,
+            3.8f, 2.6f, 2.1f, 1.9f, 1.7f };
+        float lvlDb;
+        if (ch == 0)      lvlDb = 13.5f - 7.0f * pGain;
+        else if (ch == 1) lvlDb = 25.0f - 19.0f * pGain;   // Orange (re-fit below)
+        else {
+            const float p = 10.0f * (pGain < 0.0f ? 0.0f : (pGain > 1.0f ? 1.0f : pGain));
+            const int i = (int)p;
+            lvlDb = (i >= 10) ? kRedDb[10]
+                              : kRedDb[i] + (kRedDb[i + 1] - kRedDb[i]) * (p - (float)i);
+        }
+        outLevel = (0.4f + pOutput) * std::pow(10.0f, 0.05f * lvlDb);
     }
 
     inline float process(float x){
