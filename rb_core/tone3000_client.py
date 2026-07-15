@@ -316,17 +316,29 @@ class Tone3000Client:
                 (url,),
             ).fetchone()
         if row is not None and now - row[0] < _CACHE_TTL_SECONDS:
-            return json.loads(row[1])
+            cached = json.loads(row[1])
+            # Ignore a cached `null` and re-fetch. `_http_get` returns None on a
+            # transient failure (e.g. the access token lapsed mid-batch before a
+            # refresh, giving a one-off 401/403), and an earlier version cached
+            # that None for the 7-day TTL — poisoning the tone so every later run
+            # returned the empty result and the capture reported "no models for
+            # this tone" even after the token recovered. Treating a cached null
+            # as a miss heals those entries on the next run.
+            if cached is not None:
+                return cached
 
         data = self._http_get(url)
-        payload = json.dumps(data)
-        with self._lock:
-            self._conn.execute(
-                "INSERT OR REPLACE INTO search_cache (url, fetched_at, response_json) "
-                "VALUES (?, ?, ?)",
-                (url, now, payload),
-            )
-            self._conn.commit()
+        # Never cache a failure. Only a real payload is worth persisting; caching
+        # a None would re-introduce the week-long poisoning described above.
+        if data is not None:
+            payload = json.dumps(data)
+            with self._lock:
+                self._conn.execute(
+                    "INSERT OR REPLACE INTO search_cache (url, fetched_at, response_json) "
+                    "VALUES (?, ?, ?)",
+                    (url, now, payload),
+                )
+                self._conn.commit()
         return data
 
     # ── Public API ──────────────────────────────────────────────────
