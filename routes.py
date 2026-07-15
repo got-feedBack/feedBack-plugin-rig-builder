@@ -6507,46 +6507,81 @@ def _download_tone3000_gears_worker(amps):
     try:
         items = _load_custom_gear()
         by_id = {g.get("rs_gear"): g for g in items}
-        created = 0
+
+        # Download ONE variant. Returns the gain_variants entry, or None on any
+        # failure (the reason is on _t3k_dl_error). No counter side-effects —
+        # the caller tallies — so both passes below can reuse it.
+        def _try_variant(rs_gear, level, spec):
+            with _preload_lock:
+                _preload_state["current"] = f"{_gear_display_name(rs_gear, rs_gear)} / {level}"
+            _t3k_rate_gate()
+            try:
+                res = _download_candidate(
+                    tone3000_id=int(spec["tone3000_id"]), is_ir=False,
+                    rs_gear=rs_gear, settings=settings,
+                    model_id_override=spec.get("model_id"),
+                    model_name_override=spec.get("model_name"))
+            except Exception as e:      # noqa: BLE001
+                with _preload_lock:
+                    _preload_state["errors"].append(f"{rs_gear}/{level}: {e}")
+                return None
+            if not res:
+                return None
+            _kind, _file = res
+            rng = spec.get("rs_gain_range")
+            if not (isinstance(rng, (list, tuple)) and len(rng) == 2):
+                rng = _DEFAULT_GAIN_RANGES.get(level)
+            return {
+                "file": _file,
+                "rs_gain_range": [float(rng[0]), float(rng[1])] if rng else None,
+                "notes": (spec.get("notes") or "").strip() or None,
+            }
+
+        # ── Pass 1: attempt every variant (fail-fast — no long per-call
+        #    backoff, so the batch never stalls). Collect the stragglers. ──
+        amp_variants: dict[str, dict[str, dict]] = {}   # rs_gear -> {level -> variant}
+        amp_info: dict[str, dict] = {}
+        retry_queue: list[tuple] = []                   # (rs_gear, level, spec) failed pass 1
         for rs_gear, info, specs in amps:
-            variants_out: dict[str, dict] = {}
+            amp_info[rs_gear] = info
             for level, spec in specs.items():
+                v = _try_variant(rs_gear, level, spec)
                 with _preload_lock:
-                    _preload_state["current"] = f"{_gear_display_name(rs_gear, rs_gear)} / {level}"
-                _t3k_rate_gate()
-                try:
-                    res = _download_candidate(
-                        tone3000_id=int(spec["tone3000_id"]), is_ir=False,
-                        rs_gear=rs_gear, settings=settings,
-                        model_id_override=spec.get("model_id"),
-                        model_name_override=spec.get("model_name"))
-                except Exception as e:      # noqa: BLE001
-                    res = None
-                    with _preload_lock:
-                        _preload_state["errors"].append(f"{rs_gear}/{level}: {e}")
+                    if v is not None:
+                        _preload_state["downloaded"] += 1
+                    _preload_state["done"] += 1
+                if v is not None:
+                    amp_variants.setdefault(rs_gear, {})[level] = v
+                else:
+                    # Defer the "failed" tally: a capture that 403s at the
+                    # throttle peak (~50 captures in) almost always succeeds
+                    # once the batch stops hammering the API.
+                    retry_queue.append((rs_gear, level, spec))
+
+        # ── Pass 2: after a cooldown (the throttle window clears once the batch
+        #    load drops), retry the stragglers ONCE. This is what finally lands
+        #    captures like GB100 that always sit right at the throttle peak. ──
+        if retry_queue:
+            with _preload_lock:
+                _preload_state["current"] = f"(cooling down, retrying {len(retry_queue)} throttled capture(s)…)"
+            time.sleep(20)
+            for rs_gear, level, spec in retry_queue:
+                v = _try_variant(rs_gear, level, spec)
                 with _preload_lock:
-                    if res:
+                    if v is not None:
                         _preload_state["downloaded"] += 1
                     else:
-                        # Surface the real reason (rate-limited / 404 / no
-                        # capture) instead of a flat "unavailable" so a
-                        # transient rate-limit is distinguishable from a
-                        # capture that's genuinely gone.
                         reason = getattr(_t3k_dl_error, "reason", None) or "unavailable"
                         _preload_state["failed"].append(f"{rs_gear}/{level} — {reason}")
-                    _preload_state["done"] += 1
-                if res:
-                    _kind, _file = res
-                    rng = spec.get("rs_gain_range")
-                    if not (isinstance(rng, (list, tuple)) and len(rng) == 2):
-                        rng = _DEFAULT_GAIN_RANGES.get(level)
-                    variants_out[level] = {
-                        "file": _file,
-                        "rs_gain_range": [float(rng[0]), float(rng[1])] if rng else None,
-                        "notes": (spec.get("notes") or "").strip() or None,
-                    }
+                if v is not None:
+                    amp_variants.setdefault(rs_gear, {})[level] = v
+
+        # ── Build + save one custom gear per amp that got any variant. ──
+        created = 0
+        for rs_gear, variants_out in amp_variants.items():
             if not variants_out:
                 continue
+            info = amp_info.get(rs_gear, {})
             gear_id = "custom_auto_" + _safe_filename(rs_gear)
             is_bass = rs_gear.startswith("Bass_") or rs_gear.startswith("DI_Amp")
             default_file = (variants_out.get("clean") or next(iter(variants_out.values()))).get("file")
