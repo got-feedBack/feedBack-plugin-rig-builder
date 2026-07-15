@@ -1,9 +1,9 @@
 {
  "_meta": {
   "description": "Seed catalog: the game gear type → recommended VST3/AU plugins. Free plugins only. Used by /vst/suggest endpoint and the per-piece VST panel hint.",
-  "version": 7,
-  "updated": "2026-06-23",
-  "notes": "v7: bundled clones only; adds Electar Model M and Electric Hawaiian aliases to EpicallCentura. Every gear resolves to its Rig Builder bundled VST (or NAM if none). No external/third-party plugins."
+  "version": 8,
+  "updated": "2026-07-14",
+  "notes": "v7: bundled clones only; adds Electar Model M and Electric Hawaiian aliases to EpicallCentura. Every gear resolves to its Rig Builder bundled VST (or NAM if none). No external/third-party plugins. | v8: EXTRA gear promoted to first-class entries (CE-1, DS-2, WH10, FuzzRite, MicroAmp, Silver Jubilee, Major, VH4) — keys keep the Extra_ form for saved-tone compatibility."
  },
  "Pedal_AcousticEmulator": [
   {
@@ -1797,6 +1797,94 @@
    "bundled": "vst/pedals/NYRBS103.vst3",
    "free": true,
    "notes": "Bundled original monophonic bass synth (MVP): pitch-tracking oscillator + square sub-octave through a resonant 4-pole low-pass with a per-note filter envelope. Maps Mix/Sub/Cutoff/Resonance/Envelope/Shape/Level."
+  }
+ ],
+ "Extra_ChorusEnsemble": [
+  {
+   "name": "ChorusEnsemble",
+   "manufacturer": "Rig Builder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/pedals/ChorusEnsemble.vst3",
+   "notes": "Boss CE-1 Chorus Ensemble (parody CHIEF) — MN3002 BBD stereo chorus/vibrato, built from the service notes."
+  }
+ ],
+ "Extra_TurboDistortion": [
+  {
+   "name": "TurboDistortion",
+   "manufacturer": "Rig Builder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/pedals/TurboDistortion.vst3",
+   "notes": "Boss DS-2 Turbo Distortion (parody CHIEF) — silicon hard-clip with Turbo I/II modes."
+  }
+ ],
+ "Extra_WH10Wah": [
+  {
+   "name": "WH10Wah",
+   "manufacturer": "Rig Builder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/pedals/WH10Wah.vst3",
+   "notes": "Ibanez WH10 (parody Ibañez) — active NJM4558 op-amp wah from the factory schematic."
+  }
+ ],
+ "Extra_FuzzRite": [
+  {
+   "name": "FuzzRite",
+   "manufacturer": "Rig Builder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/pedals/FuzzRite.vst3",
+   "notes": "Mosrite FuzzRite (parody nosrite) — two grounded-emitter Si stages, DEPTH phase-blend."
+  }
+ ],
+ "Extra_MicroAmp": [
+  {
+   "name": "MicroAmp",
+   "manufacturer": "Rig Builder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/pedals/MicroAmp.vst3",
+   "notes": "MXR Micro Amp M133 (parody NYR) — TL061 non-inverting clean boost, ~unity..+26 dB."
+  }
+ ],
+ "Extra_MarstenSilverJubilee": [
+  {
+   "name": "MarstenSilverJubilee",
+   "manufacturer": "Rig Builder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/MarstenSilverJubilee.vst3",
+   "notes": "Marshall 2555 Silver Jubilee (parody Marsten) — diode-clipper preamp + 4x EL34, from the 2555 schematic."
+  }
+ ],
+ "Extra_MarstenMajor": [
+  {
+   "name": "MarstenMajor",
+   "manufacturer": "Rig Builder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/MarstenMajor.vst3",
+   "notes": "Marshall Major 200W 'The Pig' (parody Marsten) — 4x KT88 + 12AU7 PI, huge clean headroom."
+  }
+ ],
+ "Extra_DeezelVH4": [
+  {
+   "name": "DeezelVH4",
+   "manufacturer": "Rig Builder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/DeezelVH4.vst3",
+   "notes": "Diezel VH4 Channel 3 'Mega' (parody Deezel) — tight 12AX7 high-gain cascade + 4x EL34."
   }
  ]
 }

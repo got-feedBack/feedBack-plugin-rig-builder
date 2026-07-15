@@ -1,0 +1,55 @@
+{
+  "_meta": {
+    "description": "First-class catalog entries for OUR OWN gear that has no game codename (built from schematics for manual use, not mapped to any song). Merged into the rs_to_real map by _load_rs_to_real(), so these flow through every normal path (category, display name, picker, catalog) with NO special-casing. Keys keep the historical Extra_<PluginName> form because users' saved tones already reference them in preset_pieces.",
+    "version": 1,
+    "updated": "2026-07-14"
+  },
+  "Extra_ChorusEnsemble": {
+    "category": "pedal",
+    "make": "CHIEF",
+    "model": "CE-1",
+    "name": "Chorus Ensemble"
+  },
+  "Extra_TurboDistortion": {
+    "category": "pedal",
+    "make": "CHIEF",
+    "model": "DS-2",
+    "name": "Turbo Distortion"
+  },
+  "Extra_WH10Wah": {
+    "category": "pedal",
+    "make": "Ibañez",
+    "model": "WH10",
+    "name": "Ibañez WH10"
+  },
+  "Extra_FuzzRite": {
+    "category": "pedal",
+    "make": "nosrite",
+    "model": "Fuzz Rite",
+    "name": "Fuzz Rite"
+  },
+  "Extra_MicroAmp": {
+    "category": "pedal",
+    "make": "NYR",
+    "model": "Micro Amp",
+    "name": "NYR Micro Amp"
+  },
+  "Extra_MarstenSilverJubilee": {
+    "category": "amp",
+    "make": "Marsten",
+    "model": "Silver Jubilee 2555",
+    "name": "Marsten Silver Jubilee"
+  },
+  "Extra_MarstenMajor": {
+    "category": "amp",
+    "make": "Marsten",
+    "model": "Major 200W",
+    "name": "Marsten Major"
+  },
+  "Extra_DeezelVH4": {
+    "category": "amp",
+    "make": "Deezel",
+    "model": "VH4",
+    "name": "Deezel VH4"
+  }
+}

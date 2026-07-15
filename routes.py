@@ -1619,11 +1619,32 @@ def _strip_meta_keys(raw: dict) -> dict:
             if not k.startswith("_") and isinstance(v, dict)}
 
 
+_RS_TO_REAL_MERGED: tuple | None = None   # (base_ref, extras_ref, merged)
+
+
 def _load_rs_to_real() -> dict:
     """Load (and cache) the rs_to_real.json map (ships pre-generated with
-    the plugin in data/). Returns an empty dict if that bundled map is
-    missing — the UI surfaces that case as a "needs setup" banner."""
-    return _load_cached_json("rs_to_real.json")
+    the plugin in data/), MERGED with extra_gear.json — the first-class
+    catalog entries for our own gear that has no game codename (CE-1, WH10,
+    Marsten Major…). Merging here makes that gear ordinary everywhere
+    (category, display name, catalog, picker) with no special-casing; the
+    Extra_<Name> keys are kept because saved tones already reference them.
+    Returns an empty dict if the bundled map is missing — the UI surfaces
+    that case as a "needs setup" banner."""
+    global _RS_TO_REAL_MERGED
+    base = _load_cached_json("rs_to_real.json")
+    extras = _load_cached_json("extra_gear.json")
+    if not extras:
+        return base
+    cached = _RS_TO_REAL_MERGED
+    if cached is not None and cached[0] is base and cached[1] is extras:
+        return cached[2]
+    merged = dict(base or {})
+    for k, v in extras.items():
+        if not k.startswith("_") and isinstance(v, dict) and k not in merged:
+            merged[k] = v
+    _RS_TO_REAL_MERGED = (base, extras, merged)
+    return merged
 
 
 def _invalidate_rs_to_real() -> None:
@@ -2067,20 +2088,8 @@ def _gear_display_name(rs_gear: str, fallback: str = "") -> str:
             dn = disp.get(_vst_display_stem(bundled))
             if dn:
                 m[g] = dn
-        # Bundled-VST EXTRA gear (Extra_<PluginName>, surfaced by the gear
-        # catalog for unmapped bundled VSTs) isn't in the seed map — resolve its
-        # display name from the plugin's own stem so chain pieces / Advanced
-        # nodes show e.g. "Chorus Ensemble" instead of the raw
-        # "Extra_ChorusEnsemble" key.
-        try:
-            for bp in _bundled_vst_plugins():
-                key = "Extra_" + bp["name"]
-                if key not in m:
-                    dn = disp.get(_vst_display_stem(bp["path"]))
-                    if dn:
-                        m[key] = dn
-        except Exception:
-            pass
+        # (Our own no-codename gear — Extra_<Name> — now ships seed entries in
+        # rs_gear_to_vst.json, so the loop above resolves its display name.)
         _GEAR_DISPLAY_NAME_CACHE = m
     return _GEAR_DISPLAY_NAME_CACHE.get(rs_gear) or _cab_clone_name(rs_gear) or fallback
 
@@ -3758,20 +3767,8 @@ def _gear_category(rs_gear: str) -> str:
     info = _load_rs_to_real().get(rs_gear) or {}
     if info.get("category"):
         return info["category"]
-    # Bundled-VST EXTRA gear ("Extra_<PluginName>", surfaced by the gear catalog
-    # for unmapped bundled VSTs) is NOT in rs_to_real — its category is its
-    # vst/<amps|pedals|racks>/ folder. Without this it fell through to the
-    # 'amp' catch-all below, so e.g. the CE-1 chorus LOADED as an amp: the
-    # room stacked it on a cab, the Advanced graph labelled it AMP, and the
-    # parallel-branch routing counted it as a third amp.
-    if rs_gear.startswith("Extra_"):
-        try:
-            for bp in _bundled_vst_plugins():
-                if ("Extra_" + bp["name"]) == rs_gear:
-                    return {"amps": "amp", "pedals": "pedal", "racks": "rack"}.get(
-                        Path(bp["path"]).parent.name.lower(), "pedal")
-        except Exception:
-            pass
+    # (Our own no-codename gear — Extra_<Name> — is first-class in the map via
+    # extra_gear.json, so it resolves through info["category"] above.)
     name = rs_gear.lower()
     if "cab" in name:
         return "cab"
@@ -11015,21 +11012,8 @@ def setup(app, context):
                 return "rack"
             if g.startswith("bass_amp_") or g.startswith("amp_"):
                 return "amp"
-            # Bundled-VST EXTRA gear (Extra_<PluginName>): once the user puts one
-            # in a tone it round-trips through the DB, whose `best` entry has NO
-            # category — and this fallback sent it to "other", a tab the UI never
-            # shows (the CE-1/Major/Jubilee "disappeared" from the catalog).
-            # Resolve it from the plugin's vst/<amps|pedals|racks>/ folder, same
-            # rule as the module-level _gear_category.
-            if gear.startswith("Extra_"):
-                try:
-                    for bp in _bundled_vst_plugins():
-                        if ("Extra_" + bp["name"]) == gear:
-                            return {"amps": "amp", "pedals": "pedal",
-                                    "racks": "rack"}.get(
-                                Path(bp["path"]).parent.name.lower(), "other")
-                except Exception:
-                    pass
+            # (Our own no-codename gear — Extra_<Name> — is first-class in the
+            # rs_map via extra_gear.json, so it never reaches this fallback.)
             return "other"
 
         # Enumerate curated gain_variants for amps so the UI can render
@@ -11192,72 +11176,10 @@ def setup(app, context):
                 "_synth_unused": True,
             }
 
-        # Surface OUR bundled VSTs that aren't mapped to ANY RS gear — the
-        # "extra gear" (Silver Jubilee, DS-2, CE-1…) built for manual use. The
-        # catalog is keyed off the RS gear map, so without this these never
-        # appear even though the .vst3 ships.
-        #
-        # Dedup by DISPLAY NAME, NOT by filename. The built .vst3 basenames don't
-        # match the seed's bundled filenames NOR the vst_display_names keys for
-        # most mapped game gear (e.g. AcousticSimulator.vst3 has stem
-        # "acousticsimulator" but its display key is "acousticemulator"), so the
-        # old filename compare let ~65 already-mapped game pedals duplicate as
-        # Extra_<Name>. A bundled plugin is a real EXTRA only when: (1) it carries
-        # its OWN display-name entry (a finished, renamed product — raw utilities
-        # like AmpEQ/NoiseGate have none), (2) its stem is not a seed-mapped
-        # bundled stem, and (3) that display name isn't already shown by a mapped
-        # gear. This never removes a normal catalog entry — it only gates what
-        # the Extra_ pass ADDS — so it can only prevent duplicates.
-        _disp_names = _load_vst_display_names() or {}
-        _seed_bundled_stems: set[str] = set()
-        _used_display: set[str] = set()
-        try:
-            for _arr in (_load_vst_seed_catalog() or {}).values():
-                if not isinstance(_arr, list):
-                    continue
-                for _e in _arr:
-                    if isinstance(_e, dict) and _e.get("bundled"):
-                        _st = _vst_display_stem(_e["bundled"])
-                        _seed_bundled_stems.add(_st)
-                        _dn = _disp_names.get(_st)
-                        if _dn:
-                            _used_display.add(_dn.strip().lower())
-        except Exception:
-            pass
-        # Belt-and-suspenders: names already shown by catalog entries (from the
-        # DB rows / rs_map), even if the seed doesn't list them.
-        for _g in list(best):
-            _dn = _gear_display_name(_g, "")
-            if _dn:
-                _used_display.add(_dn.strip().lower())
-
-        # (Also subsumes the brother's a848a9ad guard: RB's INTERNAL DSP — the
-        # master "RB Final Leveler" + the generic Studio* rack utilities — ships
-        # in vst/ but has no vst_display_names entry, so the "no display name"
-        # check below already skips it. No separate _is_internal_bundle needed.)
-        _bundled_cat = {"amps": "amp", "pedals": "pedal", "racks": "rack"}
-        for bp in _bundled_vst_plugins():
-            _stem = _vst_display_stem(bp["path"])
-            dn = _disp_names.get(_stem)
-            if not dn:
-                continue                              # no display name → raw/mapped utility, not an EXTRA
-            if _stem in _seed_bundled_stems:
-                continue                              # this exact plugin backs a mapped game gear
-            if dn.strip().lower() in _used_display:
-                continue                              # a mapped gear already shows this name
-            cat = _bundled_cat.get(Path(bp["path"]).parent.name.lower())
-            if not cat:
-                continue
-            key = "Extra_" + bp["name"]
-            if key in best:
-                continue
-            best[key] = {
-                "kind": "vst", "file": None, "tone3000_id": None,
-                "has_assignment": True, "category": cat,
-                "vst_path": bp["path"], "vst_format": bp["format"],
-                "vst_state": None, "_synth_unused": True,
-            }
-            _used_display.add(dn.strip().lower())     # don't surface the same name twice
+        # (Our own no-codename gear — the Extra_<Name> entries in extra_gear.json,
+        # merged into rs_map by _load_rs_to_real — is seeded by the rs_map loop
+        # above like any other gear, so the old synthetic "surface unmapped
+        # bundled VSTs" pass is gone along with its dedup/category fallbacks.)
 
         # Surface EVERY cab WE model (real_cab_catalog.json — the 58 curated
         # cabs) even if no downloaded song uses it, so the Cabs catalog shows
