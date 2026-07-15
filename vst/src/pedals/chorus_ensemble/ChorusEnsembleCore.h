@@ -36,8 +36,12 @@ class ChorusEnsembleCore {
     float nkEnv=0.f, nkGain=0.f, nkAtk=0.f, nkRel=0.f;
 
     float lfoRateHz() const {
-        if (vibrato) return 3.08f + 8.03f*rate;          // 325..90 ms
-        return 0.417f + 2.66f*intensity;                 // 2.4 s..325 ms
+        // Vibrato re-fit 2026-07-15 against the UAD CE-1 renders (band-energy
+        // LFO extraction over the Brit DI): min/half/max measured 3.4/5.4/12.4
+        // Hz — a quadratic taper, not linear (the old linear map ran 7.1 Hz at
+        // half, audibly too fast mid-knob).
+        if (vibrato) return 3.4f + 9.0f*rate*rate;       // 3.4..12.4 Hz (UAD-matched)
+        return 0.417f + 2.66f*intensity;                 // 2.4 s..325 ms (matches UAD 1.9/2.8 half/max)
     }
 
 public:
@@ -88,13 +92,15 @@ public:
         // ── BBD delay (MN3002 = 512 STAGES per datasheet, NOT 1024): delay =
         //    512/(2·fcp). At the CE-1's 60-200 kHz clock -> ~1.3..4.3 ms.
         //    Centre ~2.9 ms, LFO-swept within that window. ──
-        const float amount=vibrato?depth:intensity;
         const float clockCentre=100000.f;
-        // Vibrato span re-fit 2026-07-15 (440 Hz sine measurement): the old
-        // 0.12+0.48·depth mapping produced ±71 CENTS at the default depth and
-        // ±112 at max — over a semitone of wobble (seasick). Rescaled so the
-        // default lands ~±35-40 cents and max ~±70 (the real unit's extreme).
-        const float clockSpan=vibrato?(0.055f+0.29f*amount):(0.08f+0.45f*amount);
+        // Sweep spans re-fit 2026-07-15 against the UAD CE-1 renders:
+        // - VIBRATO: DEPTH^1.5 taper up to the FULL BBD range (UAD's max sweep
+        //   tracked ~3 ms p2p = the whole 1.3-4.3 ms MN3002 window). Default
+        //   depth 0.5 lands ~±28 cents; the old linear map hit ±71 at default.
+        // - CHORUS: FIXED wide sweep — on the real unit (and UAD) INTENSITY
+        //   only moves the LFO RATE; scaling the sweep width by it left low
+        //   intensities with almost no modulation (the "muy sutil" report).
+        const float clockSpan=vibrato?(0.02f+0.48f*std::pow(depth,1.5f)):0.35f;
         float clockHz=clockCentre*(1.f+clockSpan*lfo);
         if(clockHz<60000.f) clockHz=60000.f;
         if(clockHz>200000.f) clockHz=200000.f;
