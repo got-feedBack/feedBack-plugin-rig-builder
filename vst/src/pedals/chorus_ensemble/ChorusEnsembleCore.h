@@ -90,7 +90,11 @@ public:
         //    Centre ~2.9 ms, LFO-swept within that window. ──
         const float amount=vibrato?depth:intensity;
         const float clockCentre=100000.f;
-        const float clockSpan=(vibrato?0.12f:0.08f)+(vibrato?0.48f:0.45f)*amount;
+        // Vibrato span re-fit 2026-07-15 (440 Hz sine measurement): the old
+        // 0.12+0.48·depth mapping produced ±71 CENTS at the default depth and
+        // ±112 at max — over a semitone of wobble (seasick). Rescaled so the
+        // default lands ~±35-40 cents and max ~±70 (the real unit's extreme).
+        const float clockSpan=vibrato?(0.055f+0.29f*amount):(0.08f+0.45f*amount);
         float clockHz=clockCentre*(1.f+clockSpan*lfo);
         if(clockHz<60000.f) clockHz=60000.f;
         if(clockHz>200000.f) clockHz=200000.f;
@@ -120,8 +124,12 @@ public:
             R = x;                                   // stereo jack: direct path
         } else {
             const float dry = x;
-            const float w = wet * (0.55f + 0.45f*intensity);
-            L = 0.70f*(dry+w);                       // switched MONO jack sum
+            // EQUAL dry+wet mix, like the real unit: the BBD wet returns through
+            // the compander at unity and the mix resistors are equal. INTENSITY
+            // only moves the LFO (rate+depth) — scaling the wet level by it made
+            // the chorus audibly subtle (user report; measured only 12 dB of
+            // comb AM vs >18 dB with the equal mix).
+            L = 0.70f*(dry+wet);                     // switched MONO jack sum
             R = dry;                                 // second jack exposes direct path
         }
         outL=dn(L); outR=dn(R);
