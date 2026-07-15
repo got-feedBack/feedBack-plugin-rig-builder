@@ -128,7 +128,7 @@ class Tone3000Client:
         # capture got miscounted as "failed to download" — which is why
         # re-running the preload made the failure count shrink each pass
         # (the earlier "failures" were really rate-limits that cleared).
-        max_attempts = 4
+        max_attempts = 7
         for attempt in range(max_attempts):
             self._ensure_fresh_token()
             try:
@@ -153,13 +153,18 @@ class Tone3000Client:
                     # backoff with a little slope so parallel workers don't
                     # resynchronise on the same tick. tone3000's budget
                     # refills every ~0.6s so even one short pause clears it.
+                    # Cap the computed fallback so a late attempt can't stall
+                    # for minutes; a server-hinted Retry-After is honoured up
+                    # to the same ceiling. More attempts (7) mean the tail of
+                    # a big batch keeps retrying long enough to clear a
+                    # saturated window instead of failing outright.
                     retry_after = 0
                     try:
                         retry_after = int(e.headers.get("Retry-After", "0"))
                     except (TypeError, ValueError):
                         retry_after = 0
-                    sleep_s = retry_after if retry_after > 0 else (
-                        2 ** attempt + 0.5 * attempt)
+                    sleep_s = min(retry_after if retry_after > 0 else (
+                        2 ** attempt + 0.5 * attempt), 30)
                     time.sleep(sleep_s)
                     continue
                 if e.code == 403:
@@ -429,10 +434,11 @@ class Tone3000Client:
         # the same limit doesn't synchronise their retries on the same
         # tick. Honour the `Retry-After` header when present — that's
         # the API's own hint about when it's safe to come back. We cap
-        # retries to 4 attempts so a sustained outage (auth revoked
-        # mid-batch, server down) still surfaces as a real exception
-        # instead of looping forever.
-        max_attempts = 4
+        # retries to 7 attempts so the tail of a big batch can keep
+        # retrying long enough to clear a saturated rate-limit window,
+        # while a sustained outage (auth revoked mid-batch, server down)
+        # still surfaces as a real exception instead of looping forever.
+        max_attempts = 7
         last_exc = None
         for attempt in range(max_attempts):
             self._ensure_fresh_token()
@@ -471,7 +477,7 @@ class Tone3000Client:
                     retry_after = int(e.headers.get("Retry-After", "0"))
                 except (TypeError, ValueError):
                     retry_after = 0
-                sleep_s = retry_after if retry_after > 0 else (2 ** attempt + 0.5 * attempt)
+                sleep_s = min(retry_after if retry_after > 0 else (2 ** attempt + 0.5 * attempt), 30)
                 time.sleep(sleep_s)
             except Exception:
                 try:

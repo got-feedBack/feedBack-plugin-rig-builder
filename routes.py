@@ -5863,14 +5863,19 @@ def _resolve_song_swap_assignment(to_gear: str, params_json: str | None,
 
 
 # Global rate-limit gate for tone3000 API calls. Pure tone3000 server-
-# side limit is ~100 req/min; we target a comfortable ~110 req/min via
-# a 0.55s minimum gap between any two outbound API calls, knowing that
-# `download_model_file` has its own 429-retry-with-backoff if we ever
-# overshoot. Shared by every parallel worker so the combined rate
-# never exceeds the budget.
+# side limit is ~100 req/min. A batch "download version" fires TWO API
+# calls per capture (list_models + download_model_file), so an earlier
+# 0.55s gap (~110 ticks/min → ~220 calls/min) overshot the budget and
+# the LAST captures in a big run exhausted their 429 retries and failed
+# (e.g. all three GB100 variants at the tail of a ~170-capture batch).
+# Target ~70 ticks/min (0.85s gap): a big library still finishes in a
+# few minutes, but the combined call rate stays comfortably under the
+# limit, and the (now longer) 429-retry-with-backoff in the client is
+# only ever the second line of defence. Shared by every parallel worker
+# so the combined rate never exceeds the budget.
 _t3k_rate_lock = threading.Lock()
 _t3k_last_call_at = 0.0
-_T3K_MIN_GAP = 0.55
+_T3K_MIN_GAP = 0.85
 
 
 def _t3k_rate_gate():
@@ -6491,7 +6496,12 @@ def _download_tone3000_gears_worker(amps):
                     if res:
                         _preload_state["downloaded"] += 1
                     else:
-                        _preload_state["failed"].append(f"{rs_gear}/{level} — unavailable")
+                        # Surface the real reason (rate-limited / 404 / no
+                        # capture) instead of a flat "unavailable" so a
+                        # transient rate-limit is distinguishable from a
+                        # capture that's genuinely gone.
+                        reason = getattr(_t3k_dl_error, "reason", None) or "unavailable"
+                        _preload_state["failed"].append(f"{rs_gear}/{level} — {reason}")
                     _preload_state["done"] += 1
                 if res:
                     _kind, _file = res
