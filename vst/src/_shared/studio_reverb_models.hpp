@@ -543,6 +543,10 @@ class Pcm70RichChamberCore
     RbOnePoleLp adcBand;
     RbOnePoleLp wetBandL;
     RbOnePoleLp wetBandR;
+    RbOnePoleLp wetLowL;
+    RbOnePoleLp wetLowR;
+    RbOnePoleLp wetBodyL;
+    RbOnePoleLp wetBodyR;
     RbOnePoleLp lineDamp[kLines];
     RbDelay<131072> predelayLine;
     RbDelay<65536> tank[kLines];
@@ -590,6 +594,10 @@ public:
         adcBand.clear();
         wetBandL.clear();
         wetBandR.clear();
+        wetLowL.clear();
+        wetLowR.clear();
+        wetBodyL.clear();
+        wetBodyR.clear();
         predelayLine.clear();
         for (int i = 0; i < kLines; ++i) {
             tank[i].clear();
@@ -613,13 +621,17 @@ public:
         const float sizeMeters = 5.6f + std::pow(depth, 1.12f) * 54.0f;   // up to ~60 m (real PCM70 chamber)
         const float sizeNorm = (sizeMeters - 5.6f) / 54.0f;
         const float delayScale = 0.62f + sizeNorm * 1.55f;
-        const float hc = 170.0f + std::pow(tone, 1.85f) * 14830.0f;
+        const float hc = 220.0f + std::pow(tone, 1.25f) * 15800.0f;
         const float diffusion = 0.36f + depth * 0.44f;
         const float definition = 0.28f + depth * 0.62f;
 
         adcBand.setCutoff(fs, 15250.0f);
         wetBandL.setCutoff(fs, hc);
         wetBandR.setCutoff(fs, hc * 0.97f);
+        wetLowL.setCutoff(fs, 220.0f);
+        wetLowR.setCutoff(fs, 220.0f);
+        wetBodyL.setCutoff(fs, 1000.0f);
+        wetBodyR.setCutoff(fs, 1000.0f);
 
         predelay = (4.0f + depth * 42.0f + 10.0f * time) * fs * 0.001f;
 
@@ -646,17 +658,19 @@ public:
         const float reflPol[6] = { 1.0f, -0.72f, 0.58f, -0.91f, 0.69f, -0.52f };
         for (int i = 0; i < 6; ++i) {
             reflDelay[i] = predelay + (float)samplesForMs(fs, reflMs[i] * (0.72f + 1.10f * sizeNorm));
-            reflGain[i] = reflPol[i] * (0.11f + 0.18f * definition) * (1.0f - 0.055f * (float)(i & 3));
+            reflGain[i] = reflPol[i] * (0.030f + 0.050f * definition) * (1.0f - 0.055f * (float)(i & 3));
         }
 
         width = 0.48f + 0.43f * depth;
-        inputGain = 0.105f + 0.040f * definition;
+        inputGain = 0.135f + 0.052f * definition;
         modDepth = (0.8f + 13.0f * std::pow(depth, 1.3f)) * (fs / 48000.0f);   // PCM70 CHORUSING (OM p.3-5)
 
         const float m = mix * wetMax;
-        const float a = m * 1.57079632679f;
-        dryGain = std::cos(a);
-        wetGain = std::sin(a) * 1.15f;
+        const float m2 = m * m;
+        const float wetCurve = rbClip01(1.42175f * m - 2.24925f * m2
+            + 1.82750f * m2 * m);
+        dryGain = std::cos(1.57079632679f * std::pow(m, 1.85f));
+        wetGain = wetCurve * 2.72f;
     }
 
     inline void process(float xL, float xR, float& outL, float& outR)
@@ -709,14 +723,28 @@ public:
         wetR = outputDiffR[1].process(outputDiffR[0].process(wetR));
         wetL = wetBandL.process(wetL);
         wetR = wetBandR.process(wetR);
+        wetL += 0.80f * wetLowL.process(wetL);
+        wetR += 0.80f * wetLowR.process(wetR);
+        wetL += 0.35f * (wetL - wetBodyL.process(wetL));
+        wetR += 0.35f * (wetR - wetBodyR.process(wetR));
 
         const float mid = 0.5f * (wetL + wetR);
         const float side = 0.5f * (wetL - wetR) * width;
         wetL = mid + side;
         wetR = mid - side;
 
-        outL = xL * dryGain + wetL * wetGain;
-        outR = xR * dryGain + wetR * wetGain;
+        float wetOutL = wetL * wetGain;
+        float wetOutR = wetR * wetGain;
+        const float wetAbsL = std::fabs(wetOutL);
+        const float wetAbsR = std::fabs(wetOutR);
+        if (wetAbsL > 0.22f)
+            wetOutL = (wetOutL < 0.0f ? -1.0f : 1.0f)
+                * (0.22f + 0.03f * std::tanh((wetAbsL - 0.22f) / 0.03f));
+        if (wetAbsR > 0.22f)
+            wetOutR = (wetOutR < 0.0f ? -1.0f : 1.0f)
+                * (0.22f + 0.03f * std::tanh((wetAbsR - 0.22f) / 0.03f));
+        outL = xL * dryGain + wetOutL;
+        outR = xR * dryGain + wetOutR;
     }
 };
 

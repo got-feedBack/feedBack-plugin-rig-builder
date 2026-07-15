@@ -4,16 +4,14 @@
  * Reworked to the same recipe as the other fuzzes (Big Buzz / Buzz-Tone / …):
  *   - circuit model lives DPF-free in BassFuzzCore.h,
  *   - the nonlinear core runs OVERSAMPLED to tame clipping aliasing,
- *   - RBAutoMakeup loudness-locks the wet output to the dry DI so the Sustain
- *     knob changes the FUZZ, not the volume — this is what stops the synth-bass
- *     tone from blasting over the song,
- *   - the real Volume pot is applied AFTER makeup (defaults to ~unity).
+ *   - a measured static curve keeps the Sustain sweep usable without changing
+ *     note envelopes,
+ *   - the real Volume pot is applied after circuit calibration.
  */
 #include "DistrhoPlugin.hpp"
 #include "BassFuzzParams.h"
 #include "BassFuzzCore.h"
 #include "../../_shared/oversampler.hpp"
-#include "../../_shared/automakeup.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -32,7 +30,31 @@ static inline float quantize3(float v)
 
 static inline float finalLimit(float x)
 {
-    return std::tanh(0.98f * x);
+    if (x > 1.0f)
+        return 1.0f - std::exp(-(x - 1.0f));
+    if (x < -1.0f)
+        return -1.0f + std::exp(x + 1.0f);
+    return x;
+}
+
+static inline float audioTaper(float v)
+{
+    const float x = clamp01(v);
+    return std::pow(x, 2.15f);
+}
+
+static inline float staticFuzzMakeup(float sustain, float bassDry)
+{
+    const float s = clamp01(sustain);
+    const float correctionDb = -16.5f * (1.0f - std::exp(-4.0f * s));
+    const float sustainGain = std::pow(10.0f, correctionDb / 20.0f);
+    const float mode = quantize3(bassDry);
+    // The switched Bass Boost and Dry paths do not follow Normal's gain curve.
+    // Static mode calibration keeps switch changes close in level without an
+    // envelope follower that would erase their attack and sustain differences.
+    const float modeGain = mode > 0.5f ? 0.225f + 0.66f * (1.0f - std::exp(-3.0f * s))
+                                       : (mode > 0.0f ? 0.64f : 1.0f);
+    return sustainGain * modeGain;
 }
 
 } // namespace
@@ -43,8 +65,6 @@ class BassFuzzPlugin : public Plugin
     bassfuzz::BassBigMuffCore right;
     rbshared::Oversampler4x osL;
     rbshared::Oversampler4x osR;
-    RBAutoMakeup makeupL;
-    RBAutoMakeup makeupR;
     float fParams[kParamCount];
 
     static constexpr int kOS = rbshared::Oversampler4x::OS;
@@ -64,8 +84,6 @@ public:
         const float sr = (float)getSampleRate();
         left.setSampleRate(kOS * sr);
         right.setSampleRate(kOS * sr);
-        makeupL.setSampleRate(sr);
-        makeupR.setSampleRate(sr);
         applyAll();
     }
 
@@ -74,7 +92,7 @@ protected:
     const char* getDescription() const override { return "Bass Big Muff Pi fuzz"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 2, 0); }
+    uint32_t getVersion() const override { return d_version(1, 5, 0); }
     int64_t getUniqueId() const override { return d_cconst('R', 'B', 'F', 'z'); }
 
     void initParameter(uint32_t i, Parameter& p) override
@@ -100,9 +118,6 @@ protected:
             return;
         fParams[i] = (i == (uint32_t)kBassDry) ? quantize3(v) : clamp01(v);
         applyAll();
-        // Re-level fast while a knob is moving (no steady-state bias).
-        makeupL.snap();
-        makeupR.snap();
     }
 
     void sampleRateChanged(double r) override
@@ -114,8 +129,6 @@ protected:
         right.reset();
         left.setSampleRate(kOS * sr);
         right.setSampleRate(kOS * sr);
-        makeupL.setSampleRate(sr);
-        makeupR.setSampleRate(sr);
         applyAll();
     }
 
@@ -125,20 +138,15 @@ protected:
         const float* iR = in[1];
         float* oL = out[0];
         float* oR = out[1];
-        // Volume pot applied AFTER makeup. 1.35 (was 1.6) seats the pedal ~1.5 dB
-        // under the DI at the default so the synth-bass fuzz sits just below the
-        // mix instead of right at it.
-        const float volume = 1.0f * fParams[kVolume];
+        const float volume = 2.0f * audioTaper(fParams[kVolume]);
+        const float makeup = staticFuzzMakeup(fParams[kSustain], fParams[kBassDry]);
         float ubL[kOS];
         float ubR[kOS];
 
         for (uint32_t i = 0; i < frames; ++i)
         {
-            const float dryL = iL[i];
-            const float dryR = iR[i];
-
-            osL.upsample(dryL, ubL);
-            osR.upsample(dryR, ubR);
+            osL.upsample(iL[i], ubL);
+            osR.upsample(iR[i], ubR);
             for (int k = 0; k < kOS; ++k)
             {
                 ubL[k] = left.process(ubL[k]);
@@ -147,9 +155,8 @@ protected:
             const float wetL = osL.downsample(ubL);
             const float wetR = osR.downsample(ubR);
 
-            // Loudness-lock wet→dry, then the real Volume pot, then a soft peak limit.
-            oL[i] = finalLimit(makeupL.process(dryL, wetL) * volume);
-            oR[i] = finalLimit(makeupR.process(dryR, wetR) * volume);
+            oL[i] = finalLimit(wetL * volume * makeup);
+            oR[i] = finalLimit(wetR * volume * makeup);
         }
     }
 

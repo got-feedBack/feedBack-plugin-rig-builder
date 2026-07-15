@@ -7,6 +7,9 @@ schematic, model each audible circuit block from component values, keep the
 core DPF-free when possible, run strong nonlinear sections oversampled, and
 validate with offline sweeps before installing the VST3 bundle.
 
+The reusable implementation and validation rules are documented in
+`docs/FUZZ_MODELING_GUIDE.md`.
+
 Important licensing rule: Guitarix is useful as a technical reference for
 topology, oversampling and validation ideas, but its GPL code must not be copied
 into these bundled VSTs. Implement our own models from the schematic and public
@@ -16,11 +19,12 @@ electronics equations.
 
 | RS gear | Bundle | Real reference | Source schematic | Status |
 |---|---|---|---|---|
-| `Pedal_CaptFuzzle` | `Buzz-Tone.vst3` | 1.5 V Captain Fuzzle / Maestro FZ-1A style, 3x 2N1305 | `pedals/captain fuzzle.gif` | Reworked first: `BuzzToneCore.h`, 2x oversampling, installed/signed locally |
-| `Pedal_FuzzWasHe` | `BZ-1.vst3` | Boss FZ-3 style silicon fuzz | `pedals/Fuzz Was He.pdf` / Aion Argent | Reworked with real Fuzz/Tone/Volume controls |
+| `Pedal_CaptFuzzle` | `Buzz-Tone.vst3` | 1.5 V Captain Fuzzle / Maestro FZ-1A style, 3x 2N1305 | `pedals/captain fuzzle.gif` | Reworked and reference-calibrated in `BuzzToneCore.h`; 4x oversampled |
+| `Pedal_FuzzWasHe` | `BZ-1.vst3` | Boss FZ-3 style silicon fuzz | `pedals/Fuzz Was He.pdf` / Aion Argent | Fuzz feedback retained; duplicate DC blocks and output clipping removed; fixed-branch tone network |
 | `Pedal_BuzzToo` | `Big Buzz.vst3` | Big Muff V1 / triangle-era topology | `pedals/buzz 2.jpg` | Reworked with real Sustain/Tone/Volume controls |
-| `Pedal_BuzzOne` | `Super-Buzz.vst3` | Univox Super-Fuzz octave fuzz | `pedals/buzz 1.gif` | Reworked with real Expander/Tone SW/Balance controls |
-| `Bass_Pedal_BassFuzz` | `Bass Big Buzz.vst3` | Bass Big Muff style | existing source note; bass pedal | Reworked: core moved to `BassFuzzCore.h` (DPF-free), 2x oversampled, **RBAutoMakeup** loudness-locks wet→dry so Sustain no longer changes level (offline sweep: output −0.3 dB vs DI, flat across Sustain 0→1). Volume applied post-makeup. Fixes the synth-bass tone blasting over the song. Installed/signed locally to `Bass Big Buzz.vst3` + `BassFuzz.vst3`. |
+| `Pedal_BuzzOne` | `Super-Buzz.vst3` | Univox Super-Fuzz octave fuzz | `pedals/buzz 1.gif` | OA90 full-wave octave retained; only post-rectifier DC removal remains; redundant output clipping removed |
+| `Bass_Pedal_BassFuzz` | `Bass Big Buzz.vst3` | Bass Big Muff style | `pedals/Bass Big Muff schematics.png`; `pedals/bookmark-this-big-muff-schematics-explained-*.webp` | 4x oversampled; Bass Boost now reinjects filtered, clipped pre-tone signal before Q1 recovery; only Dry adds node-A clean signal at the U1C final sum; modes are statically level-matched |
+| `Extra_FuzzRite` | `FuzzRite.vst3` | Mosrite Fuzz Rite style silicon fuzz | `pedals/fuzzrite/FuzzRiteV3.pdf` | Loaded Depth node and panel direction corrected; stronger Q1 clipping retained with stable C4 feedback and interstage DC blocking; full-DI dropout audit passes |
 
 ## Pattern Used For Buzz-Tone
 
@@ -33,9 +37,9 @@ electronics equations.
   - Q1/Q2/Q3 modeled as low-headroom 2N1305 germanium stages on a 1.5 V rail.
   - FUZZ pot changes Q2 bias/feedback texture rather than acting as a generic
     linear gain.
-- Wrapper uses `rbshared::Oversampler4x` (currently 2x) around the nonlinear core.
-- `RBAutoMakeup` still handles level matching; the real Volume pot is applied
-  after makeup and defaults to unity-ish.
+- Wrapper uses `rbshared::Oversampler4x` around the nonlinear core.
+- Reference-derived static calibration handles level without changing note
+  envelopes; the real Volume pot remains after the circuit.
 
 ## Next Steps
 

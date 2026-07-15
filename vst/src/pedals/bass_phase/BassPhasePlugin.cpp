@@ -7,6 +7,7 @@
  */
 #include "DistrhoPlugin.hpp"
 #include "BassPhaseParams.h"
+#include <algorithm>
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -26,11 +27,6 @@ static inline float smoothstep(float v)
 {
     v = clamp01(v);
     return v * v * (3.0f - 2.0f * v);
-}
-
-static inline float reverseAudioTaper(float v)
-{
-    return std::pow(clamp01(v), 1.85f);
 }
 
 static inline float clampFreq(float hz, float sr)
@@ -128,20 +124,19 @@ class BassPhaseCore
 
     void updateFilters()
     {
-        const float d = smoothstep(depth);
-        const float fb = smoothstep(feedbackKnob);
         inputHp.set(sampleRate, 24.0f);
         wetLowGuard.set(sampleRate, 74.0f);
-        inputTone.setLowPass(sampleRate, 8500.0f - 900.0f * fb);
-        outputTone.setLowPass(sampleRate, 7800.0f - 1100.0f * d - 700.0f * fb);
-        lfoLagA.setLowPass(sampleRate, 8.0f);
-        lfoLagB.setLowPass(sampleRate, 3.4f);
-        compEnv.setLowPass(sampleRate, 34.0f);
+        inputTone.setLowPass(sampleRate, 15000.0f);
+        outputTone.setLowPass(sampleRate, 13500.0f);
+        lfoLagA.setLowPass(sampleRate, 10.0f);
+        lfoLagB.setLowPass(sampleRate, 8.5f);
+        compEnv.setLowPass(sampleRate, 18.0f);
     }
 
     float currentRateHz() const
     {
-        return 0.045f + 6.25f * reverseAudioTaper(speed);
+        const float shaped = std::pow(clamp01(speed), 0.92f);
+        return 0.055f * std::pow(112.0f, shaped);
     }
 
 public:
@@ -214,40 +209,42 @@ public:
         const float sine = std::sin(kTwoPi * wrapped);
         const float osc = clamp01(0.5f + 0.5f * (0.58f * tri + 0.42f * sine));
         const float optoA = lfoLagA.process(clamp01(0.50f + (osc - 0.5f) * d));
-        const float optoB = lfoLagB.process(clamp01(0.50f + ((1.0f - osc) - 0.5f) * (0.72f * d)));
+        const float optoB = lfoLagB.process(clamp01(0.515f + (osc - 0.5f) * (0.96f * d)));
 
         float x = inputHp.process(in);
         x = inputTone.process(x);
 
-        // NE571-like level control: fast enough to keep the phase path even,
-        // slow enough to avoid audible pumping. This is not a hard limiter.
+        // The NE571 compressor and expander surround the all-pass path.  Their
+        // gain must cancel at the output; treating the compressor as a drive
+        // stage caused the previous 6-8 dB boost and audible pumping.
         const float env = compEnv.process(std::fabs(x));
-        const float targetGain = 1.0f / std::sqrt(0.18f + 5.5f * env);
-        companderGain += 0.0065f * (targetGain - companderGain);
-        float driven = std::tanh(x * (1.08f + 0.28f * companderGain)) * 0.93f;
+        const float targetGain = 1.0f / std::sqrt(0.08f + 4.0f * env);
+        companderGain += onePoleCoeffHz(14.0f, sampleRate) * (targetGain - companderGain);
+        const float compressorScale = 0.55f * companderGain;
+        const float compressed = x * compressorScale;
 
-        static const float baseHz[kStageCount] = { 118.0f, 190.0f, 315.0f, 525.0f, 875.0f, 1450.0f };
-        const float regen = 0.10f + 0.62f * fb;
-        float shifted = driven - feedbackState * regen;
+        // IC3A through IC3B are six equal 10k/3.3nF cells.  PH1 and PH2 see
+        // the same lamp drive, with only optocoupler/component mismatch.
+        static const float tolerance[kStageCount] = { 0.970f, 0.985f, 0.995f, 1.005f, 1.018f, 1.035f };
+        const float regen = 0.05f + 0.50f * fb;
+        float shifted = compressed - feedbackState * regen;
 
         for (int i = 0; i < kStageCount; ++i)
         {
             const float cv = (i & 1) ? optoB : optoA;
-            const float stageSkew = 0.90f + 0.075f * (float)i;
-            const float sweep = 0.42f + (8.8f + 5.4f * d) * smoothstep(cv);
-            shifted = stages[i].process(shifted, sampleRate, baseHz[i] * sweep * stageSkew);
+            const float corner = 95.0f * std::pow(38.0f, std::pow(clamp01(cv), 1.35f));
+            shifted = stages[i].process(shifted, sampleRate, corner * tolerance[i]);
         }
 
-        feedbackState = std::tanh(shifted * (0.95f + 0.20f * fb));
+        feedbackState = shifted;
+        const float wet = outputTone.process(shifted / std::max(0.20f, compressorScale));
 
-        const float wetFull = outputTone.process(std::tanh(shifted * (1.04f + 0.18f * fb)));
-        const float wetBassSafe = wetFull - wetLowGuard.process(wetFull);
-        const float wet = wetBassSafe * 0.74f + wetFull * 0.26f;
-
-        const float effectAmount = 0.58f + 0.30f * d + 0.16f * fb;
-        const float outLevel = 0.38f + 1.05f * level;
-        const float y = driven * 0.78f - wet * effectAmount;
-        return std::tanh(y * 2.55f) * 0.60f * outLevel;
+        const float outLevel = level / kBassPhaseDef[kLevel];
+        float y = (x + wet) * 0.5f * 1.12f * outLevel;
+        const float ay = std::fabs(y);
+        if (ay > 0.88f)
+            y = (y < 0.0f ? -1.0f : 1.0f) * (0.88f + 0.10f * std::tanh((ay - 0.88f) / 0.10f));
+        return y;
     }
 };
 
@@ -276,7 +273,7 @@ public:
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kBassPhaseDef[i];
         left.setPhaseOffset(0.00f);
-        right.setPhaseOffset(0.017f);
+        right.setPhaseOffset(0.00f);
         const float sr = (float)getSampleRate();
         left.setSampleRate(sr);
         right.setSampleRate(sr);
@@ -288,7 +285,7 @@ protected:
     const char* getDescription() const override { return "Ibanez PH99 style opto phaser"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('R', 'B', 'P', 'h'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

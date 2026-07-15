@@ -5,5 +5,6 @@
 #define REVERB_DESC  "Studio chamber reverb"
 #define REVERB_UID   d_cconst('R','C','h','1')
 #define REVERB_MODEL_CLASS Pcm70RichChamberCore
-#define REVERB_WETMAX 0.55f
+#define REVERB_WETMAX 1.0f
+#define REVERB_VERSION_PATCH 1
 #include "../../_shared/reverb_model_plugin.hpp"

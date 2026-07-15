@@ -22,12 +22,6 @@ static inline float clamp01(float v)
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
 }
 
-static inline float smoothstep(float v)
-{
-    v = clamp01(v);
-    return v * v * (3.0f - 2.0f * v);
-}
-
 static inline float clampFreq(float hz, float sr)
 {
     const float nyquist = sr * 0.45f;
@@ -123,13 +117,18 @@ class Phaser363Core
     void updateFilters()
     {
         inputHp.setHighPass(sampleRate, 28.0f);
-        toneLp.setLowPass(sampleRate, 6900.0f);
+        toneLp.setLowPass(sampleRate, 15000.0f);
         lfoLag.setLowPass(sampleRate, 6.0f + 21.0f * rate);
     }
 
     float currentRateHz() const
     {
-        return 0.055f + 5.75f * std::pow(clamp01(rate), 1.45f);
+        // Calibrated from the physical-style reference captures at the three
+        // panel landmarks: 0.078 Hz, 0.73 Hz and 4.77 Hz.  Spectral modulation
+        // shows a strong second harmonic, so counting notch crossings directly
+        // would incorrectly report twice the oscillator rate.
+        const float shaped = std::pow(clamp01(rate), 0.88f);
+        return 0.078f * std::pow(61.2f, shaped);
     }
 
 public:
@@ -170,31 +169,32 @@ public:
 
         const float phase = lfoPhase + phaseOffset;
         const float sine = std::sin(kTwoPi * phase);
-        const float lfo = lfoLag.lowPass(std::pow(0.5f + 0.5f * sine, 1.22f));
+        // The JFET resistance is highly non-linear versus gate voltage; this
+        // keeps more of the cycle in the lower part of the sweep instead of
+        // making the notch travel linearly in frequency.
+        const float lfo = lfoLag.lowPass(std::pow(0.5f + 0.5f * sine, 1.80f));
 
         // Clean signal path — a Phase 90 is transparent (no input clipping).
         float x = inputHp.highPass(in);
         x = toneLp.lowPass(x);
 
-        // Log-frequency sweep of the 4 all-pass corners THROUGH the guitar
-        // midrange (230 Hz -> ~1.8 kHz) so the notches stay in the audible range
-        // the whole sweep. The old per-stage sweep (0.30..10.2x with smoothstep)
-        // flung the notches 28 Hz..15 kHz and snapped between extremes -> a held
-        // tone barely moved (0.1 dB). Strong feedback adds the resonant peaks that
-        // sweep across the harmonics = the classic, obvious "whoosh".
-        const float fc = 230.0f * std::pow(8.0f, lfo);
-        static const float spread[kStageCount] = { 0.6f, 1.0f, 1.7f, 2.8f };
+        // The four IC2-IC5 cells use the same 10k/47nF network and their 2N5952
+        // gates share one control voltage.  Small component tolerances stop the
+        // notches becoming mathematically infinite without turning the circuit
+        // into four unrelated sweeps.
+        const float fc = 145.0f * std::pow(18.0f, lfo);
+        static const float tolerance[kStageCount] = { 0.990f, 0.997f, 1.003f, 1.010f };
         float shifted = x - feedback;
         for (int i = 0; i < kStageCount; ++i)
-            shifted = stages[i].process(shifted, sampleRate, fc * spread[i]);
-        feedback = shifted * 0.70f;   // resonance regen -> audible
+            shifted = stages[i].process(shifted, sampleRate, fc * tolerance[i]);
+        feedback = shifted * 0.10f;
 
         // Classic Phase 90 mixer: dry + 4-stage all-pass summed equally -> notches
         // where the all-pass is anti-phase, ~unity broadband. The all-pass is
         // unity-gain, so NO big makeup / output tanh is needed (the old 8.5x*tanh
         // hack distorted to 4.4% THD and pushed peaks to -2.8 dBFS). A transparent
         // soft knee only catches stray peaks.
-        float y = (x + shifted) * 0.5f * 1.05f;
+        float y = (x + shifted) * 0.5f * (1.18f + 0.07f * rate);
         const float ay = std::fabs(y);
         if (ay > 0.80f)
             y = (y < 0.0f ? -1.0f : 1.0f) * (0.80f + 0.16f * std::tanh((ay - 0.80f) / 0.16f));
@@ -221,7 +221,9 @@ public:
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kPhaser363Def[i];
         left.setPhaseOffset(0.00f);
-        right.setPhaseOffset(0.015f);
+        // The pedal is mono.  Stereo hosts process both input channels, but the
+        // two channels must see the same LFO rather than an invented stereo phase.
+        right.setPhaseOffset(0.00f);
         left.setSampleRate((float)getSampleRate());
         right.setSampleRate((float)getSampleRate());
         applyAll();
@@ -232,7 +234,7 @@ protected:
     const char* getDescription() const override { return "MXR Phase 90 style one-knob phaser"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('P', '3', '6', '3'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

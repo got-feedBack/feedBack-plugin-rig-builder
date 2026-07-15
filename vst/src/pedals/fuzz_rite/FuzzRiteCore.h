@@ -16,7 +16,7 @@
 // through C3; its wiper feeds VOL. Q2's collector is not an output of the pot:
 // it returns to Q1's collector through C4 and changes the clipping loop.
 //
-// Runs at the oversampled rate (2x, set by the plugin). Transistor clipping
+// Runs at the oversampled rate (4x, set by the plugin). Transistor clipping
 // only — the FuzzRite has no clipping diodes (D1 is reverse-polarity power
 // protection).
 //
@@ -70,7 +70,6 @@ class FuzzRiteCore {
     RcHighPass inHP, c2HP, c3HP, c4FB;
     RcLowPass  outLP;
     DcBlock    dcA, dcB;
-
     float q2fb = 0.f;                 // C4 collector->collector feedback (1-sample state)
 
     void updateComponents(){
@@ -79,7 +78,10 @@ class FuzzRiteCore {
         // Q2's lower input impedance and therefore has the higher corner.
         c2HP.setHz(sampleRate, 160.0f);
         c3HP.setHz(sampleRate, 480.0f);
-        c4FB.setHz(sampleRate, 720.0f);              // C4 feedback path band-shaping
+        // C4 is 47 nF between the collector networks. The effective loaded
+        // impedance places this feedback branch near 720 Hz in the calibrated
+        // discrete-time model; extending it to 180 Hz cancels sustained notes.
+        c4FB.setHz(sampleRate, 720.0f);
         // BC337 collector capacitance and the 470k collector networks provide
         // the only HF rounding in the real pedal. Keep this above the guitar
         // band instead of adding the old arbitrary 6.2 kHz de-fizz filter.
@@ -90,7 +92,8 @@ public:
     void setSampleRate(float sr){ sampleRate = sr>1000.f?sr:48000.f; reset(); }
     void reset(){
         inHP.reset(); c2HP.reset(); c3HP.reset(); c4FB.reset(); outLP.reset();
-        dcA.reset(); dcB.reset(); q2fb=0.f; updateComponents();
+        dcA.reset(); dcB.reset();
+        q2fb=0.f; updateComponents();
     }
     void setDepth(float v){ depth = clamp01(v); }
     void setVolume(float v){ volume = clamp01(v); }
@@ -98,11 +101,15 @@ public:
     inline float process(float in){
         float x = inHP.process(in);
 
-        // Q1 and Q2 form a fixed AC feedback loop through C4. Keep the loop
-        // below unity in the discrete-time model; the previous 0.08 feedback
-        // coefficient could burst into numerical gating on transients.
+        // Q1 and Q2 form an AC collector-feedback loop through C4. Keep the
+        // collector feedback below the cancellation point. A stronger
+        // coefficient suppresses sustained-note windows even though the DSP
+        // remains finite, which sounds like hard audio dropouts.
         const float in1 = x - 0.018f*q2fb;
-        float A = -bjtStage(in1, 46.0f, -0.020f, 1.25f, 1.05f, 0.95f, 0.80f);
+        const float top = clamp01((depth - 0.70f) / 0.30f);
+        const float topSweep = top * top * (3.0f - 2.0f * top);
+        const float q1Drive = 112.0f + 30.0f * topSweep;
+        float A = -bjtStage(in1, q1Drive, -0.020f, 2.35f, 2.00f, 0.95f, 0.80f);
         A = dcA.process(A);
 
         // C2 interstage high-pass (thins into the nasal voice)
@@ -110,16 +117,23 @@ public:
 
         // The far end of DEPTH feeds Q2 through C3 and R8=22k. Q2 drive is
         // fixed by that network; moving the wiper does not alter it.
-        const float thinNode = c3HP.process(aHP);
-        const float q2in = 0.050f*thinNode;
+        const float q2DriveHp = c3HP.process(aHP);
+        const float q2in = 0.050f*q2DriveHp;
         float B = -bjtStage(q2in, 24.0f, 0.016f, 1.15f, 1.02f, 0.92f, 0.78f);
         B = dcB.process(B);
         q2fb = c4FB.process(B);                       // C4 feedback into Q1 (next sample)
 
-        // The 500KB DEPTH wiper selects between the fuller C2 side and the
-        // thinner Q2-input side. They have the same polarity, so the sweep
-        // cannot create the non-physical cancellation hole of the old model.
-        float out = (1.0f-depth)*aHP + depth*thinNode;
+        // Pin 3 of DEPTH is BEFORE C3. At low frequency C3 is open and this
+        // loaded node follows aHP; at high frequency C3/R8 shunts it through
+        // 500 k, leaving roughly R8/(500k+R8) = 0.042 of the signal. The wiper
+        // reads between that node and the un-loaded C2 side.
+        const float loadedNode = aHP - 0.958f*q2DriveHp;
+
+        // The panel rotation was reversed: increasing DEPTH selected the loaded,
+        // dark end of the 500KB pot and progressively removed the fuzz harmonics.
+        // Clockwise now moves from that loaded node toward the direct C2/Q1 side,
+        // matching the audible control direction of the pedal.
+        float out = (1.0f-depth)*loadedNode + depth*aHP;
 
         out = outLP.process(out);
         return dn(out);

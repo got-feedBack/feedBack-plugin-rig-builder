@@ -10,6 +10,7 @@
 // (K-weighting + 400 ms blocks + absolute/relative gating) of the LEFT output.
 //
 // CLI:  harness <gain_idx[,idx2,...]> <vol_idx[,idx2,...]|-> <steps>
+//               [fixed_idx=value[,fixed_idx=value...]]
 // Out:  JSON on stdout:
 //   {"n": <paramCount>, "default": <LUFS>,
 //    "sweeps": {"<idx>": [[v,LUFS], ...], ...}}
@@ -152,11 +153,41 @@ static std::vector<int> parseIdx(const char* s) {
     return v;
 }
 
+static std::vector<std::pair<int, float>> parseOverrides(const char* s) {
+    std::vector<std::pair<int, float>> v;
+    if (!s || std::strcmp(s, "-") == 0) return v;
+    std::string t(s);
+    size_t i = 0;
+    while (i < t.size()) {
+        size_t c = t.find(',', i);
+        if (c == std::string::npos) c = t.size();
+        const std::string item = t.substr(i, c - i);
+        const size_t eq = item.find('=');
+        if (eq != std::string::npos)
+            v.push_back({std::atoi(item.substr(0, eq).c_str()),
+                         (float)std::atof(item.substr(eq + 1).c_str())});
+        i = c + 1;
+    }
+    return v;
+}
+
+static std::vector<std::pair<int, float>> withSweep(
+    const std::vector<std::pair<int, float>>& fixed, int idx, float value) {
+    std::vector<std::pair<int, float>> out = fixed;
+    bool replaced = false;
+    for (auto& p : out) {
+        if (p.first == idx) { p.second = value; replaced = true; }
+    }
+    if (!replaced) out.push_back({idx, value});
+    return out;
+}
+
 int main(int argc, char** argv) {
-    if (argc < 4) { std::fprintf(stderr, "usage: harness <gain_idx> <vol_idx|-> <steps>\n"); return 2; }
+    if (argc < 4) { std::fprintf(stderr, "usage: harness <gain_idx> <vol_idx|-> <steps> [fixed_idx=value,...]\n"); return 2; }
     std::vector<int> gainIdx = parseIdx(argv[1]);
     std::vector<int> volIdx  = parseIdx(argv[2]);
     int steps = std::atoi(argv[3]); if (steps < 2) steps = 11;
+    std::vector<std::pair<int, float>> fixed = parseOverrides(argc > 4 ? argv[4] : "-");
 
     // Defaults straight from the plugin (its ctor seeds kXxxDef).
     int N;
@@ -166,7 +197,7 @@ int main(int argc, char** argv) {
 
     std::printf("{\"n\": %d, \"def\": [", N);
     for (int i = 0; i < N; ++i) std::printf("%s%.4f", i ? ", " : "", def[i]);
-    std::printf("], \"default\": %.4f, \"sweeps\": {", measure(def, {}));
+    std::printf("], \"default\": %.4f, \"sweeps\": {", measure(def, fixed));
 
     bool first = true;
     // Grouped gain sweep: move all gain pots together.
@@ -174,8 +205,12 @@ int main(int argc, char** argv) {
         std::printf("\"gain\": [");
         for (int s = 0; s < steps; ++s) {
             float v = (float)s / (float)(steps - 1);
-            std::vector<std::pair<int, float>> ov;
-            for (int gi : gainIdx) ov.push_back({gi, v});
+            std::vector<std::pair<int, float>> ov = fixed;
+            for (int gi : gainIdx) {
+                bool replaced = false;
+                for (auto& p : ov) if (p.first == gi) { p.second = v; replaced = true; }
+                if (!replaced) ov.push_back({gi, v});
+            }
             std::printf("%s[%.4f, %.4f]", s ? ", " : "", v, measure(def, ov));
         }
         std::printf("]");
@@ -187,7 +222,7 @@ int main(int argc, char** argv) {
         first = false;
         for (int s = 0; s < steps; ++s) {
             float v = (float)s / (float)(steps - 1);
-            std::printf("%s[%.4f, %.4f]", s ? ", " : "", v, measure(def, {{vi, v}}));
+            std::printf("%s[%.4f, %.4f]", s ? ", " : "", v, measure(def, withSweep(fixed, vi, v)));
         }
         std::printf("]");
     }

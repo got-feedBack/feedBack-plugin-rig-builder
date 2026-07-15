@@ -6,7 +6,7 @@
  * hard transistor clipping, tiny 2n2 interstage caps for the thin nasal voice,
  * the real DEPTH wiper between Q1 and Q2's input node, and the C4 feedback path
  * from Q2's collector to Q1's collector. Runs at
- * 2x oversampling to keep the square-wave harmonics from aliasing. Real panel =
+ * 4x oversampling to keep the square-wave harmonics from aliasing. Real panel =
  * DEPTH + VOL.
  *
  * EXTRA gear — not mapped to any RS song.
@@ -21,9 +21,9 @@ START_NAMESPACE_DISTRHO
 
 static inline float clamp01(float v){ return v<0.0f?0.0f:(v>1.0f?1.0f:v); }
 static inline float passiveOutput(float x){
-    // Collector swing is already bounded in the core. This represents the
-    // finite 9 V output headroom and never creates samples above full scale.
-    return std::tanh(x);
+    if (x > 1.0f) return 1.0f-std::exp(-(x-1.0f));
+    if (x < -1.0f) return -1.0f+std::exp(x+1.0f);
+    return x;
 }
 
 class FuzzRitePlugin : public Plugin {
@@ -51,7 +51,7 @@ protected:
     const char* getDescription() const override { return "Mosrite FuzzRite style silicon fuzz"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1,1,0); }
+    uint32_t getVersion() const override { return d_version(1,5,0); }
     int64_t getUniqueId() const override { return d_cconst('F','z','R','t'); }
 
     void initParameter(uint32_t i, Parameter& p) override {
@@ -73,7 +73,7 @@ protected:
         const float* iL=in[0]; const float* iR=in[1];
         float* oL=out[0]; float* oR=out[1];
         // VOL is the real 500KA passive output pot: mute at zero, audio taper.
-        const float vol = std::pow(params[kVolume], 2.6f);
+        const float vol = 0.58f*std::pow(params[kVolume], 2.6f);
         float ubL[kOS], ubR[kOS];
         for (uint32_t i=0;i<frames;++i){
             osL.upsample(iL[i], ubL); osR.upsample(iR[i], ubR);

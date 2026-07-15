@@ -284,7 +284,7 @@ class DigitalVerbCore
 
     void updateDelayTimes()
     {
-        static const float earlyMs[kEarlyCount] = { 9.7f, 15.3f, 22.9f, 31.1f, 41.5f };
+        static const float earlyMs[kEarlyCount] = { 2.3f, 7.1f, 13.7f, 22.9f, 78.0f };
         static const float apMs[kAllpassCount] = { 4.8f, 8.9f, 13.7f, 21.1f, 34.3f };
         static const float combMs[kCombCount] = { 53.9f, 61.7f, 70.1f, 79.3f, 88.7f, 97.9f, 111.7f, 126.1f };
 
@@ -297,8 +297,10 @@ class DigitalVerbCore
         for (int i = 0; i < kEarlyCount; ++i)
         {
             const float sign = (i & 1) ? -1.0f : 1.0f;
+            const float tapGain = i == 0 ? 0.08f
+                : (i == 4 ? 0.23f : (0.115f - 0.010f * (float)i));
             early[i].set(sampleRate, earlyMs[i] * (0.72f + 0.80f * d) * stereoSkew,
-                sign * (0.115f - 0.010f * (float)i));
+                sign * tapGain);
         }
 
         const float apFeedback = 0.55f + 0.20f * d;
@@ -315,11 +317,11 @@ class DigitalVerbCore
         const float d = smoothstep(depth);
         const float bright = smoothstep(tone);
 
-        inputHp.setHighPass(sampleRate, 70.0f + 55.0f * (1.0f - d), 0.70f);
+        inputHp.setHighPass(sampleRate, 55.0f + 45.0f * (1.0f - d), 0.70f);
         inputLp.setLowPass(sampleRate, 5200.0f + 7200.0f * bright, 0.70f);
-        tankHp.setHighPass(sampleRate, 95.0f + 90.0f * (1.0f - d), 0.70f);
+        tankHp.setHighPass(sampleRate, 80.0f + 70.0f * (1.0f - d), 0.70f);
         tankLp.setLowPass(sampleRate, 3100.0f + 8800.0f * bright, 0.62f);
-        airLp.setLowPass(sampleRate, 4200.0f + 6500.0f * bright, 0.78f);
+        airLp.setLowPass(sampleRate, 5200.0f + 7500.0f * bright, 0.78f);
         toneCoeff = onePoleCoeff(1050.0f + 2600.0f * bright, sampleRate);
 
         const float feedback = std::fmin(0.935f, 0.54f + 0.36f * t + 0.035f * d);
@@ -423,20 +425,20 @@ public:
         for (int i = 3; i < kAllpassCount; ++i)
             tank = allpasses[i].process(tank);
 
-        float wet = tankHp.process(tank + earlySum * (0.10f + 0.12f * d));
+        // The RV-2 reference has a clear early digital reflection field by
+        // 25 ms. Keep the later tank level independent and lift only that field.
+        float wet = tankHp.process(tank + earlySum * (0.80f + 0.50f * d));
         wet = tankLp.process(wet);
 
         toneTilt += toneCoeff * (wet - toneTilt);
-        wet = toneTilt + (wet - toneTilt) * (0.08f + 0.42f * bright);
+        wet = toneTilt + (wet - toneTilt) * (0.16f + 0.72f * bright);
         wet = airLp.process(wet);
 
-        // Equal-power dry/wet crossfade (consistent with the other reverb pedals):
-        // keeps the loudness ~constant and allows a true 100% wet at full Mix (the
-        // old law floored the dry at 0.54). density tracks the tail richness.
-        // density tracks tail richness; the 2.6x lifts the intrinsically quiet
-        // digital tank to sit in the same ballpark as the other reverb pedals.
-        const float density = (0.58f + 0.28f * d + 0.14f * t) * 2.6f;
-        const float a = std::pow(mix, 1.9f) * 1.5707963f;   // gentler Mix taper: 1/4 knob ~subtle, not near-full
+        // The three references follow a linear equal-power Mix law exactly.
+        // Level-match the full-wet render instead of hiding the correction in
+        // a nonlinear knob taper.
+        const float density = (0.58f + 0.28f * d + 0.14f * t) * 1.63f;
+        const float a = mix * 1.5707963f;
         const float dryLevel = std::cos(a);
         const float wetLevel = std::sin(a) * density;
         float y = (dry * dryLevel + wet * wetLevel) * 0.985f;
@@ -485,7 +487,7 @@ protected:
     const char* getDescription() const override { return "Boss RV-2 style digital reverb"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('D', 'g', 'V', 'r'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

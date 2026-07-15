@@ -47,7 +47,7 @@ class PlateVerbPlugin : public Plugin
         const float sizeScale  = 0.50f + 0.40f * depth + 0.07f * voice;
         const float dampBias   = (voice > 0.5f ? -0.05f : 0.02f);
         const float apFeedback = 0.66f + 0.08f * depth + 0.04f * voice;
-        const float tone       = voice > 0.5f ? 0.80f : 0.60f;
+        const float tone       = voice > 0.5f ? 0.60f : 0.50f;
 
         reverb.setVoicing(sizeScale, dampBias, apFeedback);
         // Time is the main decay; a bigger plate (Depth) blooms a little longer.
@@ -55,7 +55,17 @@ class PlateVerbPlugin : public Plugin
         reverb.setParams(0.16f + 0.74f * time + 0.10f * depth,
                          tone,
                          0.0f,
-                         std::pow(mix, 1.9f) * (0.66f + 0.10f * depth));
+                         0.0f);
+
+        // Reference Mix points, normalized to the full-wet render:
+        // 20% = 0.218, 50% = 0.387, 100% = 1.0. The dry plate return stays
+        // nearly unchanged through the first half, then reaches true wet-only.
+        const float m2 = mix * mix;
+        const float wetCurve = clamp01(1.4888333f * mix - 2.3705f * m2
+            + 1.8816667f * m2 * mix);
+        const float dryCurve = std::cos(1.5707963f * std::pow(mix, 2.8f));
+        reverb.setEarlyMix(wetCurve * 2.00f);
+        reverb.setOutputMix(dryCurve, wetCurve * 0.50f);
     }
 
 public:
@@ -73,7 +83,7 @@ protected:
     const char* getDescription() const override { return "EMT 140 style plate reverb"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('P', 'l', 'V', 'b'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

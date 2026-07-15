@@ -22,7 +22,11 @@ static inline float clamp01(float v)
 
 static inline float finalLimit(float x)
 {
-    return std::tanh(0.98f * x);
+    if (x > 1.0f)
+        return 1.0f - std::exp(-(x - 1.0f));
+    if (x < -1.0f)
+        return -1.0f + std::exp(x + 1.0f);
+    return x;
 }
 
 static inline float audioTaper(float v)
@@ -33,8 +37,8 @@ static inline float audioTaper(float v)
 
 static inline float staticFuzzMakeup(float fuzz)
 {
-    const float f = clamp01(fuzz);
-    return 1.20f / (0.68f + 0.42f * f);
+    (void)fuzz;
+    return 0.35f;
 }
 
 } // namespace
@@ -74,7 +78,7 @@ protected:
     const char* getDescription() const override { return "FZ-3 style silicon fuzz"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 2, 0); }
+    uint32_t getVersion() const override { return d_version(1, 3, 0); }
     int64_t getUniqueId() const override { return d_cconst('B', 'z', '0', '1'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

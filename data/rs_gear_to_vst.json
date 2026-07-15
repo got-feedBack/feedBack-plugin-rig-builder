@@ -1840,7 +1840,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/FuzzRite.vst3",
-   "notes": "Mosrite FuzzRite (parody nosrite) — two grounded-emitter Si stages, DEPTH phase-blend."
+   "notes": "Mosrite FuzzRite (parody nosrite) - two grounded-emitter Si stages, loaded DEPTH network and C4 collector feedback."
   }
  ],
  "Extra_MicroAmp": [

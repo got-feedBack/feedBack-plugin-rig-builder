@@ -73,23 +73,6 @@ public:
     }
 };
 
-class DcBlock
-{
-    float x1 = 0.0f;
-    float y1 = 0.0f;
-
-public:
-    void reset() { x1 = y1 = 0.0f; }
-
-    inline float process(float x)
-    {
-        const float y = x - x1 + 0.9985f * y1;
-        x1 = x;
-        y1 = dn(y);
-        return y1;
-    }
-};
-
 class BigBuzzCore
 {
     // Version 1 Big Muff / triangle-era schematic from pedals/buzz 2.jpg:
@@ -139,12 +122,7 @@ class BigBuzzCore
     RcLowPass q2FeedbackCap;
     RcLowPass toneLow;
     RcLowPass toneHighBase;
-    RcLowPass toneBody;
     RcLowPass q1Load;
-    DcBlock q4Dc;
-    DcBlock q3Dc;
-    DcBlock q2Dc;
-    DcBlock q1Dc;
     rbcomponents::AntiParallelDiodePair clip1;
     rbcomponents::AntiParallelDiodePair clip2;
 
@@ -193,10 +171,17 @@ class BigBuzzCore
         q3FeedbackCap.setRC(sampleRate, kR17, kC12);
         q2FeedbackCap.setRC(sampleRate, kR15, kC11);
 
-        toneLow.setRC(sampleRate, kR8 + (1.0f - t) * kTonePot, kC8);
-        toneHighBase.setRC(sampleRate, kR5 + t * kTonePot, kC9);
-        toneBody.setHz(sampleRate, 760.0f + 240.0f * t);
-        q1Load.setHz(sampleRate, 7200.0f + 2500.0f * t);
+        // The V1 tone control blends two fixed passive branches. C8/R8 is the
+        // low-pass side (about 590 Hz), while C9/R5 is the high-pass side
+        // (about 1.47 kHz). The 100 k pot selects between their outputs; it
+        // does not move both cutoff frequencies with the wiper.
+        // At the dark end the 100 k wiper and Q1 input load add to R8's 27 k
+        // source impedance. The resulting loaded corner is close to 400 Hz.
+        toneLow.setRC(sampleRate, kR8 + 13000.0f, kC8);
+        // R5 is loaded by the tone pot and Q1's input network at the bright
+        // end, reducing its effective 27 k impedance to about 15 k.
+        toneHighBase.setRC(sampleRate, 15000.0f, kC9);
+        q1Load.setHz(sampleRate, 7200.0f + 500.0f * t);
 
         // Effective source impedance into the feedback diode pairs changes with
         // sustain because the preceding transistor is driven harder.
@@ -224,11 +209,11 @@ class BigBuzzCore
         // feedback resistor and clamps the CLOSED-LOOP swing (the smooth, sustaining clip).
         const float amp = bjtStage(x, drive, bias,
                                    1.45f, 1.18f + asym, rail * 0.82f, rail * 0.72f);
-        const float clipped = diodes.process(2.15f * amp);   // 1N914 pair clamps the swing (heavy)
+        const float feedbackOutput = diodes.process(2.15f * amp);
         // The 500pF cap (Cf) across the 470k feedback gently rolls off the CLIPPED highs —
         // the Muff smooths/de-fizzes the top of the clip rather than fully bypassing it.
-        const float tamed = feedbackCap.process(clipped);    // ~680 Hz feedback rolloff
-        return clipped - 0.32f * (clipped - tamed);
+        const float tamed = feedbackCap.process(feedbackOutput); // ~680 Hz feedback rolloff
+        return feedbackOutput - 0.68f * (feedbackOutput - tamed);
     }
 
     float toneStack(float x)
@@ -236,15 +221,13 @@ class BigBuzzCore
         const float t = clamp01(tone);
         const float low = toneLow.process(x);
         const float highBase = toneHighBase.process(x);
-        const float high = x - 0.82f * highBase;
-        const float mid = toneBody.process(x);
+        const float high = x - highBase;
 
-        // Linear 100 k tone pot crossfading the low and high branches, with the
-        // expected passive mid scoop near noon.
-        const float scoop = 0.22f + 0.28f * (1.0f - std::fabs(2.0f * t - 1.0f));
-        return low * (1.22f - 0.92f * t)
-             + high * (0.18f + 1.26f * t)
-             - mid * scoop;
+        // A linear 100 k wiper blends the two branch voltages. Their separated
+        // corners create the familiar mid scoop at noon without an additional
+        // synthetic notch or high-frequency leakage at either end.
+        const float passiveNotch = 1.0f - 0.20f * (4.0f * t * (1.0f - t));
+        return passiveNotch * ((1.0f - t) * low + 1.65f * t * high);
     }
 
 public:
@@ -268,12 +251,7 @@ public:
         q2FeedbackCap.reset();
         toneLow.reset();
         toneHighBase.reset();
-        toneBody.reset();
         q1Load.reset();
-        q4Dc.reset();
-        q3Dc.reset();
-        q2Dc.reset();
-        q1Dc.reset();
         clip1.reset();
         clip2.reset();
         sagEnv = 0.0f;
@@ -303,7 +281,6 @@ public:
         const float q4Fb = q4FeedbackCap.process(x);
         x = bjtStage(x - 0.22f * q4Fb, 3.8f + 3.4f * s, -0.018f,
                      1.28f, 1.06f, rail * 0.72f, rail * 0.62f);
-        x = q4Dc.process(x);
         x = q4ToSustain.process(x);
 
         // Real Sustain pot: mostly drive into Q3, not output volume.
@@ -311,29 +288,32 @@ public:
         x = sustainToQ3.process(x * potLoss);
 
         float y = clippedStage(x, q3FeedbackCap, clip1,
-                               6.4f + 25.0f * s, -0.040f,
+                               2.8f + 27.5f * s, -0.040f,
                                rail, 0.10f);
         updateSag(y);
-        y = q3Dc.process(y);
         y = q3ToQ2.process(y);
 
         y = clippedStage(y, q2FeedbackCap, clip2,
-                         5.2f + 18.0f * s, 0.024f,
+                         2.4f + 20.0f * s, 0.024f,
                          rail, 0.05f);
-        y = q2Dc.process(y);
         y = q2ToTone.process(y);
 
         y = toneStack(y);
         y = toneToQ1.process(y);
 
         // Q1 recovery/output transistor into the 100 k Volume pot.
-        y = bjtStage(y, 2.2f + 0.55f * tone, -0.012f,
+        // Q1 is a recovery stage. The bright branch reaches it with less low
+        // frequency energy, leaving more collector headroom for pick attacks.
+        y = bjtStage(y, 2.2f - 1.0f * tone, -0.012f,
                      1.16f, 1.05f, rail * 0.76f, rail * 0.62f);
-        y = q1Load.process(q1Dc.process(y));
+        y = q1Load.process(y);
         y = outputC2.process(y);
 
-        const float level = 0.58f / (1.0f + 0.30f * s);
-        return std::tanh(y * level);
+        // Q1 and both diode-feedback stages already provide the circuit's
+        // limiting. A second broadband tanh here made the bright setting flat
+        // and brittle, and the old inverse-Sustain trim made the pedal quieter
+        // as its real Sustain control was raised.
+        return y * 0.58f;
     }
 };
 

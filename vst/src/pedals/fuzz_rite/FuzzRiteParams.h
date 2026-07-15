@@ -7,12 +7,11 @@
  * reads "Mosright", never "Mosrite").
  *
  * Two grounded-emitter NPN silicon gain stages (BC337-16, ~150 hFE) — no
- * emitter degeneration, so they slam into hard transistor clipping — with tiny
+ * emitter degeneration, so they slam into hard transistor clipping - with tiny
  * 2n2 interstage caps that thin the signal into the pedal's nasal, buzzy 60s
- * voice. Q1 inverts, Q2 inverts again, so their outputs are OUT OF PHASE; the
- * DEPTH pot crossfades between them and the partial cancellation is what makes
- * the Fuzz Rite spit, gate and honk. A C4 collector-to-collector feedback path
- * adds the sputtery, dying-note instability.
+ * voice. DEPTH reads between Q1's C2-coupled collector signal and the node
+ * loaded by C3, R8 and Q2. Q2's collector returns through C4 to Q1's collector;
+ * that AC feedback and the loaded pot node create the spit and honk.
  *
  * The real panel is just two pots: DEPTH (the fuzz-blend / character) and VOL.
  *

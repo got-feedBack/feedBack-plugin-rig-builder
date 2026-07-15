@@ -28,11 +28,6 @@ static inline float smoothstep(float v)
     return v * v * (3.0f - 2.0f * v);
 }
 
-static inline float audioTaper(float v)
-{
-    return std::pow(clamp01(v), 1.65f);
-}
-
 static inline float clampFreq(float hz, float sr)
 {
     const float nyquist = sr * 0.45f;
@@ -125,18 +120,17 @@ class ShaverPhaserCore
 
     void updateFilters()
     {
-        const float d = smoothstep(depth);
-        const float r = smoothstep(resonance);
         inputHp.set(sampleRate, 28.0f);
-        inputTone.setLowPass(sampleRate, 7600.0f - 900.0f * d - 450.0f * r);
-        outputTone.setLowPass(sampleRate, 8200.0f - 1050.0f * r);
+        inputTone.setLowPass(sampleRate, 14500.0f);
+        outputTone.setLowPass(sampleRate, 12500.0f);
         lfoLag.setLowPass(sampleRate, 4.0f + 19.0f * rate);
         jfetLag.setLowPass(sampleRate, 30.0f);
     }
 
     float currentRateHz() const
     {
-        return 0.055f + 7.10f * audioTaper(rate);
+        const float shaped = std::pow(clamp01(rate), 0.95f);
+        return 0.070f * std::pow(102.0f, shaped);
     }
 
 public:
@@ -190,7 +184,7 @@ public:
         if (lfoPhase >= 1.0f)
             lfoPhase -= std::floor(lfoPhase);
 
-        const float d = 0.10f + 0.90f * smoothstep(depth);
+        const float d = smoothstep(depth);
         const float r = smoothstep(resonance);
         const float phase = lfoPhase + phaseOffset;
         const float tri = 1.0f - 4.0f * std::fabs((phase - std::floor(phase)) - 0.5f);
@@ -208,24 +202,21 @@ public:
         float x = inputHp.process(in);
         x = inputTone.process(x);
 
-        static const float baseHz[kStageCount] = { 105.0f, 245.0f, 565.0f, 1320.0f };
-        float shifted = x - feedback * (0.20f + 0.55f * r);   // Resonance -> notch depth
+        static const float tolerance[kStageCount] = { 0.985f, 0.997f, 1.004f, 1.016f };
+        float shifted = x - feedback * (0.08f + 0.42f * r);
         for (int i = 0; i < kStageCount; ++i)
         {
-            float cv = fetShape + 0.075f * (float)i;
-            if (cv > 1.0f)
-                cv -= 1.0f;
-            const float sweep = 0.34f + (8.7f + 4.4f * d) * smoothstep(cv);
-            shifted = stages[i].process(shifted, sampleRate, baseHz[i] * sweep);
+            const float corner = 125.0f * std::pow(20.0f, fetShape);
+            shifted = stages[i].process(shifted, sampleRate, corner * tolerance[i]);
         }
 
-        feedback = std::tanh(shifted);                 // regen only (bounded, not in the wet path)
+        feedback = shifted;
         const float wet = outputTone.process(shifted); // clean all-pass output
 
         // Clean dry + all-pass mix (~unity). The old x*0.82 - wet*amt then
         // tanh(y*5.10) ran a 5.1x makeup into a tanh -> 2.2% THD on hot signals
         // and squashed peaks. A transparent soft knee only catches stray peaks.
-        float y = (x + wet) * 0.5f * 1.05f;
+        float y = (x + wet) * 0.5f * 1.15f;
         const float ay = std::fabs(y);
         if (ay > 0.80f)
             y = (y < 0.0f ? -1.0f : 1.0f) * (0.80f + 0.16f * std::tanh((ay - 0.80f) / 0.16f));
@@ -256,7 +247,7 @@ public:
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kShaverPhaserDef[i];
         left.setPhaseOffset(0.00f);
-        right.setPhaseOffset(0.018f);
+        right.setPhaseOffset(0.00f);
         left.setSampleRate((float)getSampleRate());
         right.setSampleRate((float)getSampleRate());
         applyAll();
@@ -267,7 +258,7 @@ protected:
     const char* getDescription() const override { return "Boss PH-1R style JFET phaser"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('S', 'h', 'P', 'h'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

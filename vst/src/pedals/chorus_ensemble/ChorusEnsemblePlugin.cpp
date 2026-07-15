@@ -45,7 +45,7 @@ protected:
     const char* getDescription() const override { return "Boss CE-1 Chorus Ensemble style BBD chorus/vibrato"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1,1,0); }
+    uint32_t getVersion() const override { return d_version(1,2,0); }
     int64_t getUniqueId() const override { return d_cconst('C','E','1','x'); }
 
     void initParameter(uint32_t i, Parameter& p) override {

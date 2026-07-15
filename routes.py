@@ -4739,11 +4739,11 @@ def _ir_stage_gain(kind: str | None, ir_path: str | Path | None, base_gain: floa
 # loudness (measured range ≈ −25…−2 LUFS) and cranking Gain raises level. The
 # fix lives here, not in the DSP: data/amp_loudness_model.json holds a measured
 # BS.1770-4 LUFS sweep per amp (tools/measure_amp_loudness.py). From the amp's
-# resolved params we compute a CLEAN trim (dB) so every amp lands at the target
-# (−14 LUFS), with Gain allowed to push output up to −12 and Volume/Master up
-# to −11. The trim rides a tiny unit-impulse IR stage right after the amp (a
-# clean gain the engine already applies to IR stages) — the amp's own Gain param
-# is never touched, so it still saturates exactly as before. See AMP_LOUDNESS.md.
+# resolved params we compute a CLEAN trim (dB) so every amp lands at the −12 LUFS
+# target. Multi-channel amps use independently measured channel/mode profiles.
+# The trim rides a tiny unit-impulse IR stage right after the amp (a clean gain
+# the engine already applies to IR stages) — the amp's own Gain param is never
+# touched, so it still saturates exactly as before.
 _AMP_LOUDNESS_FILE = "amp_loudness_model.json"
 # CONSISTENCY across songs: every amp lands at the SAME loudness. The soft caps
 # used to let a high-gain amp sit ~2-3 dB LOUDER than a quiet DI preamp (Gain→−12,
@@ -4757,7 +4757,7 @@ _AMP_TARGET_LUFS = -12.0
 _AMP_CAP_GAIN_DB = 0.0     # no per-gain loudness bump — all amps hit the same target
 _AMP_CAP_VOL_DB = 0.0      # no per-volume loudness bump
 _AMP_TRIM_MIN_DB = -24.0   # deepest cut (very loud amps, e.g. jc90 ≈ −1.8 LUFS)
-_AMP_TRIM_MAX_DB = 12.0    # largest boost — enough for a quiet DI preamp to reach −12
+_AMP_TRIM_MAX_DB = 24.0    # post-amp clean boost; covers quiet real clean channels
 _AMP_TRIM_RS_GEAR = "__rb_amp_trim"   # sentinel rs_gear on the trim stage
 
 
@@ -4782,16 +4782,52 @@ def _interp_curve(curve, x: float) -> float:
     return curve[-1][1]
 
 
+def _amp_channel_profile(entry: dict, params: dict) -> dict | None:
+    """Return the measured profile for the exact active channel/mode.
+
+    Selector values are switches/stepped controls. When a host supplies an
+    intermediate morph value (for example SuperSonic Channel=0.4), retain the
+    legacy whole-amp curve instead of snapping the trim to either endpoint.
+    """
+    profiles = entry.get("channel_profiles") or []
+    if not profiles:
+        return None
+    selector_defaults = entry.get("selector_defaults") or {}
+    if not params and not selector_defaults:
+        wanted = entry.get("default_profile")
+        return next((p for p in profiles if p.get("name") == wanted), None)
+
+    best = None
+    best_error = float("inf")
+    for profile in profiles:
+        fixed = profile.get("fixed") or {}
+        if not fixed or any(name not in params and name not in selector_defaults
+                            for name in fixed):
+            continue
+        try:
+            error = max(
+                abs(float(params[name] if name in params else selector_defaults[name]) - float(value))
+                for name, value in fixed.items()
+            )
+        except (TypeError, ValueError):
+            continue
+        if error < best_error:
+            best, best_error = profile, error
+    return best if best_error <= 0.08 else None
+
+
 def _amp_loudness_trim_db(entry: dict, params: dict) -> float:
-    """Clean trim (dB) that levels an amp to the target with the soft caps.
+    """Clean post-amp trim (dB) that levels an amp to the common target.
 
     `entry` is one amp's amp_loudness_model.json record; `params` is the amp's
     resolved {param_name: 0..1} (missing names fall back to the measured
-    defaults). Gain stays saturating — we never touch it — but its loudness
-    contribution is soft-capped at +2 dB and Volume/Master's at +3 dB, so the
-    output sits in the −14…−11 LUFS band whatever the knobs do.
+    defaults). Gain stays saturating because this function never changes an amp
+    parameter. Exact channel/mode positions use their independently measured
+    profile; intermediate selector morphs retain the whole-amp fallback curve.
     """
-    default = entry.get("default") or {}
+    profile = _amp_channel_profile(entry, params)
+    calibration = profile or entry
+    default = calibration.get("default") or entry.get("default") or {}
 
     def _val(name):
         try:
@@ -4799,18 +4835,18 @@ def _amp_loudness_trim_db(entry: dict, params: dict) -> float:
         except (TypeError, ValueError):
             return float(default.get(name, 0.5))
 
-    gain_params = entry.get("gain_params") or []
-    gain_curve = entry.get("gain_curve") or []
+    gain_params = calibration.get("gain_params") or []
+    gain_curve = calibration.get("gain_curve") or []
     if gain_params and gain_curve:
         g_now = sum(_val(p) for p in gain_params) / len(gain_params)
         g_def = sum(float(default.get(p, 0.5)) for p in gain_params) / len(gain_params)
         l_gain = _interp_curve(gain_curve, g_now)
         l_def = _interp_curve(gain_curve, g_def)
     else:
-        l_gain = l_def = float(entry.get("lufs_default", _AMP_TARGET_LUFS))
+        l_gain = l_def = float(calibration.get("lufs_default", _AMP_TARGET_LUFS))
 
     d_vol = 0.0
-    for name, curve in (entry.get("vol_curves") or {}).items():
+    for name, curve in (calibration.get("vol_curves") or {}).items():
         if not curve:
             continue
         d_vol += _interp_curve(curve, _val(name)) - _interp_curve(curve, float(default.get(name, 0.5)))

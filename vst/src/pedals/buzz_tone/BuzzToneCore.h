@@ -71,23 +71,6 @@ public:
     }
 };
 
-class DcBlock
-{
-    float x1 = 0.0f;
-    float y1 = 0.0f;
-
-public:
-    void reset() { x1 = y1 = 0.0f; }
-
-    inline float process(float x)
-    {
-        const float y = x - x1 + 0.9985f * y1;
-        x1 = x;
-        y1 = dn(y);
-        return y1;
-    }
-};
-
 class BuzzToneCore
 {
     // Captain Fuzzle / Maestro FZ-1A style schematic:
@@ -114,9 +97,6 @@ class BuzzToneCore
     RcLowPass q2Miller;
     RcLowPass q3Miller;
     RcLowPass cableLoad;
-    DcBlock q1Dc;
-    DcBlock q2Dc;
-    DcBlock q3Dc;
 
     float sagEnv = 0.0f;
     float sagAttack = 0.0f;
@@ -147,17 +127,19 @@ class BuzzToneCore
         q1ToQ2.setRC(sampleRate, 4700.0f, kC2);
         q2ToQ3.setRC(sampleRate, 5000.0f, kC3);
 
-        // C4 10 nF into the 50 k volume pot is a major part of the thin,
-        // raspy FZ-1A voice: fc ~= 318 Hz.
-        outputCoupling.setRC(sampleRate, kVolumePot, kC4);
+        // C4 sees the 50 k volume track plus the following input/load rather
+        // than an ideal 50 k shunt. The measured effective corner is close to
+        // 160 Hz, retaining the low-mid body heard in the supplied renders.
+        outputCoupling.setRC(sampleRate, 2.0f * kVolumePot, kC4);
 
-        // Stray capacitance / transistor Miller equivalent. The real pedal is
-        // bright but not alias-fizzy; corners move slightly down as FUZZ rises.
+        // Stray capacitance / transistor Miller equivalent. FUZZ moves Q2 away
+        // from its low-gain bias point, so its useful bandwidth and upper
+        // harmonics increase across the sweep instead of becoming duller.
         const float f = clamp01(fuzz);
-        q1Miller.setHz(sampleRate, 7200.0f - 1200.0f * f);
-        q2Miller.setHz(sampleRate, 5200.0f - 1800.0f * f);
-        q3Miller.setHz(sampleRate, 6800.0f - 1100.0f * f);
-        cableLoad.setHz(sampleRate, 6200.0f);
+        q1Miller.setHz(sampleRate, 5600.0f + 900.0f * f);
+        q2Miller.setHz(sampleRate, 3400.0f + 2100.0f * f);
+        q3Miller.setHz(sampleRate, 4600.0f + 1700.0f * f);
+        cableLoad.setHz(sampleRate, 3000.0f + 3500.0f * f);
 
         sagAttack = 1.0f - std::exp(-1.0f / (0.012f * sampleRate));
         sagRelease = 1.0f - std::exp(-1.0f / (0.090f * sampleRate));
@@ -187,9 +169,6 @@ public:
         q2Miller.reset();
         q3Miller.reset();
         cableLoad.reset();
-        q1Dc.reset();
-        q2Dc.reset();
-        q3Dc.reset();
         sagEnv = 0.0f;
         updateComponentValues();
     }
@@ -217,7 +196,7 @@ public:
         // + germanium leakage give the asymmetry before the fuzz network.
         x = geStage(x, 9.5f + 5.0f * f, -0.19f, 1.45f, 2.25f,
                     rail * 0.74f, rail * 0.58f);
-        x = q1Miller.process(q1Dc.process(x));
+        x = q1Miller.process(x);
         x = q1ToQ2.process(x);
 
         // Q2: THE FUZZ stage. The real 50 kB pot sits in the Q2 bias/feedback network
@@ -229,20 +208,20 @@ public:
                           1.65f + 0.45f * f, 2.55f + 0.75f * f,
                           rail * (0.72f - 0.08f * f), rail * (0.62f + 0.04f * f));
         updateSag(y);
-        y = q2Miller.process(q2Dc.process(y));
+        y = q2Miller.process(y);
         y = q2ToQ3.process(y);
 
         // Q3: fixed recovery/output 2N1305 (also not FUZZ-controlled). It folds the
         // already-square wave into the raspy 1.5 V output stage.
-        y = geStage(y + 0.045f * x, 4.8f + 2.0f * f, -0.075f,
+        y = geStage(y + 0.045f * x, 1.0f + 0.5f * f, -0.075f,
                     1.35f, 2.05f, rail * 0.70f, rail * 0.56f);
-        y = q3Miller.process(q3Dc.process(y));
+        y = q3Miller.process(y);
 
         y = outputCoupling.process(y);
         y = cableLoad.process(y);
 
-        // Leave level normalization to the wrapper's RBAutoMakeup; this trim
-        // keeps the makeup ratio in a stable range before the real Volume pot.
+        // Leave final reference-level calibration to the wrapper; this trim
+        // keeps the core in a stable range before the real Volume pot.
         return y * (0.78f + 0.16f * f);
     }
 };

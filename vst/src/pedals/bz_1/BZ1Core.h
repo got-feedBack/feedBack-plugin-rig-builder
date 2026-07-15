@@ -78,23 +78,6 @@ public:
     }
 };
 
-class DcBlock
-{
-    float x1 = 0.0f;
-    float y1 = 0.0f;
-
-public:
-    void reset() { x1 = y1 = 0.0f; }
-
-    inline float process(float x)
-    {
-        const float y = x - x1 + 0.9985f * y1;
-        x1 = x;
-        y1 = dn(y);
-        return y1;
-    }
-};
-
 class BZ1Core
 {
     // Boss FZ-3 / Aion Argent style schematic:
@@ -148,13 +131,7 @@ class BZ1Core
     RcLowPass fuzzBypass;
     RcLowPass toneLow;
     RcLowPass toneHigh;
-    RcLowPass toneBody;
     RcLowPass fbLp;        // R12 100k / C6 1n shunt-feedback rolloff (~1.6 kHz)
-    DcBlock q2Dc;
-    DcBlock q3Dc;
-    DcBlock q4Dc;
-    DcBlock q5Dc;
-    DcBlock q6Dc;
 
     float fbState = 0.0f;  // Fuzz Face shunt feedback memory: Q5 emitter -> Q4 base
     float sagEnv = 0.0f;
@@ -183,8 +160,6 @@ class BZ1Core
     void updateComponentValues()
     {
         const float f = clamp01(fuzz);
-        const float t = clamp01(tone);
-
         inputC1.setRC(sampleRate, kR1 + kR2, kC1);
         jfetToQ2.setRC(sampleRate, parallel(kR4, kR5), kC2 + kC3);
         q3ToFuzz.setRC(sampleRate, kR12, kC5);
@@ -206,10 +181,10 @@ class BZ1Core
 
         fbLp.setRC(sampleRate, kR12, 1.0e-9f);   // R12 100k / C6 1n -> ~1.6 kHz feedback rolloff
 
-        toneLow.setRC(sampleRate, kR21 + kR22 + 80000.0f * (1.0f - t), kC12);
-        toneHigh.setRC(sampleRate, kR20 + 100000.0f * t, kC11);
-        // real Big Muff mid-scoop sits ~400 Hz-1 kHz (was placed 1.2-2.5 kHz = too nasal/thin)
-        toneBody.setHz(sampleRate, 700.0f + 650.0f * t);
+        // The 100 kW pot blends fixed branches: R21+R22/C12 is the low side,
+        // while C11/R20 is the high side. The wiper does not move either corner.
+        toneLow.setRC(sampleRate, kR21 + kR22, kC12);
+        toneHigh.setRC(sampleRate, kR20, kC11);
 
         sagAttack = 1.0f - std::exp(-1.0f / (0.010f * sampleRate));
         sagRelease = 1.0f - std::exp(-1.0f / (0.085f * sampleRate));
@@ -235,12 +210,7 @@ class BZ1Core
         const float low = toneLow.process(x);
         const float highBase = toneHigh.process(x);
         const float high = x - 0.82f * highBase;
-        const float body = toneBody.process(x);
-        const float scoop = 0.18f + 0.20f * (1.0f - std::fabs(2.0f * t - 1.0f));
-
-        return low * (1.16f - 0.88f * tw)
-             + high * (0.16f + 1.18f * tw)
-             - body * scoop;
+        return (1.0f - tw) * low + 1.10f * tw * high;
     }
 
 public:
@@ -269,14 +239,8 @@ public:
         fuzzBypass.reset();
         toneLow.reset();
         toneHigh.reset();
-        toneBody.reset();
         fbLp.reset();
         fbState = 0.0f;
-        q2Dc.reset();
-        q3Dc.reset();
-        q4Dc.reset();
-        q5Dc.reset();
-        q6Dc.reset();
         sagEnv = 0.0f;
         updateComponentValues();
     }
@@ -310,12 +274,12 @@ public:
         float y = bjtStage(x, 2.0f + 6.0f * f, -0.035f,
                            1.25f + 0.45f * f, 1.05f + 0.22f * f,
                            railC * 0.72f, railC * 0.62f);
-        y = q2Miller.process(q2Dc.process(y));
+        y = q2Miller.process(y);
 
         y = bjtStage(y, 1.8f + 8.4f * f, 0.022f,
                      1.42f + 0.70f * f, 1.22f + 0.38f * f,
                      railC * 0.76f, railC * 0.67f);
-        y = q3Miller.process(q3Dc.process(y));
+        y = q3Miller.process(y);
         y = q3ToFuzz.process(y);
 
         const float bypass = fuzzBypass.process(y);
@@ -332,25 +296,25 @@ public:
                      1.55f + 1.20f * f, 1.22f + 0.82f * f,
                      railA * (0.74f - 0.06f * f), railA * (0.66f + 0.04f * f));
         updateSag(y);
-        y = q4Miller.process(q4Dc.process(y));
+        y = q4Miller.process(y);
 
         y = bjtStage(y + 0.18f * fuzzDrive, 3.6f + 13.0f * f,
                      0.034f + 0.012f * f,
                      1.28f + 0.92f * f, 1.08f + 0.62f * f,
                      railA * 0.78f, railA * 0.68f);
         fbState = fbLp.process(y);   // Q5 output -> feedback (HF-shunted by C6), used next sample
-        y = q5Miller.process(q5Dc.process(y));
+        y = q5Miller.process(y);
         y = q5ToQ6.process(y);
 
         y = bjtStage(y, 2.5f + 3.8f * f, -0.020f,
                      1.18f + 0.35f * f, 1.04f + 0.22f * f,
                      railA * 0.78f, railA * 0.64f);
-        y = q6Miller.process(q6Dc.process(y));
+        y = q6Miller.process(y);
         y = q6ToTone.process(y);
 
         y = toneStack(y);
         y = toneToBuffer.process(y);
-        y = q7Load.process(std::tanh(1.08f * y) * 0.93f);
+        y = q7Load.process(0.93f * y);
         y = outputC14.process(y);
 
         return y * (0.54f + 0.08f * f);

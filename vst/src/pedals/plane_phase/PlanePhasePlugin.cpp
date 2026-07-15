@@ -126,17 +126,16 @@ class PlanePhaseCore
 
     void updateFilters()
     {
-        const float d = smoothstep(depth);
-        const float m = smoothstep(mix);
         inputHp.setHighPass(sampleRate, 32.0f);
-        driveTone.setLowPass(sampleRate, 7200.0f - 1100.0f * d);
-        outputLp.setLowPass(sampleRate, 6200.0f - 1350.0f * d - 550.0f * m);
+        driveTone.setLowPass(sampleRate, 13000.0f);
+        outputLp.setLowPass(sampleRate, 11000.0f);
         lfoLag.setLowPass(sampleRate, 7.5f + 20.0f * rate);
     }
 
     float currentRateHz() const
     {
-        return 0.050f + 5.15f * std::pow(clamp01(rate), 1.44f);
+        const float shaped = std::pow(clamp01(rate), 0.95f);
+        return 0.050f * std::pow(103.0f, shaped);
     }
 
     float lfoValue()
@@ -196,38 +195,37 @@ public:
         if (lfoPhase >= 1.0f)
             lfoPhase -= std::floor(lfoPhase);
 
-        const float d = 0.03f + 0.97f * smoothstep(depth);
-        const float m = mix <= 0.0001f ? 0.0f : clamp01(0.10f + 1.05f * mix);
+        const float d = smoothstep(depth);
+        const float m = smoothstep(mix);
         const float lfo = lfoValue();
 
         float x = inputHp.highPass(in);
         x = driveTone.lowPass(x);
         env += onePoleCoeffHz(18.0f, sampleRate) * (std::fabs(x) - env);
-        const float driven = std::tanh(x * (1.10f + 0.42f * d + 0.18f * env)) * 0.88f;
+        const float driven = std::tanh(x * (1.10f + 0.10f * env)) * 0.90f;
 
-        static const float baseHz[kStageCount] = { 68.0f, 106.0f, 178.0f, 305.0f, 520.0f, 890.0f, 1510.0f, 2460.0f };
-        const float resonance = (0.30f + 0.38f * d + 0.18f * m);
+        static const float tolerance[kStageCount] = {
+            0.965f, 0.978f, 0.990f, 0.998f, 1.006f, 1.016f, 1.030f, 1.045f
+        };
+        const float resonance = 0.12f + 0.28f * d + 0.12f * m;
         float shifted = driven - feedback * resonance;
         for (int i = 0; i < kStageCount; ++i)
         {
-            float stageLfo = lfo + 0.055f * (float)i;
-            if (stageLfo > 1.0f)
-                stageLfo -= 1.0f;
-            const float sweep = 0.18f + (13.6f + 5.2f * d) * smoothstep(stageLfo);
-            shifted = stages[i].process(shifted, sampleRate, baseHz[i] * sweep);
+            const float cv = clamp01(0.50f + (lfo - 0.50f) * d);
+            const float corner = 80.0f * std::pow(35.0f, std::pow(cv, 1.25f));
+            shifted = stages[i].process(shifted, sampleRate, corner * tolerance[i]);
         }
 
-        feedback = std::tanh(shifted) * (0.46f + 0.20f * d);
-        const float jet = shifted - driven * (0.18f + 0.12f * d);
-        const float wet = outputLp.lowPass(std::tanh(jet * (1.08f + 0.24f * m)));
+        feedback = shifted;
+        const float wet = outputLp.lowPass(shifted);
 
-        // Tamed Mix: the old wetLevel (0.34+1.05*m)*m hit 1.39 at full Mix, so the
-        // notch overwhelmed the dry and the effect pumped "seasick" past Mix ~0.6.
-        // Keep more dry and grow the wet gentler so high Mix is deep but musical.
-        const float dryLevel = 1.0f - 0.12f * m;
-        const float wetLevel = (0.26f + 0.44f * m) * m;
-        const float y = driven * dryLevel - wet * wetLevel;
-        return std::tanh(y * 0.93f) * 0.98f;
+        const float wetLevel = 0.50f * m;
+        const float dryLevel = 1.0f - wetLevel;
+        float y = (driven * dryLevel + wet * wetLevel) * (1.0f + 0.10f * m);
+        const float ay = std::fabs(y);
+        if (ay > 0.88f)
+            y = (y < 0.0f ? -1.0f : 1.0f) * (0.88f + 0.10f * std::tanh((ay - 0.88f) / 0.10f));
+        return y;
     }
 };
 
@@ -254,7 +252,7 @@ public:
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kPlanePhaseDef[i];
         left.setPhaseOffset(0.00f);
-        right.setPhaseOffset(0.025f);
+        right.setPhaseOffset(0.00f);
         left.setSampleRate((float)getSampleRate());
         right.setSampleRate((float)getSampleRate());
         applyAll();
@@ -265,7 +263,7 @@ protected:
     const char* getDescription() const override { return "AP-7 style eight-stage phaser"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('P', 'l', 'P', 'h'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

@@ -66,12 +66,13 @@ class ReverbCore {
     RvAllpass apL[4],     apR[4];
     // post modulation (Depth)
     float modBufL[2048], modBufR[2048]; int mw = 0;
+    float earlyBuf[32768]; int earlyWrite = 0; float earlyLp = 0.0f;
     float lfoPh = 0.f, lfoInc = 0.f, modDepth = 0.f, modMix = 0.f;
     // Equal-power dry/wet crossfade gains (precomputed in setParams). The raw
     // comb sum is ~16-22 dB hotter than the dry, so `wetMix` folds in a
     // level-match (so full wet ≈ dry) and the cos/sin law keeps the perceived
     // volume ~constant as Mix rises (no "wet is way louder" / "19% = full room").
-    float dryMix = 1.0f, wetMix = 0.0f;
+    float dryMix = 1.0f, wetMix = 0.0f, wetLevelMatch = 0.1f, earlyMix = 0.0f;
     // voicing
     float sizeScale = 1.f, dampBias = 0.f, apFb = 0.5f, wetMax = 1.f;
 
@@ -96,7 +97,8 @@ public:
         for (int i = 0; i < 8; ++i) { combL[i].clear(); combR[i].clear(); }
         for (int i = 0; i < 4; ++i) { apL[i].clear();   apR[i].clear(); }
         std::memset(modBufL, 0, sizeof(modBufL)); std::memset(modBufR, 0, sizeof(modBufR));
-        mw = 0; lfoPh = 0.f;
+        std::memset(earlyBuf, 0, sizeof(earlyBuf));
+        mw = 0; earlyWrite = 0; earlyLp = 0.0f; lfoPh = 0.f;
     }
     void setParams(float time, float tone, float depth, float mixP) {
         const float sr = fs / 44100.0f * sizeScale;
@@ -123,13 +125,39 @@ public:
         // tail at long decay (feedback 0.975 -> 0.021), so Time changed LEVEL not
         // just decay. Keep the same level at short/medium decay but add a floor so
         // long decays stay audible (0.975 -> ~0.07 instead of 0.021).
-        const float wetLevel = (1.0f - feedback) * 0.41f + 0.06f;
+        wetLevelMatch = (1.0f - feedback) * 0.41f + 0.06f;
         float m = ((mixP < 0.f) ? 0.f : (mixP > 1.f ? 1.f : mixP)) * wetMax;
         const float a = m * 1.5707963f;
         dryMix = std::cos(a);
-        wetMix = std::sin(a) * wetLevel;
+        wetMix = std::sin(a) * wetLevelMatch;
+    }
+    void setOutputMix(float dry, float wet) {
+        dryMix = (dry < 0.f) ? 0.f : (dry > 1.f ? 1.f : dry);
+        wet = (wet < 0.f) ? 0.f : (wet > 1.5f ? 1.5f : wet);
+        wetMix = wet * wetLevelMatch;
+    }
+    void setEarlyMix(float amount) {
+        earlyMix = (amount < 0.f) ? 0.f : (amount > 2.f ? 2.f : amount);
     }
     inline void process(float xL, float xR, float& outL, float& outR) {
+        const float dryInput = (xL + xR) * 0.5f;
+        earlyBuf[earlyWrite] = dryInput;
+        const int earlyDelays[5] = {
+            (int)(fs * 0.004f), (int)(fs * 0.016f), (int)(fs * 0.031f),
+            (int)(fs * 0.049f), (int)(fs * 0.073f)
+        };
+        const float earlyGains[5] = { 0.08f, -0.28f, 0.25f, -0.18f, 0.15f };
+        float early = 0.0f;
+        for (int i = 0; i < 5; ++i) {
+            int rp = earlyWrite - earlyDelays[i];
+            while (rp < 0) rp += 32768;
+            early += earlyGains[i] * earlyBuf[rp];
+        }
+        const float earlyLpCoeff = 1.0f - std::exp(-6.2831853f * 2500.0f / fs);
+        earlyLp += earlyLpCoeff * (early - earlyLp);
+        early = earlyLp;
+        if (++earlyWrite >= 32768) earlyWrite = 0;
+
         const float in = (xL + xR) * 0.5f * 0.30f;                    // mono feed, scaled (Freeverb gain)
         float wL = 0.f, wR = 0.f;
         for (int i = 0; i < 8; ++i) { wL += combL[i].process(in); wR += combR[i].process(in); }
@@ -149,8 +177,8 @@ public:
         }
         if (++mw >= 2048) mw = 0;
 
-        outL = xL * dryMix + wL * wetMix;
-        outR = xR * dryMix + wR * wetMix;
+        outL = xL * dryMix + wL * wetMix + early * earlyMix;
+        outR = xR * dryMix + wR * wetMix + early * earlyMix;
     }
 };
 

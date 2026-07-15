@@ -44,11 +44,6 @@ static inline float coeffMs(float ms, float sr)
     return 1.0f - std::exp(-1.0f / std::fmax(1.0f, ms * 0.001f * sr));
 }
 
-static inline float audioTaper(float v)
-{
-    return std::pow(clamp01(v), 1.85f);
-}
-
 class RcHighPass
 {
     float a = 0.0f;
@@ -142,10 +137,13 @@ class LimiterPlugin : public Plugin
 
     void recalc()
     {
-        const float level = audioTaper(params[kLevel]);
+        const float level = clamp01(params[kLevel]);
         tone = clamp01(params[kTone]);
-        const float release = clamp01(params[kRelease]);
-        const float threshold = audioTaper(params[kThreshold]);
+        const float release = std::pow(clamp01(params[kRelease]), 1.55f);
+        // VR1 is 50kB: its electrical sweep is linear. It moves the detector
+        // reference; the limiter ratio is set by the fixed gain computer and
+        // internal adjustment, not by the panel Threshold pot.
+        const float threshold = clamp01(params[kThreshold]);
 
         inputCapL.setRC(sampleRate, 1010000.0f, 0.1e-6f);
         inputCapR.setRC(sampleRate, 1010000.0f, 0.1e-6f);
@@ -159,15 +157,20 @@ class LimiterPlugin : public Plugin
         toneBrightL.setHz(sampleRate, 7200.0f + 6200.0f * tone);
         toneBrightR.setHz(sampleRate, 7200.0f + 6200.0f * tone);
 
-        thresholdDb = -5.0f - 37.0f * threshold;
-        ratio = 4.0f + 26.0f * threshold;
-        maxReductionDb = 10.0f + 28.0f * threshold;
+        thresholdDb = -12.0f - 18.0f * threshold;
+        ratio = 10.0f + 2.0f * threshold;
+        maxReductionDb = 12.0f;
 
         attackA = coeffMs(0.55f + 1.2f * (1.0f - threshold), sampleRate);
-        releaseA = coeffMs(35.0f + 760.0f * release, sampleRate);
-        grAttackA = coeffMs(0.85f + 2.0f * (1.0f - threshold), sampleRate);
-        grReleaseA = coeffMs(45.0f + 640.0f * release, sampleRate);
-        levelGain = dbToAmp(-28.0f + 42.0f * level);
+        releaseA = coeffMs(45.0f + 720.0f * release, sampleRate);
+        grAttackA = coeffMs(0.85f + 1.6f * (1.0f - threshold), sampleRate);
+        grReleaseA = coeffMs(55.0f + 610.0f * release, sampleRate);
+
+        // VR4 is the 100kA Level pot. Normalize its audio taper at the shipped
+        // default (0.58) so the pedal is near unity there, while zero remains a
+        // real mute and the upper half retains output boost.
+        const float levelAnchor = std::pow(kLimiterDef[kLevel], 2.20f);
+        levelGain = std::pow(level, 2.20f) / std::fmax(1.0e-5f, levelAnchor);
 
         detectorClamp.setSpec(rbcomponents::diode1S188FM());
         detectorClamp.setSourceR(47000.0f - 18000.0f * threshold);
@@ -213,7 +216,7 @@ protected:
     const char* getDescription() const override { return "Boss LM-2-style VCA limiter"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('L', 'i', 'm', 't'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

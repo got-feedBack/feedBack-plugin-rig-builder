@@ -140,11 +140,7 @@ class SuperBuzzCore
     RcHighPass scoopHp;     // mid-band extraction for the tone-switch scoop notch
     RcLowPass scoopLp;
     RcLowPass outputLoad;
-    DcBlock q1Dc;
-    DcBlock q2Dc;
-    DcBlock q3Dc;
     DcBlock splitDc;
-    DcBlock q6Dc;
     rbcomponents::AntiParallelDiodePair oa90;
 
     float sagEnv = 0.0f;
@@ -240,11 +236,7 @@ public:
         scoopHp.reset();
         scoopLp.reset();
         outputLoad.reset();
-        q1Dc.reset();
-        q2Dc.reset();
-        q3Dc.reset();
         splitDc.reset();
-        q6Dc.reset();
         oa90.reset();
         sagEnv = 0.0f;
         updateComponentValues();
@@ -274,19 +266,19 @@ public:
         // octave waveform + the post-octave drive, not from slamming the preamp.
         x = bjtStage(x, 1.8f + 1.6f * e, -0.026f,
                      1.22f, 1.05f, rail * 0.74f, rail * 0.62f);
-        x = q1Miller.process(q1Dc.process(x));
+        x = q1Miller.process(x);
         x = q2Coupling.process(x);
 
         x = bjtStage(x, 1.6f + 2.0f * e, 0.018f,
                      1.34f, 1.12f, rail * 0.78f, rail * 0.66f);
-        x = q2Miller.process(q2Dc.process(x));
+        x = q2Miller.process(x);
 
         // EXPANDER 50 kB: drive into Q3 and the phase-split octave pair.
         x = expanderCoupling.process(x * (0.20f + 0.80f * e));
         x = bjtStage(x, 1.8f + 1.9f * e, -0.032f,
                      1.42f + 0.28f * e, 1.18f + 0.18f * e,
                      rail * 0.78f, rail * 0.68f);
-        x = q3Miller.process(q3Dc.process(x));
+        x = q3Miller.process(x);
 
         // Q4/Q5 phase splitter — two anti-phase copies. Lightly overdriven (asymmetry
         // adds grit) but NOT squared, so the rectifier can frequency-double them.
@@ -319,11 +311,10 @@ public:
         y = balanceToQ6.process(y);
         y = bjtStage(y, 2.8f + 1.0f * e, -0.010f,
                      1.18f, 1.04f, rail * 0.76f, rail * 0.62f);
-        y = outputLoad.process(q6Dc.process(y));
+        y = outputLoad.process(y);
         y = outputCoupling.process(y);
 
-        const float trim = 0.32f / (1.0f + 0.18f * e);
-        return std::tanh(y * trim);
+        return y * 0.32f;
     }
 };
 

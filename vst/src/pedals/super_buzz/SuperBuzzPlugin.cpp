@@ -22,13 +22,19 @@ static inline float clamp01(float v)
 
 static inline float finalLimit(float x)
 {
-    return std::tanh(0.98f * x);
+    if (x > 1.0f)
+        return 1.0f - std::exp(-(x - 1.0f));
+    if (x < -1.0f)
+        return -1.0f + std::exp(x + 1.0f);
+    return x;
 }
 
 static inline float staticFuzzMakeup(float expander)
 {
     const float e = clamp01(expander);
-    return 1.24f / (0.70f + 0.42f * e);
+    const float u = clamp01(2.0f * e);
+    const float compressed = u * u * (3.0f - 2.0f * u);
+    return 1.0f - 0.40f * compressed;
 }
 
 } // namespace
@@ -68,7 +74,7 @@ protected:
     const char* getDescription() const override { return "Univox Super-Fuzz style octave fuzz"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 2, 0); }
+    uint32_t getVersion() const override { return d_version(1, 3, 0); }
     int64_t getUniqueId() const override { return d_cconst('B', 'z', 'O', '1'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

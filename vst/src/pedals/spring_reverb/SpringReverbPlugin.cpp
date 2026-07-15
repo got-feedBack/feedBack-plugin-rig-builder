@@ -246,6 +246,7 @@ class SpringReverbCore
     AllpassDelay allpasses[kAllpassCount];
     AllpassDelay dispersion[5];          // dispersive chain -> the spring "boing"/chirp
     DampedComb combs[kCombCount];
+    DelayBuffer earlyLine;
 
     float fastEnv = 0.0f;
     float slowEnv = 0.0f;
@@ -268,7 +269,10 @@ class SpringReverbCore
         for (int i = 0; i < 5; ++i)
         {
             const float stage = (float)i + 1.0f;
-            const float dispMs = (1.6f + 1.15f * stage) * (1.0f + 0.45f * depth);
+            // The reference reaches its first audible spring cluster around
+            // 7 ms and its main onset near 36 ms. The previous five-stage sum
+            // added roughly 33 ms before the first 29.7 ms tank reflection.
+            const float dispMs = (0.55f + 0.35f * stage) * (1.0f + 0.35f * depth);
             const float dispFb = 0.62f + 0.05f * (float)i;
             dispersion[i].set(sampleRate, dispMs * stereoSkew, dispFb);
         }
@@ -279,10 +283,10 @@ class SpringReverbCore
 
     void updateFilters()
     {
-        inputHp.setHighPass(sampleRate, 105.0f, 0.68f);
-        inputLp.setLowPass(sampleRate, 6600.0f - 1700.0f * depth, 0.72f);
-        tankHp.setHighPass(sampleRate, 150.0f + 40.0f * (1.0f - depth), 0.70f);
-        tankLp.setLowPass(sampleRate, 3600.0f + 1800.0f * depth, 0.62f);
+        inputHp.setHighPass(sampleRate, 125.0f, 0.68f);
+        inputLp.setLowPass(sampleRate, 7000.0f - 1500.0f * depth, 0.72f);
+        tankHp.setHighPass(sampleRate, 380.0f + 80.0f * (1.0f - depth), 0.70f);
+        tankLp.setLowPass(sampleRate, 5000.0f + 2500.0f * depth, 0.62f);
         dripA.setBandPass(sampleRate, 1850.0f + 420.0f * depth, 5.2f + 4.8f * depth);
         dripB.setBandPass(sampleRate, 3180.0f + 760.0f * depth, 4.6f + 4.2f * depth);
 
@@ -314,6 +318,7 @@ public:
         tankLp.reset();
         dripA.reset();
         dripB.reset();
+        earlyLine.reset();
         for (int i = 0; i < kAllpassCount; ++i)
             allpasses[i].reset();
         for (int i = 0; i < 5; ++i)
@@ -331,6 +336,7 @@ public:
             dispersion[i].prepare(sampleRate, 20.0f);
         for (int i = 0; i < kCombCount; ++i)
             combs[i].prepare(sampleRate, 120.0f);
+        earlyLine.resize(msToSamples(90.0f, sampleRate) + 8);
         updateDelayTimes();
         updateFilters();
         reset();
@@ -359,6 +365,13 @@ public:
         const float dry = in;
         float x = inputHp.process(in);
         x = inputLp.process(x);
+
+        earlyLine.write(x);
+        const float earlySpring = 0.04f * earlyLine.read(msToSamples(7.0f, sampleRate))
+            - 0.06f * earlyLine.read(msToSamples(18.0f, sampleRate))
+            + 0.18f * earlyLine.read(msToSamples(31.0f, sampleRate))
+            - 0.44f * earlyLine.read(msToSamples(47.0f, sampleRate))
+            + 0.48f * earlyLine.read(msToSamples(65.0f, sampleRate));
 
         const float absX = std::fabs(x);
         fastEnv += fastCoeff * (absX - fastEnv);
@@ -393,22 +406,22 @@ public:
         for (int i = 2; i < kAllpassCount; ++i)
             tank = allpasses[i].process(tank);
 
-        float wet = tankHp.process(tank);
+        float wet = tankHp.process(0.80f * tank + earlySpring);
         wet = tankLp.process(wet);
         wet += drip * (0.026f + 0.030f * depth);
 
-        // Equal-power dry/wet crossfade keeps the dry guitar present at typical
-        // Mix and the loudness ~constant. The spring's raw wet is low-level, so
-        // boost it to be clearly audible; a soft limiter then only tames the
-        // wet-heavy (high-Mix) peaks. The dry guitar (peak ~0.2) sits well below
-        // the knee so it is never touched -> no dry squashing, no hot full-Mix.
-        const float a = std::pow(mix, 1.9f) * 1.5707963f;   // gentler Mix taper: 1/4 knob ~subtle, not near-full
-        const float dryLevel = std::cos(a);
-        const float wetLevel = std::sin(a) * (1.45f + 0.25f * depth);
+        // The reference Reverb control behaves like an additive spring return
+        // through most of its travel: dry stays nearly unity at 20/50, while
+        // wet measures 0.058/0.283 relative to full. Only the final part fades
+        // the dry to provide a true wet-only endpoint.
+        const float m2 = mix * mix;
+        const float wetCurve = clamp01(0.0995f * mix + 0.9655f * m2 - 0.0650f * m2 * mix);
+        const float dryLevel = std::cos(1.5707963f * std::pow(mix, 4.0f));
+        const float wetLevel = wetCurve * (1.45f + 0.25f * depth) * 1.12f;
         float y = dry * dryLevel + wet * wetLevel;
         const float ay = std::fabs(y);
-        if (ay > 0.50f)
-            y = (y < 0.0f ? -1.0f : 1.0f) * (0.50f + 0.20f * std::tanh((ay - 0.50f) / 0.20f));
+        if (ay > 0.42f)
+            y = (y < 0.0f ? -1.0f : 1.0f) * (0.42f + 0.08f * std::tanh((ay - 0.42f) / 0.08f));
         return y * 0.96f;
     }
 };
@@ -447,7 +460,7 @@ protected:
     const char* getDescription() const override { return "Spring tank reverb"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 2); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('S', 'p', 'R', 'v'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

@@ -22,13 +22,27 @@ static inline float clamp01(float v)
 
 static inline float finalLimit(float x)
 {
-    return std::tanh(0.98f * x);
+    if (x > 1.0f)
+        return 1.0f - std::exp(-(x - 1.0f));
+    if (x < -1.0f)
+        return -1.0f + std::exp(x + 1.0f);
+    return x;
 }
 
-static inline float staticFuzzMakeup(float sustain)
+static inline float staticFuzzMakeup(float sustain, float tone)
 {
     const float s = clamp01(sustain);
-    return 1.28f / (0.62f + 0.48f * s);
+    const float t = clamp01(tone);
+    // The real 100 k Sustain pot raises the signal feeding Q3. Keep that
+    // audible level/sustain rise instead of cancelling it with inverse makeup.
+    // Reference sweep: most of the audible rise occurs in the first half of
+    // the linear 100 k pot, then the diode stages compress the upper half.
+    const float base = 0.500f + 0.324f * s - 0.120f * s * s;
+    const float su = clamp01(2.0f * s);
+    const float compressed = su * su * (3.0f - 2.0f * su);
+    const float loadedToneGain = 1.0f + compressed * (0.06f + 0.55f * t - 0.22f * t * t);
+    const float recoveryGain = 1.0f + 0.80f * t + 0.06f * t * t;
+    return base * loadedToneGain * recoveryGain;
 }
 
 } // namespace
@@ -68,7 +82,7 @@ protected:
     const char* getDescription() const override { return "V1 Big Muff style silicon fuzz"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 2, 0); }
+    uint32_t getVersion() const override { return d_version(1, 3, 0); }
     int64_t getUniqueId() const override { return d_cconst('B', 'z', 'T', '2'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -128,7 +142,7 @@ protected:
 
             const float wetL = osL.downsample(ubL);
             const float wetR = osR.downsample(ubR);
-            const float makeup = staticFuzzMakeup(params[kSustain]);
+            const float makeup = staticFuzzMakeup(params[kSustain], params[kTone]);
             outL[i] = finalLimit(wetL * volume * makeup);
             outR[i] = finalLimit(wetR * volume * makeup);
         }
