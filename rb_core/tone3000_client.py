@@ -156,16 +156,16 @@ class Tone3000Client:
                         self._auth_fail_reason = "401 unauthorized — reconnect tone3000"
                     self.has_api_access = False
                     return None
-                if e.code == 429 and attempt < max_attempts - 1:
-                    # Honour Retry-After when present, else exponential
-                    # backoff with a little slope so parallel workers don't
-                    # resynchronise on the same tick. tone3000's budget
-                    # refills every ~0.6s so even one short pause clears it.
-                    # Cap the computed fallback so a late attempt can't stall
-                    # for minutes; a server-hinted Retry-After is honoured up
-                    # to the same ceiling. More attempts (7) mean the tail of
-                    # a big batch keeps retrying long enough to clear a
-                    # saturated window instead of failing outright.
+                if e.code in (429, 403) and attempt < max_attempts - 1:
+                    # tone3000 throttles a busy batch with BOTH 429 AND 403:
+                    # the same tone that 403s mid-run lists its models fine in
+                    # isolation, so a 403 is (usually) a transient rate block,
+                    # not a real "forbidden". Retry it the same way as a 429.
+                    # Honour Retry-After when present, else exponential backoff
+                    # with a little slope so parallel workers don't resynchronise
+                    # on the same tick, capped so a late attempt can't stall for
+                    # minutes. More attempts (7) let the tail of a big batch keep
+                    # retrying long enough to clear a saturated window.
                     retry_after = 0
                     try:
                         retry_after = int(e.headers.get("Retry-After", "0"))
@@ -176,17 +176,13 @@ class Tone3000Client:
                     time.sleep(sleep_s)
                     continue
                 if e.code == 403:
-                    # Forbidden. This is RESOURCE-scoped far more often than it
-                    # is session-scoped: a single tone/pack can 403 on /models
-                    # even while the token is perfectly valid (we just
-                    # downloaded dozens of other captures on it). The old code
-                    # flipped has_api_access off on the FIRST 403, so one bad
-                    # tone (e.g. GB100) aborted the whole batch and every
-                    # remaining capture reported "not connected". Fail just this
-                    # call (return None → the caller reports it) and KEEP the
-                    # session so the rest of the batch continues. A genuinely
-                    # revoked token surfaces via the Setup connection test.
-                    self._auth_fail_reason = "403 forbidden (resource or token)"
+                    # Retries exhausted. A 403 is RESOURCE-scoped far more often
+                    # than session-scoped: one tone 403ing (even after retries)
+                    # must NOT flip has_api_access off — the old code did, so one
+                    # bad tone aborted the whole batch as "not connected". Fail
+                    # just this call and keep the session; a genuinely revoked
+                    # token still surfaces via the Setup connection test.
+                    self._auth_fail_reason = "403 forbidden (rate/abuse or resource)"
                     return None
                 raise
 
@@ -520,8 +516,10 @@ class Tone3000Client:
                     os.remove(tmp_path)
                 except FileNotFoundError:
                     pass
-                if e.code != 429 or attempt == max_attempts - 1:
+                if e.code not in (429, 403) or attempt == max_attempts - 1:
                     raise
+                # tone3000 throttles a busy batch with 403 as well as 429, so
+                # retry both (a real "forbidden" clears via the Setup test).
                 # Backoff: prefer Retry-After if the server hinted one,
                 # otherwise 2^attempt + jitter so successive retries
                 # spread out. tone3000's 100-req/min budget refills

@@ -768,6 +768,7 @@
     "gain_variants": {
       "clean": {
         "curator": "Nacho",
+        "model_id": 210530,
         "model_name": "Laney IRT120 Clean Channel",
         "notes": "Laney IRT120 - Clean Channel",
         "rs_gain_range": [
@@ -778,6 +779,7 @@
       },
       "crunch": {
         "curator": "Nacho",
+        "model_id": 210528,
         "model_name": "Laney IRT120 Clean Channel - Boosted",
         "notes": "Laney IRT120 - Clean Channel Boosted",
         "rs_gain_range": [
@@ -788,6 +790,7 @@
       },
       "dist": {
         "curator": "Nacho",
+        "model_id": 210529,
         "model_name": "Laney IRT120 Lead Channel",
         "notes": "Laney IRT120 - Lead Channel",
         "rs_gain_range": [
