@@ -5,23 +5,16 @@
 // REBUILT circuit-real / Guitarix-style from the hand-traced 7-page schematic
 // (amps/Matchless Chieftan (BTQ-15)/Matchless-Chieftan-Schematic.pdf).
 //
-// EVERY audible stage is a REAL part (no tanh stand-ins except the final OT
-// soft-clip ceiling): the two 12AX7 preamp triodes are rbtube::TubeStage
-// (PURE Koren plate table + physical cathode auto-bias loop, Guitarix
-// `tubestageF` topology, our tables), the Bass/Mid/Treble network is the real
-// 3rd-order R/C transfer function (rbtube::ToneStackYeh, double precision), and
-// the 2x EL34 push-pull power amp is rbtube::PowerAmpEL34 (pure EL34 pentode
-// table, differential push-pull summed by the OT, cathode-bias sag). The amp
-// runs at 2x oversampling (rbshared::Oversampler4x, OS=2) around the nonlinear
-// chain, exactly like the BOX AC30 template (en30/BoxDC30Core.h).
+// The nonlinear stages use the local Koren-derived 12AX7/EL34 tables. The
+// passive controls retain the values and placement from the seven-page
+// schematic; the plugin runs the nonlinear chain oversampled.
 //
 // Schematic stage-by-stage (PAGE 1 / 2 / 4 of the hand-traced sheets):
 //   IN -> 68K grid stopper + 1M grid leak                       (PAGE 1)
 //   V1  12AX7  : 100K plate to 220V B+, 1.5K cathode (opt 25uF) (PAGE 1)
-//   TMB tone stack : BASS 1M / MID 250K / TREBLE 1M, slope 100K,
-//                    treble cap 5100pF (LARGE -> warm), 22nF bass/mid (PAGE 1)
-//   VOLUME 250K  : the inter-stage drive control (= RS Gain)    (PAGE 1)
-//   V2  12AX7  : 100K plate to 219V B+, 1.5K cathode + 25uF     (PAGE 1)
+//   BASS/MID network: 1MRA / 250KA, 10nF / 2.2nF / 560pF       (PAGE 1)
+//   V2 12AX7: 100K plate to 219V B+, 1.5K + 25uF cathode       (PAGE 1)
+//   TREBLE 1MA via 4.7nF, then VOLUME 250KA and FX loop        (PAGE 1)
 //   [Effects loop send/return - unity, unmodelled]              (PAGE 1)
 //   V5  12AX7  long-tail phase inverter, MASTER 500K, BRILLIANCE
 //               500K + .0047 cap (presence shelf), NO global NFB (PAGE 3)
@@ -36,10 +29,6 @@
 // power section, so it is deliberately NOT over-saturated (unlike a Boogie).
 //
 // Tubes use OUR Koren tables (public physics model, not Guitarix GPL source).
-// Tone-stack values cross-checked vs Guitarix src/faust/tonestack.dsp ts.ac30
-// (Vox/Matchless family: 1M/1M treble/bass pots, 100K slope, 22nF caps); the
-// Chieftain differs only in its 250K MID pot and the LARGE 5.1nF treble cap.
-//
 #include "../../_shared/tube_stage.hpp"
 #include <cmath>
 
@@ -47,6 +36,27 @@ namespace chieftain {
 
 static constexpr float kPi = 3.14159265358979f;
 static inline float clamp01(float v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+static inline float audioA(float v) { return std::pow(clamp01(v), 2.73696559f); }
+
+// Loudness flattening vs the electrical A250K Volume (re-fit 2026-07-14 against
+// the Brit DI): raw loudness per Volume step measured with makeup removed,
+// table = -16 dBFS family target - raw, normalized so kDb[10] = 0 (the residual
+// +5.1 dB lives in outLevel). The knob adds drive/colour, not level.
+static inline float volumeMakeupDb(float volume)
+{
+    // The clean (low-Volume) end is PEAK-matched, not RMS-matched: a flat -16
+    // RMS pushed clean peaks to -0.1 dBFS (huge clean crest), so the low half
+    // is shaved up to 3 dB — cleans sit slightly quieter with ~3 dB peak room.
+    static const float kDb[11] = {
+        26.15f, 25.60f, 22.88f, 18.59f, 13.58f, 8.96f,
+        5.88f, 3.84f, 2.29f, 0.95f, 0.00f
+    };
+    const float p = 10.0f * clamp01(volume);
+    int i = (int)p;
+    if (i >= 10)
+        return kDb[10];
+    return kDb[i] + (kDb[i + 1] - kDb[i]) * (p - (float)i);
+}
 
 // RBJ biquad (peaking / shelves / low/high-pass) -- the speaker/voicing color,
 // identical machinery to the BoxDC30 template.
@@ -100,23 +110,23 @@ struct ChieftainCore {
     rbtube::TubeStage v1, v2;           // two real cathode-biased 12AX7 stages
     rbtube::Miller12AX7 inputMiller;    // V1 input Miller loading
     rbtube::Miller12AX7 millerV2;       // tone/volume source -> V2 Miller loading
-    rbtube::CouplingCapGridLeak coupleToV2; // tone/volume network -> V2 grid blocking
-    rbtube::CouplingCapGridLeak coupleToPi; // master/brilliance -> PI grid blocking
+    rbtube::CouplingCapGridLeak coupleToV2; // V1 passive network -> V2 grid
+    rbtube::CouplingCapGridLeak coupleToPi; // volume/FX return -> PI grid
     rbtube::PhaseInverterLTP12AX7 phaseInverter;
     rbtube::MultiNodeBPlus supply;           // GZ34 rectifier + B+ nodes
     rbtube::PowerAmpEL34 power;          // 2x EL34 push-pull, cathode-bias, NO NFB
-    rbtube::ToneStackYeh tonestack;     // real Matchless TMB R/C network (Yeh model)
-    Biquad brillShelf, presShelf, spkBody, spkLowMid, spkPres, spkRoll, spkLp, spkHp;
+    rbtube::ToneStackYeh tonestack;     // V1 Bass/Mid network approximation
+    Biquad trebleShelf, brillShelf, spkBody, spkLowMid, spkPres, spkRoll, spkLp, spkHp;
     SpringReverb spring;
 
     // params (0..1), interface identical to the old ChieftainCore / ChieftainParams.h
     float pVolume=0.55f, pBass=0.5f, pMid=0.5f, pTreble=0.55f,
           pBrilliance=0.40f, pMaster=0.70f, pReverb=0.0f, pCabSim=1.0f;
-    float inScale=2.8f, preGain=1, gainOut=1, outLevel=1;
+    float inScale=2.2f, volumeElectrical=0.15f, masterElectrical=0.15f, outLevel=1;
     float lastPowerLoad=0.0f, lastScreenLoad=0.0f, lastPreampLoad=0.0f;
 
     void setSampleRate(float s){ sr=s; spring.setSampleRate(s); recalc(); reset(); }
-    void setVolume(float v){ pVolume=std::fmax(0.30f, clamp01(v)); recalc(); }
+    void setVolume(float v){ pVolume=clamp01(v); recalc(); }
     void setBass(float v){ pBass=clamp01(v); recalc(); }
     void setMid(float v){ pMid=clamp01(v); recalc(); }
     void setTreble(float v){ pTreble=clamp01(v); recalc(); }
@@ -127,74 +137,62 @@ struct ChieftainCore {
 
     void reset(){ inputCoupling.reset(); inputMiller.reset(); v1.reset(); v2.reset(); millerV2.reset();
         coupleToV2.reset(); coupleToPi.reset(); phaseInverter.reset(); supply.reset(); power.reset();
-        tonestack.reset(); brillShelf.reset(); presShelf.reset();
+        tonestack.reset(); trebleShelf.reset(); brillShelf.reset();
         spkBody.reset(); spkLowMid.reset(); spkPres.reset(); spkRoll.reset(); spkLp.reset(); spkHp.reset();
         spring.reset(); lastPowerLoad=lastScreenLoad=lastPreampLoad=0.0f; }
 
     void recalc(){
         inputCoupling.set(sr, 12.0f);                              // input grid-leak coupling
 
-        // TWO real cathode-biased 12AX7 stages, Chieftain values from the
-        // schematic (PAGE 1): V1 sees the 68K grid stopper + 1M grid leak (Ri
-        // table 0 = 68k), 1.5K cathode; V2 follows the high-Z tone stack so it
-        // uses the 250k grid-leak table (Ri 1), 1.5K cathode. Both self-bias
-        // (Vk0 solved from the load line) and saturate on their own load line;
-        // the cathode loop makes the bias breathe with level. fck = 1/(2*pi*Rk*Ck)
-        // with Rk=1.5k, Ck=25uF -> ~4.2 Hz (fully bypassed across the audio band).
-        v1.set(sr, 0, 250.0f, 40.0f, 4.2f, 1500.0f);              // V1 (68k grid-leak, 1.5k cathode)
-        v2.set(sr, 1, 250.0f, 40.0f, 4.2f, 1500.0f);              // V2 (250k grid-leak, 1.5k cathode)
+        // V1 has no fitted cathode bypass capacitor in the production drawing;
+        // V2 uses 25uF across 1.5K (about 4.2 Hz).
+        v1.set(sr, 0, 220.0f, 40.0f, 20000.0f, 1500.0f);
+        v2.set(sr, 1, 219.0f, 40.0f, 4.2f, 1500.0f);
 
-        // VOLUME 250K (= RS Gain) is the linear inter-stage pre-gain (Guitarix
-        // `*(preamp)` style). Turning it up drives the cascade into the EL34s
-        // clean->crunch with NO ad-hoc curve. The Chieftain is the CLEAN /
-        // big-headroom amp, so the pre-gain floor is generous (clean low) and the
-        // ceiling modest (only light crunch at max) -- deliberately NOT a Boogie.
-        const float panelVol = std::pow(pVolume, 1.1f);            // 250K audio taper
-        // The Chieftain is a clean/crunch amp. A real Volume pot fully down is mute,
-        // but the game uses "Gain low" to mean clean, not silence. Keep the taper
-        // while giving the tube chain an audible clean floor.
-        float vol   = 0.18f + 0.82f * panelVol;
-        inScale     = 2.0f * (0.7f + 0.45f * vol);                // audio -> grid volts into V1 (keep V1 cleaner)
-        preGain     = 0.70f + 3.6f * vol;                         // VOLUME inter-stage pre-gain
-        gainOut     = 0.70f + 0.60f * vol;                        // post-V2 level into the PI / power amp
+        volumeElectrical = 0.025f + 0.975f * audioA(pVolume);     // VR1 A250K after V2
+        // VR6 dual A500K after the PI. Tiny floor (-34 dB) so a manual Master=0
+        // fades to near-silence instead of a hard digital mute.
+        masterElectrical = 0.02f + 0.98f * audioA(pMaster);
+        inScale = 2.15f;
         inputMiller.set(sr,  68000.0f, 55.0f, 8.0f);              // input stopper + V1 Miller, ~25 kHz
-        millerV2.set(sr,   180000.0f, 52.0f, 8.0f);               // tone/volume source into V2, ~9 kHz
-        coupleToV2.set(sr, 1000000.0f, 22.0e-9f, 220000.0f,
-                       0.24f, 0.13f, 0.38f);
+        millerV2.set(sr,   150000.0f, 52.0f, 8.0f);
+        coupleToV2.set(sr, 1000000.0f, 2.2e-9f, 150000.0f,
+                       0.20f, 0.16f, 0.55f);
 
-        // Matchless TMB tone stack = the REAL R/C network (Yeh model), placed
-        // after V1 (PAGE 1). Treble pot 1M, Bass pot 1M, Mid pot 250K, slope
-        // 100K; treble cap 5100pF (LARGE -> warm/low treble, the boutique trait),
-        // bass/mid caps 22nF. Cross-check Guitarix ts.ac30 = same 1M/1M/100k/22nF
-        // family (Chieftain swaps in the 250k mid pot + 5.1nF treble cap).
-        tonestack.setComponents(1.0e6, 1.0e6, 250.0e3, 100.0e3, 5100.0e-12, 22.0e-9, 22.0e-9);
-        tonestack.update(sr, pTreble, pMid, pBass);
+        // The first passive network is not a Fender/Marshall TMB stack: Treble
+        // is a separate 4.7nF shunt at V2. Keep the actual 560p/2.2n/10n values
+        // here and reserve the third control for that separate branch.
+        tonestack.setComponents(1.0e6, 1.0e6, 250.0e3, 100.0e3,
+                                560.0e-12, 2.2e-9, 10.0e-9);
+        // pBass passed STRAIGHT: measured with the Brit DI, the inverted
+        // (1 - pBass) sense made the BASS knob remove lows as it was raised.
+        tonestack.update(sr, 0.62f, pMid, pBass);
+        trebleShelf.highShelf(sr, 1750.0f, -7.0f + 14.0f * audioA(pTreble));
 
-        coupleToPi.set(sr, 1000000.0f, 22.0e-9f, 100000.0f, 0.24f, 0.12f, 0.40f);
-        phaseInverter.setMarshall(sr, 0.78f + 1.25f * pMaster + 0.45f * vol, 0.86f);
+        coupleToPi.set(sr, 1000000.0f, 22.0e-9f, 62500.0f, 0.20f, 0.20f, 0.75f);
+        phaseInverter.setComponents(sr, 2.35f, 0.90f, 280.0f,
+                                    100000.0f, 100000.0f, 1200.0f, 7.0f, 0.025f);
         supply.set(sr,
                    115.0f, 32.0f,
-                   1200.0f, 32.0f,
-                   10000.0f, 22.0f,
-                   0.13f + 0.05f * vol,
-                   0.095f + 0.035f * vol,
-                   0.055f + 0.018f * pVolume,
+                   6800.0f, 22.0f,
+                   69000.0f, 22.0f,
+                   0.15f + 0.05f * pVolume,
+                   0.10f + 0.03f * pVolume,
+                   0.055f + 0.020f * pVolume,
                    0.20f);
         // 2x EL34 push-pull power amp (real pentode table, NO global NFB = the
         // Matchless chime). Cathode-biased (270R 10W + 250uF, ~24V cathode at
         // ~415V plate -> a fairly HOT class-AB point, big headroom). The bias is
         // hotter / sag a touch deeper than the Vox's fixed-ish EL84 -7.5; Master
         // + Volume together push it into power-amp breakup near the top.
-        power.set(sr, 2.5f + 9.0f * vol + 4.0f * pMaster, -11.5f, 0.11f);
+        power.set(sr, 15.0f, -11.5f, 0.16f, 38.0f, 18000.0f);
         power.out   = 0.0075f;                                    // scale plate-volt differential to signal
-        outLevel    = 0.62f * (0.85f + 0.30f * pMaster);          // post-power makeup, tracks Master
+        outLevel    = 1.397f;   // 0.78 + the +5.1 dB residual folded out of volumeMakeupDb (family -16 dBFS)
 
         // BRILLIANCE 500K + .0047 cap on the PI (PAGE 3): a presence high-shelf.
         // Higher Brilliance = more top sparkle. (A real preamp/PI network, kept
         // separate from the tone stack because it IS separate in the amp.)
-        brillShelf.highShelf(sr, 2600.0f, 8.0f * pBrilliance);
-        // Long-tail-pair PI + interstage bandwidth limit, then the speaker color.
-        presShelf.highShelf(sr, 3200.0f, 2.0f + 1.5f * pTreble);
+        brillShelf.highShelf(sr, 2600.0f, -5.0f + 10.0f * audioA(pBrilliance));
 
         // 2x12 / 4x12 EL34 head voicing -- the amp's OWN speaker color, kept MILD
         // and PRE-CAB on purpose (the user's cab IR provides the speaker's low
@@ -213,10 +211,11 @@ struct ChieftainCore {
             supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
         x = inputCoupling.process(x);
         x = v1.process(inputMiller.process(x) * inScale * bplus.preamp);          // audio -> grid volts -> V1
-        x = tonestack.process(x);                                  // real Matchless TMB stack between V1 and V2
-        x = coupleToV2.process(x, 0.70f + 1.6f * preGain);
-        x = v2.process(millerV2.process(x) * preGain * bplus.preamp);             // Miller-loaded VOLUME pre-gain -> V2
-        x *= gainOut;
+        x = tonestack.process(x);                                  // Bass/Mid network between V1 and V2
+        x = coupleToV2.process(millerV2.process(x), 2.15f * bplus.preamp);
+        x = v2.process(x);
+        x = trebleShelf.process(x);                                // VR4 1M + C19 4.7nF
+        x *= volumeElectrical;                                     // VR1 A250K, after V2
 
         // --- spring reverb: parallel send, returned BEFORE the power amp, so the
         //     wet goes through the EL34s + speaker like the real amp. Off at 0. ---
@@ -225,19 +224,18 @@ struct ChieftainCore {
             x += wet * (0.85f * pReverb);
         }
 
-        // --- BRILLIANCE presence shelf on the long-tail PI (post-preamp) ---
-        x = brillShelf.process(x);
-        x = coupleToPi.process(x, 1.0f + 0.10f * preGain);
+        x = coupleToPi.process(x, 1.0f);
         lastPreampLoad = 0.10f * std::fabs(x) + 0.04f * pVolume;
-        x = phaseInverter.process(x * bplus.preamp);
+        x = phaseInverter.process(x * bplus.screen);
+        x = brillShelf.process(x) * masterElectrical;              // post-PI Brill + dual Master
         lastPowerLoad = 0.78f * std::fabs(x) + 0.16f * pMaster + 0.16f * pVolume;
         lastScreenLoad = 0.50f * std::fabs(x) + 0.10f * pVolume;
 
         // --- 2x EL34 push-pull power amp (cathode-bias + B+ sag, no NFB) ---
         x = power.process(x * bplus.power * bplus.screen);
 
-        // --- output transformer + 2x12/4x12 boutique voicing ---
-        x = presShelf.process(x);
+        // PowerAmpEL34 always includes the output-transformer band limits. Only
+        // the following fallback speaker is bypassed by Cab Sim.
         float cab = spkHp.process(x);
         cab = spkBody.process(cab);
         cab = spkLowMid.process(cab);
@@ -246,12 +244,10 @@ struct ChieftainCore {
         cab = spkLp.process(cab);
         x += pCabSim * (cab - x);
 
-        // Game-facing loudness trim only. The older curve could add +20 dB at
-        // clean settings, which slammed the output limiter and made clean notes
-        // sound gated/broken instead of simply lower gain. Keep this modest so
-        // the Chieftain stays a high-headroom clean/crunch amp.
-        float gcDb = 18.0f - 35.0f * pVolume;
-        if (gcDb > 10.0f) gcDb = 10.0f; else if (gcDb < -5.0f) gcDb = -5.0f;
+        // Game-facing loudness trim only (measured table, see volumeMakeupDb):
+        // holds ~-16 dBFS RMS across the whole Volume sweep so the knob adds
+        // drive/colour, not level.
+        const float gcDb = volumeMakeupDb(pVolume);
         return x * outLevel * std::pow(10.0f, 0.05f * gcDb);
     }
 

@@ -25,9 +25,13 @@ static inline float gainLoudnessMakeupDb(float gain)
     // edge-of-breakup and cranked settings close in perceived loudness.  The
     // smooth high-gain trim compensates the extra guitar-density loudness that
     // appears when the Top Boost path starts compressing hard.
+    // Level re-fit 2026-07-14 (Brit DI): the previous fit was ~6 dB under the
+    // -16 dBFS family target across the driven half, with a HOT clean end
+    // (TB Vol 0 peaked at -1.8 dBFS). Clean end now PEAK-matched (~-3.5 dBFS);
+    // the driven half raised to family loudness (peaks stay < -3.5).
     static const float kDb[11] = {
-        31.0f, 23.0f, 13.8f, 6.65f, 1.25f, -2.50f,
-        -4.70f, -5.40f, -5.35f, -5.00f, -4.45f
+        29.75f, 20.47f, 11.26f, 5.01f, 2.27f, 0.50f,
+        -1.82f, -2.54f, -2.50f, -1.92f, -1.39f
     };
     const float p = 10.0f * clamp01(gain);
     int i = (int)p;

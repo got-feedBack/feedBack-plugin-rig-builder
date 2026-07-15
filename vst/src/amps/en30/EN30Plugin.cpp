@@ -80,7 +80,7 @@ protected:
     const char* getDescription() const override { return "BOX AC30 / AC30 Top Boost style amp"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1, 0, 2); }
     int64_t getUniqueId() const override { return d_cconst('E', 'n', '3', '0'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -126,7 +126,7 @@ protected:
             float ub[kOS];
             os.upsample(3.2f * in0[i], ub);
             for (int k = 0; k < kOS; ++k)                  // core + Top-Boost scoop + soft-clip at 4x
-                ub[k] = rbAmpLvl(1.477f * scoop.process(core.process(ub[k])));
+                ub[k] = rbAmpLvl(0.89f * scoop.process(core.process(ub[k])));
             const float y = os.downsample(ub);
             outL[i] = y;
             outR[i] = y;   // dual-mono: one core, same signal both sides = centered/balanced

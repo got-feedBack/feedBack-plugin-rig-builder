@@ -13,10 +13,9 @@
  * Mark/Boogie -- so do NOT over-saturate.
  *
  * Signal flow (per the schematic):
- *   V1 12AX7 (68k/1M in, 1k5 cathode) -> a Marshall-style TMB tone stack:
- *     BASS 1MRA, MID 250kA, TREBLE 1MA with a LARGE 5100pF (5.1nF) treble cap
- *     (=> warmer, lower-acting treble than a Marshall's 500pF), slope/coupling
- *     .0022 / 560p / 100k / 220k / 150k; V2 12AX7 -> VOLUME 250kA.
+ *   V1 12AX7 (68k/1M in, 1k5 unbypassed cathode) -> BASS 1MRA and
+ *     MID 250kA network (10nF / 2.2nF / 560pF) -> V2 12AX7 (1k5 + 25uF)
+ *     -> TREBLE 1MA through 4.7nF -> VOLUME 250kA.
  *   Phase inverter (12AX7, long-tail): MASTER 500kA + BRILLIANCE 500kA (a
  *     presence/high-shelf on the PI via a .0047 cap -> higher Brilliance = more
  *     top sparkle).
@@ -29,7 +28,7 @@
  */
 enum ChieftainParamId
 {
-    kVolume = 0,    // VOLUME 250kA  — preamp drive into the power stage  [RS Gain]
+    kVolume = 0,    // VOLUME 250kA  — post-V2 drive into PI/power stage [RS Gain]
     kBass,          // BASS 1MRA     tone stack                          [RS Bass]
     kMiddle,        // MIDDLE 250kA  tone stack                          [RS Mid]
     kTreble,        // TREBLE 1MA    tone stack (5.1nF cap, warm)        [RS Treble]

@@ -74,6 +74,24 @@ static inline float tonePot(float v)
     return v;
 }
 
+static inline float volumeMakeupDb(float volume)
+{
+    // Re-fit 2026-07-14 against the Brit DI: the previous table left the sweep
+    // INVERTED (vol 0 played ~11 dB LOUDER than vol 10). Measured the raw
+    // loudness per step with makeup removed; table = -16 dBFS target - raw,
+    // normalized so kDb[10] = 0 (the residual +8.4 dB moved into `level`).
+    // Result: ~flat -16 dBFS across the sweep — the knob adds drive, not level.
+    static const float kDb[11] = {
+        22.82f, 22.06f, 19.08f, 15.71f, 12.32f, 8.91f,
+        6.17f, 4.22f, 2.64f, 0.73f, 0.00f
+    };
+    const float p = 10.0f * clamp01(volume);
+    int i = (int)p;
+    if (i >= 10)
+        return kDb[10];
+    return kDb[i] + (kDb[i + 1] - kDb[i]) * (p - (float)i);
+}
+
 class Biquad
 {
     float b0 = 1.0f;
@@ -344,8 +362,8 @@ class TW40Core
         // triodes. They attenuate the V1 outputs before the mixer/recovery grid;
         // they do not change the guitar level hitting V1. Keep a small floor for
         // Rocksmith clean tones, but apply it only once at the real volume node.
-        const float brightVolPos = 0.22f + 0.78f * smoothstep(brightVol);
-        const float normalVolPos = 0.22f + 0.78f * smoothstep(normalVol);
+        const float brightVolPos = 0.04f + 0.96f * rbtube::PotTaper::audio(brightVol, 2.0f);
+        const float normalVolPos = 0.04f + 0.96f * rbtube::PotTaper::audio(normalVol, 2.0f);
         effDrive = clamp01(brightG * brightVolPos + normalG * normalVolPos * 0.85f);
 
         const float g = smoothstep(effDrive);
@@ -360,16 +378,21 @@ class TW40Core
         recoveryMiller.set(sampleRate, 180000.0f, 52.0f, 8.0f);         // mixed volume source + 12AX7 Miller
         coupleToRecovery.set(sampleRate, 1000000.0f, 22.0e-9f, 68000.0f, 0.30f, 0.06f, 0.18f);
         coupleToPi.set(sampleRate, 1000000.0f, 100.0e-9f, 220000.0f, 0.30f, 0.06f, 0.20f);
-        phaseInverter.setMarshall(sampleRate, 0.88f + 2.20f * effDrive + 0.75f * pushed, 0.88f);
+        // PI and output-stage operating points do not move with the channel
+        // Volume pots. The pots increase the signal presented to these stages.
+        phaseInverter.setComponents(sampleRate, 1.35f, 0.88f, 325.0f,
+                                    100000.0f, 100000.0f, 470.0f, 8.0f, 0.025f);
         // 5F6-A GZ34 supply: rectifier reservoir -> choke/screen node -> preamp
         // dropping resistor. Bassman is stiffer than 5E3 but still breathes when loud.
         supply.set(sampleRate, 115.0f, 20.0f, 800.0f, 20.0f, 10000.0f, 20.0f,
                    0.18f + 0.05f * pushed, 0.11f + 0.04f * pushed,
                    0.055f + 0.020f * pushed, 0.18f);
-        // 2x 5881 push-pull, fixed bias. -45V was too cold for this Koren 5881
-        // table: clean notes fell below conduction and breakup crossed over harshly.
-        power.set(sampleRate, 2.8f + 5.0f * effDrive + 3.8f * pushed, -38.0f, 0.18f, 45.0f, 11000.0f);
-        power.out = 0.010f;
+        // `bias` is the operating coordinate of the normalized Koren table, not
+        // the literal -48V grid-bias supply printed on the 5F6-A drawing. -38
+        // places this table below conduction and produces the historic
+        // silence/transient gating bug; -14 is its warm 5881 operating point.
+        power.set(sampleRate, 5.2f, -14.0f, 0.18f, 45.0f, 13000.0f);
+        power.out = 0.014f;
 
         // The 100pF bright cap bleeds treble most at LOW Bright Volume; plus base
         // brightness from Treble/Presence.
@@ -482,29 +505,29 @@ public:
 
         // BRIGHT/NORMAL V1 grids are fixed-gain 12AY7 inputs. The Volume pots are
         // applied after these triodes, exactly like the Bassman schematic.
-        const float brightVolPos = 0.22f + 0.78f * smoothstep(brightVol);
-        const float normalVolPos = 0.22f + 0.78f * smoothstep(normalVol);
+        const float brightVolPos = 0.04f + 0.96f * rbtube::PotTaper::audio(brightVol, 2.0f);
+        const float normalVolPos = 0.04f + 0.96f * rbtube::PotTaper::audio(normalVol, 2.0f);
 
         float bch = brightShelf.process(brightBody.process(x));
-        bch = brightTube.process(brightMiller.process(bch) * 4.80f * bplus.preamp);
+        bch = brightTube.process(brightMiller.process(bch) * 1.80f * bplus.preamp);
         // NORMAL channel: darker body, its own REAL 12AY7.
         float nch = normalBody.process(x);
-        nch = normalTube.process(normalMiller.process(nch) * 4.30f * bplus.preamp);
+        nch = normalTube.process(normalMiller.process(nch) * 1.65f * bplus.preamp);
 
         // Jumpered mix: each channel scaled by its Volume and gated by the cable.
         float y = brightG * brightVolPos * bch + normalG * normalVolPos * 0.92f * nch;
 
         // 12AX7 recovery into the FMV tone stack (REAL).
         y = interstageHp.process(y);
-        y = coupleToRecovery.process(y, 2.0f + 3.6f * effDrive);
-        y = recoveryTube.process(recoveryMiller.process(y) * (1.4f + 1.2f * effDrive) * bplus.preamp);
+        y = coupleToRecovery.process(y, 0.80f + 2.40f * effDrive);
+        y = recoveryTube.process(recoveryMiller.process(y) * (1.0f + 0.60f * effDrive) * bplus.preamp);
         y = cathodeFollowerLp.process(y);
 
         y = toneStack.process(y) * 1.70f;
         y = stackMakeupLow.process(y);
         y = stackMakeupBody.process(y);
         y = phaseLowPass.process(y);
-        y = coupleToPi.process(y, 1.0f + 1.25f * effDrive);
+        y = coupleToPi.process(y, 0.80f + 1.40f * effDrive);
         lastPreampLoad = std::fabs(y) * (0.18f + 0.55f * effDrive);
         y = phaseInverter.process(y * bplus.screen);
         lastScreenLoad = std::fabs(y) * (0.30f + 0.55f * effDrive);
@@ -532,11 +555,12 @@ public:
             + 0.012f * std::fabs((mid - 0.5f) * 17.0f)
             + 0.012f * std::fabs((treble - 0.5f) * 17.0f)
             + 0.010f * std::fabs((pres - 0.5f) * 16.0f);
-        const float level = (0.64f + 0.10f * (1.0f - effDrive)) /
-            ((1.0f + 0.22f * effDrive + 0.20f * pushed) * toneEnergy);
-        // loudness flattening vs the Bright Volume/gain (clean post-output makeup; ~0 dB at 0.5)
-        float gcDb = 6.477f - 17.069f * brightVol + 8.125f * brightVol * brightVol;
-        if (gcDb > 12.0f) gcDb = 12.0f; else if (gcDb < -9.0f) gcDb = -9.0f;
+        // 1.447 = 0.55 + the +8.4 dB residual folded out of volumeMakeupDb so the
+        // table tops out at 0 dB (family loudness ~-16 dBFS at every Volume).
+        const float level = 1.447f / ((1.0f + 0.08f * pushed) * toneEnergy);
+        // The A1M channel pot has the real electrical taper. This post-circuit
+        // table restores monitoring loudness only; it cannot drive any tube.
+        const float gcDb = volumeMakeupDb(brightVol);
         return softClip(y * level * std::pow(10.0f, 0.05f * gcDb)) * 0.97f;
     }
 };
