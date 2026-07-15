@@ -4177,7 +4177,9 @@ def _download_candidate(
 
     client = _get_t3k_client()
     if not client.has_api_access:
-        _set_dl_error("tone3000 not connected")
+        reason = getattr(client, "_auth_fail_reason", None)
+        _set_dl_error(f"tone3000 not connected — {reason}" if reason
+                      else "tone3000 not connected")
         return None
 
     try:

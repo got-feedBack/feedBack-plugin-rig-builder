@@ -83,6 +83,10 @@ class Tone3000Client:
         # switch from auto-mode to deep-link mode rather than making the
         # user paste/edit a config file.
         self.has_api_access = bool(self.access_token or self.api_key)
+        # Last reason has_api_access was flipped off (surfaced in the download
+        # failure message so "not connected" says WHY — 401 / 403 / expired
+        # refresh / transient token-endpoint error).
+        self._auth_fail_reason: str | None = None
         self._lock = threading.Lock()
         self._conn = sqlite3.connect(cache_db_path, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -140,12 +144,16 @@ class Tone3000Client:
                             return self._raw_get(url)
                         except urllib.error.HTTPError as e2:
                             if e2.code == 401:
+                                self._auth_fail_reason = "401 after token refresh"
                                 self.has_api_access = False
                                 return None
                             raise
                     # No recoverable credential — just means the user hasn't
                     # connected / pasted a key. The UI handles the fallback
-                    # flow; callers see an empty payload.
+                    # flow; callers see an empty payload. (_refresh_token sets
+                    # a more specific reason when a refresh was attempted.)
+                    if not self._auth_fail_reason:
+                        self._auth_fail_reason = "401 unauthorized — reconnect tone3000"
                     self.has_api_access = False
                     return None
                 if e.code == 429 and attempt < max_attempts - 1:
@@ -174,6 +182,7 @@ class Tone3000Client:
                     # return None so callers short-circuit (has_api_access gate)
                     # instead of re-requesting every gear and spamming a 403
                     # traceback on each. The gear falls back to bundled/pending.
+                    self._auth_fail_reason = "403 forbidden — reconnect tone3000"
                     self.has_api_access = False
                     return None
                 raise
@@ -252,23 +261,52 @@ class Tone3000Client:
     def _refresh_token(self) -> bool:
         """Use the refresh token to mint a new access token. Returns True on
         success. On `invalid_grant` (refresh token expired) the tokens are
-        cleared so the UI prompts a re-connect."""
+        cleared so the UI prompts a re-connect.
+
+        A single transient failure on the token endpoint must NOT kill the
+        whole batch: the OAuth token endpoint shares tone3000's rate budget,
+        so a busy 'download version' run can 429 the refresh, and the old
+        code then returned False → has_api_access flipped off → every
+        remaining capture reported 'not connected'. Retry 429/5xx/network
+        with backoff; only a 400 invalid_grant (refresh token genuinely dead)
+        is fatal."""
         if not self.refresh_token:
+            self._auth_fail_reason = "no refresh token — connect tone3000"
             return False
-        try:
-            tokens = self._post_token({
-                "grant_type": "refresh_token",
-                "refresh_token": self.refresh_token,
-                "client_id": self.publishable_key,
-            })
-        except urllib.error.HTTPError as e:
-            if e.code == 400:  # invalid_grant → refresh token expired
-                self._clear_tokens()
-            return False
-        except urllib.error.URLError:
-            return False
-        self._apply_tokens(tokens)
-        return True
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            try:
+                tokens = self._post_token({
+                    "grant_type": "refresh_token",
+                    "refresh_token": self.refresh_token,
+                    "client_id": self.publishable_key,
+                })
+            except urllib.error.HTTPError as e:
+                if e.code == 400:  # invalid_grant → refresh token expired
+                    self._auth_fail_reason = (
+                        "session expired — reconnect tone3000 (refresh invalid_grant)")
+                    self._clear_tokens()
+                    return False
+                if e.code in (429, 500, 502, 503, 504) and attempt < max_attempts - 1:
+                    retry_after = 0
+                    try:
+                        retry_after = int(e.headers.get("Retry-After", "0"))
+                    except (TypeError, ValueError):
+                        retry_after = 0
+                    time.sleep(min(retry_after if retry_after > 0 else (
+                        2 ** attempt + 0.5 * attempt), 30))
+                    continue
+                self._auth_fail_reason = f"token refresh failed (HTTP {e.code})"
+                return False
+            except urllib.error.URLError:
+                if attempt < max_attempts - 1:
+                    time.sleep(2 ** attempt + 0.5 * attempt)
+                    continue
+                self._auth_fail_reason = "token refresh failed (network)"
+                return False
+            self._apply_tokens(tokens)
+            return True
+        return False
 
     def _apply_tokens(self, tokens: dict) -> None:
         if tokens.get("access_token"):
@@ -280,6 +318,8 @@ class Tone3000Client:
         if expires_in:
             self.token_expires_at = time.time() + float(expires_in)
         self.has_api_access = bool(self.access_token or self.api_key)
+        if self.has_api_access:
+            self._auth_fail_reason = None   # recovered
         self._emit_tokens()
 
     def _clear_tokens(self) -> None:
