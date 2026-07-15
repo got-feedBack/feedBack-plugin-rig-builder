@@ -112,13 +112,13 @@
 
   // 3-position mini bat toggle (Darkglass Grunt/Attack): lever at top (val 1),
   // middle (0.5) or bottom (0). Click cycles 0→0.5→1→0.
-  function switch3(d, cx, cy, val) { const c = d.ctx, w = 13, h = 32;
-    rr(c, cx-w/2, cy-h/2, w, h, 4); c.fillStyle = rgb(26,26,28); c.fill();
-    rr(c, cx-w/2, cy-h/2, w, h, 4); c.strokeStyle = rgb(8,8,10); c.lineWidth = 1.2; c.stroke();
-    const ly = cy + (0.5 - val) * (h - 14);
-    const g = c.createLinearGradient(cx-5, ly-6, cx+5, ly+6); g.addColorStop(0, rgb(234,236,240)); g.addColorStop(1, rgb(150,153,160));
-    rr(c, cx-5, ly-7, 10, 14, 3); c.fillStyle = g; c.fill();
-    rr(c, cx-5, ly-7, 10, 14, 3); c.strokeStyle = rgb(70,72,78); c.lineWidth = 1; c.stroke(); }
+  function switch3(d, cx, cy, val, sc) { const c = d.ctx, k = sc || 1, w = 13*k, h = 32*k, lw = 10*k, lh = 14*k;
+    rr(c, cx-w/2, cy-h/2, w, h, 4*k); c.fillStyle = rgb(26,26,28); c.fill();
+    rr(c, cx-w/2, cy-h/2, w, h, 4*k); c.strokeStyle = rgb(8,8,10); c.lineWidth = 1.2; c.stroke();
+    const ly = cy + (0.5 - val) * (h - lh);
+    const g = c.createLinearGradient(cx-lw/2, ly-6*k, cx+lw/2, ly+6*k); g.addColorStop(0, rgb(234,236,240)); g.addColorStop(1, rgb(150,153,160));
+    rr(c, cx-lw/2, ly-lh/2, lw, lh, 3*k); c.fillStyle = g; c.fill();
+    rr(c, cx-lw/2, ly-lh/2, lw, lh, 3*k); c.strokeStyle = rgb(70,72,78); c.lineWidth = 1; c.stroke(); }
 
   // horizontal slider/fader (Maestro-style): recessed track + draggable cap with
   // a white indicator line. val 0..1 left→right. Wired via spec.sliders in attach().
@@ -4868,22 +4868,22 @@
   //    ids: 0 Channel 1 Output 2 Rectifier, Green 3-9, Orange 10-16, Red 17-23.
   P.dualrect = { w:1700, h:680, ptr:rgb(238,240,244),
     knobs:[
-      {id:1, cx:.250,cy:.700,r:.014,style:'fender'},                              // OUTPUT
+      {id:1, cx:.250,cy:.845,r:.014,style:'fender'},                              // OUTPUT (lowered to sit by its label)
       // CH3 RED
       {id:21,cx:.300,cy:.700,r:.014,style:'fender'},{id:22,cx:.345,cy:.700,r:.014,style:'fender'},{id:17,cx:.390,cy:.700,r:.014,style:'fender'},
-      {id:20,cx:.300,cy:.878,r:.014,style:'fender'},{id:19,cx:.345,cy:.878,r:.014,style:'fender'},{id:18,cx:.390,cy:.878,r:.014,style:'fender'},
+      {id:20,cx:.300,cy:.845,r:.014,style:'fender'},{id:19,cx:.345,cy:.845,r:.014,style:'fender'},{id:18,cx:.390,cy:.845,r:.014,style:'fender'},
       // CH2 ORANGE
       {id:14,cx:.475,cy:.700,r:.014,style:'fender'},{id:15,cx:.520,cy:.700,r:.014,style:'fender'},{id:10,cx:.565,cy:.700,r:.014,style:'fender'},
-      {id:13,cx:.475,cy:.878,r:.014,style:'fender'},{id:12,cx:.520,cy:.878,r:.014,style:'fender'},{id:11,cx:.565,cy:.878,r:.014,style:'fender'},
+      {id:13,cx:.475,cy:.845,r:.014,style:'fender'},{id:12,cx:.520,cy:.845,r:.014,style:'fender'},{id:11,cx:.565,cy:.845,r:.014,style:'fender'},
       // CH1 GREEN
       {id:7, cx:.650,cy:.700,r:.014,style:'fender'},{id:8, cx:.695,cy:.700,r:.014,style:'fender'},{id:3, cx:.740,cy:.700,r:.014,style:'fender'},
-      {id:6, cx:.650,cy:.878,r:.014,style:'fender'},{id:5, cx:.695,cy:.878,r:.014,style:'fender'},{id:4, cx:.740,cy:.878,r:.014,style:'fender'} ],
+      {id:6, cx:.650,cy:.845,r:.014,style:'fender'},{id:5, cx:.695,cy:.845,r:.014,style:'fender'},{id:4, cx:.740,cy:.845,r:.014,style:'fender'} ],
     sw3:[
       {id:23,cx:.428,cy:.760,hw:11,hh:20},          // Red mode  Raw/Vtg/Modern
       {id:16,cx:.603,cy:.760,hw:11,hh:20},          // Orange mode
       {id:9, cx:.778,cy:.760,hw:11,hh:20,two:true}, // Green mode Clean/Pushed
-      {id:0, cx:.880,cy:.787,hw:11,hh:22},          // Channel select 1/2/3
-      {id:2, cx:.915,cy:.787,hw:11,hh:22,two:true} ],// Rectifier Spongy/Bold
+      {id:0, cx:.880,cy:.787,hw:14,hh:26,sc:1.4},          // Channel select 1/2/3
+      {id:2, cx:.915,cy:.787,hw:14,hh:26,two:true,sc:1.4} ],// Rectifier Spongy/Bold
     draw(d,vals){ const {ctx:c,W,H,s}=d;
       const ink=rgb(232,233,236), faint='rgba(220,222,226,0.6)';
       // ── black tolex body ──
@@ -4924,11 +4924,11 @@
       const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,rgb(20,20,22)); pg.addColorStop(1,rgb(8,8,10));
       rr(c,px,py,pw,ph,4*s); c.fillStyle=pg; c.fill(); rr(c,px,py,pw,ph,4*s); c.strokeStyle=rgb(60,62,66); c.lineWidth=1.2*s; c.stroke();
       corner(0,0,1,1); corner(W,0,-1,1); corner(0,H,1,-1); corner(W,H,-1,-1);
-      const cyT=py+ph*.265, cyB=py+ph*.788, swY=py+ph*.49;
+      const cyT=py+ph*.691, cyB=py+ph*.691, swY=py+ph*.49;  // cyT: lowered SOLO/loop knob row · cyB: channel LEDs aligned to bottom knob row
       // ── power / standby toggles + jewel ──
       batToggle(d,.035*W,swY,8*s,true); batToggle(d,.066*W,swY,8*s,true);
       textSpaced(d,.035*W,py+ph*.14,F.barlow,8,ink,'ON',0.05); textSpaced(d,.066*W,py+ph*.14,F.barlow,8,ink,'ON',0.05);
-      textSpaced(d,.035*W,py+ph*.92,F.barlow,7.5,ink,'POWER',0.04); textSpaced(d,.066*W,py+ph*.92,F.barlow,7,ink,'STANDBY',0.03);
+      textSpaced(d,.035*W,py+ph*.70,F.barlow,8.5,ink,'POWER',0.04); textSpaced(d,.066*W,py+ph*.70,F.barlow,7.5,ink,'STANDBY',0.02);
       ledDot(d,.092*W,swY,true,224,40,36);
       // ── "Duo Rectifier" script logo ──
       c.save(); c.translate(.150*W,py+ph*.46); c.transform(1,0,-0.18,1,0,0); c.textAlign='center'; c.textBaseline='middle';
@@ -4941,27 +4941,27 @@
       // ── SOLO (decorative) + OUTPUT labels ──
       const soloX=.205*W; c.beginPath(); c.arc(soloX,cyT,d.W*.014,0,7); const kg=c.createRadialGradient(soloX-3*s,cyT-3*s,1*s,soloX,cyT,d.W*.014); kg.addColorStop(0,rgb(70,72,76)); kg.addColorStop(1,rgb(14,14,16)); c.fillStyle=kg; c.fill(); c.strokeStyle=rgb(150,152,158); c.lineWidth=1.4*s; c.stroke();
       c.beginPath(); c.arc(soloX,cyT-d.W*.010,2*s,0,7); c.fillStyle=rgb(230,232,236); c.fill();
-      textSpaced(d,(soloX+.250*W)/2,py+ph*.12,F.barlow,7,faint,'LOOP ACTIVE',0.06);
-      textSpaced(d,soloX,py+ph*.92,F.barlow,8,ink,'SOLO',0.05); textSpaced(d,.250*W,py+ph*.92,F.barlow,8,ink,'OUTPUT',0.04);
+      textSpaced(d,(soloX+.250*W)/2,py+ph*.42,F.barlow,8,faint,'LOOP ACTIVE',0.06);
+      textSpaced(d,soloX,py+ph*.90,F.barlow,9,ink,'SOLO',0.05); textSpaced(d,.250*W,py+ph*.90,F.barlow,9,ink,'OUTPUT',0.04);
       // ── channel blocks: column labels + mode + LED ──
-      const lbl2=(cx,t1,t2)=>{ textSpaced(d,cx*W,py+ph*.46,F.barlow,7,ink,t1,0.02); textSpaced(d,cx*W,py+ph*.95,F.barlow,7,ink,t2,0.02); };
+      const lbl2=(cx,t1,t2)=>{ textSpaced(d,cx*W,py+ph*.47,F.barlow,8,ink,t1,0.02); textSpaced(d,cx*W,py+ph*.90,F.barlow,8,ink,t2,0.02); };
       const inp=(vals&&vals[0]!=null)?vals[0]:1;
       const block=(c0,c1,c2,modeT,ledR,ledG,ledB,on,chTxt)=>{
         lbl2(c0,'PRESENCE','BASS'); lbl2(c1,'MASTER','MID'); lbl2(c2,'GAIN','TREBLE');
         const mx=(c2+0.038); // mode/LED column to the right of the block
-        textSpaced(d,mx*W,py+ph*.16,F.barlow,5.5,faint,modeT,0.0);
-        ledDot(d,mx*W,cyB,on,ledR,ledG,ledB); textSpaced(d,mx*W,py+ph*.99,F.barlow,7,ink,chTxt,0.04);
+        textSpaced(d,mx*W,py+ph*.16,F.barlow,6.5,faint,modeT,0.0);
+        ledDot(d,mx*W,cyB,on,ledR,ledG,ledB); textSpaced(d,mx*W,py+ph*.92,F.barlow,8.5,ink,chTxt,0.04);
       };
       block(.300,.345,.390,'RAW VTG MOD',224,40,36, inp>=0.75, 'CH 3');
       block(.475,.520,.565,'RAW VTG MOD',230,150,40, inp>=0.25&&inp<0.75, 'CH 2');
       block(.650,.695,.740,'CLN  PUSH',70,210,90, inp<0.25, 'CH 1');
       // ── channel select + rectifier labels ──
-      textSpaced(d,.880*W,py+ph*.14,F.barlow,7,ink,'CHANNEL',0.03);
-      textSpaced(d,.915*W,py+ph*.99,F.barlow,6.5,ink,'RECT',0.03);
+      textSpaced(d,.880*W,py+ph*.34,F.barlow,8.5,ink,'CHANNEL',0.03);
+      textSpaced(d,.915*W,py+ph*.70,F.barlow,8,ink,'RECT',0.03);
       // ── INPUT jack ──
       const ijx=.952*W; c.beginPath(); c.arc(ijx,swY,8*s,0,7); c.fillStyle=rgb(18,16,16); c.fill(); c.strokeStyle=rgb(180,182,188); c.lineWidth=2*s; c.stroke();
       c.beginPath(); c.arc(ijx,swY,2.6*s,0,7); c.fillStyle=rgb(54,54,58); c.fill();
-      textSpaced(d,ijx,py+ph*.92,F.barlow,8,ink,'INPUT',0.04); } };
+      textSpaced(d,ijx,py+ph*.70,F.barlow,9,ink,'INPUT',0.04); } };
 
   // ── MARSTEN DSL100 (Marshall JCM2000 DSL100H) — black tolex head, gold panel ──
   //    Full DSL100HR panel, 1:1. Parody brand "Marsten" (same as GM-2/UV-1 pedals).
@@ -7300,7 +7300,7 @@
     citrusrumbleverb50:1.15, sinampbassdriver:1.18, lovolt100:1.25,
     lovoltdr504:1.45, lovoltdr103:1.45, samplegvh140c:1.78,
     // British / boutique heads
-    boxac30:1.22, bendersupernova22:1.45, dualrect:1.45, dsl100:1.45, plexi:1.55,
+    boxac30:1.22, bendersupernova22:1.45, dualrect:1.72, dsl100:1.45, plexi:1.55,
     marstenvs100:1.45, marstenjcm800:1.60, marstenjtm45:1.55, marstenbluesbreaker:1.60,
     marstendsl15:1.60, marstenjvm410:1.60, aor50:1.38, jc90:1.15, engelfireball:1.45,
     polystoneminibrute:1.28, ronaldjc120:1.22, tw40:1.28, superdrive45:1.45,
@@ -7341,7 +7341,7 @@
       // `two` toggles only 0/1, so the lever sits at the bottom (0) or top (1)
       // — a 2-position bat lever using the same switch3 renderer that works.
       const v = (values && values[s.id] != null) ? values[s.id] : 0.5;
-      switch3(d, s.cx * d.W, s.cy * d.H, v);
+      switch3(d, s.cx * d.W, s.cy * d.H, v, s.sc);
     });
     (spec.sliders || []).forEach(sl => {
       const v = (values && values[sl.id] != null) ? values[sl.id] : 0.5;
