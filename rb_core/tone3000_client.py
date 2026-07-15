@@ -176,14 +176,17 @@ class Tone3000Client:
                     time.sleep(sleep_s)
                     continue
                 if e.code == 403:
-                    # Forbidden — the token is invalid/revoked or the account
-                    # lacks access (e.g. a stale credential surviving a factory
-                    # reset). Treat it like a dead 401: mark disconnected and
-                    # return None so callers short-circuit (has_api_access gate)
-                    # instead of re-requesting every gear and spamming a 403
-                    # traceback on each. The gear falls back to bundled/pending.
-                    self._auth_fail_reason = "403 forbidden — reconnect tone3000"
-                    self.has_api_access = False
+                    # Forbidden. This is RESOURCE-scoped far more often than it
+                    # is session-scoped: a single tone/pack can 403 on /models
+                    # even while the token is perfectly valid (we just
+                    # downloaded dozens of other captures on it). The old code
+                    # flipped has_api_access off on the FIRST 403, so one bad
+                    # tone (e.g. GB100) aborted the whole batch and every
+                    # remaining capture reported "not connected". Fail just this
+                    # call (return None → the caller reports it) and KEEP the
+                    # session so the rest of the batch continues. A genuinely
+                    # revoked token surfaces via the Setup connection test.
+                    self._auth_fail_reason = "403 forbidden (resource or token)"
                     return None
                 raise
 

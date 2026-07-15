@@ -4191,7 +4191,13 @@ def _download_candidate(
         _set_dl_error(_classify_dl_error(e))
         return None
     if not models_payload:
-        _set_dl_error("no models for this tone")
+        # A falsy list_models means the request returned None — i.e. an auth
+        # failure (401/403), NOT a tone that genuinely has zero captures (that
+        # comes back as a truthy {"data": []}). Surface the real auth reason so
+        # a per-tone 403 (e.g. a gated pack) reads as "403 forbidden" rather
+        # than the misleading "no models for this tone".
+        reason = getattr(client, "_auth_fail_reason", None)
+        _set_dl_error(reason or "no models for this tone")
         return None
 
     from rb_core.tone3000_client import pick_best_model
