@@ -12,11 +12,9 @@
 // The two grounded-emitter Si stages have no degeneration, so they slam into
 // hard transistor clipping — an aggressive, buzzy square-ish fuzz. The tiny 2n2
 // interstage caps high-pass everything hard, giving the thin, nasal 60s voice.
-// Q1 inverts and Q2 inverts again, so Q1's and Q2's outputs are OUT OF PHASE:
-// the DEPTH pot crossfades between them and the partial cancellation is the
-// Fuzz Rite's honk/spit/gate. The C4 collector-to-collector feedback adds the
-// sputtery, dying-note instability (scaled by DEPTH so it only bites when the
-// fuzz character is dialled up).
+// DEPTH sits between Q1's C2-coupled collector signal and the node feeding Q2
+// through C3; its wiper feeds VOL. Q2's collector is not an output of the pot:
+// it returns to Q1's collector through C4 and changes the clipping loop.
 //
 // Runs at the oversampled rate (2x, set by the plugin). Transistor clipping
 // only — the FuzzRite has no clipping diodes (D1 is reverse-polarity power
@@ -69,7 +67,7 @@ class FuzzRiteCore {
     float sampleRate = 48000.f;
     float depth = 0.62f, volume = 0.70f;
 
-    RcHighPass inHP, c2HP, c3HP, c4FB, outHP;
+    RcHighPass inHP, c2HP, c3HP, c4FB;
     RcLowPass  outLP;
     DcBlock    dcA, dcB;
 
@@ -77,22 +75,21 @@ class FuzzRiteCore {
 
     void updateComponents(){
         inHP.setRC(sampleRate, 1.0e6f, 47.0e-9f);   // C1/R1 ~3 Hz — really just a DC block
-        // Both interstage caps are 2n2, but they see different loads: C2 drives
-        // the high-Z DEPTH pot / output (fuller, lower corner) while C3 drives
-        // Q2's lower-Z base (thinner, higher corner). So Q1's path (dominant at
-        // low DEPTH) stays thick and Q2's path (dominant at high DEPTH) is thin —
-        // which is what makes DEPTH sweep from a fat fuzz to the nasal honk.
+        // Both coupling caps are 2n2. C2 sees the 500k DEPTH network; C3 sees
+        // Q2's lower input impedance and therefore has the higher corner.
         c2HP.setHz(sampleRate, 160.0f);
         c3HP.setHz(sampleRate, 480.0f);
         c4FB.setHz(sampleRate, 720.0f);              // C4 feedback path band-shaping
-        outLP.setHz(sampleRate, 6200.0f);            // tame the harshest square-wave fizz
-        outHP.setHz(sampleRate, 60.0f);
+        // BC337 collector capacitance and the 470k collector networks provide
+        // the only HF rounding in the real pedal. Keep this above the guitar
+        // band instead of adding the old arbitrary 6.2 kHz de-fizz filter.
+        outLP.setHz(sampleRate, 14500.0f);
     }
 
 public:
     void setSampleRate(float sr){ sampleRate = sr>1000.f?sr:48000.f; reset(); }
     void reset(){
-        inHP.reset(); c2HP.reset(); c3HP.reset(); c4FB.reset(); outLP.reset(); outHP.reset();
+        inHP.reset(); c2HP.reset(); c3HP.reset(); c4FB.reset(); outLP.reset();
         dcA.reset(); dcB.reset(); q2fb=0.f; updateComponents();
     }
     void setDepth(float v){ depth = clamp01(v); }
@@ -101,40 +98,30 @@ public:
     inline float process(float in){
         float x = inHP.process(in);
 
-        // ── Q1: grounded-emitter Si stage, HIGH gain, inverting. C4 couples
-        //    Q2's collector back here (fixed — the cap is always in circuit);
-        //    a SMALL low-frequency feedback term, part of the FuzzRite rasp. ──
-        const float in1 = x - 0.08f*q2fb;
+        // Q1 and Q2 form a fixed AC feedback loop through C4. Keep the loop
+        // below unity in the discrete-time model; the previous 0.08 feedback
+        // coefficient could burst into numerical gating on transients.
+        const float in1 = x - 0.018f*q2fb;
         float A = -bjtStage(in1, 46.0f, -0.020f, 1.25f, 1.05f, 0.95f, 0.80f);
         A = dcA.process(A);
 
         // C2 interstage high-pass (thins into the nasal voice)
         const float aHP = c2HP.process(A);
 
-        // ── DEPTH (grounded-wiper divider between C2 and C3): it sets how hard
-        //    Q2 is DRIVEN, not an output blend. Low DEPTH = Q2 barely driven
-        //    (mild, thin fuzz); high DEPTH = Q2 slammed (full buzz). This is the
-        //    real topology — the old output-crossfade model had a near-total
-        //    cancellation null right around DEPTH ~0.56 (the reported "choppy"
-        //    broken sound at the default). ──
-        const float q2in = c3HP.process(aHP * (0.06f + 0.94f*depth));
-        float B = -bjtStage(q2in, 40.0f, 0.016f, 1.15f, 1.02f, 0.92f, 0.78f);
+        // The far end of DEPTH feeds Q2 through C3 and R8=22k. Q2 drive is
+        // fixed by that network; moving the wiper does not alter it.
+        const float thinNode = c3HP.process(aHP);
+        const float q2in = 0.050f*thinNode;
+        float B = -bjtStage(q2in, 24.0f, 0.016f, 1.15f, 1.02f, 0.92f, 0.78f);
         B = dcB.process(B);
         q2fb = c4FB.process(B);                       // C4 feedback into Q1 (next sample)
 
-        // ── Output node = Q2's collector. Q1's (out-of-phase) signal arrives
-        //    there through C4 at a FIXED ratio set by the impedances — the
-        //    partial cancellation = the FuzzRite scoop/spit, but Q2 dominates
-        //    whenever it's driven, so there is never a null. ──
-        float out = B + 0.32f*aHP;
-
-        // Level compensation: Q2 contributes less at low DEPTH, so tilt the
-        // makeup so the DEPTH sweep stays within a few dB (default lands ~-16
-        // dBFS RMS, in family with the other pedals).
-        out *= 0.70f - 0.24f*depth;
+        // The 500KB DEPTH wiper selects between the fuller C2 side and the
+        // thinner Q2-input side. They have the same polarity, so the sweep
+        // cannot create the non-physical cancellation hole of the old model.
+        float out = (1.0f-depth)*aHP + depth*thinNode;
 
         out = outLP.process(out);
-        out = outHP.process(out);
         return dn(out);
     }
 

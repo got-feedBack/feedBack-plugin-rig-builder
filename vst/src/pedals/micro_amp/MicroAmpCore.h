@@ -42,14 +42,24 @@ class MicroAmpCore {
 
     rbshared::OpAmpStage op;
     DcBlock inDc, outDc;
+    float feedbackLp=0.0f, feedbackA=0.0f;
+    float stabilityLp=0.0f, stabilityA=1.0f;
 
     void updateGain(float knob){
-        // gain = 1 + 56k/(R5 + 2k7); the 500k reverse-log pot makes the sweep
-        // ~linear in dB, so map it straight to a dB-linear glide between the
-        // circuit's real endpoints.
-        const float minG = 1.0f + 56000.0f/(500000.0f + 2700.0f);   // ~1.111 (+0.9 dB)
-        const float maxG = 1.0f + 56000.0f/2700.0f;                  // ~21.74 (+26.7 dB)
-        gain = minG * std::pow(maxG/minG, clamp01(knob));
+        // R5 is 500k reverse-log. At half rotation about 15% of its resistance
+        // remains in the feedback leg; this is not a dB-linear interpolation.
+        const float k = clamp01(knob);
+        const float r5 = 500000.0f * std::pow(1.0f-k, 2.73696559f);
+        const float returnR = 2700.0f + r5;
+        gain = 1.0f + 56000.0f/returnR;
+
+        // C3 4.7u makes the feedback gain return to unity at DC.
+        const float fbHz = 1.0f/(2.0f*kPi*returnR*4.7e-6f);
+        feedbackA = 1.0f-std::exp(-2.0f*kPi*fbHz/sampleRate);
+
+        // C2 47p across R4=56k is the real ultrasonic stability pole.
+        const float stabHz = 1.0f/(2.0f*kPi*56000.0f*47.0e-12f);
+        stabilityA = 1.0f-std::exp(-2.0f*kPi*stabHz/sampleRate);
     }
 
 public:
@@ -57,20 +67,22 @@ public:
         sampleRate = sr>1000.f?sr:48000.f;
         op.setSpec(rbshared::tl061Spec());
         op.setSampleRate(sampleRate);
-        inDc.setHz(sampleRate, 1.0f);
-        outDc.setHz(sampleRate, 1.0f);
+        inDc.setHz(sampleRate, 0.08f);  // C1 100n / R1 22M
+        outDc.setHz(sampleRate, 1.02f); // C5 15u / (R9+R10)
         reset();
     }
-    void reset(){ op.reset(); inDc.reset(); outDc.reset(); }
+    void reset(){ op.reset(); inDc.reset(); outDc.reset(); feedbackLp=stabilityLp=0.0f; }
     void setGain(float knob){ updateGain(knob); }
 
     inline float process(float in){
         const float x = inDc.process(in);
-        // non-inverting op-amp: ideal output = x * gain, then the TL061's own
-        // bandwidth / slew / rail clipping shape it.
-        float y = op.process(x*gain, gain);
+        feedbackLp += feedbackA*(x-feedbackLp);
+        const float target = x + (x-feedbackLp)*(gain-1.0f);
+        float y = op.process(target, gain);
+        stabilityLp += stabilityA*(y-stabilityLp);
+        y = stabilityLp;
         y = outDc.process(y);
-        return dn(y);
+        return dn(0.955f*y); // R9 470R into R10 10k
     }
 };
 

@@ -3,8 +3,8 @@
  * reads "Boss"). Reference: pedals/Boss CE-1 service notes (ET-10D).
  *
  * DSP in ChorusEnsembleCore.h — MN3002 BBD chorus/vibrato with the CE-1's
- * signature STEREO "Ensemble" spread. TRUE stereo out: one mono core drives
- * both output channels (L = dry+wet, R = dry-wet in Chorus). Base sample rate
+ * signature STEREO "Ensemble" spread. One mono core drives the switched mono
+ * effect output and the separate direct stereo output. Base sample rate
  * (band-limited chorus — no oversampling needed).
  *
  * EXTRA gear — not mapped to any RS song.
@@ -45,7 +45,7 @@ protected:
     const char* getDescription() const override { return "Boss CE-1 Chorus Ensemble style BBD chorus/vibrato"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1,0,0); }
+    uint32_t getVersion() const override { return d_version(1,1,0); }
     int64_t getUniqueId() const override { return d_cconst('C','E','1','x'); }
 
     void initParameter(uint32_t i, Parameter& p) override {

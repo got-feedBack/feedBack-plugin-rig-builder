@@ -1,145 +1,105 @@
 #ifndef WH10_WAH_CORE_H
 #define WH10_WAH_CORE_H
 //
-// WH10WahCore — Ibañez WH10 (WN10) active op-amp wah, from the factory
-// schematic (pedals/Ibanez WH10/ibanez_wh10_wah.pdf).
-//
-// The WH10 is NOT a passive inductor wah. Signal path in the schematic:
-//   IN -> Q1 (2SC1815) buffer -> resonant band-pass around IC1A+IC1B (NJM4558)
-//       swept by the FREQ treadle pot VR1 -> DEPTH pot VR2 sets resonance/mix
-//       -> 2SA1015/2SC1815/2SK30A output buffers -> OUT (+ a Q3 TUNER OUT tap).
-//   S2 GUITAR/BASS drops the whole sweep range ~an octave for bass.
-//
-// Modelled as: input DC-block -> a TPT state-variable band-pass whose centre
-// frequency tracks the treadle position, whose Q rises with DEPTH, and whose
-// resonant output is pushed into a soft op-amp overdrive (the famous WH10
-// "throaty" grind when DEPTH is up and you dig in). A gentle post low-pass
-// rounds the clipper fizz, and a mostly-wet mix keeps the vocal, pronounced
-// character (the WH10 passes far less dry than a Cry Baby). AUTO mode sweeps
-// the treadle from an envelope follower so it plays as a touch-wah without an
-// expression pedal.
+// Ibanez WH10 active wah, component-guided by ibanez_wh10_wah.pdf.
+// Q1 buffers the input; IC1A/IC1B (NJM4558) form the swept active filter;
+// VR1 50k is the treadle, VR2 10k is DEPTH, and S2 selects Guitar/Bass.
+// The output transistor/JFET network is represented by its loading and headroom.
 //
 #include <cmath>
+#include "../../_shared/opamp.hpp"
 
 namespace wh10wah {
 
-static constexpr float kTwoPi = 6.28318530717958648f;
+static constexpr float kPi = 3.14159265358979323846f;
 static inline float clamp01(float v){ return v<0.f?0.f:(v>1.f?1.f:v); }
 static inline float dn(float v){ return std::fabs(v)<1.0e-15f?0.f:v; }
 
 class WH10WahCore {
-    float fs = 48000.f;
+    float fs=48000.f, position=0.5f, depth=0.68f, sens=0.60f;
+    bool bassRange=false, autoSweep=true;
+    float hpX=0.f, hpY=0.f, hpA=0.f;
+    float sv1=0.f, sv2=0.f, outLp=0.f, outA=0.f;
+    float env=0.f, envA=0.f, envR=0.f;
+    rbshared::OpAmpStage ic1a, ic1b;
 
-    // params
-    bool  autoSweep = true;
-    float position = 0.50f;
-    float depth    = 0.68f;
-    float sens     = 0.60f;
-    bool  bassRange = false;
-
-    // envelope follower (auto / touch response)
-    float env = 0.f, atk = 0.f, rel = 0.f;
-
-    // TPT state-variable band-pass state
-    float ic1 = 0.f, ic2 = 0.f;
-
-    // 1-pole input DC-block + output post low-pass
-    float hpX = 0.f, hpY = 0.f, hpA = 0.99f;
-    float lpZ = 0.f;
-
-    static inline float msCoef(float ms, float sr){ return std::exp(-1.0f/(0.001f*ms*sr)); }
-
-    void updateDerived(){
-        atk = msCoef(4.0f, fs);
-        rel = msCoef(140.0f, fs);
-        // input DC block ~30 Hz
-        const float rc = 1.0f/(kTwoPi*30.0f), dt = 1.0f/fs;
-        hpA = rc/(rc+dt);
+    void update(){
+        // C1 and Q1's bias/input resistance put the input corner below guitar.
+        const float hpHz=7.2f;
+        const float rc=1.f/(2.f*kPi*hpHz), dt=1.f/fs;
+        hpA=rc/(rc+dt);
+        // Output transistor network and cable loading, not a cabinet filter.
+        outA=1.f-std::exp(-2.f*kPi*14500.f/fs);
+        // Envelope follower for the in-game AUTO touch-sweep (no expression
+        // pedal in the game — same affordance as the US/UK/Modern wahs).
+        envA=1.f-std::exp(-1.f/(0.004f*fs));
+        envR=1.f-std::exp(-1.f/(0.140f*fs));
     }
 
 public:
-    void setSampleRate(float sr){ fs = sr>1000.f?sr:48000.f; updateDerived(); reset(); }
-
-    void reset(){ env=0.f; ic1=ic2=0.f; hpX=hpY=0.f; lpZ=0.f; }
-
-    void setParams(float a, float pos, float dep, float sn, float rng){
-        autoSweep = a>0.5f;
-        position  = clamp01(pos);
-        depth     = clamp01(dep);
-        sens      = clamp01(sn);
-        bassRange = rng>0.5f;
+    void setSampleRate(float sr){
+        fs=sr>1000.f?sr:48000.f;
+        ic1a.setSpec(rbshared::njm4558Spec());
+        ic1b.setSpec(rbshared::njm4558Spec());
+        ic1a.setSampleRate(fs); ic1b.setSampleRate(fs);
+        update(); reset();
+    }
+    void reset(){ hpX=hpY=sv1=sv2=outLp=env=0.f; ic1a.reset(); ic1b.reset(); }
+    void setParams(float aut,float pos,float dep,float sn,float range){
+        autoSweep=aut>=0.5f; position=clamp01(pos); depth=clamp01(dep);
+        sens=clamp01(sn); bassRange=range>=0.5f;
     }
 
     inline float process(float x){
-        // ── input buffer + DC block (Q1, C1 coupling) ──
-        const float in = x;
-        hpY = hpA*(hpY + in - hpX); hpX = in;
-        const float bx = hpY;
+        // Q1 2SC1815 emitter follower: essentially unity in-band with finite
+        // 9 V headroom. The mild transfer is only reached on hot inputs.
+        hpY=hpA*(hpY+x-hpX); hpX=x;
+        const float buffered=0.985f*std::tanh(0.62f*hpY)/0.62f;
 
-        // ── envelope follower for AUTO / touch response ──
-        const float lvl = std::fabs(bx);
-        const float c = lvl>env ? atk : rel;
-        env = c*env + (1.0f-c)*lvl;
-        float pick = env * (2.4f + sens*3.6f);
-        if (pick>1.0f) pick = 1.0f;
-
-        // ── treadle position (VR1) ──
-        float pos;
-        if (autoSweep){
-            // touch-wah: DEPTH-free floor from the treadle, swept up by picking
-            const float floorP = 0.08f + 0.34f*position;
-            const float span   = 0.34f + 0.42f*sens;
-            pos = floorP + span*pick;
+        // ── treadle position: manual (cocked wah) or AUTO envelope sweep ──
+        const float lvl=std::fabs(buffered);
+        env+=(lvl>env?envA:envR)*(lvl-env);
+        float pick=env*(2.4f+sens*3.6f); if(pick>1.f)pick=1.f;
+        float posEff;
+        if(autoSweep){
+            const float floorP=0.08f+0.34f*position;   // treadle sets the sweep floor
+            const float span=0.34f+0.42f*sens;
+            posEff=clamp01(floorP+span*pick);
         } else {
-            // manual cocked-wah, with a little touch bloom
-            pos = position + 0.16f*sens*pick;
+            posEff=clamp01(position+0.16f*sens*pick);  // manual + a little touch bloom
         }
-        pos = clamp01(pos);
 
-        // ── centre frequency: exponential sweep, dropped ~an octave for bass ──
-        // Guitar ~240 Hz..2.7 kHz (wider/lower/throatier than a Cry Baby),
-        // Bass ~95 Hz..1.15 kHz.
-        const float shaped = pos*pos*(3.0f-2.0f*pos);        // smoothstep
-        const float fLo = bassRange ? 95.0f  : 240.0f;
-        const float fHi = bassRange ? 1150.0f : 2700.0f;
-        float fc = fLo * std::pow(fHi/fLo, shaped);
-        const float nyq = fs*0.45f;
-        if (fc>nyq) fc = nyq;
+        // VR1 is a linear 50k treadle pot, but the RC network converts its
+        // travel into an approximately exponential audible frequency sweep.
+        const float p=posEff*posEff*(3.f-2.f*posEff);
+        const float flo=bassRange?105.f:230.f;
+        const float fhi=bassRange?1250.f:3150.f;
+        float fc=flo*std::pow(fhi/flo,p);
+        if(fc>0.42f*fs) fc=0.42f*fs;
 
-        // ── DEPTH (VR2): resonance + how hard the op-amp grinds ──
-        const float q = 1.8f + depth*6.6f;                   // ~1.8..8.4, quacky at max
+        // Two-integrator active filter equivalent to IC1A/IC1B. DEPTH controls
+        // the real feedback/mix network; it does not trigger an envelope.
+        const float q=0.75f+4.75f*depth;
+        const float g=std::tan(kPi*fc/fs);
+        const float k=1.f/q;
+        const float a1=1.f/(1.f+g*(g+k));
+        const float a2=g*a1;
+        const float v3=buffered-sv2;
+        const float bp=a1*sv1+a2*v3;
+        const float lp=sv2+a2*sv1+g*a2*v3;
+        sv1=dn(2.f*bp-sv1); sv2=dn(2.f*lp-sv2);
 
-        // ── TPT state-variable band-pass ──
-        const float g = std::tan(3.14159265359f * fc / fs);
-        const float k = 1.0f/q;
-        const float a1 = 1.0f/(1.0f + g*(g+k));
-        const float a2 = g*a1;
-        const float v3 = bx - ic2;
-        const float bp = a1*ic1 + a2*v3;
-        const float lp = ic2 + a2*ic1 + g*a2*v3;
-        ic1 = 2.0f*bp - ic1;
-        ic2 = 2.0f*lp - ic2;
+        // NJM4558 bandwidth, slew and rail swing are applied to both active
+        // sections. The resonance itself produces the WH10's overload.
+        const float stageA=ic1a.process(bp*(1.2f+2.8f*depth),1.5f+3.5f*depth);
+        const float wet=ic1b.process(stageA,1.0f+1.8f*depth);
+        const float wetMix=0.32f+0.66f*depth;
+        float y=(1.f-wetMix)*buffered+wetMix*wet;
 
-        // resonant peak level rides up with Q; DEPTH sets the band-pass gain
-        float wet = bp * k * (2.6f + 1.4f*depth);
-
-        // ── op-amp soft overdrive (the WH10 grind): drive scales with DEPTH^2
-        //    and how hard you're playing. Slight asymmetry for even harmonics. ──
-        const float drive = 1.0f + depth*depth*5.5f + sens*1.4f;
-        float d = wet*drive;
-        d = std::tanh(d) + 0.06f*d*d/(1.0f+d*d);             // soft clip + gentle 2nd-harm bias
-        wet = d / (0.7f + 0.3f*drive);                        // normalise back toward unity
-
-        // ── gentle post low-pass to round clipper fizz (WH10 isn't harsh up top) ──
-        const float lpFc = bassRange ? 2200.0f : 4200.0f;
-        const float lg = std::exp(-kTwoPi*lpFc/fs);
-        lpZ = lg*lpZ + (1.0f-lg)*wet;
-        wet = lpZ;
-
-        // ── mostly-wet mix (vocal, pronounced) + tiny dry for body ──
-        return dn(wet + bx*0.05f);
+        outLp+=outA*(y-outLp);
+        return dn(0.92f*outLp);
     }
 };
 
 } // namespace wh10wah
-#endif // WH10_WAH_CORE_H
+#endif

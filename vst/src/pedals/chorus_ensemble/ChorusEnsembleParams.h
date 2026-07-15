@@ -5,7 +5,7 @@
  * CHORUS ENSEMBLE — Boss CE-1 Chorus Ensemble (1976). Parody brand (no "Boss"
  * on the face). Reference: pedals/Boss CE-1/BOSS-CE1_ServiceNotes.pdf.
  *
- * The first Boss pedal: a TA7504S preamp -> MN3002 BBD (1024 stages, clock
+ * The first Boss pedal: a TA7136P preamp -> MN3002 BBD (512 stages, clock
  * 60-200 kHz) with an LFO modulating the clock, a Q10 output low-pass to kill
  * clock leakage, a Noise-Killer gate, and a STEREO "Ensemble" output (the wide
  * chorus spread: one out = dry+wet, the other = dry-wet).

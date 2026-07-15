@@ -1,22 +1,15 @@
 #include "DistrhoPlugin.hpp"
 #include "SuperdriveParams.h"
-#include "../../_shared/guitar_amp_core.hpp"
+#include "SuperdriveCore.h"
 #include "../../_shared/oversampler.hpp"
 #include <cmath>
 START_NAMESPACE_DISTRHO
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
 class SuperdrivePlugin : public Plugin {
-    rbgtr::AmpCore<rbtube::TubeKT66> core; float fP[kParamCount];
+    superdrive45::SuperdriveCore core; float fP[kParamCount];
     rbshared::Oversampler4x os; static constexpr int kOS = rbshared::Oversampler4x::OS;
-    void applyAll(){ bool hi=fP[kChannel]>=0.5f; bool modern=fP[kModern]>=0.5f; bool brite=fP[kBrite]>=0.5f;
-        float g=hi?fP[kDrive]:fP[kRhythm];
-        // MODERN (pull MID, hi-gain only): scoop mids ~700Hz -> lifts bass+treble feel.
-        // BRITE (pull RHYTHM, clean channel only): brighter treble shelf (bright cap).
-        const float scDb  = (hi && modern) ? -6.0f : 0.0f;
-        const float brAmt = (!hi && brite) ? 9.0f : 4.0f;
-        core.configure(500e3,500e3,50e3,56e3,220e-12,22e-9,22e-9, hi?0.40f:0.25f, hi?8.0f:3.0f,13.0f,3000.0f,brAmt, 700.0f, scDb, 1.6f, -38.0f);
-        core.setGain(g);core.setBass(fP[kBass]);core.setMiddle(fP[kMid]);core.setTreble(fP[kTreble]);core.setPresence(0.5f);core.setVolume(fP[kMaster]); }
+    void applyAll(){ for(int i=0;i<kParamCount;++i)core.setParam(i,fP[i]); }
 public:
     SuperdrivePlugin() : Plugin(kParamCount,0,0){ for(int i=0;i<kParamCount;++i)fP[i]=kSuperDef[i]; core.setSampleRate(kOS*(float)getSampleRate()); applyAll(); }
 protected:
@@ -24,7 +17,7 @@ protected:
     const char* getDescription() const override { return "Superdrive45 — circuit-real model"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(2,0,0); }
+    uint32_t getVersion() const override { return d_version(2,1,0); }
     int64_t getUniqueId() const override { return d_cconst('G','d','4','5'); }
     void initParameter(uint32_t i, Parameter& p) override { if(i>=(uint32_t)kParamCount)return; p.hints=kParameterIsAutomatable;
         if(i==(uint32_t)kChannel||i==(uint32_t)kModern||i==(uint32_t)kBrite||i==(uint32_t)kCabSim)p.hints|=kParameterIsBoolean;

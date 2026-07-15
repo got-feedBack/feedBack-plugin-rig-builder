@@ -44,7 +44,7 @@ protected:
     const char* getDescription() const override { return "Boss DS-2 Turbo Distortion style pedal"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1,0,0); }
+    uint32_t getVersion() const override { return d_version(2,0,0); }
     int64_t getUniqueId() const override { return d_cconst('T','r','D','s'); }
 
     void initParameter(uint32_t i, Parameter& p) override {

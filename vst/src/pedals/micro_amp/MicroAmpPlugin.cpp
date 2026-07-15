@@ -18,7 +18,6 @@
 START_NAMESPACE_DISTRHO
 
 static inline float clamp01(float v){ return v<0.0f?0.0f:(v>1.0f?1.0f:v); }
-static inline float finalLimit(float x){ return std::tanh(0.92f*x); }
 
 class MicroAmpPlugin : public Plugin {
     microamp::MicroAmpCore left, right;
@@ -42,7 +41,7 @@ protected:
     const char* getDescription() const override { return "MXR Micro Amp style clean boost"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1,0,0); }
+    uint32_t getVersion() const override { return d_version(1,1,0); }
     int64_t getUniqueId() const override { return d_cconst('M','c','A','p'); }
 
     void initParameter(uint32_t i, Parameter& p) override {
@@ -67,8 +66,10 @@ protected:
         for (uint32_t i=0;i<frames;++i){
             osL.upsample(iL[i], ubL); osR.upsample(iR[i], ubR);
             for (int k=0;k<kOS;++k){ ubL[k]=left.process(ubL[k]); ubR[k]=right.process(ubR[k]); }
-            oL[i]=finalLimit(osL.downsample(ubL));
-            oR[i]=finalLimit(osR.downsample(ubR));
+            // The TL061 stage already models GBW, slew and rail clipping. A
+            // second tanh here changed the circuit and reduced maximum boost.
+            oL[i]=osL.downsample(ubL);
+            oR[i]=osR.downsample(ubR);
         }
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MicroAmpPlugin)

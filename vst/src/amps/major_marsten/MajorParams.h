@@ -14,7 +14,8 @@
  *     breakup instead of the Plexi's early EL34 crunch.
  *   - a 12AU7 (ECC82) long-tail phase inverter (not the Plexi's 12AX7) -> a
  *     cleaner, higher-headroom splitter that only hardens when really pushed.
- *   - a fuller, tighter Marshall preamp voiced for headroom.
+ *   - V1 channel volumes feeding a 470k mixer, then ECC83 V2 and the passive
+ *     250pF/22nF/22nF stack before the ECC82 splitter.
  * It's the Ritchie Blackmore / Deep Purple "loud clean platform + booster"
  * amp, NOT a distortion machine.
  *

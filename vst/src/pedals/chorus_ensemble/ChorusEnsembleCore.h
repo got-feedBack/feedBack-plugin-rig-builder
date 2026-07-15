@@ -5,18 +5,17 @@
 // notes (ET-10D) + the MN3002 datasheet. MN3002 BBD = 512 stages (delay
 // 0.32-25.6 ms over its 10-800 kHz clock range; the CE-1 clocks it 60-200 kHz
 // -> ~1.3..4.3 ms), THD 0.4%, S/N 70 dB, insertion loss ~10 dB, response
-// fi <= 0.3*fcp. TA7504S preamp, LFO-modulated clock, Q10 output LPF (kills
+// fi <= 0.3*fcp. TA7136P preamp, LFO-modulated clock, Q10 output LPF (kills
 // clock leak + the dark BBD warmth), noise-killer gate, STEREO "Ensemble" out.
 //
 //   IN -> preamp -> input LP -> BBD (delay set by clock + LFO) -> output LP
-//      -> compander (BBD level ride) -> stereo mix:
-//        CHORUS : L = dry + wet,  R = dry - wet   (the wide ensemble spread)
-//        VIBRATO: L = R = wet     (100% wet pitch modulation)
+//      -> transistor Noise Killer -> jack-switched mono/stereo outputs.
 //
 // Mono core -> stereo out (process fills outL/outR). Runs at base rate.
 //
 #include <cmath>
 #include "../../_shared/ChorusComponents.h"
+#include "../../_shared/opamp.hpp"
 
 namespace chorusensemble {
 
@@ -32,13 +31,13 @@ class ChorusEnsembleCore {
     rbmod::HighPass  inputHP;
     rbmod::LowPass   inputLP, bbdLP1, bbdLP2;
     rbmod::DelayBuffer bbd;
-    rbmod::BbdCompander compander;
+    rbshared::OpAmpStage preamp;
     float lfoPhase=0.f;
-    float pre=0.f, dcOut=0.f, dcx1=0.f;
+    float nkEnv=0.f, nkGain=0.f, nkAtk=0.f, nkRel=0.f;
 
     float lfoRateHz() const {
-        if (vibrato) return 3.0f + 8.0f * rate;          // sine 3..11 Hz (325..90 ms)
-        return 0.28f + 1.4f * intensity;                 // triangle, slow chorus sweep
+        if (vibrato) return 3.08f + 8.03f*rate;          // 325..90 ms
+        return 0.417f + 2.66f*intensity;                 // 2.4 s..325 ms
     }
 
 public:
@@ -49,7 +48,10 @@ public:
         inputLP.setHz(6200.f, sampleRate);               // pre-BBD band limit
         bbdLP1.setHz(4800.f, sampleRate);                // Q10 output LPF (dark BBD)
         bbdLP2.setHz(5200.f, sampleRate);
-        compander.setSampleRate(sampleRate, 20.0f);
+        preamp.setSpec(rbshared::ta7136apSpec());
+        preamp.setSampleRate(sampleRate);
+        nkAtk=1.f-std::exp(-1.f/(0.004f*sampleRate));
+        nkRel=1.f-std::exp(-1.f/(0.160f*sampleRate));
         reset();
     }
     void setLevel(float v){ level=clamp01(v); }
@@ -62,7 +64,7 @@ public:
 
     void reset(){
         inputHP.reset(); inputLP.reset(); bbdLP1.reset(); bbdLP2.reset();
-        bbd.reset(); compander.reset(); lfoPhase=0.f; pre=dcOut=dcx1=0.f;
+        bbd.reset(); preamp.reset(); lfoPhase=0.f; nkEnv=nkGain=0.f;
     }
 
     void process(float in, float& outL, float& outR){
@@ -73,26 +75,38 @@ public:
         const float sn  = std::sin(rbmod::kTwoPi*lfoPhase);
         const float lfo = vibrato ? sn : tri;
 
-        // ── preamp (TA7504S): a touch of gain + gentle soft saturation. The
-        //    HIGH/LOW input-sensitivity switch (S1) drives it harder in HIGH
-        //    (the CE-1 "preamp boost" warmth) or stays clean in LOW. ──
+        // TA7136P input stage. LEVEL is the real 50KA input pot, not a final
+        // digital output trim. LOW attenuates instrument input before the high
+        // closed-loop-gain preamp; HIGH exposes its characteristic overload.
         float x = inputHP.process(in);
-        pre += 0.5f*(x - pre);                     // mild slew/warmth
-        const float preGain = inputHigh ? 2.7f : 1.12f;
-        x = std::tanh(preGain * x) * (inputHigh ? 0.72f : 1.0f);   // High: more drive, level-matched
+        const float pot=std::pow(level,1.7f);
+        const float sensitivity=inputHigh?1.f:0.22f;
+        const float preGain=20.f;
+        x=preamp.process(x*pot*sensitivity*preGain,preGain);
         x = inputLP.process(x);
 
         // ── BBD delay (MN3002 = 512 STAGES per datasheet, NOT 1024): delay =
         //    512/(2·fcp). At the CE-1's 60-200 kHz clock -> ~1.3..4.3 ms.
         //    Centre ~2.9 ms, LFO-swept within that window. ──
-        const float baseMs = 2.9f;
-        const float widthMs = vibrato ? (0.5f + 2.1f*depth)     // vibrato: deeper sweep
-                                      : (0.3f + 1.3f*intensity); // chorus: tight ~1.3-4.3 ms
-        const float delayMs = baseMs + widthMs*lfo;
+        const float amount=vibrato?depth:intensity;
+        const float clockCentre=100000.f;
+        const float clockSpan=(vibrato?0.12f:0.08f)+(vibrato?0.48f:0.45f)*amount;
+        float clockHz=clockCentre*(1.f+clockSpan*lfo);
+        if(clockHz<60000.f) clockHz=60000.f;
+        if(clockHz>200000.f) clockHz=200000.f;
+        const float delayMs=1000.f*512.f/(2.f*clockHz);
         bbd.write(x);
         float wet = bbd.read(delayMs*0.001f*sampleRate);
         wet = bbdLP2.process(bbdLP1.process(wet));
-        wet = compander.process(wet, 0.40f + 0.40f*(vibrato?depth:intensity));
+
+        // MN3002 typical THD is about 0.4%; apply it before the discrete
+        // transistor Noise Killer. The gate follows the input and only removes
+        // the low-level BBD floor, rather than riding musical dynamics.
+        wet += 0.004f*(wet*wet*wet-wet);
+        nkEnv += (std::fabs(x)>nkEnv?nkAtk:nkRel)*(std::fabs(x)-nkEnv);
+        const float gateTarget=clamp01((nkEnv-0.00018f)/0.0012f);
+        nkGain += (gateTarget>nkGain?nkAtk:nkRel)*(gateTarget-nkGain);
+        wet *= nkGain;
         wet = dn(wet);
 
         // ── stereo Ensemble output ──
@@ -102,19 +116,15 @@ public:
             // CE-1's famous "preamp only" path (buffered, warm, mono).
             L = R = x;
         } else if (vibrato) {
-            L = R = wet;                             // 100% wet pitch modulation
+            L = wet;                                 // mono jack: effect
+            R = x;                                   // stereo jack: direct path
         } else {
             const float dry = x;
             const float w = wet * (0.55f + 0.45f*intensity);
-            L = dry + w;                             // dry + wet
-            R = dry - w;                             // dry - wet  = the wide CE-1 spread
+            L = 0.70f*(dry+w);                       // switched MONO jack sum
+            R = dry;                                 // second jack exposes direct path
         }
-        // output level — near-unity (a modulation pedal shouldn't boost); the
-        // dry+wet Ensemble sum already adds level, so the trim keeps it in
-        // family with the other chorus pedals (~input level).
-        const float lvl = 0.30f + 0.63f*level;
-        outL = dn(L)*lvl;
-        outR = dn(R)*lvl;
+        outL=dn(L); outR=dn(R);
     }
 };
 

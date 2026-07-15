@@ -14,19 +14,20 @@
  * that goes lower and throatier than a Cry Baby, and grinds into op-amp
  * overdrive when you dig in with DEPTH up (the Frusciante / Tim Henson tone).
  *
- * The real panel is just DEPTH + GUITAR/BASS + the treadle. In-game we add an
- * AUTO envelope sweep (so it's playable without an expression pedal) and a SENS
- * control for the touch response / grind, matching the other wahs' contract.
- *
  * EXTRA gear (not mapped to any RS song).
  */
+// The real panel is treadle + DEPTH + GUITAR/BASS. In-game there is NO
+// expression pedal, so AUTO (envelope touch-sweep) + SENS make the wah
+// PLAYABLE — same contract as every other wah in the game (US/UK/Modern all
+// carry Auto/Sens). The param ORDER matches the P.wh10wah canvas face, which
+// maps knobs by index: Auto0 Position1 Depth2 Sens3 Range4.
 enum WH10WahParamId
 {
-    kAuto = 0,    // Auto envelope-sweep on/off (game affordance, not on the real pedal)
-    kPosition,    // Treadle FREQ position (VR1) — manual cocked-wah / sweep floor
-    kDepth,       // DEPTH (VR2) — resonance + wet gain + grind; the real WH10 knob
-    kSens,        // Envelope sensitivity / how hard it grinds (drives the op-amp clip)
-    kRange,       // GUITAR/BASS switch (S2): 0 = Guitar, 1 = Bass (range dropped ~octave)
+    kAuto = 0,     // Auto envelope-sweep on/off (game affordance)
+    kPosition,     // FREQ treadle (VR1 50k) — manual cocked-wah / sweep floor
+    kDepth,        // DEPTH (VR2 10k)
+    kSens,         // envelope sensitivity (drives the auto sweep)
+    kRange,        // S2: 0 = Guitar, 1 = Bass
     kParamCount
 };
 
@@ -35,8 +36,6 @@ static const char* const kWH10WahSymbols[kParamCount] = { "auto", "position", "d
 
 static const float kWH10WahMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
 static const float kWH10WahMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
-// Defaults: AUTO on (touch-wah, playable out of the box), treadle mid, DEPTH ~2
-// o'clock (the vocal WH10 quack), SENS musical, GUITAR range.
 static const float kWH10WahDef[kParamCount] = { 1.0f, 0.50f, 0.68f, 0.60f, 0.0f };
 
 #endif // WH10_WAH_PARAMS_H

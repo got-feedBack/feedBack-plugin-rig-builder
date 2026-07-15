@@ -3,10 +3,10 @@
  * "Marsten"; the in-app face must never read "Marshall". Reference: local
  * Marshall Major schematics (200W + 1966 200W PA).
  *
- * DSP in MajorCore.h — circuit-real on the shared tube_stage.hpp framework: a
- * Plexi-lineage Marshall preamp voiced for headroom, a 12AU7 (ECC82) LTP phase
- * inverter and 4x KT88 at cold bias/high B+ (200W, huge clean headroom, late
- * tight breakup). NON-MASTER: the Volume pots are the gain. STEREO I/O, single
+ * DSP in MajorCore.h follows the 200W signal order: ECC83 input channels,
+ * post-V1 Volume pots and 470k mixer, ECC83 V2 before the passive stack, ECC82
+ * LTP and 4x KT88 at cold bias/high B+ (200W, huge clean headroom, late tight
+ * breakup). NON-MASTER: the Volume pots are the gain. STEREO I/O, single
  * mono core -> both outputs (dual-mono); the nonlinear chain runs at 2x
  * oversampling.
  *
@@ -25,7 +25,7 @@ START_NAMESPACE_DISTRHO
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
 
-static constexpr float kMajorMakeup = 0.42f;   // family-level trim
+static constexpr float kMajorMakeup = 0.55f;   // family-level trim, post-DSP only
 
 class MajorPlugin : public Plugin {
     majoramp::MajorCore core;
@@ -50,7 +50,7 @@ protected:
     const char* getDescription() const override { return "Marshall Major 200W style amp — circuit-real KT88 model"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('M','r','M','j'); }
 
     void initParameter(uint32_t i, Parameter& p) override {

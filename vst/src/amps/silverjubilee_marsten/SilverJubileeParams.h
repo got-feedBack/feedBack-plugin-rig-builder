@@ -9,15 +9,15 @@
  * Plexi / DSL100). The in-app face must never read "Marshall".
  *
  * What makes the Jubilee a Jubilee (vs a JCM800): a DIODE CLIPPER in the
- * preamp — LED3/LED4 back-to-back + 3x 1N4007 (D1-D3), asymmetric — sits
+ * preamp — LED3+D1+D2 against LED2+D3, asymmetric — sits
  * between the V1 cascade and the Lead Master. That diode grind (not pure tube
  * clipping) is the singing, compressed, even-harmonic-rich Jubilee voice. The
  * GAIN pot's PULL switch engages "Rhythm Clip" (D4/D5 + C6), which tightens
- * the clip for chord work (more headroom, less compression).
+ * the clip for chord work and adds C6's high-frequency shunt.
  *
  * Signal path: IN -> V1A -> GAIN -> V1B -> diode clipper -> LEAD MASTER ->
- * V2A -> [FX loop] -> V2B -> Marshall TMB tone stack (Treble 220k, Bass 1M,
- * Middle 22k/slope 33k, 470pF/22n/22n) -> OUTPUT MASTER -> V3 long-tail PI ->
+ * V2A -> [FX loop] -> V2B -> Jubilee EQ (VR4 220k linear, VR5 100k log,
+ * tandem VR6 1M log; C26/C27/C8-C11/C7) -> OUTPUT MASTER -> ECC83 V3 LTP ->
  * 4x EL34 (~100W) + PRESENCE (power-amp NFB). Cab Sim is a temporary internal
  * 4x12 voice for auditioning without an external cab/IR.
  *
@@ -27,9 +27,9 @@ enum SilverJubileeParamId
 {
     kGain = 0,      // INPUT GAIN — drives the V1 cascade into the diode clipper
     kLeadMaster,    // LEAD MASTER (VR2) — post-clipper level into V2
-    kBass,          // BASS    Marshall tone stack (1M/22nF)
-    kMiddle,        // MIDDLE  Marshall tone stack (22k/22nF)
-    kTreble,        // TREBLE  Marshall tone stack (220k/470pF)
+    kBass,          // BASS    tandem 1M log control
+    kMiddle,        // MIDDLE  100k log control
+    kTreble,        // TREBLE  220k linear / C8 220pF
     kPresence,      // PRESENCE — power-amp NFB
     kMaster,        // OUTPUT MASTER (VR3)
     kRhythmClip,    // GAIN pull switch: 0 = Lead clip, 1 = Rhythm clip (tighter)

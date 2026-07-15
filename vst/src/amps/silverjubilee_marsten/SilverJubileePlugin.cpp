@@ -5,11 +5,11 @@
  * iss.3 6-6-88).
  *
  * DSP in JubileeCore.h — circuit-real on the shared tube_stage.hpp framework
- * plus the AsymDiodeStringClipper from semiconductors.hpp: the Jubilee's voice
- * is a preamp DIODE CLIPPER (LED3/LED4 + 3x 1N4007), not pure tube clipping.
- * The GAIN pull switch ("Rhythm Clip") tightens the clip for chords. STEREO
+ * plus a mixed LED/1N4007 Shockley clipper: the Jubilee's voice is a preamp
+ * diode network, not pure tube clipping. The GAIN pull switch adds the D4/D5
+ * rhythm pair and C6 high-frequency shunt. STEREO
  * I/O, single mono core -> both outputs (dual-mono); the nonlinear chain runs
- * at 4x oversampling.
+ * at 2x oversampling.
  *
  * EXTRA gear — not mapped to any RS song yet. Panel is the real 2555:
  * Gain / Lead Master / Bass / Middle / Treble / Presence / Master +
@@ -26,7 +26,7 @@ START_NAMESPACE_DISTRHO
 static inline float rbAmpLvl(float x){ const float t=0.90f,c=0.99f,a=(x<0.f?-x:x);
     if(a<=t) return x; return (x<0.f?-1.f:1.f)*(t+(c-t)*std::tanh((a-t)/(c-t))); }
 
-static constexpr float kJubileeMakeup = 0.40f;   // family-level trim (tuned offline)
+static constexpr float kJubileeMakeup = 0.50f;   // family-level trim, post-DSP only
 
 class SilverJubileePlugin : public Plugin {
     jubilee::JubileeCore core;
@@ -51,7 +51,7 @@ protected:
     const char* getDescription() const override { return "Marshall 2555 Silver Jubilee style amp — circuit-real model"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(1, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('M','S','J','b'); }
 
     void initParameter(uint32_t i, Parameter& p) override {

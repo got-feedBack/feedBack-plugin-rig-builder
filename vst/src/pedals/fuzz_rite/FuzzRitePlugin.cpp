@@ -4,8 +4,8 @@
  *
  * DSP in FuzzRiteCore.h — two grounded-emitter NPN silicon stages that slam into
  * hard transistor clipping, tiny 2n2 interstage caps for the thin nasal voice,
- * a DEPTH crossfade between the two out-of-phase stage outputs (the honk/spit),
- * and a C4 collector-to-collector feedback loop for the sputtery gating. Runs at
+ * the real DEPTH wiper between Q1 and Q2's input node, and the C4 feedback path
+ * from Q2's collector to Q1's collector. Runs at
  * 2x oversampling to keep the square-wave harmonics from aliasing. Real panel =
  * DEPTH + VOL.
  *
@@ -20,7 +20,11 @@
 START_NAMESPACE_DISTRHO
 
 static inline float clamp01(float v){ return v<0.0f?0.0f:(v>1.0f?1.0f:v); }
-static inline float finalLimit(float x){ return std::tanh(0.95f*x); }
+static inline float passiveOutput(float x){
+    // Collector swing is already bounded in the core. This represents the
+    // finite 9 V output headroom and never creates samples above full scale.
+    return std::tanh(x);
+}
 
 class FuzzRitePlugin : public Plugin {
     fuzzrite::FuzzRiteCore left, right;
@@ -47,7 +51,7 @@ protected:
     const char* getDescription() const override { return "Mosrite FuzzRite style silicon fuzz"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1,0,0); }
+    uint32_t getVersion() const override { return d_version(1,1,0); }
     int64_t getUniqueId() const override { return d_cconst('F','z','R','t'); }
 
     void initParameter(uint32_t i, Parameter& p) override {
@@ -68,14 +72,14 @@ protected:
     void run(const float** in, float** out, uint32_t frames) override {
         const float* iL=in[0]; const float* iR=in[1];
         float* oL=out[0]; float* oR=out[1];
-        // VOL (500KA) + fixed makeup so the fuzz sits in family with the other pedals.
-        const float vol = (0.10f + 1.75f*params[kVolume]);
+        // VOL is the real 500KA passive output pot: mute at zero, audio taper.
+        const float vol = std::pow(params[kVolume], 2.6f);
         float ubL[kOS], ubR[kOS];
         for (uint32_t i=0;i<frames;++i){
             osL.upsample(iL[i], ubL); osR.upsample(iR[i], ubR);
             for (int k=0;k<kOS;++k){ ubL[k]=left.process(ubL[k]); ubR[k]=right.process(ubR[k]); }
-            oL[i]=finalLimit(osL.downsample(ubL)*vol);
-            oR[i]=finalLimit(osR.downsample(ubR)*vol);
+            oL[i]=passiveOutput(osL.downsample(ubL)*vol);
+            oR[i]=passiveOutput(osR.downsample(ubR)*vol);
         }
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(FuzzRitePlugin)
