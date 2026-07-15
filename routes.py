@@ -6564,7 +6564,9 @@ def _download_tone3000_gears_worker(amps):
         if retry_queue:
             with _preload_lock:
                 _preload_state["current"] = f"(cooling down, retrying {len(retry_queue)} throttled capture(s)…)"
-            time.sleep(20)
+            # tone3000's abuse window outlasts a short pause when the account
+            # has been hammered (repeated batch runs), so give it a real rest.
+            time.sleep(45)
             for rs_gear, level, spec in retry_queue:
                 v = _try_variant(rs_gear, level, spec)
                 with _preload_lock:

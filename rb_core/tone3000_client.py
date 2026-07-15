@@ -140,7 +140,12 @@ class Tone3000Client:
         for attempt in range(max_attempts):
             self._ensure_fresh_token()
             try:
-                return self._raw_get(url)
+                result = self._raw_get(url)
+                # A success means we're connected — clear any stale auth-fail
+                # reason so a later None-return (a different resource) doesn't
+                # surface THIS one's old "403 forbidden" and mislead.
+                self._auth_fail_reason = None
+                return result
             except urllib.error.HTTPError as e:
                 if e.code == 401:
                     if self.access_token and self._refresh_token():
