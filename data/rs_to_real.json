@@ -768,33 +768,33 @@
     "gain_variants": {
       "clean": {
         "curator": "Nacho",
-        "model_id": 224030,
-        "notes": "VH100R - CH2 Lo - Neutral G5",
+        "model_name": "Laney IRT120 Clean Channel",
+        "notes": "Laney IRT120 - Clean Channel",
         "rs_gain_range": [
           0.0,
           35.0
         ],
-        "tone3000_id": 43720
+        "tone3000_id": 41748
       },
       "crunch": {
         "curator": "Nacho",
-        "model_id": 224037,
-        "notes": "VH100R - CH2 Lo - Neutral G7",
+        "model_name": "Laney IRT120 Clean Channel - Boosted",
+        "notes": "Laney IRT120 - Clean Channel Boosted",
         "rs_gain_range": [
           35.0,
           70.0
         ],
-        "tone3000_id": 43720
+        "tone3000_id": 41748
       },
       "dist": {
         "curator": "Nacho",
-        "model_id": 224034,
-        "notes": "VH100R - CH2 Lo - Neutral G10",
+        "model_name": "Laney IRT120 Lead Channel",
+        "notes": "Laney IRT120 - Lead Channel",
         "rs_gain_range": [
           70.0,
           100.0
         ],
-        "tone3000_id": 43720
+        "tone3000_id": 41748
       }
     },
     "make": "",

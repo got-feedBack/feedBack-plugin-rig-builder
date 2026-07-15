@@ -4146,6 +4146,7 @@ def _download_candidate(
     rs_gear: str,
     settings: dict,
     model_id_override: int | None = None,
+    model_name_override: str | None = None,
 ) -> tuple[str, str] | None:
     """Download a model for a tone3000 tone id and stage it in the
     right nam_tone directory.
@@ -4205,8 +4206,30 @@ def _download_candidate(
         if model is None:
             log.warning(
                 "model_id_override=%s not found in tone_id=%s — falling "
-                "back to pick_best_model (capture may have been removed "
-                "from tone3000)", model_id_override, tone3000_id)
+                "back to model_name/pick_best_model (capture may have been "
+                "removed from tone3000)", model_id_override, tone3000_id)
+    # Pin a capture by its TITLE (e.g. "Laney IRT120 Lead Channel"). Names are
+    # visible on the tone3000 page and stable, so curation can reference them
+    # without the opaque numeric model id. Exact (whitespace/case-normalised)
+    # match disambiguates siblings like "Clean Channel" vs "Clean Channel -
+    # Boosted"; pick_best_model then chooses the preferred SIZE among the
+    # name-matched captures (e.g. A2-Full vs A2-Lite). A named override that
+    # matches nothing fails loudly rather than silently downloading the wrong
+    # capture.
+    if model is None and model_name_override:
+        want = " ".join(str(model_name_override).lower().split())
+        subset = []
+        for m in (models_payload.get("data") or []):
+            title = m.get("title") or m.get("name") or m.get("display_name") or ""
+            if " ".join(str(title).lower().split()) == want:
+                subset.append(m)
+        if subset:
+            model = pick_best_model(
+                {"data": subset},
+                preferred_size=settings.get("preferred_size", "standard"))
+        else:
+            _set_dl_error(f"capture '{model_name_override}' not found in tone {tone3000_id}")
+            return None
     if model is None:
         model = pick_best_model(models_payload, preferred_size=settings.get("preferred_size", "standard"))
     if not model:
@@ -6487,7 +6510,8 @@ def _download_tone3000_gears_worker(amps):
                     res = _download_candidate(
                         tone3000_id=int(spec["tone3000_id"]), is_ir=False,
                         rs_gear=rs_gear, settings=settings,
-                        model_id_override=spec.get("model_id"))
+                        model_id_override=spec.get("model_id"),
+                        model_name_override=spec.get("model_name"))
                 except Exception as e:      # noqa: BLE001
                     res = None
                     with _preload_lock:
@@ -6964,6 +6988,7 @@ def _batch_worker(mode: str = "all", categories=None):
                                             rs_gear=rs_type,
                                             settings=settings,
                                             model_id_override=(amp_variant.get("model_id") if amp_variant else None),
+                                            model_name_override=(amp_variant.get("model_name") if amp_variant else None),
                                         )
                                         if downloaded:
                                             kind, fname = downloaded
@@ -7394,6 +7419,7 @@ def _auto_download_for_song(filename: str, path: Path) -> dict:
                                 rs_gear=rs_type,
                                 settings=settings,
                                 model_id_override=(amp_variant.get("model_id") if amp_variant else None),
+                                model_name_override=(amp_variant.get("model_name") if amp_variant else None),
                             )
                             if downloaded:
                                 cached["kind"], cached["file"] = downloaded
