@@ -5618,9 +5618,52 @@ async function rbStudioCloseFocus() {
 // every drag (no slow getStateInformation round-trip). Shared by amp + pedal.
 function rbStudioQuickSavePiece(idx) {
     const piece = (rbStudioCurrentChain())[idx];
-    if (piece && piece._vst_params && Object.keys(piece._vst_params).length) {
+    if (!piece) return;
+    // A. Engine slot resolved this session → the dragged edits are already keyed
+    //    by REAL param id in _vst_params. Authoritative — persist as before.
+    if (piece._vst_params && Object.keys(piece._vst_params).length) {
         try {
+            // Fold this session's canvas edits onto real ids too, so env.params
+            // (playback) matches env.logical even if the slot was null and the
+            // engine was never driven (edits still landed in _vst_logical). No-op
+            // when there's no meta to map with.
+            rbSeedParamsFromLogical(piece);
             rbStudioDualKeyParams(piece);   // add NAME keys so a fresh-load thumbnail renders right
+            rbStampVstState(piece, piece._vst_opaque || null);
+            rbStudioPersist();
+        } catch (_) {}
+        return;
+    }
+    // B. Engine slot NEVER resolved (e.g. the live monitor wasn't loaded on
+    //    re-entry, so rbStudioApplyKnobToEngine early-returned and never wrote
+    //    _vst_params). The knob edits landed ONLY in _vst_logical. Persist them
+    //    so they survive exit/re-enter instead of being silently dropped — the
+    //    reported bug — WITHOUT discarding the playback state (opaque + real-id
+    //    params) captured in a prior resolved session.
+    if (piece._vst_logical && Object.keys(piece._vst_logical).length) {
+        try {
+            let prev = {};
+            try { prev = JSON.parse(rbEffVstState(piece) || '{}') || {}; } catch (_) { prev = {}; }
+            // MERGE the fresh edits over the last-saved logical map — never
+            // replace. On re-entry _vst_logical is wiped and only gets the knobs
+            // the user actually moved this session; stamping that alone would
+            // drop every other knob's saved value. Fresh edits win.
+            if (prev.logical && typeof prev.logical === 'object') {
+                piece._vst_logical = Object.assign({}, prev.logical, piece._vst_logical);
+            }
+            // Carry forward the last-saved opaque + real-id params so this
+            // logical-only save doesn't blow them away.
+            if (!piece._vst_opaque && typeof prev.opaque === 'string') piece._vst_opaque = prev.opaque;
+            if ((!piece._vst_params || !Object.keys(piece._vst_params).length)
+                && prev.params && typeof prev.params === 'object') {
+                piece._vst_params = Object.assign({}, prev.params);
+            }
+            // Overlay this session's fresh edits onto real ids where the meta
+            // lets us map them (usually a no-op here — meta is empty when the
+            // slot didn't resolve — but then env.logical carries them and they
+            // re-map on the next load that resolves the slot).
+            rbSeedParamsFromLogical(piece);
+            rbStudioDualKeyParams(piece);
             rbStampVstState(piece, piece._vst_opaque || null);
             rbStudioPersist();
         } catch (_) {}
@@ -6098,28 +6141,44 @@ async function rbStudioChainSlotIdForPiece(api, pieceIdx) {
 //      filtered position instead of ever using the raw logical id.
 async function rbStudioApplyKnobToEngine(piece, idx, logicalId, val) {
     const api = rbAudioApi();
-    if (!api || typeof api.setParameter !== 'function') return;
-    // 1. Resolve the engine slot (re-resolve if missing/stale).
+    // 1. Try to resolve the engine slot. A null slot only means we can't DRIVE
+    //    the live monitor right now (e.g. the amp isn't in the loaded chain on
+    //    re-entry) — it must NOT stop us persisting the edit. The old code
+    //    early-returned here, so the new value never reached _vst_params: it
+    //    stayed stranded in _vst_logical while the STALE _vst_params (kept from
+    //    the previous session, since the room isn't rebuilt) still drove both the
+    //    editor display and the branch-A save → the knob "reverted" on re-open.
     let slotId = piece._vst_slot_id;
-    if (slotId == null) {
+    if (slotId == null && api && typeof api.getParameters === 'function') {
         try { slotId = await rbStudioChainSlotIdForPiece(api, idx); } catch (_) { slotId = null; }
         if (slotId != null) { piece._vst_slot_id = slotId; rbState._vstEditorSlot = slotId; }
     }
-    if (slotId == null) return;     // gear not in the live chain → nothing to drive
     // 2. Resolve the REAL engine param id for this logical (filtered) position.
+    //    The meta is usually already on the piece (survives across re-focus);
+    //    fetch it live ONLY when we actually have a slot and it's missing.
     let meta = piece._vst_param_meta;
-    if (!((meta || []).length) && typeof api.getParameters === 'function') {
+    if (!((meta || []).length) && slotId != null && api && typeof api.getParameters === 'function') {
         try { meta = await api.getParameters(slotId); piece._vst_param_meta = meta || []; }
         catch (_) { meta = piece._vst_param_meta || []; }
     }
     const filtered = rbFilterVstParams(meta || []);
-    if (logicalId >= filtered.length) return;       // can't map safely → skip (never drive a wrong param)
-    const p = filtered[logicalId];
-    const realId = p.id ?? p.paramId ?? p.index;
-    if (realId == null) return;
-    piece._vst_params = piece._vst_params || {};
-    piece._vst_params[realId] = val;                // persist under the REAL id
-    try { api.setParameter(slotId, realId, val); } catch (_) {}
+    if (logicalId < filtered.length) {
+        const p = filtered[logicalId];
+        const realId = p.id ?? p.paramId ?? p.index;
+        if (realId != null) {
+            // Persist under the REAL id REGARDLESS of whether the slot resolved —
+            // this is what the editor redraws from and what branch-A saves.
+            piece._vst_params = piece._vst_params || {};
+            piece._vst_params[realId] = val;
+            // Drive the live engine only when we have a slot to drive.
+            if (slotId != null && api && typeof api.setParameter === 'function') {
+                try { api.setParameter(slotId, realId, val); } catch (_) {}
+            }
+            return;
+        }
+    }
+    // Couldn't map (no meta yet) — the edit still rides in _vst_logical and is
+    // saved by quickSave branch B, then re-mapped on the next load with meta.
 }
 
 async function rbStudioLoadFocusVst(idx, faceEl, growMs) {
@@ -6178,6 +6237,13 @@ async function rbStudioLoadFocusVst(idx, faceEl, growMs) {
             rbState._vstEditorInChain = true;
             piece._vst_slot_id = null;
             piece._vst_param_meta = piece._vst_param_meta || [];
+            // Seed _vst_params from the SAVED state so the editor opens at the
+            // tone (not defaults) even with no live slot — and so knob edits
+            // (which now write _vst_params via rbStudioApplyKnobToEngine even
+            // without a slot) merge onto the real saved values instead of a
+            // sparse map. Fills missing keys only; never clobbers a live edit.
+            piece._vst_params = piece._vst_params || {};
+            rbSeedParamsFromSavedState(piece);
         }
         const _wait = Math.max(0, (growMs || 0) - (Date.now() - _start));
         setTimeout(() => {
@@ -9186,6 +9252,30 @@ function rbSeedParamsFromSavedState(piece) {
         for (const k of Object.keys(saved)) {
             if (piece._vst_params[k] == null && typeof saved[k] === 'number') { piece._vst_params[k] = saved[k]; n++; }
         }
+    }
+    return n;
+}
+
+// Fold this session's canvas edits (_vst_logical, keyed by logical/filtered
+// index) onto real engine param ids, OVERWRITING — these are the freshest
+// values the user just dialed in, so they must win over anything hydrated from
+// the saved envelope. No-op when the param meta is missing (the engine slot
+// never resolved): the edits still ride in env.logical via rbStampVstState and
+// re-map to real ids on the next load that DOES resolve the slot. Returns the
+// count folded.
+function rbSeedParamsFromLogical(piece) {
+    if (!piece || !piece._vst_logical) return 0;
+    const meta = piece._vst_param_meta;
+    if (!Array.isArray(meta) || !meta.length) return 0;
+    const filtered = rbFilterVstParams(meta);
+    piece._vst_params = piece._vst_params || {};
+    let n = 0;
+    for (const lid of Object.keys(piece._vst_logical)) {
+        const p = filtered[Number(lid)];
+        if (!p) continue;
+        const realId = p.id ?? p.paramId ?? p.index ?? Number(lid);
+        const v = piece._vst_logical[lid];
+        if (typeof v === 'number') { piece._vst_params[realId] = v; n++; }
     }
     return n;
 }
