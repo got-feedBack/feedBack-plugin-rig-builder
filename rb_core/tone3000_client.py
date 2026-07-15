@@ -83,6 +83,10 @@ class Tone3000Client:
         # switch from auto-mode to deep-link mode rather than making the
         # user paste/edit a config file.
         self.has_api_access = bool(self.access_token or self.api_key)
+        # Last reason has_api_access was flipped off (surfaced in the download
+        # failure message so "not connected" says WHY — 401 / 403 / expired
+        # refresh / transient token-endpoint error).
+        self._auth_fail_reason: str | None = None
         self._lock = threading.Lock()
         self._conn = sqlite3.connect(cache_db_path, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -128,11 +132,20 @@ class Tone3000Client:
         # capture got miscounted as "failed to download" — which is why
         # re-running the preload made the failure count shrink each pass
         # (the earlier "failures" were really rate-limits that cleared).
+        # Keep retries SHORT: this runs inside a single-threaded batch, so a
+        # long per-call backoff freezes the whole download. A few quick tries
+        # absorb a transient throttle; a sustained one fails fast per-resource
+        # and the idempotent re-run mops it up.
         max_attempts = 4
         for attempt in range(max_attempts):
             self._ensure_fresh_token()
             try:
-                return self._raw_get(url)
+                result = self._raw_get(url)
+                # A success means we're connected — clear any stale auth-fail
+                # reason so a later None-return (a different resource) doesn't
+                # surface THIS one's old "403 forbidden" and mislead.
+                self._auth_fail_reason = None
+                return result
             except urllib.error.HTTPError as e:
                 if e.code == 401:
                     if self.access_token and self._refresh_token():
@@ -140,36 +153,45 @@ class Tone3000Client:
                             return self._raw_get(url)
                         except urllib.error.HTTPError as e2:
                             if e2.code == 401:
+                                self._auth_fail_reason = "401 after token refresh"
                                 self.has_api_access = False
                                 return None
                             raise
                     # No recoverable credential — just means the user hasn't
                     # connected / pasted a key. The UI handles the fallback
-                    # flow; callers see an empty payload.
+                    # flow; callers see an empty payload. (_refresh_token sets
+                    # a more specific reason when a refresh was attempted.)
+                    if not self._auth_fail_reason:
+                        self._auth_fail_reason = "401 unauthorized — reconnect tone3000"
                     self.has_api_access = False
                     return None
-                if e.code == 429 and attempt < max_attempts - 1:
-                    # Honour Retry-After when present, else exponential
-                    # backoff with a little slope so parallel workers don't
-                    # resynchronise on the same tick. tone3000's budget
-                    # refills every ~0.6s so even one short pause clears it.
+                if e.code in (429, 403) and attempt < max_attempts - 1:
+                    # tone3000 throttles a busy batch with BOTH 429 AND 403:
+                    # the same tone that 403s mid-run lists its models fine in
+                    # isolation, so a 403 is (usually) a transient rate block,
+                    # not a real "forbidden". Retry it the same way as a 429.
+                    # Honour Retry-After when present, else exponential backoff
+                    # with a little slope so parallel workers don't resynchronise
+                    # on the same tick, capped so a late attempt can't stall for
+                    # minutes. More attempts (7) let the tail of a big batch keep
+                    # retrying long enough to clear a saturated window.
                     retry_after = 0
                     try:
                         retry_after = int(e.headers.get("Retry-After", "0"))
                     except (TypeError, ValueError):
                         retry_after = 0
-                    sleep_s = retry_after if retry_after > 0 else (
-                        2 ** attempt + 0.5 * attempt)
+                    sleep_s = min(retry_after if retry_after > 0 else (
+                        2 ** attempt + 0.5 * attempt), 5)
                     time.sleep(sleep_s)
                     continue
                 if e.code == 403:
-                    # Forbidden — the token is invalid/revoked or the account
-                    # lacks access (e.g. a stale credential surviving a factory
-                    # reset). Treat it like a dead 401: mark disconnected and
-                    # return None so callers short-circuit (has_api_access gate)
-                    # instead of re-requesting every gear and spamming a 403
-                    # traceback on each. The gear falls back to bundled/pending.
-                    self.has_api_access = False
+                    # Retries exhausted. A 403 is RESOURCE-scoped far more often
+                    # than session-scoped: one tone 403ing (even after retries)
+                    # must NOT flip has_api_access off — the old code did, so one
+                    # bad tone aborted the whole batch as "not connected". Fail
+                    # just this call and keep the session; a genuinely revoked
+                    # token still surfaces via the Setup connection test.
+                    self._auth_fail_reason = "403 forbidden (rate/abuse or resource)"
                     return None
                 raise
 
@@ -247,23 +269,52 @@ class Tone3000Client:
     def _refresh_token(self) -> bool:
         """Use the refresh token to mint a new access token. Returns True on
         success. On `invalid_grant` (refresh token expired) the tokens are
-        cleared so the UI prompts a re-connect."""
+        cleared so the UI prompts a re-connect.
+
+        A single transient failure on the token endpoint must NOT kill the
+        whole batch: the OAuth token endpoint shares tone3000's rate budget,
+        so a busy 'download version' run can 429 the refresh, and the old
+        code then returned False → has_api_access flipped off → every
+        remaining capture reported 'not connected'. Retry 429/5xx/network
+        with backoff; only a 400 invalid_grant (refresh token genuinely dead)
+        is fatal."""
         if not self.refresh_token:
+            self._auth_fail_reason = "no refresh token — connect tone3000"
             return False
-        try:
-            tokens = self._post_token({
-                "grant_type": "refresh_token",
-                "refresh_token": self.refresh_token,
-                "client_id": self.publishable_key,
-            })
-        except urllib.error.HTTPError as e:
-            if e.code == 400:  # invalid_grant → refresh token expired
-                self._clear_tokens()
-            return False
-        except urllib.error.URLError:
-            return False
-        self._apply_tokens(tokens)
-        return True
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            try:
+                tokens = self._post_token({
+                    "grant_type": "refresh_token",
+                    "refresh_token": self.refresh_token,
+                    "client_id": self.publishable_key,
+                })
+            except urllib.error.HTTPError as e:
+                if e.code == 400:  # invalid_grant → refresh token expired
+                    self._auth_fail_reason = (
+                        "session expired — reconnect tone3000 (refresh invalid_grant)")
+                    self._clear_tokens()
+                    return False
+                if e.code in (429, 500, 502, 503, 504) and attempt < max_attempts - 1:
+                    retry_after = 0
+                    try:
+                        retry_after = int(e.headers.get("Retry-After", "0"))
+                    except (TypeError, ValueError):
+                        retry_after = 0
+                    time.sleep(min(retry_after if retry_after > 0 else (
+                        2 ** attempt + 0.5 * attempt), 30))
+                    continue
+                self._auth_fail_reason = f"token refresh failed (HTTP {e.code})"
+                return False
+            except urllib.error.URLError:
+                if attempt < max_attempts - 1:
+                    time.sleep(2 ** attempt + 0.5 * attempt)
+                    continue
+                self._auth_fail_reason = "token refresh failed (network)"
+                return False
+            self._apply_tokens(tokens)
+            return True
+        return False
 
     def _apply_tokens(self, tokens: dict) -> None:
         if tokens.get("access_token"):
@@ -275,6 +326,8 @@ class Tone3000Client:
         if expires_in:
             self.token_expires_at = time.time() + float(expires_in)
         self.has_api_access = bool(self.access_token or self.api_key)
+        if self.has_api_access:
+            self._auth_fail_reason = None   # recovered
         self._emit_tokens()
 
     def _clear_tokens(self) -> None:
@@ -311,17 +364,29 @@ class Tone3000Client:
                 (url,),
             ).fetchone()
         if row is not None and now - row[0] < _CACHE_TTL_SECONDS:
-            return json.loads(row[1])
+            cached = json.loads(row[1])
+            # Ignore a cached `null` and re-fetch. `_http_get` returns None on a
+            # transient failure (e.g. the access token lapsed mid-batch before a
+            # refresh, giving a one-off 401/403), and an earlier version cached
+            # that None for the 7-day TTL — poisoning the tone so every later run
+            # returned the empty result and the capture reported "no models for
+            # this tone" even after the token recovered. Treating a cached null
+            # as a miss heals those entries on the next run.
+            if cached is not None:
+                return cached
 
         data = self._http_get(url)
-        payload = json.dumps(data)
-        with self._lock:
-            self._conn.execute(
-                "INSERT OR REPLACE INTO search_cache (url, fetched_at, response_json) "
-                "VALUES (?, ?, ?)",
-                (url, now, payload),
-            )
-            self._conn.commit()
+        # Never cache a failure. Only a real payload is worth persisting; caching
+        # a None would re-introduce the week-long poisoning described above.
+        if data is not None:
+            payload = json.dumps(data)
+            with self._lock:
+                self._conn.execute(
+                    "INSERT OR REPLACE INTO search_cache (url, fetched_at, response_json) "
+                    "VALUES (?, ?, ?)",
+                    (url, now, payload),
+                )
+                self._conn.commit()
         return data
 
     # ── Public API ──────────────────────────────────────────────────
@@ -428,10 +493,11 @@ class Tone3000Client:
         # Exponential backoff with jitter so a parallel client hitting
         # the same limit doesn't synchronise their retries on the same
         # tick. Honour the `Retry-After` header when present — that's
-        # the API's own hint about when it's safe to come back. We cap
-        # retries to 4 attempts so a sustained outage (auth revoked
-        # mid-batch, server down) still surfaces as a real exception
-        # instead of looping forever.
+        # the API's own hint about when it's safe to come back. Keep it
+        # SHORT (this blocks the single-threaded batch): a few quick tries
+        # clear a transient throttle; a sustained one fails fast and the
+        # idempotent re-run mops it up. A real outage (auth revoked
+        # mid-batch, server down) still surfaces as a real exception.
         max_attempts = 4
         last_exc = None
         for attempt in range(max_attempts):
@@ -459,8 +525,10 @@ class Tone3000Client:
                     os.remove(tmp_path)
                 except FileNotFoundError:
                     pass
-                if e.code != 429 or attempt == max_attempts - 1:
+                if e.code not in (429, 403) or attempt == max_attempts - 1:
                     raise
+                # tone3000 throttles a busy batch with 403 as well as 429, so
+                # retry both (a real "forbidden" clears via the Setup test).
                 # Backoff: prefer Retry-After if the server hinted one,
                 # otherwise 2^attempt + jitter so successive retries
                 # spread out. tone3000's 100-req/min budget refills
@@ -471,7 +539,7 @@ class Tone3000Client:
                     retry_after = int(e.headers.get("Retry-After", "0"))
                 except (TypeError, ValueError):
                     retry_after = 0
-                sleep_s = retry_after if retry_after > 0 else (2 ** attempt + 0.5 * attempt)
+                sleep_s = min(retry_after if retry_after > 0 else (2 ** attempt + 0.5 * attempt), 5)
                 time.sleep(sleep_s)
             except Exception:
                 try:

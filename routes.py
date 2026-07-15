@@ -4171,6 +4171,7 @@ def _download_candidate(
     rs_gear: str,
     settings: dict,
     model_id_override: int | None = None,
+    model_name_override: str | None = None,
 ) -> tuple[str, str] | None:
     """Download a model for a tone3000 tone id and stage it in the
     right nam_tone directory.
@@ -4201,7 +4202,9 @@ def _download_candidate(
 
     client = _get_t3k_client()
     if not client.has_api_access:
-        _set_dl_error("tone3000 not connected")
+        reason = getattr(client, "_auth_fail_reason", None)
+        _set_dl_error(f"tone3000 not connected — {reason}" if reason
+                      else "tone3000 not connected")
         return None
 
     try:
@@ -4213,7 +4216,13 @@ def _download_candidate(
         _set_dl_error(_classify_dl_error(e))
         return None
     if not models_payload:
-        _set_dl_error("no models for this tone")
+        # A falsy list_models means the request returned None — i.e. an auth
+        # failure (401/403), NOT a tone that genuinely has zero captures (that
+        # comes back as a truthy {"data": []}). Surface the real auth reason so
+        # a per-tone 403 (e.g. a gated pack) reads as "403 forbidden" rather
+        # than the misleading "no models for this tone".
+        reason = getattr(client, "_auth_fail_reason", None)
+        _set_dl_error(reason or "no models for this tone")
         return None
 
     from rb_core.tone3000_client import pick_best_model
@@ -4230,8 +4239,30 @@ def _download_candidate(
         if model is None:
             log.warning(
                 "model_id_override=%s not found in tone_id=%s — falling "
-                "back to pick_best_model (capture may have been removed "
-                "from tone3000)", model_id_override, tone3000_id)
+                "back to model_name/pick_best_model (capture may have been "
+                "removed from tone3000)", model_id_override, tone3000_id)
+    # Pin a capture by its TITLE (e.g. "Laney IRT120 Lead Channel"). Names are
+    # visible on the tone3000 page and stable, so curation can reference them
+    # without the opaque numeric model id. Exact (whitespace/case-normalised)
+    # match disambiguates siblings like "Clean Channel" vs "Clean Channel -
+    # Boosted"; pick_best_model then chooses the preferred SIZE among the
+    # name-matched captures (e.g. A2-Full vs A2-Lite). A named override that
+    # matches nothing fails loudly rather than silently downloading the wrong
+    # capture.
+    if model is None and model_name_override:
+        want = " ".join(str(model_name_override).lower().split())
+        subset = []
+        for m in (models_payload.get("data") or []):
+            title = m.get("title") or m.get("name") or m.get("display_name") or ""
+            if " ".join(str(title).lower().split()) == want:
+                subset.append(m)
+        if subset:
+            model = pick_best_model(
+                {"data": subset},
+                preferred_size=settings.get("preferred_size", "standard"))
+        else:
+            _set_dl_error(f"capture '{model_name_override}' not found in tone {tone3000_id}")
+            return None
     if model is None:
         model = pick_best_model(models_payload, preferred_size=settings.get("preferred_size", "standard"))
     if not model:
@@ -5924,14 +5955,19 @@ def _resolve_song_swap_assignment(to_gear: str, params_json: str | None,
 
 
 # Global rate-limit gate for tone3000 API calls. Pure tone3000 server-
-# side limit is ~100 req/min; we target a comfortable ~110 req/min via
-# a 0.55s minimum gap between any two outbound API calls, knowing that
-# `download_model_file` has its own 429-retry-with-backoff if we ever
-# overshoot. Shared by every parallel worker so the combined rate
-# never exceeds the budget.
+# side limit is ~100 req/min. A batch "download version" fires TWO API
+# calls per capture (list_models + download_model_file), so an earlier
+# 0.55s gap (~110 ticks/min → ~220 calls/min) overshot the budget and
+# the LAST captures in a big run exhausted their 429 retries and failed
+# (e.g. all three GB100 variants at the tail of a ~170-capture batch).
+# Target ~70 ticks/min (0.85s gap): a big library still finishes in a
+# few minutes, but the combined call rate stays comfortably under the
+# limit, and the (now longer) 429-retry-with-backoff in the client is
+# only ever the second line of defence. Shared by every parallel worker
+# so the combined rate never exceeds the budget.
 _t3k_rate_lock = threading.Lock()
 _t3k_last_call_at = 0.0
-_T3K_MIN_GAP = 0.55
+_T3K_MIN_GAP = 0.85
 
 
 def _t3k_rate_gate():
@@ -6532,40 +6568,83 @@ def _download_tone3000_gears_worker(amps):
     try:
         items = _load_custom_gear()
         by_id = {g.get("rs_gear"): g for g in items}
-        created = 0
+
+        # Download ONE variant. Returns the gain_variants entry, or None on any
+        # failure (the reason is on _t3k_dl_error). No counter side-effects —
+        # the caller tallies — so both passes below can reuse it.
+        def _try_variant(rs_gear, level, spec):
+            with _preload_lock:
+                _preload_state["current"] = f"{_gear_display_name(rs_gear, rs_gear)} / {level}"
+            _t3k_rate_gate()
+            try:
+                res = _download_candidate(
+                    tone3000_id=int(spec["tone3000_id"]), is_ir=False,
+                    rs_gear=rs_gear, settings=settings,
+                    model_id_override=spec.get("model_id"),
+                    model_name_override=spec.get("model_name"))
+            except Exception as e:      # noqa: BLE001
+                with _preload_lock:
+                    _preload_state["errors"].append(f"{rs_gear}/{level}: {e}")
+                return None
+            if not res:
+                return None
+            _kind, _file = res
+            rng = spec.get("rs_gain_range")
+            if not (isinstance(rng, (list, tuple)) and len(rng) == 2):
+                rng = _DEFAULT_GAIN_RANGES.get(level)
+            return {
+                "file": _file,
+                "rs_gain_range": [float(rng[0]), float(rng[1])] if rng else None,
+                "notes": (spec.get("notes") or "").strip() or None,
+            }
+
+        # ── Pass 1: attempt every variant (fail-fast — no long per-call
+        #    backoff, so the batch never stalls). Collect the stragglers. ──
+        amp_variants: dict[str, dict[str, dict]] = {}   # rs_gear -> {level -> variant}
+        amp_info: dict[str, dict] = {}
+        retry_queue: list[tuple] = []                   # (rs_gear, level, spec) failed pass 1
         for rs_gear, info, specs in amps:
-            variants_out: dict[str, dict] = {}
+            amp_info[rs_gear] = info
             for level, spec in specs.items():
+                v = _try_variant(rs_gear, level, spec)
                 with _preload_lock:
-                    _preload_state["current"] = f"{_gear_display_name(rs_gear, rs_gear)} / {level}"
-                _t3k_rate_gate()
-                try:
-                    res = _download_candidate(
-                        tone3000_id=int(spec["tone3000_id"]), is_ir=False,
-                        rs_gear=rs_gear, settings=settings,
-                        model_id_override=spec.get("model_id"))
-                except Exception as e:      # noqa: BLE001
-                    res = None
-                    with _preload_lock:
-                        _preload_state["errors"].append(f"{rs_gear}/{level}: {e}")
+                    if v is not None:
+                        _preload_state["downloaded"] += 1
+                    _preload_state["done"] += 1
+                if v is not None:
+                    amp_variants.setdefault(rs_gear, {})[level] = v
+                else:
+                    # Defer the "failed" tally: a capture that 403s at the
+                    # throttle peak (~50 captures in) almost always succeeds
+                    # once the batch stops hammering the API.
+                    retry_queue.append((rs_gear, level, spec))
+
+        # ── Pass 2: after a cooldown (the throttle window clears once the batch
+        #    load drops), retry the stragglers ONCE. This is what finally lands
+        #    captures like GB100 that always sit right at the throttle peak. ──
+        if retry_queue:
+            with _preload_lock:
+                _preload_state["current"] = f"(cooling down, retrying {len(retry_queue)} throttled capture(s)…)"
+            # tone3000's abuse window outlasts a short pause when the account
+            # has been hammered (repeated batch runs), so give it a real rest.
+            time.sleep(45)
+            for rs_gear, level, spec in retry_queue:
+                v = _try_variant(rs_gear, level, spec)
                 with _preload_lock:
-                    if res:
+                    if v is not None:
                         _preload_state["downloaded"] += 1
                     else:
-                        _preload_state["failed"].append(f"{rs_gear}/{level} — unavailable")
-                    _preload_state["done"] += 1
-                if res:
-                    _kind, _file = res
-                    rng = spec.get("rs_gain_range")
-                    if not (isinstance(rng, (list, tuple)) and len(rng) == 2):
-                        rng = _DEFAULT_GAIN_RANGES.get(level)
-                    variants_out[level] = {
-                        "file": _file,
-                        "rs_gain_range": [float(rng[0]), float(rng[1])] if rng else None,
-                        "notes": (spec.get("notes") or "").strip() or None,
-                    }
+                        reason = getattr(_t3k_dl_error, "reason", None) or "unavailable"
+                        _preload_state["failed"].append(f"{rs_gear}/{level} — {reason}")
+                if v is not None:
+                    amp_variants.setdefault(rs_gear, {})[level] = v
+
+        # ── Build + save one custom gear per amp that got any variant. ──
+        created = 0
+        for rs_gear, variants_out in amp_variants.items():
             if not variants_out:
                 continue
+            info = amp_info.get(rs_gear, {})
             gear_id = "custom_auto_" + _safe_filename(rs_gear)
             is_bass = rs_gear.startswith("Bass_") or rs_gear.startswith("DI_Amp")
             default_file = (variants_out.get("clean") or next(iter(variants_out.values()))).get("file")
@@ -7015,6 +7094,7 @@ def _batch_worker(mode: str = "all", categories=None):
                                             rs_gear=rs_type,
                                             settings=settings,
                                             model_id_override=(amp_variant.get("model_id") if amp_variant else None),
+                                            model_name_override=(amp_variant.get("model_name") if amp_variant else None),
                                         )
                                         if downloaded:
                                             kind, fname = downloaded
@@ -7445,6 +7525,7 @@ def _auto_download_for_song(filename: str, path: Path) -> dict:
                                 rs_gear=rs_type,
                                 settings=settings,
                                 model_id_override=(amp_variant.get("model_id") if amp_variant else None),
+                                model_name_override=(amp_variant.get("model_name") if amp_variant else None),
                             )
                             if downloaded:
                                 cached["kind"], cached["file"] = downloaded

@@ -5298,6 +5298,70 @@ function rbStudioClickAdd(_role) { rbShowTab('gear'); }
 // / capture) that the Default-tone editor uses, but renders into an in-room
 // zoom overlay with rbAttachKnob knobs. Dragging a knob drives the live VST
 // param; closing captures the values back into the Default tone.
+// True when a VST path points at a plugin the GAME ships (bundled under the
+// rig_builder `vst/` dir) — relative "vst/pedals/…" or an absolute
+// "…/rig_builder/vst/…". Everything else is a plugin the user brought in.
+function rbIsBundledVstPath(vp) {
+    const s = String(vp || '').replace(/\\/g, '/').toLowerCase();
+    return s.startsWith('vst/') || s.includes('/rig_builder/vst/');
+}
+// True ONLY for a VST the user ADDED themselves — i.e. a plugin that does NOT
+// ship with the game. Factory/bundled gear (which the game recreates faithfully
+// in-app) is excluded even though it plays its own bundled VST, because the
+// "🪟 Plugin window" button is meant only for user-supplied plugins that have no
+// in-game recreation.
+function rbIsAddedVst(p) {
+    const vp = rbEffVstPath(p);
+    if (!vp) return false;                    // NAM / no VST → no button
+    return !rbIsBundledVstPath(vp);           // added = not shipped with the game
+}
+// Same test at the gear-catalog level (a catalog gear `g`, not a chain piece).
+function rbGearIsAddedVst(g) {
+    const vp = rbGearVstPath(g);
+    return !!vp && !rbIsBundledVstPath(vp);
+}
+
+// Prominent "open the plugin's REAL window" button, floated OVER the focused gear
+// (top-centre of the room) instead of a tiny corner chip. Shown ONLY for gear
+// ADDED as a VST — removed for native gear / NAM. Re-evaluated on every focus
+// (re)build + pedal/rack coverflow move, so it appears/disappears with the gear.
+function rbStudioSyncFocusBarActions() {
+    const room = document.getElementById('rb-studio-room');
+    if (!room) return;
+    let btn = document.getElementById('rb-studio-realui-btn');
+    const piece = (rbStudioCurrentChain() || [])[rbState._studioFocusIdx];
+    if (!rbIsAddedVst(piece)) { if (btn) btn.remove(); return; }
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'rb-studio-realui-btn';
+        btn.className = 'rb-studio-realui-btn';
+        btn.setAttribute('onclick', 'rbStudioOpenNativeWindow()');
+        btn.title = "Open the plugin's own (real) editor window";
+        btn.innerHTML = "🪟 Plugin window";
+        room.appendChild(btn);
+    }
+}
+
+// Studio: open the REAL plugin window for the focused gear (added VSTs only).
+// Studio pieces get their _vst_slot_id only after rbStudioLoadFocusVst runs, so
+// fall back to resolving the live engine slot the studio way when it's still null.
+async function rbStudioOpenNativeWindow() {
+    const api = rbAudioApi();
+    const idx = rbState._studioFocusIdx;
+    const piece = (rbStudioCurrentChain() || [])[idx];
+    if (!api || !piece) return;
+    if (!rbIsAddedVst(piece)) { alert("This is native gear — the real plugin window is only for gear you added as a VST."); return; }
+    let slotId = piece._vst_slot_id;
+    if (slotId == null) { try { slotId = await rbStudioChainSlotIdForPiece(api, idx); } catch (_) {} }
+    if (slotId == null) { alert('Load the gear first (it is still initialising), then try again.'); return; }
+    if (!(await rbTryOpenNativeEditor(api, slotId))) {
+        alert("This plugin has no native editor window (it's UI-less).");
+        return;
+    }
+    // Mirror knob moves made in that native window back into the studio face.
+    rbStartNativeParamSync(api, slotId, piece);
+}
+
 async function rbStudioFocusAmp(idx) {
     const room = document.getElementById('rb-studio-room');
     const piece = (rbStudioCurrentChain())[idx];
@@ -5333,6 +5397,7 @@ async function rbStudioFocusAmp(idx) {
     bar.innerHTML = `
         <button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Room</button>
         <div class="rb-focus-actions" style="min-width:80px"></div>`;
+    rbStudioSyncFocusBarActions();   // 🪟 Plugin window (VST amps only)
     requestAnimationFrame(() => bar.classList.add('rb-focus-open'));
     // The amp-alternatives rail is always shown in focus (amp sits left for it).
     rbStudioOpenSwap(idx);
@@ -5410,6 +5475,16 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
                 rbStudioApplyKnobToEngine(piece, idx, logicalId, val);
             },
         });
+        // Reverse sync target: repaint THIS face (values only) when the poll sees
+        // the plugin's own window move a knob.
+        rbSetActiveVstFace(piece, () => {
+            if (!document.body.contains(canvas)) return;
+            const m = rbCanvasParamModel(piece);
+            let vv = m.values;
+            if (!vv || !Object.keys(vv).length) { try { vv = rbCanvasThumbValues(piece) || {}; } catch (_) { vv = {}; } }
+            canvas.__rbVals = vv;
+            window.RBPedalCanvas.redraw(canvas, vv);
+        });
     };
     if (window.RBPedalCanvas.ready) window.RBPedalCanvas.ready().then(draw);
     draw();
@@ -5450,6 +5525,13 @@ function rbStudioMakeCustomFaceInteractive(idx, face, piece) {
                 rbStudioApplyKnobToEngine(piece, idx, logical, val);
             },
         });
+        // Reverse sync target for the custom face (values only, no re-attach).
+        rbSetActiveVstFace(piece, () => {
+            if (!document.body.contains(canvas)) return;
+            let values = {}; try { values = rbCustomUiValues(piece) || {}; } catch (_) {}
+            canvas.__rbVals = values;
+            PC.redraw(canvas, values);
+        });
     };
     if (PC.ready) PC.ready().then(draw);
     draw();
@@ -5458,6 +5540,9 @@ function rbStudioMakeCustomFaceInteractive(idx, face, piece) {
 
 async function rbStudioCloseFocus() {
     try { rbStopGrMeterPoll(); } catch (_) {}   // stop the dbx GR-meter poll
+    try { rbStopNativeParamSync(); } catch (_) {}   // stop native-window reverse sync
+    rbState._activeVstFace = null;
+    { const _rb = document.getElementById('rb-studio-realui-btn'); if (_rb) _rb.remove(); }
     const room = document.getElementById('rb-studio-room');
     const api = rbAudioApi();
     const bar = document.getElementById('rb-studio-focus-bar');
@@ -5533,9 +5618,52 @@ async function rbStudioCloseFocus() {
 // every drag (no slow getStateInformation round-trip). Shared by amp + pedal.
 function rbStudioQuickSavePiece(idx) {
     const piece = (rbStudioCurrentChain())[idx];
-    if (piece && piece._vst_params && Object.keys(piece._vst_params).length) {
+    if (!piece) return;
+    // A. Engine slot resolved this session → the dragged edits are already keyed
+    //    by REAL param id in _vst_params. Authoritative — persist as before.
+    if (piece._vst_params && Object.keys(piece._vst_params).length) {
         try {
+            // Fold this session's canvas edits onto real ids too, so env.params
+            // (playback) matches env.logical even if the slot was null and the
+            // engine was never driven (edits still landed in _vst_logical). No-op
+            // when there's no meta to map with.
+            rbSeedParamsFromLogical(piece);
             rbStudioDualKeyParams(piece);   // add NAME keys so a fresh-load thumbnail renders right
+            rbStampVstState(piece, piece._vst_opaque || null);
+            rbStudioPersist();
+        } catch (_) {}
+        return;
+    }
+    // B. Engine slot NEVER resolved (e.g. the live monitor wasn't loaded on
+    //    re-entry, so rbStudioApplyKnobToEngine early-returned and never wrote
+    //    _vst_params). The knob edits landed ONLY in _vst_logical. Persist them
+    //    so they survive exit/re-enter instead of being silently dropped — the
+    //    reported bug — WITHOUT discarding the playback state (opaque + real-id
+    //    params) captured in a prior resolved session.
+    if (piece._vst_logical && Object.keys(piece._vst_logical).length) {
+        try {
+            let prev = {};
+            try { prev = JSON.parse(rbEffVstState(piece) || '{}') || {}; } catch (_) { prev = {}; }
+            // MERGE the fresh edits over the last-saved logical map — never
+            // replace. On re-entry _vst_logical is wiped and only gets the knobs
+            // the user actually moved this session; stamping that alone would
+            // drop every other knob's saved value. Fresh edits win.
+            if (prev.logical && typeof prev.logical === 'object') {
+                piece._vst_logical = Object.assign({}, prev.logical, piece._vst_logical);
+            }
+            // Carry forward the last-saved opaque + real-id params so this
+            // logical-only save doesn't blow them away.
+            if (!piece._vst_opaque && typeof prev.opaque === 'string') piece._vst_opaque = prev.opaque;
+            if ((!piece._vst_params || !Object.keys(piece._vst_params).length)
+                && prev.params && typeof prev.params === 'object') {
+                piece._vst_params = Object.assign({}, prev.params);
+            }
+            // Overlay this session's fresh edits onto real ids where the meta
+            // lets us map them (usually a no-op here — meta is empty when the
+            // slot didn't resolve — but then env.logical carries them and they
+            // re-map on the next load that resolves the slot).
+            rbSeedParamsFromLogical(piece);
+            rbStudioDualKeyParams(piece);
             rbStampVstState(piece, piece._vst_opaque || null);
             rbStudioPersist();
         } catch (_) {}
@@ -5746,7 +5874,9 @@ async function rbStudioFocusPedal(pos) {
         let bar = document.getElementById('rb-studio-focus-bar');
         if (!bar) { bar = document.createElement('div'); bar.id = 'rb-studio-focus-bar'; room.appendChild(bar); }
         bar.className = 'rb-focus-bar2';
-        bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Room</button>`;
+        bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Room</button>
+            <div class="rb-focus-actions"></div>`;
+        rbStudioSyncFocusBarActions();   // 🪟 Plugin window (VST pedals/racks only)
         requestAnimationFrame(() => bar.classList.add('rb-focus-open'));
         rbStudioOpenSwap(idx, rbStudioActiveGroup());   // rail of alternative pedals/racks
         requestAnimationFrame(() => layer.classList.add('rb-pf-open'));
@@ -5756,6 +5886,7 @@ async function rbStudioFocusPedal(pos) {
         rbState._studioFocusIdx = idx;
         const inp = document.querySelector('#rb-swap-panel .rb-swap-head input');
         rbStudioRenderSwapList(inp ? inp.value : '');
+        rbStudioSyncFocusBarActions();   // coverflow moved to another pedal → refresh button
     }
 
     // Load the pedal's VST + go interactive on its big face.
@@ -5879,6 +6010,72 @@ function rbStartGrMeterPoll(canvas, piece, idx, stem) {
     }, 70);
 }
 
+// ── Reverse param sync: native plugin window → in-app UI ─────────────────────
+// The forward path (in-app knob → api.setParameter → sandbox) already works. The
+// reverse didn't: a sandboxed VST3 exposes NO JUCE parameter proxies host-side,
+// so knob moves in the plugin's OWN (native) window never reached us. The engine
+// now answers getParameters(slot) from the subprocess's live values, so while a
+// native editor window is open we poll it and, when a value moved, push it into
+// the piece + repaint the on-screen in-app canvas — WITHOUT re-attaching (that
+// would stack a fresh set of drag listeners each tick). The interactive canvas
+// currently on screen registers itself via rbSetActiveVstFace, exposing a
+// values-only repaint the poll drives.
+let _rbNativeParamPoll = null;
+function rbStopNativeParamSync() { if (_rbNativeParamPoll) { clearInterval(_rbNativeParamPoll); _rbNativeParamPoll = null; } }
+// Register the on-screen interactive VST face + a values-only repaint for it.
+// `redraw` MUST repaint knob positions only (render/renderSpec), never re-attach.
+function rbSetActiveVstFace(piece, redraw) {
+    rbState._activeVstFace = (piece && typeof redraw === 'function') ? { piece, redraw } : null;
+}
+// Drop the active-face registration (called when a face is torn down). Scoped to
+// `piece` so a stale teardown can't clear a newer face.
+function rbClearActiveVstFace(piece) {
+    if (!piece || (rbState._activeVstFace && rbState._activeVstFace.piece === piece)) rbState._activeVstFace = null;
+}
+function rbStartNativeParamSync(api, slotId, piece) {
+    rbStopNativeParamSync();
+    if (!api || typeof api.getParameters !== 'function' || slotId == null || !piece) return;
+    let last = null, busy = false, misses = 0;
+    _rbNativeParamPoll = setInterval(async () => {
+        if (busy) return;
+        // Stop once the in-app face for THIS piece is gone (editor/view closed).
+        const face = rbState._activeVstFace;
+        if (!face || face.piece !== piece) { if (++misses > 40) rbStopNativeParamSync(); return; }
+        misses = 0;
+        busy = true;
+        try {
+            const live = await api.getParameters(slotId);
+            if (!Array.isArray(live) || !live.length) return;
+            const now = {};
+            let changed = (last == null);
+            for (const p of live) {
+                const rid = p.id ?? p.paramId ?? p.index;
+                const v = p.value ?? p.current;
+                if (rid == null || typeof v !== 'number') continue;
+                now[rid] = v;
+                if (!last || Math.abs((last[rid] ?? -999) - v) > 1e-4) changed = true;
+            }
+            if (!changed) return;   // nothing moved in the native window this tick
+            last = now;
+            // Persist into the piece (same shape 📸 Capture writes) so the tweak
+            // survives closing the window / reloading: real-id keyed params +
+            // logical-id keyed values (for the thumbnail + canvas redraw).
+            const model = rbBuildCanvasModel(live);
+            piece._vst_param_meta = live;
+            piece._vst_params = Object.assign({}, now);
+            piece._vst_logical = piece._vst_logical || {};
+            Object.keys(model.idMap).forEach(lid => {
+                const rid = model.idMap[lid];
+                if (now[rid] != null) piece._vst_logical[lid] = now[rid];
+            });
+            try { rbStampVstState(piece); } catch (_) {}
+            // Repaint the on-screen face at the new values (values-only, no re-attach).
+            try { if (rbState._activeVstFace && rbState._activeVstFace.piece === piece) rbState._activeVstFace.redraw(); } catch (_) {}
+        } catch (_) { /* transient IPC hiccup — retry next tick */ }
+        finally { busy = false; }
+    }, 70);   // ~14 Hz — smooth mirroring of native-window knob moves (matches the GR-meter poll)
+}
+
 // pedal focus (the amp has its own inline copy with the grow-timed swap).
 // Map a focused Studio piece to its slot id in the ALREADY-LOADED engine chain,
 // matching the VST path directly against getChainState() (Nth slot with that
@@ -5944,28 +6141,44 @@ async function rbStudioChainSlotIdForPiece(api, pieceIdx) {
 //      filtered position instead of ever using the raw logical id.
 async function rbStudioApplyKnobToEngine(piece, idx, logicalId, val) {
     const api = rbAudioApi();
-    if (!api || typeof api.setParameter !== 'function') return;
-    // 1. Resolve the engine slot (re-resolve if missing/stale).
+    // 1. Try to resolve the engine slot. A null slot only means we can't DRIVE
+    //    the live monitor right now (e.g. the amp isn't in the loaded chain on
+    //    re-entry) — it must NOT stop us persisting the edit. The old code
+    //    early-returned here, so the new value never reached _vst_params: it
+    //    stayed stranded in _vst_logical while the STALE _vst_params (kept from
+    //    the previous session, since the room isn't rebuilt) still drove both the
+    //    editor display and the branch-A save → the knob "reverted" on re-open.
     let slotId = piece._vst_slot_id;
-    if (slotId == null) {
+    if (slotId == null && api && typeof api.getParameters === 'function') {
         try { slotId = await rbStudioChainSlotIdForPiece(api, idx); } catch (_) { slotId = null; }
         if (slotId != null) { piece._vst_slot_id = slotId; rbState._vstEditorSlot = slotId; }
     }
-    if (slotId == null) return;     // gear not in the live chain → nothing to drive
     // 2. Resolve the REAL engine param id for this logical (filtered) position.
+    //    The meta is usually already on the piece (survives across re-focus);
+    //    fetch it live ONLY when we actually have a slot and it's missing.
     let meta = piece._vst_param_meta;
-    if (!((meta || []).length) && typeof api.getParameters === 'function') {
+    if (!((meta || []).length) && slotId != null && api && typeof api.getParameters === 'function') {
         try { meta = await api.getParameters(slotId); piece._vst_param_meta = meta || []; }
         catch (_) { meta = piece._vst_param_meta || []; }
     }
     const filtered = rbFilterVstParams(meta || []);
-    if (logicalId >= filtered.length) return;       // can't map safely → skip (never drive a wrong param)
-    const p = filtered[logicalId];
-    const realId = p.id ?? p.paramId ?? p.index;
-    if (realId == null) return;
-    piece._vst_params = piece._vst_params || {};
-    piece._vst_params[realId] = val;                // persist under the REAL id
-    try { api.setParameter(slotId, realId, val); } catch (_) {}
+    if (logicalId < filtered.length) {
+        const p = filtered[logicalId];
+        const realId = p.id ?? p.paramId ?? p.index;
+        if (realId != null) {
+            // Persist under the REAL id REGARDLESS of whether the slot resolved —
+            // this is what the editor redraws from and what branch-A saves.
+            piece._vst_params = piece._vst_params || {};
+            piece._vst_params[realId] = val;
+            // Drive the live engine only when we have a slot to drive.
+            if (slotId != null && api && typeof api.setParameter === 'function') {
+                try { api.setParameter(slotId, realId, val); } catch (_) {}
+            }
+            return;
+        }
+    }
+    // Couldn't map (no meta yet) — the edit still rides in _vst_logical and is
+    // saved by quickSave branch B, then re-mapped on the next load with meta.
 }
 
 async function rbStudioLoadFocusVst(idx, faceEl, growMs) {
@@ -6024,6 +6237,13 @@ async function rbStudioLoadFocusVst(idx, faceEl, growMs) {
             rbState._vstEditorInChain = true;
             piece._vst_slot_id = null;
             piece._vst_param_meta = piece._vst_param_meta || [];
+            // Seed _vst_params from the SAVED state so the editor opens at the
+            // tone (not defaults) even with no live slot — and so knob edits
+            // (which now write _vst_params via rbStudioApplyKnobToEngine even
+            // without a slot) merge onto the real saved values instead of a
+            // sparse map. Fills missing keys only; never clobbers a live edit.
+            piece._vst_params = piece._vst_params || {};
+            rbSeedParamsFromSavedState(piece);
         }
         const _wait = Math.max(0, (growMs || 0) - (Date.now() - _start));
         setTimeout(() => {
@@ -8839,6 +9059,10 @@ async function rbTeardownVstEditor(api) {
     const inChain = rbState._vstEditorInChain;
     rbState._vstEditorSlot = null;
     rbState._vstEditorInChain = false;
+    // Stop the native-window reverse-sync poll + drop the on-screen face — its
+    // slot is about to go away.
+    rbStopNativeParamSync();
+    rbState._activeVstFace = null;
     if (!api) return;
     // Close the prior editor's native window only if there was one…
     if (slot != null) {
@@ -8908,6 +9132,8 @@ async function rbChainSlotIdForPiece(api, payload, toneIdx, pIdx) {
 // while its slot is cleared/replaced crashes the host. This is the
 // "edit a master-chain VST → switch menu / load a song → crash" report.
 async function rbCloseActiveVstEditor() {
+    try { rbStopNativeParamSync(); } catch (_) {}   // stop native-window reverse sync
+    rbState._activeVstFace = null;
     const slot = rbState._vstEditorSlot;
     if (slot == null) return;
     rbState._vstEditorSlot = null;
@@ -9026,6 +9252,30 @@ function rbSeedParamsFromSavedState(piece) {
         for (const k of Object.keys(saved)) {
             if (piece._vst_params[k] == null && typeof saved[k] === 'number') { piece._vst_params[k] = saved[k]; n++; }
         }
+    }
+    return n;
+}
+
+// Fold this session's canvas edits (_vst_logical, keyed by logical/filtered
+// index) onto real engine param ids, OVERWRITING — these are the freshest
+// values the user just dialed in, so they must win over anything hydrated from
+// the saved envelope. No-op when the param meta is missing (the engine slot
+// never resolved): the edits still ride in env.logical via rbStampVstState and
+// re-map to real ids on the next load that DOES resolve the slot. Returns the
+// count folded.
+function rbSeedParamsFromLogical(piece) {
+    if (!piece || !piece._vst_logical) return 0;
+    const meta = piece._vst_param_meta;
+    if (!Array.isArray(meta) || !meta.length) return 0;
+    const filtered = rbFilterVstParams(meta);
+    piece._vst_params = piece._vst_params || {};
+    let n = 0;
+    for (const lid of Object.keys(piece._vst_logical)) {
+        const p = filtered[Number(lid)];
+        if (!p) continue;
+        const realId = p.id ?? p.paramId ?? p.index ?? Number(lid);
+        const v = piece._vst_logical[lid];
+        if (typeof v === 'number') { piece._vst_params[realId] = v; n++; }
     }
     return n;
 }
@@ -9253,7 +9503,10 @@ async function rbToneOpenNativeWindow(toneIdx, pIdx) {
     if (piece._vst_slot_id == null) { alert('Load the gear first (open its editor), then try again.'); return; }
     if (!(await rbTryOpenNativeEditor(api, piece._vst_slot_id))) {
         alert("This plugin has no native editor window (it's UI-less).");
+        return;
     }
+    // Mirror knob moves made in that native window back into the in-app face.
+    rbStartNativeParamSync(api, piece._vst_slot_id, piece);
 }
 async function rbMasterOpenNativeWindow(role, idx) {
     const api = rbAudioApi();
@@ -9262,7 +9515,9 @@ async function rbMasterOpenNativeWindow(role, idx) {
     if (piece._vst_slot_id == null) { alert('Load the gear first (open its editor), then try again.'); return; }
     if (!(await rbTryOpenNativeEditor(api, piece._vst_slot_id))) {
         alert("This plugin has no native editor window (it's UI-less).");
+        return;
     }
+    rbStartNativeParamSync(api, piece._vst_slot_id, piece);
 }
 
 // Inline panel shown when a non-recreated VST is being edited in its own native
@@ -9460,6 +9715,12 @@ function rbToneRenderCustomFace(toneIdx, pIdx, piece, editor) {
                 rbDebouncedToneSave(toneIdx, pIdx);
             },
         });
+        // Reverse sync target for the custom tone face (values only, no re-attach).
+        rbSetActiveVstFace(piece, () => {
+            if (!document.body.contains(canvas)) return;
+            let values = {}; try { values = rbCustomUiValues(piece) || {}; } catch (_) {}
+            PC.redraw(canvas, values);
+        });
     };
     if (PC.ready) PC.ready().then(draw);
     draw();
@@ -9529,6 +9790,12 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
                     rbStampVstState(piece);
                     rbDebouncedToneSave(toneIdx, pIdx);
                 },
+            });
+            // Reverse sync target: repaint THIS face (values only) when the poll
+            // sees the plugin's own window move a knob.
+            rbSetActiveVstFace(piece, () => {
+                if (!document.body.contains(canvas)) return;
+                window.RBPedalCanvas.redraw(canvas, rbCanvasParamModel(piece).values);
             });
         };
         // Fonts may still be loading on first open — redraw once they're ready.
@@ -10489,6 +10756,12 @@ function rbMasterRenderInlineVstParams(role, idx) {
                     // fresh drag on the next song load ("edits don't save").
                     rbSyncParamNameAlias(piece, realId, val);
                 },
+            });
+            // Reverse sync target: repaint this master face (values only) when the
+            // poll sees the plugin's own window move a knob.
+            rbSetActiveVstFace(piece, () => {
+                if (!document.body.contains(canvas)) return;
+                window.RBPedalCanvas.redraw(canvas, rbCanvasParamModel(piece).values);
             });
         };
         if (window.RBPedalCanvas.ready) window.RBPedalCanvas.ready().then(draw);
@@ -14831,8 +15104,8 @@ async function rbCatalogCustomEditInline(g) {
             host.innerHTML = `
                 <div class="flex items-center justify-between mb-1">
                     <div class="text-[11px] text-purple-300 font-semibold">In-feedBack editor · ${rbEsc(g.real_name || '')}</div>
-                    <button onclick="rbCatalogOpenNative()" title="Open the plugin's own (real) editor window"
-                            class="bg-dark-700 hover:bg-dark-600 text-gray-300 text-[10px] px-2 py-0.5 rounded">🪟 Plugin window</button>
+                    ${rbGearIsAddedVst(g) ? `<button onclick="rbCatalogOpenNative()" title="Open the plugin's own (real) editor window"
+                            class="bg-dark-700 hover:bg-dark-600 text-gray-300 text-[10px] px-2 py-0.5 rounded">🪟 Plugin window</button>` : ''}
                 </div>
                 <div style="text-align:center">
                     <canvas id="rb-cg-cat-canvas-${safeId}" style="cursor:ns-resize;touch-action:none;display:inline-block;vertical-align:top"></canvas>
@@ -14857,6 +15130,20 @@ async function rbCatalogCustomEditInline(g) {
                 const realId = (model.idMap && model.idMap[logical] != null) ? model.idMap[logical] : logical;
                 try { (rbNativeAudio ? rbNativeAudio() : rbAudioApi()).setParameter(slotId, realId, val); } catch (_) {}
             },
+        });
+        // Reverse-sync target: this gear-catalog editor has no chain `piece`, so use
+        // a lightweight synthetic one the poll writes live values into. The redraw
+        // maps real params → this custom layout's control ids and repaints (no
+        // re-attach). Started by rbCatalogOpenNative when the native window opens.
+        const catPiece = rbState._cgCatPiece || (rbState._cgCatPiece = { _vst_param_meta: [], _vst_params: {}, _vst_logical: {} });
+        catPiece._vst_slot_id = slotId;
+        rbSetActiveVstFace(catPiece, () => {
+            const cv = document.getElementById(`rb-cg-cat-canvas-${safeId}`);
+            if (!cv || !document.body.contains(cv)) return;
+            const m = rbBuildCanvasModel(catPiece._vst_param_meta || [], catPiece._vst_params || null);
+            const vv = {};
+            (layout.controls || []).forEach(c => { if (typeof c.param === 'number' && typeof m.values[c.param] === 'number') vv[c.id] = m.values[c.param]; });
+            PC.redraw(cv, vv);
         });
     };
 
@@ -14899,7 +15186,9 @@ async function rbCatalogOpenNative(slotId) {
     const api = rbAudioApi();
     const sid = (slotId != null) ? slotId : rbState._cgCatSlotId;
     if (api && sid != null) {
-        if (!(await rbTryOpenNativeEditor(api, sid))) alert("This plugin has no native editor window (it's UI-less).");
+        if (!(await rbTryOpenNativeEditor(api, sid))) { alert("This plugin has no native editor window (it's UI-less)."); return; }
+        // Mirror knob moves made in that native window back into the gear-catalog face.
+        if (rbState._cgCatPiece) rbStartNativeParamSync(api, sid, rbState._cgCatPiece);
     } else {
         alert('The plugin is still loading — try again in a moment.');
     }
@@ -19030,7 +19319,7 @@ async function rbAdvEditNode(id) {
     if (piece._custom_ui && window.RBPedalCanvas && window.RBPedalCanvas.specFromLayout) {
         panel.innerHTML = `<div class="rb-adv-editor-bar">
                 <span class="rb-adv-editor-name">${rbEsc(piece.real_name || piece.type || 'Gear')}</span>
-                <button class="rb-adv-editor-close" onclick="rbAdvCloseEditor()">✕</button>
+                ${rbAdvRealUiBtnHtml(piece)}<button class="rb-adv-editor-close" onclick="rbAdvCloseEditor()">✕</button>
             </div>
             <div class="rb-adv-editor-face rb-amp-face"></div>`;
         host.appendChild(panel);
@@ -19058,7 +19347,7 @@ async function rbAdvEditNode(id) {
         const v = rbState.studioView || {};
         panel.innerHTML = `<div class="rb-adv-editor-bar">
                 <span class="rb-adv-editor-name">${rbEsc(_cabEntry.name || piece.type || 'Cab')}</span>
-                <button class="rb-adv-editor-close" onclick="rbAdvCloseEditor()">✕</button>
+                ${rbAdvRealUiBtnHtml(piece)}<button class="rb-adv-editor-close" onclick="rbAdvCloseEditor()">✕</button>
             </div>
             <div id="rb-cabroom-adv" style="padding:8px;"></div>`;
         host.appendChild(panel);
@@ -19073,7 +19362,7 @@ async function rbAdvEditNode(id) {
     if (!(window.RBPedalCanvas && (window.RBPedalCanvas.has(stem) || (piece._vst_param_meta || []).length))) {
         panel.innerHTML = `<div class="rb-adv-editor-bar">
                 <span class="rb-adv-editor-name">${rbEsc(piece.real_name || piece.type || 'Gear')}</span>
-                <button class="rb-adv-editor-close" onclick="rbAdvCloseEditor()">✕</button>
+                ${rbAdvRealUiBtnHtml(piece)}<button class="rb-adv-editor-close" onclick="rbAdvCloseEditor()">✕</button>
             </div>
             <div class="rb-adv-editor-empty">No editable knob UI for this gear.</div>`;
         host.appendChild(panel);
@@ -19109,7 +19398,7 @@ async function rbAdvEditNode(id) {
     } catch (_) { piece._vst_slot_id = null; }
     panel.innerHTML = `<div class="rb-adv-editor-bar">
             <span class="rb-adv-editor-name">${rbEsc(piece.real_name || piece.type || 'Gear')}</span>
-            <button class="rb-adv-editor-close" onclick="rbAdvCloseEditor()">✕</button>
+            ${rbAdvRealUiBtnHtml(piece)}<button class="rb-adv-editor-close" onclick="rbAdvCloseEditor()">✕</button>
         </div>
         <div class="rb-adv-editor-face rb-amp-face"></div>`;
     // Size the card to the gear's natural canvas width — but the canvas height is
@@ -19134,9 +19423,36 @@ async function rbAdvEditNode(id) {
     rbState._advEditPieceIdx = n.pieceIdx;
     rbStudioMakeFaceInteractive(n.pieceIdx, panel.querySelector('.rb-adv-editor-face'));
 }
+// Node-editor (Advanced) "🪟 Plugin window" button — shown ONLY for gear ADDED as
+// a VST (a plugin the user brought in, not the game's bundled gear). Mirrors the
+// studio/tone buttons so the node editor can pop the plugin's real UI too.
+function rbAdvRealUiBtnHtml(piece) {
+    if (!rbIsAddedVst(piece)) return '';
+    return `<button class="rb-adv-editor-realui" onclick="rbAdvOpenNativeWindow()"
+                title="Open the plugin's own (real) editor window">🪟 Plugin window</button>`;
+}
+
+// Open the REAL plugin window for the node currently open in the Advanced editor,
+// then mirror its knob moves back into the in-app face (the face was made
+// interactive by rbStudioMakeFaceInteractive, which registered rbState._activeVstFace).
+async function rbAdvOpenNativeWindow() {
+    const api = rbAudioApi();
+    const idx = rbState._advEditPieceIdx;
+    const piece = (typeof idx === 'number') ? rbStudioCurrentChain()[idx] : null;
+    if (!api || !piece) return;
+    if (!rbIsAddedVst(piece)) { alert("This is native gear — the real plugin window is only for gear you added as a VST."); return; }
+    let slotId = piece._vst_slot_id;
+    if (slotId == null) { try { slotId = await rbStudioChainSlotIdForPiece(api, idx); } catch (_) {} }
+    if (slotId == null) { alert('Load the gear first (it is still initialising), then try again.'); return; }
+    if (!(await rbTryOpenNativeEditor(api, slotId))) { alert("This plugin has no native editor window (it's UI-less)."); return; }
+    rbStartNativeParamSync(api, slotId, piece);
+}
+
 function rbAdvCloseEditor() {
     const panel = document.getElementById('rb-adv-editor');
     if (panel) panel.remove();
+    try { rbStopNativeParamSync(); } catch (_) {}   // stop native-window reverse sync
+    rbState._activeVstFace = null;
     // Persist the moved knobs the same way the Studio focus does (captures the
     // tracked per-drag values + re-stamps vst_state, then saves).
     const idx = rbState._advEditPieceIdx;
