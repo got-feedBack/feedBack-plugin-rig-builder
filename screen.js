@@ -18203,7 +18203,7 @@ const RB_ADV_STEREO_OUT_STEMS = new Set([
     '134stereochorus',
     'analogchorus',
     'ch5',
-    'chorusensemble',   // CE-1: TRUE stereo Ensemble out (L=dry+wet, R=dry-wet)
+    'chorusensemble',   // CE-1 jack switching: L=mono effect sum, R=direct stereo path
     'digitalchorus',
     'cb3',
     'basschorus',
