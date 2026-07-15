@@ -11015,6 +11015,21 @@ def setup(app, context):
                 return "rack"
             if g.startswith("bass_amp_") or g.startswith("amp_"):
                 return "amp"
+            # Bundled-VST EXTRA gear (Extra_<PluginName>): once the user puts one
+            # in a tone it round-trips through the DB, whose `best` entry has NO
+            # category — and this fallback sent it to "other", a tab the UI never
+            # shows (the CE-1/Major/Jubilee "disappeared" from the catalog).
+            # Resolve it from the plugin's vst/<amps|pedals|racks>/ folder, same
+            # rule as the module-level _gear_category.
+            if gear.startswith("Extra_"):
+                try:
+                    for bp in _bundled_vst_plugins():
+                        if ("Extra_" + bp["name"]) == gear:
+                            return {"amps": "amp", "pedals": "pedal",
+                                    "racks": "rack"}.get(
+                                Path(bp["path"]).parent.name.lower(), "other")
+                except Exception:
+                    pass
             return "other"
 
         # Enumerate curated gain_variants for amps so the UI can render
