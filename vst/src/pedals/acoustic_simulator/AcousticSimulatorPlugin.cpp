@@ -1,14 +1,13 @@
 /*
- * AcousticSimulator - blue-button acoustic pedal model.
+ * AcousticSimulator - acoustic image processor.
  *
- * Reference: pedals/acoustic simulator.png. The circuit is a clean TL072
- * filter/preamp with a TL061 + 2N4339/J201 FET voice branch, 1N4148/green LED
- * diode ladder, Top/Body voicing filters and a final volume stage.
+ * The short FIR image is identified from aligned local DI/reference renders.
+ * Brightness and the coupled Thickness/Amount controls interpolate the
+ * measured responses; Volume remains an independent output control.
  */
 #include "DistrhoPlugin.hpp"
 #include "AcousticSimulatorParams.h"
-#include "../../_shared/opamp.hpp"
-#include "../../_shared/semiconductors.hpp"
+#include "AcousticImageFIR.h"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -68,38 +67,6 @@ public:
         x1 = x;
         y1 = dn(y);
         return y1;
-    }
-};
-
-class RcLowPass
-{
-    float a = 0.0f;
-    float y = 0.0f;
-
-public:
-    void setRC(float sr, float rOhm, float cFarad)
-    {
-        const float rc = rOhm * cFarad;
-        const float dt = 1.0f / (sr > 1000.0f ? sr : 48000.0f);
-        a = dt / (rc + dt);
-    }
-
-    void setHz(float sr, float hz)
-    {
-        const float safeSr = sr > 1000.0f ? sr : 48000.0f;
-        a = 1.0f - std::exp(-2.0f * kPi * clampFreq(hz, safeSr) / safeSr);
-    }
-
-    void reset()
-    {
-        y = 0.0f;
-    }
-
-    float process(float x)
-    {
-        y += a * (x - y);
-        y = dn(y);
-        return y;
     }
 };
 
@@ -198,153 +165,85 @@ public:
     }
 };
 
-// Short fixed-delay allpass — the diffuse "inside the box" air. Two of these
-// nested (3.7/6.1 ms) + a lowpass give the hollow early-reflection shimmer an
-// acoustic body adds around the plucked string.
-class ShortAllpass
-{
-    float buf[512] = {};
-    int idx = 0;
-    int len = 1;
-    float g = 0.55f;
-
-public:
-    void init(float sr, float ms, float gain)
-    {
-        len = (int)(sr * ms * 0.001f);
-        if (len < 1) len = 1;
-        if (len > 512) len = 512;
-        g = gain;
-        reset();
-    }
-
-    void reset()
-    {
-        for (int i = 0; i < 512; ++i) buf[i] = 0.0f;
-        idx = 0;
-    }
-
-    float process(float x)
-    {
-        const float d = buf[idx];
-        const float y = d - g * x;
-        buf[idx] = x + g * y;
-        if (++idx >= len) idx = 0;
-        return dn(y);
-    }
-};
-
-static inline float softExcess(float x, float threshold)
-{
-    if (x <= threshold)
-        return 0.0f;
-    return std::tanh((x - threshold) * 1.7f) / 1.7f;
-}
-
 } // namespace
 
 class AcousticSimulatorCore
 {
-    // ── Acoustic image processor (rebuilt from scratch) ──────────────────
-    // The AC-2-style circuit (wide EQ bands + FET/diode branch) reads as "a
-    // filter" — the real pedal does too. This core instead models what makes
-    // an acoustic sound acoustic, the way modern sims (Aura/ToneDexter) do:
-    //
-    //   1. PICKUP DE-EMPHASIS  — tame the magnetic pickup's mid resonance.
-    //   2. BODY                — a DENSE bank of 24 narrow modal resonators at
-    //      published dreadnought frequencies (A0 Helmholtz ~98 Hz, T(1,1) top
-    //      ~196, back ~226, then the modal comb thickening into a statistical
-    //      plateau by ~2.5 kHz) + diffuse "inside the box" air (nested short
-    //      allpasses). Narrow modes RING like wood; wide EQ never does.
-    //   3. STRING SPARKLE      — soft asymmetric saturation of the top band,
-    //      restoring the bronze-string zing a magnetic pickup rolls off.
-    //   4. ATTACK SOFTENING    — gentle envelope compression, the mic'd-box
-    //      "bloom" instead of the electric pick spike.
-    //
-    // Panel semantics preserved (Gain/Top/Body/Volume; RS maps Mid->Gain,
-    // Tone->Top, Body->Body): Gain = drive/compression character, Top =
-    // sparkle + brightness, Body = how much box.
+    // The main image is a short measured FIR. Thickness/Amount add only the
+    // residual body colour that differs from the full-bright reference.
+    static constexpr int kMaxRuntimeTaps = 512;
     float sampleRate = 48000.0f;
-    float gain = kAcousticSimulatorDef[kGain];
-    float top = kAcousticSimulatorDef[kTop];
-    float body = kAcousticSimulatorDef[kBody];
+    float brightness = kAcousticSimulatorDef[kBrightness];
+    float thickness = kAcousticSimulatorDef[kThickness];
+    float amount = kAcousticSimulatorDef[kAmount];
     float volume = kAcousticSimulatorDef[kVolume];
+    Biquad boxControl;
+    float coefficients[kMaxRuntimeTaps] = {};
+    float history[kMaxRuntimeTaps] = {};
+    int firLength = kAcousticImageTaps;
+    int historyIndex = 0;
 
-    RcHighPass inputHP;
-    Biquad pickupNotch;
-    Biquad pickupLP;
-
-    static constexpr int kModes = 24;
-    Biquad modeBank[kModes];
-    RcHighPass bodyHP;
-    ShortAllpass boxAp1, boxAp2, boxAp3;
-    RcLowPass boxAirLP;
-
-    Biquad sparkleBand;
-    Biquad topShelfOut;
-    Biquad finalLP;
-    RcHighPass outHP;
-
-    float env = 0.0f;
-    float envAttack = 0.0f;
-    float envRelease = 0.0f;
-
-    // Dreadnought modal set {Hz}: strong ringy low modes, comb thickening up
-    // high (Caldersmith/French modal surveys). Q and gain taper with index.
-    static const float kModeF[kModes];
-    static const float kModeQ[kModes];
-    static const float kModeG[kModes];
-    static const float kModeS[kModes];
-
-    void updateFilters()
+    static float sinc(float x)
     {
-        const float t = audioTaper(top);
-        const float g = audioTaper(gain);
+        if (std::fabs(x) < 1.0e-6f)
+            return 1.0f;
+        const float px = kPi * x;
+        return std::sin(px) / px;
+    }
 
-        inputHP.setRC(sampleRate, 45000.0f, 100.0e-9f);          // ~35 Hz
-        // Magnetic pickup mid "spike" de-emphasis: deeper with Gain (more
-        // "acoustic image", less electric character).
-        pickupNotch.setPeaking(sampleRate, 2600.0f, 1.1f, -3.0f - 4.5f * g);
-        pickupLP.setLowPass(sampleRate, 7800.0f + 2800.0f * t, 0.60f);
+    static float interpolateTap(const float* source, float position)
+    {
+        const int centre = (int)std::floor(position);
+        float value = 0.0f;
+        for (int k = centre - 7; k <= centre + 8; ++k)
+        {
+            if (k < 0 || k >= kAcousticImageTaps)
+                continue;
+            const float distance = position - (float)k;
+            if (std::fabs(distance) >= 8.0f)
+                continue;
+            value += source[k] * sinc(distance) * sinc(distance / 8.0f);
+        }
+        return value;
+    }
 
-        for (int i = 0; i < kModes; ++i)
-            modeBank[i].setBandPass(sampleRate, kModeF[i], kModeQ[i]);
-        bodyHP.setRC(sampleRate, 33000.0f, 68.0e-9f);            // ~70 Hz, keep rumble out
-        // Lower allpass feedback + darker air: short allpasses at g>=0.5 ring
-        // with an audible metallic comb of their own; g<=0.4 keeps the diffuse
-        // "inside the box" smear without the clang.
-        boxAp1.init(sampleRate, 3.1f, 0.40f);
-        boxAp2.init(sampleRate, 5.3f, 0.36f);
-        boxAp3.init(sampleRate, 8.9f, 0.30f);
-        boxAirLP.setHz(sampleRate, 3200.0f);
+    void updateModel()
+    {
+        const float bodyControl = clamp01(thickness) * clamp01(amount);
+        const float brightnessWeight = std::pow(clamp01(brightness), 2.15f);
+        const float bodyWeight = (1.0f - brightnessWeight)
+                               * std::pow(bodyControl, 4.0f);
+        const float imageWeight = brightnessWeight + bodyWeight;
 
-        sparkleBand.setHighPass(sampleRate, 2500.0f, 0.707f);
-        topShelfOut.setHighShelf(sampleRate, 5200.0f, 0.75f, -1.5f + 6.5f * t);
-        finalLP.setLowPass(sampleRate, 10500.0f + 4000.0f * t, 0.62f);
-        outHP.setRC(sampleRate, 100000.0f, 47.0e-9f);            // ~34 Hz DC guard
+        float source[kAcousticImageTaps];
+        for (int i = 0; i < kAcousticImageTaps; ++i)
+            source[i] = kAcousticBase48k[i]
+                      + imageWeight * (kAcousticBright48k[i] - kAcousticBase48k[i]);
 
-        envAttack = 1.0f - std::exp(-1.0f / (0.004f * sampleRate));   // 4 ms
-        envRelease = 1.0f - std::exp(-1.0f / (0.180f * sampleRate));  // 180 ms
+        const float rateRatio = sampleRate / 48000.0f;
+        firLength = (int)std::ceil(kAcousticImageTaps * rateRatio);
+        if (firLength < 1) firLength = 1;
+        if (firLength > kMaxRuntimeTaps) firLength = kMaxRuntimeTaps;
+        const float amplitudeScale = 1.0f / rateRatio;
+        for (int i = 0; i < firLength; ++i)
+            coefficients[i] = amplitudeScale * interpolateTap(source, (float)i / rateRatio);
+        for (int i = firLength; i < kMaxRuntimeTaps; ++i)
+            coefficients[i] = 0.0f;
+
+        const float bodyColorDb = -8.0f * bodyControl * (1.0f - bodyControl)
+                                + 1.8f * bodyControl * bodyControl;
+        boxControl.setPeaking(sampleRate, 560.0f + 90.0f * clamp01(thickness),
+                              2.20f, bodyColorDb);
     }
 
 public:
     void reset()
     {
-        inputHP.reset();
-        pickupNotch.reset();
-        pickupLP.reset();
-        for (int i = 0; i < kModes; ++i) modeBank[i].reset();
-        bodyHP.reset();
-        boxAp1.reset();
-        boxAp2.reset();
-        boxAp3.reset();
-        boxAirLP.reset();
-        sparkleBand.reset();
-        topShelfOut.reset();
-        finalLP.reset();
-        outHP.reset();
-        env = 0.0f;
-        updateFilters();
+        boxControl.reset();
+        for (int i = 0; i < kMaxRuntimeTaps; ++i)
+            history[i] = 0.0f;
+        historyIndex = 0;
+        updateModel();
     }
 
     void setSampleRate(float sr)
@@ -353,87 +252,30 @@ public:
         reset();
     }
 
-    void setGain(float v)   { gain = clamp01(v); updateFilters(); }
-    void setTop(float v)    { top = clamp01(v); updateFilters(); }
-    void setBody(float v)   { body = clamp01(v); updateFilters(); }
-    void setVolume(float v) { volume = clamp01(v); updateFilters(); }
+    void setBrightness(float v) { brightness = clamp01(v); updateModel(); }
+    void setThickness(float v)  { thickness = clamp01(v); updateModel(); }
+    void setAmount(float v)     { amount = clamp01(v); updateModel(); }
+    void setVolume(float v)     { volume = clamp01(v); }
 
     float process(float in)
     {
-        const float g = audioTaper(gain);
-        const float t = audioTaper(top);
-        const float b = audioTaper(body);
+        history[historyIndex] = in;
+        float y = 0.0f;
+        int readIndex = historyIndex;
+        for (int i = 0; i < firLength; ++i)
+        {
+            y += coefficients[i] * history[readIndex];
+            if (--readIndex < 0)
+                readIndex = kMaxRuntimeTaps - 1;
+        }
+        if (++historyIndex >= kMaxRuntimeTaps)
+            historyIndex = 0;
 
-        // 1) input conditioning: HP + pickup de-emphasis
-        float x = inputHP.process(in);
-        x = pickupNotch.process(x);
-        x = pickupLP.process(x);
-
-        // 4) attack softening (feed-forward): mic'd boxes bloom, they don't
-        // spike. Gentle ratio, scaled by Gain.
-        const float mag = std::fabs(x);
-        env += (mag > env ? envAttack : envRelease) * (mag - env);
-        const float comp = 1.0f / (1.0f + (1.5f + 4.0f * g) * env);
-        x *= 0.55f + 0.45f * comp;
-
-        // 2) BODY: dense modal bank + diffuse box air
-        const float xb = bodyHP.process(x);
-        float res = 0.0f;
-        for (int i = 0; i < kModes; ++i)
-            res += kModeS[i] * kModeG[i] * modeBank[i].process(xb);
-        const float air = boxAirLP.process(
-            boxAp3.process(boxAp2.process(boxAp1.process(xb))));
-
-        // 3) string sparkle: soft asymmetric saturation of the top band (adds
-        // the even-harmonic bronze zing magnetic pickups lose). Kept SUBTLE:
-        // over-driving a highs-only saturator dumps intermod energy at 3-6 kHz
-        // that reads as tinny/metallic — measured hottest IR band pre-fix.
-        const float sp = sparkleBand.process(x + 0.35f * res);
-        const float spDrive = sp * (1.4f + 1.6f * t);
-        const float sparkle = std::tanh(spDrive + 0.10f * spDrive * spDrive) * 0.30f;
-
-        // mix: direct string + body + air + sparkle
-        float y = x * 0.34f
-                + res * (0.55f + 0.95f * b)
-                + air * (0.10f + 0.30f * b)
-                + sparkle * (0.08f + 0.30f * t);
-
-        y = topShelfOut.process(y);
-        y = finalLP.process(y);
-        y = outHP.process(y);
-
-        // Makeup: the narrow modal bank passes far less broadband energy than
-        // a wide-EQ chain; +19 dB lands the default at ~-15.5 dBFS RMS like
-        // the other pedals (RS pins Volume at 0.62).
-        y *= dbToGain(19.0f);
+        y = boxControl.process(y);
         const float vol = dbToGain(-6.0f + 18.0f * audioTaper(volume));
-        y *= vol;
-        return std::tanh(y * 1.04f) * 0.96f;
+        return y * vol;
     }
 };
-
-const float AcousticSimulatorCore::kModeF[AcousticSimulatorCore::kModes] = {
-     98.0f, 196.0f, 226.0f, 258.0f, 292.0f, 330.0f, 388.0f, 435.0f,
-    480.0f, 556.0f, 610.0f, 672.0f, 735.0f, 800.0f, 875.0f, 950.0f,
-   1040.0f, 1140.0f, 1250.0f, 1400.0f, 1600.0f, 1850.0f, 2150.0f, 2500.0f };
-// Q taper: low modes (Helmholtz + top/back plates) keep their woody ring, but
-// above ~500 Hz real bodies have modal overlap > 1 — individual modes stop
-// being audible as separate ringing. The first version kept Q 8-12 up to
-// 2.5 kHz and those isolated 100+ ms rings at 1-2 kHz read as METALLIC clang;
-// tapering hard to Q~3 turns the upper bank back into a broad statistical
-// plateau (measured: T40 @0.8-1.6 kHz 114 ms -> ~35 ms).
-const float AcousticSimulatorCore::kModeQ[AcousticSimulatorCore::kModes] = {
-    16.0f, 22.0f, 24.0f, 17.0f, 14.0f, 11.0f,  9.5f,  8.5f,
-     7.5f,  7.0f,  6.5f,  6.0f,  5.5f,  5.0f,  4.7f,  4.4f,
-     4.1f,  3.9f,  3.7f,  3.5f,  3.3f,  3.2f,  3.1f,  3.0f };
-const float AcousticSimulatorCore::kModeG[AcousticSimulatorCore::kModes] = {
-    1.00f, 0.95f, 0.70f, 0.55f, 0.72f, 0.50f, 0.58f, 0.42f,
-    0.38f, 0.42f, 0.33f, 0.36f, 0.28f, 0.30f, 0.24f, 0.26f,
-    0.22f, 0.20f, 0.19f, 0.17f, 0.16f, 0.15f, 0.14f, 0.13f };
-const float AcousticSimulatorCore::kModeS[AcousticSimulatorCore::kModes] = {
-    1.0f, 1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f,
-    1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f,
-    -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f };
 
 class AcousticSimulatorPlugin : public Plugin
 {
@@ -443,12 +285,12 @@ class AcousticSimulatorPlugin : public Plugin
 
     void applyAll()
     {
-        left.setGain(params[kGain]);
-        right.setGain(params[kGain]);
-        left.setTop(params[kTop]);
-        right.setTop(params[kTop]);
-        left.setBody(params[kBody]);
-        right.setBody(params[kBody]);
+        left.setBrightness(params[kBrightness]);
+        right.setBrightness(params[kBrightness]);
+        left.setThickness(params[kThickness]);
+        right.setThickness(params[kThickness]);
+        left.setAmount(params[kAmount]);
+        right.setAmount(params[kAmount]);
         left.setVolume(params[kVolume]);
         right.setVolume(params[kVolume]);
     }
@@ -469,7 +311,7 @@ protected:
     const char* getDescription() const override { return "blue-button acoustic simulator"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 2, 0); }
+    uint32_t getVersion() const override { return d_version(1, 5, 0); }
     int64_t getUniqueId() const override { return d_cconst('A', 'c', 's', 'm'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

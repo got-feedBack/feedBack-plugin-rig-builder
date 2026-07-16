@@ -47,7 +47,8 @@ class CryBabyWah
         atk = msCoef(5.0f, fs);
         rel = msCoef(130.0f, fs);
 
-        const float rateHz = 0.12f + speed * speed * 6.6f;
+        const float rawRate = speed * speed * 6.6f;
+        const float rateHz = 0.12f + 2.70f * std::tanh(rawRate / 2.70f);
         lfoInc = 6.28318530718f * rateHz / fs;
 
         const float hpFc = 95.0f;

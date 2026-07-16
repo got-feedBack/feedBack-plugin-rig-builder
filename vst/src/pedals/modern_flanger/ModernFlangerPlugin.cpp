@@ -97,7 +97,7 @@ protected:
     const char* getDescription() const override { return "MF-108M Cluster Flux style BBD flanger"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('M', 'd', 'F', 'l'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

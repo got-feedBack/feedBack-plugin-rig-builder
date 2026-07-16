@@ -1355,11 +1355,26 @@
       // model badge bottom-centre
       textSpaced(d,.500*W,.945*H,F.barlow,7,'rgba(30,32,26,0.75)','CE-1',0.2); } };
 
-  // Multi-Vibe — Boss VB-2-style: Chief body in the VB-2 bright blue.
-  // RS knob names. 3 RS knobs: Speed0 Mix1 Waveform2.
-  P.vb2 = chiefSpec(300,480,[50,140,212],
-    [{id:0,cx:.25,lbl:'SPEED'},{id:1,cx:.50,lbl:'MIX'},{id:2,cx:.75,lbl:'WAVEFORM',lblPx:7}],
-    'Vibrato',null,'VB-2');
+  // VB-2 — real panel: Rate0, Depth1, Rise Time2 and the three-position
+  // Unlatch/Bypass/Latch selector3. Rocksmith names are translated in mapping.
+  P.vb2 = { w:300,h:480,
+    knobs:[
+      {id:0,cx:.25,cy:.235,r:.072,style:'boss'},
+      {id:1,cx:.50,cy:.235,r:.072,style:'boss'},
+      {id:2,cx:.75,cy:.235,r:.072,style:'boss'}],
+    sw3:[{id:3,cx:.18,cy:.405,hw:18,hh:34}],
+    ptr:rgb(238,240,242),
+    draw(d,vals){ const {W,H}=d, wc=rgb(238,240,242), ink=rgb(16,16,20);
+      chiefBody(d,50,140,212);
+      textSpaced(d,.25*W,.135*H,F.barlow,8.5,wc,'RATE',0.2);
+      textSpaced(d,.50*W,.135*H,F.barlow,8.5,wc,'DEPTH',0.2);
+      textSpaced(d,.75*W,.135*H,F.barlow,7.5,wc,'RISE TIME',0.15);
+      const mode=(vals&&vals[3]!=null)?vals[3]:0;
+      textSpaced(d,.18*W,.325*H,F.barlow,7,wc,'MODE',0.15);
+      textC(d,.255*W,.372*H,F.barlow,6.7,mode>.75?wc:ink,'UNLATCH','left');
+      textC(d,.255*W,.405*H,F.barlow,6.7,mode>.25&&mode<.75?wc:ink,'BYPASS','left');
+      textC(d,.255*W,.438*H,F.barlow,6.7,mode<.25?wc:ink,'LATCH','left');
+      chiefName(d,'Vibrato',null,'VB-2'); } };
 
   // Baked Rotatoe — Boss RT-2/RT-20-style rotary: Chief body in the RT silver/
   // champagne (the black knob plate matches the real panel). RS knob names.
@@ -2244,42 +2259,30 @@
       // chrome footswitch
       footRound(d,W*.50,H*.82,19*s); } };
 
-  // Amp Vibe — MXR Uni-Vibe-style: grey hammertone body, big black face panel
-  // with two glossy black knobs, a Vibe LED + mini toggle, the brand box logo,
-  // a script wordmark, side jack legends, status LED + chrome stomp. Parody
-  // (NYR / Multi-Vibe). RS knob names. Speed0 Mix1.
-  P.multivibe = { w:280,h:470, knobs:[
-      {id:0,cx:.29,cy:.29,r:.085,style:'davies'},
-      {id:1,cx:.71,cy:.29,r:.085,style:'davies'}],
-    ptr:rgb(244,244,246),
-    draw(d){ const {ctx:c,W,H,s}=d; const m=8*s, wt=rgb(238,240,242);
-      // grey hammertone enclosure
+  // Uni-Vibe — original chassis controls only. Speed0 remains host-mapped as
+  // the external foot-controller travel; the panel exposes Intensity1 and
+  // Volume2. Chorus/Vibrato Mode3 is fixed to Chorus and intentionally hidden.
+  P.multivibe = { w:480,h:300, knobs:[
+      {id:2,cx:.22,cy:.28,r:.073,style:'davies'},
+      {id:1,cx:.62,cy:.28,r:.073,style:'davies'}],
+    ptr:rgb(244,244,246), tick:rgb(104,106,112),
+    draw(d){ const {ctx:c,W,H,s}=d; const wt=rgb(238,240,242), wood=rgb(154,82,34);
       c.fillStyle=rgb(8,8,10); c.fillRect(0,0,W,H);
-      const bg=c.createLinearGradient(0,m,0,H-m); bg.addColorStop(0,rgb(170,172,176)); bg.addColorStop(1,rgb(130,132,136));
-      rr(c,m,m,W-2*m,H-2*m,14*s); c.fillStyle=bg; c.fill();
-      rr(c,m,m,W-2*m,H-2*m,14*s); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=2*s; c.stroke();
-      // black face panel with thin white border
-      const px=W*.085, py=H*.085, pw=W*.83, ph=H*.80;
-      rr(c,px,py,pw,ph,8*s); c.fillStyle=rgb(20,20,22); c.fill();
-      rr(c,px,py,pw,ph,8*s); c.strokeStyle=rgb(224,226,230); c.lineWidth=1.6*s; c.stroke();
-      // Vibe LED + label (top-left)
-      ledDot(d,W*.175,H*.150,true,234,238,242);
-      textSpaced(d,W*.265,H*.150,F.barlow,7,wt,'VIBE',0.3);
-      // knob labels (RS names)
-      textSpaced(d,.29*W,.435*H,F.barlow,9.5,wt,'SPEED',0.5);
-      textSpaced(d,.71*W,.435*H,F.barlow,9.5,wt,'MIX',0.5);
-      // brand box logo (NYR) — white-outlined rounded rect + bold letters
-      const lx=W*.345, ly=H*.505, lw=W*.31, lh=H*.072;
-      rr(c,lx,ly,lw,lh,4*s); c.strokeStyle=wt; c.lineWidth=2.6*s; c.stroke();
-      textC(d,W*.50,ly+lh*0.55,F.anton,30,wt,'NYR');
-      // side jack legends (rotated)
-      c.save(); c.translate(W*.135,H*.50); c.rotate(-Math.PI/2); textSpaced(d,0,0,F.barlow,7.5,wt,'OUTPUT',0.5); c.restore();
-      c.save(); c.translate(W*.865,H*.50); c.rotate(-Math.PI/2); textSpaced(d,0,0,F.barlow,7.5,wt,'INPUT',0.5); c.restore();
-      // status LED + chrome footswitch
-      ledDot(d,W*.50,H*.665,true,210,210,90);
-      footRound(d,W*.50,H*.755,19*s);
-      // script wordmark on the grey below the panel
-      outlineText(d,W*.50,H*.945,F.ink,24,wt,rgb(40,40,44),'Multi-Vibe',0); } };
+      const wg=c.createLinearGradient(0,0,W,0); wg.addColorStop(0,rgb(98,48,24)); wg.addColorStop(.5,wood); wg.addColorStop(1,rgb(94,46,22));
+      rr(c,W*.025,H*.055,W*.95,H*.89,10*s); c.fillStyle=wg; c.fill();
+      rr(c,W*.075,H*.055,W*.85,H*.89,7*s); c.fillStyle=rgb(30,30,32); c.fill();
+      rr(c,W*.075,H*.055,W*.85,H*.89,7*s); c.strokeStyle=rgb(90,90,94); c.lineWidth=1.5*s; c.stroke();
+      textC(d,.50*W,.125*H,F.crete,28,wt,'Uni-Vibe');
+      textSpaced(d,.22*W,.445*H,F.barlow,9,wt,'VOLUME',0.4);
+      textSpaced(d,.62*W,.445*H,F.barlow,9,wt,'INTENSITY',0.35);
+      const jx=.82*W,jy=.29*H;
+      c.beginPath(); c.arc(jx,jy,13*s,0,7); c.fillStyle=rgb(12,12,14); c.fill(); c.strokeStyle=rgb(176,178,184); c.lineWidth=2*s; c.stroke();
+      c.beginPath(); c.arc(jx,jy,5*s,0,7); c.fillStyle=rgb(44,44,48); c.fill();
+      textSpaced(d,jx,.445*H,F.barlow,7.2,wt,'FOOT CONTROL',0.18);
+      ledDot(d,W*.82,H*.70,true,210,48,42);
+      footRound(d,W*.62,H*.72,18*s);
+      textSpaced(d,.22*W,.73*H,F.barlow,8,wt,'INSTRUMENT',0.35);
+      textSpaced(d,.22*W,.82*H,F.barlow,8,wt,'OUTPUT',0.45); } };
 
   // Auto Vibe — EarthQuaker Aqueduct-style: blue sparkle enclosure, cream top
   // stripe (arrows + 9V symbol), white Roman-aqueduct arcade silhouette, four
@@ -2430,6 +2433,10 @@
       rr(c,tx-3.5*s,ty-18*s,7*s,17*s,3*s); c.strokeStyle=rgb(70,72,78); c.lineWidth=0.8*s; c.stroke();
       textSpaced(d,.85*W,.625*H,F.barlow,6.5,wt,'ON',0.2);
       textSpaced(d,.85*W,.835*H,F.barlow,7,wt,'POWER SW.',0.2); } };
+
+  // Compatibility for saved OmniMod/UniMod paths. Both game gear ids now
+  // resolve to the single canonical Uni-Vibe DSP and two-control canvas.
+  P.unimod = P.multivibe;
 
   // Valve Echo — Catalinbread Echorec-style: gold metallic body, black knob
   // panel, outline ECHOREC wordmark, column + concentric-arc line-art, chrome
@@ -2602,12 +2609,12 @@
   // Bass MultiComp — EBS MultiComp (Blue Label): BLACK body with blue accent
   // lines across the bottom; stylised 'MultiComp' logo (big C…P flanking a
   // stacked MULTI/OM) under the knobs, EBX above the footswitch, blue lines
-  // running behind EBX + footswitch. Real controls: Comp0 Sens1 Gain2 Mode3.
+  // running behind EBX + footswitch. Front panel: Comp/Limit0, Gain2 and the
+  // three-position Mode3 selector. LowTrim1/HighTrim4 are internal calibrations.
   P.multicomp = { w:300,h:470,
     knobs:[
-      {id:0,cx:.22,cy:.235,r:.082,style:'boss'},  // COMP
-      {id:1,cx:.50,cy:.235,r:.082,style:'boss'},  // SENS
-      {id:2,cx:.78,cy:.235,r:.082,style:'boss'}], // GAIN
+      {id:0,cx:.33,cy:.235,r:.082,style:'boss'},  // COMP/LIMIT
+      {id:2,cx:.67,cy:.235,r:.082,style:'boss'}], // GAIN
     sw3:[{id:3,cx:.50,cy:.675,hw:18,hh:28}],
     ptr:rgb(236,238,242),
     draw(d){ const {ctx:c,W,H}=d; const w=rgb(236,240,248), m=8;
@@ -2617,9 +2624,8 @@
       rr(c,m,m,W-2*m,H-2*m,14); c.fillStyle=bg; c.fill();
       rr(c,m,m,W-2*m,H-2*m,14); c.strokeStyle='rgba(0,0,0,0.5)'; c.lineWidth=2; c.stroke();
       const R=.082*W+12;
-      textC(d,.22*W,.235*H+R,F.barlow,11,w,'COMP');
-      textC(d,.50*W,.235*H+R,F.barlow,11,w,'SENS');
-      textC(d,.78*W,.235*H+R,F.barlow,11,w,'GAIN');
+      textC(d,.33*W,.235*H+R,F.barlow,10,w,'COMP/LIMIT');
+      textC(d,.67*W,.235*H+R,F.barlow,11,w,'GAIN');
       // stylised 'MultiComp': letters stretched WIDE (less tall) — C … P with
       // MULTI (up top) + OM filling the gap between C and P
       textWide(d,.50*W,.445*H,F.barlow,20,w,'MULTI',1.3);
@@ -2630,6 +2636,9 @@
       c.strokeStyle='rgba(46,124,228,0.92)'; c.lineWidth=8;
       for(let i=0;i<7;i++){ const y=(.63+i*0.05)*H; c.beginPath(); c.moveTo(W*0.18,y); c.lineTo(W*0.82,y); c.stroke(); }
       textSpaced(d,.50*W,.605*H,F.barlow,8.5,w,'MODE',0.4);
+      textC(d,.39*W,.645*H,F.barlow,7.5,w,'TUBE SIM','right');
+      textC(d,.39*W,.675*H,F.barlow,7.5,w,'MULTI BAND','right');
+      textC(d,.39*W,.705*H,F.barlow,7.5,w,'NORMAL','right');
       textC(d,.50*W,.75*H,F.ink,30,w,'EBX');     // ink/marker-style brand logo
       footRound(d,W*0.5,H*0.86,22); } };
 
@@ -2779,41 +2788,25 @@
       footRound(d,W*.50,H*.78,20*s);
       textSpaced(d,.50*W,.905*H,F.barlow,9,wt,'INDEX AUDIO',1.2); } };
 
-  // Deja Chorus — Fulltone Deja'Vibe-style: matte-black landscape box, white
-  // pinstripe border + script logo, three top knobs + two mode toggles, a big
-  // offset knob + BYPASS stomp + blue LED. Recreated brand-free.
-  // Real controls: Intensity0 Speed1 Speed2 SpeedSel3 Volume4 Mode5.
+  // Deja Chorus — calibrated from the DejaVibe reference grid. One Speed,
+  // Volume and Intensity are exposed; legacy Speed2/SpeedSel/Mode ids remain
+  // hidden for preset compatibility and the DSP is fixed to Chorus.
   P.dejachorus = { w:480, h:300, knobs:[
-      {id:1,cx:.135,cy:.205,r:.055,style:'boss'},
-      {id:3,cx:.260,cy:.205,r:.040,style:'bat'},
-      {id:5,cx:.340,cy:.205,r:.040,style:'bat'},
-      {id:2,cx:.465,cy:.205,r:.055,style:'boss'},
-      {id:4,cx:.640,cy:.205,r:.055,style:'boss'},
+      {id:1,cx:.180,cy:.220,r:.065,style:'boss'},
+      {id:4,cx:.470,cy:.220,r:.065,style:'boss'},
       {id:0,cx:.825,cy:.560,r:.110,style:'boss'}],
     ptr:rgb(236,238,242),
     draw(d){ const {ctx:c,W,H,s}=d; box(d,26,26,28); const wt=rgb(232,234,238);
       // white pinstripe border + a divider under the top knob strip
       c.save(); rr(c,16*s,16*s,W-32*s,H-32*s,10*s); c.strokeStyle=rgb(214,216,222); c.lineWidth=1.8*s; c.stroke(); c.restore();
       c.beginPath(); c.moveTo(22*s,H*.415); c.lineTo(W-22*s,H*.415); c.strokeStyle=rgb(214,216,222); c.lineWidth=1.3*s; c.stroke();
-      // two mode toggles between the top knobs (Speed select, Vibrato/Chorus).
-      const tog=(tx,ty,up)=>{ const w0=9*s,h0=20*s;
-        rr(c,tx-w0/2,ty-h0/2,w0,h0,3*s); c.fillStyle=rgb(16,16,18); c.fill();
-        rr(c,tx-w0/2,ty-h0/2,w0,h0,3*s); c.strokeStyle=rgb(6,6,8); c.lineWidth=1*s; c.stroke();
-        const ly=ty+(up?-1:1)*h0*0.18;
-        const g=c.createLinearGradient(tx-4*s,ly-6*s,tx+4*s,ly+6*s); g.addColorStop(0,rgb(228,230,236)); g.addColorStop(1,rgb(150,153,160));
-        rr(c,tx-4*s,ly-6*s,8*s,12*s,2*s); c.fillStyle=g; c.fill();
-        rr(c,tx-4*s,ly-6*s,8*s,12*s,2*s); c.strokeStyle=rgb(70,72,78); c.lineWidth=0.8*s; c.stroke(); };
-      tog(.270*W,.205*H,false); tog(.330*W,.205*H,true);
       // top knob labels
-      textSpaced(d,.135*W,.370*H,F.barlow,7.6,wt,'SPEED1',0.25);
-      textSpaced(d,.260*W,.370*H,F.barlow,5.7,wt,'SPD SEL',0.05);
-      textSpaced(d,.340*W,.370*H,F.barlow,6.0,wt,'MODE',0.10);
-      textSpaced(d,.465*W,.370*H,F.barlow,7.6,wt,'SPEED2',0.25);
-      textSpaced(d,.640*W,.370*H,F.barlow,7.6,wt,'VOLUME',0.20);
+      textSpaced(d,.180*W,.390*H,F.barlow,8.0,wt,'SPEED',0.30);
+      textSpaced(d,.470*W,.390*H,F.barlow,8.0,wt,'VOLUME',0.25);
       // white script logo + parody model code + brand
-      textC(d,.375*W,.560*H,F.crete,40,wt,"Deja Chorus");
-      textC(d,.585*W,.655*H,F.barlow,12,wt,'DC-1');
-      textC(d,.46*W,.815*H,F.ink,22,wt,'ExtraTone');
+      textC(d,.345*W,.570*H,F.crete,38,wt,"Deja Chorus");
+      textC(d,.530*W,.665*H,F.barlow,12,wt,'DC-1');
+      textC(d,.42*W,.815*H,F.ink,22,wt,'ExtraTone');
       // big intensity knob label + blue status LED
       textSpaced(d,.825*W,.815*H,F.barlow,8.2,wt,'INTENSITY',0.20);
       ledDot(d,W*.655,H*.610,true,70,150,234);
@@ -2823,7 +2816,7 @@
 
   // Acoustic Guitar Pedal — blue-button acoustic simulator: black box, 4 top
   // knobs with tick scales, the iconic glowing blue window + bold white wordmark.
-  // Recreated brand-free. Real controls: Gain0 Top1 Body2 Volume3.
+  // Recreated brand-free. Controls: Brightness0 Thickness1 Amount2 Volume3.
   P.acousticemulator = { w:300, h:360, knobs:[
       {id:0,cx:.145,cy:.160,r:.078,style:'pointer',cap:[32,32,34]},
       {id:1,cx:.385,cy:.160,r:.078,style:'pointer',cap:[32,32,34]},
@@ -2832,9 +2825,9 @@
     tick:rgb(150,152,158), ptr:rgb(238,240,244),
     draw(d){ const {ctx:c,W,H,s}=d; box(d,22,22,24); const wt=rgb(236,238,242);
       // knob labels
-      textSpaced(d,.145*W,.282*H,F.barlow,8.5,wt,'GAIN',0.3);
-      textSpaced(d,.385*W,.282*H,F.barlow,8.5,wt,'TOP',0.3);
-      textSpaced(d,.625*W,.282*H,F.barlow,8.5,wt,'BODY',0.3);
+      textSpaced(d,.145*W,.282*H,F.barlow,7.1,wt,'BRIGHTNESS',0.05);
+      textSpaced(d,.385*W,.282*H,F.barlow,7.1,wt,'THICKNESS',0.05);
+      textSpaced(d,.625*W,.282*H,F.barlow,8.0,wt,'AMOUNT',0.2);
       textSpaced(d,.865*W,.282*H,F.barlow,8.0,wt,'VOLUME',0.2);
       // status legends (parody of the Rockman's printed text)
       textSpaced(d,.20*W,.350*H,F.barlow,6.5,rgb(150,152,158),'LOW BATTERY',0.2);
@@ -3337,12 +3330,12 @@
 
   // Deluxe Servant — EH Deluxe Electric Mistress-style: brushed-silver landscape
   // box, black diagonal wedge with the retro logo. Real controls: Rate0 Range1
-  // Color2 Matrix3. (Pedal_VintageFlanger -> VintageFlanger.vst3.)
+  // Color2 plus the Filter Matrix3 switch. (Pedal_VintageFlanger -> VintageFlanger.vst3.)
   P.deluxeservant = { w:480,h:360, knobs:[
       {id:0,cx:.815,cy:.275,r:.052,style:'davies'},
       {id:1,cx:.815,cy:.485,r:.052,style:'davies'},
-      {id:2,cx:.815,cy:.695,r:.052,style:'davies'},
-      {id:3,cx:.815,cy:.875,r:.044,style:'davies'}],
+      {id:2,cx:.815,cy:.695,r:.052,style:'davies'}],
+    switches:[{id:3,cx:.815,cy:.875,hs:.020,style:'bat'}],
     tick:rgb(150,152,158), ptr:rgb(244,244,240),
     draw(d){ const {ctx:c,W,H,s}=d; const m=7*s, ink=rgb(30,30,34), wt=rgb(234,236,240);
       c.fillStyle=rgb(10,10,12); c.fillRect(0,0,W,H);

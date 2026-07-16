@@ -8,23 +8,13 @@
 #include "StandardDistortionParams.h"
 #include "StandardDistortionCore.h"
 #include "../../_shared/oversampler.hpp"
-#include <cmath>
 
 START_NAMESPACE_DISTRHO
-
-namespace {
 
 static inline float clamp01(float v)
 {
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
 }
-
-static inline float finalLimit(float x)
-{
-    return std::tanh(0.98f * x);
-}
-
-} // namespace
 
 class StandardDistortionPlugin : public Plugin
 {
@@ -38,10 +28,8 @@ class StandardDistortionPlugin : public Plugin
 
     void applyAll()
     {
-        left.setDist(params[kDist]);
-        right.setDist(params[kDist]);
-        left.setTone(params[kTone]);
-        right.setTone(params[kTone]);
+        left.setParams(params[kDist], params[kTone], params[kLevel]);
+        right.setParams(params[kDist], params[kTone], params[kLevel]);
     }
 
 public:
@@ -61,7 +49,7 @@ protected:
     const char* getDescription() const override { return "DS-1 style standard distortion"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(2, 0, 0); }
     int64_t getUniqueId() const override { return d_cconst('D', 's', '1', 'D'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -105,7 +93,6 @@ protected:
         const float* inR = inputs[1];
         float* outL = outputs[0];
         float* outR = outputs[1];
-        const float level = 2.1f * params[kLevel];
         float ubL[kOS];
         float ubR[kOS];
 
@@ -119,10 +106,8 @@ protected:
                 ubR[k] = right.process(ubR[k]);
             }
 
-            const float wetL = osL.downsample(ubL);
-            const float wetR = osR.downsample(ubR);
-            outL[i] = finalLimit(wetL * level);
-            outR[i] = finalLimit(wetR * level);
+            outL[i] = osL.downsample(ubL);
+            outR[i] = osR.downsample(ubR);
         }
     }
 

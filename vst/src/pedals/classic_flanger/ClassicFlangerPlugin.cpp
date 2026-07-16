@@ -22,6 +22,7 @@ static rbflanger::FlangerVoicing bf2Voicing()
 {
     rbflanger::FlangerVoicing v;
     v.bbd = rbflanger::mn3207Bf2ClockedSpec();
+    v.bbd.headroom = 0.35f;
     v.opamp = rbshared::upc4558Spec();
     v.minDelayMs = 1.0f;
     v.maxDelayMs = 13.0f;
@@ -32,17 +33,33 @@ static rbflanger::FlangerVoicing bf2Voicing()
     v.bbdLpHz = 5100.0f;
     v.outputLpHz = 5900.0f;
     v.colorHpHz = 2400.0f;
+    v.delaySlewHz = 48.0f;
     v.feedbackMax = 0.68f;
     v.feedbackSign = -1.0f;
-    v.wetSign = -1.0f;
-    v.dryLevel = 0.90f;
+    v.wetSign = 1.0f;
+    v.dryLevel = 0.74f;
     v.wetLevel = 0.60f;
     v.lfoTriangle = 0.88f;
     v.driveMinDb = -0.4f;
     v.driveMaxDb = 1.2f;
-    v.outputMinDb = -0.4f;
-    v.outputMaxDb = 0.8f;
-    v.compander = 0.48f;
+    // The fixed BF-2 blend already matches the reference wet/dry ratio, but
+    // the complete output was about 3 dB low at every measured control point.
+    v.outputMinDb = 4.7f;
+    v.outputMaxDb = 4.7f;
+    v.depthBase = 0.01f;
+    v.depthScale = 0.59f;
+    v.compander = 0.0f;
+    v.rateTaperExponent = 1.36f;
+    v.manualTaperExponent = 0.90f;
+    v.widthTaperExponent = 1.13f;
+    v.depthCenterMinScale = 0.175f;
+    v.depthCenterMaxScale = 2.16f;
+    v.manualDepthScale = 0.14f;
+    v.highRateDepthReduction = 0.50f;
+    v.widthCenterShift = -0.35f;
+    v.widthCenterShiftExponent = 1.50f;
+    v.useCompander = false;
+    v.linearPath = true;
     return v;
 }
 
@@ -73,7 +90,7 @@ public:
         left.setVoicing(voice);
         right.setVoicing(voice);
         left.setPhaseOffset(0.00f);
-        right.setPhaseOffset(0.018f);
+        right.setPhaseOffset(0.00f);
         left.setSampleRate((float)getSampleRate());
         right.setSampleRate((float)getSampleRate());
         applyAll();
@@ -84,7 +101,7 @@ protected:
     const char* getDescription() const override { return "Boss BF-2 style MN3207 BBD flanger"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 3, 0); }
     int64_t getUniqueId() const override { return d_cconst('C', 'l', 'F', 'l'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

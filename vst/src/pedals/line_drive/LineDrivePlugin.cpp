@@ -20,11 +20,6 @@ static inline float clamp01(float v)
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
 }
 
-static inline float finalLimit(float x)
-{
-    return std::tanh(0.98f * x);
-}
-
 } // namespace
 
 class LineDrivePlugin : public Plugin
@@ -39,12 +34,8 @@ class LineDrivePlugin : public Plugin
 
     void applyAll()
     {
-        left.setDrive(params[kDrive]);
-        right.setDrive(params[kDrive]);
-        left.setTone(params[kTone]);
-        right.setTone(params[kTone]);
-        left.setColor(params[kColor]);
-        right.setColor(params[kColor]);
+        left.setParams(params[kDrive], params[kTone], params[kColor], params[kLevel]);
+        right.setParams(params[kDrive], params[kTone], params[kColor], params[kLevel]);
     }
 
 public:
@@ -64,7 +55,7 @@ protected:
     const char* getDescription() const override { return "OS-2 style overdrive/distortion"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(2, 0, 0); }
     int64_t getUniqueId() const override { return d_cconst('L', 'n', 'D', 'r'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -108,7 +99,6 @@ protected:
         const float* inR = inputs[1];
         float* outL = outputs[0];
         float* outR = outputs[1];
-        const float level = 1.15f * params[kLevel];
         float ubL[kOS];
         float ubR[kOS];
 
@@ -124,8 +114,8 @@ protected:
 
             const float wetL = osL.downsample(ubL);
             const float wetR = osR.downsample(ubR);
-            outL[i] = finalLimit(wetL * level);
-            outR[i] = finalLimit(wetR * level);
+            outL[i] = wetL;
+            outR[i] = wetR;
         }
     }
 

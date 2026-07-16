@@ -69,6 +69,30 @@ public:
         return data[(size_t)i0] + (data[(size_t)i1] - data[(size_t)i0]) * frac;
     }
 
+    float readCubic(float delaySamples) const
+    {
+        const int size = (int)data.size();
+        if (size <= 6)
+            return 0.0f;
+        delaySamples = std::fmax(2.0f, std::fmin(delaySamples, (float)(size - 4)));
+        float pos = (float)writeIndex - delaySamples;
+        while (pos < 0.0f)
+            pos += (float)size;
+        const int i0 = (int)std::floor(pos);
+        const int im1 = (i0 + size - 1) % size;
+        const int i1 = (i0 + 1) % size;
+        const int i2 = (i0 + 2) % size;
+        const float t = pos - (float)i0;
+        const float xm1 = data[(size_t)im1];
+        const float x0 = data[(size_t)i0];
+        const float x1 = data[(size_t)i1];
+        const float x2 = data[(size_t)i2];
+        const float a = 0.5f * (-xm1 + 3.0f * x0 - 3.0f * x1 + x2);
+        const float b = 0.5f * (2.0f * xm1 - 5.0f * x0 + 4.0f * x1 - x2);
+        const float c = 0.5f * (-xm1 + x1);
+        return ((a * t + b) * t + c) * t + x0;
+    }
+
     void write(float x)
     {
         data[(size_t)writeIndex] = x;
@@ -176,9 +200,14 @@ public:
 
         const float sine = std::sin(kTwoPi * lfoPhase);
         const float lfo = 0.88f * sine + 0.12f * std::sin(kTwoPi * (lfoPhase * 2.0f + 0.17f));
-        const float depth = smoothstep(mix) * (0.10f + 0.90f * e);
-        const float delayMs = std::fmax(1.35f, std::fmin(17.0f, 5.9f + lfo * (0.25f + 5.4f * depth)));
-        float wet = delay.read(delayMs * 0.001f * sampleRate);
+        // Reuse the measured VB-2 MN3207 trajectory as a guardrail for this
+        // behaviour-driven BBD: the previous 5.65 ms excursion sounded like a
+        // pitch dive. Even at maximum envelope/Mix, stay near 1.7 ms.
+        const float amount = smoothstep(mix);
+        const float depth = amount * (0.18f + 0.82f * e);
+        const float excursionMs = 0.10f + 1.58f * depth;
+        const float delayMs = 4.50f + lfo * excursionMs;
+        float wet = delay.readCubic(delayMs * 0.001f * sampleRate);
         delay.write(x);
 
         dark += darkA * (wet - dark);
@@ -190,9 +219,11 @@ public:
         dc += 0.00035f * (wet - dc);
         wet -= dc;
 
-        const float dryLevel = 1.0f - 0.86f * smoothstep(mix);
-        const float wetLevel = 0.94f * smoothstep(mix);
-        return (x * dryLevel + wet * wetLevel) * 0.98f;
+        const float mixAngle = amount * 1.5707963f;
+        const float dryLevel = std::cos(mixAngle);
+        const float wetLevel = 0.86f * std::sin(mixAngle);
+        const float levelComp = 1.0f + 0.16f * amount;
+        return (x * dryLevel + wet * wetLevel) * 0.98f * levelComp;
     }
 };
 

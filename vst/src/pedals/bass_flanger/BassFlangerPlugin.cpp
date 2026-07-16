@@ -82,7 +82,7 @@ public:
         left.setVoicing(voice);
         right.setVoicing(voice);
         left.setPhaseOffset(0.00f);
-        right.setPhaseOffset(0.018f);
+        right.setPhaseOffset(0.00f);
         left.setSampleRate((float)getSampleRate());
         right.setSampleRate((float)getSampleRate());
         applyAll();
@@ -93,7 +93,7 @@ protected:
     const char* getDescription() const override { return "Boss BF-2B style MN3204 BBD bass flanger"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('R', 'B', 'F', 'l'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

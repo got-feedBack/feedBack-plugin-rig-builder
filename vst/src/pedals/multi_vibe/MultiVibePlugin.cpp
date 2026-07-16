@@ -1,7 +1,8 @@
 /*
  * MultiVibe - Boss VB-2 style BBD vibrato for the game's Pedal_MultiVibe.
  *
- * Local reference: pedals/multi vibe.jpg. The schematic is a Boss VB-2 with
+ * Local references: pedals/multi vibe.jpg, Boss-VB-2-Vibrato-Schematic-1.jpg
+ * and boss vb-2 clone.jpeg. The schematic is a Boss VB-2 with
  * NJM4558 input/output stages, a BA662A/BA654 gain-control section and the
  * MN3207/MN3102 BBD clock pair. The real front panel is Rate, Depth and Rise
  * Time; the game's Speed, Mix and Waveform are mapped to those controls.
@@ -10,7 +11,6 @@
 #include "MultiVibeParams.h"
 #include "../_shared/ChorusComponents.h"
 #include <cmath>
-#include <vector>
 
 START_NAMESPACE_DISTRHO
 
@@ -22,12 +22,6 @@ static constexpr float kTwoPi = 6.28318530718f;
 static inline float clamp01(float v)
 {
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
-}
-
-static inline float smoothstep(float v)
-{
-    v = clamp01(v);
-    return v * v * (3.0f - 2.0f * v);
 }
 
 static inline float onePoleCoeffHz(float hz, float sr)
@@ -42,57 +36,6 @@ static inline float coeffMs(float ms, float sr)
     return 1.0f - std::exp(-1.0f / (ms * 0.001f * sr));
 }
 
-class DelayBuffer
-{
-    std::vector<float> data;
-    int writeIndex = 0;
-
-public:
-    void resize(int samples)
-    {
-        if (samples < 8)
-            samples = 8;
-        data.assign((size_t)samples, 0.0f);
-        writeIndex = 0;
-    }
-
-    void reset()
-    {
-        for (size_t i = 0; i < data.size(); ++i)
-            data[i] = 0.0f;
-        writeIndex = 0;
-    }
-
-    float read(float delaySamples) const
-    {
-        const int size = (int)data.size();
-        if (size <= 4)
-            return 0.0f;
-
-        delaySamples = std::fmax(1.0f, std::fmin(delaySamples, (float)(size - 3)));
-        float pos = (float)writeIndex - delaySamples;
-        while (pos < 0.0f)
-            pos += (float)size;
-        while (pos >= (float)size)
-            pos -= (float)size;
-
-        const int i0 = (int)std::floor(pos);
-        const int i1 = (i0 + 1) % size;
-        const float frac = pos - (float)i0;
-        return data[(size_t)i0] + (data[(size_t)i1] - data[(size_t)i0]) * frac;
-    }
-
-    void write(float x)
-    {
-        if (data.empty())
-            return;
-        data[(size_t)writeIndex] = x;
-        ++writeIndex;
-        if (writeIndex >= (int)data.size())
-            writeIndex = 0;
-    }
-};
-
 } // namespace
 
 class MultiVibeCore
@@ -103,17 +46,18 @@ class MultiVibeCore
     float riseTime = kMultiVibeDef[kWaveform];
     float mode = kMultiVibeDef[kMode];
 
-    DelayBuffer delay;
+    rbmod::DelayBuffer delay;
     float lfoPhase = 0.0f;
     float lfoLag = 0.0f;
     float riseEnv = 0.0f;
+    float smRate = kMultiVibeDef[kSpeed];
+    float smDepth = kMultiVibeDef[kMix];
     float hpX1 = 0.0f;
     float hpY1 = 0.0f;
     float preY = 0.0f;
     float bbdY = 0.0f;
     float airY = 0.0f;
     float dc = 0.0f;
-    float compEnv = 0.0f;
     float clockNoise = 0.0f;
 
     float hpA = 0.0f;
@@ -121,15 +65,17 @@ class MultiVibeCore
     float bbdA = 0.0f;
     float airA = 0.0f;
     float lfoA = 0.0f;
-    float compA = 0.0f;
     float riseA = 0.0f;
     float noiseA = 0.0f;
+    float paramA = 0.0f;
     rbmod::NoiseSource noise;
 
     float rateHz() const
     {
-        const float r = clamp01(rate);
-        return 0.12f + 6.65f * std::pow(r, 2.02f);
+        // Measured from the nine VB-2 reference renders. The reverse-log 250 kC
+        // RATE pot places noon much closer to the fast end than a linear map.
+        const float curve = std::pow(clamp01(smRate), 1.27f);
+        return 2.34f * std::pow(14.17f / 2.34f, curve);
     }
 
     void updateCoeffs()
@@ -139,15 +85,16 @@ class MultiVibeCore
         const float hpRc = 1.0f / (2.0f * kPi * hpHz);
         hpA = hpRc / (hpRc + dt);
 
-        const float d = smoothstep(depth);
-        const float rise = smoothstep(riseTime);
-        preA = onePoleCoeffHz(7800.0f - 900.0f * d, sampleRate);
-        bbdA = onePoleCoeffHz(4650.0f - 1150.0f * d + 220.0f * rise, sampleRate);
-        airA = onePoleCoeffHz(2300.0f + 850.0f * (1.0f - d), sampleRate);
-        lfoA = onePoleCoeffHz(12.0f + 22.0f * rate, sampleRate);
-        compA = onePoleCoeffHz(42.0f, sampleRate);
-        riseA = coeffMs(18.0f + 1550.0f * rise * rise, sampleRate);
+        // The Q1/IC1 and Q2-Q4 networks are fixed filters. DEPTH only changes
+        // the MN3102 clock excursion; it must not darken the audio path.
+        preA = onePoleCoeffHz(9800.0f, sampleRate);
+        bbdA = onePoleCoeffHz(6900.0f, sampleRate);
+        airA = onePoleCoeffHz(6100.0f, sampleRate);
+        lfoA = onePoleCoeffHz(58.0f, sampleRate);
+        const float rise = std::pow(clamp01(riseTime), 1.7f); // VR3 250 kA
+        riseA = coeffMs(18.0f + 1700.0f * rise, sampleRate);
         noiseA = onePoleCoeffHz(6400.0f, sampleRate);
+        paramA = coeffMs(12.0f, sampleRate);
     }
 
     float highPass(float x)
@@ -179,7 +126,9 @@ public:
         lfoPhase = 0.0f;
         lfoLag = 0.0f;
         riseEnv = 0.0f;
-        hpX1 = hpY1 = preY = bbdY = airY = dc = compEnv = clockNoise = 0.0f;
+        smRate = rate;
+        smDepth = depth;
+        hpX1 = hpY1 = preY = bbdY = airY = dc = clockNoise = 0.0f;
         noise.seed(0x56423231u);
         updateCoeffs();
     }
@@ -187,7 +136,7 @@ public:
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
-        delay.resize((int)(sampleRate * 0.060f));
+        delay.resizeForMs(sampleRate, 12.0f);
         reset();
     }
 
@@ -216,11 +165,13 @@ public:
 
     float process(float in)
     {
-        // Real VB-2 MODE toggle: <0.34 = BYPASS (dry), 0.34-0.67 = LATCH
-        // (continuous vibrato), >0.67 = UNLATCH (swells the vibrato in over
-        // RISE TIME). Default 0.5 = Latch.
-        const bool bypass  = mode < 0.34f;
+        // Physical selector order is UNLATCH / BYPASS / LATCH. The UI maps the
+        // top position to 1, centre to 0.5 and bottom to 0.
+        const bool bypass  = mode >= 0.34f && mode <= 0.67f;
         const bool unlatch = mode > 0.67f;
+
+        smRate += paramA * (rate - smRate);
+        smDepth += paramA * (depth - smDepth);
 
         lfoPhase += rateHz() / sampleRate;
         if (lfoPhase >= 1.0f)
@@ -233,27 +184,31 @@ public:
         riseEnv += envCoeff * (target - riseEnv);
         const float bloom = riseEnv;
 
-        const float intensity = smoothstep(depth);   // DEPTH = pitch excursion only
+        // VR2 is 50 kB. The slight exponent is measured from the reference
+        // delay spans: about 1.36 ms p-p at noon and 2.9-3.4 ms at maximum.
+        const float intensity = std::pow(clamp01(smDepth), 1.15f);
+        const float rateDepthLoss = 1.0f
+                                  - 0.23f * smRate * smRate
+                                  - 0.34f * smRate * smRate * smRate;
         const float rawLfo = lfoShape(lfoPhase);
         lfoLag += lfoA * (rawLfo - lfoLag);
 
         float x = highPass(in);
         x = lowPass(x, preY, preA);
 
-        compEnv += compA * (std::fabs(x) - compEnv);
-        const float ba662Gain = 1.0f / (1.0f + (0.38f + 0.78f * intensity) * compEnv);
-        x = std::tanh(x * ba662Gain * 1.08f) * 0.96f;
+        // BA662A is the rise/bypass VCA here, not a signal-dependent compander.
+        x = std::tanh(x * 1.02f) * 0.98f;
 
-        const float baseMs = 5.85f;
-        const float widthMs = 0.28f + 5.55f * intensity * bloom;   // excursion swells in on unlatch
-        const float delayMs = std::fmax(1.35f, std::fmin(18.0f, baseMs + widthMs * lfoLag));
+        const float baseMs = 4.32f;
+        const float widthMs = 1.72f * intensity * bloom * rateDepthLoss;
+        const float delayMs = std::fmax(2.45f, std::fmin(6.20f, baseMs + widthMs * lfoLag));
 
-        float wet = delay.read(delayMs * 0.001f * sampleRate);
+        float wet = delay.readCubic(delayMs * 0.001f * sampleRate);
         delay.write(x);
 
         wet = lowPass(wet, bbdY, bbdA);
         const float darker = lowPass(wet, airY, airA);
-        wet = darker + (wet - darker) * 0.18f;
+        wet = darker + (wet - darker) * 0.62f;
 
         clockNoise += noiseA * (noise.next() - clockNoise);
         wet += clockNoise * (0.00010f + 0.00024f * intensity * bloom);
@@ -261,13 +216,15 @@ public:
         dc += 0.00035f * (wet - dc);
         wet -= dc;
 
-        const float throb = 1.0f - (0.012f + 0.042f * intensity * bloom) * (0.5f + 0.5f * lfoLag);
+        const float throb = 1.0f - (0.004f + 0.012f * intensity * bloom) * (0.5f + 0.5f * lfoLag);
         wet *= throb;
 
         // VB-2 vibrato = 100% WET in Latch (pitch mod, no dry). bloom = wet mix:
         // Bypass -> dry, Unlatch crossfades dry->wet as it swells in.
+        if (bypass)
+            return in;
         const float y = in * (1.0f - bloom) + wet * bloom;
-        return y * 0.985f;
+        return y * 0.87f;
     }
 };
 
@@ -305,7 +262,7 @@ protected:
     const char* getDescription() const override { return "Boss VB-2 style BBD vibrato"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 2, 0); }
+    uint32_t getVersion() const override { return d_version(1, 3, 0); }
     int64_t getUniqueId() const override { return d_cconst('M', 'l', 'V', 'b'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

@@ -3,7 +3,9 @@
  *
  * References: pedals/chorus 20/ElectroVibe-PedalPCB.pdf and the Pisotones
  * UniVibe document. The model follows the transistor preamp, four LDR-driven
- * all-pass stages, incandescent lamp driver and Chorus/Vibrato output switch.
+ * all-pass stages and incandescent lamp driver. Legacy selector parameters
+ * remain at their original ids for song compatibility, but this pedal is fixed
+ * to Chorus and uses a single visible Speed control.
  */
 #include "DistrhoPlugin.hpp"
 #include "Chorus20Params.h"
@@ -17,10 +19,11 @@ class VibeCore
     float sampleRate = 48000.0f;
     float intensity = kChorus20Def[kIntensity];
     float speed1 = kChorus20Def[kSpeed1];
-    float speed2 = kChorus20Def[kSpeed2];
-    float speedSelect = kChorus20Def[kSpeedSelect];
     float volume = kChorus20Def[kVolume];
-    float mode = kChorus20Def[kMode];
+    float intensityNow = intensity;
+    float speedNow = speed1;
+    float volumeNow = volume;
+    float smoothA = 1.0f;
 
     float phase = 0.0f;
     float dc = 0.0f;
@@ -29,13 +32,14 @@ class VibeCore
     rbmod::HighPass inputHp;
     rbmod::LowPass inputLp;
     rbmod::LowPass outputLp;
+    rbmod::LowPass outputBass;
     rbmod::LampLdrModel lamp;
     rbmod::FirstOrderAllPass stages[4];
 
     float currentRateHz() const
     {
-        const float s = speedSelect >= 0.5f ? speed2 : speed1;
-        return 0.070f + 6.80f * std::pow(rbmod::clamp01(s), 2.05f);
+        // Measured DejaVibe anchors: about 0.10, 4.95 and 10.0 Hz.
+        return 0.10f + 9.90f * rbmod::clamp01(speedNow);
     }
 
     void configureStages()
@@ -57,12 +61,15 @@ class VibeCore
         // Uni-Vibe is warm, not lifeless — keep some air up top.
         inputLp.setHz(13000.0f, sampleRate);
         outputLp.setHz(11000.0f, sampleRate);
+        outputBass.setHz(600.0f, sampleRate);
     }
 
 public:
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
+        smoothA = 1.0f - std::exp(-1.0f / (0.012f * sampleRate));
+        lamp.setTimeConstants(5.0f, 18.0f, 3.0f, 22.0f);
         lamp.setSampleRate(sampleRate);
         configureStages();
         updateFilters();
@@ -74,23 +81,31 @@ public:
         inputHp.reset();
         inputLp.reset();
         outputLp.reset();
+        outputBass.reset();
         lamp.reset();
         for (int i = 0; i < 4; ++i)
             stages[i].reset();
         phase = 0.0f;
         dc = 0.0f;
         preBias = 0.0f;
+        intensityNow = intensity;
+        speedNow = speed1;
+        volumeNow = volume;
     }
 
     void setIntensity(float v) { intensity = rbmod::clamp01(v); }
     void setSpeed1(float v) { speed1 = rbmod::clamp01(v); }
-    void setSpeed2(float v) { speed2 = rbmod::clamp01(v); }
-    void setSpeedSelect(float v) { speedSelect = v >= 0.5f ? 1.0f : 0.0f; }
+    void setSpeed2(float) {}
+    void setSpeedSelect(float) {}
     void setVolume(float v) { volume = rbmod::clamp01(v); }
-    void setMode(float v) { mode = v >= 0.5f ? 1.0f : 0.0f; }
+    void setMode(float) {}
 
     float process(float in)
     {
+        intensityNow += smoothA * (intensity - intensityNow);
+        speedNow += smoothA * (speed1 - speedNow);
+        volumeNow += smoothA * (volume - volumeNow);
+
         phase += currentRateHz() / sampleRate;
         if (phase >= 1.0f)
             phase -= std::floor(phase);
@@ -98,49 +113,48 @@ public:
         // Analog LFO into lamp driver. The Q1/Q2 oscillator is close to sine
         // but the lamp driver/bulb inertia makes the bright half wider.
         const float lfo = 0.5f + 0.5f * std::sin(rbmod::kTwoPi * phase);
-        const float inten = std::pow(rbmod::clamp01(intensity), 1.20f);
-        const float drive = rbmod::clamp01(0.12f + (0.22f + 0.76f * inten) * lfo);
+        const float inten = 1.0f - std::exp(-5.0f * rbmod::clamp01(intensityNow));
+        const float drive = rbmod::clamp01(0.10f + inten * (0.16f + 0.74f * lfo));
         const float light = lamp.processLight(drive);
 
+        const float dryIn = in;
         float x = inputHp.process(in);
         x = inputLp.process(x);
         preBias += 0.00055f * (x - preBias);
         x -= preBias;
-        x = rbmod::softClip(x * 1.16f) * 0.93f;
+        x = rbmod::softClip(x * 1.08f) / 1.08f;
 
         float wet = x;
         const float ldrR = rbmod::LampLdrModel::nsl7530Resistance(light);
         const float spread[4] = { 1.00f, 0.82f, 1.18f, 0.96f };
         for (int i = 0; i < 4; ++i)
         {
-            const float stageR = 4700.0f + ldrR * spread[i];
+            const float stageR = 4700.0f + 16.0f * ldrR * spread[i];
             wet = stages[i].process(wet, stageR);
-            wet = rbmod::softClip(wet * 1.035f);
         }
         wet = outputLp.process(wet);
         dc += 0.00035f * (wet - dc);
         wet -= dc;
 
-        const float chorusMode = 1.0f - mode; // 0 = chorus, 1 = vibrato
-        // CHORUS mode SUMS dry + wet (the real Uni-Vibe mixes both through
-        // equal resistors into the output stage): the classic vibe NOTCHES
-        // fall where the 4-stage phase crosses 180°/540°, and bass/treble
-        // (where the allpass chain returns to 0°/720° = in phase) pass at
-        // full level. The previous SUBTRACTION inverted that — it canceled
-        // the in-phase extremes instead, gutting lows AND highs into a
-        // midband hump ("the chorus mode darkens the guitar a lot").
-        // 0.52+0.52 keeps the in-phase sum ~unity where 0.78−0.86 sat.
-        const float dry = x * (0.52f * chorusMode);
-        const float wetLevel = mode >= 0.5f ? 0.96f : 0.52f;
-        const float mixed = mode >= 0.5f ? wet * wetLevel
-                                         : dry + wet * wetLevel;
-        // Level-match to the chorus group at UNITY. The old curve (0.18+1.65·t
-        // then ×0.72) left the pinned Volume (0.62) at ~-6.7 dB and low RS-Mix
-        // settings near-inaudible; only full Volume reached ~unity. Raised the
-        // base + span and dropped the -2.9 dB output trim so ~0.62 lands near
-        // unity and the knob spans a usable ±6 dB instead of collapsing.
-        const float outGain = 0.45f + 1.35f * rbmod::audioTaper(volume);
-        return rbmod::softClip(mixed * outGain);
+        // Chorus mode sums dry and phase-shifted paths through equal branches.
+        // Explicitly interpolate from dry so Intensity=0 matches the reference
+        // instead of leaving a static comb filter active.
+        const float chorus = 0.52f * x + 0.52f * wet;
+        const float mixed = dryIn + inten * (chorus - dryIn);
+
+        // Per-channel renders put the dry minimum around -2 dB and useful
+        // Intensity around +9.5 dB. The analog output stage also compensates
+        // the deeper cancellation produced at faster sweeps.
+        const float s = rbmod::clamp01(speedNow);
+        const float speedCompDb = inten * (0.85f - 0.90f * s + 0.37f * s * s);
+        const float speedComp = std::pow(10.0f, speedCompDb / 20.0f);
+        const float characterGain = 0.793f + 3.00f * inten;
+        const float defaultTaper = rbmod::audioTaper(kChorus20Def[kVolume]);
+        const float outGain = rbmod::audioTaper(volumeNow) / defaultTaper;
+        float y = mixed * characterGain * speedComp * outGain;
+        y -= 0.28f * outputBass.process(y);
+        return rbmod::clamp(y,
+                            -1.0f, 1.0f);
     }
 };
 
@@ -182,7 +196,7 @@ protected:
     const char* getDescription() const override { return "Deja Vibe style optical chorus"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('C', 'h', '2', '0'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -191,7 +205,9 @@ protected:
             return;
         parameter.hints = kParameterIsAutomatable;
         if (index == (uint32_t)kSpeedSelect || index == (uint32_t)kMode)
-            parameter.hints |= kParameterIsBoolean | kParameterIsInteger;
+            parameter.hints |= kParameterIsBoolean | kParameterIsInteger | kParameterIsHidden;
+        if (index == (uint32_t)kSpeed2)
+            parameter.hints |= kParameterIsHidden;
         parameter.name = kChorus20Names[index];
         parameter.symbol = kChorus20Symbols[index];
         parameter.ranges.min = kChorus20Min[index];
@@ -209,8 +225,7 @@ protected:
         if (index >= (uint32_t)kParamCount)
             return;
         params[index] = (index == (uint32_t)kSpeedSelect || index == (uint32_t)kMode)
-            ? (value >= 0.5f ? 1.0f : 0.0f)
-            : rbmod::clamp01(value);
+            ? 0.0f : rbmod::clamp01(value);
         applyAll();
     }
 

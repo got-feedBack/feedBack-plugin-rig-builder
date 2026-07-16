@@ -3,9 +3,10 @@
  *
  * Local references: pedals/ampvibe.jpg, pedals/chorus 20/ElectroVibe-PedalPCB.pdf
  * and the Pisotones Uni-Vibe notes. The DSP follows the transistor preamp,
- * four LDR-controlled all-pass stages, incandescent lamp inertia and the
- * Chorus/Vibrato output switch. the game's Speed and Mix are mapped to the
- * real Speed and Intensity controls; Volume and Mode remain editable in the UI.
+ * four LDR-controlled all-pass stages and incandescent lamp inertia. The
+ * chassis exposes Intensity and Volume; Speed remains available to the host as
+ * the real external foot-controller input. The compatibility Mode parameter is
+ * fixed internally to Chorus.
  */
 #include "DistrhoPlugin.hpp"
 #include "AmpVibeParams.h"
@@ -20,12 +21,14 @@ class AmpVibeCore
     float speed = kAmpVibeDef[kSpeed];
     float intensity = kAmpVibeDef[kIntensity];
     float volume = kAmpVibeDef[kVolume];
-    float mode = kAmpVibeDef[kMode];
+    float speedNow = speed;
+    float intensityNow = intensity;
+    float volumeNow = volume;
+    float smoothA = 1.0f;
 
     float phase = 0.0f;
     float dc = 0.0f;
     float preBias = 0.0f;
-    float feedback = 0.0f;
 
     rbmod::HighPass inputHp;
     rbmod::LowPass inputLp;
@@ -36,8 +39,9 @@ class AmpVibeCore
 
     float currentRateHz() const
     {
-        const float s = std::pow(rbmod::clamp01(speed), 2.05f);
-        return 0.070f + 6.80f * s;
+        // Reference renders anchor the external speed pedal at roughly
+        // 0.10/4.95/10.0 Hz for minimum/half/maximum travel.
+        return 0.10f + 9.90f * rbmod::clamp01(speedNow);
     }
 
     void configureStages()
@@ -55,8 +59,8 @@ class AmpVibeCore
     void updateFilters()
     {
         inputHp.setHz(28.0f, sampleRate);
-        inputLp.setHz(9000.0f, sampleRate);
-        outputLp.setHz(7400.0f, sampleRate);
+        inputLp.setHz(13000.0f, sampleRate);
+        outputLp.setHz(11000.0f, sampleRate);
         outputHp.setHz(18.0f, sampleRate);
     }
 
@@ -73,12 +77,19 @@ public:
         phase = 0.0f;
         dc = 0.0f;
         preBias = 0.0f;
-        feedback = 0.0f;
+        speedNow = speed;
+        intensityNow = intensity;
+        volumeNow = volume;
     }
 
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
+        smoothA = 1.0f - std::exp(-1.0f / (0.012f * sampleRate));
+        // The supplied renders retain almost full optical sweep at 4.95 Hz and
+        // a clearly measurable sweep at 10 Hz. The generic slow CdS defaults
+        // suppress both, so use the faster lamp/cell pair measured here.
+        lamp.setTimeConstants(5.0f, 18.0f, 3.0f, 22.0f);
         lamp.setSampleRate(sampleRate);
         configureStages();
         updateFilters();
@@ -88,50 +99,57 @@ public:
     void setSpeed(float v) { speed = rbmod::clamp01(v); }
     void setIntensity(float v) { intensity = rbmod::clamp01(v); }
     void setVolume(float v) { volume = rbmod::clamp01(v); }
-    void setMode(float v) { mode = v >= 0.5f ? 1.0f : 0.0f; }
+    void setMode(float) {}
 
     float process(float in)
     {
+        speedNow += smoothA * (speed - speedNow);
+        intensityNow += smoothA * (intensity - intensityNow);
+        volumeNow += smoothA * (volume - volumeNow);
+
         phase += currentRateHz() / sampleRate;
         if (phase >= 1.0f)
             phase -= std::floor(phase);
 
         const float lfo = 0.5f + 0.5f * std::sin(rbmod::kTwoPi * phase);
-        const float inten = std::pow(rbmod::clamp01(intensity), 1.18f);
-        const float drive = rbmod::clamp01(0.10f + (0.18f + 0.82f * inten) * lfo);
+        // The reference is dry at Intensity minimum and reaches nearly full
+        // optical excursion by noon. Lamp/LDR inertia supplies the asymmetry.
+        const float inten = 1.0f - std::exp(-5.0f * rbmod::clamp01(intensityNow));
+        const float drive = rbmod::clamp01(0.10f + inten * (0.16f + 0.74f * lfo));
         const float light = lamp.processLight(drive);
 
+        const float dryIn = in;
         float x = inputHp.process(in);
         x = inputLp.process(x);
         preBias += 0.00050f * (x - preBias);
         x -= preBias;
-        x = rbmod::softClip(x * 1.14f) * 0.94f;
+        x = rbmod::softClip(x * 1.08f) / 1.08f;
 
         const float ldrR = rbmod::LampLdrModel::nsl7530Resistance(light);
         const float spread[4] = { 1.00f, 0.84f, 1.22f, 0.94f };
-        float wet = x + feedback * (0.08f + 0.20f * inten);
+        float wet = x;
         for (int i = 0; i < 4; ++i)
         {
-            const float stageR = 4700.0f + ldrR * spread[i];
+            const float stageR = 4700.0f + 0.35f * ldrR * spread[i];
             wet = stages[i].process(wet, stageR);
-            wet = rbmod::softClip(wet * 1.03f);
         }
-        feedback = rbmod::softClip(wet) * (0.10f + 0.22f * inten);
 
         wet = outputLp.process(wet);
         dc += 0.00035f * (wet - dc);
         wet -= dc;
 
-        const float vibratoMode = mode >= 0.5f ? 1.0f : 0.0f;
-        const float dry = x * (0.78f * (1.0f - vibratoMode));
-        const float wetLevel = vibratoMode > 0.5f ? 0.98f : 0.88f;
-        float y = vibratoMode > 0.5f ? wet * wetLevel
-                                      : dry - wet * wetLevel;
+        const float chorus = 0.52f * x + 0.52f * wet;
+        const float effectDepth = 0.84f * inten;
+        float y = dryIn + effectDepth * (chorus - dryIn);
 
-        const float throb = 1.0f - (0.04f + 0.11f * inten) * (light * 2.0f - 1.0f);
-        const float outGain = 0.18f + 1.70f * rbmod::audioTaper(volume);
-        y = outputHp.process(y * throb);
-        return rbmod::softClip(y * outGain) * 0.72f;
+        // Per-channel renders put the dry minimum near -2 dB and the working
+        // intensity range roughly 4.5 dB above it. Keep that fixed calibration
+        // separate from the real 100 k audio Volume pot.
+        const float characterGain = 0.633f + 1.50f * inten;
+        const float defaultTaper = rbmod::audioTaper(kAmpVibeDef[kVolume]);
+        const float outGain = rbmod::audioTaper(volumeNow) / defaultTaper;
+        y = outputHp.process(y);
+        return y * characterGain * outGain;
     }
 };
 
@@ -169,7 +187,7 @@ protected:
     const char* getDescription() const override { return "Uni-Vibe style optical modulation"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('A', 'm', 'V', 'b'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -178,7 +196,7 @@ protected:
             return;
         parameter.hints = kParameterIsAutomatable;
         if (index == (uint32_t)kMode)
-            parameter.hints |= kParameterIsBoolean | kParameterIsInteger;
+            parameter.hints |= kParameterIsBoolean | kParameterIsInteger | kParameterIsHidden;
         parameter.name = kAmpVibeNames[index];
         parameter.symbol = kAmpVibeSymbols[index];
         parameter.ranges.min = kAmpVibeMin[index];
@@ -195,9 +213,7 @@ protected:
     {
         if (index >= (uint32_t)kParamCount)
             return;
-        params[index] = index == (uint32_t)kMode
-            ? (value >= 0.5f ? 1.0f : 0.0f)
-            : rbmod::clamp01(value);
+        params[index] = index == (uint32_t)kMode ? 0.0f : rbmod::clamp01(value);
         applyAll();
     }
 

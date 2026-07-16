@@ -23,26 +23,37 @@ static rbflanger::FlangerVoicing mxrVoicing()
     rbflanger::FlangerVoicing v;
     v.bbd = rbflanger::sad1024Spec();
     v.opamp = rbshared::jrc4558Spec();
-    v.minDelayMs = 0.48f;
-    v.maxDelayMs = 11.8f;
-    v.minRateHz = 0.045f;
-    v.maxRateHz = 8.5f;
+    v.minDelayMs = 0.65f;
+    v.maxDelayMs = 7.0f;
+    v.minRateHz = 0.064f;
+    v.maxRateHz = 7.56f;
     v.inputHpHz = 24.0f;
     v.inputLpHz = 7600.0f;
     v.bbdLpHz = 6100.0f;
     v.outputLpHz = 6500.0f;
     v.colorHpHz = 1800.0f;
-    v.feedbackMax = 0.74f;
+    v.delaySlewHz = 52.0f;
+    v.feedbackMax = 0.82f;
     v.feedbackSign = -1.0f;
-    v.wetSign = -1.0f;
-    v.dryLevel = 0.88f;
-    v.wetLevel = 0.64f;
+    v.wetSign = 1.0f;
+    v.dryLevel = 0.51f;
+    v.wetLevel = 0.60f;
     v.lfoTriangle = 0.76f;
     v.driveMinDb = -0.2f;
     v.driveMaxDb = 2.2f;
-    v.outputMinDb = -0.6f;
-    v.outputMaxDb = 1.0f;
-    v.compander = 0.34f;
+    v.outputMinDb = -0.7f;
+    v.outputMaxDb = -0.7f;
+    v.depthBase = 0.06f;
+    v.depthScale = 0.41f;
+    v.compander = 0.0f;
+    v.rateTaperExponent = 1.13f;
+    v.manualTaperExponent = 0.60f;
+    v.widthTaperExponent = 1.55f;
+    v.manualCenterMaxRatio = 0.26f;
+    v.manualDepthScale = 0.69f;
+    v.widthCenterShift = 0.25f;
+    v.useCompander = false;
+    v.linearPath = true;
     return v;
 }
 
@@ -73,7 +84,7 @@ public:
         left.setVoicing(voice);
         right.setVoicing(voice);
         left.setPhaseOffset(0.00f);
-        right.setPhaseOffset(0.032f);
+        right.setPhaseOffset(0.00f);
         left.setSampleRate((float)getSampleRate());
         right.setSampleRate((float)getSampleRate());
         applyAll();
@@ -84,7 +95,7 @@ protected:
     const char* getDescription() const override { return "MXR M117/SAD1024 style BBD flanger"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('E', '8', 'F', 'l'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

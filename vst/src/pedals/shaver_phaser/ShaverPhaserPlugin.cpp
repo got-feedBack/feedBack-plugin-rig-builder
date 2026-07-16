@@ -129,8 +129,11 @@ class ShaverPhaserCore
 
     float currentRateHz() const
     {
-        const float shaped = std::pow(clamp01(rate), 0.95f);
-        return 0.070f * std::pow(102.0f, shaped);
+        // Reference anchors: about 0.06 Hz at minimum, 0.49 Hz at noon and
+        // 9.2 Hz at maximum. The PH-1R rate network is strongly non-linear;
+        // this law preserves all three points instead of fitting only its ends.
+        const float shaped = std::pow(clamp01(rate), 1.26f);
+        return 0.060f * std::pow(153.3333f, shaped);
     }
 
 public:
@@ -206,7 +209,10 @@ public:
         float shifted = x - feedback * (0.08f + 0.42f * r);
         for (int i = 0; i < kStageCount; ++i)
         {
-            const float corner = 125.0f * std::pow(20.0f, fetShape);
+            // The selected 2SK30A VCRs sweep the repeated 10 nF all-pass cells
+            // over roughly 95 Hz..4.75 kHz. This keeps the bias point near
+            // 500 Hz while reaching the upper notches visible in the renders.
+            const float corner = 95.0f * std::pow(50.0f, fetShape);
             shifted = stages[i].process(shifted, sampleRate, corner * tolerance[i]);
         }
 

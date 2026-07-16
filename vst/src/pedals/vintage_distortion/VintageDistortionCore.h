@@ -1,9 +1,17 @@
 #ifndef VINTAGE_DISTORTION_CORE_H
 #define VINTAGE_DISTORTION_CORE_H
 
-#include <cmath>
+/*
+ * DOD 250 Overdrive/Preamp core derived from pedals/vintage distortion.png.
+ * Runs at the wrapper's 4x sample rate.
+ *
+ * C2/R6 -> LM741 non-inverting stage with R8/C5 feedback and the real
+ * C3/R7/VR1 gain leg -> C4/R9 -> D1 versus D2+D3 asymmetric shunt clipper ->
+ * C6 -> VR2 Volume.
+ */
 #include "../../_shared/opamp.hpp"
 #include "../../_shared/semiconductors.hpp"
+#include <cmath>
 
 namespace vintagedistortion {
 
@@ -14,185 +22,202 @@ static inline float clamp01(float v)
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
 }
 
-static inline float dn(float v)
+static inline float audioTaper(float v)
 {
-    return std::fabs(v) < 1.0e-15f ? 0.0f : v;
+    return (std::pow(10.0f, 2.0f * clamp01(v)) - 1.0f) / 99.0f;
+}
+
+static inline float onePoleCoef(float hz, float sampleRate)
+{
+    const float nyquist = 0.45f * sampleRate;
+    const float fc = hz < 1.0f ? 1.0f : (hz > nyquist ? nyquist : hz);
+    return 1.0f - std::exp(-2.0f * kPi * fc / sampleRate);
 }
 
 class RcHighPass
 {
-    float a = 0.0f;
+    float coefficient = 0.0f;
     float x1 = 0.0f;
     float y1 = 0.0f;
 
 public:
-    void setRC(float sr, float rOhm, float cFarad)
+    void setRC(float sampleRate, float resistance, float capacitance)
     {
-        const float s = sr > 1000.0f ? sr : 48000.0f;
-        const float rc = rOhm * cFarad;
-        const float dt = 1.0f / s;
-        a = rc / (rc + dt);
+        const float dt = 1.0f / sampleRate;
+        const float rc = resistance * capacitance;
+        coefficient = rc / (rc + dt);
     }
 
     void reset() { x1 = y1 = 0.0f; }
 
-    inline float process(float x)
+    float process(float x)
     {
-        const float y = a * (y1 + x - x1);
+        const float y = coefficient * (y1 + x - x1);
         x1 = x;
-        y1 = dn(y);
+        y1 = std::fabs(y) < 1.0e-15f ? 0.0f : y;
         return y1;
     }
 };
 
 class RcLowPass
 {
-    float a = 0.0f;
-    float y = 0.0f;
+    float coefficient = 0.0f;
+    float state = 0.0f;
 
 public:
-    void setRC(float sr, float rOhm, float cFarad)
+    void setRC(float sampleRate, float resistance, float capacitance)
     {
-        const float s = sr > 1000.0f ? sr : 48000.0f;
-        const float rc = rOhm * cFarad;
-        a = 1.0f - std::exp(-1.0f / (rc * s));
+        setFrequency(sampleRate,
+                     1.0f / (2.0f * kPi * resistance * capacitance));
     }
 
-    void setHz(float sr, float hz)
+    void setFrequency(float sampleRate, float hz)
     {
-        const float s = sr > 1000.0f ? sr : 48000.0f;
-        a = 1.0f - std::exp(-2.0f * kPi * hz / s);
+        coefficient = onePoleCoef(hz, sampleRate);
     }
 
-    void reset() { y = 0.0f; }
+    void reset() { state = 0.0f; }
 
-    inline float process(float x)
+    float process(float x)
     {
-        y += a * (x - y);
-        y = dn(y);
-        return y;
+        state += coefficient * (x - state);
+        if (std::fabs(state) < 1.0e-15f)
+            state = 0.0f;
+        return state;
     }
 };
 
-class DcBlock
+class Lm741OutputStage
 {
-    float x1 = 0.0f;
-    float y1 = 0.0f;
+    const rbshared::OpAmpSpec spec = rbshared::lm741Spec();
+    float sampleRate = 192000.0f;
+    float state = 0.0f;
 
 public:
-    void reset() { x1 = y1 = 0.0f; }
-
-    inline float process(float x)
+    void setSampleRate(float sr)
     {
-        const float y = x - x1 + 0.9985f * y1;
-        x1 = x;
-        y1 = dn(y);
-        return y1;
+        sampleRate = sr > 1000.0f ? sr : 192000.0f;
+        reset();
+    }
+
+    void reset() { state = 0.0f; }
+
+    float process(float target, float noiseGain)
+    {
+        const float gain = noiseGain < 1.0f ? 1.0f : noiseGain;
+        const float coefficient = onePoleCoef(spec.gbwHz / gain, sampleRate);
+
+        // The 9 V supply is biased at 4.5 V. This is the LM741 output swing,
+        // applied before its finite bandwidth and slew response.
+        const float positiveRail = 3.0f / spec.voltsPerUnit;
+        const float negativeRail = 2.7f / spec.voltsPerUnit;
+        const float desired = target >= 0.0f
+            ? positiveRail * std::tanh(target / positiveRail)
+            : -negativeRail * std::tanh((-target) / negativeRail);
+
+        float next = state + coefficient * (desired - state);
+        const float maxStep = (spec.slewVPerUs * 1000000.0f / sampleRate)
+                            / spec.voltsPerUnit;
+        const float delta = next - state;
+        if (delta > maxStep)
+            next = state + maxStep;
+        else if (delta < -maxStep)
+            next = state - maxStep;
+        state = std::fabs(next) < 1.0e-15f ? 0.0f : next;
+        return state;
     }
 };
 
 class VintageDistortionCore
 {
-    // DOD 250 schematic from pedals/vintage distortion.png:
-    // LM741, Gain 500 k, feedback R8 1 M + C5 22 pF, C3 4.7 nF,
-    // asymmetric 1N4148 clipper, Volume 100 k.
-    static constexpr float kC2 = 10.0e-9f;
-    static constexpr float kR5 = 2200000.0f;
-    static constexpr float kR6 = 10000.0f;
-    static constexpr float kGainPot = 500000.0f;
-    static constexpr float kR7 = 4700.0f;
-    static constexpr float kC3 = 4.7e-9f;
-    static constexpr float kR8 = 1000000.0f;
-    static constexpr float kC5 = 22.0e-12f;
-    static constexpr float kC4 = 4.7e-6f;
-    static constexpr float kR9 = 10000.0f;
-    static constexpr float kC6 = 1.0e-9f;
-    static constexpr float kVolumePot = 100000.0f;
+    static constexpr float kFeedbackR = 1000000.0f; // R8
+    static constexpr float kGainR = 4700.0f;        // R7
+    static constexpr float kGainPot = 500000.0f;    // VR1
 
-    float sampleRate = 48000.0f;
+    float sampleRate = 192000.0f;
     float gain = 0.35f;
+    float volume = 0.62f;
+    float gainResistance = kGainR + kGainPot;
+    float noiseGain = 1.0f;
+    float outputGain = 0.0f;
 
     RcHighPass inputC2;
-    RcHighPass gainPathC3;
+    RcHighPass gainLegC3;
     RcHighPass outputC4;
-    RcHighPass outputCoupling;
-    RcLowPass lm741FeedbackCap;
-    RcLowPass postClipC6;
-    RcLowPass outputLoad;
-    DcBlock opDc;
-    DcBlock outDc;
-    rbshared::OpAmpStage lm741;
+    RcLowPass feedbackC5;
+    RcLowPass clipperC6;
+    Lm741OutputStage lm741;
     rbcomponents::AsymDiodeStringClipper outputDiodes;
 
-    void updateComponentValues()
+    void updateControls()
     {
-        const float g = clamp01(gain);
-        inputC2.setRC(sampleRate, kR5 + kR6, kC2);
-        gainPathC3.setRC(sampleRate, kR7 + (1.0f - g) * kGainPot, kC3);
-        outputC4.setRC(sampleRate, kR9 + kVolumePot, kC4);
-        outputCoupling.setRC(sampleRate, kVolumePot, kC4);
-        lm741FeedbackCap.setRC(sampleRate, kR8, kC5);
-        postClipC6.setRC(sampleRate, kR9, kC6);
-        outputLoad.setHz(sampleRate, 14500.0f);
-        outputDiodes.setSpec(rbcomponents::diode1N4148());
-        outputDiodes.setSeries(1, 2);
-        outputDiodes.setSourceR(1800.0f - 650.0f * g);
+        // VR1 is wired as a rheostat in the inverting leg. Its reverse-log
+        // effective law spreads the 3x-to-214x electrical gain over the knob.
+        gainResistance = kGainR + kGainPot * audioTaper(1.0f - gain);
+        noiseGain = 1.0f + kFeedbackR / gainResistance;
+        gainLegC3.setRC(sampleRate, gainResistance, 4.7e-9f);
+
+        // VR2 is the passive 100k output pot. The fixed normalization factor
+        // matches the project's instrument-level convention; it is not a
+        // gain-dependent makeup stage.
+        outputGain = 4.0f * audioTaper(volume);
     }
 
 public:
+    VintageDistortionCore()
+    {
+        outputDiodes.setSpec(rbcomponents::diode1N4148());
+        outputDiodes.setSeries(1, 2); // D1 versus D2+D3
+        outputDiodes.setSourceR(10000.0f); // R9
+    }
+
     void setSampleRate(float sr)
     {
-        sampleRate = sr > 1000.0f ? sr : 48000.0f;
-        lm741.setSpec(rbshared::lm741Spec());
+        sampleRate = sr > 1000.0f ? sr : 192000.0f;
         lm741.setSampleRate(sampleRate);
+
+        inputC2.setRC(sampleRate, 2210000.0f, 10.0e-9f); // R5+R6/C2
+        outputC4.setRC(sampleRate, 110000.0f, 4.7e-6f);  // R9+VR2/C4
+        feedbackC5.setRC(sampleRate, 1000000.0f, 22.0e-12f);
+        clipperC6.setRC(sampleRate, 10000.0f, 1.0e-9f);
         reset();
     }
 
     void reset()
     {
         inputC2.reset();
-        gainPathC3.reset();
+        gainLegC3.reset();
         outputC4.reset();
-        outputCoupling.reset();
-        lm741FeedbackCap.reset();
-        postClipC6.reset();
-        outputLoad.reset();
-        opDc.reset();
-        outDc.reset();
+        feedbackC5.reset();
+        clipperC6.reset();
         lm741.reset();
         outputDiodes.reset();
-        updateComponentValues();
+        updateControls();
     }
 
-    void setGain(float v)
+    void setParams(float newGain, float newVolume)
     {
-        gain = clamp01(v);
-        updateComponentValues();
+        gain = clamp01(newGain);
+        volume = clamp01(newVolume);
+        updateControls();
     }
 
-    float process(float in)
+    float process(float input)
     {
-        const float g = clamp01(gain);
-        const float g2 = g * g;
+        const float x = inputC2.process(input);
 
-        float x = inputC2.process(0.97f * in);
-        const float shaped = gainPathC3.process(x);
+        // Non-inverting gain: 1 + R8/Z(C3 + R7 + VR1). C5 across R8 limits
+        // only the boosted feedback component, preserving the unity path.
+        const float highPassed = gainLegC3.process(x);
+        const float boost = feedbackC5.process((noiseGain - 1.0f) * highPassed);
+        float y = lm741.process(x + boost, noiseGain);
 
-        // LM741 gain stage. The 22 pF cap and old op-amp slew behavior make the
-        // high end rounder as gain rises.
-        const float feedback = lm741FeedbackCap.process(shaped);
-        float y = (shaped - 0.20f * feedback) * (2.4f + 16.0f * g + 42.0f * g2);
-        y = lm741.process(y, 2.0f + 20.0f * g);
-        y = std::tanh(0.82f * y) + 0.18f * std::tanh(0.22f * y);
-        y = opDc.process(y);
+        // C4 removes the 4.5 V bias. R9 then drives the sole nonlinear diode
+        // node; C6 is its real 1 nF shunt capacitor.
         y = outputC4.process(y);
-
-        y = outputDiodes.process(1.85f * y);
-        y = postClipC6.process(y);
-        y = outputLoad.process(outDc.process(y));
-        y = outputCoupling.process(y);
-
-        return std::tanh(y * (0.78f / (1.0f + 0.16f * g)));
+        y = outputDiodes.process(3.0f * y) / 3.0f;
+        y = clipperC6.process(y);
+        return y * outputGain;
     }
 };
 

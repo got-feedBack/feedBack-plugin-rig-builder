@@ -1,9 +1,19 @@
 #ifndef LINE_DRIVE_CORE_H
 #define LINE_DRIVE_CORE_H
 
-#include <cmath>
+/*
+ * Boss OS-2 OverDrive/Distortion core from pedals/line drive.png.
+ * Runs at the wrapper's 4x sample rate.
+ *
+ * The dual 270k Drive pot feeds two complete parallel paths:
+ *   OD:   IC2b with D7 versus D8+D9 asymmetric feedback clipping.
+ *   DIST: IC2a multi-band gain -> C15/R23 -> D3/D4 shunt clipping -> Q2.
+ * VR4 Color loads and blends those outputs before IC1a, then IC1b/VR2 form
+ * the common Tone network, followed by VR1 Level and Q3 output buffer.
+ */
 #include "../../_shared/opamp.hpp"
 #include "../../_shared/semiconductors.hpp"
+#include <cmath>
 
 namespace linedrive {
 
@@ -14,277 +24,332 @@ static inline float clamp01(float v)
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
 }
 
-static inline float smoothstep(float v)
-{
-    v = clamp01(v);
-    return v * v * (3.0f - 2.0f * v);
-}
-
-static inline float dn(float v)
+static inline float denormal(float v)
 {
     return std::fabs(v) < 1.0e-15f ? 0.0f : v;
 }
 
+static inline float onePoleCoef(float hz, float sampleRate)
+{
+    const float nyquist = 0.45f * sampleRate;
+    const float fc = hz < 1.0f ? 1.0f : (hz > nyquist ? nyquist : hz);
+    return 1.0f - std::exp(-2.0f * kPi * fc / sampleRate);
+}
+
 class RcHighPass
 {
-    float a = 0.0f;
+    float coefficient = 0.0f;
     float x1 = 0.0f;
     float y1 = 0.0f;
 
 public:
-    void setRC(float sr, float rOhm, float cFarad)
+    void setRC(float sampleRate, float resistance, float capacitance)
     {
-        const float s = sr > 1000.0f ? sr : 48000.0f;
-        const float rc = rOhm * cFarad;
-        const float dt = 1.0f / s;
-        a = rc / (rc + dt);
+        const float dt = 1.0f / sampleRate;
+        const float rc = resistance * capacitance;
+        coefficient = rc / (rc + dt);
     }
 
     void reset() { x1 = y1 = 0.0f; }
 
-    inline float process(float x)
+    float process(float x)
     {
-        const float y = a * (y1 + x - x1);
+        const float y = coefficient * (y1 + x - x1);
         x1 = x;
-        y1 = dn(y);
+        y1 = denormal(y);
         return y1;
     }
 };
 
 class RcLowPass
 {
-    float a = 0.0f;
-    float y = 0.0f;
+    float coefficient = 0.0f;
+    float state = 0.0f;
 
 public:
-    void setRC(float sr, float rOhm, float cFarad)
+    void setRC(float sampleRate, float resistance, float capacitance)
     {
-        const float s = sr > 1000.0f ? sr : 48000.0f;
-        const float rc = rOhm * cFarad;
-        a = 1.0f - std::exp(-1.0f / (rc * s));
+        setFrequency(sampleRate,
+                     1.0f / (2.0f * kPi * resistance * capacitance));
     }
 
-    void setHz(float sr, float hz)
+    void setFrequency(float sampleRate, float hz)
     {
-        const float s = sr > 1000.0f ? sr : 48000.0f;
-        const float clampedHz = hz < 20.0f ? 20.0f : (hz > 0.45f * s ? 0.45f * s : hz);
-        a = 1.0f - std::exp(-2.0f * kPi * clampedHz / s);
+        coefficient = onePoleCoef(hz, sampleRate);
     }
 
-    void reset() { y = 0.0f; }
+    void reset() { state = 0.0f; }
 
-    inline float process(float x)
+    float process(float x)
     {
-        y += a * (x - y);
-        y = dn(y);
-        return y;
+        state += coefficient * (x - state);
+        state = denormal(state);
+        return state;
     }
 };
 
-class DcBlock
+class M5218OutputStage
 {
-    float x1 = 0.0f;
-    float y1 = 0.0f;
+    const rbshared::OpAmpSpec spec = rbshared::m5218Spec();
+    float sampleRate = 192000.0f;
+    float state = 0.0f;
 
 public:
-    void reset() { x1 = y1 = 0.0f; }
-
-    inline float process(float x)
+    void setSampleRate(float sr)
     {
-        const float y = x - x1 + 0.9985f * y1;
-        x1 = x;
-        y1 = dn(y);
-        return y1;
+        sampleRate = sr > 1000.0f ? sr : 192000.0f;
+        reset();
+    }
+
+    void reset() { state = 0.0f; }
+
+    float process(float target, float noiseGain)
+    {
+        const float gain = noiseGain < 1.0f ? 1.0f : noiseGain;
+        const float coefficient = onePoleCoef(spec.gbwHz / gain, sampleRate);
+        const float positiveRail = 3.15f / spec.voltsPerUnit;
+        const float negativeRail = 2.95f / spec.voltsPerUnit;
+        const float desired = target >= 0.0f
+            ? positiveRail * std::tanh(target / positiveRail)
+            : -negativeRail * std::tanh((-target) / negativeRail);
+
+        float next = state + coefficient * (desired - state);
+        const float maxStep = (spec.slewVPerUs * 1000000.0f / sampleRate)
+                            / spec.voltsPerUnit;
+        const float delta = next - state;
+        if (delta > maxStep)
+            next = state + maxStep;
+        else if (delta < -maxStep)
+            next = state - maxStep;
+        state = denormal(next);
+        return state;
     }
 };
 
 class LineDriveCore
 {
-    // Boss OS-2 schematic anchors from pedals/line drive.png:
-    // C22/R28/R33 input bias network, dual VR3 270 k Drive sections, D3/D4
-    // distortion clipper, asymmetric overdrive feedback diodes, VR4 20 k Color,
-    // VR2 20 k Tone and VR1 50 k Level. This core keeps those stages separate
-    // so Color is a real blend, not a post-EQ shortcut.
-    static constexpr float kC22 = 47.0e-9f;
-    static constexpr float kR28 = 10000.0f;
-    static constexpr float kR33 = 1000000.0f;
-    static constexpr float kDrivePot = 270000.0f;
-    static constexpr float kTonePot = 20000.0f;
-    static constexpr float kColorPot = 20000.0f;
-    static constexpr float kLevelPot = 50000.0f;
-    static constexpr float kSmallFeedbackCap = 100.0e-12f;
-    static constexpr float kToneCap = 22.0e-9f;
-    static constexpr float kCouplingCap = 47.0e-9f;
-
-    float sampleRate = 48000.0f;
+    float sampleRate = 192000.0f;
     float drive = 0.45f;
     float tone = 0.50f;
     float color = 0.58f;
+    float level = 0.62f;
+    float odFeedbackR = 1000.0f;
+    float distFeedbackR = 12000.0f;
+    float outputGain = 0.0f;
 
     RcHighPass inputC22;
-    RcHighPass odDriveLeg;
-    RcHighPass distDriveLeg;
-    RcHighPass blendCoupling;
-    RcHighPass outputCoupling;
     RcLowPass inputBufferPole;
-    RcLowPass odFeedbackCap;
-    RcLowPass odDiodeCap;
-    RcLowPass distFeedbackCap;
-    RcLowPass distDiodeCap;
-    RcHighPass colorOdCoupling;
-    RcHighPass colorDistCoupling;
-    RcLowPass toneLowLeg;
-    RcLowPass toneHighBleed;
-    RcLowPass outputLoad;
-    DcBlock odDc;
-    DcBlock distDc;
-    DcBlock mixDc;
-    rbshared::OpAmpStage odOpamp;
-    rbshared::OpAmpStage distOpamp;
+
+    RcHighPass odInputC27;
+    RcHighPass odGainLegC23;
+    RcLowPass odFeedbackC26;
+    RcHighPass odOutputC5;
+    RcLowPass odMixC4;
+
+    RcHighPass distInputC28;
+    RcHighPass distGainLegC19;
+    RcHighPass distTrebleLegC18;
+    RcLowPass distFeedbackC17;
+    RcHighPass distOutputC15;
+    RcHighPass distSeriesC16;
+    RcLowPass distBodyC20;
+    RcHighPass distBufferC10;
+    RcHighPass distBufferC9;
+    RcLowPass distOutputC8;
+
+    RcLowPass toneDark;
+    RcHighPass tonePresence;
+    RcLowPass toneCeiling;
+    RcHighPass toneOutputC7;
+    RcHighPass finalOutputC11;
+    RcLowPass outputBufferPole;
+
+    M5218OutputStage odOpamp;
+    M5218OutputStage distOpamp;
+    M5218OutputStage mixOpamp;
+    M5218OutputStage toneOpamp;
     rbcomponents::AsymDiodeStringClipper odFeedbackDiodes;
     rbcomponents::AntiParallelDiodePair distHardClipper;
 
-    void updateComponentValues()
+    void updateControls()
     {
-        const float d = smoothstep(drive);
-        const float t = clamp01(tone);
-        const float c = clamp01(color);
+        // The mechanically linked 270k tracks increase both feedback paths.
+        // The loaded law keeps useful resolution around noon without changing
+        // either branch's fixed capacitors or diode source resistances.
+        const float track = std::pow(clamp01(drive), 1.45f);
+        odFeedbackR = 1000.0f + 270000.0f * track;   // R37 + VR3a
+        distFeedbackR = 12000.0f + 270000.0f * track;// R22 + VR3b
 
-        inputC22.setRC(sampleRate, kR28 + kR33, kC22);
-        inputBufferPole.setHz(sampleRate, 14500.0f);
+        odFeedbackDiodes.setSourceR(odFeedbackR);
+        odFeedbackC26.setRC(sampleRate, odFeedbackR, 100.0e-12f);
+        distFeedbackC17.setRC(sampleRate, distFeedbackR, 100.0e-12f);
 
-        odDriveLeg.setRC(sampleRate, 10000.0f + (1.0f - d) * 0.35f * kDrivePot, 47.0e-9f);
-        distDriveLeg.setRC(sampleRate, 22000.0f + (1.0f - d) * 0.30f * kDrivePot, 100.0e-9f);
-        odFeedbackCap.setRC(sampleRate, 68000.0f + d * kDrivePot, kSmallFeedbackCap);
-        distFeedbackCap.setRC(sampleRate, 33000.0f + 0.45f * d * kDrivePot, kSmallFeedbackCap);
-        odDiodeCap.setHz(sampleRate, 7200.0f - 1600.0f * d + 700.0f * t);
-        distDiodeCap.setHz(sampleRate, 6800.0f - 1900.0f * d + 1500.0f * t);
-
-        colorOdCoupling.setRC(sampleRate, 33000.0f + c * kColorPot, 1.0e-6f);
-        colorDistCoupling.setRC(sampleRate, 12000.0f + (1.0f - c) * kColorPot, 1.0e-6f);
-        blendCoupling.setRC(sampleRate, 22000.0f + 0.5f * kColorPot, kCouplingCap);
-
-        toneLowLeg.setRC(sampleRate, 6800.0f + (1.0f - t) * kTonePot, kToneCap);
-        toneHighBleed.setRC(sampleRate, 4700.0f + t * kTonePot, 4.7e-9f);
-        outputCoupling.setRC(sampleRate, kLevelPot, 1.0e-6f);
-        outputLoad.setHz(sampleRate, 11000.0f + 3000.0f * t - 1400.0f * c);
-
-        odFeedbackDiodes.setSpec(rbcomponents::diode1S2473());
-        odFeedbackDiodes.setSeries(1, 2);
-        odFeedbackDiodes.setSourceR(2200.0f - 900.0f * d);
-        distHardClipper.setSpec(rbcomponents::diode1S2473());
-        distHardClipper.setSourceR(2300.0f - 950.0f * d);
+        // VR1 is explicitly 50k linear in the schematic.
+        outputGain = 2.55f * clamp01(level);
     }
 
-    float toneNetwork(float x)
+    float processOverdrive(float x)
     {
+        const float od = odInputC27.process(x);
+        const float groundCurrentSignal = odGainLegC23.process(od);
+        const float linearFeedback = (odFeedbackR / 100.0f)
+                                   * groundCurrentSignal;
+        const float compensated = odFeedbackC26.process(linearFeedback);
+
+        // D7 versus D8+D9 sits across the feedback resistance. Solving the
+        // Thevenin feedback voltage preserves the soft, asymmetric SD-1 side.
+        const float diodeFeedback = odFeedbackDiodes.process(3.0f * compensated)
+                                  / 3.0f;
+        const float noiseGain = 1.0f + odFeedbackR / 100.0f;
+        float y = odOpamp.process(od + diodeFeedback, noiseGain);
+        y = odOutputC5.process(y);
+
+        // R2/C4 is the fixed low-pass loading at the OD side of Color.
+        return odMixC4.process(y);
+    }
+
+    float processDistortion(float x)
+    {
+        const float input = distInputC28.process(x);
+        const float band60 = distGainLegC19.process(input);
+        const float band3386 = distTrebleLegC18.process(input);
+
+        // IC2a has two real frequency-dependent ground legs, analogous to the
+        // RAT topology but with the OS-2 values shown in the schematic.
+        float boost = (distFeedbackR / 1200.0f) * band60
+                    + (distFeedbackR / 100.0f) * band3386;
+        boost = distFeedbackC17.process(boost);
+        const float noiseGain = 1.0f + distFeedbackR / 1200.0f;
+        float y = distOpamp.process(input + boost, noiseGain);
+
+        y = distOutputC15.process(y);
+        y = distHardClipper.process(3.0f * y) / 3.0f;
+
+        // C16/R24/R32 and the R27/C20/R26 return form the fixed post-clip
+        // voicing. Keeping a body and a bright path models that bridged load.
+        const float bright = distSeriesC16.process(y);
+        const float body = distBodyC20.process(y);
+        y = 0.64f * y + 0.32f * bright + 0.30f * body;
+        y = distBufferC10.process(y);
+        y = distBufferC9.process(0.985f * y); // Q2 emitter follower
+        return distOutputC8.process(y);
+    }
+
+    float processTone(float x)
+    {
+        // IC1b's VR2/R1/C1 and R7/C6 network changes the balance around fixed
+        // corner frequencies; Tone does not retune either capacitor.
         const float t = clamp01(tone);
-        const float low = toneLowLeg.process(x);
-        const float bleed = toneHighBleed.process(x);
-        const float high = x - 0.82f * bleed;
-        return low * (0.92f - 0.52f * t)
-             + high * (0.26f + 1.02f * t)
-             + x * 0.06f;
+        const float base = toneCeiling.process(x);
+        const float dark = toneDark.process(base);
+        const float presence = tonePresence.process(base);
+        const float target = (1.10f - 0.35f * t) * dark
+                           + (0.05f + 0.55f * t) * presence
+                           + 0.20f * base;
+        return toneOpamp.process(target, 3.1f);
+    }
+
+    static float q3EmitterFollower(float x)
+    {
+        const float positiveRail = 1.34f;
+        const float negativeRail = 1.28f;
+        return x >= 0.0f
+            ? positiveRail * std::tanh(x / positiveRail)
+            : -negativeRail * std::tanh((-x) / negativeRail);
     }
 
 public:
+    LineDriveCore()
+    {
+        odFeedbackDiodes.setSpec(rbcomponents::diode1S2473());
+        odFeedbackDiodes.setSeries(1, 2); // D7 versus D8+D9
+        distHardClipper.setSpec(rbcomponents::diode1S2473());
+        distHardClipper.setSourceR(1000.0f); // R23
+    }
+
     void setSampleRate(float sr)
     {
-        sampleRate = sr > 1000.0f ? sr : 48000.0f;
-        odOpamp.setSpec(rbshared::m5218Spec());
-        distOpamp.setSpec(rbshared::m5218Spec());
+        sampleRate = sr > 1000.0f ? sr : 192000.0f;
         odOpamp.setSampleRate(sampleRate);
         distOpamp.setSampleRate(sampleRate);
+        mixOpamp.setSampleRate(sampleRate);
+        toneOpamp.setSampleRate(sampleRate);
+
+        inputC22.setRC(sampleRate, 1010000.0f, 47.0e-9f);// R28+R33
+        inputBufferPole.setFrequency(sampleRate, 18000.0f);
+
+        odInputC27.setRC(sampleRate, 100000.0f, 47.0e-9f);// R35/C27
+        odGainLegC23.setRC(sampleRate, 100.0f, 4.7e-6f);// R39/C23
+        odOutputC5.setRC(sampleRate, 20000.0f, 10.0e-6f);// C5/R2
+        odMixC4.setRC(sampleRate, 20000.0f, 10.0e-9f);// R2/C4
+
+        distInputC28.setRC(sampleRate, 220000.0f, 22.0e-9f);// R36/C28
+        distGainLegC19.setRC(sampleRate, 1200.0f, 2.2e-6f);// R31/C19
+        distTrebleLegC18.setRC(sampleRate, 100.0f, 0.47e-6f);// R30/C18
+        distOutputC15.setRC(sampleRate, 1000.0f, 10.0e-6f);// C15/R23
+        distSeriesC16.setRC(sampleRate, 9000.0f, 18.0e-9f);// C16/load
+        distBodyC20.setRC(sampleRate, 6800.0f, 100.0e-9f);// R27/C20
+        distBufferC10.setRC(sampleRate, 1000000.0f, 1.0e-6f);// C10/Q2
+        distBufferC9.setRC(sampleRate, 20000.0f, 10.0e-6f);// C9/R13
+        distOutputC8.setRC(sampleRate, 20000.0f, 820.0e-12f);// R13/C8
+
+        toneDark.setFrequency(sampleRate, 1350.0f);
+        tonePresence.setRC(sampleRate, 4700.0f, 10.0e-9f);// R1/C1
+        toneCeiling.setRC(sampleRate, 10000.0f, 1.0e-9f);// R7/C6
+        toneOutputC7.setRC(sampleRate, 50000.0f, 10.0e-6f);
+        finalOutputC11.setRC(sampleRate, 100000.0f, 1.0e-6f);
+        outputBufferPole.setFrequency(sampleRate, 36000.0f);
         reset();
     }
 
     void reset()
     {
-        inputC22.reset();
-        odDriveLeg.reset();
-        distDriveLeg.reset();
-        blendCoupling.reset();
-        outputCoupling.reset();
-        inputBufferPole.reset();
-        odFeedbackCap.reset();
-        odDiodeCap.reset();
-        distFeedbackCap.reset();
-        distDiodeCap.reset();
-        colorOdCoupling.reset();
-        colorDistCoupling.reset();
-        toneLowLeg.reset();
-        toneHighBleed.reset();
-        outputLoad.reset();
-        odDc.reset();
-        distDc.reset();
-        mixDc.reset();
-        odOpamp.reset();
-        distOpamp.reset();
-        odFeedbackDiodes.reset();
-        distHardClipper.reset();
-        updateComponentValues();
+        inputC22.reset(); inputBufferPole.reset();
+        odInputC27.reset(); odGainLegC23.reset(); odFeedbackC26.reset();
+        odOutputC5.reset(); odMixC4.reset();
+        distInputC28.reset(); distGainLegC19.reset(); distTrebleLegC18.reset();
+        distFeedbackC17.reset(); distOutputC15.reset(); distSeriesC16.reset();
+        distBodyC20.reset(); distBufferC10.reset(); distBufferC9.reset();
+        distOutputC8.reset();
+        toneDark.reset(); tonePresence.reset(); toneCeiling.reset();
+        toneOutputC7.reset(); finalOutputC11.reset(); outputBufferPole.reset();
+        odOpamp.reset(); distOpamp.reset(); mixOpamp.reset(); toneOpamp.reset();
+        odFeedbackDiodes.reset(); distHardClipper.reset();
+        updateControls();
     }
 
-    void setDrive(float v)
+    void setParams(float newDrive, float newTone, float newColor, float newLevel)
     {
-        drive = clamp01(v);
-        updateComponentValues();
+        drive = clamp01(newDrive);
+        tone = clamp01(newTone);
+        color = clamp01(newColor);
+        level = clamp01(newLevel);
+        updateControls();
     }
 
-    void setTone(float v)
+    float process(float input)
     {
-        tone = clamp01(v);
-        updateComponentValues();
-    }
+        float x = inputC22.process(input);
+        x = inputBufferPole.process(0.992f * x); // Q4/Q6 buffers and switch
 
-    void setColor(float v)
-    {
-        color = clamp01(v);
-        updateComponentValues();
-    }
+        const float od = processOverdrive(x);
+        const float distortion = processDistortion(x);
 
-    float process(float in)
-    {
-        const float d = smoothstep(drive);
+        // VR4 never fully removes the opposite path because both sides load the
+        // common IC1a node through R2/R5 and the 20k track.
         const float c = clamp01(color);
+        const float odWeight = 0.12f + 0.88f * std::cos(0.5f * kPi * c);
+        const float distWeight = 0.12f + 0.88f * std::sin(0.5f * kPi * c);
+        // Q2 and the IC1a summing resistors recover the larger passive loss in
+        // the hard-clipped branch, keeping Color from acting as a level knob.
+        const float mixed = odWeight * od + 1.40f * distWeight * distortion;
+        float y = mixOpamp.process(0.64f * mixed, 7.8f); // IC1a R3/R14
+        y = processTone(y);
+        y = toneOutputC7.process(y);
 
-        float x = inputC22.process(0.96f * in);
-        x = inputBufferPole.process(x);
-        x = std::tanh(1.04f * x);
-
-        float od = odDriveLeg.process(x);
-        const float odFb = odFeedbackCap.process(od);
-        od = (od - 0.18f * odFb) * (1.25f + 9.0f * drive + 15.0f * d);
-        od = odOpamp.process(od, 2.0f + 15.0f * d);
-        od = odFeedbackDiodes.process(od + 0.010f * drive);
-        od = 0.92f * od + 0.08f * std::tanh(0.34f * od);
-        od = odDiodeCap.process(od);
-        od = odDc.process(od);
-
-        float dist = distDriveLeg.process(x);
-        const float distFb = distFeedbackCap.process(dist);
-        dist = (dist - 0.12f * distFb) * (2.2f + 14.0f * drive + 28.0f * d);
-        dist = distOpamp.process(dist, 4.0f + 28.0f * d);
-        dist = distHardClipper.process(2.55f * dist);
-        dist = 0.74f * dist + 0.26f * std::tanh(2.1f * dist);
-        dist = distDiodeCap.process(dist);
-        dist = distDc.process(dist);
-
-        od = colorOdCoupling.process(od);
-        dist = colorDistCoupling.process(dist);
-        const float odMix = std::cos(0.5f * kPi * c);
-        const float distMix = std::sin(0.5f * kPi * c);
-        float y = od * odMix + dist * distMix;
-        y = blendCoupling.process(y);
-
-        const float cleanLeak = 0.08f * (1.0f - d) * (1.0f - c);
-        y = y * (1.0f - cleanLeak) + x * cleanLeak;
-        y = mixDc.process(y);
-        y = toneNetwork(y);
-        y = outputLoad.process(outputCoupling.process(y));
-
-        const float trim = 1.02f / (1.0f + 0.14f * drive + 0.12f * d + 0.10f * c);
-        return std::tanh(1.08f * y * trim);
+        y *= outputGain;
+        y = outputBufferPole.process(q3EmitterFollower(y));
+        return finalOutputC11.process(y);
     }
 };
 

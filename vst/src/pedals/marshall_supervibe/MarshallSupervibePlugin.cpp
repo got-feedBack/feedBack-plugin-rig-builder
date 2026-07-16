@@ -82,6 +82,30 @@ public:
         return data[(size_t)i0] + (data[(size_t)i1] - data[(size_t)i0]) * frac;
     }
 
+    float readCubic(float delaySamples) const
+    {
+        const int size = (int)data.size();
+        if (size <= 6)
+            return 0.0f;
+        delaySamples = std::fmax(2.0f, std::fmin(delaySamples, (float)(size - 4)));
+        float pos = (float)writeIndex - delaySamples;
+        while (pos < 0.0f)
+            pos += (float)size;
+        const int i0 = (int)std::floor(pos);
+        const int im1 = (i0 + size - 1) % size;
+        const int i1 = (i0 + 1) % size;
+        const int i2 = (i0 + 2) % size;
+        const float t = pos - (float)i0;
+        const float xm1 = data[(size_t)im1];
+        const float x0 = data[(size_t)i0];
+        const float x1 = data[(size_t)i1];
+        const float x2 = data[(size_t)i2];
+        const float a = 0.5f * (-xm1 + 3.0f * x0 - 3.0f * x1 + x2);
+        const float b = 0.5f * (2.0f * xm1 - 5.0f * x0 + 4.0f * x1 - x2);
+        const float c = 0.5f * (-xm1 + x1);
+        return ((a * t + b) * t + c) * t + x0;
+    }
+
     void write(float x)
     {
         if (data.empty())
@@ -90,27 +114,6 @@ public:
         ++writeIndex;
         if (writeIndex >= (int)data.size())
             writeIndex = 0;
-    }
-};
-
-class FirstOrderAllpass
-{
-    float z = 0.0f;
-
-public:
-    void reset()
-    {
-        z = 0.0f;
-    }
-
-    float process(float x, float sr, float hz)
-    {
-        hz = std::fmax(20.0f, std::fmin(hz, sr * 0.45f));
-        const float t = std::tan(kPi * hz / sr);
-        const float a = (1.0f - t) / (1.0f + t);
-        const float y = a * x + z;
-        z = x - a * y;
-        return y;
     }
 };
 
@@ -126,7 +129,6 @@ class MarshallSupervibeCore
     float phaseOffset = 0.0f;
 
     DelayBuffer delay;
-    FirstOrderAllpass phaseStages[2];
 
     float lfoPhase = 0.0f;
     float hpX1 = 0.0f;
@@ -213,8 +215,6 @@ public:
     void reset()
     {
         delay.reset();
-        for (int i = 0; i < 2; ++i)
-            phaseStages[i].reset();
         lfoPhase = phaseOffset;
         hpX1 = hpY1 = inputY = bbdY = airY = compY = feedback = dc = clockNoise = 0.0f;
         noise.seed(0x5356314du);
@@ -257,7 +257,7 @@ public:
         if (lfoPhase >= 1.0f)
             lfoPhase -= std::floor(lfoPhase);
 
-        const float d = 0.06f + 0.94f * smoothstep(depth);
+        const float d = smoothstep(depth);
         const float t = smoothstep(tone);
         const float w = smoothstep(sweep);
 
@@ -268,22 +268,21 @@ public:
         x = lowPass(x, inputY, inputA);
         x = softClip(x * (1.025f + 0.075f * d)) * 0.965f;
 
-        const float baseMs = 3.2f + 9.2f * w;
-        const float widthMs = 0.30f + 6.20f * d;
+        // MN3007 has the same stage count as the VB-2's MN3207. Use the
+        // measured BBD excursion as the upper bound instead of the previous
+        // 6.5 ms pitch dive. Sweep moves the clock centre; Depth sets width.
+        const float baseMs = 3.70f + 1.50f * w;
+        const float r = clamp01(rate);
+        const float widthMs = 1.68f * std::pow(d, 1.12f) * (1.0f - 0.12f * r * r);
         float delayMs = baseMs + widthMs * wobble;
-        delayMs = std::fmax(1.55f, std::fmin(24.0f, delayMs));
+        delayMs = std::fmax(2.20f, std::fmin(7.20f, delayMs));
 
         const float fb = (0.018f + 0.090f * d + 0.050f * w);
         const float write = softClip(x + feedback * fb);
-        float wet = delay.read(delayMs * 0.001f * sampleRate);
+        float wet = delay.readCubic(delayMs * 0.001f * sampleRate);
         delay.write(write);
 
         wet = lowPass(wet, bbdY, bbdA);
-
-        static const float phaseBase[2] = { 220.0f, 920.0f };
-        const float phaseSweep = 0.55f + 4.8f * (0.5f + 0.5f * wobble) * d;
-        wet = phaseStages[0].process(wet, sampleRate, phaseBase[0] * phaseSweep);
-        wet = phaseStages[1].process(wet, sampleRate, phaseBase[1] * (0.65f + phaseSweep));
 
         compY += compA * (std::fabs(wet) - compY);
         const float comp = 1.0f / (1.0f + 0.66f * compY);
@@ -299,13 +298,17 @@ public:
         wet -= dc;
         feedback = wet;
 
-        const float throb = 1.0f - (0.055f + 0.125f * d) * (0.5f + 0.5f * wobble);
+        const float throb = 1.0f - 0.070f * d * (0.5f + 0.5f * wobble);
         wet *= throb;
 
-        const float dryLevel = 0.74f - 0.16f * d;
-        const float wetLevel = 0.44f + 0.66f * d;
+        // The schematic mixes DIRECT and DELAYOUT through equal 100 k paths;
+        // the Depth pot controls how much delayed signal reaches that summer.
+        const float dryLevel = 0.82f;
+        const float wetLevel = 0.08f + 0.72f * d;
         float y = x * dryLevel - wet * wetLevel;
-        return softClip(y * 0.98f) * 0.97f;
+        const float levelCompDb = 2.35f - 2.02f * d - 1.64f * d * d;
+        const float levelComp = std::pow(10.0f, levelCompDb / 20.0f);
+        return softClip(y * 0.98f) * 0.97f * levelComp;
     }
 };
 

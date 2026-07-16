@@ -22,11 +22,11 @@ static inline float clamp01(float v)
 
 static inline float finalLimit(float x)
 {
-    if (x > 1.0f)
-        return 1.0f - std::exp(-(x - 1.0f));
-    if (x < -1.0f)
-        return -1.0f + std::exp(x + 1.0f);
-    return x;
+    const float a = std::fabs(x);
+    if (a <= 0.95f)
+        return x;
+    const float limited = 0.95f + 0.05f * std::tanh((a - 0.95f) / 0.05f);
+    return std::copysign(limited, x);
 }
 
 static inline float staticFuzzMakeup(float expander)
@@ -35,6 +35,16 @@ static inline float staticFuzzMakeup(float expander)
     const float u = clamp01(2.0f * e);
     const float compressed = u * u * (3.0f - 2.0f * u);
     return 1.0f - 0.40f * compressed;
+}
+
+static inline float balancePotGain(float balance)
+{
+    // Real BALANCE is the 50 kB output-level pot, not a clean/fuzz blend.
+    // Normalize its audio taper at the curated default so the full travel is
+    // audible without changing existing song levels around 0.62.
+    const float b = clamp01(balance);
+    const float reference = std::pow(kSuperBuzzDef[kBalance], 1.7f);
+    return std::pow(b, 1.7f) / reference;
 }
 
 } // namespace
@@ -74,7 +84,7 @@ protected:
     const char* getDescription() const override { return "Univox Super-Fuzz style octave fuzz"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 3, 0); }
+    uint32_t getVersion() const override { return d_version(1, 4, 0); }
     int64_t getUniqueId() const override { return d_cconst('B', 'z', 'O', '1'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -121,7 +131,7 @@ protected:
         const float* inR = inputs[1];
         float* outL = outputs[0];
         float* outR = outputs[1];
-        const float balance = 1.62f * params[kBalance];
+        const float balance = balancePotGain(params[kBalance]);
         float ubL[kOS];
         float ubR[kOS];
 

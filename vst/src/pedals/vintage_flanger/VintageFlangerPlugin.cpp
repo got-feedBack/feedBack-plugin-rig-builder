@@ -22,27 +22,38 @@ static rbflanger::FlangerVoicing mistressVoicing()
 {
     rbflanger::FlangerVoicing v;
     v.bbd = rbflanger::rd5106aSpec();
+    v.bbd.headroom = 1.25f;
     v.opamp = rbshared::lm324Spec();
-    v.minDelayMs = 0.55f;
-    v.maxDelayMs = 12.8f;
-    v.minRateHz = 0.045f;
-    v.maxRateHz = 6.2f;
+    v.minDelayMs = 1.35f;
+    v.maxDelayMs = 4.2f;
+    v.minRateHz = 0.078f;
+    v.maxRateHz = 4.9f;
     v.inputHpHz = 28.0f;
     v.inputLpHz = 6900.0f;
     v.bbdLpHz = 5200.0f;
     v.outputLpHz = 5700.0f;
     v.colorHpHz = 2200.0f;
-    v.feedbackMax = 0.70f;
+    v.delaySlewHz = 42.0f;
+    v.feedbackMax = 0.84f;
     v.feedbackSign = -1.0f;
-    v.wetSign = -1.0f;
+    v.wetSign = 1.0f;
     v.dryLevel = 0.88f;
-    v.wetLevel = 0.62f;
+    v.wetLevel = 0.80f;
+    v.rangeFeedbackDryDucking = 0.13f;
+    v.rangeFeedbackWetBoost = 0.09f;
     v.lfoTriangle = 0.84f;
     v.driveMinDb = -0.5f;
     v.driveMaxDb = 1.6f;
-    v.outputMinDb = -0.8f;
-    v.outputMaxDb = 0.7f;
-    v.compander = 0.30f;
+    // The references keep the direct-path level nearly constant across Color.
+    // Color changes feedback, not a hidden 2.3 dB output attenuation.
+    v.outputMinDb = -0.33f;
+    v.outputMaxDb = -0.33f;
+    v.depthBase = 0.17f;
+    v.depthScale = 0.38f;
+    v.compander = 0.0f;
+    v.useCompander = false;
+    v.linearPath = true;
+    v.reverseLinearRate = true;
     return v;
 }
 
@@ -57,10 +68,14 @@ class VintageFlangerPlugin : public Plugin
     void applyAll()
     {
         const bool matrix = params[kMatrix] >= 0.5f;
-        left.setControls(0.44f, params[kRange], params[kRate], params[kColor],
-                         1.0f, 0.36f, 0.55f, matrix);
-        right.setControls(0.44f, params[kRange], params[kRate], params[kColor],
-                          1.0f, 0.36f, 0.55f, matrix);
+        const float manual = 0.88f - 0.25f * params[kRange];
+        // The Color potentiometer reaches the audible feedback region before
+        // noon. A linear DSP mapping left the middle half as subtle as a chorus.
+        const float colorFeedback = std::pow(params[kColor], 0.68f);
+        left.setControls(manual, params[kRange], params[kRate], colorFeedback,
+                         1.0f, 0.36f, params[kColor], matrix);
+        right.setControls(manual, params[kRange], params[kRate], colorFeedback,
+                          1.0f, 0.36f, params[kColor], matrix);
     }
 
 public:
@@ -74,7 +89,7 @@ public:
         left.setVoicing(voice);
         right.setVoicing(voice);
         left.setPhaseOffset(0.00f);
-        right.setPhaseOffset(0.045f);
+        right.setPhaseOffset(0.00f);
         left.setSampleRate((float)getSampleRate());
         right.setSampleRate((float)getSampleRate());
         applyAll();
@@ -85,7 +100,7 @@ protected:
     const char* getDescription() const override { return "Deluxe Electric Mistress style BBD flanger"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 3, 0); }
     int64_t getUniqueId() const override { return d_cconst('V', 't', 'F', 'l'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

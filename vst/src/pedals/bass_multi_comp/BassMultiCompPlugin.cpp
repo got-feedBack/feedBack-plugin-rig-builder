@@ -1,10 +1,11 @@
 /*
  * BassMultiComp - EBS MultiComp 2-style bass compressor.
  *
- * Real panel: Comp, Sens, Gain and Mode. Component references come from the
+ * Real panel: Comp/Limit, Gain and Mode. Component references come from the
  * local Black Label MultiComp 2 schematic: BC850C input buffer, PMBFJ113 JFET
  * gain elements, TS922/TS925 audio filters, TL064 detector/control stages,
- * BAS28/BAT54 rectifiers and BC857B control buffers.
+ * BAS28/BAT54 rectifiers and BC857B control buffers. Low/high detector
+ * reference trims are internal service controls, not front-panel knobs.
  */
 #include "DistrhoPlugin.hpp"
 #include "BassMultiCompParams.h"
@@ -182,9 +183,10 @@ class BassMultiCompCore
 {
     float sampleRate = 48000.0f;
     float comp = kBassMultiCompDef[kComp];
-    float sens = kBassMultiCompDef[kSens];
+    float lowTrim = kBassMultiCompDef[kLowTrim];
     float gain = kBassMultiCompDef[kGain];
     float mode = kBassMultiCompDef[kMode];
+    float highTrim = kBassMultiCompDef[kHighTrim];
 
     RcHighPass inputCap;
     RcHighPass outputCap;
@@ -211,15 +213,15 @@ class BassMultiCompCore
     float maxLowReduction = 14.0f;
     float maxHighReduction = 12.0f;
     float maxFullReduction = 16.0f;
-    float controlMakeupGain = 1.0f;
     int modeIndex = 1;
 
     void update()
     {
-        // P2A/P2B are a dual 50kB (linear) compression pot. Sens represents the
-        // two detector-reference trims as one user-facing linear calibration.
+        // P2A/P2B are the dual 50kB Comp/Limit pot. The two 500k detector
+        // reference trims are independent internal adjustments in the schematic.
         const float c = clamp01(comp);
-        const float s = clamp01(sens);
+        const float lowT = clamp01(lowTrim);
+        const float highT = clamp01(highTrim);
         modeIndex = mode < 0.33f ? 0 : (mode < 0.66f ? 1 : 2);
 
         inputCap.setRC(sampleRate, 1000000.0f, 0.68e-6f);
@@ -230,53 +232,36 @@ class BassMultiCompCore
         const float crossover = 315.0f;
         splitLowA.setHz(sampleRate, crossover);
         splitLowB.setHz(sampleRate, crossover * 1.18f);
-        highTone.setHz(sampleRate, 7800.0f - 1200.0f * c);
+        highTone.setHz(sampleRate, 7800.0f);
         tubeLow.setHz(sampleRate, 5200.0f);
 
-        // Raising the detector reference makes the rectifier charge its timing
-        // capacitor sooner. Model that as a faster effective attack so high
-        // Sens does not merely lower the body while leaking the initial peak.
-        const float sensAttackScale = 1.0f - 0.70f * s;
-        lowDetector.setTimes(sampleRate, (7.0f - 4.0f * c) * sensAttackScale,
-            240.0f - 160.0f * c);
-        highDetector.setTimes(sampleRate, (3.2f - 1.2f * c) * sensAttackScale,
-            130.0f - 80.0f * c);
-        fullDetector.setTimes(sampleRate, (4.0f - 3.5f * c) * sensAttackScale,
-            180.0f - 110.0f * c);
+        // Comp/Limit changes compression ratio from 1:1 to 5:1. It does not
+        // retune the crossover, detector references or rectifier impedance.
+        // Linearly interpolate the actual gain-reduction slope rather than the
+        // ratio number. A direct 1+4*c mapping spends most of the knob travel
+        // near the limiting end and makes the upper half barely change.
+        const float ratio = 1.0f / (1.0f - 0.80f * c);
+        lowDetector.setTimes(sampleRate, 6.0f, 220.0f);
+        highDetector.setTimes(sampleRate, 3.0f, 125.0f);
+        fullDetector.setTimes(sampleRate, 4.0f, 170.0f);
 
-        lowThresholdDb = -11.0f - 21.0f * s - 4.0f * c;
-        highThresholdDb = -13.0f - 19.0f * s - 3.0f * c;
-        fullThresholdDb = -12.0f - 20.0f * s - 4.0f * c;
-        lowRatio = 1.0f + 6.5f * c;
-        highRatio = 1.0f + 5.4f * c;
-        fullRatio = 1.0f + 6.8f * c;
-        maxLowReduction = 12.0f * c;
-        maxHighReduction = 10.0f * c;
-        maxFullReduction = 10.0f * c;
+        lowThresholdDb = -9.0f - 18.0f * lowT;
+        highThresholdDb = -11.0f - 18.0f * highT;
+        fullThresholdDb = -10.0f - 9.0f * (lowT + highT);
+        lowRatio = highRatio = fullRatio = ratio;
+        maxLowReduction = 18.0f;
+        maxHighReduction = 16.0f;
+        maxFullReduction = 18.0f;
 
-        // The game keeps the real Gain pot pinned while automating Comp/Sens.
-        // Compensate only the predictable control-dependent insertion loss so
-        // clockwise rotation is heard as lower crest and greater sustain, not
-        // as the whole instrument becoming quieter. This is static makeup and
-        // cannot pump or chase the input envelope.
-        const float compMakeupDb = -0.45f * c + 1.58f * c * c;
-        const float sensMakeupDb = 2.0f * c * (0.80f * s + 1.40f * s * s);
-        // Full-band Normal and TubeSim route the entire signal through one JFET,
-        // so their insertion loss is greater than the recombined multiband path.
-        const float modeMakeupDb = modeIndex == 0
-            ? 5.70f * std::pow(c, 1.90f)
-            : (modeIndex == 2 ? 4.30f * std::pow(c, 2.40f) : 0.0f);
-        controlMakeupGain = dbToGain(std::fmin(10.0f,
-            compMakeupDb + sensMakeupDb + modeMakeupDb));
         // Real panel Gain is an output/makeup control, not a mute. The previous
         // -18..+14 dB span made low settings drop below a usable compressor
         // level; keep the bottom audible and reserve the top for makeup.
         outputGain = dbToGain(-6.0f + 18.0f * audioTaper(gain));
 
         bas28Pair.setSpec(rbcomponents::diodeBAS28());
-        bas28Pair.setSourceR(15000.0f - 6000.0f * s);
+        bas28Pair.setSourceR(12000.0f);
         bat54Pair.setSpec(rbcomponents::diodeBAT54());
-        bat54Pair.setSourceR(12000.0f - 5200.0f * s);
+        bat54Pair.setSourceR(9400.0f);
     }
 
 public:
@@ -317,9 +302,9 @@ public:
         update();
     }
 
-    void setSens(float v)
+    void setLowTrim(float v)
     {
-        sens = clamp01(v);
+        lowTrim = clamp01(v);
         update();
     }
 
@@ -332,6 +317,12 @@ public:
     void setMode(float v)
     {
         mode = clamp01(v);
+        update();
+    }
+
+    void setHighTrim(float v)
+    {
+        highTrim = clamp01(v);
         update();
     }
 
@@ -353,10 +344,8 @@ public:
             const float lowGain = lowDetector.process(lowRect, lowThresholdDb, lowRatio, maxLowReduction);
             const float highGain = highDetector.process(highRect, highThresholdDb, highRatio, maxHighReduction);
 
-            const float lowDepth = 0.18f + 0.82f * c;
-            const float highDepth = 0.14f + 0.68f * c;
-            low = lowAmp.process(jfetAttenuator(low, lowGain, lowDepth), 2.0f);
-            high = highAmp.process(jfetAttenuator(high, highGain, highDepth), 2.0f);
+            low = lowAmp.process(jfetAttenuator(low, lowGain, 1.0f), 2.0f);
+            high = highAmp.process(jfetAttenuator(high, highGain, 1.0f), 2.0f);
             high = highTone.process(high);
             y = low + high;
         }
@@ -364,13 +353,19 @@ public:
         {
             const float rect = std::fabs(bas28Pair.process(x * 2.20f));
             const float g = fullDetector.process(rect, fullThresholdDb, fullRatio, maxFullReduction);
-            y = jfetAttenuator(x, g, 0.18f + 0.82f * c);
+            y = jfetAttenuator(x, g, 1.0f);
 
             if (modeIndex == 2)
             {
-                const float warm = std::tanh(y * (1.35f + 0.85f * comp));
-                y = 0.78f * y + 0.22f * warm;
-                y = tubeLow.process(y);
+                // TubeSim adds a low-passed, asymmetric harmonic residual. The
+                // dry fundamental stays intact, so the mode warms the bass
+                // without turning into a dark low-pass filter.
+                const float drive = 4.0f + 3.0f * c;
+                const float bias = 0.055f;
+                const float warm = (std::tanh((y + bias) * drive)
+                    - std::tanh(bias * drive)) / drive;
+                const float harmonics = tubeLow.process(warm - y);
+                y += 0.24f * harmonics;
             }
             else
             {
@@ -378,7 +373,7 @@ public:
             }
         }
 
-        y = outputCap.process(y * outputGain * controlMakeupGain);
+        y = outputCap.process(y * outputGain);
         return std::tanh(y * 1.04f) * 0.98f;
     }
 };
@@ -393,12 +388,14 @@ class BassMultiCompPlugin : public Plugin
     {
         left.setComp(params[kComp]);
         right.setComp(params[kComp]);
-        left.setSens(params[kSens]);
-        right.setSens(params[kSens]);
+        left.setLowTrim(params[kLowTrim]);
+        right.setLowTrim(params[kLowTrim]);
         left.setGain(params[kGain]);
         right.setGain(params[kGain]);
         left.setMode(params[kMode]);
         right.setMode(params[kMode]);
+        left.setHighTrim(params[kHighTrim]);
+        right.setHighTrim(params[kHighTrim]);
     }
 
 public:
@@ -417,7 +414,7 @@ protected:
     const char* getDescription() const override { return "EBS MultiComp 2-style bass compressor"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 3, 0); }
+    uint32_t getVersion() const override { return d_version(1, 4, 0); }
     int64_t getUniqueId() const override { return d_cconst('B', 'm', 'c', 'p'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

@@ -434,11 +434,12 @@ public:
         wet = toneTilt + (wet - toneTilt) * (0.16f + 0.72f * bright);
         wet = airLp.process(wet);
 
-        // The three references follow a linear equal-power Mix law exactly.
-        // Level-match the full-wet render instead of hiding the correction in
-        // a nonlinear knob taper.
+        // Keep the endpoints from the reference calibration, but bias the
+        // middle of the knob slightly toward dry. Equal-power at 50% was
+        // subjectively too wet in the Studio chain.
         const float density = (0.58f + 0.28f * d + 0.14f * t) * 1.63f;
-        const float a = mix * 1.5707963f;
+        const float mixPosition = std::pow(mix, 1.12f);
+        const float a = mixPosition * 1.5707963f;
         const float dryLevel = std::cos(a);
         const float wetLevel = std::sin(a) * density;
         float y = (dry * dryLevel + wet * wetLevel) * 0.985f;

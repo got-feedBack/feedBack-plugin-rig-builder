@@ -37,7 +37,9 @@ public:
     void setParams(float autoP, float pedalP, float sensP, float speedP) {
         autoSweep = autoP > 0.5f;
         pedal = pedalP; sens = sensP;
-        lfoInc = 6.2831853f * (0.1f + speedP * 5.9f) / fs;   // 0.1 .. 6 Hz
+        const float rawRate = speedP * 5.9f;
+        const float rateHz = 0.10f + 2.20f * std::tanh(rawRate / 2.20f);
+        lfoInc = 6.2831853f * rateHz / fs;
     }
     inline float process(float x) {
         // envelope (normalized-ish to 0..1)

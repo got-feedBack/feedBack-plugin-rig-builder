@@ -47,10 +47,10 @@ class OpticalWah
         atk = msCoef(3.0f, fs);
         rel = msCoef(95.0f, fs);
 
-        // the game uses many high Speed values (77-100) on Modern Wah.
-        // The previous 0.16..7.96 Hz range made those presets chatter like a
-        // fast LFO; keep the optical auto sweep responsive but cap it lower.
-        const float rateHz = 0.10f + std::pow(speed, 1.45f) * 3.45f;
+        // The game uses many high Speed values (77-100) on Modern Wah. Keep
+        // those presets responsive without letting the upper range chatter.
+        const float rawRate = std::pow(speed, 1.45f) * 3.45f;
+        const float rateHz = 0.10f + 2.35f * std::tanh(rawRate / 2.35f);
         lfoInc = 6.28318530718f * rateHz / fs;
 
         const float hpFc = 85.0f;

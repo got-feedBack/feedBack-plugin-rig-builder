@@ -45,19 +45,19 @@
     "Volume": 0.62
    },
    "Tone": {
-    "param": "Top",
+    "param": "Brightness",
     "scale": 0.01,
-    "_hint": "RS Tone drives the real Top control."
+    "_hint": "RS Tone drives acoustic-image Brightness."
    },
    "Body": {
-    "param": "Body",
+    "param": "Thickness",
     "scale": 0.01,
-    "_hint": "RS Body drives the real Body control."
+    "_hint": "RS Body drives virtual-body Thickness."
    },
    "Mid": {
-    "param": "Gain",
+    "param": "Amount",
     "scale": 0.01,
-    "_hint": "RS Mid is reused as the real Gain control. MidShift is skipped because the real pedal has no MidShift knob."
+    "_hint": "RS Mid is reused as virtual-body Amount. MidShift is skipped."
    }
   },
   "acoustic emulator": {
@@ -65,19 +65,19 @@
     "Volume": 0.62
    },
    "Tone": {
-    "param": "Top",
+    "param": "Brightness",
     "scale": 0.01,
-    "_hint": "RS Tone drives the real Top control."
+    "_hint": "RS Tone drives acoustic-image Brightness."
    },
    "Body": {
-    "param": "Body",
+    "param": "Thickness",
     "scale": 0.01,
-    "_hint": "RS Body drives the real Body control."
+    "_hint": "RS Body drives virtual-body Thickness."
    },
    "Mid": {
-    "param": "Gain",
+    "param": "Amount",
     "scale": 0.01,
-    "_hint": "RS Mid is reused as the real Gain control. MidShift is skipped because the real pedal has no MidShift knob."
+    "_hint": "RS Mid is reused as virtual-body Amount. MidShift is skipped."
    }
   }
  },
@@ -130,7 +130,7 @@
    "Rate": {
     "param": "Speed1",
     "scale": 0.1,
-    "_hint": "the game Chorus 2 Rate is stored as 0..10; map it to the Deja Vibe Speed1 control. Speed2 is static unless edited in the VST."
+    "_hint": "the game Chorus 2 Rate is stored as 0..10; map it to the visible Deja Chorus Speed control. Legacy Speed2/SpeedSel remain pinned and hidden."
    },
    "Depth": {
     "param": "Intensity",
@@ -1037,7 +1037,7 @@
  "Pedal_ShaverPhaser": {
   "shaverphaser": {
    "_static": {
-    "Resonance": 0.38
+    "Resonance": 0.0
    },
    "Rate": {
     "param": "Rate",
@@ -1096,7 +1096,7 @@
   },
   "ph-1": {
    "_static": {
-    "Resonance": 0.38
+    "Resonance": 0.0
    },
    "Rate": {
     "param": "Rate",
@@ -1236,7 +1236,8 @@
   "tremolo": {
    "Speed": {
     "param": "Speed",
-    "scale": 0.01
+    "scale": 0.01,
+    "_hint": "RS Speed drives the external Uni-Vibe foot-controller input; it is intentionally not a chassis knob."
    },
    "Mix": {
     "param": "Depth",
@@ -1277,7 +1278,8 @@
   "amptrem": {
    "Speed": {
     "param": "Speed",
-    "scale": 0.01
+    "scale": 0.01,
+    "_hint": "RS Speed drives the external Uni-Vibe foot-controller input; it is intentionally not a chassis knob."
    },
    "Depth": {
     "param": "Depth",
@@ -1640,6 +1642,40 @@
    }
   },
   "unimod": {
+   "Rate": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Intensity",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Volume",
+    "scale": 0.01
+   },
+   "_static": {
+    "Mode": 0.0
+   }
+  },
+  "multi-vibe": {
+   "Rate": {
+    "param": "Speed",
+    "scale": 0.01
+   },
+   "Depth": {
+    "param": "Intensity",
+    "scale": 0.01
+   },
+   "Mix": {
+    "param": "Volume",
+    "scale": 0.01
+   },
+   "_static": {
+    "Mode": 0.0
+   }
+  },
+  "ampvibe": {
    "Rate": {
     "param": "Speed",
     "scale": 0.01
@@ -3235,18 +3271,19 @@
  "Bass_Pedal_MBComp": {
   "bassmulticomp": {
    "_static": {
-    "Gain": 0.56,
-    "Mode": 0.5
+    "Low Trim": 0.5,
+    "Mode": 0.5,
+    "High Trim": 0.5
    },
    "Compress": {
-    "param": "Comp",
+    "param": "Comp/Limit",
     "scale": 0.01,
-    "_hint": "RS Compress drives the real EBS Comp control."
+    "_hint": "RS Compress drives the real EBS Comp/Limit control (1:1 to 5:1)."
    },
    "Filter": {
-    "param": "Sens",
+    "param": "Gain",
     "scale": 0.01,
-    "_hint": "RS Filter is reused as the real EBS Sens control. Gain and Mode are pinned by _static."
+    "_hint": "RS Filter is reused for the real output Gain control; detector trims and MultiBand mode are pinned."
    }
   },
   "khs compressor": {
@@ -3267,18 +3304,19 @@
   },
   "multi comp": {
    "_static": {
-    "Gain": 0.56,
-    "Mode": 0.5
+    "Low Trim": 0.5,
+    "Mode": 0.5,
+    "High Trim": 0.5
    },
    "Compress": {
-    "param": "Comp",
+    "param": "Comp/Limit",
     "scale": 0.01,
-    "_hint": "RS Compress drives the real EBS Comp control."
+    "_hint": "RS Compress drives the real EBS Comp/Limit control (1:1 to 5:1)."
    },
    "Filter": {
-    "param": "Sens",
+    "param": "Gain",
     "scale": 0.01,
-    "_hint": "RS Filter is reused as the real EBS Sens control. Gain and Mode are pinned by _static."
+    "_hint": "RS Filter is reused for the real output Gain control; detector trims and MultiBand mode are pinned."
    }
   }
  },
@@ -4699,6 +4737,9 @@
  },
  "Pedal_MultiVibe": {
   "multivibe": {
+   "_static": {
+    "Mode": 0.0
+   },
    "Speed": {
     "param": "Rate",
     "scale": 0.01
@@ -4743,6 +4784,9 @@
    }
   },
   "vb-2": {
+   "_static": {
+    "Mode": 0.0
+   },
    "Speed": {
     "param": "Rate",
     "scale": 0.01

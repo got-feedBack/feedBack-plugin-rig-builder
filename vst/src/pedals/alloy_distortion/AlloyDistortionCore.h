@@ -1,9 +1,20 @@
 #ifndef ALLOY_DISTORTION_CORE_H
 #define ALLOY_DISTORTION_CORE_H
 
-#include <cmath>
+/*
+ * Boss HM-2 core derived from pedals/alloy distortion.pdf.
+ * Runs at the wrapper's 4x sample rate.
+ *
+ * Audible path:
+ * C1/Q1 buffer -> Q4 switch -> C6/Q6 NPN gain -> C11/Q7 PNP driver ->
+ * IC1b with D3 versus D4+D5 asymmetric feedback clipping -> C12/D6-D7
+ * series germanium crossover -> R30/D8-D9 hard clip -> IC1a buffer ->
+ * VR4 Dist/IC3a and the fixed-frequency Color L/H board -> VR1 Level ->
+ * Q10 switch -> Q3 output buffer.
+ */
 #include "../../_shared/opamp.hpp"
 #include "../../_shared/semiconductors.hpp"
+#include <cmath>
 
 namespace alloydistortion {
 
@@ -14,92 +25,72 @@ static inline float clamp01(float v)
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
 }
 
-static inline float smoothstep(float v)
-{
-    v = clamp01(v);
-    return v * v * (3.0f - 2.0f * v);
-}
-
-static inline float dn(float v)
+static inline float denormal(float v)
 {
     return std::fabs(v) < 1.0e-15f ? 0.0f : v;
 }
 
-static inline float clampFreq(float hz, float sr)
+static inline float audioTaper(float v)
 {
-    const float nyquist = sr * 0.45f;
-    return hz < 20.0f ? 20.0f : (hz > nyquist ? nyquist : hz);
+    return (std::pow(10.0f, 2.0f * clamp01(v)) - 1.0f) / 99.0f;
+}
+
+static inline float onePoleCoef(float hz, float sampleRate)
+{
+    const float nyquist = 0.45f * sampleRate;
+    const float fc = hz < 1.0f ? 1.0f : (hz > nyquist ? nyquist : hz);
+    return 1.0f - std::exp(-2.0f * kPi * fc / sampleRate);
 }
 
 class RcHighPass
 {
-    float a = 0.0f;
+    float coefficient = 0.0f;
     float x1 = 0.0f;
     float y1 = 0.0f;
 
 public:
-    void setRC(float sr, float rOhm, float cFarad)
+    void setRC(float sampleRate, float resistance, float capacitance)
     {
-        const float s = sr > 1000.0f ? sr : 48000.0f;
-        const float rc = rOhm * cFarad;
-        const float dt = 1.0f / s;
-        a = rc / (rc + dt);
+        const float dt = 1.0f / sampleRate;
+        const float rc = resistance * capacitance;
+        coefficient = rc / (rc + dt);
     }
 
     void reset() { x1 = y1 = 0.0f; }
 
-    inline float process(float x)
+    float process(float x)
     {
-        const float y = a * (y1 + x - x1);
+        const float y = coefficient * (y1 + x - x1);
         x1 = x;
-        y1 = dn(y);
+        y1 = denormal(y);
         return y1;
     }
 };
 
 class RcLowPass
 {
-    float a = 0.0f;
-    float y = 0.0f;
+    float coefficient = 0.0f;
+    float state = 0.0f;
 
 public:
-    void setRC(float sr, float rOhm, float cFarad)
+    void setRC(float sampleRate, float resistance, float capacitance)
     {
-        const float s = sr > 1000.0f ? sr : 48000.0f;
-        const float rc = rOhm * cFarad;
-        a = 1.0f - std::exp(-1.0f / (rc * s));
+        setFrequency(sampleRate,
+                     1.0f / (2.0f * kPi * resistance * capacitance));
     }
 
-    void setHz(float sr, float hz)
+    void setFrequency(float sampleRate, float hz)
     {
-        const float s = sr > 1000.0f ? sr : 48000.0f;
-        a = 1.0f - std::exp(-2.0f * kPi * clampFreq(hz, s) / s);
+        coefficient = onePoleCoef(hz, sampleRate);
     }
 
-    void reset() { y = 0.0f; }
+    void reset() { state = 0.0f; }
 
-    inline float process(float x)
+    float process(float x)
     {
-        y += a * (x - y);
-        y = dn(y);
-        return y;
-    }
-};
-
-class DcBlock
-{
-    float x1 = 0.0f;
-    float y1 = 0.0f;
-
-public:
-    void reset() { x1 = y1 = 0.0f; }
-
-    inline float process(float x)
-    {
-        const float y = x - x1 + 0.9985f * y1;
-        x1 = x;
-        y1 = dn(y);
-        return y1;
+        state += coefficient * (x - state);
+        state = denormal(state);
+        return state;
     }
 };
 
@@ -113,11 +104,10 @@ class Biquad
     float z1 = 0.0f;
     float z2 = 0.0f;
 
-    void set(float nb0, float nb1, float nb2, float na0, float na1, float na2)
+    void set(float nb0, float nb1, float nb2,
+             float na0, float na1, float na2)
     {
-        if (std::fabs(na0) < 1.0e-12f)
-            na0 = 1.0f;
-        const float invA0 = 1.0f / na0;
+        const float invA0 = 1.0f / (std::fabs(na0) < 1.0e-12f ? 1.0f : na0);
         b0 = nb0 * invA0;
         b1 = nb1 * invA0;
         b2 = nb2 * invA0;
@@ -126,53 +116,35 @@ class Biquad
     }
 
 public:
-    void reset()
-    {
-        z1 = z2 = 0.0f;
-    }
+    void reset() { z1 = z2 = 0.0f; }
 
-    inline float process(float x)
+    float process(float x)
     {
         const float y = b0 * x + z1;
-        z1 = dn(b1 * x - a1 * y + z2);
-        z2 = dn(b2 * x - a2 * y);
+        z1 = denormal(b1 * x - a1 * y + z2);
+        z2 = denormal(b2 * x - a2 * y);
         return y;
     }
 
-    void setPeaking(float sr, float hz, float q, float gainDb)
+    void setPeaking(float sampleRate, float hz, float q, float gainDb)
     {
-        const float s = sr > 1000.0f ? sr : 48000.0f;
-        hz = clampFreq(hz, s);
         const float a = std::pow(10.0f, gainDb / 40.0f);
-        const float w0 = 2.0f * kPi * hz / s;
+        const float w0 = 2.0f * kPi * hz / sampleRate;
         const float c = std::cos(w0);
         const float alpha = std::sin(w0) / (2.0f * q);
         set(1.0f + alpha * a, -2.0f * c, 1.0f - alpha * a,
             1.0f + alpha / a, -2.0f * c, 1.0f - alpha / a);
     }
 
-    void setLowPass(float sr, float hz, float q)
+    void setHighShelf(float sampleRate, float hz, float slope, float gainDb)
     {
-        const float s = sr > 1000.0f ? sr : 48000.0f;
-        hz = clampFreq(hz, s);
-        const float w0 = 2.0f * kPi * hz / s;
-        const float c = std::cos(w0);
-        const float alpha = std::sin(w0) / (2.0f * q);
-        set((1.0f - c) * 0.5f, 1.0f - c, (1.0f - c) * 0.5f,
-            1.0f + alpha, -2.0f * c, 1.0f - alpha);
-    }
-
-    void setHighShelf(float sr, float hz, float slope, float gainDb)
-    {
-        const float srate = sr > 1000.0f ? sr : 48000.0f;
-        hz = clampFreq(hz, srate);
         const float a = std::pow(10.0f, gainDb / 40.0f);
-        const float w0 = 2.0f * kPi * hz / srate;
+        const float w0 = 2.0f * kPi * hz / sampleRate;
         const float c = std::cos(w0);
         const float si = std::sin(w0);
         const float rootA = std::sqrt(a);
-        const float alpha = si * 0.5f * std::sqrt((a + 1.0f / a) * (1.0f / slope - 1.0f) + 2.0f);
-
+        const float alpha = si * 0.5f
+            * std::sqrt((a + 1.0f / a) * (1.0f / slope - 1.0f) + 2.0f);
         set(a * ((a + 1.0f) + (a - 1.0f) * c + 2.0f * rootA * alpha),
             -2.0f * a * ((a - 1.0f) + (a + 1.0f) * c),
             a * ((a + 1.0f) + (a - 1.0f) * c - 2.0f * rootA * alpha),
@@ -182,243 +154,283 @@ public:
     }
 };
 
-class AlloyDistortionCore
+class M5218OutputStage
 {
-    // Boss HM-2 schematic anchors from pedals/alloy distortion.pdf:
-    // C1 47 nF/R8 1 M input FET buffer, transistor gain into IC1b,
-    // C9/R20/D3-D5 feedback soft clipper, D6/D7 germanium-series crossover
-    // modeled with the available OA90 datasheet,
-    // D8/D9 hard clipper, VR4 250 k Dist, VR2/VR3 10 k Color Mix L/H,
-    // and VR1 10 k Level.
-    static constexpr float kC1 = 47.0e-9f;
-    static constexpr float kR8 = 1000000.0f;
-    static constexpr float kC4 = 1.0e-6f;
-    static constexpr float kR11 = 1000000.0f;
-    static constexpr float kC6 = 47.0e-9f;
-    static constexpr float kR15 = 1000000.0f;
-    static constexpr float kR16 = 470000.0f;
-    static constexpr float kC10 = 100.0e-12f;
-    static constexpr float kC11 = 47.0e-9f;
-    static constexpr float kR20 = 220000.0f;
-    static constexpr float kC9 = 100.0e-12f;
-    static constexpr float kC12 = 1.0e-6f;
-    static constexpr float kR23 = 10000.0f;
-    static constexpr float kC16 = 1.0e-9f;
-    static constexpr float kDistPot = 250000.0f;
-    static constexpr float kColorPot = 10000.0f;
-    static constexpr float kLevelPot = 10000.0f;
-    static constexpr float kC30 = 68.0e-9f;
-    static constexpr float kC27 = 6.8e-9f;
-    static constexpr float kC26 = 4.7e-9f;
-
-    float sampleRate = 48000.0f;
-    float dist = 0.55f;
-    float colorLow = 0.82f;
-    float colorHigh = 0.72f;
-
-    RcHighPass inputC1;
-    RcHighPass q1CouplingC4;
-    RcHighPass q4CouplingC6;
-    RcHighPass q6CouplingC11;
-    RcHighPass opampCouplingC12;
-    RcHighPass colorLowCap;
-    RcHighPass colorHighCap;
-    RcHighPass colorPresenceCap;
-    RcHighPass outputCoupling;
-    RcLowPass inputFetPole;
-    RcLowPass q6FeedbackC10;
-    RcLowPass opampFeedbackC9;
-    RcLowPass hardClipCapC16;
-    RcLowPass outputLoad;
-    Biquad lowColorBoost;
-    Biquad highColorBoost;
-    Biquad highColorShelf;
-    Biquad postColorLimit;
-    DcBlock q6Dc;
-    DcBlock opampDc;
-    DcBlock geDc;
-    rbshared::OpAmpStage ic1b;
-    rbshared::OpAmpStage ic2a;
-    rbcomponents::AsymDiodeStringClipper feedbackDiodesQ6;
-    rbcomponents::AsymDiodeStringClipper feedbackDiodesOpamp;
-    rbcomponents::AntiParallelDiodePair germaniumPair;
-    rbcomponents::AntiParallelDiodePair hardClipper;
-
-    void updateComponentValues()
-    {
-        const float d = smoothstep(dist);
-        const float lo = clamp01(colorLow);
-        const float hi = clamp01(colorHigh);
-
-        inputC1.setRC(sampleRate, kR8, kC1);
-        q1CouplingC4.setRC(sampleRate, kR11, kC4);
-        q4CouplingC6.setRC(sampleRate, kR15, kC6);
-        q6CouplingC11.setRC(sampleRate, 22000.0f + (1.0f - d) * 0.45f * kDistPot, kC11);
-        opampCouplingC12.setRC(sampleRate, kR23, kC12);
-        colorLowCap.setRC(sampleRate, 330.0f + (1.0f - lo) * kColorPot, kC30);
-        colorHighCap.setRC(sampleRate, 330.0f + (1.0f - hi) * kColorPot, kC27);
-        colorPresenceCap.setRC(sampleRate, 330.0f + (1.0f - hi) * kColorPot, kC26);
-        outputCoupling.setRC(sampleRate, kLevelPot, 1.0e-6f);
-
-        inputFetPole.setHz(sampleRate, 15000.0f);
-        q6FeedbackC10.setRC(sampleRate, kR16, kC10);
-        opampFeedbackC9.setRC(sampleRate, kR20 + d * kDistPot, kC9);
-        hardClipCapC16.setRC(sampleRate, kR23, kC16);
-        outputLoad.setHz(sampleRate, 7600.0f + 2800.0f * hi - 600.0f * lo);
-
-        lowColorBoost.setPeaking(sampleRate, 88.0f + 42.0f * lo, 0.70f, -3.0f + 16.0f * lo);
-        highColorBoost.setPeaking(sampleRate, 1080.0f + 520.0f * hi, 0.48f, -4.5f + 20.0f * hi);
-        highColorShelf.setHighShelf(sampleRate, 2300.0f + 1500.0f * hi, 0.68f, -7.0f + 11.0f * hi);
-        postColorLimit.setLowPass(sampleRate, 3600.0f + 4300.0f * hi, 0.58f);
-
-        feedbackDiodesQ6.setSpec(rbcomponents::diode1S2473());
-        feedbackDiodesQ6.setSeries(1, 2);
-        feedbackDiodesQ6.setSourceR(2600.0f - 1100.0f * d);
-        feedbackDiodesOpamp.setSpec(rbcomponents::diode1S2473());
-        feedbackDiodesOpamp.setSeries(1, 2);
-        feedbackDiodesOpamp.setSourceR(2600.0f - 1100.0f * d);
-        germaniumPair.setSpec(rbcomponents::diodeOA90());
-        germaniumPair.setSourceR(1900.0f - 650.0f * d);
-        hardClipper.setSpec(rbcomponents::diode1S2473());
-        hardClipper.setSourceR(1600.0f - 650.0f * d);
-    }
-
-    static inline float siliconFeedbackClip(float x, float d)
-    {
-        const float pos = 0.63f - 0.08f * d;
-        const float neg = 0.84f - 0.10f * d;
-        if (x >= 0.0f)
-            return pos * std::tanh(x / pos);
-        return -neg * std::tanh((-x) / neg);
-    }
-
-    static inline float germaniumCrossover(float x, float amount)
-    {
-        const float dead = 0.010f + 0.024f * amount;
-        const float inner = 0.16f + 0.20f * (1.0f - amount);
-        if (std::fabs(x) < dead)
-            return x * inner;
-        return x > 0.0f ? x - dead : x + dead;
-    }
-
-    static inline float hardClipD8D9(float x, float d)
-    {
-        const float threshold = 0.53f - 0.07f * d;
-        return threshold * std::tanh(x / threshold);
-    }
-
-    float colorBoard(float x)
-    {
-        const float lo = clamp01(colorLow);
-        const float hi = clamp01(colorHigh);
-        float low = colorLowCap.process(x);
-        low = lowColorBoost.process(low);
-        float high = colorHighCap.process(x);
-        high = highColorBoost.process(high);
-        float presence = colorPresenceCap.process(x);
-        presence = highColorShelf.process(presence);
-        return x * 0.30f
-             + low * (0.14f + 1.10f * lo)
-             + high * (0.10f + 1.08f * hi)
-             + presence * (0.06f + 0.42f * hi);
-    }
+    const rbshared::OpAmpSpec spec = rbshared::m5218Spec();
+    float sampleRate = 192000.0f;
+    float state = 0.0f;
 
 public:
     void setSampleRate(float sr)
     {
-        sampleRate = sr > 1000.0f ? sr : 48000.0f;
-        ic1b.setSpec(rbshared::m5218Spec());
-        ic2a.setSpec(rbshared::m5218Spec());
-        ic1b.setSampleRate(sampleRate);
-        ic2a.setSampleRate(sampleRate);
+        sampleRate = sr > 1000.0f ? sr : 192000.0f;
+        reset();
+    }
+
+    void reset() { state = 0.0f; }
+
+    float process(float target, float noiseGain)
+    {
+        const float gain = noiseGain < 1.0f ? 1.0f : noiseGain;
+        const float coefficient = onePoleCoef(spec.gbwHz / gain, sampleRate);
+        const float rail = spec.posSwingV / spec.voltsPerUnit;
+        const float desired = rail * std::tanh(target / rail);
+
+        float next = state + coefficient * (desired - state);
+        const float maxStep = (spec.slewVPerUs * 1000000.0f / sampleRate)
+                            / spec.voltsPerUnit;
+        const float delta = next - state;
+        if (delta > maxStep)
+            next = state + maxStep;
+        else if (delta < -maxStep)
+            next = state - maxStep;
+        state = denormal(next);
+        return state;
+    }
+};
+
+class AlloyDistortionCore
+{
+    float sampleRate = 192000.0f;
+    float dist = 0.55f;
+    float colorLow = 0.82f;
+    float colorHigh = 0.72f;
+    float level = 0.62f;
+    float driveAmount = 0.0f;
+    float outputGain = 0.0f;
+
+    RcHighPass inputC1;
+    RcHighPass q1OutputC4;
+    RcHighPass q4OutputC6;
+    RcHighPass q6OutputC11;
+    RcHighPass ic1bOutputC12;
+    RcHighPass colorLowC30;
+    RcHighPass colorMidC27;
+    RcHighPass colorHighC26;
+    RcHighPass colorOutputC34;
+    RcHighPass levelOutputC32;
+    RcHighPass finalOutputC3;
+    RcLowPass inputBufferPole;
+    RcLowPass q6FeedbackC10;
+    RcLowPass feedbackC9;
+    RcLowPass hardClipC16;
+    RcLowPass colorCeiling;
+    RcLowPass outputBufferPole;
+    Biquad lowColorEq;
+    Biquad highColorEq;
+    Biquad presenceEq;
+    M5218OutputStage clipOpamp;
+    M5218OutputStage clipBuffer;
+    M5218OutputStage colorMixer;
+    rbcomponents::AsymDiodeStringClipper feedbackClipper;
+    rbcomponents::AntiParallelDiodePair hardClipper;
+
+    static float q6CommonEmitter(float x, float drive)
+    {
+        // Q6 2SC2240-GR: high-gain NPN stage with R16/C10 feedback and the
+        // bypassed 22R emitter leg. The unequal collector headroom is retained.
+        const float v = (2.7f + 27.3f * drive) * x;
+        if (v >= 0.0f)
+            return -1.02f * (1.0f - std::exp(-0.96f * v));
+        return 0.91f * (1.0f - std::exp(1.13f * v));
+    }
+
+    static float q7CommonEmitter(float x, float drive)
+    {
+        // Q7 2SA970-GR is the complementary driver into IC1b. It adds the
+        // opposite asymmetry before the D3 versus D4/D5 feedback network.
+        const float v = (1.5f + 9.1f * drive) * x;
+        if (v >= 0.0f)
+            return 0.94f * (1.0f - std::exp(-1.10f * v));
+        return -1.06f * (1.0f - std::exp(0.93f * v));
+    }
+
+    static float seriesGermaniumPair(float x)
+    {
+        // D6/D7 are in series with the signal. OA90 is the documented project
+        // substitute for 1S188FM. This smooth physical-voltage transfer keeps
+        // the crossover/noise-gate character without a discontinuity or click.
+        const float volts = 3.0f * x;
+        const float magnitude = std::fabs(volts);
+        const float knee = 0.165f;
+        const float softness = 0.025f;
+        const float over = magnitude - knee;
+        const float base = 0.5f * (-knee
+                         + std::sqrt(knee * knee + softness * softness));
+        const float conduction = 0.5f * (over
+                               + std::sqrt(over * over + softness * softness))
+                               - base;
+        const float passed = 0.035f * magnitude
+                           + (conduction > 0.0f ? conduction : 0.0f);
+        return volts < 0.0f ? -passed / 3.0f : passed / 3.0f;
+    }
+
+    static float q3EmitterFollower(float x)
+    {
+        // Q3 runs from the 9 V rail around the 4.5 V virtual ground. Its usable
+        // output swing is finite, but this buffer remains linear at normal
+        // Level settings and only rounds peaks that exceed physical headroom.
+        const float positiveRail = 1.34f;
+        const float negativeRail = 1.28f;
+        return x >= 0.0f
+            ? positiveRail * std::tanh(x / positiveRail)
+            : -negativeRail * std::tanh((-x) / negativeRail);
+    }
+
+    void updateControls()
+    {
+        // VR4 is 250kD. Its effective loaded law is substantially gentler than
+        // an unloaded reverse-log curve; the power fit preserves useful gain
+        // travel through noon instead of collapsing it into the first quarter.
+        // VR2/VR3 are 10kG and VR1 is 120kA. Color changes gain, not frequency.
+        driveAmount = std::pow(clamp01(dist), 1.8f);
+        const float low = clamp01(colorLow);
+        const float high = clamp01(colorHigh);
+
+        lowColorEq.setPeaking(sampleRate, 105.0f, 0.72f,
+                              7.0f + low);
+        highColorEq.setPeaking(sampleRate, 1050.0f, 0.75f,
+                               -9.6f + 27.2f * high);
+        presenceEq.setHighShelf(sampleRate, 2800.0f, 0.72f,
+                                -10.0f + 6.0f * high);
+
+        outputGain = 11.9f * audioTaper(level);
+    }
+
+    float processColorBoard(float x)
+    {
+        const float lowControl = clamp01(colorLow);
+        const float highControl = clamp01(colorHigh);
+
+        // IC3b, IC2a and IC2b use fixed C30/C27/C26 networks. Their outputs
+        // meet at IC3a through the Color pots and R52/R63 mixer resistors.
+        float low = lowColorEq.process(colorLowC30.process(x));
+        float mid = highColorEq.process(colorMidC27.process(x));
+        float high = presenceEq.process(colorHighC26.process(x));
+        const float mixed = 0.33f * x
+            + (0.35f + 0.45f * lowControl) * low
+            + (0.12f + 0.78f * highControl) * mid
+            + (0.01f + 0.03f * highControl) * high;
+        const float mixerScale = 0.40f / (1.0f + 0.45f * highControl);
+        return (0.58f / mixerScale) * colorMixer.process(mixerScale * mixed, 6.0f);
+    }
+
+public:
+    AlloyDistortionCore()
+    {
+        feedbackClipper.setSpec(rbcomponents::diode1S2473());
+        feedbackClipper.setSeries(1, 2); // D3 versus D4+D5
+        feedbackClipper.setSourceR(68000.0f); // R25 / feedback-loop scale
+        hardClipper.setSpec(rbcomponents::diode1S2473());
+        hardClipper.setSourceR(10000.0f); // R30
+    }
+
+    void setSampleRate(float sr)
+    {
+        sampleRate = sr > 1000.0f ? sr : 192000.0f;
+        clipOpamp.setSampleRate(sampleRate);
+        clipBuffer.setSampleRate(sampleRate);
+        colorMixer.setSampleRate(sampleRate);
+
+        inputC1.setRC(sampleRate, 1000000.0f, 47.0e-9f);   // C1/R8
+        q1OutputC4.setRC(sampleRate, 1000000.0f, 1.0e-6f); // C4/R11
+        q4OutputC6.setRC(sampleRate, 100000.0f, 47.0e-9f); // C6/R21
+        q6OutputC11.setRC(sampleRate, 22000.0f, 47.0e-9f); // C11/R22
+        ic1bOutputC12.setRC(sampleRate, 10000.0f, 1.0e-6f);// C12/R23
+
+        colorLowC30.setRC(sampleRate, 100000.0f, 68.0e-9f);
+        colorMidC27.setRC(sampleRate, 82000.0f, 6.8e-9f);
+        colorHighC26.setRC(sampleRate, 100000.0f, 4.7e-9f);
+        colorOutputC34.setRC(sampleRate, 10000.0f, 1.0e-6f);
+        levelOutputC32.setRC(sampleRate, 1000000.0f, 1.0e-6f);
+        finalOutputC3.setRC(sampleRate, 100000.0f, 1.0e-6f);
+
+        inputBufferPole.setFrequency(sampleRate, 18000.0f);
+        q6FeedbackC10.setRC(sampleRate, 470000.0f, 100.0e-12f);
+        feedbackC9.setRC(sampleRate, 220000.0f, 100.0e-12f);
+        hardClipC16.setRC(sampleRate, 10000.0f, 1.0e-9f);
+        colorCeiling.setFrequency(sampleRate, 5500.0f);
+        outputBufferPole.setFrequency(sampleRate, 36000.0f);
         reset();
     }
 
     void reset()
     {
         inputC1.reset();
-        q1CouplingC4.reset();
-        q4CouplingC6.reset();
-        q6CouplingC11.reset();
-        opampCouplingC12.reset();
-        colorLowCap.reset();
-        colorHighCap.reset();
-        colorPresenceCap.reset();
-        outputCoupling.reset();
-        inputFetPole.reset();
+        q1OutputC4.reset();
+        q4OutputC6.reset();
+        q6OutputC11.reset();
+        ic1bOutputC12.reset();
+        colorLowC30.reset();
+        colorMidC27.reset();
+        colorHighC26.reset();
+        colorOutputC34.reset();
+        levelOutputC32.reset();
+        finalOutputC3.reset();
+        inputBufferPole.reset();
         q6FeedbackC10.reset();
-        opampFeedbackC9.reset();
-        hardClipCapC16.reset();
-        outputLoad.reset();
-        lowColorBoost.reset();
-        highColorBoost.reset();
-        highColorShelf.reset();
-        postColorLimit.reset();
-        q6Dc.reset();
-        opampDc.reset();
-        geDc.reset();
-        ic1b.reset();
-        ic2a.reset();
-        feedbackDiodesQ6.reset();
-        feedbackDiodesOpamp.reset();
-        germaniumPair.reset();
+        feedbackC9.reset();
+        hardClipC16.reset();
+        colorCeiling.reset();
+        outputBufferPole.reset();
+        lowColorEq.reset();
+        highColorEq.reset();
+        presenceEq.reset();
+        clipOpamp.reset();
+        clipBuffer.reset();
+        colorMixer.reset();
+        feedbackClipper.reset();
         hardClipper.reset();
-        updateComponentValues();
+        updateControls();
     }
 
-    void setDist(float v)
+    void setParams(float newDist, float newColorLow,
+                   float newColorHigh, float newLevel)
     {
-        dist = clamp01(v);
-        updateComponentValues();
+        dist = clamp01(newDist);
+        colorLow = clamp01(newColorLow);
+        colorHigh = clamp01(newColorHigh);
+        level = clamp01(newLevel);
+        updateControls();
     }
 
-    void setColorLow(float v)
+    float process(float input)
     {
-        colorLow = clamp01(v);
-        updateComponentValues();
-    }
+        // Q1 source follower and Q4 electronic switch stay essentially linear.
+        float x = inputC1.process(input);
+        x = inputBufferPole.process(0.992f * x);
+        x = q1OutputC4.process(x);
+        x = q4OutputC6.process(0.995f * x);
 
-    void setColorHigh(float v)
-    {
-        colorHigh = clamp01(v);
-        updateComponentValues();
-    }
+        // Q6 and Q7 are the real discrete voltage-gain stages before IC1b.
+        float y = q6CommonEmitter(x, driveAmount);
+        y = q6FeedbackC10.process(y);
+        y = q6OutputC11.process(y);
+        y = q7CommonEmitter(y, driveAmount);
 
-    float process(float in)
-    {
-        const float d = smoothstep(dist);
+        // IC1b and its asymmetric feedback network: one 1S2473 on the positive
+        // branch and two in series on the negative branch.
+        const float opampGain = 2.2f + 8.0f * driveAmount;
+        y = clipOpamp.process(feedbackC9.process(opampGain * y), opampGain);
+        y = feedbackClipper.process(3.0f * y) / 3.0f;
+        y = ic1bOutputC12.process(y);
 
-        float x = inputC1.process(0.96f * in);
-        x = inputFetPole.process(x);
-        x = q1CouplingC4.process(std::tanh(1.03f * x));
-        x = q4CouplingC6.process(x);
+        // D6/D7 create crossover distortion in series; D8/D9 then hard-clip
+        // the node after fixed R30. IC1a is the following unity buffer.
+        y = seriesGermaniumPair(y);
+        y = hardClipper.process(3.0f * y) / 3.0f;
+        y = hardClipC16.process(y);
+        y = clipBuffer.process(y, 1.0f);
 
-        const float q6Fb = q6FeedbackC10.process(x);
-        float y = (x - 0.22f * q6Fb) * (2.0f + 8.5f * dist + 18.0f * d);
-        y = ic1b.process(y, 2.0f + 10.0f * d);
-        y = feedbackDiodesQ6.process(y);
-        y = q6Dc.process(y);
-        y = q6CouplingC11.process(y);
+        y = colorCeiling.process(processColorBoard(y));
+        y = colorOutputC34.process(y);
 
-        const float opFb = opampFeedbackC9.process(y);
-        y = (y - 0.18f * opFb) * (1.9f + 9.5f * dist + 19.0f * d);
-        y = ic2a.process(y, 2.0f + 12.0f * d);
-        y = feedbackDiodesOpamp.process(y + 0.010f * dist);
-        y = opampDc.process(y);
-        y = opampCouplingC12.process(y);
-
-        y = germaniumCrossover(y, 0.45f + 0.55f * d);
-        y = 0.82f * y + 0.18f * germaniumPair.process(1.6f * y);
-        y = geDc.process(y);
-        y = hardClipper.process(1.85f * y);
-        y = hardClipCapC16.process(y);
-
-        y = colorBoard(y);
-        y = postColorLimit.process(y);
-        y = outputLoad.process(outputCoupling.process(y));
-
-        const float trim = 0.68f / (1.0f + 0.32f * dist + 0.24f * d + 0.18f * colorLow + 0.10f * colorHigh);
-        return std::tanh(1.02f * y * trim);
+        // VR1 Level, Q10 switch and Q3 emitter follower. There is no generic
+        // post-DSP limiter; only the physical M5218 rail and diode stages clip.
+        y *= outputGain;
+        y = levelOutputC32.process(y);
+        y = outputBufferPole.process(q3EmitterFollower(0.985f * y));
+        return finalOutputC3.process(y);
     }
 };
 

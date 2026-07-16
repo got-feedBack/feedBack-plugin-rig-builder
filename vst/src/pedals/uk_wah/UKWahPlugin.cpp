@@ -46,7 +46,8 @@ class VoxWah
         atk = msCoef(6.5f, fs);
         rel = msCoef(160.0f, fs);
 
-        const float rateHz = 0.10f + speed * speed * 5.8f;
+        const float rawRate = speed * speed * 5.8f;
+        const float rateHz = 0.10f + 2.45f * std::tanh(rawRate / 2.45f);
         lfoInc = 6.28318530718f * rateHz / fs;
 
         const float hpFc = 70.0f;

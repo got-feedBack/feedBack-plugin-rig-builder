@@ -135,3 +135,56 @@ referencia aislada del nodo de diodos.
 
 Una coincidencia de RMS no valida una distorsion. El ataque, la compresion, el
 reparto de armonicos y la perdida del filtro deben coincidir por separado.
+
+## 8. Lecciones del resto de la familia
+
+La pasada sobre DS-1, HM-2, SD-1, Guv'nor Plus, MT-2, DOD 250, OS-2, OCD,
+Germanium Drive y B3K agrego estas reglas:
+
+- Un clipper de realimentacion no se puede tratar como un shunt clipper a
+  tierra. Se calcula primero la tension desarrollada en la rama de feedback,
+  se aplica la curva asimetrica de los diodos y se recompone la salida no
+  inversora.
+- El orden numerico debe coincidir con el orden analogico. Representar una
+  transferencia de primer orden dentro de un IIR de tercer orden agrega pares
+  polo-cero cancelados en `z=-1`; durante la automatizacion pueden perder
+  precision y producir caidas de volumen o distorsion discontinua.
+- No todos los diodos del esquema procesan audio. D001/D002 del MT-2 pertenecen
+  al switching de bypass/salida; el hard clipping audible es D003/D004 despues
+  de C027/R033.
+- No se agrega un `tanh` despues de un op-amp limitado, un clipper fisico o un
+  transformador ya saturado. Cada no linealidad debe corresponder a un bloque
+  identificable del circuito.
+- Las etapas con bias, como el transistor de germanio o los inversores CMOS,
+  deben restar su salida quiescente. El bias sigue afectando la asimetria, pero
+  una entrada digital cero debe producir salida cero y no un pulso al activar
+  el plugin.
+- Los controles fijos del circuito siguen siendo fijos. En el Guv'nor, `Gain`
+  modifica la primera etapa; la segunda conserva R6/R2 = 680k/10k. Hacer que
+  ambas dependan de la perilla cambia la compresion y el recorrido completo.
+- Para potes especiales se usa su ley real. El W20k del SD-1 requiere una curva
+  en S y su red C4/C5/C6 se discretiza como transferencia activa de tercer
+  orden, no como una mezcla arbitraria de low-pass y high-pass.
+
+El proyecto `davemollen/dm-SD1` se uso como referencia conductual para el
+recorrido de Drive y para contrastar las transferencias del SD-1. Su codigo es
+GPLv3; la implementacion de Slopsmith deriva sus propios coeficientes desde el
+esquema local y conserva sus modelos compartidos de uPC4558 y 1S2473.
+
+## 9. Referencias SD-1 y OCD
+
+Las carpetas `../test logic/sd1/` y `../test logic/ocd/` contienen renders
+estereo con canales identicos. Para medirlos se debe seleccionar un canal; una
+conversion automatica a mono suma ambos y agrega 3.01 dB falsos.
+
+En el SD-1, el clipper aproximado se reemplazo por el solver Shockley compartido
+del 1S2473: una rama usa D4 y la otra D5+D6 en serie, con la resistencia real de
+feedback y conversion de 3 V por unidad. En los seis puntos el RMS del modelo
+queda entre 0.1 y 1.8 dB de la referencia, sin copiar un limitador final.
+
+Los renders del OCD fueron grabados a menor volumen. Se usan para las relaciones
+de Drive, Tone y la forma del clipping, no para fijar el nivel absoluto. El DSP
+reproduce los 3.6 dB entre Drive mitad/maximo y la respuesta relativa de Tone
+dentro de 0.1 dB; Volume a mitad se calibra al RAT del proyecto (`-25.9` frente
+a `-25.7` dB RMS). La posicion germanio usa OA90 como sustituto disponible del
+1N34A opcional mostrado por el esquema.

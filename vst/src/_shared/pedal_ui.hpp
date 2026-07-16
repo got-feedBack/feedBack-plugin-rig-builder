@@ -16,6 +16,9 @@
  *   #define PEDAL_ACG 150
  *   #define PEDAL_ACB 230
  *   #define PEDAL_KNOBS { {0.30f,0.20f,0.12f}, ... }  // cx,cy,r (frac of W/H/W)
+ *   // optional: expose only a compatible subset of the plugin parameters
+ *   #define PEDAL_VISIBLE_COUNT 2
+ *   #define PEDAL_PARAM_IDS { kDepth, kVolume }
  *   // optional: PEDAL_W / PEDAL_H default window size
  *   #include "../_shared/pedal_ui.hpp"
  */
@@ -46,11 +49,17 @@
 #define PEDAL_ARCG PEDAL_ACG
 #define PEDAL_ARCB PEDAL_ACB
 #endif
+#ifndef PEDAL_VISIBLE_COUNT
+#define PEDAL_VISIBLE_COUNT kParamCount
+#endif
 
 START_NAMESPACE_DISTRHO
 
 struct PedalKnob { float cx, cy, r; };   // cx,cy fraction of W/H; r fraction of W
-static const PedalKnob kPedalKnobs[kParamCount] = PEDAL_KNOBS;
+static const PedalKnob kPedalKnobs[PEDAL_VISIBLE_COUNT] = PEDAL_KNOBS;
+#ifdef PEDAL_PARAM_IDS
+static const uint32_t kPedalParamIds[PEDAL_VISIBLE_COUNT] = PEDAL_PARAM_IDS;
+#endif
 
 class PedalUI : public UI
 {
@@ -63,10 +72,18 @@ class PedalUI : public UI
     float kx(int i) const { return getWidth()  * kPedalKnobs[i].cx; }
     float ky(int i) const { return getHeight() * kPedalKnobs[i].cy; }
     float kr(int i) const { return getWidth()  * kPedalKnobs[i].r; }
+    static uint32_t paramId(int i) {
+#ifdef PEDAL_PARAM_IDS
+        return kPedalParamIds[i];
+#else
+        return (uint32_t)i;
+#endif
+    }
     static float angleFor(float n) { return (135.0f + n * 270.0f) * 3.14159265f / 180.0f; }
 
     void drawKnob(int i) {
-        const float cx = kx(i), cy = ky(i), R = kr(i), f = scale(), n = fValues[i];
+        const uint32_t id = paramId(i);
+        const float cx = kx(i), cy = ky(i), R = kr(i), f = scale(), n = fValues[id];
         // knob body
         beginPath(); circle(cx, cy, R);        fillColor(Color(36, 38, 44)); fill();
         beginPath(); circle(cx, cy, R - 3*f);  fillColor(Color(58, 62, 72)); fill();
@@ -81,13 +98,13 @@ class PedalUI : public UI
         strokeColor(Color(235, 238, 244)); strokeWidth(3*f); stroke();
         // label above, value below
         textAlign(ALIGN_CENTER | ALIGN_BOTTOM);
-        fontSize(11*f); fillColor(Color(225, 228, 236)); text(cx, cy - R - 4*f, PEDAL_NAMES[i], NULL);
+        fontSize(11*f); fillColor(Color(225, 228, 236)); text(cx, cy - R - 4*f, PEDAL_NAMES[id], NULL);
         char buf[16]; std::snprintf(buf, sizeof(buf), "%.1f", n * 10.0f);
         textAlign(ALIGN_CENTER | ALIGN_TOP);
         fontSize(10*f); fillColor(Color(170, 178, 190)); text(cx, cy + R + 3*f, buf, NULL);
     }
     int knobAt(double px, double py) const {
-        for (int i = 0; i < kParamCount; ++i) {
+        for (int i = 0; i < PEDAL_VISIBLE_COUNT; ++i) {
             const float dx = px - kx(i), dy = py - ky(i), R = kr(i) + 6;
             if (dx*dx + dy*dy <= R*R) return i;
         }
@@ -127,7 +144,7 @@ protected:
         text(W * 0.5f, H * 0.63f, PEDAL_TITLE, NULL);
 
         // knobs
-        for (int i = 0; i < kParamCount; ++i) drawKnob(i);
+        for (int i = 0; i < PEDAL_VISIBLE_COUNT; ++i) drawKnob(i);
 
         // LED
         beginPath(); circle(W*0.5f, H*0.75f, 5*f); fillColor(Color(255, 70, 60)); fill();
@@ -140,8 +157,8 @@ protected:
 
     bool onMouse(const MouseEvent& ev) override {
         if (ev.button != 1) return false;
-        if (ev.press) { const int k = knobAt(ev.pos.getX(), ev.pos.getY()); if (k >= 0) { fDrag = k; fLastY = ev.pos.getY(); fDragVal = fValues[k]; editParameter(k, true); return true; } }
-        else if (fDrag >= 0) { editParameter(fDrag, false); fDrag = -1; return true; }
+        if (ev.press) { const int k = knobAt(ev.pos.getX(), ev.pos.getY()); if (k >= 0) { const uint32_t id = paramId(k); fDrag = k; fLastY = ev.pos.getY(); fDragVal = fValues[id]; editParameter(id, true); return true; } }
+        else if (fDrag >= 0) { editParameter(paramId(fDrag), false); fDrag = -1; return true; }
         return false;
     }
     bool onMotion(const MotionEvent& ev) override {
@@ -149,7 +166,8 @@ protected:
             const double dy = fLastY - ev.pos.getY(); fLastY = ev.pos.getY();
             fDragVal += (float)dy / (170.0f * scale());
             if (fDragVal < 0.f) fDragVal = 0.f; if (fDragVal > 1.f) fDragVal = 1.f;
-            fValues[fDrag] = fDragVal; setParameterValue(fDrag, fDragVal); repaint();
+            const uint32_t id = paramId(fDrag);
+            fValues[id] = fDragVal; setParameterValue(id, fDragVal); repaint();
             return true;
         }
         return false;

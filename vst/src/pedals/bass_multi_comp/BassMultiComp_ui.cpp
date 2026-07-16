@@ -1,5 +1,5 @@
-/* BassMultiComp UI — copyright-free chrome compressor look. Real panel:
- * Comp, Sens, Gain and a three-way mode selector. */
+/* BassMultiComp UI - copyright-free chrome compressor look. Real panel:
+ * Comp/Limit, Gain and a three-way mode selector. Detector trims are internal. */
 #include "BassMultiCompParams.h"
 #include "../_shared/pedalkit.hpp"
 START_NAMESPACE_DISTRHO
@@ -8,9 +8,8 @@ public:
     BassMultiCompUI() : PedalKitUI(320, 470, kParamCount, kBassMultiCompDef) {
         names_ = kBassMultiCompNames; labelFont_ = fBarlow;
         labelClr = Color(40,42,46); pointerClr = Color(30,32,36); tickClr = Color(96,98,104);
-        addKnob(kComp, 0.25f, 0.25f, 0.095f, 70,72,78, 0);
-        addKnob(kSens, 0.50f, 0.25f, 0.095f, 70,72,78, 0);
-        addKnob(kGain, 0.75f, 0.25f, 0.095f, 70,72,78, 0);
+        addKnob(kComp, 0.33f, 0.25f, 0.095f, 70,72,78, 0);
+        addKnob(kGain, 0.67f, 0.25f, 0.095f, 70,72,78, 0);
         addToggle(kMode, 0.50f, 0.47f, 0.050f, 3);
     }
 protected:

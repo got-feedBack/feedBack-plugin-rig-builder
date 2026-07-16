@@ -19,16 +19,6 @@ static inline float clamp01(float v)
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
 }
 
-static inline float audioTaper(float v)
-{
-    return std::pow(clamp01(v), 1.70f);
-}
-
-static inline float finalLimit(float x)
-{
-    return std::tanh(0.98f * x);
-}
-
 } // namespace
 
 class CustomDrivePlugin : public Plugin
@@ -43,12 +33,8 @@ class CustomDrivePlugin : public Plugin
 
     void applyAll()
     {
-        left.setDrive(params[kDrive]);
-        right.setDrive(params[kDrive]);
-        left.setTone(params[kTone]);
-        right.setTone(params[kTone]);
-        left.setVoice(params[kVoice]);
-        right.setVoice(params[kVoice]);
+        left.setParams(params[kDrive], params[kTone], params[kVoice], params[kVolume]);
+        right.setParams(params[kDrive], params[kTone], params[kVoice], params[kVolume]);
     }
 
 public:
@@ -68,7 +54,7 @@ protected:
     const char* getDescription() const override { return "OCD-style MOSFET/diode overdrive"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(2, 0, 0); }
     int64_t getUniqueId() const override { return d_cconst('C', 'd', 'r', 'v'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -115,7 +101,6 @@ protected:
         const float* inR = inputs[1];
         float* outL = outputs[0];
         float* outR = outputs[1];
-        const float volume = 3.0f * audioTaper(params[kVolume]);
         float ubL[kOS];
         float ubR[kOS];
 
@@ -131,8 +116,8 @@ protected:
 
             const float wetL = osL.downsample(ubL);
             const float wetR = osR.downsample(ubR);
-            outL[i] = finalLimit(wetL * volume);
-            outR[i] = finalLimit(wetR * volume);
+            outL[i] = wetL;
+            outR[i] = wetR;
         }
     }
 

@@ -249,6 +249,8 @@ Fuentes:
 
 - `../pedals/ESB MultiComp 2.pdf`: esquema Black Label MultiComp 2;
 - `../pedals/multi bass comp.webp`: copia de menor resolucion del mismo plano;
+- `https://www.bajosybajistas.com/ebs-multicomp/`: descripcion de controles,
+  ratio y modos del pedal real;
 - datasheets locales de PMBFJ113, TS921/TS925, TL064, BAS28 y BAT54;
 - DI de bajo `../ui_public_inputs_Frogger - Bass.wav`;
 - DI de bajo `../ui_public_inputs_Garden - Bass.wav`.
@@ -265,9 +267,10 @@ Input buffer
 ```
 
 P2A/P2B es el pot dual 50kB de compresion. Los JFET trabajan como resistencias
-variables en shunt. Sens representa los ajustes de referencia de ambos
-detectores en un solo control accesible; no debe mover la frecuencia del
-crossover.
+variables en shunt. R52 y R63 son trims internos de 500k separados para los
+umbrales low/high; no existe una perilla frontal Sens. El VST conserva ambos
+ajustes como parametros internos para calibracion, pero la UI muestra solo los
+controles fisicos externos.
 
 ### 5.1 Bug encontrado
 
@@ -295,10 +298,13 @@ JFET no se usa como distorsion principal.
 
 ### 5.2 Controles y modos
 
-- Comp controla ratio, profundidad maxima, tiempos efectivos y el pot dual de
-  los dos detectores.
-- Sens mueve el umbral comun de deteccion sin retocar HP/LP.
-- Gain conserva su taper y margen de salida independientes.
+- Comp/Limit controla la pendiente de reduccion desde 1:1 hasta 5:1. La
+  interpolacion se hace sobre la pendiente, no directamente sobre el numero de
+  ratio, para que la mitad superior de la perilla siga siendo util.
+- Low Trim y High Trim mueven independientemente los umbrales de sus detectores
+  sin cambiar crossover, ataque, release ni impedancia de los rectificadores.
+- Gain es el makeup/output final independiente; Comp no contiene un makeup
+  automatico oculto.
 - Normal usa detector full-band.
 - MultiBand usa detectores HP/LP independientes.
 - TubeSim usa detector full-band y agrega solo la coloracion del modo.
@@ -308,21 +314,19 @@ Con Gain=0.56 y MultiBand, el DI Frogger mide actualmente:
 | Comp | RMS | Peak | Crest |
 |---:|---:|---:|---:|
 | 0.00 | -26.95 dBFS | -8.21 dBFS | 18.75 dB |
-| 0.25 | -26.94 dBFS | -8.43 dBFS | 18.51 dB |
-| 0.50 | -27.01 dBFS | -8.85 dBFS | 18.16 dB |
-| 0.75 | -27.11 dBFS | -9.42 dBFS | 17.69 dB |
-| 1.00 | -27.21 dBFS | -9.91 dBFS | 17.30 dB |
+| 0.25 | -27.47 dBFS | -8.61 dBFS | 18.86 dB |
+| 0.50 | -27.88 dBFS | -9.01 dBFS | 18.87 dB |
+| 0.75 | -28.21 dBFS | -9.41 dBFS | 18.80 dB |
+| 1.00 | -28.46 dBFS | -9.80 dBFS | 18.65 dB |
 
-El RMS queda dentro de 0.26 dB mientras el peak baja 1.70 dB y el crest baja
-1.45 dB. Por lo tanto, Comp en sentido horario se percibe como mayor densidad
-y control de transientes, no como una perdida de volumen. El DI Garden confirma
-la direccion: su crest baja de 14.98 a 13.33 dB.
+El peak baja de forma continua 1.59 dB. El RMS tambien baja porque el hardware
+deja la compensacion al control Gain; el DSP ya no inventa makeup dependiente de
+Comp. En Rocksmith, `Compress` mapea a Comp/Limit y `Filter` se reutiliza para
+Gain. Los trims quedan en su calibracion de fabrica y Mode queda en MultiBand.
 
-El juego deja Gain fijo al automatizar Comp y Sens. Se agrega compensacion
-estatica de la perdida de insercion predecible de esos controles, calibrada por
-modo. No sigue la envolvente, no reemplaza el detector y no puede producir
-pumping. Normal y TubeSim necesitan mas compensacion que MultiBand porque toda
-la senal atraviesa una sola celda JFET en vez de recombinar dos bandas.
+TubeSim conserva la fundamental y mezcla solo un residuo armonico asimetrico
+filtrado. No se debe pasar toda la senal por un low-pass, porque eso oscurece el
+pedal en vez de agregar la calidez descrita para el modo.
 
 Antes de esta correccion ambos barridos eran casi planos. Los extremos ahora
 son audibles, continuos y no producen dropouts. Todavia no existen renders de

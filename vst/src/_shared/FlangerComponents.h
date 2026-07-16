@@ -119,7 +119,7 @@ public:
         const float delaySamples = (spec.delayClockFactor * (float)spec.buckets * sampleRate) / clockHz;
 
         const float driven = spec.headroom * std::tanh(input / spec.headroom);
-        const float tap = delay.read(delaySamples);
+        const float tap = delay.readCubic(delaySamples);
         delay.write(driven);
 
         const float bbdBandwidth = rbmod::clamp(std::fmin(postFilterHz, clockHz * 0.42f), 900.0f, sampleRate * 0.42f);
@@ -159,6 +159,8 @@ struct FlangerVoicing
     float dryDucking = 0.18f;
     float wetMixMin = 0.18f;
     float wetMixScale = 0.82f;
+    float rangeFeedbackDryDucking = 0.0f;
+    float rangeFeedbackWetBoost = 0.0f;
     float lfoTriangle = 0.82f;
     float flangeRangeMaxMs = 0.0f;
     float depthBase = 0.04f;
@@ -168,6 +170,19 @@ struct FlangerVoicing
     float outputMinDb = -1.0f;
     float outputMaxDb = 1.0f;
     float compander = 0.45f;
+    float rateTaperExponent = 1.7f;
+    float manualTaperExponent = 1.7f;
+    float widthTaperExponent = 1.0f;
+    float manualCenterMaxRatio = 1.0f;
+    float depthCenterMinScale = 0.0f;
+    float depthCenterMaxScale = 0.0f;
+    float manualDepthScale = 0.0f;
+    float highRateDepthReduction = 0.0f;
+    float widthCenterShift = 0.0f;
+    float widthCenterShiftExponent = 3.0f;
+    bool useCompander = true;
+    bool linearPath = false;
+    bool reverseLinearRate = false;
 };
 
 class AnalogBbdFlanger
@@ -286,7 +301,10 @@ public:
 
     float process(float in)
     {
-        const float rateHz = logInterp(voice.minRateHz, voice.maxRateHz, rbmod::audioTaper(rate));
+        const float rateCurve = std::pow(rbmod::clamp01(rate), voice.rateTaperExponent);
+        const float rateHz = voice.reverseLinearRate
+            ? voice.minRateHz + (voice.maxRateHz - voice.minRateHz) * rbmod::reverseAudioTaper(rate)
+            : logInterp(voice.minRateHz, voice.maxRateHz, rateCurve);
         if (!frozen)
         {
             phase += rateHz / sampleRate;
@@ -302,9 +320,27 @@ public:
             : std::max(voice.minDelayMs * 2.2f, 17.5f);
         const float rangeMaxMs = longRange ? voice.maxDelayMs
                                            : std::min(voice.maxDelayMs, shortRangeMaxMs);
-        const float centerMs = logInterp(rangeMaxMs, rangeMinMs, rbmod::audioTaper(manual));
+        const float manualCurve = std::pow(rbmod::clamp01(manual), voice.manualTaperExponent);
+        const float depthCurve = rbmod::smoothstep(width);
+        const float centerMinMs = rangeMinMs
+                                + (rangeMaxMs - rangeMinMs) * voice.depthCenterMinScale * depthCurve;
+        const float centerMaxBaseMs = rangeMinMs
+                                    + (rangeMaxMs - rangeMinMs) * rbmod::clamp01(voice.manualCenterMaxRatio);
+        const float centerMaxMs = centerMinMs
+                                + (centerMaxBaseMs - centerMinMs)
+                                  * std::exp(-voice.depthCenterMaxScale * depthCurve);
+        const float widthShift = std::exp(voice.widthCenterShift
+                                        * std::pow(width, voice.widthCenterShiftExponent));
+        const float centerMs = rbmod::clamp(logInterp(centerMaxMs, centerMinMs, manualCurve) * widthShift,
+                                            rangeMinMs, rangeMaxMs);
+        const float widthCurve = std::pow(rbmod::smoothstep(width), voice.widthTaperExponent);
+        const float highRateDepth = 1.0f - voice.highRateDepthReduction * rate * rate * rate;
         const float span = std::log(rangeMaxMs / rangeMinMs)
-                         * (voice.depthBase + voice.depthScale * rbmod::smoothstep(width));
+                         * (voice.depthBase
+                            + voice.depthScale * widthCurve
+                            + voice.manualDepthScale * rbmod::smoothstep(width)
+                              * std::pow(1.0f - manual, 3.0f))
+                         * rbmod::clamp(highRateDepth, 0.1f, 1.0f);
         const float targetDelayMs = rbmod::clamp(centerMs * std::exp(lfo * span), rangeMinMs, rangeMaxMs);
         if (smoothedDelayMs <= 0.0f)
             smoothedDelayMs = targetDelayMs;
@@ -319,21 +355,28 @@ public:
         x = inputLp.process(x);
 
         const float fb = voice.feedbackMax * rbmod::smoothstep(feedback);
-        const float write = rbmod::softClip(x + voice.feedbackSign * feedbackState * fb);
+        const float feedbackInput = x + voice.feedbackSign * feedbackState * fb;
+        const float write = voice.linearPath ? feedbackInput : rbmod::softClip(feedbackInput);
         float wet = bbd.process(write, clockHz, voice.bbdLpHz * (1.06f - 0.24f * rbmod::smoothstep(width)),
                                 rbmod::smoothstep(feedback), rbmod::smoothstep(width));
 
-        wet = compander.process(wet, voice.compander);
+        if (voice.useCompander)
+            wet = compander.process(wet, voice.compander);
         const float colorBand = wet - colorLp.process(wet);
-        wet = rbmod::softClip(wet + colorBand * (0.08f + 0.32f * rbmod::smoothstep(feedback)));
+        const float coloredWet = wet + colorBand * (0.08f + 0.32f * rbmod::smoothstep(feedback));
+        wet = voice.linearPath ? coloredWet : rbmod::softClip(coloredWet);
         feedbackState = wet;
 
         wet = outputLp2.process(outputLp1.process(wet));
 
-        const float dry = voice.dryLevel * (1.0f - voice.dryDucking * mix);
-        const float wetGain = voice.wetLevel * (voice.wetMixMin + voice.wetMixScale * mix);
+        const float rangeFeedback = rbmod::smoothstep(width) * rbmod::smoothstep(feedback);
+        const float dry = voice.dryLevel * (1.0f - voice.dryDucking * mix
+            - voice.rangeFeedbackDryDucking * rangeFeedback);
+        const float wetGain = voice.wetLevel * (voice.wetMixMin + voice.wetMixScale * mix)
+            * (1.0f + voice.rangeFeedbackWetBoost * rangeFeedback);
         const float outputDb = voice.outputMinDb + (voice.outputMaxDb - voice.outputMinDb) * output;
-        return rbmod::softClip((dry * x + voice.wetSign * wetGain * wet) * dbToGain(outputDb));
+        const float mixed = (dry * x + voice.wetSign * wetGain * wet) * dbToGain(outputDb);
+        return voice.linearPath ? mixed : rbmod::softClip(mixed);
     }
 };
 

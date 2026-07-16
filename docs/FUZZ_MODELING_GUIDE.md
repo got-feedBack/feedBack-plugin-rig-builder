@@ -107,7 +107,10 @@ targets, but a future edit should explain a large change:
 - **Fuzz Face / FZ-3 family:** transistor bias and shunt feedback create bloom
   and gating. Do not replace that behavior with output clipping.
 - **Super-Fuzz:** preserve the anti-phase splitter and germanium full-wave
-  rectifier. The octave must track input pitch before the tone switch.
+  rectifier. The octave must track input pitch before the tone switch. Balance
+  is the 50 kB output-level pot, not a clean/fuzz blend; use its audio taper
+  after the Q6/output network. Any safety limiter must be continuous at the
+  rail or it can make the Balance sweep sound stuck and broken.
 - **Bass Big Muff:** retain the two clipping cells and the three-way SW2 routing.
   Bass Boost takes the already-clipped node 1 through R2/C4/U1A and C9/R7, then
   injects it before the Q1 recovery stage; it must never use clean input. Dry is

@@ -296,7 +296,9 @@ public:
 
 class OcdMosfetGeClipper
 {
-    DiodeSpec ge = diode1N34A();
+    // The local CustomDrive build uses OA90 as the available germanium
+    // substitute for the optional 1N34A position in the OCD clipping network.
+    DiodeSpec ge = diodeOA90();
     float sourceR = 10000.0f;
     float v = 0.0f;
     float mosfetK = 0.0018f;
@@ -338,9 +340,9 @@ public:
     void setHardness(float amount)
     {
         const float a = rbClamp(amount, 0.0f, 1.0f);
-        mosfetK = 0.00135f + 0.00115f * a;
-        posVth = 1.62f - 0.16f * a;
-        negVth = 1.26f - 0.13f * a;
+        mosfetK = 0.00135f + 0.00215f * a;
+        posVth = 1.62f - 0.34f * a;
+        negVth = 1.26f - 0.24f * a;
     }
 
     void reset()

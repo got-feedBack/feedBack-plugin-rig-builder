@@ -154,7 +154,7 @@ protected:
     const char* getDescription() const override { return "Boss RBF-10 MN3204 BBD rack flanger"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('R', 'F', 'l', '1'); }
 
     void initParameter(uint32_t i, Parameter& p) override

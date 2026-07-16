@@ -83,7 +83,9 @@ class B3K
         // silicon clamp let the Drive knob sweep clean -> OD -> heavy distortion.
         float s = cmosInverter(x, 0.040f, rail);
         s = cmosInverter(s * 1.08f, -0.026f, rail);
-        return siliconClamp.process(s * 0.82f);
+        float idle = cmosInverter(0.0f, 0.040f, rail);
+        idle = cmosInverter(idle * 1.08f, -0.026f, rail);
+        return siliconClamp.process((s - idle) * 0.82f);
     }
 
 public:

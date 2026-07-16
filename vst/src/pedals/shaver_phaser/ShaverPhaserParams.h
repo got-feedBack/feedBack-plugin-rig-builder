@@ -23,6 +23,6 @@ static const char* const kShaverPhaserSymbols[kParamCount] = {
 
 static const float kShaverPhaserMin[kParamCount] = { 0.0f, 0.0f, 0.0f };
 static const float kShaverPhaserMax[kParamCount] = { 1.0f, 1.0f, 1.0f };
-static const float kShaverPhaserDef[kParamCount] = { 0.30f, 0.42f, 0.38f };
+static const float kShaverPhaserDef[kParamCount] = { 0.30f, 0.42f, 0.00f };
 
 #endif // SHAVER_PHASER_PARAMS_H

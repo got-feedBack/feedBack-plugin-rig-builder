@@ -261,9 +261,8 @@ class ShredZoneCore
     rbshared::OpAmpStage ic2a;
     rbshared::OpAmpStage ic2b;
     rbshared::OpAmpStage ic1a;
-    rbcomponents::AntiParallelDiodePair clipD003D005a;
-    rbcomponents::AntiParallelDiodePair clipD003D005b;
-    rbcomponents::AntiParallelDiodePair hardClipD001D002;
+    rbcomponents::AsymDiodeStringClipper preampD005;
+    rbcomponents::AntiParallelDiodePair hardClipD003D004;
 
     static float eqDb(float normalized, float rangeDb)
     {
@@ -308,12 +307,11 @@ class ShredZoneCore
         biteEq.setPeaking(sampleRate, 2100.0f + 850.0f * high, 0.66f, 1.4f + 3.5f * high + 1.0f * d);
         outputLowPass.setLowPass(sampleRate, 3800.0f + 7700.0f * high, 0.62f);
 
-        clipD003D005a.setSpec(rbcomponents::diode1SS133());
-        clipD003D005a.setSourceR(2300.0f - 1000.0f * d);
-        clipD003D005b.setSpec(rbcomponents::diode1SS133());
-        clipD003D005b.setSourceR(2100.0f - 900.0f * d);
-        hardClipD001D002.setSpec(rbcomponents::diode1SS133());
-        hardClipD001D002.setSourceR(1600.0f - 600.0f * d);
+        preampD005.setSpec(rbcomponents::diode1SS133());
+        preampD005.setSeries(1, 2);
+        preampD005.setSourceR(10000.0f); // R054/Q009 stage Thevenin path
+        hardClipD003D004.setSpec(rbcomponents::diode1SS133());
+        hardClipD003D004.setSourceR(2200.0f); // R033
     }
 
 public:
@@ -353,9 +351,8 @@ public:
         ic2a.reset();
         ic2b.reset();
         ic1a.reset();
-        clipD003D005a.reset();
-        clipD003D005b.reset();
-        hardClipD001D002.reset();
+        preampD005.reset();
+        hardClipD003D004.reset();
         updateComponentValues();
     }
 
@@ -401,22 +398,26 @@ public:
         float y = transistorInputC034.process(x);
         const float emitter = transistorEmitterC035.process(y);
         y = (y + 0.22f * emitter) * (1.85f + 7.5f * dist + 15.5f * d);
-        y = clipD003D005a.process(y);
+        // Q010/Q009 and D005 form the asymmetric discrete pre-distortion
+        // stage. D005 is not the later D003/D004 shunt pair.
+        y = preampD005.process(2.4f * y) / 2.4f;
         y = firstDc.process(y);
 
         const float fb1 = firstFeedbackC032.process(y);
         y = (y - 0.18f * fb1) * (1.55f + 5.5f * dist + 12.0f * d);
         y = ic2a.process(y, 2.0f + 12.0f * d);
-        y = std::tanh(y);
         y = opampCouplingC029.process(y);
 
         const float fb2 = secondFeedbackC028.process(y);
         y = (y - 0.15f * fb2 + 0.05f * x) * (1.30f + 4.8f * dist + 11.0f * d);
         y = ic2b.process(y, 2.0f + 10.0f * d);
-        y = clipD003D005b.process(y);
         y = secondDc.process(y);
+
+        // C027/R033 feed the sole antiparallel audio hard clipper D003/D004.
+        // D001/D002 belong to the electronic bypass/output switching and must
+        // not create another distortion stage.
         y = hardClipCouplingC024.process(y);
-        y = hardClipD001D002.process(1.65f * y);
+        y = hardClipD003D004.process(y);
         y = clipRollOff.process(y);
         y = postClipDc.process(y);
 
@@ -430,8 +431,12 @@ public:
             + 0.018f * std::fabs((low - 0.5f) * 30.0f)
             + 0.017f * std::fabs((middle - 0.5f) * 30.0f)
             + 0.017f * std::fabs((high - 0.5f) * 30.0f);
-        const float trim = 0.58f / ((1.0f + 0.30f * dist + 0.28f * d) * eqEnergy);
-        return std::tanh(1.02f * y * trim);
+        // Once D003/D004 conduct, increasing Dist changes compression and
+        // harmonic density rather than making the pedal progressively quieter.
+        // Compensate the measured loss of the cascaded RC stages, not peaks.
+        const float driveMakeup = 1.0f + 0.55f * d * d;
+        const float trim = 0.58f * driveMakeup / eqEnergy;
+        return dn(ic1a.process(y * trim, 2.0f));
     }
 };
 

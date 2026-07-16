@@ -86,6 +86,35 @@ public:
     }
 };
 
+class AnalogIir1
+{
+    double b0 = 1.0, b1 = 0.0, a1 = 0.0;
+    double x1 = 0.0, y1 = 0.0;
+public:
+    void setAnalog(float sr, double n1, double n0, double d1, double d0)
+    {
+        const double k = 2.0 * static_cast<double>(sr);
+        const double denominator = d1 * k + d0;
+        b0 = (n1 * k + n0) / denominator;
+        b1 = (-n1 * k + n0) / denominator;
+        a1 = (-d1 * k + d0) / denominator;
+    }
+    void reset() { x1 = y1 = 0.0; }
+    float process(float input)
+    {
+        const double x = input;
+        double y = b0*x + b1*x1 - a1*y1;
+        x1 = x;
+        y1 = y;
+        if (!std::isfinite(y))
+        {
+            reset();
+            y = 0.0;
+        }
+        return dn(static_cast<float>(y));
+    }
+};
+
 class DcBlock
 {
     float x1 = 0.0f;
@@ -210,9 +239,11 @@ class MarshallGuvnorPlusCore
     float mid = 0.56f;
     float treble = 0.54f;
     float deep = 0.38f;
+    float firstStageNoiseGain = 1.0f;
 
     RcHighPass inputC5;
     RcHighPass interstageC3;
+    AnalogIir1 firstGainTransfer;
     RcLowPass gainFeedbackC2;
     RcLowPass clipFeedbackC8;
     RcLowPass ledCap;
@@ -234,21 +265,26 @@ class MarshallGuvnorPlusCore
 
     void updateComponentValues()
     {
-        const float g = smoothstep(gain);
+        const float g = clamp01(gain); // VR1 100kB
+        const float gainResistance = 100.0f + g * kGainPot;
+        firstStageNoiseGain = 1.0f + gainResistance / 2200.0f;
         inputC5.setRC(sampleRate, kInputR, kInputC);
-        interstageC3.setRC(sampleRate, 10000.0f + (1.0f - g) * 0.30f * kGainPot, kCouplingC);
-        gainFeedbackC2.setRC(sampleRate, 2200.0f + gain * kGainPot, kFeedbackC);
+        interstageC3.setRC(sampleRate, 10000.0f, kCouplingC);
+        firstGainTransfer.setAnalog(sampleRate,
+                                    (2200.0f + gainResistance) * 100.e-9f, 1.0,
+                                    2200.0f * 100.e-9f, 1.0);
+        gainFeedbackC2.setRC(sampleRate, gainResistance, kFeedbackC);
         clipFeedbackC8.setRC(sampleRate, kClipFeedbackR, kClipFeedbackC);
-        ledCap.setHz(sampleRate, 6800.0f - 1500.0f * g + 1200.0f * treble);
+        ledCap.setHz(sampleRate, 7600.0f + 1000.0f * treble);
 
         deepShelf.setLowShelf(sampleRate, 86.0f + 55.0f * deep, 0.76f, -2.0f + 10.5f * deep);
-        preVoice.setPeaking(sampleRate, 640.0f + 430.0f * mid, 0.74f, 1.3f + 2.9f * g);
+        preVoice.setPeaking(sampleRate, 760.0f, 0.74f, 1.2f);
         bassShelf.setLowShelf(sampleRate, 135.0f, 0.74f, eqDb(bass, 11.5f));
         midEq.setPeaking(sampleRate, 700.0f + 460.0f * mid, 0.66f, eqDb(mid, 12.0f));
         trebleShelf.setHighShelf(sampleRate, 2350.0f + 1650.0f * treble, 0.72f, eqDb(treble, 12.5f));
         outputPresence.setPeaking(sampleRate, 2100.0f + 900.0f * treble, 0.72f, 0.7f + 2.5f * treble);
         ledClipper.setSpec(rbcomponents::redLed3mm());
-        ledClipper.setSourceR(1800.0f - 650.0f * g);
+        ledClipper.setSourceR(1000.0f); // R7
     }
 
 public:
@@ -266,6 +302,7 @@ public:
     {
         inputC5.reset();
         interstageC3.reset();
+        firstGainTransfer.reset();
         gainFeedbackC2.reset();
         clipFeedbackC8.reset();
         ledCap.reset();
@@ -290,34 +327,30 @@ public:
 
     float process(float in)
     {
-        const float g = smoothstep(gain);
         float x = inputC5.process(0.96f * in);
         x = deepShelf.process(x);
         x = preVoice.process(x);
 
-        const float fb = gainFeedbackC2.process(x);
-        float y = (x - 0.13f * fb) * (1.5f + 6.4f * gain + 13.5f * g);
-        y = op1a.process(y, 2.0f + 14.0f * gain);
-        y = std::tanh(0.58f * y) * 1.58f;
+        // IC1a: VR1/R1/C1 set the variable non-inverting gain; C2 is the
+        // physical feedback compensation capacitor.
+        float y = firstGainTransfer.process(x);
+        y = op1a.process(gainFeedbackC2.process(y), firstStageNoiseGain);
         y = interstageC3.process(y);
 
-        const float clipFb = clipFeedbackC8.process(y);
-        y = (y - 0.12f * clipFb) * (1.18f + 3.2f * gain + 6.6f * g);
-        y = op1b.process(y, 2.0f + 10.0f * gain);
+        // IC1b is a fixed inverting 680k/10k stage with C8 in parallel with
+        // R6. The 3 mm red LEDs are the only hard shunt clipper.
+        y = op1b.process(-68.0f * clipFeedbackC8.process(y), 69.0f);
         y = ledClipper.process(y);
-        y = 0.84f * y + 0.16f * std::tanh(2.1f * y);
         y = ledCap.process(y);
         y = clipDc.process(y);
 
-        const float cleanLeak = 0.08f * (1.0f - gain);
-        y = y * (1.0f - cleanLeak) + x * cleanLeak;
         y = bassShelf.process(y);
         y = midEq.process(y);
         y = trebleShelf.process(y);
         y = outputPresence.process(y);
 
-        const float trim = 0.64f / (1.0f + 0.26f * gain + 0.22f * g + 0.12f * deep);
-        return std::tanh(1.02f * y * trim);
+        const float trim = 0.64f / (1.0f + 0.18f * gain + 0.12f * deep);
+        return dn(y * trim);
     }
 };
 

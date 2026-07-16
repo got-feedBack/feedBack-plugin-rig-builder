@@ -13,19 +13,10 @@
 
 START_NAMESPACE_DISTRHO
 
-namespace {
-
 static inline float clamp01(float v)
 {
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
 }
-
-static inline float finalLimit(float x)
-{
-    return std::tanh(0.98f * x);
-}
-
-} // namespace
 
 class ShredZonePlugin : public Plugin
 {
@@ -128,8 +119,8 @@ protected:
 
             const float wetL = osL.downsample(ubL);
             const float wetR = osR.downsample(ubR);
-            outL[i] = finalLimit(wetL * level);
-            outR[i] = finalLimit(wetR * level);
+            outL[i] = wetL * level;
+            outR[i] = wetR * level;
         }
     }
 

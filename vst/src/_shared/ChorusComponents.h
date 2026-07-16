@@ -159,6 +159,37 @@ public:
         return data[(size_t)i0] + (data[(size_t)i1] - data[(size_t)i0]) * frac;
     }
 
+    float readCubic(float delaySamples) const
+    {
+        const int size = (int)data.size();
+        if (size <= 6)
+            return 0.0f;
+        delaySamples = clamp(delaySamples, 2.0f, (float)(size - 4));
+
+        float pos = (float)writeIndex - delaySamples;
+        while (pos < 0.0f)
+            pos += (float)size;
+        while (pos >= (float)size)
+            pos -= (float)size;
+
+        const int i0 = (int)std::floor(pos);
+        const int im1 = (i0 + size - 1) % size;
+        const int i1 = (i0 + 1) % size;
+        const int i2 = (i0 + 2) % size;
+        const float t = pos - (float)i0;
+        const float xm1 = data[(size_t)im1];
+        const float x0 = data[(size_t)i0];
+        const float x1 = data[(size_t)i1];
+        const float x2 = data[(size_t)i2];
+
+        // Four-point Catmull-Rom interpolation preserves more high-frequency
+        // comb depth than linear interpolation while the delay head moves.
+        const float a = 0.5f * (-xm1 + 3.0f * x0 - 3.0f * x1 + x2);
+        const float b = 0.5f * (2.0f * xm1 - 5.0f * x0 + 4.0f * x1 - x2);
+        const float c = 0.5f * (-xm1 + x1);
+        return ((a * t + b) * t + c) * t + x0;
+    }
+
     void write(float x)
     {
         if (data.empty())
@@ -258,21 +289,38 @@ class LampLdrModel
     float sampleRate = 48000.0f;
     float lamp = 0.0f;
     float ldrLight = 0.0f;
+    float lampUpSeconds = 0.020f;
+    float lampDownSeconds = 0.075f;
+    float ldrUpSeconds = 0.012f;
+    float ldrDownSeconds = 0.090f;
     float lampUp = 0.0f;
     float lampDown = 0.0f;
     float ldrUp = 0.0f;
     float ldrDown = 0.0f;
 
+    void updateCoefficients()
+    {
+        lampUp = 1.0f - std::exp(-1.0f / (lampUpSeconds * sampleRate));
+        lampDown = 1.0f - std::exp(-1.0f / (lampDownSeconds * sampleRate));
+        ldrUp = 1.0f - std::exp(-1.0f / (ldrUpSeconds * sampleRate));
+        ldrDown = 1.0f - std::exp(-1.0f / (ldrDownSeconds * sampleRate));
+    }
+
 public:
+    void setTimeConstants(float lampUpMs, float lampDownMs,
+                          float ldrUpMs, float ldrDownMs)
+    {
+        lampUpSeconds = clamp(lampUpMs, 0.5f, 500.0f) * 0.001f;
+        lampDownSeconds = clamp(lampDownMs, 0.5f, 500.0f) * 0.001f;
+        ldrUpSeconds = clamp(ldrUpMs, 0.5f, 500.0f) * 0.001f;
+        ldrDownSeconds = clamp(ldrDownMs, 0.5f, 500.0f) * 0.001f;
+        updateCoefficients();
+    }
+
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
-        // JKL 2174 incandescent bulb plus CdS lag: quick enough to wobble,
-        // slow enough to give the Uni-Vibe asymmetric throb.
-        lampUp = 1.0f - std::exp(-1.0f / (0.020f * sampleRate));
-        lampDown = 1.0f - std::exp(-1.0f / (0.075f * sampleRate));
-        ldrUp = 1.0f - std::exp(-1.0f / (0.012f * sampleRate));
-        ldrDown = 1.0f - std::exp(-1.0f / (0.090f * sampleRate));
+        updateCoefficients();
         reset();
     }
 

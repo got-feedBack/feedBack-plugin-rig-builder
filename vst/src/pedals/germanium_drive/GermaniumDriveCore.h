@@ -106,16 +106,9 @@ class GermaniumClipper
     rbcomponents::DiodeSpec spec = rbcomponents::junction2N404A();
     float rSeries = 1500.0f;
     float v = 0.0f;
+    float idle = 0.0f;
 
-public:
-    void reset() { v = 0.0f; }
-
-    void setSeriesResistance(float rOhm)
-    {
-        rSeries = rOhm < 470.0f ? 470.0f : rOhm;
-    }
-
-    inline float process(float vin)
+    void solve(float vin)
     {
         for (int i = 0; i < 8; ++i)
         {
@@ -128,7 +121,30 @@ public:
             v -= f / fp;
             v = rbcomponents::rbClamp(v, -spec.maxAbsV, spec.maxAbsV);
         }
-        return v;
+    }
+
+public:
+    void reset()
+    {
+        v = 0.0f;
+        solve(0.12f); // Q2 class-A operating point
+        idle = v;
+    }
+
+    void setSeriesResistance(float rOhm)
+    {
+        const float acState = v - idle;
+        rSeries = rOhm < 470.0f ? 470.0f : rOhm;
+        v = 0.0f;
+        solve(0.12f);
+        idle = v;
+        v += acState;
+    }
+
+    inline float process(float vin)
+    {
+        solve(vin + 0.12f);
+        return v - idle;
     }
 };
 
@@ -227,7 +243,7 @@ public:
 
         const float starveDrive = 1.42f - 0.42f * volt;
         const float starveCeil = 0.62f + 0.38f * volt;
-        float q2 = germanium.process(q1 * (1.0f + 1.65f * g) * starveDrive + 0.12f);
+        float q2 = germanium.process(q1 * (1.0f + 1.65f * g) * starveDrive);
         q2 = geDc.process(q2) * (2.25f * starveCeil);
 
         float transformer = std::tanh(q2 * (0.78f + 0.52f * g + 0.22f * mode));
@@ -239,7 +255,7 @@ public:
         const float y = rounded + (open - rounded) * (0.18f + 0.82f * volt);
 
         const float makeup = (0.36f + 0.24f * std::exp(-g / 0.35f)) / (0.88f + 0.28f * mode);
-        return std::tanh(y * makeup);
+        return dn(y * makeup);
     }
 };
 

@@ -6,7 +6,7 @@ enum MultiVibeParamId
     kSpeed = 0,
     kMix,        // display "Depth" — pitch-modulation excursion (not a dry/wet mix)
     kWaveform,   // display "Rise Time" — unlatch bloom time
-    kMode,       // real VB-2 3-way: Bypass / Latch / Unlatch (APPENDED last -> old seeds default to Latch)
+    kMode,       // real VB-2 3-way: Unlatch / Bypass / Latch
     kParamCount
 };
 
@@ -26,8 +26,7 @@ static const char* const kMultiVibeSymbols[kParamCount] = {
 
 static const float kMultiVibeMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f };
 static const float kMultiVibeMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f };
-// Mode default 0.5 = LATCH (continuous vibrato) = the prior always-on behaviour,
-// so songs seeded before this param existed load as a normal vibrato.
-static const float kMultiVibeDef[kParamCount] = { 0.38f, 0.64f, 0.18f, 0.5f };
+// Bottom selector position (0) is LATCH, the normal continuous-vibrato mode.
+static const float kMultiVibeDef[kParamCount] = { 0.38f, 0.50f, 0.18f, 0.0f };
 
 #endif // MULTI_VIBE_PARAMS_H

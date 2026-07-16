@@ -19,11 +19,6 @@ static inline float clamp01(float v)
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
 }
 
-static inline float finalLimit(float x)
-{
-    return std::tanh(0.98f * x);
-}
-
 } // namespace
 
 class VintageDistortionPlugin : public Plugin
@@ -38,8 +33,8 @@ class VintageDistortionPlugin : public Plugin
 
     void applyAll()
     {
-        left.setGain(params[kGain]);
-        right.setGain(params[kGain]);
+        left.setParams(params[kGain], params[kVolume]);
+        right.setParams(params[kGain], params[kVolume]);
     }
 
 public:
@@ -59,7 +54,7 @@ protected:
     const char* getDescription() const override { return "DOD 250 style overdrive/preamp"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(2, 0, 0); }
     int64_t getUniqueId() const override { return d_cconst('V', 'i', 'D', 's'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -103,7 +98,6 @@ protected:
         const float* inR = inputs[1];
         float* outL = outputs[0];
         float* outR = outputs[1];
-        const float volume = 1.15f * params[kVolume];
         float ubL[kOS];
         float ubR[kOS];
 
@@ -119,8 +113,8 @@ protected:
 
             const float wetL = osL.downsample(ubL);
             const float wetR = osR.downsample(ubR);
-            outL[i] = finalLimit(wetL * volume);
-            outR[i] = finalLimit(wetR * volume);
+            outL[i] = wetL;
+            outR[i] = wetR;
         }
     }
 

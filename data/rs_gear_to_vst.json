@@ -13,7 +13,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Acoustic Emulator.vst3",
-   "notes": "Bundled blue-button acoustic simulator based on the local schematic, with TL072/TL061 stages, 2N4339/J201 FET voice branch, 1N4148/green LED diode ladder, and real Gain, Top, Body, Volume controls. Rocksmith Tone maps to Top, Body to Body, Mid to Gain, and Volume is pinned."
+   "notes": "Bundled acoustic image processor calibrated from local reference renders. Brightness controls the acoustic image, Thickness defines the virtual body, Amount blends its contribution, and Volume sets output level. Rocksmith Tone maps to Brightness, Body to Thickness, Mid to Amount, and Volume is pinned."
   }
  ],
  "Pedal_Chorus": [
@@ -35,7 +35,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Deja Chorus.vst3",
-   "notes": "Bundled Deja Vibe/Uni-Vibe style optical chorus based on the local ElectroVibe/UniVibe schematics. Real controls: Intensity, Speed1, Speed2, Speed Select, Volume, Mode; Rocksmith pins Mode to Chorus."
+   "notes": "Bundled Deja Vibe/Uni-Vibe style optical chorus based on the local ElectroVibe/UniVibe schematics and calibrated reference renders. Visible controls: Speed, Volume and Intensity. Legacy Speed2/Speed Select/Mode ids remain hidden for preset compatibility; the DSP is fixed to Chorus."
   }
  ],
  "Pedal_StereoChorus": [
@@ -133,7 +133,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Deluxe Servant.vst3",
-   "notes": "Bundled Deluxe Electric Mistress style component-guided BBD flanger based on the local vintage schematic. Real controls: Rate, Range, Color, Matrix; Rocksmith Depth maps to Range and Mix maps to Color."
+   "notes": "Bundled Deluxe Electric Mistress style component-guided BBD flanger based on the local vintage schematic. Real panel: Rate, Range and Color knobs plus a Filter Matrix switch; Rocksmith Depth maps to Range and Mix maps to Color."
   }
  ],
  "Bass_Pedal_BassFlanger": [
@@ -241,7 +241,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Multi-Vibe.vst3",
-   "notes": "Bundled Uni-Vibe style optical modulation based on the local schematic. Real controls: Speed, Intensity, Volume, Mode; the game Speed/Mix map to Speed/Intensity."
+   "notes": "Bundled Uni-Vibe style optical modulation based on the local schematic and reference renders. The chassis exposes Intensity and Volume; the game Speed drives the hidden external foot-controller input and Mode is fixed to Chorus."
   }
  ],
  "Pedal_MultiVibe": [
@@ -252,7 +252,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/VB-2.vst3",
-   "notes": "Bundled Boss VB-2 style BBD vibrato based on the local schematic and datasheets. Real controls: Rate, Depth, Rise Time; the game Speed/Mix/Waveform map to those controls."
+   "notes": "Bundled Boss VB-2 style MN3207 BBD vibrato calibrated against the local schematic and nine reference renders. Real panel: Rate, Depth and Rise Time knobs plus the Unlatch/Bypass/Latch selector; the game Speed/Mix/Waveform map to the three pots and songs pin Mode to Latch."
   }
  ],
  "Pedal_AutoVibe": [
@@ -263,7 +263,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Oceanduct.vst3",
-   "notes": "Bundled envelope-controlled vibrato/vibe. No exact schematic is available locally, so this is a behaviour-driven auto-vibrato using Sens, Attack, Release, and Mix."
+   "notes": "Bundled envelope-controlled BBD vibrato. No exact schematic is available locally, so it is behaviour-driven, but its delay centre and maximum excursion are bounded by the measured VB-2 references. Uses Sens, Attack, Release, and Mix."
   }
  ],
  "Pedal_BassEmulator": [
@@ -285,7 +285,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/UV-1.vst3",
-   "notes": "Bundled Marshall SV-1/Supervibe style MN3007 BBD vibe based on the local schematic and datasheets. Real controls: Rate, Depth, Tone, Sweep; the game Mix/Wave map to Tone/Sweep."
+   "notes": "Bundled Marshall SV-1/Supervibe MN3007 BBD model based on the local schematic. The direct/delay summer, clock-centre Sweep and Depth-controlled excursion follow the circuit; the measured VB-2 renders bound the 1024-stage BBD excursion. Real controls: Rate, Depth, Tone, Sweep."
   }
  ],
  "Pedal_BakedRotatoe": [
@@ -301,13 +301,13 @@
  ],
  "Pedal_OmniMod": [
   {
-   "name": "OmniMod",
-   "manufacturer": "RigBuilder",
+   "name": "AmpVibe",
+   "manufacturer": "Rig Builder",
    "format": "VST3",
    "url": "",
    "free": true,
-   "bundled": "vst/pedals/UniMod.vst3",
-   "notes": "Bundled Uni-Vibe/Shin-ei style photocell phase modulation based on the local Omni Mod schematics. Real controls: Speed, Intensity, Volume, Mode; the game Rate/Depth/Mix map to Speed/Intensity/Volume."
+   "bundled": "vst/pedals/Multi-Vibe.vst3",
+   "notes": "Shares the canonical Uni-Vibe optical model used by Pedal_AmpVibe. The game Rate/Depth/Mix map to the hidden external Speed input and the real Intensity/Volume pots; Chorus mode is fixed."
   }
  ],
  "Pedal_AnalogueDelay": [
@@ -422,7 +422,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/RV-2.vst3",
-   "notes": "Bundled Boss RV-2 style early digital reverb based on the local schematic, using the game's Time, Mix, Depth, and Tone knobs."
+   "notes": "Bundled Boss RV-2 style early digital reverb based on the local schematic and reference renders. Mix keeps the calibrated endpoints but uses a slightly dry-biased middle taper; uses the game's Time, Mix, Depth, and Tone knobs."
   }
  ],
  "Pedal_PlateVerb": [
@@ -477,7 +477,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/Multi Comp.vst3",
-   "notes": "Bundled EBS MultiComp 2-style bass compressor based on the local schematic, with real Comp, Sens, Gain and Mode controls. Rocksmith Compress maps to Comp; Filter maps to Sens; Gain and Mode are pinned."
+   "notes": "Bundled EBS MultiComp 2-style bass compressor based on the local schematic, with real Comp/Limit, Gain and Mode controls plus separate internal low/high detector trims. Rocksmith Compress maps to Comp/Limit and Filter maps to Gain; trims and MultiBand mode are pinned."
   }
  ],
  "Pedal_EQ5": [
@@ -965,7 +965,7 @@
    "format": "VST3",
    "bundled": "vst/racks/RotaVibe.vst3",
    "free": true,
-   "notes": "Bundled Rotary speaker. Maps RS Rate/Depth/Mix/Balance."
+   "notes": "Bundled two-band rotary speaker with separate horn/rotor Doppler and amplitude paths. Depth scales both effects, Mix uses a restrained taper, and Balance shifts horn versus rotor level."
   }
  ],
  "Rack_StereoTubeTrem": [
@@ -1025,7 +1025,7 @@
    "format": "VST3",
    "bundled": "vst/racks/StereoAnalogVibe.vst3",
    "free": true,
-   "notes": "Bundled Univibe vibrato. Maps RS Speed/Waveform/Mix."
+   "notes": "Bundled stereo optical phase vibe using the measured Uni-Vibe lamp/LDR response and unequal four-stage RC network. Stereo phase offset and waveform morph are intentionally restrained. Maps RS Speed/Waveform/Mix."
   }
  ],
  "Rack_StudioChamber": [

@@ -26,11 +26,6 @@ static inline float quantize3(float v)
     return v < 0.25f ? 0.0f : (v < 0.75f ? 0.5f : 1.0f);
 }
 
-static inline float finalLimit(float x)
-{
-    return std::tanh(0.98f * x);
-}
-
 } // namespace
 
 class GermaniumDrivePlugin : public Plugin
@@ -132,8 +127,8 @@ protected:
                 ubR[k] = right.process(ubR[k]);
             }
 
-            outL[i] = finalLimit(osL.downsample(ubL) * level);
-            outR[i] = finalLimit(osR.downsample(ubR) * level);
+            outL[i] = osL.downsample(ubL) * level;
+            outR[i] = osR.downsample(ubR) * level;
         }
     }
 

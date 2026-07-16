@@ -27,7 +27,7 @@ static const char* const kAmpVibeSymbols[kParamCount] = {
 static const float kAmpVibeMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f };
 static const float kAmpVibeMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f };
 static const float kAmpVibeDef[kParamCount] = {
-    0.34f,
+    0.49f,
     0.62f,
     0.62f,
     0.0f,
