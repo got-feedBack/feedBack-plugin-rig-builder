@@ -31,6 +31,76 @@ TEMPLATE = (ROOT / "tools" / "amp_lufs_harness.cpp.in").read_text()
 MODEL = ROOT / "data" / "amp_loudness_model.json"
 STEPS = 11
 
+# ── Reference cab IRs ─────────────────────────────────────────────────────────
+# The model must capture the loudness of what the player HEARS: in the app the
+# amp's internal Cab Sim is muted and a real cab IR follows. Measured amp-only,
+# high-gain amps (energy largely in harmonics above the cab's ~4-5 kHz rolloff)
+# read equal-LUFS but land several dB apart after the cab (10.8 dB spread over
+# 9 amps) — and the engine's final leveler then squashes whoever came out hot,
+# which players hear as "high-gain amps are quieter". Every measurement is
+# therefore taken with "Cab Sim"=0 and the output convolved with a reference IR
+# (energy-normalized, truncated to 1024 taps): the classic 4x12 for guitar
+# amps, an 8x10 for bass amps.
+GUITAR_IR = ROOT / "assets" / "cab_irs" / "Marsten_1960A_4x12" / "dyn_cone.wav"
+BASS_IR = ROOT / "assets" / "cab_irs" / "Citrus_OBC810" / "dyn_cone.wav"
+IR_TAPS = 1024
+_CABSIM_RE = re.compile(r"^cab\s*sim$", re.I)
+
+
+def _read_wav_mono(path: Path) -> list[float]:
+    import struct as _st
+    d = path.read_bytes()
+    assert d[:4] == b"RIFF" and d[8:12] == b"WAVE", f"not a WAV: {path}"
+    i = 12
+    fmt = ch = sr = bits = None
+    data = b""
+    while i + 8 <= len(d):
+        cid = d[i:i + 4]
+        sz = _st.unpack("<I", d[i + 4:i + 8])[0]
+        body = d[i + 8:i + 8 + sz]
+        if cid == b"fmt ":
+            fmt, ch, sr = _st.unpack("<HHI", body[:8])
+            bits = _st.unpack("<H", body[14:16])[0]
+        elif cid == b"data":
+            data = body
+        i += 8 + sz + (sz & 1)
+    if fmt == 3 and bits == 32:
+        n = len(data) // 4
+        vals = list(_st.unpack(f"<{n}f", data))
+    elif bits == 16:
+        n = len(data) // 2
+        vals = [v / 32768.0 for v in _st.unpack(f"<{n}h", data)]
+    elif bits == 24:
+        vals = []
+        for j in range(0, len(data) - 2, 3):
+            v = data[j] | (data[j + 1] << 8) | (data[j + 2] << 16)
+            if v >= 1 << 23:
+                v -= 1 << 24
+            vals.append(v / float(1 << 23))
+    else:
+        n = len(data) // 4
+        vals = [v / float(1 << 31) for v in _st.unpack(f"<{n}i", data)]
+    if ch == 2:
+        vals = vals[0::2]
+    return vals
+
+
+def _prepare_ir(path: Path) -> Path:
+    """Reference IR → raw float32 for the harness: mono, truncated to IR_TAPS
+    with a short fade-out, ENERGY-normalized (sum of squares = 1, i.e. unity
+    broadband power gain so the absolute LUFS target stays comparable)."""
+    import struct as _st
+    ir = _read_wav_mono(path)[:IR_TAPS]
+    fade = 128
+    for j in range(fade):
+        ir[-fade + j] *= 1.0 - (j + 1) / float(fade)
+    e = sum(v * v for v in ir)
+    scale = (1.0 / e) ** 0.5 if e > 0 else 1.0
+    ir = [v * scale for v in ir]
+    out = Path(tempfile.gettempdir()) / f"rb_ref_ir_{path.parent.name}.f32"
+    out.write_bytes(_st.pack(f"<{len(ir)}f", *ir))
+    return out
+
 # Explicit channel/mode topology for guitar amps whose selectors cannot be
 # inferred from an RS Gain mapping. Each profile is measured with the selector
 # values fixed, then only that channel's real gain and level controls are swept.
@@ -208,7 +278,8 @@ def _choose_params(info: dict, gain_names: list[str]) -> tuple[list[int], list[i
     return gain_idx, vol_idx
 
 
-def _compile_and_run(info: dict, gain_idx, vol_idx, fixed: dict[int, float] | None = None) -> dict | None:
+def _compile_and_run(info: dict, gain_idx, vol_idx, fixed: dict[int, float] | None = None,
+                     ir_path: Path | None = None) -> dict | None:
     d: Path = info["dir"]
     probe = TEMPLATE.replace("@PLUGIN_CPP@", info["plugin_cpp"]).replace("@CLASS@", info["class"])
     probe_path = d / "_lufs_probe.cpp"
@@ -226,7 +297,10 @@ def _compile_and_run(info: dict, gain_idx, vol_idx, fixed: dict[int, float] | No
         g = ",".join(str(i) for i in gain_idx) or "-"
         v = ",".join(str(i) for i in vol_idx) or "-"
         fx = ",".join(f"{i}={value:.6f}" for i, value in (fixed or {}).items()) or "-"
-        run = subprocess.run([binpath, g, v, str(STEPS), fx], capture_output=True, text=True)
+        args = [binpath, g, v, str(STEPS), fx]
+        if ir_path is not None:
+            args.append(str(ir_path))
+        run = subprocess.run(args, capture_output=True, text=True)
         if run.returncode != 0 or not run.stdout.strip():
             print(f"  RUN FAIL rc={run.returncode}: {run.stderr[-500:]}", file=sys.stderr)
             return None
@@ -236,7 +310,8 @@ def _compile_and_run(info: dict, gain_idx, vol_idx, fixed: dict[int, float] | No
         Path(binpath).unlink(missing_ok=True)
 
 
-def measure_amp(d: Path, gear_idx: dict, knob_map: dict) -> tuple[str, dict] | None:
+def measure_amp(d: Path, gear_idx: dict, knob_map: dict,
+                guitar_ir: Path | None = None, bass_ir: Path | None = None) -> tuple[str, dict] | None:
     info = _parse_amp(d)
     if not info:
         print(f"[skip] {d.name}: could not parse", file=sys.stderr)
@@ -246,9 +321,20 @@ def measure_amp(d: Path, gear_idx: dict, knob_map: dict) -> tuple[str, dict] | N
     gain_names = _gain_param_names(knob_map, gears, stem)
     gain_idx, vol_idx = _choose_params(info, gain_names)
     names = info["names"]
+    # Measure through the reference cab (bass amps → 8x10, everything else →
+    # 4x12) with the internal Cab Sim muted — exactly what the app plays when a
+    # real cab IR is in the chain.
+    is_bass = any(g.startswith("Bass_Amp") for g in gears)
+    ir_path = (bass_ir if is_bass else guitar_ir)
+    base_fixed: dict[int, float] = {}
+    for i, n in enumerate(names):
+        if _CABSIM_RE.search(n):
+            base_fixed[i] = 0.0
+            break
     print(f"[{d.name}] stem={stem} class={info['class']} "
-          f"gain={[names[i] for i in gain_idx]} vol={[names[i] for i in vol_idx]}")
-    res = _compile_and_run(info, gain_idx, vol_idx)
+          f"gain={[names[i] for i in gain_idx]} vol={[names[i] for i in vol_idx]} "
+          f"cab={'8x10' if is_bass else '4x12'}{' cabsim=0' if base_fixed else ''}")
+    res = _compile_and_run(info, gain_idx, vol_idx, base_fixed or None, ir_path)
     if not res:
         return None
     defs = res["def"]
@@ -273,9 +359,10 @@ def measure_amp(d: Path, gear_idx: dict, knob_map: dict) -> tuple[str, dict] | N
                 print(f"    profile {spec['name']} skipped; missing params: {missing}", file=sys.stderr)
                 continue
             fixed_idx = {idx_of[name]: value for name, value in spec["fixed"].items()}
+            fixed_idx.update(base_fixed)     # Cab Sim stays muted per profile too
             gain_profile_idx = [idx_of[name] for name in spec["gain"]]
             vol_profile_idx = [idx_of[name] for name in spec["vol"]]
-            measured = _compile_and_run(info, gain_profile_idx, vol_profile_idx, fixed_idx)
+            measured = _compile_and_run(info, gain_profile_idx, vol_profile_idx, fixed_idx, ir_path)
             if not measured:
                 print(f"    profile {spec['name']} measurement failed", file=sys.stderr)
                 continue
@@ -328,15 +415,23 @@ def main(argv: list[str]) -> int:
     if MODEL.exists() and argv:          # subset run: merge into existing
         model = json.loads(MODEL.read_text())
 
+    guitar_ir = _prepare_ir(GUITAR_IR)
+    bass_ir = _prepare_ir(BASS_IR)
+
     ok = 0
     for d in dirs:
-        out = measure_amp(d, gear_idx, knob_map)
+        out = measure_amp(d, gear_idx, knob_map, guitar_ir, bass_ir)
         if out:
             model[out[0]] = out[1]
             ok += 1
     model["_meta"] = {
         "target_lufs": -12.0, "metric": "BS.1770-4 integrated LUFS (mono, left)",
-        "excitation": "110-1760 Hz multitone @ RMS 0.10", "steps": STEPS,
+        "excitation": "plucked 110-1760 Hz multitone, peak -12 dBFS (the "
+                      "calibrated guitar reference level; 350 ms plucks, "
+                      "~180 ms decay)", "steps": STEPS,
+        "chain": "Cab Sim=0 + reference cab IR (guitar: Marsten_1960A_4x12, "
+                 "bass: Citrus_OBC810; energy-normalized, 1024 taps) — the "
+                 "loudness of what the player hears, not the raw amp output",
         "note": "lufs_* are measured with the amp's compiled kLvl; rig builder "
                 "computes a clean trim from these — it does NOT modify amp params.",
     }
