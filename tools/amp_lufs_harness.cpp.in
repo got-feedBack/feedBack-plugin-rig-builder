@@ -62,8 +62,12 @@ static const uint32_t CHUNK   = 512;
 // amp: clean (linear) amps then played ~8 dB quieter with real guitar than the
 // model predicted while compressed high-gain amps barely moved — a ~6 dB
 // residual loudness spread the trim couldn't see.
+static bool gBassTone = false;   // bass amps: fundamentals down at 55 Hz
+
 static std::vector<float> makeMultitone(int n) {
-    const double f[5] = {110.0, 220.0, 440.0, 880.0, 1760.0};
+    const double fg[5] = {110.0, 220.0, 440.0, 880.0, 1760.0};
+    const double fb[5] = {55.0, 110.0, 220.0, 440.0, 880.0};
+    const double* f = gBassTone ? fb : fg;
     const int    period = (int)(0.350 * SR);
     const int    attack = (int)(0.005 * SR);
     const double tau    = 0.180 * SR;
@@ -233,6 +237,8 @@ int main(int argc, char** argv) {
             gCabIR.insert(gCabIR.end(), buf, buf + got);
         std::fclose(f);
     }
+    if (argc > 6 && std::strcmp(argv[6], "bass") == 0)
+        gBassTone = true;   // bass excitation: fundamentals from 55 Hz
 
     // Defaults straight from the plugin (its ctor seeds kXxxDef).
     int N;

@@ -46,6 +46,36 @@ BASS_IR = ROOT / "assets" / "cab_irs" / "Citrus_OBC810" / "dyn_cone.wav"
 IR_TAPS = 1024
 _CABSIM_RE = re.compile(r"^cab\s*sim$", re.I)
 
+# Per-amp material-calibration offset (dB), ADDED to every measured LUFS value.
+# For amps with heavy program compression the pluck excitation under-predicts
+# their in-game loudness: the Eden WT family's opto comp + Output-Limit holds
+# ~5.5:1 effective over real bass (input -8 dB -> output only -1.4 dB), so its
+# output loudness barely tracks the input and a static trim computed from the
+# excitation lands ~3.5 dB hot vs the other bass amps on real material
+# (verified against the Garden bass DI through the OBC810 reference IR).
+# Keyed by bundle stem; survives regens because it lives here, not in the JSON.
+MATERIAL_OFFSET_DB = {
+    "aidengt300": 3.5,
+    "aidengt550": 3.5,
+    "aidengt880": 3.5,
+}
+
+
+def _apply_material_offset(stem: str, entry: dict) -> None:
+    off = MATERIAL_OFFSET_DB.get(stem, 0.0)
+    if not off:
+        return
+    def shift_curve(curve):
+        return [[v, round(l + off, 4)] for v, l in curve]
+    entry["lufs_default"] = round(entry["lufs_default"] + off, 4)
+    entry["gain_curve"] = shift_curve(entry.get("gain_curve") or [])
+    entry["vol_curves"] = {k: shift_curve(c) for k, c in (entry.get("vol_curves") or {}).items()}
+    for prof in entry.get("channel_profiles") or []:
+        prof["lufs_default"] = round(prof["lufs_default"] + off, 4)
+        prof["gain_curve"] = shift_curve(prof.get("gain_curve") or [])
+        prof["vol_curves"] = {k: shift_curve(c) for k, c in (prof.get("vol_curves") or {}).items()}
+    entry["material_offset_db"] = off
+
 
 def _read_wav_mono(path: Path) -> list[float]:
     import struct as _st
@@ -279,7 +309,7 @@ def _choose_params(info: dict, gain_names: list[str]) -> tuple[list[int], list[i
 
 
 def _compile_and_run(info: dict, gain_idx, vol_idx, fixed: dict[int, float] | None = None,
-                     ir_path: Path | None = None) -> dict | None:
+                     ir_path: Path | None = None, bass_tone: bool = False) -> dict | None:
     d: Path = info["dir"]
     probe = TEMPLATE.replace("@PLUGIN_CPP@", info["plugin_cpp"]).replace("@CLASS@", info["class"])
     probe_path = d / "_lufs_probe.cpp"
@@ -300,6 +330,8 @@ def _compile_and_run(info: dict, gain_idx, vol_idx, fixed: dict[int, float] | No
         args = [binpath, g, v, str(STEPS), fx]
         if ir_path is not None:
             args.append(str(ir_path))
+            if bass_tone:
+                args.append("bass")
         run = subprocess.run(args, capture_output=True, text=True)
         if run.returncode != 0 or not run.stdout.strip():
             print(f"  RUN FAIL rc={run.returncode}: {run.stderr[-500:]}", file=sys.stderr)
@@ -334,7 +366,7 @@ def measure_amp(d: Path, gear_idx: dict, knob_map: dict,
     print(f"[{d.name}] stem={stem} class={info['class']} "
           f"gain={[names[i] for i in gain_idx]} vol={[names[i] for i in vol_idx]} "
           f"cab={'8x10' if is_bass else '4x12'}{' cabsim=0' if base_fixed else ''}")
-    res = _compile_and_run(info, gain_idx, vol_idx, base_fixed or None, ir_path)
+    res = _compile_and_run(info, gain_idx, vol_idx, base_fixed or None, ir_path, is_bass)
     if not res:
         return None
     defs = res["def"]
@@ -362,7 +394,7 @@ def measure_amp(d: Path, gear_idx: dict, knob_map: dict,
             fixed_idx.update(base_fixed)     # Cab Sim stays muted per profile too
             gain_profile_idx = [idx_of[name] for name in spec["gain"]]
             vol_profile_idx = [idx_of[name] for name in spec["vol"]]
-            measured = _compile_and_run(info, gain_profile_idx, vol_profile_idx, fixed_idx, ir_path)
+            measured = _compile_and_run(info, gain_profile_idx, vol_profile_idx, fixed_idx, ir_path, is_bass)
             if not measured:
                 print(f"    profile {spec['name']} measurement failed", file=sys.stderr)
                 continue
@@ -400,6 +432,7 @@ def measure_amp(d: Path, gear_idx: dict, knob_map: dict,
     print(f"    lufs_default={entry['lufs_default']:.2f}  "
           f"gain_range=[{entry['gain_curve'][0][1]:.1f}..{entry['gain_curve'][-1][1]:.1f}]"
           if entry["gain_curve"] else f"    lufs_default={entry['lufs_default']:.2f} (no gain sweep)")
+    _apply_material_offset(stem, entry)
     return stem, entry
 
 
@@ -426,7 +459,7 @@ def main(argv: list[str]) -> int:
             ok += 1
     model["_meta"] = {
         "target_lufs": -12.0, "metric": "BS.1770-4 integrated LUFS (mono, left)",
-        "excitation": "plucked 110-1760 Hz multitone, peak -12 dBFS (the "
+        "excitation": "plucked multitone, peak -12 dBFS (guitar 110-1760 Hz, bass 55-880 Hz; the "
                       "calibrated guitar reference level; 350 ms plucks, "
                       "~180 ms decay)", "steps": STEPS,
         "chain": "Cab Sim=0 + reference cab IR (guitar: Marsten_1960A_4x12, "
