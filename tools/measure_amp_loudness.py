@@ -70,6 +70,7 @@ def _apply_material_offset(stem: str, entry: dict) -> None:
     entry["lufs_default"] = round(entry["lufs_default"] + off, 4)
     entry["gain_curve"] = shift_curve(entry.get("gain_curve") or [])
     entry["vol_curves"] = {k: shift_curve(c) for k, c in (entry.get("vol_curves") or {}).items()}
+    entry["input_curve"] = shift_curve(entry.get("input_curve") or [])
     for prof in entry.get("channel_profiles") or []:
         prof["lufs_default"] = round(prof["lufs_default"] + off, 4)
         prof["gain_curve"] = shift_curve(prof.get("gain_curve") or [])
@@ -377,6 +378,9 @@ def measure_amp(d: Path, gear_idx: dict, knob_map: dict,
         "lufs_default": res["default"],
         "gain_curve": res["sweeps"].get("gain", []),
         "vol_curves": {names[int(k)]: v for k, v in res["sweeps"].items() if k != "gain"},
+        # LUFS vs input drive (+0..+24 dB): how much of a pre-amp pedal's boost
+        # this amp ABSORBS (saturated: flat) vs passes through (clean: ~linear).
+        "input_curve": res.get("input_curve", []),
     }
 
     profile_specs = CHANNEL_PROFILES.get(d.name, [])
@@ -411,6 +415,7 @@ def measure_amp(d: Path, gear_idx: dict, knob_map: dict,
                 "gain_curve": measured["sweeps"].get("gain", []),
                 "vol_curves": {names[int(k)]: curve for k, curve in measured["sweeps"].items()
                                if k != "gain"},
+                "input_curve": measured.get("input_curve", []),
             })
             print(f"    profile={spec['name']:<20} lufs={measured['default']:.2f}")
         if len(profiles) != len(profile_specs):

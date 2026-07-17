@@ -138,6 +138,9 @@ static double integratedLUFS(const std::vector<float>& x) {
 
 // Reference cab FIR (raw float32, loaded once in main; empty = amp-only).
 static std::vector<float> gCabIR;
+// Input drive scale for the input-response sweep (how much of a pre-amp
+// pedal's boost the amp ABSORBS vs passes through).
+static double gInGain = 1.0;
 
 // ── One measurement: fresh plugin, set params, run, measure LEFT output ────────
 static double measure(const std::vector<float>& def,
@@ -158,7 +161,7 @@ static double measure(const std::vector<float>& def,
     int n = WARMUP + MEASURE, pos = 0;
     while (pos < n) {
         uint32_t f = (uint32_t)std::min((int)CHUNK, n - pos);
-        for (uint32_t i = 0; i < f; ++i) { inBufL[i] = inBufR[i] = tone[pos + i]; }
+        for (uint32_t i = 0; i < f; ++i) { inBufL[i] = inBufR[i] = (float)(tone[pos + i] * gInGain); }
         p.go(ins, outs, f);
         for (uint32_t i = 0; i < f; ++i)
             if (pos + (int)i >= WARMUP) outL.push_back(outBufL[i]);
@@ -277,6 +280,17 @@ int main(int argc, char** argv) {
         }
         std::printf("]");
     }
-    std::printf("}}\n");
+    std::printf("}");
+    // Input-response sweep: default params, input driven +0..+24 dB — how the
+    // amp's LOUDNESS responds to a hotter signal (a dirt/boost pedal in front).
+    // A saturated amp absorbs the boost (flat curve); a clean amp passes it.
+    std::printf(", \"input_curve\": [");
+    for (int s = 0; s < 5; ++s) {
+        const double offDb = 6.0 * s;
+        gInGain = std::pow(10.0, offDb / 20.0);
+        std::printf("%s[%.1f, %.4f]", s ? ", " : "", offDb, measure(def, fixed));
+    }
+    gInGain = 1.0;
+    std::printf("]}\n");
     return 0;
 }

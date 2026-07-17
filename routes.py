@@ -4848,7 +4848,60 @@ def _amp_channel_profile(entry: dict, params: dict) -> dict | None:
     return best if best_error <= 0.08 else None
 
 
-def _amp_loudness_trim_db(entry: dict, params: dict) -> float:
+def _load_pedal_loudness_model() -> dict:
+    """data/pedal_loudness_model.json — per-pedal output level (dB vs the
+    calibrated DI) + input-absorption slope, measured with the same excitation
+    as the amp model (tools/measure_pedal_loudness.py). Used to estimate the
+    level a pre-amp pedal chain feeds the amp."""
+    return _load_cached_json("pedal_loudness_model.json")
+
+
+def _pedal_chain_level_db(stem_lower: str, params: dict | None, lvl_in: float) -> float:
+    """Level (dB vs the calibrated DI) AFTER this pedal, given `lvl_in` before
+    it. Unknown pedals pass the level through unchanged (assume unity)."""
+    entry = _load_pedal_loudness_model().get(stem_lower)
+    if not isinstance(entry, dict):
+        return lvl_in
+    default = entry.get("default") or {}
+
+    def _val(name):
+        try:
+            return float((params or {}).get(name, default.get(name, 0.5)))
+        except (TypeError, ValueError):
+            return float(default.get(name, 0.5))
+
+    drive_curve = (entry.get("drive_curves") or {}).get("gain") or []
+    drive_params = entry.get("drive_params") or []
+    if drive_curve and drive_params:
+        g_now = sum(_val(p) for p in drive_params) / len(drive_params)
+        out = _interp_curve(drive_curve, g_now)
+    else:
+        out = float(entry.get("out_db", 0.0))
+    for name, curve in (entry.get("level_curves") or {}).items():
+        if not curve:
+            continue
+        out += _interp_curve(curve, _val(name)) - _interp_curve(curve, float(default.get(name, 0.5)))
+    # Input absorption: a hard clipper's output level barely tracks its input
+    # (slope ~0); a transparent boost passes it (slope ~1).
+    slope = float(entry.get("input_slope", 1.0))
+    return out + slope * max(0.0, lvl_in)
+
+
+def _amp_input_response_db(calibration: dict, entry: dict, offset_db: float) -> float:
+    """How much LOUDER the amp plays with its input `offset_db` dB above the
+    calibrated level — interpolated from the measured input_curve (a saturated
+    amp absorbs the boost, a clean amp passes it). 0 when there's no curve."""
+    if offset_db <= 0.0:
+        return 0.0
+    curve = calibration.get("input_curve") or entry.get("input_curve") or []
+    if not curve:
+        return 0.0
+    hi = max(o for o, _ in curve)
+    off = min(offset_db, hi)
+    return _interp_curve(curve, off) - _interp_curve(curve, 0.0)
+
+
+def _amp_loudness_trim_db(entry: dict, params: dict, input_offset_db: float = 0.0) -> float:
     """Clean post-amp trim (dB) that levels an amp to the common target.
 
     `entry` is one amp's amp_loudness_model.json record; `params` is the amp's
@@ -4856,6 +4909,12 @@ def _amp_loudness_trim_db(entry: dict, params: dict) -> float:
     defaults). Gain stays saturating because this function never changes an amp
     parameter. Exact channel/mode positions use their independently measured
     profile; intermediate selector morphs retain the whole-amp fallback curve.
+
+    `input_offset_db` is the estimated level (dB above the calibrated DI) that
+    the pre-amp pedal chain feeds this amp — the amp's measured input_curve
+    tells how much of that boost it passes through (clean amps: most of it;
+    saturated amps: almost none), and the trim compensates the passed part so
+    chains with dirt pedals sit at the SAME loudness as the bare amp.
     """
     profile = _amp_channel_profile(entry, params)
     calibration = profile or entry
@@ -4884,7 +4943,7 @@ def _amp_loudness_trim_db(entry: dict, params: dict) -> float:
         d_vol += _interp_curve(curve, _val(name)) - _interp_curve(curve, float(default.get(name, 0.5)))
 
     d_gain = l_gain - l_def
-    l_meas = l_gain + d_vol
+    l_meas = l_gain + d_vol + _amp_input_response_db(calibration, entry, input_offset_db)
     extra_g = _AMP_CAP_GAIN_DB * math.tanh(max(0.0, d_gain) / _AMP_CAP_GAIN_DB) if _AMP_CAP_GAIN_DB > 0 else 0.0
     extra_v = _AMP_CAP_VOL_DB * math.tanh(max(0.0, d_vol) / _AMP_CAP_VOL_DB) if _AMP_CAP_VOL_DB > 0 else 0.0
     desired = _AMP_TARGET_LUFS + extra_g + extra_v
@@ -4910,9 +4969,10 @@ def _amp_params_from_state(effective_vst_state) -> dict | None:
     return p if isinstance(p, dict) else None
 
 
-def _amp_trim_mult_for_state(vst_path, effective_vst_state) -> float:
+def _amp_trim_mult_for_state(vst_path, effective_vst_state, input_offset_db: float = 0.0) -> float:
     """Linear post-amp gain that levels this amp VST. 1.0 (no-op) for any VST
-    that isn't a modeled amp, or whose state is opaque."""
+    that isn't a modeled amp, or whose state is opaque. `input_offset_db` is
+    the estimated pre-amp pedal-chain level (dB above the calibrated DI)."""
     stem = Path(vst_path).stem
     model = _load_amp_loudness_model()
     if not model:
@@ -4923,7 +4983,14 @@ def _amp_trim_mult_for_state(vst_path, effective_vst_state) -> float:
     params = _amp_params_from_state(effective_vst_state)
     if params is None:
         return 1.0
-    return 10.0 ** (_amp_loudness_trim_db(entry, params) / 20.0)
+    return 10.0 ** (_amp_loudness_trim_db(entry, params, input_offset_db) / 20.0)
+
+
+def _vst_piece_pedal_level(vst_path: str, effective_vst_state, lvl: float) -> float:
+    """Running pre-amp level (dB vs the calibrated DI) after a pedal VST."""
+    params = _amp_params_from_state(effective_vst_state)
+    return _pedal_chain_level_db(Path(vst_path).stem.lower(),
+                                 params if isinstance(params, dict) else None, lvl)
 
 
 # The engine loads EVERY IR stage with JUCE Normalise::yes, which rescales the
@@ -9937,6 +10004,12 @@ def setup(app, context):
 
         chain: list[dict] = []
         missing: list[str] = []
+        # Estimated level (dB vs the calibrated DI) the pre-amp pedal chain
+        # feeds the amp — dirt/boost pedals raise it; the amp's input_curve
+        # then says how much of that boost passes through to loudness, and the
+        # amp trim compensates it (chains stay at ONE loudness).
+        _pre_amp_lvl = 0.0
+        _amp_seen = False
         for _r, _o, kind, slot, payload, gear, bypassed, vst_format, vst_state, params_json in audio_pieces:
             if kind == "nam_full":
                 # Full-chain capture: absolute path, unity drive (no 2.5×
@@ -9986,10 +10059,15 @@ def setup(app, context):
                 # Per-amp loudness trim: a clean gain right after the amp so all
                 # amps sit at the target LUFS (Gain still saturates — untouched).
                 if slot == "amp" and not bypassed:
+                    _amp_seen = True
                     _ts = _amp_trim_stage(
-                        _amp_trim_mult_for_state(str(vst_path_p), effective_vst_state))
+                        _amp_trim_mult_for_state(str(vst_path_p), effective_vst_state,
+                                                 input_offset_db=_pre_amp_lvl))
                     if _ts:
                         chain.append(_ts)
+                elif slot != "amp" and not bypassed and not _amp_seen:
+                    _pre_amp_lvl = _vst_piece_pedal_level(
+                        str(vst_path_p), effective_vst_state, _pre_amp_lvl)
 
         # One cab IR at the tail (prefer the cabinet slot). Indexed in the
         # original `rows` tuples — column order: slot, kind, file, rs_gear,
@@ -10195,6 +10273,10 @@ def setup(app, context):
             audio_pieces.sort(key=lambda t: (t[0], t[1]))
 
             tone_stages: list[dict] = []
+            # Pre-amp pedal-chain level estimate (dB vs the calibrated DI) —
+            # same composition as the single-tone chain builder above.
+            _pre_amp_lvl = 0.0
+            _amp_seen = False
             for _r, _o, kind, slot, payload, gear, persisted_bypassed, vst_format, vst_state, params_json in audio_pieces:
                 if kind == "nam_full":
                     # Absolute path, unity drive, no cab IR (see below).
@@ -10245,11 +10327,16 @@ def setup(app, context):
                     # tone_key + amp_trim so the dedupe below keeps per-tone
                     # trims distinct. Gain itself is untouched (still saturates).
                     if slot == "amp" and not persisted_bypassed:
+                        _amp_seen = True
                         _ts = _amp_trim_stage(
-                            _amp_trim_mult_for_state(str(vp), effective_vst_state),
+                            _amp_trim_mult_for_state(str(vp), effective_vst_state,
+                                                     input_offset_db=_pre_amp_lvl),
                             tone_key=tone_key)
                         if _ts:
                             tone_stages.append(_ts)
+                    elif slot != "amp" and not persisted_bypassed and not _amp_seen:
+                        _pre_amp_lvl = _vst_piece_pedal_level(
+                            str(vp), effective_vst_state, _pre_amp_lvl)
 
             # Cab IR at the tail of the tone (prefer cabinet slot). Exclude the
             # generic "Cabinets" placeholder (may carry a stale other/*.wav) so it
