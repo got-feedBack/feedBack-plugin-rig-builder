@@ -37,11 +37,28 @@ static inline float bjt(float x,float drive,float bias,float pk=1.22f,float nk=1
     return bjtCurve(bias+drive*x,pk,nk,pr,nr)-bjtCurve(bias,pk,nk,pr,nr);
 }
 
+// 2-pole resonant band-pass (TPT SVF) — the Turbo-II gyrator resonance.
+class ResBP {
+    float g=0.f,k=1.f,s1=0.f,s2=0.f;
+public:
+    void set(float sr,float f,float q){ g=std::tan(kPi*f/sr); k=1.f/q; }
+    void reset(){ s1=s2=0.f; }
+    float process(float x){
+        const float a1=1.f/(1.f+g*(g+k)), a2=g*a1;
+        const float v3=x-s2;
+        const float bp=a1*s1+a2*v3;
+        const float lp=s2+a2*s1+g*a2*v3;
+        s1=dn(2.f*bp-s1); s2=dn(2.f*lp-s2);
+        return bp;
+    }
+};
+
 class TurboDistortionCore {
     float fs=192000.f,dist=.55f,tone=.5f,level=.5f;
     bool turbo=false;
     HP inputC12,c38,c40,c39,c45,c35,toneC37,outC24;
-    LP inputMiller,q22Miller,q23Miller,turboMiller,turboMid,toneLow,toneHighBase,outLoad;
+    LP inputMiller,q22Miller,q23Miller,turboMiller,toneLow,toneHighBase,outLoad;
+    ResBP turboRes;
     rbcomponents::AntiParallelDiodePair preClip,mainClip;
 
     void update(){
@@ -58,7 +75,9 @@ class TurboDistortionCore {
         q22Miller.setHz(fs,9200.f-1800.f*d);
         q23Miller.setHz(fs,7800.f-1500.f*d);
         turboMiller.setHz(fs,6400.f);
-        turboMid.setHz(fs,720.f);
+        // Q16-Q20 gyrator: the Turbo-II voice is a RESONANT mid peak feeding
+        // the extra gain stage — the DS-2 'honk' — not a broad tilt.
+        turboRes.set(fs,900.f,2.2f);
         // Q12/Q10/Q13 create fixed low and high branches. VR2 blends those
         // branch voltages; it does not sweep both cutoff frequencies.
         toneLow.setRC(fs,33000.f,.0068e-6f);
@@ -78,7 +97,7 @@ public:
     void setTurbo(float v){turbo=v>=.5f;update();}
     void reset(){
         inputC12.reset();c38.reset();c40.reset();c39.reset();c45.reset();c35.reset();toneC37.reset();outC24.reset();
-        inputMiller.reset();q22Miller.reset();q23Miller.reset();turboMiller.reset();turboMid.reset();toneLow.reset();toneHighBase.reset();outLoad.reset();
+        inputMiller.reset();q22Miller.reset();q23Miller.reset();turboMiller.reset();turboRes.reset();toneLow.reset();toneHighBase.reset();outLoad.reset();
         preClip.reset();mainClip.reset();update();
     }
 
@@ -103,12 +122,13 @@ public:
         y=q23Miller.process(y);
 
         // Q14/Q15 and Q16-Q20 switch the additional Turbo-II compound stage.
-        // Mode I bypasses it; Mode II adds gain and the 700-1k mid emphasis.
+        // Mode I bypasses it; Mode II adds the gyrator's RESONANT ~900 Hz mid
+        // peak (the DS-2 honk/vocal voice) into an extra gain stage. The old
+        // broad tilt (y - .72*LP720) just read as "more gain" — user report:
+        // "mode II sounds like normal distortion, not turbo".
         if(turbo){
-            const float low=turboMid.process(y);
-            const float mid=y-.72f*low;
-            y=c45.process(y+.95f*mid);
-            y=-bjt(y,2.4f+8.5f*d,-.020f,1.28f,1.08f,1.0f,.82f);
+            y=c45.process(y+3.2f*turboRes.process(y));
+            y=-bjt(y,2.6f+9.0f*d,-.020f,1.28f,1.08f,1.0f,.82f);
             y=turboMiller.process(y);
         }
 
