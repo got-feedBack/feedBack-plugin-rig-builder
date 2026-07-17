@@ -281,14 +281,15 @@ int main(int argc, char** argv) {
         std::printf("]");
     }
     std::printf("}");
-    // Input-response sweep: default params, input driven +0..+24 dB — how the
-    // amp's LOUDNESS responds to a hotter signal (a dirt/boost pedal in front).
-    // A saturated amp absorbs the boost (flat curve); a clean amp passes it.
+    // Input-response sweep: default params, input driven -12..+24 dB — how the
+    // amp's LOUDNESS responds to a hotter OR quieter signal (a dirt/boost pedal
+    // or an attenuating pedal/volume roll-off in front). A saturated amp
+    // absorbs the change (flat curve); a clean amp passes it both ways.
+    static const double kOff[7] = { -12.0, -6.0, 0.0, 6.0, 12.0, 18.0, 24.0 };
     std::printf(", \"input_curve\": [");
-    for (int s = 0; s < 5; ++s) {
-        const double offDb = 6.0 * s;
-        gInGain = std::pow(10.0, offDb / 20.0);
-        std::printf("%s[%.1f, %.4f]", s ? ", " : "", offDb, measure(def, fixed));
+    for (int s = 0; s < 7; ++s) {
+        gInGain = std::pow(10.0, kOff[s] / 20.0);
+        std::printf("%s[%.1f, %.4f]", s ? ", " : "", kOff[s], measure(def, fixed));
     }
     gInGain = 1.0;
     std::printf("]}\n");

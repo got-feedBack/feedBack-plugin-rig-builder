@@ -4882,22 +4882,27 @@ def _pedal_chain_level_db(stem_lower: str, params: dict | None, lvl_in: float) -
             continue
         out += _interp_curve(curve, _val(name)) - _interp_curve(curve, float(default.get(name, 0.5)))
     # Input absorption: a hard clipper's output level barely tracks its input
-    # (slope ~0); a transparent boost passes it (slope ~1).
+    # (slope ~0, both for a hotter AND a quieter input — its output level is
+    # set by its own clipping); a transparent boost/attenuator passes it
+    # (slope ~1). Negative lvl_in (an attenuating pedal earlier in the chain)
+    # flows through the same law.
     slope = float(entry.get("input_slope", 1.0))
-    return out + slope * max(0.0, lvl_in)
+    return out + slope * lvl_in
 
 
 def _amp_input_response_db(calibration: dict, entry: dict, offset_db: float) -> float:
-    """How much LOUDER the amp plays with its input `offset_db` dB above the
-    calibrated level — interpolated from the measured input_curve (a saturated
-    amp absorbs the boost, a clean amp passes it). 0 when there's no curve."""
-    if offset_db <= 0.0:
+    """How much LOUDER (or quieter, negative) the amp plays with its input
+    `offset_db` dB away from the calibrated level — interpolated from the
+    measured input_curve (a saturated amp absorbs the change both ways, a
+    clean amp passes it). 0 when there's no curve."""
+    if offset_db == 0.0:
         return 0.0
     curve = calibration.get("input_curve") or entry.get("input_curve") or []
     if not curve:
         return 0.0
+    lo = min(o for o, _ in curve)
     hi = max(o for o, _ in curve)
-    off = min(offset_db, hi)
+    off = max(lo, min(offset_db, hi))
     return _interp_curve(curve, off) - _interp_curve(curve, 0.0)
 
 
