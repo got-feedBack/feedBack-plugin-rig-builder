@@ -2385,6 +2385,9 @@ const RbMegaChain = (function () {
                                // loop bail if a newer song load superseded it
     let _seedTried = null;     // filename we already kicked an on-demand seed for
     let _activeToneKey = null; // tone_key currently un-bypassed
+    let _manualToneKey = null; // when set, a hotkey forced THIS tone: the auto
+                               // schedule poll/rechecks stop switching until the
+                               // user clears it (clearForcedTone) or the song changes
     let _defaultFallback = false; // true when the active chain is the default tone (song had no per-song mapping — e.g. feedpak)
     let _pollHandle = null;    // setInterval handle watching highway tone changes
     let _duckedStems = null;   // saved gain nodes to restore on teardown
@@ -2668,6 +2671,30 @@ const RbMegaChain = (function () {
     // setMultiBypass want the engine's actual slot IDs, which loadPreset
     // assigns dynamically. We translate via _indexToSlotId captured
     // right after loadPreset returned.
+    // Briefly mute the guitar monitor around a bypass-flip so the enable/disable
+    // of stages doesn't click/pop on a tone switch. Skipped when a load-mute is
+    // already in flight (rbPreLoadMute owns the monitor then) or disabled via
+    // window.__rbMuteBypassFlip === false. Restores to the pre-flip state (a user
+    // mute always wins). No reload happens — this only hides the switch transient.
+    async function _bypassFlipMuted(applyFn) {
+        const audio = _api();
+        if (!audio || window.__rbMuteBypassFlip === false || _rbMuteInFlight
+            || typeof audio.setMonitorMute !== 'function') {
+            return applyFn();
+        }
+        let wasMuted = false;
+        try { if (typeof audio.isMonitorMuted === 'function') wasMuted = !!(await audio.isMonitorMuted()); } catch (_) {}
+        try { await audio.setMonitorMute(true); } catch (_) {}
+        try {
+            return await applyFn();
+        } finally {
+            setTimeout(() => {
+                if (_rbMuteInFlight) return;   // a real load-mute took over — leave it to that
+                try { audio.setMonitorMute(wasMuted || !!rbState._userMuted); } catch (_) {}
+            }, 45);
+        }
+    }
+
     async function _applyActiveTone(activeToneKey) {
         const api = _api();
         if (!api || !_mega) return;
@@ -2714,15 +2741,17 @@ const RbMegaChain = (function () {
                 const slotId = _indexToSlotId[idx];
                 changes.push({ slotId, bypassed: bypassByIdx[idx] });
             }
-            try {
-                if (typeof api.setMultiBypass === 'function') {
-                    await api.setMultiBypass(changes);
-                } else if (typeof api.setBypass === 'function') {
-                    for (const c of changes) await api.setBypass(c.slotId, c.bypassed);
+            await _bypassFlipMuted(async () => {
+                try {
+                    if (typeof api.setMultiBypass === 'function') {
+                        await api.setMultiBypass(changes);
+                    } else if (typeof api.setBypass === 'function') {
+                        for (const c of changes) await api.setBypass(c.slotId, c.bypassed);
+                    }
+                } catch (e) {
+                    console.warn('[rig_builder mega-chain] applyActiveTone failed:', e);
                 }
-            } catch (e) {
-                console.warn('[rig_builder mega-chain] applyActiveTone failed:', e);
-            }
+            });
         }
         const effectiveChain = chainSpec.map((stage, idx) => {
             const copy = Object.assign({}, stage, { bypassed: !!bypassByIdx[idx] });
@@ -3086,6 +3115,7 @@ const RbMegaChain = (function () {
         recheckSchedule.forEach((delay, i) => {
             setTimeout(() => {
                 if (!_active || !_mega) return;
+                if (_manualToneKey) return;   // hotkey pinned a tone
                 // First 4 rechecks: strict mode. After 700 ms, accept
                 // first-change-as-base too so songs with missing
                 // toneBase metadata get their intro tone within 1 s
@@ -3285,6 +3315,7 @@ const RbMegaChain = (function () {
         let lastHwKey = null;   // raw highway key last seen — fast steady-state early-out
         _pollHandle = setInterval(async () => {
             if (!_active || !_mega) return;
+            if (_manualToneKey) return;   // a hotkey pinned a tone — don't auto-switch
             // Relaxed resolver: accepts first scheduled tone-change as
             // intro when base is missing. Safe in steady-state polling
             // because the resolver still walks all changes <= t first
@@ -3338,6 +3369,7 @@ const RbMegaChain = (function () {
         _activeFilename = null;
         _mega = null;
         _activeToneKey = null;
+        _manualToneKey = null;   // a new song starts on its own schedule
         _pending = false;
         _pendingFilename = null;
         if (!silent) _lastError = null;
@@ -3397,7 +3429,43 @@ const RbMegaChain = (function () {
         catch (_) { return false; }
     }
 
-    const api = { buildForSong, teardown, isActive, isPending, settingOn, settingKnown, markPending, toggleEnabled, state, setOutputTrimDb };
+    // ── Hotkey tone-forcing ──────────────────────────────────────────────
+    // Force ONE of the song's OWN tones live (per-section switching by hotkey),
+    // pinning it so the auto schedule poll/rechecks stop switching until the
+    // user clears it or the song changes. Only meaningful while the mega-chain
+    // is active (i.e. the "Play a specific tone" override is OFF).
+    function getTones() {
+        return (_mega && Array.isArray(_mega.tones) ? _mega.tones : [])
+            .map(t => ({ tone_key: t.tone_key, name: t.name || t.tone_key }));
+    }
+    async function forceToneByKey(key) {
+        if (!_active || !_mega) return null;
+        const tone = _findToneByKey(key) || (_mega.tones || []).find(t => t.tone_key === key);
+        if (!tone) return null;
+        _manualToneKey = tone.tone_key;
+        try { await _applyActiveTone(tone.tone_key); } catch (_) {}
+        _emitState();
+        return tone.name || tone.tone_key;
+    }
+    async function forceToneByIndex(i) {
+        const tones = (_mega && _mega.tones) || [];
+        if (i < 0 || i >= tones.length) return null;
+        return forceToneByKey(tones[i].tone_key);
+    }
+    // Stop pinning and resume the song's own auto schedule from "now".
+    async function clearForcedTone() {
+        if (!_manualToneKey) return;
+        _manualToneKey = null;
+        if (!_active || !_mega) { _emitState(); return; }
+        const key = _resolveActiveToneKey({ useFirstChangeIfNoBase: true });
+        let tone = key ? _findToneByKey(key) : null;
+        if (!tone) tone = (_mega.tones || [])[0] || null;
+        if (tone) { try { await _applyActiveTone(tone.tone_key); } catch (_) {} }
+        _emitState();
+    }
+    function forcedToneKey() { return _manualToneKey; }
+
+    const api = { buildForSong, teardown, isActive, isPending, settingOn, settingKnown, markPending, toggleEnabled, state, setOutputTrimDb, getTones, forceToneByKey, forceToneByIndex, clearForcedTone, forcedToneKey };
     window.RbMegaChain = api;
     return api;
 })();
@@ -3743,6 +3811,7 @@ async function rbInit() {
     rbShowTab(rbState.currentTab);
     rbStudioRenderToneChips();              // show the current-tone label right away
     rbStudioLoadSavedTones().catch(() => {});   // then fill in saved tones
+    try { rbSetupToneHotkeys(); } catch (_) {}   // seed defaults + install the tone-hotkey listener
     rbLoadRealCabCatalog().catch(() => {});     // Real Cab catalog (cab room)
     // Close the tone dropdown when clicking outside it. Use mousedown (fires
     // before click handlers mutate the DOM) so the target is still attached —
@@ -6644,9 +6713,44 @@ function rbToggleSongSearch() {
 function rbStudioRenderToneChips() {   // kept name: refresh label + song bar + open menu list
     rbStudioUpdateToneLabel();
     rbStudioRenderSongBar();
+    rbStudioUpdateToneActionBtn();
     const list = document.getElementById('rb-tone-list');
     if (list) list.innerHTML = rbStudioToneListHtml(rbState._toneMenuFilter || '');
+    // Keep the Advanced hotkeys panel's song-tone slots in sync with the
+    // current song (no-op when the panel isn't mounted/open).
+    try { rbRenderToneHotkeysUI(); } catch (_) {}
 }
+
+// The floating Restore/Remove button (left of ⚙ Advanced): shown only when a
+// SONG tone is active; label depends on whether that tone was user-added.
+function rbStudioUpdateToneActionBtn() {
+    const btn = document.getElementById('rb-studio-tone-action');
+    if (!btn) return;
+    const v = rbState.studioView || {};
+    const t = (v.source === 'song' && rbState.songTones && Array.isArray(rbState.songTones.tones))
+        ? rbState.songTones.tones[v.toneIdx] : null;
+    if (!t) { btn.classList.add('hidden'); return; }
+    if (t.user_added) {
+        btn.textContent = '🗑 Remove tone';
+        btn.title = 'Delete this tone you added to the song';
+    } else {
+        btn.textContent = '↺ Restore to original';
+        btn.title = "Discard your edits and revert this tone to the song's original gear";
+    }
+    btn.classList.remove('hidden');
+}
+
+// Click handler for that floating button — routes to Remove (user-added) or
+// Restore (the song's own tone) based on the active tone.
+window.rbStudioToneActionClick = function rbStudioToneActionClick() {
+    const v = rbState.studioView || {};
+    if (v.source !== 'song') return;
+    const t = rbState.songTones && Array.isArray(rbState.songTones.tones)
+        ? rbState.songTones.tones[v.toneIdx] : null;
+    if (!t) return;
+    if (t.user_added) rbRemoveSongTone(v.toneIdx);
+    else rbStudioResetSongTone();
+};
 // The loaded song's tones live in their OWN bar (only shown when a song is
 // loaded), separate from the Default / saved-tone selector.
 function rbStudioRenderSongBar() {
@@ -6656,26 +6760,35 @@ function rbStudioRenderSongBar() {
     // The tonebar sits over the top of the stage; flag the wrap so the floating
     // Advanced button drops below it (otherwise the bar covers it) — see CSS.
     const wrap = document.getElementById('rb-stage-wrap');
-    if (!st || !Array.isArray(st.tones) || !st.tones.length) {
+    // Hide ONLY when no song is loaded. A loaded song with zero tones still
+    // shows the bar so "＋ Add tone" is right there (that's where the user lands
+    // after searching + opening a song — this is the discoverable entry point).
+    if (!st || !st.filename) {
         bar.classList.add('hidden'); bar.innerHTML = '';
         if (wrap) wrap.classList.remove('rb-songbar-on');
         return;
     }
+    const tones = Array.isArray(st.tones) ? st.tones : [];
     const v = rbState.studioView || {};
     const meta = rbState.currentSongMeta || {};
     const songLabel = (meta.artist && meta.title) ? `${meta.artist} - ${meta.title}`
         : (meta.title || (rbState.currentSongFile || 'Song').replace(/\.(sloppak|psarc)$/i, ''));
+    const fnEsc = rbEsc(st.filename || rbState.currentSongFile || '').replace(/'/g, "\\'");
     let html = `<span class="rb-song-tonebar-name">${rbEsc(songLabel)}</span>`;
-    st.tones.forEach((t, i) => {
+    if (!tones.length) {
+        html += `<span style="color:#7e8aa3;font-size:12px;margin:0 2px;">no tones yet —</span>`;
+    }
+    tones.forEach((t, i) => {
         const bass = /bass/i.test(t.key || t.tone_key || '')
             || (Array.isArray(t.chain) && t.chain.some(p => /^bass_/i.test(p.type || p.rs_gear || '')));
         const on = v.source === 'song' && v.toneIdx === i;
         html += `<button class="rb-tone-chip ${on ? 'rb-tone-chip-on' : ''}" onclick="rbStudioShowSongTone(${i})">${bass ? '🎚' : '🎸'} ${rbEsc(t.name || ('Tone ' + (i + 1)))}</button>`;
     });
-    if (v.source === 'song') {
-        html += `<button class="rb-tone-chip rb-song-reset-btn" onclick="rbStudioResetSongTone()" `
-            + `title="Reset this tone to the song's original gear (discards your edits to it)">↺ Reset to original</button>`;
-    }
+    // Per-tone Restore/Remove is NOT on the bar (keeps it uncluttered) — it lives
+    // in the tone menu (the ▾ selector), next to "Save current tone".
+    // Always-available "＋ Add tone" — and the ONLY control for a tone-less song.
+    html += `<button class="rb-tone-chip" style="border-color:rgba(110,200,150,.4);color:#a7f3d0;"
+        onclick="rbOpenAddToneDialog('${fnEsc}')" title="Add a tone to this song">＋ Add tone</button>`;
     html += `<button class="rb-song-tonebar-x" onclick="rbStudioCloseSong()" title="Close this song">✕</button>`;
     bar.innerHTML = html;
     bar.classList.remove('hidden');
@@ -6733,16 +6846,12 @@ window.rbStudioRenderToneMenu = function rbStudioRenderToneMenu(filter) {
     const menu = document.getElementById('rb-tone-menu');
     if (!menu) return;
     rbState._toneMenuFilter = filter || '';
-    // When a SONG tone is loaded, offer "Reset to song tone" — discards the
-    // user's edits to this tone and reverts it to the song's original gear.
-    const v = rbState.studioView || {};
-    const resetBtn = v.source === 'song'
-        ? `<button class="rb-tone-save rb-tone-reset" onclick="rbStudioResetSongTone()" title="Discard your edits to this song tone and revert it to the song's original gear">↺ Reset to song tone</button>`
-        : '';
+    // Per-song-tone Restore/Remove is NOT here (too hidden) — it's the floating
+    // button next to "⚙ Advanced". This menu only saves the current tone.
     menu.innerHTML = `
         <div class="rb-tone-search"><input type="text" placeholder="Search tones…" value="${rbEsc(filter || '')}" oninput="rbStudioFilterToneList(this.value)"></div>
         <div class="rb-tone-list" id="rb-tone-list">${rbStudioToneListHtml(filter)}</div>
-        <div class="rb-tone-foot"><button class="rb-tone-save" onclick="rbStudioSaveTone()">💾 Save current tone</button>${resetBtn}</div>`;
+        <div class="rb-tone-foot"><button class="rb-tone-save" onclick="rbStudioSaveTone()">💾 Save current tone</button></div>`;
 };
 
 // Revert the currently-loaded SONG tone to the song's original bundled gear
@@ -6988,6 +7097,325 @@ function rbInitToneOverrideUI(s) {
     });
 }
 
+// ── Hotkeyable tone presets ─────────────────────────────────────────────────
+// Bind number keys to tones so the user can switch on the CURRENT playthrough.
+// Three kinds of target:
+//   - "__song:N__"  → the current song's OWN tone in slot N (per-section switch,
+//                     live via RbMegaChain.forceToneByIndex — its own chain).
+//   - a saved name / "__default__" → a global preset loaded via the proven
+//                     "Play a specific tone" override (rbApplyToneOverrideNow).
+//   - "__builtin__" → undo both (forced song tone AND override) → the song's
+//                     own scheduled tones.
+// Bindings persist per-device in localStorage; shortcuts are player-scoped.
+const RB_TONE_HOTKEYS_LS = 'rig_builder.toneHotkeys';   // { "1": "__song:0__", "9": "Crunch", "0": "__builtin__" }
+const RB_HOTKEY_REVERT = '__builtin__';   // sentinel target: back to the song's own scheduled tones
+const RB_HOTKEY_DEFAULT = '__default__';  // sentinel target: the global Default tone
+const RB_HOTKEY_SONG_PREFIX = '__song:';  // "__song:N__" → this song's tone slot N
+const RB_HOTKEY_SONG_SLOTS = 4;           // Rocksmith caps a song at 4 tones (A/B/C/D)
+const RB_HOTKEY_SEEDED_LS = 'rig_builder.toneHotkeys.seeded.v2';   // one-time default-binding flag (v2 = keys 1-9)
+let _rbHotkeyRecordingTarget = null;   // target currently capturing a key combo
+let _rbHotkeyListenerInstalled = false;
+
+function rbLoadToneHotkeys() {
+    try {
+        const m = JSON.parse(localStorage.getItem(RB_TONE_HOTKEYS_LS) || '{}');
+        return (m && typeof m === 'object') ? m : {};
+    } catch (_) { return {}; }
+}
+function rbSaveToneHotkeys(map) {
+    try { localStorage.setItem(RB_TONE_HOTKEYS_LS, JSON.stringify(map || {})); } catch (_) {}
+}
+
+// Resolve a UI row reference (kind + index) to the stored target string. Saved
+// tones are stored by NAME so a binding survives a savedTones re-fetch; Default
+// and revert use sentinels.
+function rbHotkeyTargetFor(kind, idx) {
+    if (kind === 'revert') return RB_HOTKEY_REVERT;
+    if (kind === 'default') return RB_HOTKEY_DEFAULT;
+    if (kind === 'song') return `${RB_HOTKEY_SONG_PREFIX}${idx}__`;
+    const t = (rbState.savedTones || [])[idx];
+    return t ? t.name : '';
+}
+
+// Canonical combo string from a keydown event, e.g. "1", "Ctrl+1", "Shift+A",
+// "Ctrl+Shift+F1". Uses e.code for the base key so it's layout/shift stable
+// (Shift+1 stays "Shift+1", not "Shift+!"), and so the recorder and the live
+// listener always produce the SAME string. Returns null for a lone modifier.
+function rbComboFromEvent(e) {
+    const c = e.code || '';
+    let base;
+    if (/^Digit(\d)$/.test(c)) base = c.slice(5);
+    else if (/^Numpad(\d)$/.test(c)) base = c.slice(6);
+    else if (/^Key([A-Z])$/.test(c)) base = c.slice(3);
+    else if (c === 'Space') base = 'Space';
+    else if (/^(Control|Shift|Alt|Meta)(Left|Right)$/.test(c)) return null;   // lone modifier
+    else base = c || (e.key || '');
+    if (!base) return null;
+    const parts = [];
+    if (e.ctrlKey) parts.push('Ctrl');
+    if (e.altKey) parts.push('Alt');
+    if (e.shiftKey) parts.push('Shift');
+    if (e.metaKey) parts.push('Cmd');
+    parts.push(base);
+    return parts.join('+');
+}
+
+// Record a key/combo for a target: capture the next keypress (Esc cancels).
+window.rbRecordToneHotkey = function rbRecordToneHotkey(kind, idx) {
+    const target = rbHotkeyTargetFor(kind, idx);
+    if (!target) return;
+    _rbHotkeyRecordingTarget = target;
+    rbRenderToneHotkeysUI();   // show "Press a key…"
+    const onKey = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (e.key === 'Escape') { done(null); return; }
+        const combo = rbComboFromEvent(e);
+        if (combo === null) return;   // lone modifier — keep waiting for the real key
+        done(combo);
+    };
+    const done = (combo) => {
+        window.removeEventListener('keydown', onKey, true);
+        const t = _rbHotkeyRecordingTarget;
+        _rbHotkeyRecordingTarget = null;
+        if (combo && t) rbSetToneHotkeyCombo(t, combo);
+        else rbRenderToneHotkeysUI();
+    };
+    window.addEventListener('keydown', onKey, true);
+};
+
+// One combo per target, one target per combo — clear both sides then bind.
+function rbSetToneHotkeyCombo(target, combo) {
+    const map = rbLoadToneHotkeys();
+    for (const k of Object.keys(map)) if (map[k] === target) delete map[k];
+    delete map[combo];
+    map[combo] = target;
+    rbSaveToneHotkeys(map);
+    rbRenderToneHotkeysUI();
+}
+
+window.rbClearToneHotkey = function rbClearToneHotkey(kind, idx) {
+    const target = rbHotkeyTargetFor(kind, idx);
+    if (!target) return;
+    const map = rbLoadToneHotkeys();
+    let changed = false;
+    for (const k of Object.keys(map)) if (map[k] === target) { delete map[k]; changed = true; }
+    if (changed) { rbSaveToneHotkeys(map); rbRenderToneHotkeysUI(); }
+};
+
+// Sync the Setup override checkbox/dropdown to the current rbToneOverride state.
+function rbSyncOverrideControls() {
+    try { const cb = document.getElementById('rb-tone-override-enabled'); if (cb) cb.checked = rbToneOverride.enabled; } catch (_) {}
+    try {
+        const sel = document.getElementById('rb-tone-override-name');
+        if (sel) { sel.value = rbToneOverride.name || ''; sel.disabled = !rbToneOverride.enabled; }
+    } catch (_) {}
+}
+
+// Apply the tone bound to `key` to the live playthrough. No-op if unbound.
+async function rbFireToneHotkey(key) {
+    const map = rbLoadToneHotkeys();
+    const target = map[key];
+    if (!target) return;
+
+    // 1) "Back to built-in": undo a forced song tone AND/OR the preset override.
+    if (target === RB_HOTKEY_REVERT) {
+        const hadForced = (typeof RbMegaChain !== 'undefined'
+            && typeof RbMegaChain.forcedToneKey === 'function' && RbMegaChain.forcedToneKey());
+        if (hadForced) { try { await RbMegaChain.clearForcedTone(); } catch (_) {} }
+        if (rbToneOverride.enabled) {
+            rbToneOverride.enabled = false;
+            rbResetOverrideLoaded();
+            rbPersistToneOverride();
+            rbSyncOverrideControls();
+            try { await rbApplyToneOverrideNow(); } catch (_) {}
+        }
+        rbHotkeyToast("↺ Back to the song's built-in tones");
+        return;
+    }
+
+    // 2) One of the song's OWN tones (per-section live switch via the mega-chain).
+    if (typeof target === 'string' && target.startsWith(RB_HOTKEY_SONG_PREFIX)) {
+        const idx = parseInt(target.slice(RB_HOTKEY_SONG_PREFIX.length), 10);
+        if (rbToneOverride.enabled) {
+            // The override owns the engine; drop it first so the song's own chain
+            // is live, then the user can jump between its tones.
+            rbToneOverride.enabled = false;
+            rbResetOverrideLoaded();
+            rbPersistToneOverride();
+            rbSyncOverrideControls();
+            try { await rbApplyToneOverrideNow(); } catch (_) {}
+            rbHotkeyToast('Preset override off — press again to jump tones');
+            return;
+        }
+        let label = null;
+        try {
+            if (typeof RbMegaChain !== 'undefined' && typeof RbMegaChain.forceToneByIndex === 'function') {
+                label = await RbMegaChain.forceToneByIndex(idx);
+            }
+        } catch (_) {}
+        rbHotkeyToast(label ? ('🎸 ' + label) : `No tone in slot ${idx + 1}`);
+        return;
+    }
+
+    // 3) A global preset (saved Studio tone, or the Default tone) via the override.
+    rbToneOverride.enabled = true;
+    rbToneOverride.name = (target === RB_HOTKEY_DEFAULT) ? '' : target;   // '' = Default
+    rbResetOverrideLoaded();
+    rbPersistToneOverride();
+    rbSyncOverrideControls();
+    rbHotkeyToast('🎸 ' + (target === RB_HOTKEY_DEFAULT ? 'Default tone' : target));
+    try { await rbApplyToneOverrideNow(); } catch (_) {}
+}
+
+// Seed sensible defaults ONCE so hotkeys work out of the box: keys 1-9 = this
+// song's tone slots 0-8 (songs can have up to 9 tones), 0 = back to built-in.
+// ADDITIVE + idempotent: a key already bound, or a target already bound to
+// another key, is left untouched — so existing users keep their 1-4 (and any
+// custom bindings) and just gain the missing 5-9 defaults. The user can
+// re-record any of them.
+function rbSeedDefaultHotkeysOnce() {
+    try {
+        if (localStorage.getItem(RB_HOTKEY_SEEDED_LS)) return;
+        const map = rbLoadToneHotkeys();
+        const targetsBound = new Set(Object.values(map));
+        const ensure = (key, target) => {
+            if (map[key] || targetsBound.has(target)) return;
+            map[key] = target; targetsBound.add(target);
+        };
+        for (let n = 0; n < 9; n++) ensure(String(n + 1), `${RB_HOTKEY_SONG_PREFIX}${n}__`);  // 1-9 → song tones 0-8
+        ensure('0', RB_HOTKEY_REVERT);
+        rbSaveToneHotkeys(map);
+        localStorage.setItem(RB_HOTKEY_SEEDED_LS, '1');
+    } catch (_) {}
+}
+
+// A single global keydown listener matches bound combos (incl. Ctrl/Shift/Alt/
+// Cmd) and fires them. Own listener rather than registerShortcut so modifier
+// combos work and matching stays identical to the recorder. Skips typing fields.
+function rbInstallToneHotkeyListener() {
+    if (_rbHotkeyListenerInstalled) return;
+    _rbHotkeyListenerInstalled = true;
+    document.addEventListener('keydown', (e) => {
+        if (_rbHotkeyRecordingTarget) return;   // the recorder owns the keyboard
+        const el = document.activeElement;
+        if (el && (/^(input|textarea|select)$/i.test(el.tagName) || el.isContentEditable)) return;
+        const combo = rbComboFromEvent(e);
+        if (!combo) return;
+        const map = rbLoadToneHotkeys();
+        if (!map[combo]) return;
+        e.preventDefault();
+        rbFireToneHotkey(combo).catch(() => {});
+    }, true);
+}
+
+// One-time setup: seed defaults + install the global listener. (Kept as the
+// entry point the init call sites use.)
+function rbSetupToneHotkeys() {
+    rbSeedDefaultHotkeysOnce();
+    rbInstallToneHotkeyListener();
+}
+
+// Tiny transient confirmation so the user knows a hotkey landed (no toast
+// helper exists in this plugin, so this is self-contained).
+function rbHotkeyToast(msg) {
+    try {
+        let el = document.getElementById('rb-hotkey-toast');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'rb-hotkey-toast';
+            el.style.cssText = 'position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:99999;'
+                + 'background:rgba(18,18,26,.94);color:#e5e7eb;border:1px solid rgba(130,130,150,.4);'
+                + 'padding:8px 14px;border-radius:10px;font-size:13px;pointer-events:none;opacity:0;'
+                + 'transition:opacity .18s ease;box-shadow:0 6px 24px rgba(0,0,0,.45)';
+            document.body.appendChild(el);
+        }
+        el.textContent = msg;
+        el.style.opacity = '1';
+        clearTimeout(el.__rbT);
+        el.__rbT = setTimeout(() => { el.style.opacity = '0'; }, 1300);
+    } catch (_) {}
+}
+
+// Populate the "Tone hotkeys" panel: the current song's own tone slots
+// (per-section switching), then the global presets (revert, Default, saved).
+function rbRenderToneHotkeysUI() {
+    const host = document.getElementById('rb-tone-hotkeys-list');
+    if (!host) return;
+    const map = rbLoadToneHotkeys();
+    const comboFor = (target) => { for (const k of Object.keys(map)) if (map[k] === target) return k; return ''; };
+    const heading = (t) => `<div class="text-[11px] uppercase tracking-wide text-gray-500 mt-3 mb-1 first:mt-0">${rbEsc(t)}</div>`;
+    const row = (label, sub, kind, idx) => {
+        const target = rbHotkeyTargetFor(kind, idx);
+        const recording = _rbHotkeyRecordingTarget === target;
+        const combo = comboFor(target);
+        const pill = recording
+            ? `<span class="text-[11px] text-amber-300 px-2 py-1 rounded bg-amber-900/25 border border-amber-700/40">Press a key… (Esc)</span>`
+            : (combo
+                ? `<span class="text-[11px] text-emerald-200 px-2 py-1 rounded bg-emerald-900/20 border border-emerald-700/40" style="font-family:ui-monospace,monospace;">${rbEsc(combo)}</span>`
+                : `<span class="text-[11px] text-gray-600 px-2 py-1">unbound</span>`);
+        return `<div class="flex items-center justify-between gap-2 bg-dark-800/60 border border-gray-800/50 rounded-lg px-3 py-2">
+            <div class="min-w-0">
+                <div class="text-sm text-gray-200 truncate">${rbEsc(label)}</div>
+                ${sub ? `<div class="text-[11px] text-gray-500 truncate">${rbEsc(sub)}</div>` : ''}
+            </div>
+            <div class="flex items-center gap-1.5 flex-shrink-0">
+                ${pill}
+                <button onclick="rbRecordToneHotkey('${kind}', ${idx})" title="Record a key or combo (e.g. Ctrl+1)"
+                        class="text-xs px-2 py-1 rounded border border-gray-700 text-gray-200 hover:bg-dark-700 transition">⏺ Rec</button>
+                ${combo ? `<button onclick="rbClearToneHotkey('${kind}', ${idx})" title="Clear this binding"
+                        class="text-xs px-1.5 py-1 rounded border border-gray-800 text-gray-500 hover:text-gray-200 transition">✕</button>` : ''}
+            </div>
+        </div>`;
+    };
+
+    // The current song's tones — read the SAME in-memory list the Studio tone
+    // bar shows (rbState.songTones.tones), which is updated the instant you add a
+    // tone. Only fall back to the live playing chain when no song is open in RB.
+    // (Deliberately NOT re-fetched from the backend here: a stale fetch would
+    // clobber the freshly-added tone.)
+    let songTones = [];
+    if (rbState.songTones && Array.isArray(rbState.songTones.tones) && rbState.songTones.tones.length) {
+        songTones = rbState.songTones.tones.map(t => ({ tone_key: t.key || t.tone_key, name: t.name }));
+    } else {
+        try {
+            if (typeof RbMegaChain !== 'undefined' && typeof RbMegaChain.getTones === 'function') {
+                songTones = RbMegaChain.getTones() || [];
+            }
+        } catch (_) {}
+    }
+
+    let html = heading("This song's tones — per-section");
+    if (songTones.length) {
+        // One bindable row PER real tone (labelled by name). NOT capped at 4 —
+        // songs can carry more than the Rocksmith 4 (e.g. MuseTime has 6), and
+        // capping hid tones the user added past the limit.
+        for (let n = 0; n < songTones.length; n++) {
+            const t = songTones[n];
+            html += row(t.name || t.tone_key || `Song tone ${n + 1}`, `slot ${n + 1}`, 'song', n);
+        }
+    } else {
+        html += '<p class="text-[11px] text-gray-600 mt-1">Open or play a song to bind hotkeys to its tones.</p>';
+    }
+    html += heading('Global presets');
+    html += row('↺ Back to built-in tones', "Undo forced/override → song's own tones", 'revert', 0);
+    html += row('Default tone', 'Your global Default tone', 'default', 0);
+    (rbState.savedTones || []).forEach((t, i) => { html += row(t.name, '', 'saved', i); });
+    if (!(rbState.savedTones || []).length) {
+        html += '<p class="text-[11px] text-gray-600 mt-1">Save a tone in the Studio to bind it to a key.</p>';
+    }
+    host.innerHTML = html;
+}
+
+// Toggle the Advanced-tab "Tone hotkeys" floating panel. Pass false to force
+// close. Re-renders on open from the current in-memory song tones.
+window.rbToggleToneHotkeysPanel = function rbToggleToneHotkeysPanel(show) {
+    const panel = document.getElementById('rb-adv-hotkeys-panel');
+    if (!panel) return;
+    const willShow = (show === undefined) ? panel.classList.contains('hidden') : !!show;
+    panel.classList.toggle('hidden', !willShow);
+    if (willShow) { try { rbRenderToneHotkeysUI(); } catch (_) {} }
+};
+
 async function rbStudioLoadMonitor() {
     const api = rbAudioApi();
     if (!api || typeof rbLoadNativePresetPayload !== 'function') return;
@@ -7098,6 +7526,94 @@ function rbStudioChainToPayload(chain) {
         const kind = rbEffKind(p) || (file ? (cat === 'cab' ? 'ir' : 'nam') : 'none');
         return { slot, rs_gear_type: p.type, kind, file, params: {}, assigned_mode: 'manual', bypassed: !!p._bypassed };
     });
+}
+
+// ── Export / Import a tone (Advanced tab) ────────────────────────────────────
+// Export dumps the CURRENT tone's chain config to a .rbtone.json file; Import
+// REPLACES the current tone's config with a file's, persisting to whatever the
+// current tone is (song tone / saved tone / Default) and reloading it.
+function rbAdvCurrentToneName() {
+    const v = rbState.studioView || { source: 'default' };
+    if (v.source === 'song') {
+        const t = rbState.songTones && rbState.songTones.tones && rbState.songTones.tones[v.toneIdx];
+        return (t && (t.name || t.key)) || 'song-tone';
+    }
+    if (v.source === 'saved') return v.name || 'saved-tone';
+    return 'default-tone';
+}
+window.rbAdvExportTone = function rbAdvExportTone() {
+    const chain = rbStudioCurrentChain();
+    // Base payload (slot/gear/file/VST state), plus the per-piece knob values
+    // (rbStudioChainToPayload zeroes params — keep them for a faithful export).
+    const pieces = rbStudioChainToPayload(chain).map((pp, i) => {
+        const src = chain[i];
+        if (src && src.knobs && Object.keys(src.knobs).length) pp.params = src.knobs;
+        return pp;
+    });
+    if (!pieces.length) { alert('This tone has no gear to export yet.'); return; }
+    const name = rbAdvCurrentToneName();
+    const env = { format: 'rig_builder_tone', version: 1, name, pieces };
+    const safe = String(name).replace(/[^\w.-]+/g, '_').slice(0, 60) || 'tone';
+    const blob = new Blob([JSON.stringify(env, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${safe}.rbtone.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+};
+window.rbAdvImportToneFile = function rbAdvImportToneFile(input) {
+    const file = input && input.files && input.files[0];
+    if (input) input.value = '';   // let the user re-import the same file later
+    if (file) rbAdvImportTone(file).catch((e) => alert('Import failed: ' + (e && e.message ? e.message : e)));
+};
+async function rbAdvImportTone(file) {
+    let env;
+    try { env = JSON.parse(await file.text()); } catch (_) { alert('Not a valid tone file (bad JSON).'); return; }
+    const pieces = env && Array.isArray(env.pieces) ? env.pieces : null;
+    if (!pieces) { alert('This file has no tone configuration (missing "pieces").'); return; }
+    if (!confirm(`Replace the CURRENT tone's configuration with "${env.name || 'imported tone'}"?\n\nThis overwrites the gear on the tone you're editing now.`)) return;
+    const v = rbState.studioView || { source: 'default' };
+    // Persist the imported pieces to whatever the current tone is.
+    try {
+        let r;
+        if (v.source === 'song' && rbState.currentSongFile) {
+            const t = rbState.songTones && rbState.songTones.tones && rbState.songTones.tones[v.toneIdx];
+            const toneKey = t && (t.key || t.name);
+            if (!toneKey) throw new Error('no current song tone');
+            r = await fetch(`${window.RB_API}/save_preset`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: rbState.currentSongFile, tone_key: toneKey, pieces }),
+            });
+        } else if (v.source === 'saved' && v.name) {
+            r = await fetch(`${window.RB_API}/saved_tone/save`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: v.name, pieces }),
+            });
+        } else {
+            r = await fetch(`${window.RB_API}/default_tone/save`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pieces }),
+            });
+        }
+        if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || `HTTP ${r.status}`); }
+    } catch (e) { alert('Import failed: ' + (e && e.message ? e.message : e)); return; }
+    // Reload the current tone from the backend so the chain, Advanced graph and
+    // audio all reflect the imported config.
+    try {
+        if (v.source === 'song' && rbState.currentSongFile) {
+            const fresh = await rbFetchSong(rbState.currentSongFile);
+            if (fresh && !fresh.error && Array.isArray(fresh.tones)) { rbState.songTones = fresh; try { rbSeedBypass(fresh); } catch (_) {} }
+        } else if (v.source === 'saved') {
+            await rbStudioLoadSavedTones();
+        } else {
+            await rbLoadDefaultToneEditor();
+        }
+    } catch (_) {}
+    // Force the Advanced graph to reseed from the now-updated chain, then re-audition.
+    try { const adv = rbAdvState(); adv.seeded = false; adv.nodes = []; adv.edges = []; } catch (_) {}
+    try { await rbLoadAdvanced(); } catch (_) {}
+    try { rbStudioRenderToneChips(); } catch (_) {}
+    try { rbStudioLoadMonitor(); } catch (_) {}
 }
 
 // ── Full-chain NAM OVERRIDE ──────────────────────────────────────────────
@@ -7473,6 +7989,7 @@ async function rbStudioLoadSavedTones() {
     rbState._savedTonesLoaded = true;   // the override dropdown may now safely prune a deleted selection
     try { rbStudioRenderToneChips(); } catch (_) {}
     try { rbPopulateToneOverrideSelect(); } catch (_) {}   // keep the Setup override dropdown in sync
+    try { rbRenderToneHotkeysUI(); } catch (_) {}          // saved-tone rows in the hotkeys panel
 }
 
 // ── Manage tab: inventory of downloaded NAM/IR files ────────────────
@@ -8360,6 +8877,7 @@ async function rbLoadSongTones(filename) {
     }
     rbState.songTones = data;
     rbSeedBypass(data);
+    try { rbRenderToneHotkeysUI(); } catch (_) {}   // refresh the hotkey panel for the newly opened song
     // Fresh song = fresh selection (always start at tone 0, piece 0).
     rbResetEditorState();
     try {
@@ -8525,7 +9043,21 @@ function rbResetEditorState() {
 function rbRenderSongEditor(data, filename) {
     const ed = rbEnsureEditorState();
     if (!data || !Array.isArray(data.tones) || data.tones.length === 0) {
-        return '<p class="text-gray-500 text-sm">No tones in this song.</p>';
+        // A song with no tone data (notably feedpak songs — they carry no
+        // Rocksmith gear descriptors) has nothing to edit, so editing here used
+        // to silently hit the GLOBAL default tone and never stick to the song.
+        // Offer to create a real per-song tone (seeded from the Default tone)
+        // so the user's edits persist to THIS song via /save_preset.
+        const f = rbEsc(filename || (data && data.filename) || rbState.currentSongFile || '').replace(/'/g, "\\'");
+        return `
+            <div class="text-sm text-gray-500 space-y-3 p-1">
+                <p>This song has no tones of its own.</p>
+                <button onclick="rbOpenAddToneDialog('${f}')"
+                        class="px-3 py-2 rounded-lg border border-emerald-800/40 bg-emerald-900/15 text-emerald-300 hover:bg-emerald-900/30 transition text-xs">
+                    ＋ Add a tone for this song
+                </button>
+                <p class="text-[11px] text-gray-600">Name it, optionally import a saved tone, and it saves to this song — so edits stick here instead of changing the global Default.</p>
+            </div>`;
     }
     // Clamp selection so a chain shrink (remove piece) doesn't leave a
     // dangling selected index that re-renders blank.
@@ -8564,9 +9096,16 @@ function rbRenderToneTabs(tones, selectedIdx, filename) {
                     <span class="ml-1 text-[10px] opacity-70">${pieces}</span>
                 </button>`;
     }).join('');
+    // Always-available "＋ Add tone": lets the user add extra per-song tones
+    // (e.g. one per section) to a song that already has tones — not just the
+    // empty-state case. Seeds from the Default tone and persists per-song.
+    const addBtn = `<button onclick="rbOpenAddToneDialog('${rbEsc(filename).replace(/'/g, "\\'")}')"
+                        title="Add another tone to this song"
+                        class="flex-shrink-0 px-3 py-2 rounded-lg border border-emerald-800/40 bg-emerald-900/15 text-emerald-300 hover:bg-emerald-900/30 text-xs transition">＋ Add tone</button>`;
     return `<div class="flex items-center gap-1 overflow-x-auto px-3 pt-3 pb-2 border-b border-gray-800/40"
                  style="scrollbar-width: thin;">
                 ${tabs}
+                ${addBtn}
             </div>`;
 }
 
@@ -8962,6 +9501,157 @@ function rbSelectPiece(toneIdx, pIdx) {
     rbReRenderSongEditor();
 }
 
+// Create a real per-song tone for a song that has none of its own, seeded
+// from the user's Default tone, and persist it via /save_preset so it sticks
+// to THIS song (and gets picked up at playback — mega_chain reads
+// tone_mappings before the default fallback). Without this, a no-tone-data
+// song's only editable surface is the GLOBAL default tone, which changes every
+// such song and never "sticks" to the one in front of you.
+// opts: { name?: string, seedSavedId?: string|number }. name → the tone's
+// display name (and key, so it survives a reload). seedSavedId → import that
+// saved Studio tone's chain instead of the Default tone.
+window.rbAddSongTone = async function rbAddSongTone(filename, opts) {
+    opts = opts || {};
+    filename = filename || (rbState.songTones && rbState.songTones.filename) || rbState.currentSongFile;
+    if (!filename) return;
+    rbState.songTones = rbState.songTones || { filename, tones: [] };
+    rbState.songTones.filename = rbState.songTones.filename || filename;
+    if (!Array.isArray(rbState.songTones.tones)) rbState.songTones.tones = [];
+    const tones = rbState.songTones.tones;
+    // Seed the chain: import a saved Studio tone's pieces, or fall back to the
+    // Default tone. Empty seed just means the user builds it up piece by piece.
+    let pieces = [];
+    if (opts.seedSavedId != null && opts.seedSavedId !== '') {
+        const s = (rbState.savedTones || []).find(t => String(t.id) === String(opts.seedSavedId));
+        if (s && Array.isArray(s.pieces)) pieces = s.pieces;
+    } else {
+        try {
+            const r = await fetch(`${window.RB_API}/default_tone`);
+            if (r.ok) { const dt = await r.json(); if (Array.isArray(dt.pieces)) pieces = dt.pieces; }
+        } catch (_) {}
+    }
+    // Key + display name. A user-typed name becomes BOTH the key and the name
+    // (get_song shows a non-sentinel tone_key verbatim, so the name survives a
+    // reload). No name → "__default__" for the first tone on a tone-less song,
+    // else "custom-N".
+    const usedKeys = new Set(tones.map(t => t.key || t.tone_key));
+    const wanted = (opts.name || '').trim();
+    let key, name;
+    if (wanted) {
+        let k = wanted, i = 2;
+        while (usedKeys.has(k)) { k = `${wanted} (${i++})`; }
+        key = k; name = k;
+    } else if (tones.length === 0 && !usedKeys.has('__default__')) {
+        key = '__default__'; name = 'Default';
+    } else {
+        let n = 1;
+        while (usedKeys.has(`custom-${n}`)) n++;
+        key = `custom-${n}`; name = `Custom ${n}`;
+    }
+    const tone = { name, key, chain: pieces, preset_id: null, chain_source: 'edited', user_added: true };
+    tones.push(tone);
+    const newIdx = tones.length - 1;
+    rbSeedBypass(rbState.songTones);   // map bypassed -> _bypassed for rbPersistTone
+    const presetId = await rbPersistTone(newIdx, filename);
+    if (presetId === null) {
+        // rbPersistTone already alerted; drop the optimistic tone so we don't
+        // leave an unsaved tone in the UI.
+        tones.splice(newIdx, 1);
+        rbReRenderSongEditor(filename);
+        return;
+    }
+    tone.preset_id = presetId;
+    // Land the editor on the tone we just created.
+    const ed = rbEnsureEditorState();
+    ed.selectedToneIdx = newIdx; ed.selectedPIdx = 0;
+    rbReRenderSongEditor(filename);
+    // Surface the new tone in the Studio top bar / chips + the hotkeys panel.
+    try { rbStudioRenderToneChips(); } catch (_) {}
+    try { rbStudioRenderSongBar(); } catch (_) {}
+    try { rbRenderToneHotkeysUI(); } catch (_) {}   // reads rbState.songTones — now has the new tone
+};
+
+// Small modal to name a new tone and optionally import a saved Studio tone as
+// its starting chain. Every "＋ Add tone" affordance opens this.
+window.rbCloseAddToneDialog = function rbCloseAddToneDialog() {
+    const o = document.getElementById('rb-addtone-overlay');
+    if (o) o.remove();
+};
+window.rbOpenAddToneDialog = function rbOpenAddToneDialog(filename) {
+    filename = filename || (rbState.songTones && rbState.songTones.filename) || rbState.currentSongFile;
+    if (!filename) return;
+    rbCloseAddToneDialog();
+    const seedOptions = ['<option value="">Default tone</option>']
+        .concat((rbState.savedTones || []).map(t => `<option value="${rbEsc(String(t.id))}">${rbEsc(t.name)}</option>`))
+        .join('');
+    const overlay = document.createElement('div');
+    overlay.id = 'rb-addtone-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;';
+    overlay.onclick = (e) => { if (e.target === overlay) rbCloseAddToneDialog(); };
+    overlay.innerHTML = `
+        <div style="width:340px;max-width:92vw;background:#12161e;border:1px solid rgba(120,165,225,.28);border-radius:14px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.6);">
+            <h3 style="color:#fff;font-weight:600;font-size:15px;margin:0 0 12px;">Add a tone to this song</h3>
+            <label style="display:block;color:#9fb0cc;font-size:12px;margin-bottom:4px;">Name</label>
+            <input id="rb-addtone-name" type="text" placeholder="e.g. Solo, Clean verse…" maxlength="60"
+                   style="width:100%;box-sizing:border-box;background:#0b0f16;border:1px solid #33405a;border-radius:9px;padding:8px 10px;color:#e5e7eb;font-size:13px;margin-bottom:12px;">
+            <label style="display:block;color:#9fb0cc;font-size:12px;margin-bottom:4px;">Start from</label>
+            <select id="rb-addtone-seed" style="width:100%;box-sizing:border-box;background:#0b0f16;border:1px solid #33405a;border-radius:9px;padding:8px 10px;color:#e5e7eb;font-size:13px;margin-bottom:16px;">
+                ${seedOptions}
+            </select>
+            <div style="display:flex;justify-content:flex-end;gap:8px;">
+                <button id="rb-addtone-cancel" style="padding:7px 14px;border-radius:9px;border:1px solid #33405a;background:none;color:#c9d3e5;font-size:13px;cursor:pointer;">Cancel</button>
+                <button id="rb-addtone-create" style="padding:7px 14px;border-radius:9px;border:1px solid rgba(110,200,150,.5);background:rgba(16,120,80,.35);color:#c9f7de;font-size:13px;cursor:pointer;">Create</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    const nameEl = overlay.querySelector('#rb-addtone-name');
+    const create = async () => {
+        const name = nameEl.value;
+        const seedSavedId = overlay.querySelector('#rb-addtone-seed').value;
+        rbCloseAddToneDialog();
+        await rbAddSongTone(filename, { name, seedSavedId });
+    };
+    overlay.querySelector('#rb-addtone-create').onclick = create;
+    overlay.querySelector('#rb-addtone-cancel').onclick = rbCloseAddToneDialog;
+    nameEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); create(); }
+        else if (e.key === 'Escape') { e.preventDefault(); rbCloseAddToneDialog(); }
+    });
+    setTimeout(() => { try { nameEl.focus(); } catch (_) {} }, 30);
+};
+
+// Delete a USER-ADDED per-song tone (backed by /remove_song_tone). Native song
+// tones (from the chart) are not removable — the UI offers Restore for those.
+window.rbRemoveSongTone = async function rbRemoveSongTone(idx) {
+    const st = rbState.songTones;
+    if (!st || !Array.isArray(st.tones)) return;
+    const tone = st.tones[idx];
+    if (!tone) return;
+    if (!tone.user_added) {
+        alert('Only tones you added can be removed. Use "Restore to original" for the song\'s own tones.');
+        return;
+    }
+    if (!confirm(`Remove the tone "${tone.name || tone.key}" from this song?`)) return;
+    try {
+        const r = await fetch(`${window.RB_API}/remove_song_tone`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: st.filename || rbState.currentSongFile, tone_key: tone.key || tone.tone_key }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || d.ok === false) { alert(`Remove failed: ${d.error || r.status}`); return; }
+    } catch (e) { alert(`Remove failed: ${e.message}`); return; }
+    st.tones.splice(idx, 1);
+    const view = rbState.studioView || {};
+    if (view.source === 'song' && view.toneIdx === idx) { try { rbStudioShowDefault(); } catch (_) {} }
+    rbSeedBypass(st);
+    const ed = rbEnsureEditorState();
+    if (ed.selectedToneIdx >= st.tones.length) ed.selectedToneIdx = Math.max(0, st.tones.length - 1);
+    rbReRenderSongEditor(st.filename);
+    try { rbStudioRenderToneChips(); } catch (_) {}
+    try { rbStudioRenderSongBar(); } catch (_) {}
+    try { rbRenderToneHotkeysUI(); } catch (_) {}
+};
+
 // Full redraw of the song editor without re-fetching from the backend.
 // Used after in-memory mutations (reorder, bypass toggle) — server-side
 // edits use rbRefreshSongAfterEdit which does an extra /song fetch.
@@ -9059,6 +9749,7 @@ async function rbTeardownVstEditor(api) {
     const inChain = rbState._vstEditorInChain;
     rbState._vstEditorSlot = null;
     rbState._vstEditorInChain = false;
+    rbState._vstEditorCtx = null;   // no piece under edit anymore
     // Stop the native-window reverse-sync poll + drop the on-screen face — its
     // slot is about to go away.
     rbStopNativeParamSync();
@@ -9163,6 +9854,8 @@ async function rbOnLeaveRigBuilder() {
     _rbLeaving = true;
     try {
         const hadEditor = rbState._vstEditorSlot != null;
+        await rbAutoCaptureActiveVstEditor();     // persist on-the-fly VST tweaks before teardown
+        rbState._vstEditorCtx = null;
         await rbCloseActiveVstEditor();           // close native window first
         if (rbState.listeningTone !== null || rbState._auditionId) {
             await rbStopPreview();                // also clears chain + stops audio
@@ -9298,6 +9991,7 @@ async function rbToneEditVst(toneIdx, pIdx) {
     const api = rbAudioApi();
     // Toggle close if already open — tear the editor VST down cleanly.
     if (!editor.classList.contains('hidden')) {
+        await rbAutoCaptureActiveVstEditor();   // persist on-the-fly tweaks before closing
         editor.classList.add('hidden');
         editor.innerHTML = '';
         await rbTeardownVstEditor(api);
@@ -9317,6 +10011,7 @@ async function rbToneEditVst(toneIdx, pIdx) {
     if (!vstPath) return alert('This piece has no VST assigned yet.');
     if (rbState._vstEditorBusy) return;   // ignore rapid double-clicks while a load is in flight
     rbState._vstEditorBusy = true;
+    rbState._vstEditorCtx = { toneIdx, pIdx };   // which piece is being edited (for auto-capture on close/leave)
     editor.classList.remove('hidden');
     editor.innerHTML = `<div class="text-xs text-gray-500">loading ${rbEsc(vstPath.split(/[\\/]/).pop())}…</div>`;
     try {
@@ -9908,7 +10603,7 @@ function rbDebouncedToneSave(toneIdx, pIdx) {
     _rbToneSaveTimers.set(key, timer);
 }
 
-async function rbToneCaptureVstState(toneIdx, pIdx) {
+async function rbToneCaptureVstState(toneIdx, pIdx, silent) {
     const api = rbAudioApi();
     const piece = rbState.songTones.tones[toneIdx].chain[pIdx];
     if (!piece) return;
@@ -9936,7 +10631,7 @@ async function rbToneCaptureVstState(toneIdx, pIdx) {
         if (rbState.currentSongFile) {
             await rbPersistTone(toneIdx, rbState.currentSongFile).catch(() => null);
         }
-        if (editor) {
+        if (editor && !silent) {
             const status = document.createElement('div');
             status.className = 'text-[10px] text-emerald-300';
             status.textContent = opaque
@@ -9946,8 +10641,21 @@ async function rbToneCaptureVstState(toneIdx, pIdx) {
             setTimeout(() => status.remove(), 2500);
         }
     } catch (e) {
-        alert(`Capture failed: ${e.message || e}`);
+        if (!silent) alert(`Capture failed: ${e.message || e}`);
     }
+}
+
+// Auto-persist the VST currently under edit — its live params + opaque state —
+// so on-the-fly tweaks in the plugin window survive closing the editor or
+// leaving Rig Builder (no manual "Capture" click needed). Silent + guarded:
+// runs only when a piece is actually being edited on a live slot.
+async function rbAutoCaptureActiveVstEditor() {
+    const ctx = rbState._vstEditorCtx;
+    if (!ctx) return;
+    const tone = rbState.songTones && rbState.songTones.tones && rbState.songTones.tones[ctx.toneIdx];
+    const piece = tone && tone.chain && tone.chain[ctx.pIdx];
+    if (!piece || piece._vst_slot_id == null) return;
+    try { await rbToneCaptureVstState(ctx.toneIdx, ctx.pIdx, true); } catch (_) {}
 }
 
 // ── Library label helpers (still used by piece + catalog renderers) ────
@@ -18237,6 +18945,11 @@ async function rbLoadSettings() {
     try { rbUpdateRigBuilderEnabledUI(); } catch (_) {}
     // "Play a specific tone" override — set the checkbox + dropdown from settings.
     try { rbInitToneOverrideUI(s); } catch (_) {}
+    // Tone hotkeys: seed defaults + install the global key listener now (runs at
+    // page-load, so hotkeys work on the highway even if the user never opens the
+    // Rig Builder screen this session), and refresh the Advanced panel if mounted.
+    try { rbSetupToneHotkeys(); } catch (_) {}
+    try { rbRenderToneHotkeysUI(); } catch (_) {}
     // Refresh the chain-input drive cache too — picks up any change the
     // user made via Settings (or via a direct settings POST in DevTools).
     if (typeof s.nam_chain_input_drive === 'number') {
@@ -18780,6 +19493,7 @@ async function rbLoadAdvanced() {
     rbLoadCurrentToneGate();                           // load THIS tone's saved noise gate (not stale state)
     rbStudioApplyStereoToEngine().catch(() => {});   // push pan/branch to the live engine
     rbAdvApplyConnectivity();                         // mute if Input/Output is unwired
+    try { rbRenderToneHotkeysUI(); } catch (_) {}     // refresh the hotkeys panel's song-tone rows
 }
 
 // Build the initial graph from the current chain: a serial line

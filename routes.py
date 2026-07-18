@@ -9202,8 +9202,14 @@ def setup(app, context):
 
         _img_idx = _tone_image_index()
         tones: list[dict] = []
+        # Keys carried by the song's own GearList — anything in tone_mappings
+        # NOT in here is a tone the user ADDED to this song (see the orphan
+        # pass after this loop), which is the only way a no-tone-data song
+        # (feedpak, no Rocksmith gear descriptors) gets a per-song tone.
+        raw_keys: set[str] = set()
         for raw in raw_tones:
             parsed = _parse_tone(raw)
+            raw_keys.add(parsed["key"])
             preset_id = existing_by_key.get(parsed["key"])
             # If the user has a saved chain for this tone, that's the
             # source of truth — it can have pieces added by the user,
@@ -9235,6 +9241,39 @@ def setup(app, context):
                 # tell the UI so it can show "edited" badge / skip the
                 # PSARC-defaults explainer.
                 "chain_source": "edited" if saved_chain else "psarc",
+            })
+        # User-added tones: mappings whose tone_key isn't in the song's own
+        # GearList. Query WITHOUT the EXISTS-pieces filter (unlike existing_rows
+        # above) — a tone seeded from an EMPTY Default tone has 0 preset_pieces
+        # but MUST still surface, or it shows in the Studio bar (in-memory) yet
+        # vanishes from the editor / hotkeys on any reload. mega_chain reads
+        # tone_mappings before the default fallback, so playback picks it up too.
+        all_map_rows = conn.execute(
+            f"SELECT tone_key, preset_id FROM tone_mappings WHERE {_filename_filter}",
+            _filename_args,
+        ).fetchall()
+        _seen_orphan: set[str] = set()
+        for tone_key, preset_id in all_map_rows:
+            if tone_key in raw_keys or tone_key in _seen_orphan:
+                continue
+            _seen_orphan.add(tone_key)
+            saved_chain = _load_saved_chain(conn, preset_id, _img_idx) or []
+            if tone_key == "__default__":
+                # Reserved key the in-memory default fallback uses; once
+                # persisted per-song, present it as the song's "Default" tone.
+                display_name = "Default"
+            elif tone_key.startswith("custom-"):
+                # UI-added extra tones ("custom-1" → "Custom 1").
+                display_name = "Custom " + tone_key[len("custom-"):]
+            else:
+                display_name = tone_key
+            tones.append({
+                "name": display_name,
+                "key": tone_key,
+                "chain": saved_chain,
+                "preset_id": preset_id,
+                "chain_source": "edited",
+                "user_added": True,
             })
         return {"filename": filename, "tones": tones}
 
@@ -9744,6 +9783,43 @@ def setup(app, context):
             except Exception:
                 log.exception("reset_tone: rollback failed")
         return {"ok": True, "reseeded": reseeded}
+
+    @app.post("/api/plugins/rig_builder/remove_song_tone")
+    @app.post("/api/plugins/nam_rig_builder/remove_song_tone")
+    def remove_song_tone(data: dict = Body(...)):
+        """Delete a USER-ADDED per-song tone entirely (its mapping + preset +
+        pieces), across both container formats. Unlike reset_tone this does NOT
+        re-seed — it's for tones the user created (via "Add tone"), which have no
+        GearList original to fall back to. Tones the song actually ships (present
+        in its GearList) are NOT removable this way: get_song would just re-surface
+        them from the raw GearList, so removing their mapping only reverts edits —
+        the caller (UI) gates Remove to user-added tones and offers Restore for
+        the song's own ones."""
+        filename = data.get("filename")
+        tone_key = (data.get("tone_key") or "").strip()
+        if not filename or not tone_key:
+            return JSONResponse({"error": "filename and tone_key required"}, 400)
+        song_key = _db_song_key(filename)
+        conn = _get_conn()
+        removed = 0
+        try:
+            ckey = _canonical_song_key(song_key)
+            with _lock:
+                # Match this tone_key for THIS song + its sibling container only
+                # (the same canonical-key scoping reset_tone / save_preset use).
+                targets = [(fn, pid) for fn, pid in conn.execute(
+                    "SELECT filename, preset_id FROM tone_mappings WHERE tone_key = ?",
+                    (tone_key,)).fetchall() if _canonical_song_key(fn) == ckey]
+                for fn, pid in targets:
+                    conn.execute("DELETE FROM tone_mappings WHERE preset_id = ?", (pid,))
+                    conn.execute("DELETE FROM preset_pieces WHERE preset_id = ?", (pid,))
+                    conn.execute("DELETE FROM presets WHERE id = ?", (pid,))
+                    removed += 1
+                conn.commit()
+        except Exception as e:
+            log.exception("remove_song_tone failed")
+            return JSONResponse({"error": f"{type(e).__name__}: {e}"}, 500)
+        return {"ok": True, "removed": removed}
 
     # ── Export current gear→capture assignments as shipped defaults ───
     @app.post("/api/plugins/rig_builder/export_default_captures")
