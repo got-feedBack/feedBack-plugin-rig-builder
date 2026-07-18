@@ -62,6 +62,10 @@
     /* Restore/Remove-tone action, floating just LEFT of ⚙ Advanced. */
     .rb-studio-tone-action{ right:140px !important; }
     .rb-studio-tone-action.hidden{ display:none; }
+    /* Replace-with-preset action, floating just LEFT of Restore/Remove.
+       Offset clears the widest Restore/Remove label ("↺ Restore to original"). */
+    .rb-studio-tone-replace{ right:316px !important; }
+    .rb-studio-tone-replace.hidden{ display:none; }
     /* When a song's tonebar is shown it covers the top strip — drop the Advanced
        button below it so it stays reachable while a song is loaded. */
     #rb-stage-wrap.rb-songbar-on .rb-studio-adv-btn{ top:58px; }
@@ -1129,6 +1133,12 @@
              Reuses .rb-studio-adv-btn so it inherits the songbar-drop + focus-hide. -->
         <button id="rb-studio-tone-action" class="rb-studio-adv-btn rb-studio-tone-action hidden"
                 onclick="rbStudioToneActionClick()"></button>
+        <!-- Replace this song tone's whole chain with one of the user's saved
+             presets (no rebuilding from scratch). Shown on any active song tone;
+             persists through the normal per-song path, so Restore still undoes it. -->
+        <button id="rb-studio-tone-replace" class="rb-studio-adv-btn rb-studio-tone-replace hidden"
+                onclick="rbStudioReplaceSongToneWithPreset()"
+                title="Swap this tone's gear for one of your saved presets">🔁 Replace with preset…</button>
         <!-- Advanced (node-graph chain editor) lives INSIDE Studio, not in the top tab bar -->
         <button class="rb-studio-adv-btn" onclick="rbShowTab('advanced')" title="Open the advanced node-graph chain editor">
             ⚙ Advanced

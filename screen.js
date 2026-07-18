@@ -6752,19 +6752,28 @@ function rbStudioRenderToneChips() {   // kept name: refresh label + song bar + 
 // SONG tone is active; label depends on whether that tone was user-added.
 function rbStudioUpdateToneActionBtn() {
     const btn = document.getElementById('rb-studio-tone-action');
-    if (!btn) return;
+    const rep = document.getElementById('rb-studio-tone-replace');
     const v = rbState.studioView || {};
     const t = (v.source === 'song' && rbState.songTones && Array.isArray(rbState.songTones.tones))
         ? rbState.songTones.tones[v.toneIdx] : null;
-    if (!t) { btn.classList.add('hidden'); return; }
-    if (t.user_added) {
-        btn.textContent = '🗑 Remove tone';
-        btn.title = 'Delete this tone you added to the song';
-    } else {
-        btn.textContent = '↺ Restore to original';
-        btn.title = "Discard your edits and revert this tone to the song's original gear";
+    if (!t) {
+        if (btn) btn.classList.add('hidden');
+        if (rep) rep.classList.add('hidden');
+        return;
     }
-    btn.classList.remove('hidden');
+    if (btn) {
+        if (t.user_added) {
+            btn.textContent = '🗑 Remove tone';
+            btn.title = 'Delete this tone you added to the song';
+        } else {
+            btn.textContent = '↺ Restore to original';
+            btn.title = "Discard your edits and revert this tone to the song's original gear";
+        }
+        btn.classList.remove('hidden');
+    }
+    // "Replace with preset…" applies to ANY active song tone (native or added):
+    // native tones keep Restore-to-original to undo the swap; added tones keep Remove.
+    if (rep) rep.classList.remove('hidden');
 }
 
 // Click handler for that floating button — routes to Remove (user-added) or
@@ -6778,6 +6787,112 @@ window.rbStudioToneActionClick = function rbStudioToneActionClick() {
     if (t.user_added) rbRemoveSongTone(v.toneIdx);
     else rbStudioResetSongTone();
 };
+
+// Click handler for the floating "🔁 Replace with preset…" button. Lets the user
+// swap the ACTIVE song tone's whole chain for one of their saved Studio presets
+// instead of rebuilding it piece by piece. Opens a small picker; the actual swap
+// + persist happens in rbReplaceSongToneChain.
+window.rbStudioReplaceSongToneWithPreset = function rbStudioReplaceSongToneWithPreset() {
+    const v = rbState.studioView || {};
+    if (v.source !== 'song') return;
+    const st = rbState.songTones;
+    const tone = st && Array.isArray(st.tones) ? st.tones[v.toneIdx] : null;
+    const filename = (st && st.filename) || rbState.currentSongFile;
+    if (!tone || !filename) return;
+    const open = () => {
+        if (!(rbState.savedTones || []).length) {
+            alert('No saved presets yet.\n\nBuild a tone in the Studio and use "💾 Save current tone" '
+                + '(the ▾ tone menu) first — then you can drop it onto any song tone here.');
+            return;
+        }
+        rbOpenReplaceToneDialog(filename, v.toneIdx);
+    };
+    // Saved presets are lazy-loaded; make sure they're in before opening the picker.
+    if (!rbState._savedTonesLoaded && typeof rbStudioLoadSavedTones === 'function') {
+        Promise.resolve(rbStudioLoadSavedTones()).then(open).catch(open);
+    } else {
+        open();
+    }
+};
+
+window.rbCloseReplaceToneDialog = function rbCloseReplaceToneDialog() {
+    const o = document.getElementById('rb-replacetone-overlay');
+    if (o) o.remove();
+};
+
+// Picker modal: choose which saved preset replaces this song tone. Mirrors the
+// look of rbOpenAddToneDialog; the selected id is handed to rbReplaceSongToneChain.
+window.rbOpenReplaceToneDialog = function rbOpenReplaceToneDialog(filename, toneIdx) {
+    rbCloseReplaceToneDialog();
+    const tone = rbState.songTones && rbState.songTones.tones && rbState.songTones.tones[toneIdx];
+    const toneName = (tone && (tone.name || tone.key)) || 'this tone';
+    const options = (rbState.savedTones || [])
+        .map(t => `<option value="${rbEsc(String(t.id))}">${rbEsc(t.name)}</option>`).join('');
+    const overlay = document.createElement('div');
+    overlay.id = 'rb-replacetone-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;';
+    overlay.onclick = (e) => { if (e.target === overlay) rbCloseReplaceToneDialog(); };
+    overlay.innerHTML = `
+        <div style="width:360px;max-width:92vw;background:#12161e;border:1px solid rgba(120,165,225,.28);border-radius:14px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.6);">
+            <h3 style="color:#fff;font-weight:600;font-size:15px;margin:0 0 4px;">Replace with a preset</h3>
+            <p style="color:#7e8aa3;font-size:12px;margin:0 0 12px;">Swap <b style="color:#cfe0ff;">${rbEsc(toneName)}</b>'s gear for one of your saved presets. You can Restore/undo it later.</p>
+            <label style="display:block;color:#9fb0cc;font-size:12px;margin-bottom:4px;">Preset</label>
+            <select id="rb-replacetone-seed" style="width:100%;box-sizing:border-box;background:#0b0f16;border:1px solid #33405a;border-radius:9px;padding:8px 10px;color:#e5e7eb;font-size:13px;margin-bottom:16px;">
+                ${options}
+            </select>
+            <div style="display:flex;justify-content:flex-end;gap:8px;">
+                <button id="rb-replacetone-cancel" style="padding:7px 14px;border-radius:9px;border:1px solid #33405a;background:none;color:#c9d3e5;font-size:13px;cursor:pointer;">Cancel</button>
+                <button id="rb-replacetone-apply" style="padding:7px 14px;border-radius:9px;border:1px solid rgba(120,170,240,.5);background:rgba(30,72,140,.45);color:#cfe0ff;font-size:13px;cursor:pointer;">🔁 Replace</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    const selEl = overlay.querySelector('#rb-replacetone-seed');
+    const apply = async () => {
+        const savedId = selEl.value;
+        rbCloseReplaceToneDialog();
+        await rbReplaceSongToneChain(filename, toneIdx, savedId);
+    };
+    overlay.querySelector('#rb-replacetone-apply').onclick = apply;
+    overlay.querySelector('#rb-replacetone-cancel').onclick = rbCloseReplaceToneDialog;
+    overlay.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); apply(); }
+        else if (e.key === 'Escape') { e.preventDefault(); rbCloseReplaceToneDialog(); }
+    });
+    setTimeout(() => { try { selEl.focus(); } catch (_) {} }, 30);
+};
+
+// Core: copy a saved preset's chain onto an existing song tone and persist it via
+// the normal per-song path (POST /save_preset), same as editing that tone by hand.
+// The tone keeps its section name/key — only its gear changes.
+async function rbReplaceSongToneChain(filename, toneIdx, savedId) {
+    const st = rbState.songTones;
+    const tone = st && Array.isArray(st.tones) ? st.tones[toneIdx] : null;
+    if (!tone) return;
+    const s = (rbState.savedTones || []).find(t => String(t.id) === String(savedId));
+    if (!s || !Array.isArray(s.pieces)) { alert('That preset could not be loaded. Try re-opening the picker.'); return; }
+    // Deep-copy so editing this song tone never mutates the shared saved preset.
+    let pieces;
+    try { pieces = JSON.parse(JSON.stringify(s.pieces)); }
+    catch (_) { pieces = s.pieces.map(p => ({ ...p })); }
+    const prevChain = tone.chain;
+    const prevSource = tone.chain_source;
+    tone.chain = pieces;
+    tone.chain_source = 'edited';
+    rbSeedBypass(rbState.songTones);   // map bypassed -> _bypassed for rbPersistTone
+    const presetId = await rbPersistTone(toneIdx, filename);
+    if (presetId === null) {
+        // rbPersistTone already alerted; roll back so the UI keeps the old chain.
+        tone.chain = prevChain;
+        tone.chain_source = prevSource;
+        return;
+    }
+    tone.preset_id = presetId;
+    // Re-audition the replaced tone and refresh every surface that shows it.
+    try { rbStudioShowSongTone(toneIdx); } catch (_) {}       // also re-renders chips/label
+    try { rbReRenderSongEditor(filename); } catch (_) {}
+    rbHotkeyToast(`🔁 ${tone.name || 'Tone'} ← ${s.name}`);
+}
+
 // The loaded song's tones live in their OWN bar (only shown when a song is
 // loaded), separate from the Default / saved-tone selector.
 function rbStudioRenderSongBar() {
@@ -7604,7 +7719,7 @@ function rbRenderToneHotkeysUI() {
                 : `<span class="text-[11px] text-gray-600 px-2 py-1">unbound</span>`);
         return `<div class="flex items-center justify-between gap-2 bg-dark-800/60 border border-gray-800/50 rounded-lg px-3 py-2">
             <div class="min-w-0">
-                <div class="text-sm text-gray-200 truncate">${rbEsc(label)}</div>
+                <div class="text-sm text-gray-200 leading-snug break-words">${rbEsc(label)}</div>
                 ${sub ? `<div class="text-[11px] text-gray-500 truncate">${rbEsc(sub)}</div>` : ''}
             </div>
             <div class="flex items-center gap-1.5 flex-shrink-0">
@@ -7668,8 +7783,8 @@ function rbRenderToneHotkeysUI() {
         html += '<p class="text-[11px] text-gray-600 mt-1">Open or play a song to bind hotkeys to its tones.</p>';
     }
     html += heading('Global presets');
-    html += row('↺ Back to built-in tones', "Undo forced/override → song's own tones", 'revert', 0);
-    html += row('Default tone', 'Your global Default tone', 'default', 0);
+    html += row('↺ Back to built-in tones', '', 'revert', 0);
+    html += row('Default tone', '', 'default', 0);
     (rbState.savedTones || []).forEach((t, i) => { html += row(t.name, '', 'saved', i); });
     if (!(rbState.savedTones || []).length) {
         html += '<p class="text-[11px] text-gray-600 mt-1">Save a tone in the Studio to bind it to a key.</p>';
