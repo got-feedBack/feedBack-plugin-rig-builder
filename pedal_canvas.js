@@ -4044,9 +4044,9 @@
   //    grid built from its live parameter metadata (so nothing opens in a
   //    native window). params = [{id|paramId|index, name, value}, …]. ──────────
   function buildGeneric(stem, params) {
-    const ps = (params || []).filter(p => p && (p.id ?? p.paramId ?? p.index) != null).slice(0, 12);
+    const ps = (params || []).filter(p => p && (p.id ?? p.paramId ?? p.index) != null).slice(0, 24);
     const n = ps.length; if (!n) return null;
-    const cols = n <= 4 ? n : (n <= 6 ? 3 : 4), rows = Math.ceil(n / cols);
+    const cols = n <= 4 ? n : (n <= 6 ? 3 : n <= 12 ? 4 : 6), rows = Math.ceil(n / cols);
     const cellW = 96, cellH = 124, padTop = 56, padBot = 22;
     const w = cols * cellW, h = padTop + rows * cellH + padBot, rPx = Math.min(cellW, cellH) * 0.27;
     const knobs = ps.map((p, i) => {

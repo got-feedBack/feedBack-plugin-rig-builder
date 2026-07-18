@@ -5545,7 +5545,10 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
             },
         });
         // Reverse sync target: repaint THIS face (values only) when the poll sees
-        // the plugin's own window move a knob.
+        // the plugin's own window move a knob — and, when the poll sees the param
+        // SET change (a preset that swaps which knobs exist), rebuild via draw()
+        // so the new knobs are laid out. draw() re-attaches from the now-current
+        // piece._vst_param_meta (the poll just refreshed it) and re-registers here.
         rbSetActiveVstFace(piece, () => {
             if (!document.body.contains(canvas)) return;
             const m = rbCanvasParamModel(piece);
@@ -5553,7 +5556,7 @@ function rbStudioMakeFaceInteractive(idx, faceEl) {
             if (!vv || !Object.keys(vv).length) { try { vv = rbCanvasThumbValues(piece) || {}; } catch (_) { vv = {}; } }
             canvas.__rbVals = vv;
             window.RBPedalCanvas.redraw(canvas, vv);
-        });
+        }, () => { if (document.body.contains(canvas)) draw(); });
     };
     if (window.RBPedalCanvas.ready) window.RBPedalCanvas.ready().then(draw);
     draw();
@@ -6093,8 +6096,14 @@ let _rbNativeParamPoll = null;
 function rbStopNativeParamSync() { if (_rbNativeParamPoll) { clearInterval(_rbNativeParamPoll); _rbNativeParamPoll = null; } }
 // Register the on-screen interactive VST face + a values-only repaint for it.
 // `redraw` MUST repaint knob positions only (render/renderSpec), never re-attach.
-function rbSetActiveVstFace(piece, redraw) {
-    rbState._activeVstFace = (piece && typeof redraw === 'function') ? { piece, redraw } : null;
+// `rebuild` (optional) FULLY re-attaches the face: it regenerates the knob spec
+// from the plugin's CURRENT param list. The poll fires it only when the param
+// SET itself changes (a plugin preset that swaps which knobs exist, e.g.
+// Archetype Petrucci amp presets) — never per-tick, so it can't stack listeners.
+function rbSetActiveVstFace(piece, redraw, rebuild) {
+    rbState._activeVstFace = (piece && typeof redraw === 'function')
+        ? { piece, redraw, rebuild: (typeof rebuild === 'function' ? rebuild : null) }
+        : null;
 }
 // Drop the active-face registration (called when a face is torn down). Scoped to
 // `piece` so a stale teardown can't clear a newer face.
@@ -6104,7 +6113,7 @@ function rbClearActiveVstFace(piece) {
 function rbStartNativeParamSync(api, slotId, piece) {
     rbStopNativeParamSync();
     if (!api || typeof api.getParameters !== 'function' || slotId == null || !piece) return;
-    let last = null, busy = false, misses = 0;
+    let last = null, lastSig = null, busy = false, misses = 0;
     _rbNativeParamPoll = setInterval(async () => {
         if (busy) return;
         // Stop once the in-app face for THIS piece is gone (editor/view closed).
@@ -6124,7 +6133,15 @@ function rbStartNativeParamSync(api, slotId, piece) {
                 now[rid] = v;
                 if (!last || Math.abs((last[rid] ?? -999) - v) > 1e-4) changed = true;
             }
-            if (!changed) return;   // nothing moved in the native window this tick
+            // Signature of the param SET itself (id + name of every param). When it
+            // differs, the plugin swapped which knobs exist (e.g. loading a different
+            // Archetype Petrucci amp preset) — the face must be REBUILT (new knob
+            // count/identity), not just repainted at new values. A pure preset swap
+            // may move no values at all, so this is what makes such changes visible.
+            const sig = live.map(p => (p.id ?? p.paramId ?? p.index) + ':' + (p.name || p.label || '')).join('|');
+            const structChanged = (lastSig != null && sig !== lastSig);
+            lastSig = sig;
+            if (!changed && !structChanged) return;   // nothing moved / nothing swapped this tick
             last = now;
             // Persist into the piece (same shape 📸 Capture writes) so the tweak
             // survives closing the window / reloading: real-id keyed params +
@@ -6138,8 +6155,18 @@ function rbStartNativeParamSync(api, slotId, piece) {
                 if (now[rid] != null) piece._vst_logical[lid] = now[rid];
             });
             try { rbStampVstState(piece); } catch (_) {}
-            // Repaint the on-screen face at the new values (values-only, no re-attach).
-            try { if (rbState._activeVstFace && rbState._activeVstFace.piece === piece) rbState._activeVstFace.redraw(); } catch (_) {}
+            // Refresh the on-screen face. A param-SET change (new preset → different
+            // knobs) needs a full rebuild so the new knobs appear; a plain value
+            // move only needs a values-only repaint (no re-attach). rebuild() re-runs
+            // attach(), which self-cleans the prior wiring (canvas.__rbWire), so it
+            // never stacks listeners — and it fires only on the rare struct change.
+            try {
+                const f = rbState._activeVstFace;
+                if (f && f.piece === piece) {
+                    if (structChanged && typeof f.rebuild === 'function') f.rebuild();
+                    else f.redraw();
+                }
+            } catch (_) {}
         } catch (_) { /* transient IPC hiccup — retry next tick */ }
         finally { busy = false; }
     }, 70);   // ~14 Hz — smooth mirroring of native-window knob moves (matches the GR-meter poll)
@@ -6995,9 +7022,22 @@ async function rbLoadOverrideTone() {
     if (!t || t.id == null) { try { return !!(await rbReloadDefaultTone()); } catch (_) { return false; } }
     if (typeof rbLoadNativePresetPayload !== 'function') return false;
     try {
-        const r = await fetch(`${window.RB_API}/native_preset_full/${t.id}`);
-        if (!r.ok) return false;
-        const payload = await r.json();
+        // Use the warmed payload when present (background prefetch, song-independent)
+        // so the switch skips the /native_preset_full round-trip; else fetch live and
+        // populate the cache so a later switch to the same tone is warm too. Cache
+        // stores TEXT and we parse a fresh copy per use (the load path mutates it).
+        let payload = null;
+        const cached = _rbHotkeyToneCache.get(t.id);
+        if (cached && (Date.now() - cached.ts) < RB_HOTKEY_WARM_TTL) {
+            try { payload = JSON.parse(cached.text); } catch (_) { payload = null; }
+        }
+        if (!payload) {
+            const r = await fetch(`${window.RB_API}/native_preset_full/${t.id}`);
+            if (!r.ok) return false;
+            const text = await r.text();
+            try { payload = JSON.parse(text); } catch (_) { return false; }
+            if (payload && payload.native_preset) _rbHotkeyToneCache.set(t.id, { text, ts: Date.now() });
+        }
         if (!payload || !payload.native_preset) return false;
         try { if (typeof rbCloseActiveVstEditor === 'function') await rbCloseActiveVstEditor(); } catch (_) {}
         delete payload.id;   // force the legacy monitor path (executor route is silent at idle)
@@ -7116,6 +7156,86 @@ const RB_HOTKEY_SEEDED_LS = 'rig_builder.toneHotkeys.seeded.v2';   // one-time d
 let _rbHotkeyRecordingTarget = null;   // target currently capturing a key combo
 let _rbHotkeyListenerInstalled = false;
 
+// ── Background warming of hotkey-bound saved tones ───────────────────────────
+// Switching to a SONG tone is instant (RbMegaChain preloads them all + flips
+// bypass). Switching to a SAVED Studio tone via hotkey goes through the override
+// path (rbLoadOverrideTone), which fetches /native_preset_full/{id} (a server
+// build) and THEN loads the chain — the fetch/build is on the keypress critical
+// path, so the first press of a cold tone stalls. That payload is song-INDEPENDENT
+// (no filename), so we can prefetch + cache it in the background the moment the
+// bindings are known. On press, rbLoadOverrideTone reuses the cached payload and
+// skips the round-trip. (The engine's VST/NAM instantiation still happens on
+// press — eliminating THAT would need an engine-side resident bypassed chain.)
+// Kill-switch: window.__rbWarmHotkeyTones = false.
+const _rbHotkeyToneCache = new Map();   // tone id → { text, ts }
+let _rbHotkeyWarmGen = 0;               // bump to supersede an in-flight warm
+let _rbHotkeyWarmTimer = null;
+const RB_HOTKEY_WARM_MAX = 12;          // cap: only warm this many bound tones
+const RB_HOTKEY_WARM_TTL = 5 * 60 * 1000;   // re-fetch a cached payload after 5 min (self-heals edits)
+const RB_HOTKEY_WARM_GAP_MS = 150;      // pause between prefetches so we never burst the pipe
+
+// De-duped ids of SAVED tones currently bound to a key (case 3 — a saved-tone
+// name; excludes song slots + sentinels). Capped at RB_HOTKEY_WARM_MAX.
+function rbHotkeyBoundSavedToneIds() {
+    const map = rbLoadToneHotkeys();
+    const saved = rbState.savedTones || [];
+    const ids = [];
+    for (const key of Object.keys(map)) {
+        const target = map[key];
+        if (typeof target !== 'string') continue;
+        if (target === RB_HOTKEY_REVERT || target === RB_HOTKEY_DEFAULT) continue;
+        if (target.startsWith(RB_HOTKEY_SONG_PREFIX)) continue;   // song tones are already preloaded
+        const t = saved.find(x => x.name === target);
+        if (t && t.id != null && ids.indexOf(t.id) < 0) ids.push(t.id);
+        if (ids.length >= RB_HOTKEY_WARM_MAX) break;
+    }
+    return ids;
+}
+
+// Sequentially prefetch + cache the bound saved tones' preset payloads. Background
+// only, low priority (gap between fetches), idempotent, superseded-safe.
+async function rbWarmHotkeyTones() {
+    if (window.__rbWarmHotkeyTones === false) return;
+    const ids = rbHotkeyBoundSavedToneIds();
+    // Drop cache entries for tones no longer bound to any key.
+    for (const id of Array.from(_rbHotkeyToneCache.keys())) {
+        if (ids.indexOf(id) < 0) _rbHotkeyToneCache.delete(id);
+    }
+    if (!ids.length) return;
+    const gen = ++_rbHotkeyWarmGen;
+    let fetched = 0;
+    for (const id of ids) {
+        if (gen !== _rbHotkeyWarmGen) return;                    // a newer warm took over
+        const hit = _rbHotkeyToneCache.get(id);
+        if (hit && (Date.now() - hit.ts) < RB_HOTKEY_WARM_TTL) continue;   // still fresh
+        try {
+            const r = await fetch(`${window.RB_API}/native_preset_full/${id}`);
+            if (gen !== _rbHotkeyWarmGen) return;
+            if (r.ok) {
+                const text = await r.text();
+                let ok = false;
+                try { const p = JSON.parse(text); ok = !!(p && p.native_preset); } catch (_) {}
+                if (ok) { _rbHotkeyToneCache.set(id, { text, ts: Date.now() }); fetched++; }
+            }
+        } catch (_) { /* leave uncached — the press falls back to a live fetch */ }
+        await new Promise(res => setTimeout(res, RB_HOTKEY_WARM_GAP_MS));
+    }
+    if (gen === _rbHotkeyWarmGen) {
+        console.log(`[rig_builder] hotkey-tone warm: ${_rbHotkeyToneCache.size}/${ids.length} saved tones cached (${fetched} fetched this pass)`);
+    }
+}
+
+// Debounced trigger — bindings/saved-tones can change in bursts.
+function rbScheduleHotkeyWarm(delay) {
+    if (_rbHotkeyWarmTimer) clearTimeout(_rbHotkeyWarmTimer);
+    _rbHotkeyWarmTimer = setTimeout(() => {
+        _rbHotkeyWarmTimer = null;
+        rbWarmHotkeyTones().catch(() => {});
+    }, delay == null ? 1500 : delay);
+}
+// Manual trigger for debugging.
+window.rbWarmHotkeyTones = () => rbWarmHotkeyTones().catch(() => {});
+
 function rbLoadToneHotkeys() {
     try {
         const m = JSON.parse(localStorage.getItem(RB_TONE_HOTKEYS_LS) || '{}');
@@ -7124,6 +7244,7 @@ function rbLoadToneHotkeys() {
 }
 function rbSaveToneHotkeys(map) {
     try { localStorage.setItem(RB_TONE_HOTKEYS_LS, JSON.stringify(map || {})); } catch (_) {}
+    rbScheduleHotkeyWarm();   // (re)warm any newly-bound saved tones; prune removed ones
 }
 
 // Resolve a UI row reference (kind + index) to the stored target string. Saved
@@ -7317,17 +7438,145 @@ function rbSetupToneHotkeys() {
 
 // Tiny transient confirmation so the user knows a hotkey landed (no toast
 // helper exists in this plugin, so this is self-contained).
+// ── Tone-change toast: user-customizable size + position ─────────────────────
+// The label shown when you switch tone (hotkey / forced tone). Feedback was that
+// it read too small and too low — size + on-screen position are now customizable
+// from the Tone hotkeys panel and persist per-device. Runtime override:
+// localStorage 'rig_builder.toneToast' = {"size":"s|m|l|xl","pos":"top|center|bottom"}.
+const RB_TONE_TOAST_LS = 'rig_builder.toneToast';
+const RB_TONE_TOAST_SIZES = {
+    s:  { label: 'S',  font: 13, pad: '8px 14px' },
+    m:  { label: 'M',  font: 18, pad: '10px 18px' },
+    l:  { label: 'L',  font: 26, pad: '14px 24px' },
+    xl: { label: 'XL', font: 38, pad: '18px 34px' },
+};
+const RB_TONE_TOAST_POS = { top: 'Top', bottom: 'Bottom', left: 'Left', right: 'Right', center: 'Center' };
+let _rbToastPlacing = false;   // true while the user is drag-placing the toast
+function rbToneToastCfg() {
+    let c = {};
+    try { c = JSON.parse(localStorage.getItem(RB_TONE_TOAST_LS) || '{}') || {}; } catch (_) {}
+    // pos is EITHER a named preset OR a free {x,y} (percent of viewport, centre-anchored).
+    let pos = 'bottom';
+    if (c.pos && typeof c.pos === 'object' && typeof c.pos.x === 'number' && typeof c.pos.y === 'number') {
+        pos = { x: c.pos.x, y: c.pos.y };
+    } else if (RB_TONE_TOAST_POS[c.pos]) {
+        pos = c.pos;
+    }
+    return { size: RB_TONE_TOAST_SIZES[c.size] ? c.size : 'm', pos };   // defaults: Medium / Bottom
+}
+function rbToneToastPosCss(pos) {
+    if (pos && typeof pos === 'object') {   // free drag position (percent, centre-anchored)
+        const x = Math.max(2, Math.min(98, pos.x)), y = Math.max(4, Math.min(96, pos.y));
+        return `left:${x}%;right:auto;top:${y}%;bottom:auto;transform:translate(-50%,-50%);`;
+    }
+    if (pos === 'top')    return 'left:50%;right:auto;top:96px;bottom:auto;transform:translateX(-50%);';
+    if (pos === 'center') return 'left:50%;right:auto;top:50%;bottom:auto;transform:translate(-50%,-50%);';
+    if (pos === 'left')   return 'left:24px;right:auto;top:50%;bottom:auto;transform:translateY(-50%);';
+    if (pos === 'right')  return 'right:24px;left:auto;top:50%;bottom:auto;transform:translateY(-50%);';
+    return 'left:50%;right:auto;bottom:84px;top:auto;transform:translateX(-50%);';   // bottom
+}
+// Called from the panel chips: persist, re-render the control, flash a preview.
+window.rbToneToastSet = function rbToneToastSet(kind, value) {
+    const c = rbToneToastCfg();
+    if (kind === 'size' && RB_TONE_TOAST_SIZES[value]) c.size = value;
+    if (kind === 'pos' && RB_TONE_TOAST_POS[value]) c.pos = value;
+    try { localStorage.setItem(RB_TONE_TOAST_LS, JSON.stringify(c)); } catch (_) {}
+    try { rbRenderToneHotkeysUI(); } catch (_) {}
+    rbHotkeyToast('🎸 Preview');   // show the new look right away
+};
+
+// Drag-to-place: show the toast persistently and let the user drag it anywhere;
+// releasing saves the exact spot as % of the viewport (centre-anchored, so it
+// scales with resolution). Escape cancels and keeps the previous position.
+window.rbToneToastPlace = function rbToneToastPlace() {
+    const cfg = rbToneToastCfg();
+    const sz = RB_TONE_TOAST_SIZES[cfg.size] || RB_TONE_TOAST_SIZES.m;
+    _rbToastPlacing = true;
+    let el = document.getElementById('rb-hotkey-toast');
+    if (!el) { el = document.createElement('div'); el.id = 'rb-hotkey-toast'; document.body.appendChild(el); }
+    clearTimeout(el.__rbT);
+    el.__rbCfgSig = '__placing__';   // force a restyle on the next normal toast
+    // Draw at the CURRENT configured position first, then take over with px coords.
+    el.style.cssText = 'position:fixed;z-index:99999;' + rbToneToastPosCss(cfg.pos)
+        + 'background:rgba(18,18,26,.96);color:#cfe0ff;border:1px dashed rgba(130,180,255,.8);'
+        + `padding:${sz.pad};border-radius:10px;font-size:${sz.font}px;line-height:1.15;`
+        + 'pointer-events:auto;cursor:grab;opacity:1;box-shadow:0 6px 24px rgba(0,0,0,.5);max-width:80vw;text-align:center;user-select:none;';
+    el.textContent = '✥ Drag me — release to place (Esc cancels)';
+    const rect = el.getBoundingClientRect();
+    let cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+    const halfW = rect.width / 2, halfH = rect.height / 2;
+    const applyCenter = (px, py) => {
+        cx = Math.max(halfW, Math.min(window.innerWidth - halfW, px));
+        cy = Math.max(halfH, Math.min(window.innerHeight - halfH, py));
+        el.style.left = cx + 'px'; el.style.right = 'auto';
+        el.style.top = cy + 'px'; el.style.bottom = 'auto';
+        el.style.transform = 'translate(-50%,-50%)';
+    };
+    applyCenter(cx, cy);
+    let dragging = false, offx = 0, offy = 0;
+    const down = (e) => {
+        dragging = true; el.style.cursor = 'grabbing';
+        offx = e.clientX - cx; offy = e.clientY - cy;
+        try { rbTrackPointerCapture(el, e.pointerId); } catch (_) {}
+        e.preventDefault();
+    };
+    const move = (e) => { if (dragging) applyCenter(e.clientX - offx, e.clientY - offy); };
+    const cleanup = () => {
+        el.removeEventListener('pointerdown', down);
+        el.removeEventListener('pointermove', move);
+        el.removeEventListener('pointerup', up);
+        el.removeEventListener('pointercancel', up);
+        document.removeEventListener('keydown', esc, true);
+        el.style.pointerEvents = 'none'; el.style.cursor = '';
+        el.__rbCfgSig = null;   // next real toast restyles from the saved config
+    };
+    const up = () => {
+        if (!dragging && !_rbToastPlacing) return;
+        dragging = false;
+        _rbToastPlacing = false;
+        const x = Math.round(cx / window.innerWidth * 1000) / 10;
+        const y = Math.round(cy / window.innerHeight * 1000) / 10;
+        const c = rbToneToastCfg(); c.pos = { x, y };
+        try { localStorage.setItem(RB_TONE_TOAST_LS, JSON.stringify(c)); } catch (_) {}
+        cleanup();
+        try { rbRenderToneHotkeysUI(); } catch (_) {}
+        el.textContent = '✓ Placed';
+        clearTimeout(el.__rbT); el.__rbT = setTimeout(() => { el.style.opacity = '0'; }, 700);
+    };
+    const esc = (ev) => {
+        if (ev.key !== 'Escape') return;
+        ev.preventDefault(); dragging = false; _rbToastPlacing = false;
+        cleanup(); el.style.opacity = '0';
+        try { rbRenderToneHotkeysUI(); } catch (_) {}
+    };
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    document.addEventListener('keydown', esc, true);
+};
+
 function rbHotkeyToast(msg) {
+    if (_rbToastPlacing) return;   // don't fight the drag-to-place UI
     try {
+        const cfg = rbToneToastCfg();
+        const sz = RB_TONE_TOAST_SIZES[cfg.size] || RB_TONE_TOAST_SIZES.m;
         let el = document.getElementById('rb-hotkey-toast');
         if (!el) {
             el = document.createElement('div');
             el.id = 'rb-hotkey-toast';
-            el.style.cssText = 'position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:99999;'
-                + 'background:rgba(18,18,26,.94);color:#e5e7eb;border:1px solid rgba(130,130,150,.4);'
-                + 'padding:8px 14px;border-radius:10px;font-size:13px;pointer-events:none;opacity:0;'
-                + 'transition:opacity .18s ease;box-shadow:0 6px 24px rgba(0,0,0,.45)';
             document.body.appendChild(el);
+        }
+        // Re-apply the base style only when size/position changed (keeps the fade
+        // smooth otherwise). Position + size come from the user's saved config.
+        const sig = cfg.size + '|' + JSON.stringify(cfg.pos);
+        if (el.__rbCfgSig !== sig) {
+            el.__rbCfgSig = sig;
+            el.style.cssText = 'position:fixed;z-index:99999;' + rbToneToastPosCss(cfg.pos)
+                + 'background:rgba(18,18,26,.94);color:#e5e7eb;border:1px solid rgba(130,130,150,.4);'
+                + `padding:${sz.pad};border-radius:10px;font-size:${sz.font}px;line-height:1.15;`
+                + 'pointer-events:none;opacity:0;transition:opacity .18s ease;'
+                + 'box-shadow:0 6px 24px rgba(0,0,0,.45);max-width:80vw;text-align:center;';
         }
         el.textContent = msg;
         el.style.opacity = '1';
@@ -7384,7 +7633,29 @@ function rbRenderToneHotkeysUI() {
         } catch (_) {}
     }
 
-    let html = heading("This song's tones — per-section");
+    // Customize the tone-change label (size + position) — persists per-device.
+    const toastCfg = rbToneToastCfg();
+    const toastChip = (kind, val, lbl) => {
+        const on = toastCfg[kind] === val;
+        return `<button onclick="rbToneToastSet('${kind}','${val}')"
+            class="text-[11px] px-2 py-1 rounded border ${on ? 'border-emerald-600 text-emerald-200 bg-emerald-900/25' : 'border-gray-700 text-gray-400 hover:bg-dark-700'} transition">${rbEsc(lbl)}</button>`;
+    };
+    let html = `<div class="bg-dark-800/60 border border-gray-800/50 rounded-lg px-3 py-2 mb-1">
+        <div class="text-[11px] uppercase tracking-wide text-gray-500 mb-1.5">Tone-change label</div>
+        <div class="flex items-center justify-between gap-2 mb-1.5">
+            <span class="text-[11px] text-gray-500">Size</span>
+            <div class="flex gap-1">${['s', 'm', 'l', 'xl'].map(s => toastChip('size', s, RB_TONE_TOAST_SIZES[s].label)).join('')}</div>
+        </div>
+        <div class="flex items-start justify-between gap-2">
+            <span class="text-[11px] text-gray-500 mt-1">Position</span>
+            <div class="flex flex-wrap gap-1 justify-end" style="max-width:78%">
+                ${['top', 'bottom', 'left', 'right', 'center'].map(p => toastChip('pos', p, RB_TONE_TOAST_POS[p])).join('')}
+                <button onclick="rbToneToastPlace()" title="Drag the label anywhere on screen"
+                    class="text-[11px] px-2 py-1 rounded border ${(toastCfg.pos && typeof toastCfg.pos === 'object') ? 'border-emerald-600 text-emerald-200 bg-emerald-900/25' : 'border-sky-700 text-sky-300 hover:bg-dark-700'} transition">✥ Drag${(toastCfg.pos && typeof toastCfg.pos === 'object') ? ' ✓' : ''}</button>
+            </div>
+        </div>
+    </div>`;
+    html += heading("This song's tones — per-section");
     if (songTones.length) {
         // One bindable row PER real tone (labelled by name). NOT capped at 4 —
         // songs can carry more than the Rocksmith 4 (e.g. MuseTime has 6), and
@@ -7990,6 +8261,7 @@ async function rbStudioLoadSavedTones() {
     try { rbStudioRenderToneChips(); } catch (_) {}
     try { rbPopulateToneOverrideSelect(); } catch (_) {}   // keep the Setup override dropdown in sync
     try { rbRenderToneHotkeysUI(); } catch (_) {}          // saved-tone rows in the hotkeys panel
+    rbScheduleHotkeyWarm();   // background-prefetch the payloads of hotkey-bound saved tones
 }
 
 // ── Manage tab: inventory of downloaded NAM/IR files ────────────────
@@ -9848,10 +10120,86 @@ async function rbCloseActiveVstEditor() {
 // and crashes the host. This is the "edit master VST → enter a song → crash"
 // report. Idempotent + safe to call when nothing is open.
 let _rbLeaving = false;
+// ── Overlay watchdog: force-close every RB overlay / release drags ───────────
+// The "text input dies app-wide until restart" bug: several RB overlays and
+// popovers are appended to document.body (so they ESCAPE the plugin screen) or
+// use pointer capture. If one is left open when you navigate away — or a drag's
+// mouseup/pointerup is lost (e.g. released over a VST's native window) — the
+// element/capture lingers on TOP of the whole app, swallowing clicks + focus so
+// no text field anywhere accepts input until reload. rbOnLeaveRigBuilder used to
+// tear down only the VST editor + audio, never these. This closes them all and
+// LOGS what it found open, so the console names the culprit next time it fires.
+let _rbActivePointerCaptures = [];
+// Capture a pointer AND remember it, self-clearing on release, so a lost
+// pointerup (drag released over a native window) can be recovered later.
+function rbTrackPointerCapture(el, pointerId) {
+    try { el.setPointerCapture?.(pointerId); } catch (_) { return; }
+    const rec = { el, pointerId };
+    _rbActivePointerCaptures.push(rec);
+    const clear = () => {
+        const i = _rbActivePointerCaptures.indexOf(rec);
+        if (i >= 0) _rbActivePointerCaptures.splice(i, 1);
+        el.removeEventListener('pointerup', clear);
+        el.removeEventListener('pointercancel', clear);
+        el.removeEventListener('lostpointercapture', clear);
+    };
+    el.addEventListener('pointerup', clear);
+    el.addEventListener('pointercancel', clear);
+    el.addEventListener('lostpointercapture', clear);
+}
+function rbReleaseAllPointerCaptures() {
+    const caps = _rbActivePointerCaptures; _rbActivePointerCaptures = [];
+    for (const c of caps) { try { c.el.releasePointerCapture?.(c.pointerId); } catch (_) {} }
+    return caps.length;
+}
+function rbCloseAllRbOverlays(reason) {
+    const closed = [];
+    try { if (rbState._studioFocusKind === 'cab' && typeof rbStudioCloseCabFocus === 'function') { rbStudioCloseCabFocus(); closed.push('cab-focus'); } } catch (_) {}
+    try { if (document.getElementById('rb-studio-focus-bar')) { rbStudioCloseFocus(); closed.push('focus-bar'); } } catch (_) {}
+    try { if (document.getElementById('rb-swap-panel')) { rbStudioCloseSwap(); closed.push('swap-rail'); } } catch (_) {}
+    const byId = (id) => { const el = document.getElementById(id); if (el) { try { el.remove(); } catch (_) {} closed.push('#' + id); } };
+    const byClass = (cls) => document.querySelectorAll(cls).forEach(el => { try { el.remove(); } catch (_) {} closed.push(cls); });
+    byId('rb-addtone-overlay'); byId('rb-cg-pop');
+    byClass('.rb-map-modal'); byClass('.rb-suggest-modal'); byClass('.rb-adv-drag-ghost');
+    // fc-modal lives in screen.html — hide it (don't remove) so it can reopen.
+    try { document.getElementById('rb-fullchain-modal')?.classList.add('hidden'); } catch (_) {}
+    const released = rbReleaseAllPointerCaptures();
+    if (released) closed.push('pointer-capture×' + released);
+    if (closed.length) console.warn('[rig_builder] force-closed overlays on ' + (reason || '?') + ':', closed.join(', '));
+    return closed;
+}
+// Manual probe: run rbDebugOverlays() in the console the moment input is stuck to
+// see (and clear) whichever RB overlay is swallowing clicks/typing.
+window.rbDebugOverlays = function rbDebugOverlays() {
+    const open = [];
+    ['rb-addtone-overlay', 'rb-cg-pop', 'rb-studio-focus-bar', 'rb-swap-panel'].forEach(id => { if (document.getElementById(id)) open.push('#' + id); });
+    ['.rb-map-modal', '.rb-suggest-modal', '.rb-adv-drag-ghost', '.rb-fc-modal:not(.hidden)'].forEach(c => { if (document.querySelector(c)) open.push(c); });
+    if (_rbActivePointerCaptures.length) open.push('pointer-capture×' + _rbActivePointerCaptures.length);
+    console.warn('[rig_builder] open overlays:', open.length ? open.join(', ') : '(none)');
+    rbCloseAllRbOverlays('rbDebugOverlays');
+    return open;
+};
+if (!window.__rbOverlayWatchdog) {
+    window.__rbOverlayWatchdog = true;
+    // Escape anywhere (when NOT typing) force-closes stray RB overlays — a manual
+    // un-stick without an app restart, and it logs which overlay leaked.
+    document.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'Escape') return;
+        const t = ev.target, tag = (t && t.tagName) || '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || (t && t.isContentEditable)) return;
+        try { rbCloseAllRbOverlays('escape'); } catch (_) {}
+    }, true);
+    // Window losing focus (a VST native window opening is the classic case) is
+    // exactly when a drag's pointerup gets lost — release captures so the pointer
+    // isn't hijacked when focus returns.
+    window.addEventListener('blur', () => { try { rbReleaseAllPointerCaptures(); } catch (_) {} });
+}
+
 async function rbOnLeaveRigBuilder() {
     rbStopFinalChainNormalizer();
     if (_rbLeaving) return;
     _rbLeaving = true;
+    try { rbCloseAllRbOverlays('leave-rig-builder'); } catch (_) {}
     try {
         const hadEditor = rbState._vstEditorSlot != null;
         await rbAutoCaptureActiveVstEditor();     // persist on-the-fly VST tweaks before teardown
@@ -14294,7 +14642,7 @@ function rbCabRoomBuild(g, entry, safeId, opts) {
 function rbCabMicDrag(e, safeId, gear, isDown) {
     if (!isDown && e.buttons !== 1) return;
     const fit = e.currentTarget;
-    fit.setPointerCapture?.(e.pointerId);
+    rbTrackPointerCapture(fit, e.pointerId);
     const st = _rbCabRoom[safeId];
     if (!st) return;
     const rect = fit.getBoundingClientRect();
@@ -14427,7 +14775,7 @@ function rbCabRoomEntry(gear) { return rbRealCabEntryFor(gear); }
 function rbCabRoomPointer(e, safeId, gear, isDown) {
     if (!isDown && e.buttons !== 1) return;
     const cv = e.currentTarget;
-    cv.setPointerCapture?.(e.pointerId);
+    rbTrackPointerCapture(cv, e.pointerId);
     const entry = rbCabRoomEntry(gear);
     const st = _rbCabRoom[safeId];
     if (!entry || !st) return;
@@ -15852,7 +16200,24 @@ async function rbCatalogCustomEditInline(g) {
             const vv = {};
             (layout.controls || []).forEach(c => { if (typeof c.param === 'number' && typeof m.values[c.param] === 'number') vv[c.id] = m.values[c.param]; });
             PC.redraw(cv, vv);
-        });
+        }, catRebuild);
+    };
+
+    // Rebuild the AUTO-generated face when the plugin's param set changes (a preset
+    // that swaps which knobs exist). Only applies when the layout was generated from
+    // the plugin's live params (smartLayout, no user-authored g.ui) — a custom face
+    // is fixed by design and must never be rebuilt from the plugin. Regenerates the
+    // layout from the freshly-polled meta, then re-renders (which re-registers here).
+    const catRebuild = () => {
+        if (g.ui) return;
+        const raw = (rbState._cgCatPiece && rbState._cgCatPiece._vst_param_meta) || [];
+        if (!raw.length) return;
+        const nl = PC.smartLayout(g.category, rbFilterVstParams(raw), { title: g.real_name || '' });
+        if (!nl) return;
+        layout = nl;
+        mapParams();
+        model = rbBuildCanvasModel(raw, null);
+        renderFace();
     };
 
     if (layout) {
