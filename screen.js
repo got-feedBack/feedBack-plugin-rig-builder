@@ -3981,10 +3981,12 @@ async function rbApplyPluginUpdate() {
     }
 }
 
-function rbShowTab(name) {
+async function rbShowTab(name) {
     // Leaving any view tears down an open inline VST editor first so its
     // orphaned native window can't crash the host on the next chain load.
-    rbCloseActiveVstEditor();
+    // Awaited so a pending master-chain auto-save flushes (and commits) BEFORE
+    // we may re-fetch the chain for the destination tab.
+    await rbCloseActiveVstEditor();
     // The Studio room is a permanent backdrop (never hidden), so an open focus
     // overlay — the Cab Room and its position:fixed swap rail — would linger on
     // top of whatever tab you open. Tear it down when LEAVING Studio. (Not when
@@ -10211,6 +10213,14 @@ async function rbChainSlotIdForPiece(api, payload, toneIdx, pIdx) {
 // "edit a master-chain VST → switch menu / load a song → crash" report.
 async function rbCloseActiveVstEditor() {
     try { rbStopNativeParamSync(); } catch (_) {}   // stop native-window reverse sync
+    // Flush any pending master-chain auto-save NOW, while the editor slot is still
+    // live, so a fast tab switch can't lose the last knob move (see rbFlushMasterSaves).
+    try { await rbFlushMasterSaves(); } catch (_) {}
+    // Same for a per-tone VST editor open on a live slot: edits made in the
+    // plugin's OWN window schedule no debounce, so capture their live state +
+    // opaque and persist before the slot is torn down (mirrors the master flush).
+    try { await rbAutoCaptureActiveVstEditor(); } catch (_) {}
+    rbState._vstEditorCtx = null;
     rbState._activeVstFace = null;
     const slot = rbState._vstEditorSlot;
     if (slot == null) return;
@@ -10582,7 +10592,7 @@ async function rbToneEditVst(toneIdx, pIdx) {
             if (await rbTryOpenNativeEditor(api, slotId)) {
                 const _nm = vstPath.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '');
                 editor.innerHTML = rbNativeEditorPanelHtml(
-                    _nm, `rbToneCaptureVstState(${toneIdx}, ${pIdx})`, `rbToneEditVst(${toneIdx}, ${pIdx})`);
+                    _nm, null, `rbToneEditVst(${toneIdx}, ${pIdx})`);
             }
         }
     } catch (e) {
@@ -10683,19 +10693,25 @@ async function rbMasterOpenNativeWindow(role, idx) {
 // into the tone/master saved state) + close. `captureCall`/`closeCall` are the
 // onclick expressions for the relevant scope (tone vs master).
 function rbNativeEditorPanelHtml(vstName, captureCall, closeCall) {
+    // captureCall falsy → auto-save mode: no manual "Capture state" button, and
+    // the hint tells the user their edits save automatically on close.
+    const captureBtn = captureCall ? `
+                <button onclick="${captureCall}"
+                        title="Snapshot the current parameter values into the saved state"
+                        class="bg-amber-700/60 hover:bg-amber-600/60 text-amber-100 text-[10px] px-2 py-0.5 rounded">📸 Capture state</button>` : '';
+    const hint = captureCall
+        ? "This plugin's UI opened in a separate window — tweak it there, then 📸 Capture to save into this tone."
+        : "This plugin's UI opened in a separate window — tweak it there, then close (✕). Your changes save automatically.";
     return `
         <div class="flex items-center justify-between mb-1">
             <div class="text-[11px] text-purple-300 font-semibold">Editing in the plugin's own window · ${rbEsc(vstName)}</div>
-            <div class="flex items-center gap-1">
-                <button onclick="${captureCall}"
-                        title="Snapshot the current parameter values into the saved state"
-                        class="bg-amber-700/60 hover:bg-amber-600/60 text-amber-100 text-[10px] px-2 py-0.5 rounded">📸 Capture state</button>
+            <div class="flex items-center gap-1">${captureBtn}
                 <button onclick="${closeCall}"
                         title="Close editor"
                         class="text-[10px] text-gray-400 hover:text-gray-200 px-1">✕</button>
             </div>
         </div>
-        <div class="text-[10px] text-gray-500">This plugin's UI opened in a separate window — tweak it there, then 📸 Capture to save into this tone.</div>`;
+        <div class="text-[10px] text-gray-500">${hint}</div>`;
 }
 
 // Display width for the inline canvas. Keep each VST at a readable default
@@ -10837,9 +10853,6 @@ function rbToneRenderCustomFace(toneIdx, pIdx, piece, editor) {
                 ${rbEffVstPath(piece) ? `<button onclick="rbToneOpenNativeWindow(${toneIdx}, ${pIdx})"
                         title="Open the plugin's own (real) editor window"
                         class="bg-dark-700 hover:bg-dark-600 text-gray-300 text-[10px] px-2 py-0.5 rounded">🪟 Plugin window</button>` : ''}
-                <button onclick="rbToneCaptureVstState(${toneIdx}, ${pIdx})"
-                        title="Snapshot the current parameter values into this tone's saved state"
-                        class="bg-amber-700/60 hover:bg-amber-600/60 text-amber-100 text-[10px] px-2 py-0.5 rounded">📸 Capture state</button>
                 <button onclick="rbToneEditVst(${toneIdx}, ${pIdx})"
                         title="Close inline editor"
                         class="text-[10px] text-gray-400 hover:text-gray-200 px-1">✕</button>
@@ -10907,9 +10920,6 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
                     <button onclick="rbToneOpenNativeWindow(${toneIdx}, ${pIdx})"
                             title="Open the plugin's own (real) editor window"
                             class="bg-dark-700 hover:bg-dark-600 text-gray-300 text-[10px] px-2 py-0.5 rounded">🪟 Plugin window</button>
-                    <button onclick="rbToneCaptureVstState(${toneIdx}, ${pIdx})"
-                            title="Snapshot the current parameter values into this tone's saved state"
-                            class="bg-amber-700/60 hover:bg-amber-600/60 text-amber-100 text-[10px] px-2 py-0.5 rounded">📸 Capture state</button>
                     <button onclick="rbToneEditVst(${toneIdx}, ${pIdx})"
                             title="Close inline editor"
                             class="text-[10px] text-gray-400 hover:text-gray-200 px-1">✕</button>
@@ -10965,9 +10975,6 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
         <div class="flex items-center justify-between">
             <div class="text-[11px] text-purple-300 font-semibold">In-feedBack editor · ${rbEsc(vstName)} · ${params.length} params</div>
             <div class="flex items-center gap-1">
-                <button onclick="rbToneCaptureVstState(${toneIdx}, ${pIdx})"
-                        title="Snapshot the current parameter values into this tone's saved state"
-                        class="bg-amber-700/60 hover:bg-amber-600/60 text-amber-100 text-[10px] px-2 py-0.5 rounded">📸 Capture state</button>
                 <button onclick="rbToneEditVst(${toneIdx}, ${pIdx})"
                         title="Close inline editor"
                         class="text-[10px] text-gray-400 hover:text-gray-200 px-1">✕</button>
@@ -10977,7 +10984,8 @@ function rbToneRenderInlineVstParams(toneIdx, pIdx) {
         editor.innerHTML = `
             ${header}
             <div class="text-xs text-gray-500 italic mt-1">
-                This plugin doesn't expose any parameters to the host. Use the native window for tweaks.
+                This plugin doesn't expose any parameters to the host. Edit it in the native
+                window — your changes save automatically when you close the editor.
             </div>`;
         return;
     }
@@ -11404,6 +11412,26 @@ async function rbLoadMasterChain() {
     }
     rbRenderMasterChain('pre');
     rbRenderMasterChain('post');
+    // Auto-open the first VST's inline UI so the user doesn't have to click
+    // "Edit VST" to see it (the engine hosts one VST editor at a time — pre wins).
+    rbMasterAutoOpenFirstVst().catch(() => {});
+}
+
+// Open the inline editor for the FIRST VST piece across the master chains without
+// a manual "Edit VST" click. Only ONE VST editor slot exists in the engine, so we
+// open a single one (pre chain has priority) and never steal one already open.
+async function rbMasterAutoOpenFirstVst() {
+    if (rbState._vstEditorSlot != null || rbState._vstEditorBusy) return;
+    for (const role of ['pre', 'post']) {
+        const arr = rbState.master[role] || [];
+        const idx = arr.findIndex(p => rbEffVstPath(p));
+        if (idx < 0) continue;
+        const editor = document.getElementById(`rb-master-${role}-editor-${idx}`);
+        if (editor && editor.classList.contains('hidden')) {
+            await rbMasterEditVst(role, idx).catch(() => {});
+        }
+        return;   // single editor slot — stop after the first VST found
+    }
 }
 
 // ── Default tone (standalone idle rig) ───────────────────────────────
@@ -11809,6 +11837,10 @@ async function rbMasterEditVst(role, idx) {
     const api = rbAudioApi();
     // Toggle close if already open — tear the editor VST down cleanly.
     if (!editor.classList.contains('hidden')) {
+        // Auto-capture the plugin's state before tearing it down, so edits made
+        // in the plugin's OWN window (or param-less plugins that emit no slider
+        // events) persist without a manual "Capture state" click.
+        try { await rbMasterCaptureVstState(role, idx); } catch (_) {}
         editor.classList.add('hidden');
         editor.innerHTML = '';
         await rbTeardownVstEditor(api);
@@ -11870,7 +11902,7 @@ async function rbMasterEditVst(role, idx) {
             if (await rbTryOpenNativeEditor(api, slotId)) {
                 const _nm = vstPath.split(/[\\/]/).pop().replace(/\.(vst3|component)$/i, '');
                 editor.innerHTML = rbNativeEditorPanelHtml(
-                    _nm, `rbMasterCaptureVstState('${role}', ${idx})`, `rbMasterEditVst('${role}', ${idx})`);
+                    _nm, null, `rbMasterEditVst('${role}', ${idx})`);
             }
         }
     } catch (e) {
@@ -11896,9 +11928,6 @@ function rbMasterRenderInlineVstParams(role, idx) {
                     <button onclick="rbMasterOpenNativeWindow('${role}', ${idx})"
                             title="Open the plugin's own (real) editor window"
                             class="bg-dark-700 hover:bg-dark-600 text-gray-300 text-[10px] px-2 py-0.5 rounded">🪟 Plugin window</button>
-                    <button onclick="rbMasterCaptureVstState('${role}', ${idx})"
-                            title="Snapshot the current parameter values into the master chain's saved state"
-                            class="bg-amber-700/60 hover:bg-amber-600/60 text-amber-100 text-[10px] px-2 py-0.5 rounded">📸 Capture state</button>
                     <button onclick="rbMasterEditVst('${role}', ${idx})"
                             title="Close inline editor (the VST stays loaded in the master chain)"
                             class="text-[10px] text-gray-400 hover:text-gray-200 px-1">✕</button>
@@ -11926,6 +11955,16 @@ function rbMasterRenderInlineVstParams(role, idx) {
                     // it already exists, or the stale name value overrides this
                     // fresh drag on the next song load ("edits don't save").
                     rbSyncParamNameAlias(piece, realId, val);
+                    // Keep the LOGICAL-id value too so a fresh reload redraws the
+                    // right knob (the canvas spec draws by logical id) — mirrors the
+                    // per-tone editor, whose omission here was "edits don't save".
+                    piece._vst_logical = piece._vst_logical || {};
+                    piece._vst_logical[logicalId] = val;
+                    // Auto-save the drag (no manual "Capture state" needed): stamp
+                    // the params now and debounce a persist that also captures the
+                    // opaque blob — same behaviour the slider editor already had.
+                    rbStampVstState(piece);
+                    rbDebouncedMasterSave(role);
                 },
             });
             // Reverse sync target: repaint this master face (values only) when the
@@ -11943,9 +11982,6 @@ function rbMasterRenderInlineVstParams(role, idx) {
         <div class="flex items-center justify-between">
             <div class="text-[11px] text-purple-300 font-semibold">In-feedBack editor · ${vstName} · ${params.length} params</div>
             <div class="flex items-center gap-1">
-                <button onclick="rbMasterCaptureVstState('${role}', ${idx})"
-                        title="Snapshot the current parameter values into the master chain's saved state"
-                        class="bg-amber-700/60 hover:bg-amber-600/60 text-amber-100 text-[10px] px-2 py-0.5 rounded">📸 Capture state</button>
                 <button onclick="rbMasterEditVst('${role}', ${idx})"
                         title="Close inline editor (the VST stays loaded in the master chain)"
                         class="text-[10px] text-gray-400 hover:text-gray-200 px-1">✕</button>
@@ -11957,10 +11993,10 @@ function rbMasterRenderInlineVstParams(role, idx) {
             <div class="text-xs text-gray-400 mt-1 space-y-1">
                 <div>This effect exposes no host-automatable parameters — that's normal
                 for some plugins (denoisers, analyzers, utilities). It's not a failure,
-                and your settings <b>can</b> still be saved.</div>
-                <div>Edit it in the plugin's own editor window, then click
-                <b>📸 Capture state</b> above — that snapshots the plugin's current
-                state into the master chain so it persists and reloads on playback.</div>
+                and your settings <b>are</b> still saved.</div>
+                <div>Edit it in the plugin's own editor window, then close this panel
+                (the <b>✕</b>) — your changes are captured into the master chain
+                automatically and reload on playback.</div>
             </div>`;
         return;
     }
@@ -12040,6 +12076,39 @@ function rbDebouncedMasterSave(role) {
         rbPersistMasterChain(role).catch(() => null);
     }, 500);
     _rbMasterSaveTimers.set(role, timer);
+}
+
+// Persist any PENDING debounced master save immediately, then cancel its timer.
+// Called when the VST editor is torn down (tab switch, reopen) so a fast
+// Master→Studio→Master round-trip can't (a) re-fetch before the 500 ms timer
+// fired, losing the edit, or (b) let a late timer fire AFTER the re-fetch and
+// overwrite the DB with the freshly-reloaded plugin's DEFAULT values.
+async function rbFlushMasterSaves() {
+    const slot = rbState._vstEditorSlot;
+    // Roles with a debounced save still pending (canvas/slider edits) — cancel the
+    // timer and mark the role to persist now.
+    const pendingRoles = new Set();
+    for (const role of ['pre', 'post', 'default']) {
+        const t = _rbMasterSaveTimers.get(role);
+        if (t) { clearTimeout(t); _rbMasterSaveTimers.delete(role); pendingRoles.add(role); }
+    }
+    // The master piece whose editor is OPEN right now. Edits made in the plugin's
+    // OWN window schedule no debounce (the reverse-sync poll only repaints the
+    // in-app face), so without this they never reach the DB. Snapshot its LIVE
+    // param values + opaque blob and persist, while the engine slot is still alive.
+    if (slot != null) {
+        for (const role of ['pre', 'post', 'default']) {
+            const arr = rbState.master[role] || [];
+            const idx = arr.findIndex(p => p && p._vst_slot_id === slot);
+            if (idx < 0) continue;
+            try { await rbMasterCaptureVstState(role, idx); } catch (_) {}  // live getParameters + opaque + persist
+            pendingRoles.delete(role);   // already persisted above
+        }
+    }
+    // Remaining pending-timer roles with no open editor piece: persist as staged.
+    for (const role of pendingRoles) {
+        await rbPersistMasterChain(role).catch(() => null);
+    }
 }
 
 async function rbMasterCaptureVstState(role, idx) {
@@ -12368,7 +12437,7 @@ async function rbMasterAssignVstPick(role, idx) {
     }
 }
 
-function rbMasterAssignVstPath(role, idx, path) {
+async function rbMasterAssignVstPath(role, idx, path) {
     if (!path) return;
     const p = rbState.master[role][idx];
     if (!p) return;
@@ -12378,7 +12447,12 @@ function rbMasterAssignVstPath(role, idx, path) {
     p._vst_kind = 'vst';
     p._uploaded_file = null;
     p._uploaded_kind = null;
-    rbAfterMasterEdit(role);
+    await rbAfterMasterEdit(role);
+    // Show the just-assigned VST's UI right away — no "Edit VST" click needed.
+    const editor = document.getElementById(`rb-master-${role}-editor-${idx}`);
+    if (editor && editor.classList.contains('hidden')) {
+        await rbMasterEditVst(role, idx).catch(() => {});
+    }
 }
 
 // ── Chain editor: reorder / add / remove pieces ────────────────────────
