@@ -59,6 +59,13 @@
         box-shadow:0 6px 18px rgba(0,0,0,.4); backdrop-filter:blur(6px);
         transition:background .15s, color .15s, transform .12s; }
     .rb-studio-adv-btn:hover{ background:rgba(48,72,118,.8); color:#fff; transform:translateY(-1px); }
+    /* Restore/Remove-tone action, floating just LEFT of ⚙ Advanced. */
+    .rb-studio-tone-action{ right:140px !important; }
+    .rb-studio-tone-action.hidden{ display:none; }
+    /* Replace-with-preset action, floating just LEFT of Restore/Remove.
+       Offset clears the widest Restore/Remove label ("↺ Restore to original"). */
+    .rb-studio-tone-replace{ right:316px !important; }
+    .rb-studio-tone-replace.hidden{ display:none; }
     /* When a song's tonebar is shown it covers the top strip — drop the Advanced
        button below it so it stays reachable while a song is loaded. */
     #rb-stage-wrap.rb-songbar-on .rb-studio-adv-btn{ top:58px; }
@@ -1121,6 +1128,17 @@
     <!-- Studio (main view — the Default tone visualised as a 3D control room) -->
     <div id="rb-tab-studio" class="rb-tab-panel">
         <div id="rb-studio-room"></div>
+        <!-- Per-song-tone action: Restore (song's own tone) or Remove (a tone you
+             added). Floats just left of ⚙ Advanced; shown only on a song tone.
+             Reuses .rb-studio-adv-btn so it inherits the songbar-drop + focus-hide. -->
+        <button id="rb-studio-tone-action" class="rb-studio-adv-btn rb-studio-tone-action hidden"
+                onclick="rbStudioToneActionClick()"></button>
+        <!-- Replace this song tone's whole chain with one of the user's saved
+             presets (no rebuilding from scratch). Shown on any active song tone;
+             persists through the normal per-song path, so Restore still undoes it. -->
+        <button id="rb-studio-tone-replace" class="rb-studio-adv-btn rb-studio-tone-replace hidden"
+                onclick="rbStudioReplaceSongToneWithPreset()"
+                title="Swap this tone's gear for one of your saved presets">🔁 Replace with preset…</button>
         <!-- Advanced (node-graph chain editor) lives INSIDE Studio, not in the top tab bar -->
         <button class="rb-studio-adv-btn" onclick="rbShowTab('advanced')" title="Open the advanced node-graph chain editor">
             ⚙ Advanced
@@ -1313,7 +1331,22 @@
                         <button onclick="rbAdvZoom(0.15)" class="rb-adv-btn rb-adv-btn-icon" title="Zoom in">+</button>
                         <button onclick="rbAdvAutoLayout()" class="rb-adv-btn">Tidy</button>
                         <button onclick="rbAdvResetToChain()" class="rb-adv-btn">Reset to chain</button>
+                        <button onclick="rbAdvExportTone()" class="rb-adv-btn" title="Export this tone's configuration to a file">⬆ Export tone</button>
+                        <button onclick="document.getElementById('rb-adv-import-tone').click()" class="rb-adv-btn" title="Import a tone file — replaces this tone's configuration">⬇ Import tone</button>
+                        <input type="file" id="rb-adv-import-tone" accept=".json,application/json" style="display:none" onchange="rbAdvImportToneFile(this)">
+                        <button onclick="rbToggleToneHotkeysPanel()" class="rb-adv-btn" title="Bind number keys to tones for live switching while a song plays">⌨ Hotkeys</button>
                     </div>
+                </div>
+                <!-- Tone hotkeys — floating panel. Bind number keys to the song's
+                     own tones (per-section) or to saved/Default presets. Toggled
+                     from the toolbar; populated by rbRenderToneHotkeysUI(). -->
+                <div id="rb-adv-hotkeys-panel" class="hidden" style="position:absolute;top:96px;right:12px;z-index:40;width:330px;max-height:72%;overflow-y:auto;background:rgba(12,16,26,.97);border:1px solid rgba(120,165,225,.28);border-radius:12px;padding:14px;box-shadow:0 10px 40px rgba(0,0,0,.5);">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <h3 style="color:#fff;font-weight:600;font-size:14px;margin:0;">Tone hotkeys</h3>
+                        <button onclick="rbToggleToneHotkeysPanel(false)" style="color:#9fb0cc;font-size:18px;line-height:1;background:none;border:none;cursor:pointer;">✕</button>
+                    </div>
+                    <p style="color:#7e8aa3;font-size:11.5px;margin:0 0 10px;">Press a bound number key while a song plays. "Song tone N" jumps between THIS song's own sections; the presets load a saved/Default tone over any song. Back-to-built-in undoes both.</p>
+                    <div id="rb-tone-hotkeys-list" class="space-y-2"></div>
                 </div>
                 <!-- Per-tone noise gate — saved WITH this tone (distinct from the
                      app-wide gate in audio settings). Applied to the engine when
