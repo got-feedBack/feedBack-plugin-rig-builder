@@ -2920,6 +2920,49 @@ const RbMegaChain = (function () {
             _markFailed(filename, 'No mapped Rig Builder tones were found for this song');
             return false;
         }
+        // A 200 with `default_fallback` means the backend had NO per-song mapping
+        // yet, so it served the DEFAULT tone. For a mappable song (psarc/CDLC)
+        // that is the SAME first-load seed race as a 404 — the async seeder just
+        // hasn't written tone_mappings yet — but it slips past the 404 branch
+        // above because the response IS a valid 200. Symptom: the first entry
+        // plays the default tone, and the user exits/re-enters 2-3× until the
+        // seed lands. Fix: on default_fallback, run the on-demand seed ONCE
+        // (awaited — /auto_download_song returns only after mappings persist)
+        // and re-fetch. If it is STILL default_fallback afterwards, the song is
+        // genuinely unmappable (feedpak / no tone3000 key) and we keep the default.
+        if (mega && mega.default_fallback && _seedTried !== filename) {
+            _seedTried = filename;
+            try {
+                const seedResp = await fetch(`${RB_API}/auto_download_song`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename }),
+                });
+                console.log(`[rig_builder mega-chain] default-fallback seed for "${filename}" → HTTP ${seedResp.status}`);
+            } catch (e) {
+                console.warn('[rig_builder mega-chain] default-fallback seed failed:', e);
+            }
+            const _POST_SEED_DELAYS = [0, 800, 2000];
+            for (let attempt = 0; attempt < _POST_SEED_DELAYS.length; attempt++) {
+                if (_POST_SEED_DELAYS[attempt]) await new Promise(r => setTimeout(r, _POST_SEED_DELAYS[attempt]));
+                if (myGen !== _buildGen) {
+                    console.log('[rig_builder mega-chain] build superseded during default-fallback re-fetch — abandoning');
+                    return false;
+                }
+                let r2;
+                try { r2 = await fetch(`${RB_API}/mega_chain/${encodeURIComponent(filename)}`); }
+                catch (e) { break; }   // network hiccup — keep the default we already have
+                if (!r2.ok) break;     // 404/error — keep the default
+                const m2 = await r2.json();
+                if (m2 && !m2.default_fallback
+                    && m2.native_preset && Array.isArray(m2.native_preset.chain) && m2.native_preset.chain.length) {
+                    mega = m2;         // got the REAL mapped tone on this first entry
+                    console.log(`[rig_builder mega-chain] real mapping resolved after seed for "${filename}" (was default fallback)`);
+                    break;
+                }
+                console.warn(`[rig_builder mega-chain] still default fallback after seed (re-fetch ${attempt + 1}/${_POST_SEED_DELAYS.length - 1}) — will keep default if it stays this way`);
+            }
+        }
         if (!mega || !mega.native_preset
             || !Array.isArray(mega.native_preset.chain)
             || mega.native_preset.chain.length === 0) {
@@ -6721,7 +6764,7 @@ window.rbOpenStudio = function rbOpenStudio() {
 
 // Song search is an action, not a tab: toggle the bottom search dock over the
 // Studio room (you stay in Studio; picking a song loads its tones as chips).
-function rbToggleSongSearch() {
+async function rbToggleSongSearch() {
     const dock = document.getElementById('rb-tab-song');
     const btn = document.getElementById('rb-song-btn');
     if (!dock) return;
@@ -6730,7 +6773,12 @@ function rbToggleSongSearch() {
         btn && btn.classList.remove('rb-songbtn-on');
         return;
     }
-    rbShowTab('studio');                 // the dock floats over the Studio room
+    // MUST await: rbShowTab is async (it awaits a VST-editor teardown), so its
+    // panel-hide loop — which re-adds `hidden` to EVERY .rb-tab-panel, this dock
+    // included — runs on a later microtask. Un-hiding the dock before that loop
+    // ran meant rbShowTab immediately re-hid it (and cleared the button glow),
+    // so the dock never appeared. Await it, THEN un-hide, so we win the race.
+    await rbShowTab('studio');           // the dock floats over the Studio room
     dock.classList.remove('hidden');
     btn && btn.classList.add('rb-songbtn-on');
     try { rbShowSongList(); requestAnimationFrame(() => document.getElementById('rb-song-search')?.focus()); } catch (_) {}
