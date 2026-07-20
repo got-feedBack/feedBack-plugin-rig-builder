@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/MarstenDSL15.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			ILCJZOZ3L+MFsRWN1gb7Js/qmG822Odk6UIFwt40mw0=
+			</data>
+		</dict>
+		<key>x86_64-win/MarstenDSL15.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			/AnM/wdqSWQkV98Bhe6Unc+0DEku+l7Hewhk5JHYnPw=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

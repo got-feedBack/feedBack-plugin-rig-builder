@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/MarstenMajor.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			ZJQ99zuvTL01BWV3tCpBn23SxIJ4OsxpYPbD2CZ+8H0=
+			</data>
+		</dict>
+		<key>x86_64-win/MarstenMajor.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			zwvYTN65KNtt4iICxlNOSjeaNdXJyUxwtuRTV/Tvr8s=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

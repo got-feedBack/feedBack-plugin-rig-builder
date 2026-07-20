@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/MicroAmp.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			tSNxRJCZPvVeowKv9my62JxZV543kP7jomvDCNa4IGk=
+			</data>
+		</dict>
+		<key>x86_64-win/MicroAmp.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			zyJnmbEXnUKMc3QUu47k8M8o8aUn90F/QQbzUbo/dC4=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

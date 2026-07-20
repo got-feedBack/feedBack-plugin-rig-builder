@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/FuzzRite.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			wXzyFGGFV/vDr9jFv2ADiOFaBj+URdzG3jtqAOuT2+w=
+			</data>
+		</dict>
+		<key>x86_64-win/FuzzRite.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			ooP6zWZwuRkZFq7nMn7DzetW7Fjh0mxp12gV+W2v0hA=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

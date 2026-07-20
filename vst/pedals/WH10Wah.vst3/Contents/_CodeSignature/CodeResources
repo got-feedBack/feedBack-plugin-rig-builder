@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/WH10Wah.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			O8mmtRtJLYPUXFZcRVUyE1AtDu/w9tYalUtLCeKtXJc=
+			</data>
+		</dict>
+		<key>x86_64-win/WH10Wah.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			oXfJnFgOInIdVJN+vVcDkd0FLzIZJ3SIDpQnp9tZR/0=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/MrYMaz38.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			HXHK/Z/dmdiG705xPaS3a+oF4zW7FbP9zw0ybXE37Eg=
+			</data>
+		</dict>
+		<key>x86_64-win/MrYMaz38.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			EVB2zh7V3dxKUfrMQTJk0vOFYMs5l5DfI/Zh7YNfGJI=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

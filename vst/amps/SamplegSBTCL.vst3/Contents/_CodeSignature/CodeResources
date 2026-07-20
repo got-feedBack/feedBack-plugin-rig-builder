@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/SamplegSBTCL.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			co0hA79Xc16HjJG3j+LF1eppNchUPNc3I/vphfw+eY8=
+			</data>
+		</dict>
+		<key>x86_64-win/SamplegSBTCL.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			42Op9gbZO3WUHtqGu7+WvYIB4FHmWK2TuJmGqLeGx0I=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/TurboDistortion.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			ZgV+oO+wdSog/XoAxxM9bE22HeJ5cP8GmwSQWmLxmqY=
+			</data>
+		</dict>
+		<key>x86_64-win/TurboDistortion.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			X58jMq+qUs1p5R61x/N5dahZbDpBj/lreicgQC7ZW08=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

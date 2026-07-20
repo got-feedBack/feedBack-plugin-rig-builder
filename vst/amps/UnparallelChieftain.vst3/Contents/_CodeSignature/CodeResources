@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/UnparallelChieftain.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			AzxoNeZqwxzoXi6PxFAEfJe+44BmkGvjdIa8P2ex658=
+			</data>
+		</dict>
+		<key>x86_64-win/UnparallelChieftain.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			cqRYxAre0fkCJhe8u7n2TgwxfmoTtnP81jg0ZsdiEIc=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

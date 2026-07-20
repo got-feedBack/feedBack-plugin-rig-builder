@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/MarstenJCM800.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			WVOF1i+E4UmjmwCyjgRhxIrai9CA0Sr9XxyAsG67c8E=
+			</data>
+		</dict>
+		<key>x86_64-win/MarstenJCM800.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			gzPTsPXjJpNxButklJTRfVEJh9/xhQhfysoLKE5JODg=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

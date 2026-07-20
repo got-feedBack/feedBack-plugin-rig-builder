@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/MarstenSilverJubilee.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			NZgdBzVs/dXq4FulfBN0ViL4s/JEhMC7FeKfGJ3Gs2o=
+			</data>
+		</dict>
+		<key>x86_64-win/MarstenSilverJubilee.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			I7HSCBWLZRAHG1GLgXaCSEtcoJ2cAVMBU1NIPBcpStQ=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

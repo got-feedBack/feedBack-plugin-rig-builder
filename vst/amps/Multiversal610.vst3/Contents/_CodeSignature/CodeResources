@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/Multiversal610.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			J35Yt5XceD+xM+J7xZVy4O3JUsfkzYl19cu/n79feI8=
+			</data>
+		</dict>
+		<key>x86_64-win/Multiversal610.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			oT3DsuwMp2WUgKZhz9aO/u4SPqrYflIeXQZkk9QeoUM=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

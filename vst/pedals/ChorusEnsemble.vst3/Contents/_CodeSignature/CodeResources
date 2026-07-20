@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/ChorusEnsemble.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			mpp4uab86Y4vHnsQcIOIcoLvErRCVQLQNS/QtiPlLqQ=
+			</data>
+		</dict>
+		<key>x86_64-win/ChorusEnsemble.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Sm6o+9spy1FWASXWhqqSc8rXvaHD/WiO/Z6Z7R9M3nk=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>

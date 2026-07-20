@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/DeezelVH4.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			8GFGO99Qn1+IXr9hmH6Jk4pOyS9WLGAqZFsBaVYtl2g=
+			</data>
+		</dict>
+		<key>x86_64-win/DeezelVH4.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			SxGHLAwAfQ6jynS+ezb3NwhxCjueekkUkqo3SfSy2Ls=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>
