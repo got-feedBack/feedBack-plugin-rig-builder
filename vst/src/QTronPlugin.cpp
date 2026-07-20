@@ -61,14 +61,16 @@ public:
 
         const int ri = (int)(range_mod * 2.9f);
         const float fmin = freq_ranges[ri][0], fmax = freq_ranges[ri][1];
-        // Drive the sweep ONLY within [0,1] so filter_freq stays in [fmin,fmax]
-        // (safely below Nyquist). gain_level (up to x15) can push env_smooth well
-        // above 1; without this clamp env_smooth^2 sent filter_freq far past
-        // Nyquist, omega exceeded pi, and the RBJ biquad coefficients went
-        // unstable (NaN/blowup on hard playing) — the audio glitch. Clamping also
-        // matches a real envelope filter: it fully opens at fmax and stays there.
-        const float drive = (env_smooth < 0.0f) ? 0.0f : (env_smooth > 1.0f) ? 1.0f : env_smooth;
-        filter_freq = fmin + (fmax - fmin) * drive * drive;
+        // The envelope sweeps the cutoff, and the BRIGHT top of that sweep (well
+        // above fmax, up into the kHz) IS the "quack". Clamping the drive to [0,1]
+        // (cutoff maxed at fmax) killed it — the effect went inaudible. So let
+        // env^2 push the cutoff freely, but CLAMP THE RESULT just below Nyquist:
+        // that alone keeps the RBJ biquad stable (the glitch was filter_freq >
+        // Nyquist -> omega > pi -> NaN blow-up) without capping the audible sweep.
+        const float sweep = env_smooth * env_smooth;   // env_smooth is always >= 0
+        filter_freq = fmin + (fmax - fmin) * sweep;
+        const float maxFreq = 0.45f * sampling_freq;    // omega <= 0.9*pi -> always stable
+        if (filter_freq > maxFreq) filter_freq = maxFreq;
 
         const float omega = two_pi * filter_freq / sampling_freq;
         const float so = sinf(omega), co = cosf(omega);
