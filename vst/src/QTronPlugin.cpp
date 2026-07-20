@@ -61,7 +61,14 @@ public:
 
         const int ri = (int)(range_mod * 2.9f);
         const float fmin = freq_ranges[ri][0], fmax = freq_ranges[ri][1];
-        filter_freq = fmin + (fmax - fmin) * env_smooth * env_smooth;
+        // Drive the sweep ONLY within [0,1] so filter_freq stays in [fmin,fmax]
+        // (safely below Nyquist). gain_level (up to x15) can push env_smooth well
+        // above 1; without this clamp env_smooth^2 sent filter_freq far past
+        // Nyquist, omega exceeded pi, and the RBJ biquad coefficients went
+        // unstable (NaN/blowup on hard playing) — the audio glitch. Clamping also
+        // matches a real envelope filter: it fully opens at fmax and stays there.
+        const float drive = (env_smooth < 0.0f) ? 0.0f : (env_smooth > 1.0f) ? 1.0f : env_smooth;
+        filter_freq = fmin + (fmax - fmin) * drive * drive;
 
         const float omega = two_pi * filter_freq / sampling_freq;
         const float so = sinf(omega), co = cosf(omega);
