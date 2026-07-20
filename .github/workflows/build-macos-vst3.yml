@@ -52,14 +52,23 @@ jobs:
                         CFLAGS="$ARCHS" CXXFLAGS="$ARCHS" LDFLAGS="$ARCHS" vst3 ) \
               || fail="$fail $1"
           }
+          # Post-reorg the effects moved to <cat>/<name>/ and 110+ of them include
+          # "../_shared/...". After the split that must resolve to <cat>/_shared,
+          # so symlink _shared into each category dir (mirrors the Win/Linux jobs).
+          for cat in amps pedals racks; do
+            [ -d "$cat" ] && [ -d _shared ] && ln -sfn ../_shared "$cat/_shared"
+          done
           # root Makefile builds AutoSweep (the QTron envelope filter)
           [ -f Makefile ] && build .
-          for mk in */Makefile; do
+          # Effects are TWO levels deep: <cat>/<name>/Makefile (was */Makefile,
+          # which matched nothing post-reorg -> "FAILED DIRS: *", building nothing).
+          for mk in */*/Makefile; do
             d=$(dirname "$mk")
-            case "$d" in DPF|_shared) continue;; esac
+            case "$d" in DPF/*|*/DPF|*/_shared|*/mark_shared|RBFinalLeveler/*|*/build) continue;; esac
             echo "==== building $d ===="
             build "$d"
           done
+          for cat in amps pedals racks; do rm -f "$cat/_shared"; done
           rm -f "$GITHUB_WORKSPACE/vst/DPF"
           echo "FAILED DIRS:$fail"
 
