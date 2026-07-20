@@ -380,12 +380,20 @@ _DEFAULT_SETTINGS = {
     # then adjusts setGain('chain', X) so every complete chain lands near
     # the same perceived level.
     "final_chain_normalize": True,
-    # -15.5 (was -14): sits the leveled tone slightly UNDER the song's backing
-    # (normalized to -12 LUFS, ×0.8 backing fader ≈ -13.9 heard) so the tone
-    # doesn't dominate the mix (tone-vs-backing balance pass).
-    "final_chain_target_rms_db": -15.5,
+    # -12: level the instrument to the SAME target as the backing (also -12
+    # LUFS) so the played tone sits right up with the song, not under it. (Was
+    # -15.5, which parked it ~3.5 dB below the backing; per-request the tone is
+    # now front-and-centre.)
+    "final_chain_target_rms_db": -12.0,
     "final_chain_min_gain_db": -20.0,
-    "final_chain_max_gain_db": 20.0,
+    # Max BOOST authority. Keep it SMALL so the final leveler behaves like a
+    # LIMITER (cut loud tones to target) with only a touch of make-up — NOT an
+    # AGC that cranks quiet input. +20 dB let a softly-played tone get boosted
+    # way up; a loud note right after then hit that huge gain and distorted
+    # (brickwall-squashed), and idle hiss rode up +20 dB when you stopped. The
+    # "too-quiet tone" case that needed big boost is gone (cab gain is now baked
+    # into the IR stage — _ir_stage), so a few dB of make-up is plenty.
+    "final_chain_max_gain_db": 6.0,
     "final_chain_gate_db": -45.0,
     "final_chain_attack_ms": 12,
     "final_chain_release_ms": 120,
@@ -452,8 +460,8 @@ def _final_leveler_params_state(gate_db_override: float | None = None,
 
     # As of the K-weighting upgrade the leveler measures BS.1770 LUFS, so this
     # "Target RMS dB" is really a target LUFS (param name kept for state compat).
-    target_rms = float(s.get("final_chain_target_rms_db", -14.0))
-    max_boost = float(s.get("final_chain_max_gain_db", 20.0))
+    target_rms = float(s.get("final_chain_target_rms_db", -12.0))
+    max_boost = float(s.get("final_chain_max_gain_db", 6.0))
     max_cut = abs(float(s.get("final_chain_min_gain_db", -20.0)))
     gate = float(s.get("final_chain_gate_db", -45.0))
     # Bare-cab chains (no amp) run much quieter than amp chains even after the
@@ -8343,9 +8351,9 @@ def setup(app, context):
             # multiplier). Range 0–5, default 1× (the knob value IS the multiplier).
             "chain_makeup": float(s.get("chain_makeup", 1.0)),
             "final_chain_normalize": bool(s.get("final_chain_normalize", True)),
-            "final_chain_target_rms_db": float(s.get("final_chain_target_rms_db", -14.0)),
+            "final_chain_target_rms_db": float(s.get("final_chain_target_rms_db", -12.0)),
             "final_chain_min_gain_db": float(s.get("final_chain_min_gain_db", -20.0)),
-            "final_chain_max_gain_db": float(s.get("final_chain_max_gain_db", 20.0)),
+            "final_chain_max_gain_db": float(s.get("final_chain_max_gain_db", 6.0)),
             "final_chain_gate_db": float(s.get("final_chain_gate_db", -45.0)),
             "final_chain_attack_ms": int(min(float(s.get("final_chain_attack_ms", 12)), 80.0)),
             "final_chain_release_ms": int(min(float(s.get("final_chain_release_ms", 120)), 250.0)),
