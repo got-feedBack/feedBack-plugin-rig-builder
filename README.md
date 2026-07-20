@@ -94,10 +94,12 @@ Rig Builder reads songs in feedBack's own `.sloppak` format only.
   survives app updates. (Kill-switch: `window.__rbChainPlayback = false`.)
 
 For the full design, internals, and contributor notes see **`docs/HANDOFF.md`**
-and **`docs/CLAUDE.md`** in this repo. For circuit-real modulation pedal work,
-read **`docs/CHORUS_PHASER_MODELING_GUIDE.md`** before implementing or tuning a
-chorus or phaser. For compressor topology, sidechains, OTA gain cells and
-reference calibration, read **`docs/COMPRESSOR_MODELING_GUIDE.md`**.
+and **`docs/CLAUDE.md`** in this repo. Before implementing or calibrating any
+amp or pedal against audio, read **`docs/REFERENCE_MATCHING_WORKFLOW.md`**.
+Then use the family guide: **`vst/src/amps/REAL_TUBE_AMP_GUIDE.md`**,
+**`docs/DISTORTION_MODELING_GUIDE.md`**, **`docs/FUZZ_MODELING_GUIDE.md`**,
+**`docs/CHORUS_PHASER_MODELING_GUIDE.md`** or
+**`docs/COMPRESSOR_MODELING_GUIDE.md`**.
 
 ---
 

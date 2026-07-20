@@ -2197,7 +2197,7 @@
     "_hint": "RS Tone 0-100 -> LineDrive Tone 0-1. Lower values are darker and thicker; higher values open the OS-2 style post-clipping tone network."
    },
    "_static": {
-    "Color": 0.58,
+    "Color": 0.5,
     "Level": 0.62
    }
   },
@@ -2212,7 +2212,7 @@
     "_hint": "RS Tone 0-100 -> LineDrive Tone 0-1. Lower values are darker and thicker; higher values open the OS-2 style post-clipping tone network."
    },
    "_static": {
-    "Color": 0.58,
+    "Color": 0.5,
     "Level": 0.62
    }
   }
@@ -2996,7 +2996,7 @@
  "Pedal_CaptFuzzle": {
   "buzz-tone": {
    "Gain": {
-    "param": "Fuzz",
+    "param": "Attack",
     "scale": 0.01
    },
    "_static": {
@@ -4467,25 +4467,24 @@
  },
  "Pedal_RingMod": {
   "ringmod": {
+   "_static": {
+    "Volume": 0.72,
+    "Modulate": 1.0
+   },
    "Depth": {
-    "param": "Depth",
+    "param": "Modulation",
     "scale": 0.01,
-    "_hint": "RS Depth controls ring-mod wet amount and carrier injection."
+    "_hint": "RS Depth maps to the RM-1A 50k linear Modulation blend."
    },
    "Waveform": {
-    "param": "Waveform",
+    "param": "Pitch Range",
     "scale": 1.0,
-    "_hint": "RS Waveform values are selector-like. 0 is rounded sine/triangle, 1 is sharper square."
+    "_hint": "The RM-1A carrier is sine-only; the RS selector is reused for the real LOW/HIGH timing-capacitor switch."
    },
    "Sensitivity": {
-    "param": "Sensitivity",
+    "param": "Pitch",
     "scale": 0.01,
-    "_hint": "RS Sensitivity controls squelch/envelope sensitivity and carrier range."
-   },
-   "Attack": {
-    "param": "Attack",
-    "scale": 0.01,
-    "_hint": "RS Attack controls envelope and carrier slew time."
+    "_hint": "RS Sensitivity is reused for the real dual-gang 150kB carrier Pitch control. Attack is intentionally ignored because the real pedal has no attack control."
    }
   },
   "khs ring mod": {

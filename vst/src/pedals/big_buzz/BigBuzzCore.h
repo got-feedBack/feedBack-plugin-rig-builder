@@ -73,6 +73,356 @@ public:
     }
 };
 
+// Nodal model of one V1 Big Muff clipping cell. Voltages are solved around the
+// DC operating point of the 2N5133. The 1N914 pair is AC-coupled by C6/C7 and
+// sits between collector and base, in parallel with R17/R15 and C12/C11.
+class MuffFeedbackClipStage
+{
+    float sampleRate = 192000.0f;
+    float inputR = 10000.0f;
+    float feedbackR = 470000.0f;
+    float baseR = 100000.0f;
+    float collectorR = 10000.0f;
+    float emitterR = 120.0f;
+    float feedbackC = 500.0e-12f;
+    float diodeCouplingC = 1.0e-6f;
+    float supplyV = 9.0f;
+
+    // 2N5133 datasheet: hFE typ 220 @ 1 mA. Is is a conventional silicon
+    // small-signal value; the solved bias and circuit resistors set the stage.
+    float beta = 220.0f;
+    float transistorIs = 1.0e-14f;
+    float thermalV = 0.02585f;
+    rbcomponents::DiodeSpec diode = rbcomponents::diode1N914();
+
+    float idleB = 0.0f, idleE = 0.0f, idleC = 0.0f;
+    float idleIc = 0.0f, idleIb = 0.0f;
+    float b = 0.0f, e = 0.0f, c = 0.0f, d = 0.0f;
+    float previousCb = 0.0f;
+    float previousCd = 0.0f;
+
+    static void solveLinear(float a[4][5], int count)
+    {
+        for (int col = 0; col < count; ++col) {
+            int pivot = col;
+            for (int row = col + 1; row < count; ++row)
+                if (std::fabs(a[row][col]) > std::fabs(a[pivot][col])) pivot = row;
+            if (pivot != col)
+                for (int k = col; k <= count; ++k) {
+                    const float t = a[col][k]; a[col][k] = a[pivot][k]; a[pivot][k] = t;
+                }
+            const float divisor = std::fabs(a[col][col]) > 1.0e-20f ? a[col][col] : 1.0e-20f;
+            for (int k = col; k <= count; ++k) a[col][k] /= divisor;
+            for (int row = 0; row < count; ++row) {
+                if (row == col) continue;
+                const float factor = a[row][col];
+                for (int k = col; k <= count; ++k) a[row][k] -= factor * a[col][k];
+            }
+        }
+    }
+
+    void transistor(float vbe, float& ic, float& ib, float& gm, float& gb) const
+    {
+        const float exponent = std::fmax(-40.0f, std::fmin(40.0f, vbe / thermalV));
+        const float ev = std::exp(exponent);
+        ic = transistorIs * (ev - 1.0f);
+        gm = transistorIs * ev / thermalV;
+        ib = ic / beta;
+        gb = gm / beta;
+    }
+
+    void diodePair(float voltage, float& current, float& conductance) const
+    {
+        const float vt = diode.ideality * thermalV;
+        const float exponent = std::fmax(-40.0f, std::fmin(40.0f, voltage / vt));
+        const float ep = std::exp(exponent);
+        const float en = 1.0f / ep;
+        current = diode.isAmp * (ep - en);
+        conductance = diode.isAmp * (ep + en) / vt;
+    }
+
+    void solveIdle()
+    {
+        idleB = 0.62f;
+        idleE = 0.08f;
+        idleC = collectorR > 20000.0f ? 4.5f : 7.0f;
+        for (int iteration = 0; iteration < 12; ++iteration) {
+            float ic, ib, gm, gb;
+            transistor(idleB - idleE, ic, ib, gm, gb);
+            const float fB = idleB / baseR + ib + (idleB - idleC) / feedbackR;
+            const float fE = idleE / emitterR - ic - ib;
+            const float fC = (idleC - supplyV) / collectorR + ic
+                           + (idleC - idleB) / feedbackR;
+            float a[4][5] = {};
+            a[0][0] = 1.0f / baseR + gb + 1.0f / feedbackR;
+            a[0][1] = -gb;
+            a[0][2] = -1.0f / feedbackR;
+            a[0][3] = -fB;
+            a[1][0] = -(gm + gb);
+            a[1][1] = 1.0f / emitterR + gm + gb;
+            a[1][3] = -fE;
+            a[2][0] = gm - 1.0f / feedbackR;
+            a[2][1] = -gm;
+            a[2][2] = 1.0f / collectorR + 1.0f / feedbackR;
+            a[2][3] = -fC;
+            solveLinear(a, 3);
+            idleB += a[0][3];
+            idleE += a[1][3];
+            idleC += a[2][3];
+        }
+        float gm, gb;
+        transistor(idleB - idleE, idleIc, idleIb, gm, gb);
+    }
+
+public:
+    void set(float sr, float rin, float rf, float rb, float rc, float re,
+             float cf, float couplingC)
+    {
+        sampleRate = sr > 1000.0f ? sr : 192000.0f;
+        inputR = rin;
+        feedbackR = rf;
+        baseR = rb;
+        collectorR = rc;
+        emitterR = re;
+        feedbackC = cf;
+        diodeCouplingC = couplingC;
+        reset();
+    }
+
+    void reset()
+    {
+        solveIdle();
+        b = e = c = d = 0.0f;
+        previousCb = previousCd = 0.0f;
+    }
+
+    float process(float inputVoltage)
+    {
+        const float gFeedbackC = feedbackC * sampleRate;
+        const float gDiodeC = diodeCouplingC * sampleRate;
+
+        for (int iteration = 0; iteration < 7; ++iteration) {
+            float ic, ib, gm, gb;
+            transistor((idleB + b) - (idleE + e), ic, ib, gm, gb);
+            const float deltaIc = ic - idleIc;
+            const float deltaIb = ib - idleIb;
+            float diodeCurrent, diodeG;
+            diodePair(d - b, diodeCurrent, diodeG);
+
+            const float fB = b / baseR + (b - inputVoltage) / inputR
+                           + (b - c) / feedbackR + deltaIb
+                           + gFeedbackC * (b - c + previousCb)
+                           - diodeCurrent;
+            const float fE = e / emitterR - deltaIc - deltaIb;
+            const float fC = c / collectorR + (c - b) / feedbackR + deltaIc
+                           + gFeedbackC * (c - b - previousCb)
+                           + gDiodeC * (c - d - previousCd);
+            const float fD = diodeCurrent + gDiodeC * (d - c + previousCd);
+
+            float a[4][5] = {};
+            a[0][0] = 1.0f / baseR + 1.0f / inputR + 1.0f / feedbackR
+                    + gb + gFeedbackC + diodeG;
+            a[0][1] = -gb;
+            a[0][2] = -1.0f / feedbackR - gFeedbackC;
+            a[0][3] = -diodeG;
+            a[0][4] = -fB;
+
+            a[1][0] = -(gm + gb);
+            a[1][1] = 1.0f / emitterR + gm + gb;
+            a[1][4] = -fE;
+
+            a[2][0] = gm - 1.0f / feedbackR - gFeedbackC;
+            a[2][1] = -gm;
+            a[2][2] = 1.0f / collectorR + 1.0f / feedbackR
+                    + gFeedbackC + gDiodeC;
+            a[2][3] = -gDiodeC;
+            a[2][4] = -fC;
+
+            a[3][0] = -diodeG;
+            a[3][2] = -gDiodeC;
+            a[3][3] = diodeG + gDiodeC;
+            a[3][4] = -fD;
+            solveLinear(a, 4);
+
+            b += a[0][4];
+            e += a[1][4];
+            c += a[2][4];
+            d += a[3][4];
+            if (std::fabs(a[0][4]) + std::fabs(a[1][4])
+              + std::fabs(a[2][4]) + std::fabs(a[3][4]) < 1.0e-7f)
+                break;
+        }
+
+        previousCb = c - b;
+        previousCd = c - d;
+        return dn(c);
+    }
+};
+
+// Nodal 2N5133 common-emitter stage used for Q4 (collector-to-base bias and
+// feedback) and Q1 (fixed base divider). Coupling capacitors remain in the
+// surrounding network, so the signal source is AC-coupled and does not alter
+// the solved DC operating point.
+class MuffBjtStage
+{
+    float sampleRate = 192000.0f;
+    float inputR = 36000.0f;
+    float baseGroundR = 100000.0f;
+    float baseSupplyR = 0.0f;
+    float feedbackR = 470000.0f;
+    float collectorR = 39000.0f;
+    float emitterR = 120.0f;
+    float feedbackC = 500.0e-12f;
+    float supplyV = 9.0f;
+
+    float beta = 220.0f;
+    float transistorIs = 1.0e-14f;
+    float thermalV = 0.02585f;
+
+    float idleB = 0.0f, idleE = 0.0f, idleC = 0.0f;
+    float idleIc = 0.0f, idleIb = 0.0f;
+    float b = 0.0f, e = 0.0f, c = 0.0f;
+    float previousBC = 0.0f;
+
+    static void solveLinear(float a[3][4])
+    {
+        for (int col = 0; col < 3; ++col) {
+            int pivot = col;
+            for (int row = col + 1; row < 3; ++row)
+                if (std::fabs(a[row][col]) > std::fabs(a[pivot][col])) pivot = row;
+            if (pivot != col)
+                for (int k = col; k < 4; ++k) {
+                    const float value = a[col][k];
+                    a[col][k] = a[pivot][k];
+                    a[pivot][k] = value;
+                }
+            const float divisor = std::fabs(a[col][col]) > 1.0e-20f
+                                ? a[col][col] : 1.0e-20f;
+            for (int k = col; k < 4; ++k) a[col][k] /= divisor;
+            for (int row = 0; row < 3; ++row) {
+                if (row == col) continue;
+                const float factor = a[row][col];
+                for (int k = col; k < 4; ++k) a[row][k] -= factor * a[col][k];
+            }
+        }
+    }
+
+    void transistor(float vbe, float& ic, float& ib, float& gm, float& gb) const
+    {
+        const float exponent = std::fmax(-40.0f, std::fmin(40.0f, vbe / thermalV));
+        const float ev = std::exp(exponent);
+        ic = transistorIs * (ev - 1.0f);
+        gm = transistorIs * ev / thermalV;
+        ib = ic / beta;
+        gb = gm / beta;
+    }
+
+    void solveIdle()
+    {
+        idleB = baseSupplyR > 0.0f
+              ? supplyV * baseGroundR / (baseGroundR + baseSupplyR)
+              : 0.62f;
+        idleE = std::fmax(0.02f, idleB - 0.58f);
+        idleC = 4.5f;
+
+        const float gBg = 1.0f / baseGroundR;
+        const float gBt = baseSupplyR > 0.0f ? 1.0f / baseSupplyR : 0.0f;
+        const float gFb = feedbackR > 0.0f ? 1.0f / feedbackR : 0.0f;
+        for (int iteration = 0; iteration < 12; ++iteration) {
+            float ic, ib, gm, gb;
+            transistor(idleB - idleE, ic, ib, gm, gb);
+            const float fB = idleB * gBg + (idleB - supplyV) * gBt
+                           + ib + (idleB - idleC) * gFb;
+            const float fE = idleE / emitterR - ic - ib;
+            const float fC = (idleC - supplyV) / collectorR + ic
+                           + (idleC - idleB) * gFb;
+            float a[3][4] = {};
+            a[0][0] = gBg + gBt + gb + gFb;
+            a[0][1] = -gb;
+            a[0][2] = -gFb;
+            a[0][3] = -fB;
+            a[1][0] = -(gm + gb);
+            a[1][1] = 1.0f / emitterR + gm + gb;
+            a[1][3] = -fE;
+            a[2][0] = gm - gFb;
+            a[2][1] = -gm;
+            a[2][2] = 1.0f / collectorR + gFb;
+            a[2][3] = -fC;
+            solveLinear(a);
+            idleB += a[0][3];
+            idleE += a[1][3];
+            idleC += a[2][3];
+        }
+        float gm, gb;
+        transistor(idleB - idleE, idleIc, idleIb, gm, gb);
+    }
+
+public:
+    void set(float sr, float rin, float rBaseGround, float rBaseSupply,
+             float rFeedback, float rc, float re, float cFeedback)
+    {
+        sampleRate = sr > 1000.0f ? sr : 192000.0f;
+        inputR = rin;
+        baseGroundR = rBaseGround;
+        baseSupplyR = rBaseSupply;
+        feedbackR = rFeedback;
+        collectorR = rc;
+        emitterR = re;
+        feedbackC = cFeedback;
+        reset();
+    }
+
+    void reset()
+    {
+        solveIdle();
+        b = e = c = 0.0f;
+        previousBC = 0.0f;
+    }
+
+    float process(float inputVoltage)
+    {
+        const float gBg = 1.0f / baseGroundR;
+        const float gBt = baseSupplyR > 0.0f ? 1.0f / baseSupplyR : 0.0f;
+        const float gFb = feedbackR > 0.0f ? 1.0f / feedbackR : 0.0f;
+        const float gCf = feedbackC * sampleRate;
+
+        for (int iteration = 0; iteration < 6; ++iteration) {
+            float ic, ib, gm, gb;
+            transistor((idleB + b) - (idleE + e), ic, ib, gm, gb);
+            const float deltaIc = ic - idleIc;
+            const float deltaIb = ib - idleIb;
+            const float fB = b * (gBg + gBt) + (b - inputVoltage) / inputR
+                           + deltaIb + (b - c) * gFb
+                           + gCf * (b - c - previousBC);
+            const float fE = e / emitterR - deltaIc - deltaIb;
+            const float fC = c / collectorR + deltaIc + (c - b) * gFb
+                           + gCf * (c - b + previousBC);
+            float a[3][4] = {};
+            a[0][0] = gBg + gBt + 1.0f / inputR + gb + gFb + gCf;
+            a[0][1] = -gb;
+            a[0][2] = -gFb - gCf;
+            a[0][3] = -fB;
+            a[1][0] = -(gm + gb);
+            a[1][1] = 1.0f / emitterR + gm + gb;
+            a[1][3] = -fE;
+            a[2][0] = gm - gFb - gCf;
+            a[2][1] = -gm;
+            a[2][2] = 1.0f / collectorR + gFb + gCf;
+            a[2][3] = -fC;
+            solveLinear(a);
+            b += a[0][3];
+            e += a[1][3];
+            c += a[2][3];
+            if (std::fabs(a[0][3]) + std::fabs(a[1][3])
+              + std::fabs(a[2][3]) < 1.0e-7f)
+                break;
+        }
+
+        previousBC = b - c;
+        return dn(c);
+    }
+};
+
 class BigBuzzCore
 {
     // Version 1 Big Muff / triangle-era schematic from pedals/buzz 2.jpg:
@@ -114,39 +464,19 @@ class BigBuzzCore
     RcHighPass q4ToSustain;
     RcHighPass sustainToQ3;
     RcHighPass q3ToQ2;
-    RcHighPass q2ToTone;
     RcHighPass toneToQ1;
     RcHighPass outputC2;
-    RcLowPass q4FeedbackCap;
-    RcLowPass q3FeedbackCap;
-    RcLowPass q2FeedbackCap;
     RcLowPass toneLow;
     RcLowPass toneHighBase;
     RcLowPass q1Load;
-    rbcomponents::AntiParallelDiodePair clip1;
-    rbcomponents::AntiParallelDiodePair clip2;
-
-    float sagEnv = 0.0f;
-    float sagAttack = 0.0f;
-    float sagRelease = 0.0f;
+    MuffBjtStage inputStage;
+    MuffFeedbackClipStage clip1;
+    MuffFeedbackClipStage clip2;
+    MuffBjtStage recoveryStage;
 
     static inline float parallel(float a, float b)
     {
         return (a * b) / (a + b);
-    }
-
-    static inline float bjtCurve(float v, float posK, float negK, float posRail, float negRail)
-    {
-        if (v >= 0.0f)
-            return posRail * (1.0f - std::exp(-posK * v));
-        return -negRail * (1.0f - std::exp(negK * v));
-    }
-
-    static inline float bjtStage(float x, float drive, float bias, float posK,
-                                 float negK, float posRail, float negRail)
-    {
-        const float idle = bjtCurve(bias, posK, negK, posRail, negRail);
-        return bjtCurve(bias + drive * x, posK, negK, posRail, negRail) - idle;
     }
 
     void updateComponentValues()
@@ -161,73 +491,46 @@ class BigBuzzCore
         const float sustainSource = 1000.0f + (1.0f - s) * 99000.0f;
         sustainToQ3.setRC(sampleRate, kR19 + sustainSource + kR20, kC5);
         q3ToQ2.setRC(sampleRate, kR12 + kR16, kC13);
-        q2ToTone.setRC(sampleRate, kR5 + kR8 + kTonePot, kC9);
         toneToQ1.setRC(sampleRate, parallel(kR7, kR3), kC3);
         outputC2.setRC(sampleRate, kVolumePot, kC2);
 
-        // 500 pF caps in the collector-base feedback loops reduce high-gain
-        // fizz without being plain output low-passes.
-        q4FeedbackCap.setRC(sampleRate, kR9, kC10);
-        q3FeedbackCap.setRC(sampleRate, kR17, kC12);
-        q2FeedbackCap.setRC(sampleRate, kR15, kC11);
-
-        // The V1 tone control blends two fixed passive branches. C8/R8 is the
-        // low-pass side (about 590 Hz), while C9/R5 is the high-pass side
-        // (about 1.47 kHz). The 100 k pot selects between their outputs; it
-        // does not move both cutoff frequencies with the wiper.
-        // At the dark end the 100 k wiper and Q1 input load add to R8's 27 k
-        // source impedance. The resulting loaded corner is close to 400 Hz.
-        toneLow.setRC(sampleRate, kR8 + 13000.0f, kC8);
-        // R5 is loaded by the tone pot and Q1's input network at the bright
-        // end, reducing its effective 27 k impedance to about 15 k.
-        toneHighBase.setRC(sampleRate, 15000.0f, kC9);
+        // Reference-calibrated branch approximation of the passive network.
+        // It retains the schematic RC values while avoiding the false branch
+        // leakage produced by a fixed Q1 load at the two pot endpoints.
+        toneLow.setRC(sampleRate, kR8, kC8);
+        toneHighBase.setRC(sampleRate, kR5, kC9);
         q1Load.setHz(sampleRate, 7200.0f + 500.0f * t);
 
-        // Effective source impedance into the feedback diode pairs changes with
-        // sustain because the preceding transistor is driven harder.
-        clip1.setSpec(rbcomponents::diode1N914());
-        clip2.setSpec(rbcomponents::diode1N914());
-        clip1.setSourceR(3300.0f - 1600.0f * s);
-        clip2.setSourceR(2700.0f - 1200.0f * s);
-
-        sagAttack = 1.0f - std::exp(-1.0f / (0.012f * sampleRate));
-        sagRelease = 1.0f - std::exp(-1.0f / (0.120f * sampleRate));
     }
 
-    void updateSag(float x)
+    void configureTransistorStages()
     {
-        const float target = clamp01(std::fabs(x) * 1.15f);
-        const float a = target > sagEnv ? sagAttack : sagRelease;
-        sagEnv += a * (target - sagEnv);
-    }
-
-    float clippedStage(float x, RcLowPass& feedbackCap, rbcomponents::AntiParallelDiodePair& diodes,
-                       float drive, float bias, float rail, float asym)
-    {
-        // Common-emitter 2N5133 gain stage. In a real Big Muff the transistor itself
-        // barely clips — the anti-parallel 1N914 pair sits ACROSS the 470k collector-base
-        // feedback resistor and clamps the CLOSED-LOOP swing (the smooth, sustaining clip).
-        const float amp = bjtStage(x, drive, bias,
-                                   1.45f, 1.18f + asym, rail * 0.82f, rail * 0.72f);
-        const float feedbackOutput = diodes.process(2.15f * amp);
-        // The 500pF cap (Cf) across the 470k feedback gently rolls off the CLIPPED highs —
-        // the Muff smooths/de-fizzes the top of the clip rather than fully bypassing it.
-        const float tamed = feedbackCap.process(feedbackOutput); // ~680 Hz feedback rolloff
-        return feedbackOutput - 0.68f * (feedbackOutput - tamed);
+        // Q4: R2 input, R14 base shunt, R9/C10 collector feedback,
+        // R13 collector load and R22 emitter resistor.
+        inputStage.set(sampleRate, kR2, kR14, 0.0f, kR9,
+                       kR13, 120.0f, kC10);
+        // Q3 and Q2 clipping cells.
+        clip1.set(sampleRate, kR19, kR17, kR20, 10000.0f,
+                  120.0f, kC12, 1.0e-6f);
+        clip2.set(sampleRate, kR12, kR15, kR16, 39000.0f,
+                  120.0f, kC11, 1.0e-6f);
+        // Q1: the tone-network solver already includes its loaded Thevenin
+        // output, so no second synthetic source resistance is inserted here.
+        recoveryStage.set(sampleRate, 10.0f, kR3, kR7, 0.0f,
+                          10000.0f, 2200.0f, 0.0f);
     }
 
     float toneStack(float x)
     {
         const float t = clamp01(tone);
         const float low = toneLow.process(x);
-        const float highBase = toneHighBase.process(x);
-        const float high = x - highBase;
-
-        // A linear 100 k wiper blends the two branch voltages. Their separated
-        // corners create the familiar mid scoop at noon without an additional
-        // synthetic notch or high-frequency leakage at either end.
-        const float passiveNotch = 1.0f - 0.20f * (4.0f * t * (1.0f - t));
-        return passiveNotch * ((1.0f - t) * low + 1.65f * t * high);
+        const float high = x - toneHighBase.process(x);
+        const float centre = 4.0f * t * (1.0f - t);
+        const float passiveNotch = 1.0f - 0.20f * centre;
+        const float loadedHighBranch = 1.10f + 0.90f * centre;
+        // The physical network has substantial insertion loss before Q1.
+        return 0.30f * passiveNotch
+             * ((1.0f - t) * low + loadedHighBranch * t * high);
     }
 
 public:
@@ -243,19 +546,13 @@ public:
         q4ToSustain.reset();
         sustainToQ3.reset();
         q3ToQ2.reset();
-        q2ToTone.reset();
         toneToQ1.reset();
         outputC2.reset();
-        q4FeedbackCap.reset();
-        q3FeedbackCap.reset();
-        q2FeedbackCap.reset();
         toneLow.reset();
         toneHighBase.reset();
         q1Load.reset();
-        clip1.reset();
-        clip2.reset();
-        sagEnv = 0.0f;
         updateComponentValues();
+        configureTransistorStages();
     }
 
     void setSustain(float v)
@@ -273,39 +570,26 @@ public:
     float process(float in)
     {
         const float s = clamp01(sustain);
-        const float rail = 1.42f / (1.0f + 0.18f * sagEnv);
-
         float x = inputC1.process(0.965f * in);
 
         // Q4 input booster: 2N5133 with R13/R14/R22 and 470 k + 500 pF feedback.
-        const float q4Fb = q4FeedbackCap.process(x);
-        x = bjtStage(x - 0.22f * q4Fb, 3.8f + 3.4f * s, -0.018f,
-                     1.28f, 1.06f, rail * 0.72f, rail * 0.62f);
+        x = inputStage.process(x);
         x = q4ToSustain.process(x);
 
         // Real Sustain pot: mostly drive into Q3, not output volume.
-        const float potLoss = 0.10f + 0.90f * s;
+        const float potLoss = 0.003f + 0.997f * s;
         x = sustainToQ3.process(x * potLoss);
 
-        float y = clippedStage(x, q3FeedbackCap, clip1,
-                               2.8f + 27.5f * s, -0.040f,
-                               rail, 0.10f);
-        updateSag(y);
+        float y = clip1.process(x);
         y = q3ToQ2.process(y);
 
-        y = clippedStage(y, q2FeedbackCap, clip2,
-                         2.4f + 20.0f * s, 0.024f,
-                         rail, 0.05f);
-        y = q2ToTone.process(y);
+        y = clip2.process(y);
 
         y = toneStack(y);
         y = toneToQ1.process(y);
 
         // Q1 recovery/output transistor into the 100 k Volume pot.
-        // Q1 is a recovery stage. The bright branch reaches it with less low
-        // frequency energy, leaving more collector headroom for pick attacks.
-        y = bjtStage(y, 2.2f - 1.0f * tone, -0.012f,
-                     1.16f, 1.05f, rail * 0.76f, rail * 0.62f);
+        y = recoveryStage.process(y);
         y = q1Load.process(y);
         y = outputC2.process(y);
 
@@ -313,7 +597,7 @@ public:
         // limiting. A second broadband tanh here made the bright setting flat
         // and brittle, and the old inverse-Sustain trim made the pedal quieter
         // as its real Sustain control was raised.
-        return y * 0.58f;
+        return y * 0.12f;
     }
 };
 

@@ -1,6 +1,6 @@
 # Pedal Rework Status
 
-Ultima actualizacion: 2026-07-01.
+Ultima actualizacion: 2026-07-17.
 
 Este archivo deja la cola de pedales antes de cambiar el foco a racks.
 
@@ -15,13 +15,19 @@ Estos suenan bien y quedan fuera de la cola activa:
 
 ## Pendientes conocidos
 
-Estos quedan anotados para una pasada futura, pero no son foco inmediato porque ahora el trabajo sigue en racks:
+Estos quedan anotados para una pasada futura:
 
-- `Pedal_AutoFilter` / `BU-TRON III.vst3`: revisar el comportamiento de envelope/auto-wah. El usuario reporto que no suena como envelope filter real.
-- `Pedal_BobFilter` / `FM105.vst3`: revisar el barrido/envelope. El usuario reporto que no se percibe el efecto auto-wah esperado.
-- `Pedal_LineDrive` / `OS-2.vst3`: revisar la distorsion/blend OD+dist; quedo reportado que no suena bien.
-- `Pedal_RingMod` / `RingMod.vst3`: no es prioridad; suena usable, pero podria mejorarse mas adelante.
+- `Pedal_RingMod` / `RingMod.vst3`: rework Maestro/Oberheim RM-1A implementado con controles reales, oscilador Wien/LM741 senoidal, multiplicador `MC1495`, buffers `MC1458` y squelch `1N4148`/`2N4360`. La revision 2.1 conserva el dry lineal, suma el efecto sin level-hole y evita que el squelch corte notas debiles. Pendiente validacion auditiva del usuario.
 - `Bass_Pedal_NYRBS103` / `NYRBS103.vst3`: tiene VST bundled, pero falta entrada dedicada en `rig_builder/data/rs_knob_to_vst_param.json`.
+
+## Confirmados y cerrados
+
+- `Pedal_AutoFilter` / `BU-TRON III.vst3`.
+- `Pedal_BobFilter` / `FM105.vst3`.
+- `Pedal_AcousticEmulator` / `Acoustic Emulator.vst3`.
+- `Pedal_LineDrive` / `OS-2.vst3`: Color mezcla las ramas tipo SD-1/DS-1; la mitad inferior de Drive conserva dinamica y la saturacion fuerte queda al final del recorrido.
+- `Pedal_PlanePhase` / `Rocket Phase.vst3`: estabilidad corregida al cambiar presets/automatizar Rate, Depth y Mix; sin clipping ni dropouts a 44.1/48/96 kHz.
+- `Bass_Pedal_BassPhase` / `phase 99.vst3`: smoothing corregido para Speed, Depth, Feedback y Level; eliminados los saltos y cortes transitorios al cambiar estados.
 
 ## Pendientes de baja prioridad
 
@@ -40,4 +46,4 @@ Estos existen y estan mapeados, pero no han recibido la misma auditoria fina com
 
 ## Foco siguiente
 
-Continuar con `rig_builder/vst/src/racks/`.
+Validar auditivamente `RingMod.vst3` y ajustar solo contra referencias del RM-1A si aparecen diferencias.

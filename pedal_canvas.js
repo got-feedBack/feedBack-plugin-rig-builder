@@ -1598,7 +1598,7 @@
 
   // Buzz-Tone — Maestro Fuzz-Tone FZ-1A-style: brown box, two gold knobs poking
   // from the top, white script + shadowed wordmark, big chrome footswitch button,
-  // maker text. Parody (Master Buzz-Tone / Hudson). Real controls: Fuzz0 Volume1.
+  // maker text. Parody (Master Buzz-Tone / Hudson). Real controls: Attack0 Volume1.
   P.buzztone = { w:300,h:480, knobs:[
       {id:0,cx:.28,cy:.095,r:.082,style:'pointer',cap:[206,168,92]},
       {id:1,cx:.72,cy:.095,r:.082,style:'pointer',cap:[206,168,92]}],
@@ -1609,7 +1609,7 @@
       rr(c,m,m,W-2*m,H-2*m,12*s); c.fillStyle=bg; c.fill();
       rr(c,m,m,W-2*m,H-2*m,12*s); c.strokeStyle='rgba(0,0,0,0.45)'; c.lineWidth=2*s; c.stroke();
       // knob labels (RS names)
-      textSpaced(d,.28*W,.205*H,F.barlow,9,cream,'FUZZ',0.4);
+      textSpaced(d,.28*W,.205*H,F.barlow,9,cream,'ATTACK',0.4);
       textSpaced(d,.72*W,.205*H,F.barlow,9,cream,'VOLUME',0.4);
       // 'Master' script + 'Buzz-Tone' shadowed wordmark (parody of Maestro Fuzz-Tone)
       textC(d,.50*W,.315*H,F.ink,40,cream,'Master');
@@ -4837,6 +4837,7 @@
   //    ids: 0 NormalVol 1 TBVol 2 Treble 3 Bass 4 RevTone 5 RevLevel
   //    6 Speed 7 Depth 8 ToneCut 9 Master.
   P.boxac30 = { w:1400, h:560, ptr:rgb(240,237,230),
+    paramNames:['Normal Vol','TB Vol','Treble','Bass','Rev Tone','Rev Level','Speed','Depth','Tone Cut','Master','Input','Bright','Cab Sim'],
     knobs:[
       {id:0,cx:.140,cy:.738,r:.019,style:'vox'},   // NORMAL VOLUME
       {id:1,cx:.210,cy:.738,r:.019,style:'vox'},   // TOP BOOST VOLUME (RS Gain)
@@ -5181,6 +5182,12 @@
   //    (each Presence/Bass · Master/Mid · Gain/Treble + mode + LED), Input.
   //    ids: 0 Channel 1 Output 2 Rectifier, Green 3-9, Orange 10-16, Red 17-23.
   P.dualrect = { w:1700, h:680, ptr:rgb(238,240,244),
+    paramNames:[
+      'Channel','Output','Rectifier',
+      'Green Gain','Green Treble','Green Mid','Green Bass','Green Presence','Green Master','Green Mode',
+      'Orange Gain','Orange Treble','Orange Mid','Orange Bass','Orange Presence','Orange Master','Orange Mode',
+      'Red Gain','Red Treble','Red Mid','Red Bass','Red Presence','Red Master','Red Mode','Cab Sim'
+    ],
     knobs:[
       {id:1, cx:.250,cy:.845,r:.014,style:'fender'},                              // OUTPUT (lowered to sit by its label)
       // CH3 RED
@@ -5260,15 +5267,23 @@
       // ── channel blocks: column labels + mode + LED ──
       const lbl2=(cx,t1,t2)=>{ textSpaced(d,cx*W,py+ph*.47,F.barlow,8,ink,t1,0.02); textSpaced(d,cx*W,py+ph*.90,F.barlow,8,ink,t2,0.02); };
       const inp=(vals&&vals[0]!=null)?vals[0]:1;
-      const block=(c0,c1,c2,modeT,ledR,ledG,ledB,on,chTxt)=>{
+      const block=(c0,c1,c2,ledR,ledG,ledB,on,chTxt)=>{
         lbl2(c0,'PRESENCE','BASS'); lbl2(c1,'MASTER','MID'); lbl2(c2,'GAIN','TREBLE');
         const mx=(c2+0.038); // mode/LED column to the right of the block
-        textSpaced(d,mx*W,py+ph*.16,F.barlow,6.5,faint,modeT,0.0);
         ledDot(d,mx*W,cyB,on,ledR,ledG,ledB); textSpaced(d,mx*W,py+ph*.92,F.barlow,8.5,ink,chTxt,0.04);
       };
-      block(.300,.345,.390,'RAW VTG MOD',224,40,36, inp>=0.75, 'CH 3');
-      block(.475,.520,.565,'RAW VTG MOD',230,150,40, inp>=0.25&&inp<0.75, 'CH 2');
-      block(.650,.695,.740,'CLN  PUSH',70,210,90, inp<0.25, 'CH 1');
+      const modeLabels=(mx,top,middle,bottom)=>{
+        const x=(mx+.014)*W, y=.760*H;
+        textSpaced(d,x,y-17*s,F.barlow,5.8,faint,top,0.0);
+        textSpaced(d,x,y,F.barlow,5.8,faint,middle,0.0);
+        textSpaced(d,x,y+17*s,F.barlow,5.8,faint,bottom,0.0);
+      };
+      block(.300,.345,.390,224,40,36, inp>=0.75, 'CH 3');
+      block(.475,.520,.565,230,150,40, inp>=0.25&&inp<0.75, 'CH 2');
+      block(.650,.695,.740,70,210,90, inp<0.25, 'CH 1');
+      modeLabels(.428,'MOD','VTG','RAW');
+      modeLabels(.603,'MOD','VTG','RAW');
+      modeLabels(.778,'PUSH','','CLN');
       // ── channel select + rectifier labels ──
       textSpaced(d,.880*W,py+ph*.34,F.barlow,8.5,ink,'CHANNEL',0.03);
       textSpaced(d,.915*W,py+ph*.70,F.barlow,8,ink,'RECT',0.03);

@@ -26,6 +26,6 @@ static const char* const kLineDriveSymbols[kParamCount] = {
 
 static const float kLineDriveMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f };
 static const float kLineDriveMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f };
-static const float kLineDriveDef[kParamCount] = { 0.45f, 0.50f, 0.58f, 0.62f };
+static const float kLineDriveDef[kParamCount] = { 0.45f, 0.50f, 0.50f, 0.62f };
 
 #endif // LINE_DRIVE_PARAMS_H

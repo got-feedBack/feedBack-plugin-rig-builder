@@ -1,296 +1,287 @@
 /*
- * RingMod - Maestro/Oberheim RM-1A style ring modulator for the game's
- * Pedal_RingMod.
+ * RingMod - Maestro/Oberheim RM-1A component-guided ring modulator.
  *
- * The local schematic shows a preamp, oscillator, squelch/envelope section and
- * MC1495 balanced modulator with signal/carrier null trims. the game exposes
- * Depth, Waveform, Sensitivity and Attack, so the trim controls are fixed and
- * the carrier is driven by a dynamic oscillator.
+ * Signal path follows the local 26 March 1973 schematic: 50kA input Volume,
+ * MC1458 input amplifier, LM741 Wien-bridge sine oscillator with 1N746 zener
+ * amplitude stabilisation, MC1495 four-quadrant multiplier, 1N4148 detector +
+ * 2N4360 P-channel JFET linear squelch, Modulation blend and MC1458 output.
  */
 #include "DistrhoPlugin.hpp"
 #include "RingModParams.h"
+#include "../../_shared/analog_multiplier.hpp"
+#include "../../_shared/opamp.hpp"
+#include "../../_shared/oversampler.hpp"
+#include "../../_shared/semiconductors.hpp"
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
 
 namespace {
 
-static constexpr float kTwoPi = 6.28318530718f;
+static constexpr float kPi = 3.14159265358979323846f;
+static constexpr float kTwoPi = 2.0f * kPi;
+static constexpr float kVoltsPerUnit = 3.0f;
 
-static inline float clamp01(float v)
+static inline float clamp01(float value)
 {
-    return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
+    return value < 0.0f ? 0.0f : (value > 1.0f ? 1.0f : value);
 }
 
-static inline float clampFreq(float hz, float sr)
+static inline float onePoleCoeff(float hz, float sampleRate)
 {
-    const float nyquist = sr * 0.45f;
-    return std::fmax(16.0f, std::fmin(hz, nyquist));
+    return 1.0f - std::exp(-kTwoPi * hz / sampleRate);
 }
 
-static inline float smoothstep(float v)
+class DcBlocker
 {
-    v = clamp01(v);
-    return v * v * (3.0f - 2.0f * v);
-}
-
-static inline float softClip(float x)
-{
-    return std::tanh(x);
-}
-
-static inline float onePoleCoeffMs(float ms, float sr)
-{
-    ms = std::fmax(0.05f, ms);
-    return 1.0f - std::exp(-1.0f / (0.001f * ms * sr));
-}
-
-class Biquad
-{
-    float b0 = 1.0f;
-    float b1 = 0.0f;
-    float b2 = 0.0f;
-    float a1 = 0.0f;
-    float a2 = 0.0f;
-    float z1 = 0.0f;
-    float z2 = 0.0f;
-
-    void set(float nb0, float nb1, float nb2, float na0, float na1, float na2)
-    {
-        if (std::fabs(na0) < 1.0e-12f)
-            na0 = 1.0f;
-        const float invA0 = 1.0f / na0;
-        b0 = nb0 * invA0;
-        b1 = nb1 * invA0;
-        b2 = nb2 * invA0;
-        a1 = na1 * invA0;
-        a2 = na2 * invA0;
-    }
+    float r = 0.999f;
+    float x1 = 0.0f;
+    float y1 = 0.0f;
 
 public:
+    void set(float sampleRate, float hz)
+    {
+        r = std::exp(-kTwoPi * hz / sampleRate);
+    }
+
     void reset()
     {
-        z1 = z2 = 0.0f;
+        x1 = y1 = 0.0f;
     }
 
     float process(float x)
     {
-        const float y = b0 * x + z1;
-        z1 = b1 * x - a1 * y + z2;
-        z2 = b2 * x - a2 * y;
+        const float y = x - x1 + r * y1;
+        x1 = x;
+        y1 = std::fabs(y) < 1.0e-15f ? 0.0f : y;
+        return y1;
+    }
+};
+
+class OnePoleLowPass
+{
+    float a = 1.0f;
+    float y = 0.0f;
+
+public:
+    void set(float sampleRate, float hz)
+    {
+        a = onePoleCoeff(hz, sampleRate);
+    }
+
+    void reset() { y = 0.0f; }
+
+    float process(float x)
+    {
+        y += a * (x - y);
+        if (std::fabs(y) < 1.0e-15f)
+            y = 0.0f;
         return y;
     }
+};
 
-    void setHighPass(float sr, float hz, float q)
+class RingModCore
+{
+    float sampleRate = 192000.0f;
+    float pitchTarget = kRingModDef[kPitch];
+    float modulationTarget = kRingModDef[kModulation];
+    float volumeTarget = kRingModDef[kVolume];
+    float pitch = kRingModDef[kPitch];
+    float modulation = kRingModDef[kModulation];
+    float volume = kRingModDef[kVolume];
+    float modulateAmount = kRingModDef[kModulate];
+    bool highRange = false;
+    bool modulate = true;
+
+    double phase = 0.0;
+    float envelope = 0.0f;
+    float squelch = 0.0f;
+    float hardSquelch = 0.0f;
+    float controlA = 0.0f;
+    float envAttackA = 0.0f;
+    float envReleaseA = 0.0f;
+    float squelchAttackA = 0.0f;
+    float squelchReleaseA = 0.0f;
+
+    DcBlocker inputCoupling;
+    OnePoleLowPass inputBandwidth;
+    DcBlocker outputCoupling;
+    OnePoleLowPass outputBandwidth;
+    rbshared::LinearOpAmpStage inputAmp;
+    rbshared::LinearOpAmpStage oscillatorAmp;
+    rbshared::LinearOpAmpStage outputAmp;
+    rbcomponents::Mc1495Multiplier multiplier;
+    rbcomponents::JfetSpec squelchFet = rbcomponents::jfet2N4360();
+
+    void updateCoefficients()
     {
-        hz = clampFreq(hz, sr);
-        const float w0 = kTwoPi * hz / sr;
-        const float c = std::cos(w0);
-        const float alpha = std::sin(w0) / (2.0f * q);
-        set((1.0f + c) * 0.5f, -(1.0f + c), (1.0f + c) * 0.5f,
-            1.0f + alpha, -2.0f * c, 1.0f - alpha);
+        inputCoupling.set(sampleRate, 7.5f);
+        inputBandwidth.set(sampleRate, 16800.0f); // 47k / 200p input network
+        outputCoupling.set(sampleRate, 5.0f);
+        outputBandwidth.set(sampleRate, 14500.0f);
+        controlA = onePoleCoeff(18.0f, sampleRate);
+        envAttackA = onePoleCoeff(78.0f, sampleRate);
+        envReleaseA = onePoleCoeff(3.0f, sampleRate);
+        squelchAttackA = onePoleCoeff(46.0f, sampleRate);
+        squelchReleaseA = onePoleCoeff(0.8f, sampleRate);
     }
 
-    void setLowPass(float sr, float hz, float q)
+    float carrierFrequency() const
     {
-        hz = clampFreq(hz, sr);
-        const float w0 = kTwoPi * hz / sr;
-        const float c = std::cos(w0);
-        const float alpha = std::sin(w0) / (2.0f * q);
-        set((1.0f - c) * 0.5f, 1.0f - c, (1.0f - c) * 0.5f,
-            1.0f + alpha, -2.0f * c, 1.0f - alpha);
+        // Dual-gang 150kB Pitch pot with the schematic's 4.7k end stop. The
+        // range switch parallels the second 15 nF timing capacitor in LOW.
+        const float resistance = 4700.0f + 150000.0f * (1.0f - pitch);
+        const float capacitance = highRange ? 15.0e-9f : 30.0e-9f;
+        return 1.0f / (kTwoPi * resistance * capacitance);
     }
 
-    void setPeaking(float sr, float hz, float q, float gainDb)
+    float makeCarrier()
     {
-        hz = clampFreq(hz, sr);
-        const float a = std::pow(10.0f, gainDb / 40.0f);
-        const float w0 = kTwoPi * hz / sr;
-        const float c = std::cos(w0);
-        const float alpha = std::sin(w0) / (2.0f * q);
-        set(1.0f + alpha * a, -2.0f * c, 1.0f - alpha * a,
-            1.0f + alpha / a, -2.0f * c, 1.0f - alpha / a);
+        phase += static_cast<double>(carrierFrequency() / sampleRate);
+        phase -= std::floor(phase);
+
+        // The 741 Wien bridge is sine-only. Back-to-back 1N746 3.3 V zeners
+        // plus the opposite diode's forward drop stabilise it near +/-4 V.
+        const float sineVolts = 4.20f * std::sin(kTwoPi * static_cast<float>(phase));
+        const float magnitude = std::fabs(sineVolts);
+        const float limited = magnitude <= 3.60f
+                            ? magnitude
+                            : 3.60f + 0.40f * std::tanh((magnitude - 3.60f) / 0.40f);
+        const float zenerVolts = sineVolts < 0.0f ? -limited : limited;
+        return kVoltsPerUnit * oscillatorAmp.process(zenerVolts / kVoltsPerUnit, 3.0f);
+    }
+
+    float updateSquelch(float inputVolts)
+    {
+        // 1N4148 half-wave detector. The 5k trim is treated as calibrated to
+        // suppress carrier bleed between notes without chopping normal decay.
+        // The detector op-amp compensates most of the diode's forward drop;
+        // applying the raw 0.54 V threshold here chopped quiet guitar notes.
+        const float rectified = std::fmax(0.0f, std::fabs(inputVolts) - 0.08f);
+        const float envA = rectified > envelope ? envAttackA : envReleaseA;
+        envelope += envA * (rectified - envelope);
+
+        const float target = clamp01((envelope - 0.002f) / 0.040f);
+        const float gateA = target > squelch ? squelchAttackA : squelchReleaseA;
+        squelch += gateA * (target - squelch);
+
+        // Q1 is a P-channel shunt. RDS(on) is <=700 Ohm; when released, the
+        // effective resistance rises toward one megohm against the 47k path.
+        const float fetR = squelchFet.rdsOnMaxOhm
+                         + squelch * squelch * (1000000.0f - squelchFet.rdsOnMaxOhm);
+        const float divider = fetR / (47000.0f + fetR);
+        hardSquelch = divider;
+        return 0.15f + 0.85f * divider;
+    }
+
+public:
+    RingModCore()
+    {
+        inputAmp.setSpec(rbshared::mc1458Spec());
+        oscillatorAmp.setSpec(rbshared::lm741DualRailSpec());
+        outputAmp.setSpec(rbshared::mc1458Spec());
+        multiplier.setAxisResistors(18000.0f, 47000.0f);
+        multiplier.setOutputScale(1.0f);
+    }
+
+    void setSampleRate(float newSampleRate)
+    {
+        sampleRate = newSampleRate > 4000.0f ? newSampleRate : 192000.0f;
+        inputAmp.setSampleRate(sampleRate);
+        oscillatorAmp.setSampleRate(sampleRate);
+        outputAmp.setSampleRate(sampleRate);
+        updateCoefficients();
+        reset();
+    }
+
+    void reset()
+    {
+        phase = 0.0;
+        envelope = 0.0f;
+        squelch = 0.0f;
+        hardSquelch = 0.0f;
+        pitch = pitchTarget;
+        modulation = modulationTarget;
+        volume = volumeTarget;
+        modulateAmount = modulate ? 1.0f : 0.0f;
+        inputCoupling.reset();
+        inputBandwidth.reset();
+        outputCoupling.reset();
+        outputBandwidth.reset();
+        inputAmp.reset();
+        oscillatorAmp.reset();
+        outputAmp.reset();
+    }
+
+    void setParams(float newPitch, float newModulation, float newVolume,
+                   bool newHighRange, bool newModulate)
+    {
+        pitchTarget = clamp01(newPitch);
+        modulationTarget = clamp01(newModulation);
+        volumeTarget = clamp01(newVolume);
+        highRange = newHighRange;
+        modulate = newModulate;
+    }
+
+    float process(float input)
+    {
+        pitch += controlA * (pitchTarget - pitch);
+        modulation += controlA * (modulationTarget - modulation);
+        volume += controlA * (volumeTarget - volume);
+        modulateAmount += controlA * ((modulate ? 1.0f : 0.0f) - modulateAmount);
+
+        // 50kA pot feeds the non-inverting MC1458 stage. The 47k/1k feedback
+        // network gives 48x gain above its 20 uF cathode-equivalent corner.
+        const float volumeTaper = volume * volume;
+        float dry = inputCoupling.process(input);
+        dry = inputBandwidth.process(dry);
+        const float pre = inputAmp.process(dry * 0.35f * volumeTaper * 48.0f, 48.0f);
+        const float signalVolts = kVoltsPerUnit * pre;
+
+        const float carrierVolts = makeCarrier();
+        const float multiplied = multiplier.process(carrierVolts, signalVolts);
+        const float linearSquelch = updateSquelch(signalVolts);
+
+        // Fixed null trims leave only a small, hardware-like residue. The JFET
+        // squelch removes that residue and the multiplied tail between notes.
+        const float signalPath = multiplied + 0.0040f * signalVolts;
+        const float carrierResidue = 0.0015f * carrierVolts + 0.0010f;
+        const float wetVolts = signalPath * linearSquelch
+                             + carrierResidue * hardSquelch;
+
+        // Modulation adds the multiplier return around a stable buffered dry
+        // path. A replacement crossfade produced a level hole at noon and made
+        // the guitar disappear as the effect increased.
+        const float volumeReference = kRingModDef[kVolume] * kRingModDef[kVolume];
+        dry *= volumeTaper / volumeReference;
+        const float wet = 2.00f * wetVolts / kVoltsPerUnit;
+        const float mix = modulation * modulateAmount;
+        const float dryLevel = 1.0f - 0.12f * mix;
+        const float wetLevel = 0.58f * mix;
+        float output = dry * dryLevel + wet * wetLevel;
+        output = outputCoupling.process(output);
+        output = outputBandwidth.process(output);
+        return outputAmp.process(output, 1.0f);
     }
 };
 
 } // namespace
 
-class RingModCore
-{
-    float sampleRate = 48000.0f;
-    float depth = kRingModDef[kDepth];
-    float waveform = kRingModDef[kWaveform];
-    float sensitivity = kRingModDef[kSensitivity];
-    float attack = kRingModDef[kAttack];
-
-    Biquad inputHp;
-    Biquad inputVoice;
-    Biquad modLowPass;
-    Biquad outputHp;
-    Biquad outputLowPass;
-
-    float phase = 0.0f;
-    float env = 0.0f;
-    float gate = 0.0f;
-    float carrierHz = 90.0f;
-
-    float envAttackA = 0.0f;
-    float envReleaseA = 0.0f;
-    float gateAttackA = 0.0f;
-    float gateReleaseA = 0.0f;
-    float freqSlewA = 0.0f;
-
-    void updateFilters()
-    {
-        const float s = smoothstep(sensitivity);
-        const float a = smoothstep(attack);
-        const float w = smoothstep(waveform);
-
-        inputHp.setHighPass(sampleRate, 24.0f + 48.0f * s, 0.70f);
-        inputVoice.setPeaking(sampleRate, 850.0f + 540.0f * s, 0.78f,
-                              1.0f + 3.0f * depth);
-        modLowPass.setLowPass(sampleRate, 8200.0f - 2600.0f * w, 0.68f);
-        outputHp.setHighPass(sampleRate, 30.0f + 30.0f * (1.0f - s), 0.68f);
-        outputLowPass.setLowPass(sampleRate, 7200.0f + 3600.0f * (1.0f - w), 0.64f);
-
-        // Higher Attack means a slower RM-1A-style squelch and carrier sweep.
-        envAttackA = onePoleCoeffMs(1.4f + 180.0f * a, sampleRate);
-        envReleaseA = onePoleCoeffMs(42.0f + 260.0f * (1.0f - s), sampleRate);
-        gateAttackA = onePoleCoeffMs(2.0f + 130.0f * a, sampleRate);
-        gateReleaseA = onePoleCoeffMs(58.0f + 120.0f * a, sampleRate);
-        freqSlewA = onePoleCoeffMs(3.5f + 170.0f * a, sampleRate);
-    }
-
-    float carrierWave() const
-    {
-        const float sine = std::sin(kTwoPi * phase);
-        const float tri = 1.0f - 4.0f * std::fabs(phase - 0.5f);
-        const float square = std::tanh(sine * 8.5f);
-
-        if (waveform <= 0.5f)
-        {
-            const float t = waveform * 2.0f;
-            return sine * (1.0f - t) + tri * t;
-        }
-
-        const float t = (waveform - 0.5f) * 2.0f;
-        return tri * (1.0f - t) + square * t;
-    }
-
-    void updateEnvelope(float x)
-    {
-        const float detectorGain = 1.2f + 8.5f * sensitivity;
-        const float target = clamp01(std::fabs(x) * detectorGain);
-        const float envA = target > env ? envAttackA : envReleaseA;
-        env += envA * (target - env);
-
-        const float threshold = 0.035f + 0.145f * (1.0f - sensitivity);
-        const float gateTarget = smoothstep((env - threshold) / (0.055f + 0.25f * sensitivity));
-        const float gateA = gateTarget > gate ? gateAttackA : gateReleaseA;
-        gate += gateA * (gateTarget - gate);
-    }
-
-public:
-    void reset()
-    {
-        inputHp.reset();
-        inputVoice.reset();
-        modLowPass.reset();
-        outputHp.reset();
-        outputLowPass.reset();
-        phase = 0.0f;
-        env = 0.0f;
-        gate = 0.0f;
-        carrierHz = 90.0f;
-        updateFilters();
-    }
-
-    void setSampleRate(float sr)
-    {
-        sampleRate = sr > 1000.0f ? sr : 48000.0f;
-        reset();
-    }
-
-    void setDepth(float v)
-    {
-        depth = clamp01(v);
-        updateFilters();
-    }
-
-    void setWaveform(float v)
-    {
-        waveform = clamp01(v);
-        updateFilters();
-    }
-
-    void setSensitivity(float v)
-    {
-        sensitivity = clamp01(v);
-        updateFilters();
-    }
-
-    void setAttack(float v)
-    {
-        attack = clamp01(v);
-        updateFilters();
-    }
-
-    float process(float in)
-    {
-        float x = inputHp.process(in);
-        x = inputVoice.process(x);
-
-        // Slight preamp color before the balanced modulator, matching the
-        // RM-1A front-end without making Depth=0 louder than bypass.
-        const float pre = softClip(x * (1.15f + 1.15f * depth)) * (0.92f + 0.12f * sensitivity);
-        updateEnvelope(pre);
-
-        const float s = smoothstep(sensitivity);
-        const float baseHz = 23.0f + 140.0f * s + 520.0f * s * s;
-        const float envBend = env * (70.0f + 760.0f * s) * (0.25f + 0.75f * depth);
-        const float targetHz = std::fmin(1850.0f, baseHz + envBend);
-        carrierHz += freqSlewA * (targetHz - carrierHz);
-
-        phase += carrierHz / sampleRate;
-        if (phase >= 1.0f)
-            phase -= std::floor(phase);
-
-        const float carrier = carrierWave();
-
-        // MC1495-style balanced multiply with imperfect nulls. Squelch reduces
-        // carrier artifacts between notes but never fully closes the effect.
-        const float balanced = pre * carrier * (1.65f + 1.25f * depth);
-        const float signalLeak = pre * (0.040f + 0.045f * (1.0f - sensitivity));
-        const float carrierLeak = carrier * (0.008f + 0.018f * waveform) * (0.30f + depth) * gate;
-        float wet = balanced + signalLeak + carrierLeak;
-        wet = modLowPass.process(wet);
-        wet = softClip(wet * (1.08f + 0.34f * depth));
-        wet = outputHp.process(wet);
-        wet = outputLowPass.process(wet);
-
-        const float amount = std::pow(clamp01(depth), 0.55f) * (0.28f + 0.72f * (0.20f + 0.80f * gate));
-        const float dryLevel = 1.0f - 0.66f * amount;
-        const float wetLevel = 0.74f * amount;
-        return softClip(in * dryLevel + wet * wetLevel) * 0.98f;
-    }
-};
-
 class RingModPlugin : public Plugin
 {
+    static constexpr int kOS = rbshared::Oversampler4x::OS;
     RingModCore left;
     RingModCore right;
+    rbshared::Oversampler4x osL;
+    rbshared::Oversampler4x osR;
     float params[kParamCount];
 
     void applyAll()
     {
-        left.setDepth(params[kDepth]);
-        right.setDepth(params[kDepth]);
-        left.setWaveform(params[kWaveform]);
-        right.setWaveform(params[kWaveform]);
-        left.setSensitivity(params[kSensitivity]);
-        right.setSensitivity(params[kSensitivity]);
-        left.setAttack(params[kAttack]);
-        right.setAttack(params[kAttack]);
+        const bool range = params[kPitchRange] >= 0.5f;
+        const bool enabled = params[kModulate] >= 0.5f;
+        left.setParams(params[kPitch], params[kModulation], params[kVolume], range, enabled);
+        right.setParams(params[kPitch], params[kModulation], params[kVolume], range, enabled);
     }
 
 public:
@@ -299,24 +290,28 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kRingModDef[i];
-        left.setSampleRate((float)getSampleRate());
-        right.setSampleRate((float)getSampleRate());
+        const float rate = kOS * static_cast<float>(getSampleRate());
+        left.setSampleRate(rate);
+        right.setSampleRate(rate);
         applyAll();
     }
 
 protected:
     const char* getLabel() const override { return "RingMod"; }
-    const char* getDescription() const override { return "Maestro RM-1A style ring modulator"; }
+    const char* getDescription() const override { return "Maestro/Oberheim RM-1A ring modulator"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 0); }
+    uint32_t getVersion() const override { return d_version(2, 1, 0); }
     int64_t getUniqueId() const override { return d_cconst('R', 'g', 'M', 'd'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
     {
-        if (index >= (uint32_t)kParamCount)
+        if (index >= static_cast<uint32_t>(kParamCount))
             return;
         parameter.hints = kParameterIsAutomatable;
+        if (index == static_cast<uint32_t>(kPitchRange)
+            || index == static_cast<uint32_t>(kModulate))
+            parameter.hints |= kParameterIsBoolean | kParameterIsInteger;
         parameter.name = kRingModNames[index];
         parameter.symbol = kRingModSymbols[index];
         parameter.ranges.min = kRingModMin[index];
@@ -326,34 +321,44 @@ protected:
 
     float getParameterValue(uint32_t index) const override
     {
-        return index < (uint32_t)kParamCount ? params[index] : 0.0f;
+        return index < static_cast<uint32_t>(kParamCount) ? params[index] : 0.0f;
     }
 
     void setParameterValue(uint32_t index, float value) override
     {
-        if (index >= (uint32_t)kParamCount)
+        if (index >= static_cast<uint32_t>(kParamCount))
             return;
-        params[index] = clamp01(value);
+        params[index] = (index == static_cast<uint32_t>(kPitchRange)
+                      || index == static_cast<uint32_t>(kModulate))
+                      ? (value >= 0.5f ? 1.0f : 0.0f) : clamp01(value);
         applyAll();
     }
 
     void sampleRateChanged(double newSampleRate) override
     {
-        left.setSampleRate((float)newSampleRate);
-        right.setSampleRate((float)newSampleRate);
+        osL.reset();
+        osR.reset();
+        const float rate = kOS * static_cast<float>(newSampleRate);
+        left.setSampleRate(rate);
+        right.setSampleRate(rate);
         applyAll();
     }
 
     void run(const float** inputs, float** outputs, uint32_t frames) override
     {
-        const float* inL = inputs[0];
-        const float* inR = inputs[1];
-        float* outL = outputs[0];
-        float* outR = outputs[1];
+        float upL[kOS];
+        float upR[kOS];
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = left.process(inL[i]);
-            outR[i] = right.process(inR[i]);
+            osL.upsample(inputs[0][i], upL);
+            osR.upsample(inputs[1][i], upR);
+            for (int k = 0; k < kOS; ++k)
+            {
+                upL[k] = left.process(upL[k]);
+                upR[k] = right.process(upR[k]);
+            }
+            outputs[0][i] = osL.downsample(upL);
+            outputs[1][i] = osR.downsample(upR);
         }
     }
 

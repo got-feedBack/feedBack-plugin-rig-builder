@@ -157,7 +157,9 @@ Archivos relevantes:
 - `vst/src/_shared/tube_stage.hpp`
 - `data/rs_knob_to_vst_param.json`
 - `tools/render_amp_wav.py`
-- `AMP_MODELING_GUIDE.md`
+- `tools/compare_amp_reference.py`
+- `docs/REFERENCE_MATCHING_WORKFLOW.md`
+- `vst/src/amps/REAL_TUBE_AMP_GUIDE.md`
 
 DB local:
 

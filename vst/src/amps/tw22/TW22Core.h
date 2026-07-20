@@ -169,16 +169,61 @@ class TW22Core {
     float sag = 0.0f;
 
     // ── REAL tube stages (Koren circuit models) replacing the tanh approximations ──
-    rbtube::TubeStage vintTube;            // VINTAGE: 1x 12AX7
-    rbtube::TubeStage burn1, burn2, burn3; // BURN: 3x 12AX7 cascade
-    rbtube::Miller12AX7 vintMiller, burn1Miller, burn2Miller, burn3Miller;
-    rbtube::CouplingCapGridLeak burnCouple12, burnCouple23, coupleToPi;
+    rbtube::TubeStage inputTube;             // shared V1A
+    rbtube::TubeStage vintTube;              // V1B after Vintage tone/Volume
+    rbtube::TubeStage burn1, burn2, burn3;   // V1B, V2A, V2B on Burn
+    rbtube::Miller12AX7 inputMiller, vintMiller;
+    rbtube::Miller12AX7 burn1Miller, burn2Miller, burn3Miller;
+    rbtube::CouplingCapGridLeak burnCouple12, burnCouple23, burnCouple34;
+    rbtube::CouplingCapGridLeak burnToTone, coupleToPi;
     rbtube::PhaseInverterLTP12AT7 phaseInverter; // real 12AT7 Fender LTP
     rbtube::MultiNodeBPlus supply;               // stiff silicon B+ nodes
     rbtube::PowerAmp6V6 power;             // 2x 6V6 push-pull (~22W)
-    float vDrv=1, b1g=1, b2g=1, b3g=1; // computed drives (audio->grid volts)
+    float inputDrive=1, vintDrive=1, b1g=1, b2g=1, b3g=1;
     float vintVolPot=0, gain1Pot=0, gain2Pot=0, burnVolPot=0;
     float lastPowerLoad=0, lastScreenLoad=0, lastPreampLoad=0;
+
+    static float burnReferenceTrimDb(float g1, float g2) {
+        static constexpr float g1Knots[4] = { 0.0f, 0.5f, 0.75f, 1.0f };
+        static constexpr float g2Knots[3] = { 0.0f, 0.5f, 1.0f };
+        static constexpr float trimDb[4][3] = {
+            { 5.623f, 5.623f, 5.623f },
+            { 2.817f, 1.795f, 2.236f },
+            { 2.225f, 1.925f, 1.925f },
+            { 1.830f, 1.670f, 1.668f },
+        };
+        g1 = clamp01(g1); g2 = clamp01(g2);
+        int i1 = g1 >= 0.75f ? 2 : (g1 >= 0.5f ? 1 : 0);
+        int i2 = g2 >= 0.5f ? 1 : 0;
+        const float x = (g1 - g1Knots[i1]) / (g1Knots[i1 + 1] - g1Knots[i1]);
+        const float y = (g2 - g2Knots[i2]) / (g2Knots[i2 + 1] - g2Knots[i2]);
+        const float a = trimDb[i1][i2] + x * (trimDb[i1 + 1][i2] - trimDb[i1][i2]);
+        const float b = trimDb[i1][i2 + 1] + x * (trimDb[i1 + 1][i2 + 1] - trimDb[i1][i2 + 1]);
+        return a + y * (b - a) + 0.75f;
+    }
+
+    void configureCircuit() {
+        // Fixed component topology. Keep this out of parameter updates: the
+        // TubeStage/PI set() methods solve bias and clear dynamic cathode state.
+        inputTube.set(sampleRate, 1, 250.0f, 40.0f, 4.8f, 1500.0f);  // R3/R4/C1
+        vintTube.set(sampleRate, 1, 250.0f, 40.0f, 48.0f, 1500.0f);  // V1B
+        burn1.set(sampleRate, 1, 250.0f, 40.0f, 48.0f, 1500.0f);     // V1B
+        burn2.set(sampleRate, 1, 250.0f, 40.0f, 4.8f, 1500.0f);      // V2A R34/C17
+        burn3.set(sampleRate, 1, 250.0f, 40.0f, 4.8f, 1500.0f);      // V2B R27/C21
+        inputMiller.set(sampleRate, 10000.0f, 55.0f, 8.0f);
+        vintMiller.set(sampleRate, 100000.0f, 55.0f, 8.0f);
+        burn1Miller.set(sampleRate, 68000.0f, 55.0f, 8.0f);
+        burn2Miller.set(sampleRate, 111500.0f, 55.0f, 8.0f);
+        burn3Miller.set(sampleRate, 82400.0f, 55.0f, 8.0f);
+        burnCouple12.set(sampleRate, 1000000.0f, 2.2e-9f, 15000.0f, 0.12f, 0.42f, 1.35f);
+        burnCouple23.set(sampleRate, 4700000.0f, 220.0e-9f, 111500.0f, 0.12f, 0.52f, 1.65f);
+        burnCouple34.set(sampleRate, 100000.0f, 47.0e-9f, 470000.0f, 0.12f, 0.52f, 1.65f);
+        burnToTone.set(sampleRate, 1000000.0f, 220.0e-9f, 120000.0f, 0.12f, 0.42f, 1.35f);
+        coupleToPi.set(sampleRate, 1000000.0f, 47.0e-9f, 180000.0f, 0.13f, 0.48f, 1.35f);
+        phaseInverter.setFenderAB763(sampleRate, 1.0f, 0.86f);
+        power.set(sampleRate, 1.0f, -13.0f, 0.32f, 80.0f, 10000.0f);
+        power.out = 0.011f;
+    }
 
     void updateFilters() {
         // Remap the RS Gain (channel) so the Burn channel / crunch only arrives near
@@ -187,42 +232,33 @@ class TW22Core {
         const float ch = std::pow(channel, 1.6f);
         const float wBurn = smoothstep(ch);    // 0=Vintage .. 1=Burn
         vintVolPot = rbtube::PotTaper::audio(vintVol, 1.24f);
-        gain1Pot = rbtube::PotTaper::audio(gain1, 1.18f);
+        gain1Pot = rbtube::PotTaper::audio(gain1, 1.45f);
         gain2Pot = rbtube::PotTaper::audio(gain2, 1.16f);
         burnVolPot = rbtube::PotTaper::audio(burnVol, 1.20f);
         const float hot = smoothstepRange(0.45f, 1.0f, ch) * smoothstep(gain1Pot);
 
-        // ── real 12AX7 / 6V6 circuit stages (cathode-biased, self-bias solved) ──
-        vintTube.set(sampleRate, 1, 250.0f, 40.0f, 30.0f, 1500.0f);   // Vintage 1x 12AX7
-        burn1.set(sampleRate, 1, 250.0f, 40.0f, 25.0f, 1500.0f);      // Burn cascade
-        burn2.set(sampleRate, 1, 250.0f, 40.0f, 40.0f, 1500.0f);
-        burn3.set(sampleRate, 1, 250.0f, 40.0f, 60.0f, 1500.0f);
-        vintMiller.set(sampleRate, 68000.0f, 55.0f, 8.0f);
-        burn1Miller.set(sampleRate, 68000.0f, 55.0f, 8.0f);
-        burn2Miller.set(sampleRate, 220000.0f, 52.0f, 8.0f);
-        burn3Miller.set(sampleRate, 180000.0f, 52.0f, 8.0f);
-        // Cascaded Burn coupling caps + grid leaks. Exact cap labels vary by
-        // schematic node; these follow the SS22 12AX7 cascade scale (22n/1M)
-        // so blocking/recovery happens in the right places instead of ideal HPFs.
-        burnCouple12.set(sampleRate, 1000000.0f, 22.0e-9f, 150000.0f, 0.12f, 0.50f, 1.55f);
-        burnCouple23.set(sampleRate, 1000000.0f, 22.0e-9f, 180000.0f, 0.12f, 0.56f, 1.75f);
-        coupleToPi.set(sampleRate, 1000000.0f, 47.0e-9f, 180000.0f, 0.13f, 0.48f, 1.35f);
-        phaseInverter.setFenderAB763(sampleRate, 0.90f + 1.20f * wBurn + 2.40f * hot, 0.86f);
+        phaseInverter.drive = 0.90f + 1.20f * wBurn + 2.40f * hot;
+        phaseInverter.tailMix = 0.11f + 0.07f * std::fmin(1.0f, phaseInverter.drive * 0.22f);
         // Super-Sonic 22 uses silicon rectification and larger modern filter caps:
         // much stiffer than tweed, but screens/preamp still sag under Burn load.
         supply.set(sampleRate, 35.0f, 47.0f, 470.0f, 22.0f, 10000.0f, 22.0f,
                    0.095f + 0.035f * hot, 0.070f + 0.030f * hot,
                    0.035f + 0.015f * hot, 0.12f);
         // 2x 6V6 push-pull, solid-state rectifier (MILD sag), NFB approximated by presence
-        power.set(sampleRate, 1.7f + 4.6f * wBurn
-                  + 6.6f * wBurn * (0.5f * smoothstep(gain1Pot) + 0.5f * smoothstep(gain2Pot))
-                  + 3.0f * hot, -13.0f, 0.32f, 80.0f, 10000.0f);   // Burn drive scales with BOTH gains
-        power.out = 0.011f;
-        // drives (audio -> grid volts): Vintage stays clean-ish; Burn cascade driven by Gain1/Gain2
-        vDrv = 1.7f * (0.6f + 1.8f * vintVolPot);
-        b1g  = 2.0f * (0.40f + 3.0f * gain1Pot);
-        b2g  = 1.3f * (0.45f + 3.2f * gain2Pot);
-        b3g  = 0.85f + 0.65f * gain2Pot;
+        power.drive = 1.7f + 4.6f * wBurn
+                    + 6.6f * wBurn * (0.5f * smoothstep(gain1Pot) + 0.5f * smoothstep(gain2Pot))
+                    + 3.0f * hot;
+        // Audio-to-grid calibration around the real pot locations. Gain 1 is
+        // between V1A/V1B; Gain 2 is between V1B/V2A. V2A->V2B includes the
+        // fixed R42/R43 470k/100k divider from the schematic.
+        inputDrive = 1.55f;
+        vintDrive = 1.35f * (0.20f + 1.80f * vintVolPot);
+        b1g = 0.55f + 3.57f * gain1Pot;
+        // R36=20k and R38=10k prevent Gain 2 from behaving like a zero-to-full
+        // divider. The reference sweep stays nearly flat through noon and
+        // rises mainly over the last quarter of the pot.
+        b2g = 1.70f + 2.80f * std::pow(gain2, 4.0f);
+        b3g = 0.90f;
 
         // input grid HP (tightens a little more on the Burn channel) + shared
         // bright cap (Norm = sparkly, Fat = darker/fuller).
@@ -249,21 +285,25 @@ class TW22Core {
         presence.setHighShelf(sampleRate, 2900.0f, 0.80f, -3.0f + 8.0f * presenceK);
 
         // --- Celestion V30 12" (bright / tight, modest body) ---
-        speakerHp.setHighPass(sampleRate, 135.0f, 0.72f);        // tighter low end to match the reference (was 84 = too much sub)
+        const float cabOpen = 0.72f + 0.28f * hot;
+        speakerHp.setHighPass(sampleRate, 260.0f - 120.0f * hot, 0.72f);
         speakerBody.setPeaking(sampleRate, 205.0f, 0.80f, -1.0f + 1.6f * (wBurn * burnBass + (1.0f - wBurn) * vintBass) - 0.4f * hot);
         // Bite tracks gain too (more presence on crank, less at low gain).
         speakerBite.setPeaking(sampleRate, 2600.0f + 500.0f * burnTre, 0.72f, 2.5f + 2.4f * burnTre + 0.8f * wBurn + 1.3f * hot);
         // AIR high-shelf: lifts the V30 top. The AmpliTube SuperSonic gets
         // BRIGHTER with gain (the high-gain ref is the brightest of the set), so
         // the air now RISES strongly with `hot` and CUTS the top at low gain.
-        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f, -6.7f + 2.0f * burnTre + 10.0f * hot);
-        // Speaker LP: opens with gain to track the reference's brightness trend
-        // (dark ~6.5k at low gain -> ~14k miked V30 on crank).
-        speakerLp.setLowPass(sampleRate, 1000.0f + 3000.0f * burnTre + 11500.0f * hot, 0.64f);
+        speakerFizz.setHighShelf(sampleRate, 4700.0f, 0.70f,
+                                 -5.4f + 2.0f * burnTre + 10.0f * cabOpen);
+        // The reference cabinet keeps its upper-mid/air response even when the
+        // preamp is clean; gain adds harmonics but does not open a virtual door.
+        speakerLp.setLowPass(sampleRate, 1000.0f + 3000.0f * burnTre
+                             + 11500.0f * cabOpen, 0.64f);
     }
 
 public:
     void reset() {
+        configureCircuit();
         inputHp.reset(); inputBright.reset();
         vintTone.reset();
         burnTighten.reset(); interstageLp.reset();
@@ -271,10 +311,12 @@ public:
         presence.reset();
         speakerHp.reset(); speakerBody.reset(); speakerBite.reset(); speakerFizz.reset(); speakerLp.reset();
         dcBlock.reset(); spring.clear(); sag = 0.0f;
-        vintMiller.reset(); burn1Miller.reset(); burn2Miller.reset(); burn3Miller.reset();
-        burnCouple12.reset(); burnCouple23.reset(); coupleToPi.reset();
+        inputMiller.reset(); vintMiller.reset();
+        burn1Miller.reset(); burn2Miller.reset(); burn3Miller.reset();
+        burnCouple12.reset(); burnCouple23.reset(); burnCouple34.reset();
+        burnToTone.reset(); coupleToPi.reset();
         phaseInverter.reset(); supply.reset();
-        vintTube.reset(); burn1.reset(); burn2.reset(); burn3.reset(); power.reset();
+        inputTube.reset(); vintTube.reset(); burn1.reset(); burn2.reset(); burn3.reset(); power.reset();
         lastPowerLoad = lastScreenLoad = lastPreampLoad = 0.0f;
         updateFilters();
     }
@@ -303,26 +345,25 @@ public:
         const rbtube::SupplyScales bplus = supply.process(lastPowerLoad, lastScreenLoad, lastPreampLoad);
         float x = inputHp.process(in);
         x = inputBright.process(x);
-        x = softClip(x * 1.04f) * 0.96f;
+        const float shared = inputTube.process(inputMiller.process(x) * inputDrive * bplus.preamp);
 
-        // --- VINTAGE channel: one REAL 12AX7 (clean until pushed by Volume) ---
-        float vt = vintTube.process(vintMiller.process(x) * vDrv * bplus.preamp);
-        vt = vintTone.process(vt) * 2.2f;                         // real blackface tone (+ makeup)
-        vt *= (0.55f + 0.90f * vintVolPot);
+        // --- VINTAGE: V1A -> tone/Volume -> V1B ---
+        float vt = vintTone.process(shared) * 2.2f;
+        vt *= (0.20f + 0.80f * vintVolPot);
+        vt = vintTube.process(vintMiller.process(vt) * vintDrive * bplus.preamp);
+        vt *= 5.8f; // recover the measured passive stack/Volume insertion loss
 
-        // --- BURN channel: cascaded gain stages ---
-        // Drive is mostly GAIN-knob dependent (steep clean->crunch range) with a
-        // small fixed Burn-channel floor, so low gain stays clean and the knob
-        // sweeps a wide range like the AmpliTube reference.
-        // --- BURN channel: 3 REAL cascaded 12AX7 (Gain1 -> Gain2 -> recovery) ---
-        float bn = burnTighten.process(x);
-        bn = burn1.process(burn1Miller.process(bn) * b1g * bplus.preamp);  // stage 1 (Gain 1)
+        // --- BURN: V1A -> Gain1 -> V1B -> Gain2 -> V2A -> V2B ---
+        float bn = burnTighten.process(shared);
+        bn = burnCouple12.process(bn, b1g);
+        bn = burn1.process(burn1Miller.process(bn) * bplus.preamp);
         bn = interstageLp.process(bn);
-        bn = burnCouple12.process(bn, b2g);
-        bn = burn2.process(burn2Miller.process(bn) * bplus.preamp);  // stage 2 (Gain 2)
-        bn = burnCouple23.process(bn, b3g);
-        bn = burn3.process(burn3Miller.process(bn) * bplus.preamp);  // stage 3 (lead recovery)
-        bn = burnTone.process(bn) * 4.0f;                         // real hot-rod TMB (+ makeup for insertion loss + scoop)
+        bn = burnCouple23.process(bn, b2g);
+        bn = burn2.process(burn2Miller.process(bn) * bplus.preamp);
+        bn = burnCouple34.process(bn, b3g);
+        bn = burn3.process(burn3Miller.process(bn) * bplus.preamp);
+        bn = burnToTone.process(bn);
+        bn = burnTone.process(bn) * 4.0f;
         bn *= (0.40f + 0.95f * burnVolPot);
 
         float y = vt * wVint + bn * wBurn;
@@ -362,7 +403,9 @@ public:
         const float level = makeup / toneEnergy;
         // loudness flattening vs the Vintage->Burn morph/gain (clean post-output makeup;
         // ~0 dB at morph 0.5). Tracks the remapped channel so loudness follows the knob.
-        float gcDb = 8.317f - 20.537f * ch + 5.580f * ch * ch;
+        float gcDb = 8.317f - 20.537f * ch + 5.580f * ch * ch + 6.20f * ch;
+        gcDb += wBurn * burnReferenceTrimDb(gain1, gain2);
+        gcDb += 13.8f * (1.0f - wBurn);
         if (gcDb > 20.0f) gcDb = 20.0f; else if (gcDb < -12.0f) gcDb = -12.0f;
         return softClip(y * level * std::pow(10.0f, 0.05f * gcDb)) * 0.98f;
     }

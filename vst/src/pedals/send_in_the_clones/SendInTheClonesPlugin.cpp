@@ -19,7 +19,10 @@ class CloneTheoryCore
     float depth = kSitcDef[kDepth];
     float chVib = kSitcDef[kChVib];
     float flange = kSitcDef[kFlange];
-    float phaseOffset = 0.0f;
+    float rateNow = rate;
+    float depthNow = depth;
+    float chVibNow = chVib;
+    float smoothA = 1.0f;
     float lfoPhase = 0.0f;
     float feedback = 0.0f;
 
@@ -28,22 +31,20 @@ class CloneTheoryCore
     rbmod::LowPass inputLp;
     rbmod::LowPass bbdLp1;
     rbmod::LowPass bbdLp2;
-    rbmod::BbdCompander compander;
     rbmod::NoiseSource noise;
 
     float currentRateHz() const
     {
-        return 0.065f + 5.85f * std::pow(rbmod::clamp01(rate), 2.00f);
+        return 0.065f + 5.85f * std::pow(rbmod::clamp01(rateNow), 2.00f);
     }
 
     void updateFilters()
     {
-        const float d = std::pow(rbmod::clamp01(depth), 1.70f);
         const float f = flange >= 0.5f ? 1.0f : 0.0f;
         inputHp.setHz(30.0f, sampleRate);
-        inputLp.setHz(7200.0f - 900.0f * d, sampleRate);
-        bbdLp1.setHz(4500.0f - 850.0f * d - 500.0f * f, sampleRate);
-        bbdLp2.setHz(3300.0f - 450.0f * d - 350.0f * f, sampleRate);
+        inputLp.setHz(7600.0f, sampleRate);
+        bbdLp1.setHz(5200.0f - 400.0f * f, sampleRate);
+        bbdLp2.setHz(4100.0f - 350.0f * f, sampleRate);
     }
 
 public:
@@ -51,13 +52,12 @@ public:
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
         bbd.resizeForMs(sampleRate, 55.0f);
-        compander.setSampleRate(sampleRate, 26.0f);
+        smoothA = 1.0f - std::exp(-1.0f / (0.012f * sampleRate));
         updateFilters();
         reset();
     }
 
     void setSeed(unsigned int seed) { noise.seed(seed); }
-    void setPhaseOffset(float v) { phaseOffset = v - std::floor(v); }
 
     void reset()
     {
@@ -66,9 +66,11 @@ public:
         inputLp.reset();
         bbdLp1.reset();
         bbdLp2.reset();
-        compander.reset();
-        lfoPhase = phaseOffset;
+        lfoPhase = 0.0f;
         feedback = 0.0f;
+        rateNow = rate;
+        depthNow = depth;
+        chVibNow = chVib;
     }
 
     void setRate(float v) { rate = rbmod::clamp01(v); }
@@ -78,16 +80,20 @@ public:
 
     float process(float in)
     {
+        rateNow += smoothA * (rate - rateNow);
+        depthNow += smoothA * (depth - depthNow);
+        chVibNow += smoothA * (chVib - chVibNow);
+
         lfoPhase += currentRateHz() / sampleRate;
         if (lfoPhase >= 1.0f)
             lfoPhase -= std::floor(lfoPhase);
 
-        const float p = lfoPhase + phaseOffset;
+        const float p = lfoPhase;
         const float sine = std::sin(rbmod::kTwoPi * p);
         const float second = std::sin(rbmod::kTwoPi * (2.0f * p + 0.22f));
         const float wobble = 0.86f * sine + 0.14f * second;
 
-        const float d = std::pow(rbmod::clamp01(depth), 1.70f);
+        const float d = std::pow(rbmod::clamp01(depthNow), 1.55f);
         const float f = flange >= 0.5f ? 1.0f : 0.0f;
         const float baseMs = f > 0.5f ? 3.4f : 12.2f;
         const float widthMs = (f > 0.5f ? 2.0f : 7.8f) * d + 0.08f;
@@ -100,38 +106,33 @@ public:
 
         const float fb = f > 0.5f ? -0.28f : 0.022f;
         const float write = rbmod::softClip(x + feedback * fb);
-        float wet = bbd.read(delayMs * 0.001f * sampleRate);
+        float wet = bbd.readCubic(delayMs * 0.001f * sampleRate);
         bbd.write(write);
 
-        wet += noise.next() * (0.00035f + 0.00125f * d);
+        wet += noise.next() * (0.000012f + 0.000035f * d);
         wet = bbdLp2.process(bbdLp1.process(wet));
-        wet = compander.process(wet, 0.52f + 0.28f * d);
+        wet = rbmod::softClip(wet * 1.018f) / 1.018f;
         feedback = wet;
 
-        const float vib = std::pow(rbmod::clamp01(chVib), 1.35f);
-        const float dryLevel = 0.86f * (1.0f - 0.80f * vib);
-        const float wetLevel = 0.20f + 0.82f * vib;
+        const float vib = std::pow(rbmod::clamp01(chVibNow), 1.20f);
+        const float dryLevel = 1.0f - 0.92f * vib;
+        const float wetLevel = 0.42f + 0.58f * vib;
         const float y = dryLevel * in + wetLevel * wet;
-        return rbmod::softClip(y * 0.94f) * 1.22f;   // +2 dB to level-match the chorus group
+        return rbmod::softClip(y * 0.98f);
     }
 };
 
 class SendInTheClonesPlugin : public Plugin
 {
-    CloneTheoryCore left;
-    CloneTheoryCore right;
+    CloneTheoryCore core;
     float params[kParamCount];
 
     void applyAll()
     {
-        left.setRate(params[kRate]);
-        right.setRate(params[kRate]);
-        left.setDepth(params[kDepth]);
-        right.setDepth(params[kDepth]);
-        left.setChVib(params[kChVib]);
-        right.setChVib(params[kChVib]);
-        left.setFlange(params[kFlange]);
-        right.setFlange(params[kFlange]);
+        core.setRate(params[kRate]);
+        core.setDepth(params[kDepth]);
+        core.setChVib(params[kChVib]);
+        core.setFlange(params[kFlange]);
     }
 
 public:
@@ -140,12 +141,8 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kSitcDef[i];
-        left.setSeed(0x53434c31u);
-        right.setSeed(0x53434c32u);
-        left.setPhaseOffset(0.00f);
-        right.setPhaseOffset(0.37f);
-        left.setSampleRate((float)getSampleRate());
-        right.setSampleRate((float)getSampleRate());
+        core.setSeed(0x53434c31u);
+        core.setSampleRate((float)getSampleRate());
         applyAll();
     }
 
@@ -154,7 +151,7 @@ protected:
     const char* getDescription() const override { return "Clone Theory style BBD chorus/vibrato"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('S', 'C', 'l', 'n'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -187,8 +184,7 @@ protected:
 
     void sampleRateChanged(double newSampleRate) override
     {
-        left.setSampleRate((float)newSampleRate);
-        right.setSampleRate((float)newSampleRate);
+        core.setSampleRate((float)newSampleRate);
         applyAll();
     }
 
@@ -201,8 +197,10 @@ protected:
         for (uint32_t i = 0; i < frames; ++i)
         {
             const rbmod::StereoInputPair feed = rbmod::stereoPedalFeeds(inL[i], inR[i]);
-            outL[i] = left.process(feed.left);
-            outR[i] = right.process(feed.right);
+            const float mono = 0.5f * (feed.left + feed.right);
+            const float output = core.process(mono);
+            outL[i] = output;
+            outR[i] = output;
         }
     }
 

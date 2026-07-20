@@ -1,25 +1,25 @@
 #ifndef BUZZ_TONE_PARAMS_H
 #define BUZZ_TONE_PARAMS_H
 
-// Buzz-Tone = Captain Fuzzle (3x 2N1305 germanium, 1.5 V). Real panel = two
-// 50kB pots only: FUZZ (the bias/feedback amount) and VOLUME (output) — see
+// Buzz-Tone = Captain Fuzzle / Maestro FZ-1A (3x 2N1305 germanium, 1.5 V).
+// Real panel = two 50kB pots only: ATTACK (Q2 bias/feedback) and VOLUME — see
 // pedals/captain fuzzle.gif. There is NO tone control on the real pedal, so RS
-// Gain maps to Fuzz and RS Tone is left unmapped (rs_knob_to_vst_param.json);
+// Gain maps to Attack and RS Tone is left unmapped (rs_knob_to_vst_param.json);
 // Volume sits at its musical default (no RS pedal-volume knob).
 enum BuzzToneParamId
 {
-    kFuzz = 0,
+    kAttack = 0,
     kVolume,
     kParamCount
 };
 
 static const char* const kBuzzToneNames[kParamCount] = {
-    "Fuzz",
+    "Attack",
     "Volume",
 };
 
 static const char* const kBuzzToneSymbols[kParamCount] = {
-    "fuzz",
+    "attack",
     "volume",
 };
 

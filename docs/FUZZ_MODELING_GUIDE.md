@@ -1,9 +1,15 @@
 # Fuzz Modeling Guide
 
+Estado: 2026-07-19
+
 This guide records the circuit and calibration rules learned while matching the
 Big Buzz and Buzz-Tone plugins to the supplied Big Muff and vintage-fuzz renders.
 It applies to guitar and bass fuzzes, but it is not a shared voicing preset: each
 pedal must retain the clipping mechanism, filtering and controls in its schematic.
+
+Apply [`REFERENCE_MATCHING_WORKFLOW.md`](REFERENCE_MATCHING_WORKFLOW.md) first.
+That document owns DI identity, alignment, calibration order, acceptance gates
+and deployment. This guide adds the topology-specific requirements for fuzz.
 
 ## 1. Preserve The Actual Nonlinear Topology
 
@@ -69,15 +75,50 @@ control position. At minimum measure:
 
 - RMS, peak and crest factor.
 - Envelope correlation and gain spread over 50 ms windows.
+- DI/output coherence by band, matched to the reference rather than minimized.
 - Spectral centroid plus octave/band energy.
 - Zero-crossing rate as a warning for duplicated high-pass filtering or fizz.
 - Sustain/Fuzz sweep direction and the change from minimum to noon to maximum.
 - Silence, impulse tail, finite output and maximum peak over an 11-point sweep.
 
-For the completed Big Buzz and Buzz-Tone pass, the 12 supplied renders ended at
-0.34 dB mean RMS error and 0.88 dB maximum RMS error. Those numbers validate
-level behavior only; spectrum, crest factor and decay still need independent
-checks.
+The 2026-07-19 Big Buzz pass used all nine combinations of Tone and Sustain at
+minimum/noon/maximum with the exact Brit DI. The final circuit uses:
+
+- DC-biased nodal 2N5133 models for Q4, both clipping cells and Q1.
+- C6/C7-coupled 1N914 pairs inside the Q3/Q2 collector-to-base feedback loops,
+  rather than output shunt clippers.
+- The schematic's R/C values in both tone branches. Do not add a second global
+  C9 high-pass before the tone network; that duplicate removed up to 7 dB below
+  180 Hz.
+- A 0.3% Sustain floor. The former 1.5% floor kept Q3/Q2 nonlinear at the panel
+  minimum and produced up to 12.1 dB excess high-frequency energy. At 0.3%,
+  DI/output coherence is within 0.01 of the minimum-Sustain references.
+- A branch-voltage tone approximation with measured centre loading. A fixed
+  three-node 70 k Q1 load was tested and rejected: it leaked the opposite branch
+  at both endpoints and made the noon notch 3 dB too deep. Keep the endpoint RC
+  values fixed and calibrate only their wiper interaction from all three renders.
+
+After post-circuit output calibration, eight of nine RMS errors are between
+-0.27 and +0.34 dB. The original dark/minimum interaction was corrected as a
+2D static trim instead of altering a nonlinear stage. RMS agreement alone is
+not sufficient: the accepted half/max settings also keep broad bands generally
+within 2 dB, crest within about 1.2 dB and mid/high coherence within 0.011.
+
+The 2026-07-17 Fuzz-Tone/FuzzRite reference set added two stronger anchors:
+
+- **Fuzz-Tone / FZ-1A:** the real control is `Attack`, not a generic output
+  gain. Minimum leaves Q2 near cutoff and preserves pick crest; maximum moves
+  Q2 into conduction and compression. On the 32 s DI, the min/noon/max target
+  RMS values are -24.07/-16.08/-12.57 dBFS. The calibrated model reaches
+  -24.07/-16.09/-12.57 dBFS with no active-window dropout. Do not invert Q2
+  bias or use envelope makeup to obtain that 11.5 dB sweep.
+- **FuzzRite:** Depth is a passive wiper between the direct C2 side and the
+  loaded C3/R8 side. Solving only 500 k against 22 k over-attenuates the loaded
+  endpoint and produces a dark, interrupted result because it ignores the
+  finite collector, coupling and Volume-pot impedances. The measured min/noon/
+  max RMS values are -9.57/-13.88/-14.15 dBFS; the calibrated model reaches
+  -9.61/-13.88/-14.15 dBFS. Keep C4 feedback below the sustained-note
+  cancellation point and verify complete active windows, not only finite output.
 
 The follow-up audit established topology regression anchors using a 220 Hz sine
 at 0.03 amplitude (110 Hz at 0.05 for bass). These are not universal fidelity
@@ -101,8 +142,9 @@ targets, but a future edit should explain a large change:
 - **Big Muff family:** two feedback-diode clipping stages, fixed passive tone
   branches and a recovery transistor. Sustain rises early and then compresses.
 - **Fuzz Rite:** two grounded-emitter stages coupled through the collector
-  feedback path. Depth reads between the loaded Q2-input node and the direct C2
-  side; verify its panel direction as well as its electrical interpolation. C4
+  feedback path. Depth reads from the direct C2 endpoint toward the loaded
+  Q2-input endpoint; verify its panel direction, taper and complete source/load
+  network rather than treating 500 k and 22 k as an isolated divider. C4
   feedback must remain audible.
 - **Fuzz Face / FZ-3 family:** transistor bias and shunt feedback create bloom
   and gating. Do not replace that behavior with output clipping.
@@ -123,7 +165,8 @@ targets, but a future edit should explain a large change:
 2. Identify every nonlinear, coupling, tone and recovery block.
 3. Verify controls and tapers against the real panel.
 4. Render the complete DI at minimum, noon and maximum settings.
-5. Correct circuit errors before adding any calibration curve.
-6. Run parameter sweeps and impulse/silence stability tests.
-7. Build in a fresh temporary directory.
-8. Install canonical and alias VST3 bundles, sign them and verify signatures.
+5. Compare coherence, harmonic growth, crest windows and note decay to reference.
+6. Correct circuit errors before adding any calibration curve.
+7. Run parameter sweeps and impulse/silence stability tests.
+8. Build in a fresh temporary directory.
+9. Install canonical and alias VST3 bundles, sign them and verify signatures.

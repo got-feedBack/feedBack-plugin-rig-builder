@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Render a WAV through one bundled DPF amp plugin source.
+"""Render a WAV through one bundled DPF amp or pedal plugin source.
 
 Usage:
-  python3 tools/render_amp_wav.py <amp_dir> <input.wav> <output.wav> [Param=Value ...]
+  python3 tools/render_amp_wav.py <effect_dir> <input.wav> <output.wav> [Param=Value ...]
 
-The amp_dir is a directory name under vst/src/amps, for example:
-  plexi, tw40, chieftain_unparallel
+The effect_dir defaults to a directory under vst/src/amps. Prefix pedal
+directories with ``pedals/``, for example:
+  plexi, tw40, pedals/phaser_363, pedals/dynamics_compression
 
 This intentionally compiles a tiny local host around the plugin source instead
 of using the desktop app, so DSP failures can be reproduced without preset/UI
@@ -23,6 +24,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 AMPS = ROOT / "vst" / "src" / "amps"
+PEDALS = ROOT / "vst" / "src" / "pedals"
 DPF_SRC = "../DPF/distrho/src/DistrhoPlugin.cpp"
 
 
@@ -103,6 +105,8 @@ static Audio readWav(const char* path) {
             channels = rd16(chunk.data() + 2);
             sampleRate = rd32(chunk.data() + 4);
             bits = rd16(chunk.data() + 14);
+            if (fmtTag == 0xfffe && size >= 40)
+                fmtTag = rd16(chunk.data() + 24); // WAVE_FORMAT_EXTENSIBLE subformat
             haveFmt = true;
         } else if (std::memcmp(chdr, "data", 4) == 0) {
             data.swap(chunk);
@@ -353,7 +357,13 @@ def main(argv: list[str]) -> int:
     if len(argv) < 3:
         print(__doc__.strip(), file=sys.stderr)
         return 2
-    amp_dir = AMPS / argv[0]
+    effect_name = argv[0]
+    if effect_name.startswith("pedals/"):
+        amp_dir = PEDALS / effect_name.removeprefix("pedals/")
+    elif effect_name.startswith("amps/"):
+        amp_dir = AMPS / effect_name.removeprefix("amps/")
+    else:
+        amp_dir = AMPS / effect_name
     in_wav = Path(argv[1]).resolve()
     out_wav = Path(argv[2]).resolve()
     info = parse_amp(amp_dir)

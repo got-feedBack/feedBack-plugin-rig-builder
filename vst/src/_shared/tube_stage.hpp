@@ -403,27 +403,50 @@ struct ToneStackYeh {
     void reset(){ x1=x2=x3=y1=y2=y3=0; }
 };
 
-// 5E3 Tweed Deluxe single TONE control — the REAL circuit (1M pot R10, 500pF treble
-// bypass C4, .0047uF C5 to gnd, loaded by the 1M next-stage grid leak), solved off the
-// '57 Deluxe schematic to a 2nd-order H(s), bilinear -> IIR. One knob `tone`: 10=bright
-// (flat), 0=dark with a mid scoop (the woofy tweed tone-down). Analog coeffs are
-// polynomials in the pot position p (derived in /tmp/tweed_tone.py).
+// 5E3 Tweed Deluxe single TONE control. C5 (4.7nF) is the dark shunt path and
+// C4 (500pF) is the treble path around the Instrument volume control. Their
+// effective source resistances come from the two loaded 1M controls and the
+// preceding 12AY7 plate. Keeping both RC paths separate is important: the old
+// polynomial transfer accidentally formed a mid notch at Tone=0 and left the
+// top octave almost unchanged, the opposite of the measured 5E3 response.
 struct TweedTone {
-    double b0=1,b1=0,b2=0,a1=0,a2=0, x1=0,x2=0,y1=0,y2=0;
+    LP1 c5Dark, c4Treble;
+    float lowGain = 1.0f, highGain = 1.0f;
     void update(float sr, float tone){
-        double p = tone < 0.02f ? 0.02 : (tone > 0.98f ? 0.98 : tone);
-        double pp = 47.0*p*(p-1.0);                       // shared s^2 coeff
-        double B2=pp, B1=-(84000.0*p+10000.0), B0=-20000000.0;
-        double A2=pp, A1=94000.0*p*p-84000.0*p-104000.0, A0=20000000.0*p-40000000.0;
-        double c=2.0*(double)sr, cc=c*c;                  // bilinear x(1+z^-1)^2
-        double n0=B2*cc+B1*c+B0, n1=2*B0-2*B2*cc, n2=B2*cc-B1*c+B0;
-        double d0=A2*cc+A1*c+A0, d1=2*A0-2*A2*cc, d2=A2*cc-A1*c+A0;
-        b0=n0/d0; b1=n1/d0; b2=n2/d0; a1=d1/d0; a2=d2/d0;
+        const float p = PotTaper::clamp01(tone);
+        constexpr float c5 = 4.7e-9f;
+        constexpr float c4 = 500.0e-12f;
+        constexpr float darkSource = 100000.0f;
+        constexpr float trebleSource = 330000.0f;
+        c5Dark.set(sr, 1.0f / (2.0f * kPi * darkSource * c5));
+        c4Treble.set(sr, 1.0f / (2.0f * kPi * trebleSource * c4));
+
+        // Noon is the neutral reference point. Below it C5 progressively
+        // grounds treble; above it C4 bypasses the Instrument volume path while
+        // the loaded 1M network trims bass. The endpoints follow the measured
+        // direct 5E3 sweep without introducing a post-amp cabinet EQ.
+        constexpr float noon = 0.44f;
+        float lowDb, highDb;
+        if (p <= noon) {
+            const float q = p / noon;
+            lowDb = 4.0f * (1.0f - q);
+            highDb = -39.0f * (1.0f - q);
+        } else {
+            const float q = (p - noon) / (1.0f - noon);
+            lowDb = -5.5f * q;
+            highDb = 8.0f * q;
+        }
+        lowGain = std::pow(10.0f, lowDb / 20.0f);
+        highGain = std::pow(10.0f, highDb / 20.0f);
     }
     inline float process(float x){
-        double y=b0*x+b1*x1+b2*x2-a1*y1-a2*y2; x2=x1;x1=x;y2=y1;y1=y; return dn((float)y);
+        const float low = c5Dark.process(x);
+        float y = x + (lowGain - 1.0f) * low;
+        const float high = y - c4Treble.process(y);
+        y += (highGain - 1.0f) * high;
+        return dn(y);
     }
-    void reset(){ x1=x2=y1=y2=0; }
+    void reset(){ c5Dark.reset(); c4Treble.reset(); }
 };
 
 // One real cathode-biased triode gain stage (Guitarix `tubestageF` topology, our tables).

@@ -113,6 +113,10 @@ class PlanePhaseCore
     float rate = kPlanePhaseDef[kRate];
     float depth = kPlanePhaseDef[kDepth];
     float mix = kPlanePhaseDef[kMix];
+    float rateTarget = kPlanePhaseDef[kRate];
+    float depthTarget = kPlanePhaseDef[kDepth];
+    float mixTarget = kPlanePhaseDef[kMix];
+    float controlA = 0.0f;
 
     FirstOrderAllpass stages[kStageCount];
     OnePoleFilter inputHp;
@@ -129,7 +133,10 @@ class PlanePhaseCore
         inputHp.setHighPass(sampleRate, 32.0f);
         driveTone.setLowPass(sampleRate, 13000.0f);
         outputLp.setLowPass(sampleRate, 11000.0f);
-        lfoLag.setLowPass(sampleRate, 7.5f + 20.0f * rate);
+        // The AP-7 control network has a fixed settling time. Keeping this
+        // pole independent of Rate also avoids coefficient jumps on presets.
+        lfoLag.setLowPass(sampleRate, 13.0f);
+        controlA = onePoleCoeffHz(12.0f, sampleRate);
     }
 
     float currentRateHz() const
@@ -156,6 +163,9 @@ public:
     {
         lfoPhase = phaseOffset;
         feedback = env = 0.0f;
+        rate = rateTarget;
+        depth = depthTarget;
+        mix = mixTarget;
         for (int i = 0; i < kStageCount; ++i)
             stages[i].reset();
         inputHp.reset();
@@ -173,24 +183,25 @@ public:
 
     void setRate(float v)
     {
-        rate = clamp01(v);
-        updateFilters();
+        rateTarget = clamp01(v);
     }
 
     void setDepth(float v)
     {
-        depth = clamp01(v);
-        updateFilters();
+        depthTarget = clamp01(v);
     }
 
     void setMix(float v)
     {
-        mix = clamp01(v);
-        updateFilters();
+        mixTarget = clamp01(v);
     }
 
     float process(float in)
     {
+        rate += controlA * (rateTarget - rate);
+        depth += controlA * (depthTarget - depth);
+        mix += controlA * (mixTarget - mix);
+
         lfoPhase += currentRateHz() / sampleRate;
         if (lfoPhase >= 1.0f)
             lfoPhase -= std::floor(lfoPhase);
@@ -263,7 +274,7 @@ protected:
     const char* getDescription() const override { return "AP-7 style eight-stage phaser"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('P', 'l', 'P', 'h'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

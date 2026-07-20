@@ -1,6 +1,6 @@
 # Guía de modelado circuit-real para chorus y phasers
 
-Estado: 2026-07-15
+Estado: 2026-07-19
 
 Esta guía documenta el método aprendido al rehacer y calibrar el Boss CE-1,
 MXR Phase 90, Ibanez PH99, Boss PH-1R y Roland AP-7. El objetivo es que los
@@ -12,6 +12,11 @@ La regla principal es:
 > El esquema define la topología y los controles. Las referencias de audio
 > calibran los comportamientos que el papel no describe por completo. No se
 > deben copiar las constantes de un pedal a otro.
+
+Esta guía complementa el workflow obligatorio de
+[`REFERENCE_MATCHING_WORKFLOW.md`](REFERENCE_MATCHING_WORKFLOW.md). El workflow
+común define identidad del DI, alineación, ventanas y gates; aquí se agregan las
+mediciones de delay, LFO, notches, feedback y matriz estéreo.
 
 ## 1. Qué significa traducir un esquema a DSP
 
@@ -349,7 +354,45 @@ La linea MN3207 usa interpolacion cubica para evitar aspereza al mover el
 cabezal. Rate y Depth tienen 12 ms de smoothing. Bypass debe ser dry a unidad y
 los dos canales de un pedal mono deben compartir exactamente el mismo LFO.
 
-### 4.3 Uni-Vibe y Deja Chorus
+### 4.3 CE-2, 134, CE-5, CEB-3 y Clone Theory
+
+La auditoria de los chorus restantes encontro un error estructural repetido:
+varios modelos fabricaban estereo instanciando dos BBD con LFO distintos aunque
+el esquema mostraba una sola linea de retardo. Eso cambia el movimiento, el
+ruido y la correlacion, y no representa las salidas fisicas del pedal.
+
+Reglas aplicadas:
+
+- CE-2 usa un MN3007, filtros RC fijos y un sumador dry/BBD. Depth modifica el
+  reloj, no el corte de los filtros.
+- MXR 134 usa un MN3009 y genera estereo con la matriz dry+wet / dry-wet. No son
+  dos chorus independientes.
+- CE-5 y CEB-3 usan un ES56028S. Output A entrega dry+effect y Output B entrega
+  el camino directo del mismo circuito.
+- Clone Theory usa un MN3007 y una salida fisica. En el host estereo se duplica
+  esa salida mono; no se inventa un segundo BBD desfasado.
+- No se aplica un seguidor de envolvente tipo compander donde el esquema no lo
+  contiene. El modelo anterior podia convertirlo en pumping audible.
+- Los cabezales moviles usan interpolacion cubica y los controles continuos
+  tienen 12 ms de smoothing para evitar zipper y saltos de delay.
+
+Una segunda calibracion encontro que los tapers de Effect Level eran demasiado
+conservadores: en CE-5 el ajuste por defecto dejaba solo 0.28 de wet y en CEB-3
+aproximadamente 0.41. Tras las pruebas auditivas, los tapers definitivos dejan
+residuos modulados de 0.57 y 0.60 respectivamente. El MXR 134 pasa de 0.33 a
+0.49, manteniendo su matriz estereo real.
+
+Rate tampoco debe concentrar casi todo su recorrido al final. Los rangos
+minimo/mitad/maximo quedan aproximadamente en 0.22/0.95/4.51 Hz para CE-5,
+0.20/0.95/5.0 Hz para CEB-3 y 0.14/0.84/4.48 Hz para MXR 134. Asi el chorus se
+percibe en ajustes bajos sin convertir el ultimo cuarto en vibrato extremo.
+
+La prueba con el DI comun no produjo dropouts ni clipping en los extremos. El
+ruido propio a controles maximos queda aproximadamente entre -99.7 y -111.3
+dBFS segun el modelo, en vez del rango anterior de -67 a -83 dBFS. En CE-5 y
+CEB-3, Effect Level minimo conserva el camino directo en ambas salidas.
+
+### 4.4 Uni-Vibe y Deja Chorus
 
 Fuentes:
 
@@ -357,18 +400,20 @@ Fuentes:
 - `pedals/chorus 20/ElectroVibe-PedalPCB.pdf`;
 - `pedals/chorus 20/www_pisotones.pdf`;
 - tres renders en `test logic/univibe/`;
-- nueve renders en `test logic/dejavibe/`.
+- seis renders nuevos en `test logic/dejavibe/`.
 
-Ambos modelos conservan el preamp, la lampara con inercia, las cuatro LDR y las
-cuatro celdas all-pass con 15 nF, 220 nF, 470 pF y 4.7 nF. No se agrega feedback
-ni saturacion entre celdas: esas rutas no aparecen en el circuito y deformaban
-la envolvente sin mejorar el barrido.
+Los dos modelos conservan el preamp, la lampara con inercia, las cuatro LDR y
+los capacitores de 15 nF, 220 nF, 470 pF y 4.7 nF. Ambos usan por etapa las
+ecuaciones de colector, emisor, realimentacion y forma BJT de
+Guitarix/Rakarrack con los valores del ElectroVibe; el Uni-Vibe ya no usa cuatro
+all-pass ideales. No se agrega feedback entre etapas que no aparezca en el
+circuito.
 
-Las referencias DejaVibe fijan Speed cerca de 0.10, 4.95 y 10.0 Hz. En este
-caso el recorrido normalizado es practicamente lineal; la curva anterior daba
-0.07, 1.71 y 6.87 Hz. Intensity minimo entrega la ruta seca, mientras que la
-excursion optica llega casi a su rango completo cerca de la mitad. La lampara y
-la LDR siguen aportando el ataque y recuperacion asimetricos.
+Las referencias DejaVibe nuevas incluyen posiciones 0/2/5/7/10 y miden cerca de
+1.0/2.3/4.5/5.9/8.0 Hz. Por eso Speed usa ahora el recorrido practicamente
+lineal `1 + 7*x` Hz. Intensity alcanza el recorrido optico completo alrededor
+de la mitad, pero su ganancia de salida conserva un taper convexo separado; la
+lampara y la LDR siguen aportando ataque y recuperacion asimetricos.
 
 No basta con ajustar el RMS para validar esta etapa. Con las constantes opticas
 genericas de 20/75 ms para la lampara y 12/90 ms para la LDR, el nivel podia
@@ -377,18 +422,37 @@ renders requieren 5/18 ms para la lampara y 3/22 ms para la celda. La validacion
 final mide la fundamental de la ganancia por bandas y confirma aproximadamente
 0.10/5.0/10.0 Hz, ademas del nivel y espectro.
 
-La suma Chorus usa ramas dry y all-pass de igual peso. A medida que aumenta la
-velocidad cambia la cancelacion media del barrido, por lo que la etapa de salida
-se calibra estaticamente contra la grilla. No se usa un normalizador dependiente
-de la senal. Los parametros continuos tienen 12 ms de smoothing y Deja Chorus
-limita solamente los picos que exceden el rail digital observado en los renders.
+La propia etapa transistor contiene contribuciones de emisor y colector para
+formar la transferencia de cada etapa, pero eso no reemplaza el mezclador
+seco/desfasado posterior. Deja Chorus usa 0.35/0.65 para formar los notches sin
+caer en el tremolo de una suma 50/50. El Uni-Vibe canonico conserva una rama
+directa sustractiva de 0.18 contra la escalera; Intensity mueve solo la
+trayectoria optica, no el dry/wet ni el makeup. Asi la correlacion medida avanza
+aproximadamente de -0.65 a -0.13 sin variar el nivel general.
 
-Resultado RMS por canal usando el mismo DI:
+La traduccion luz/resistencia se ajusta al recorrido operativo de 10-250 kOhm
+documentado en Guitarix; antes la celda quedaba pegada cerca de 10 kOhm durante
+gran parte del ciclo. Tambien se elimino el low-pass sustractivo de salida que
+oscurecia el resultado sin aparecer en la topologia de referencia. Los
+parametros continuos conservan 12 ms de smoothing y los coeficientes de etapa se
+actualizan cada cuatro muestras, como en la implementacion de referencia.
+
+La etapa de salida conserva el tilt medido en las referencias: graves levemente
+atenuados y presencia/aire abiertos. Ese EQ queda despues del mezclador para no
+cambiar la excursion de las LDR.
+
+Resultado RMS por canal usando el mismo DI y las referencias nuevas:
 
 | Modelo | Puntos | Error medio | Error maximo |
 |---|---:|---:|---:|
-| Uni-Vibe | 3 | 0.177 dB | 0.256 dB |
-| Deja Chorus | 9 | 0.230 dB | 0.535 dB |
+| Uni-Vibe | 3 | 0.25 dB | 0.43 dB |
+| Deja Chorus | 6 | 0.29 dB | 0.73 dB |
+
+Ademas del RMS se validan peak y correlacion. En Uni-Vibe, el RMS permanece
+cerca de -27.2 dBFS en las tres intensidades y la correlacion cambia por la fase,
+no por una automatizacion de volumen. En Deja Chorus, los cinco renders de
+Intensity maxima quedan cerca de -24.4 dBFS y el render medio cerca de
+-27.9 dBFS, sin clipping digital.
 
 El Uni-Vibe original expone Volume e Intensity en el chasis; Speed corresponde
 al pedal externo. Por compatibilidad, Speed conserva su id y el mapeo de
@@ -402,7 +466,7 @@ resuelven al mismo `Multi-Vibe.vst3` y al mismo canvas Uni-Vibe; los nombres de
 bundle `OmniMod.vst3` y `UniMod.vst3` solo se conservan como rutas de migracion.
 El `VB-2.vst3` sigue separado porque es un vibrato BBD, no este circuito optico.
 
-### 4.4 Limites para otros vibes
+### 4.5 Limites para otros vibes
 
 Las referencias anteriores tambien sirven como limites para modelos sin renders
 propios, pero no justifican convertir todos los efectos en el mismo circuito:
@@ -616,6 +680,13 @@ El compander se representa como ganancia de compresión antes del all-pass y su
 inversa después. Su función principal es mejorar ruido/rango dinámico, no crear
 la distorsión del pedal.
 
+Correccion de estabilidad 2026-07-17: Speed, Depth, Feedback y Level deben
+suavizarse dentro del core. Aplicarlos directamente por bloque no produce
+clipping en un preset fijo, pero al cargar estados o automatizar generaba saltos
+entre muestras de hasta 0.162 y breves cortes al mover Level. Con smoothing de
+12 Hz el salto maximo medido bajo conmutacion extrema queda en 0.032, sin
+dropouts ni alterar la topologia de seis etapas o el compander.
+
 ### 6.3 Boss PH-1R
 
 Fuente: `pedals/boss_ph-1r_phaser_pedal.png` y datasheets locales TL022,
@@ -672,6 +743,12 @@ El DSP anterior sumaba niveles dry/wet de hasta aproximadamente 1.58 antes de
 otro `tanh`; Mix máximo subía cerca de +5.65 dB. La mezcla corregida hace un
 crossfade acotado entre dry y all-pass y mantiene el carácter jet mediante el
 feedback, no mediante boost.
+
+Correccion de estabilidad 2026-07-17: Rate, Depth y Mix ahora tienen smoothing
+de 12 Hz dentro del core. El cambio directo de parametros producia saltos de
+hasta 0.142 al cargar presets aunque cada posicion fija midiera sin clipping.
+La misma prueba dinamica queda en 0.040, sin discontinuidades mayores a 0.08,
+clipping ni dropouts.
 
 ### 6.5 Deluxe Electric Mistress
 
@@ -857,25 +934,19 @@ Electric Mistress queda cerca de 0.33 dB medio y 0.87 dB maximo en 14 puntos.
 
 ### 7.4 Harness local
 
-El harness actual está en `tools/render_amp_wav.py`, pero puede apuntarse a
-`vst/src/pedals`:
+`tools/render_amp_wav.py` acepta directamente el prefijo `pedals/`:
 
 ```sh
 cd rig_builder
-python3 -c '
-import sys
-from pathlib import Path
-import tools.render_amp_wav as r
-r.AMPS = Path("vst/src/pedals")
-raise SystemExit(r.main(sys.argv[1:]))
-' phaser_363 \
+python3 tools/render_amp_wav.py pedals/phaser_363 \
   '../test logic/ce1_ref/brit_di.wav' \
   /private/tmp/phase90.wav \
   'Rate=0.5'
 ```
 
 El render imprime RMS, peak, clipping, near-zero y ventanas de dropout. Repetir
-para todos los puntos de la grilla.
+para todos los puntos de la grilla y pasar cada salida por
+`tools/compare_amp_reference.py` con su DI y referencia exactos.
 
 ### 7.5 Gates de aceptación
 
@@ -934,6 +1005,7 @@ Antes de desplegar:
 - [ ] No inventé estéreo para una salida mono.
 - [ ] No usé saturación o makeup para hacer audible un error de fase.
 - [ ] Feedback máximo permanece estable.
+- [ ] Cambios de preset y automatizacion no producen discontinuidades.
 - [ ] Medí nivel, notches, espectro, pumping, clipping y dropouts.
 
 ## 11. Criterio para reutilizar código

@@ -107,6 +107,11 @@ class BassPhaseCore
     float depth = kBassPhaseDef[kDepth];
     float feedbackKnob = kBassPhaseDef[kFeedback];
     float level = kBassPhaseDef[kLevel];
+    float speedTarget = kBassPhaseDef[kSpeed];
+    float depthTarget = kBassPhaseDef[kDepth];
+    float feedbackTarget = kBassPhaseDef[kFeedback];
+    float levelTarget = kBassPhaseDef[kLevel];
+    float controlA = 0.0f;
     float phaseOffset = 0.0f;
 
     FirstOrderAllpass stages[kStageCount];
@@ -131,6 +136,7 @@ class BassPhaseCore
         lfoLagA.setLowPass(sampleRate, 10.0f);
         lfoLagB.setLowPass(sampleRate, 8.5f);
         compEnv.setLowPass(sampleRate, 18.0f);
+        controlA = onePoleCoeffHz(12.0f, sampleRate);
     }
 
     float currentRateHz() const
@@ -150,6 +156,10 @@ public:
         lfoPhase = phaseOffset;
         feedbackState = 0.0f;
         companderGain = 1.0f;
+        speed = speedTarget;
+        depth = depthTarget;
+        feedbackKnob = feedbackTarget;
+        level = levelTarget;
         for (int i = 0; i < kStageCount; ++i)
             stages[i].reset();
         inputHp.reset();
@@ -170,29 +180,31 @@ public:
 
     void setSpeed(float v)
     {
-        speed = clamp01(v);
-        updateFilters();
+        speedTarget = clamp01(v);
     }
 
     void setDepth(float v)
     {
-        depth = clamp01(v);
-        updateFilters();
+        depthTarget = clamp01(v);
     }
 
     void setFeedback(float v)
     {
-        feedbackKnob = clamp01(v);
-        updateFilters();
+        feedbackTarget = clamp01(v);
     }
 
     void setLevel(float v)
     {
-        level = clamp01(v);
+        levelTarget = clamp01(v);
     }
 
     float process(float in)
     {
+        speed += controlA * (speedTarget - speed);
+        depth += controlA * (depthTarget - depth);
+        feedbackKnob += controlA * (feedbackTarget - feedbackKnob);
+        level += controlA * (levelTarget - level);
+
         lfoPhase += currentRateHz() / sampleRate;
         if (lfoPhase >= 1.0f)
             lfoPhase -= std::floor(lfoPhase);
@@ -285,7 +297,7 @@ protected:
     const char* getDescription() const override { return "Ibanez PH99 style opto phaser"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 2, 0); }
+    uint32_t getVersion() const override { return d_version(1, 3, 0); }
     int64_t getUniqueId() const override { return d_cconst('R', 'B', 'P', 'h'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

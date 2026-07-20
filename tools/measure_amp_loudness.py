@@ -141,6 +141,11 @@ CHANNEL_PROFILES = {
         {"name": "channel_one", "fixed": {"Channel": 0.0}, "gain": ["Ch1 Preamp"], "vol": ["Ch1 Master"]},
         {"name": "aor", "fixed": {"Channel": 1.0}, "gain": ["AOR Preamp"], "vol": ["AOR Master"]},
     ],
+    "en30": [
+        {"name": "normal", "fixed": {"Input": 0.0}, "gain": ["Normal Vol"], "vol": ["Master"]},
+        {"name": "top_boost", "fixed": {"Input": 1.0}, "gain": ["TB Vol"], "vol": ["Master"]},
+        {"name": "both", "fixed": {"Input": 0.5}, "gain": ["TB Vol"], "vol": ["Normal Vol", "Master"]},
+    ],
     "dc30_unparallel": [
         {"name": "brilliant", "fixed": {"Channel": 0.0}, "gain": ["Ch1 Volume"], "vol": ["Master"]},
         {"name": "ef86", "fixed": {"Channel": 1.0}, "gain": ["Ch2 Volume"], "vol": ["Master"]},
@@ -204,6 +209,11 @@ CHANNEL_PROFILES = {
     "tw22": [
         {"name": "vintage", "fixed": {"Channel": 0.0}, "gain": ["Vint Vol"], "vol": []},
         {"name": "burn", "fixed": {"Channel": 1.0}, "gain": ["Gain 1", "Gain 2"], "vol": ["Burn Vol"]},
+    ],
+    "tw40": [
+        {"name": "bright", "fixed": {"Input": 0.0}, "gain": ["Bright Vol"], "vol": []},
+        {"name": "both", "fixed": {"Input": 0.5}, "gain": ["Bright Vol"], "vol": ["Normal Vol"]},
+        {"name": "normal", "fixed": {"Input": 1.0}, "gain": ["Normal Vol"], "vol": []},
     ],
     "vh140_sampleg": [
         {"name": "channel_a", "fixed": {"Channel": 0.0}, "gain": ["A Gain"], "vol": ["A Level"]},

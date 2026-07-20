@@ -1,7 +1,7 @@
 /*
  * BOX AC30 - AC30 Top Boost-style amp for the game's Amp_EN30.
  *
- * DPF wrapper (VST3 + AU). All the DSP lives in EN30Core.h (plain C++,
+ * DPF wrapper (VST3 + AU). All the DSP lives in BoxDC30Core.h (plain C++,
  * offline-testable); see that header for the circuit topology and schematic refs.
  *
  * STEREO I/O, single mono core: the amp IS a mono device, so it runs ONE EN30Core
@@ -41,14 +41,13 @@ class EN30Plugin : public Plugin
     rbshared::Oversampler4x os;                 // 4x anti-alias around the nonlinear chain
     static constexpr int kOS = rbshared::Oversampler4x::OS;
     float osr = 96000.0f;
-    En30Bq scoop;                               // Top-Boost upper-mid scoop (ref consensus)
+    En30Bq scoop;                               // retained as a neutral compatibility stage
 
     void applyAll()
     {
-        // The AC30 Top Boost is upper-mid scooped (the ac30 reference is hm ~-5; the
-        // UAD "ruby" ref ~0) -> a gentle ~1.7 kHz dip that scales with the Top Boost
-        // weight (Input): Normal flat, Top Boost the full scoop. Lands hm ~-3 (consensus).
-        scoop.peak(osr, 1850.0f, -4.0f * params[kInput], 1.15f);
+        // The new direct Ruby renders already isolate the amp from its cabinet
+        // and show no separate 1.85 kHz notch beyond the real Top Boost stack.
+        scoop.peak(osr, 1850.0f, 0.0f, 1.15f);
         core.setNormalVol(params[kNormalVol]);
         core.setTBVol(params[kTBVol]);
         core.setTreble(params[kTreble]);
@@ -80,7 +79,7 @@ protected:
     const char* getDescription() const override { return "BOX AC30 / AC30 Top Boost style amp"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 0, 2); }
+    uint32_t getVersion() const override { return d_version(1, 5, 0); }
     int64_t getUniqueId() const override { return d_cconst('E', 'n', '3', '0'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -121,13 +120,16 @@ protected:
         const float* in0 = inputs[0];
         float* outL = outputs[0];
         float* outR = outputs[1];
+        const float makeup = core.outputMakeup();
         for (uint32_t i = 0; i < frames; ++i)
         {
             float ub[kOS];
             os.upsample(3.2f * in0[i], ub);
             for (int k = 0; k < kOS; ++k)                  // core + Top-Boost scoop + soft-clip at 4x
                 ub[k] = rbAmpLvl(0.89f * scoop.process(core.process(ub[k])));
-            const float y = os.downsample(ub);
+            // Level trim is strictly linear and AFTER every nonlinear block,
+            // including rbAmpLvl, so flattening Volume cannot alter distortion.
+            const float y = os.downsample(ub) * makeup;
             outL[i] = y;
             outR[i] = y;   // dual-mono: one core, same signal both sides = centered/balanced
         }

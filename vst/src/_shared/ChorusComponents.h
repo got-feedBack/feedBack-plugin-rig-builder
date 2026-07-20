@@ -284,6 +284,125 @@ public:
     }
 };
 
+// One transistor/LDR phase stage from the Uni-Vibe signal path. This follows
+// the component-domain transfer used by Guitarix/Rakarrack: collector,
+// emitter-load and collector-output networks are solved separately, then the
+// BJT stage combines them. It is intentionally not an ideal all-pass filter.
+class TransistorVibeStage
+{
+    struct OnePole
+    {
+        float x1 = 0.0f;
+        float y1 = 0.0f;
+        float n0 = 0.0f;
+        float n1 = 0.0f;
+        float d1 = 0.0f;
+
+        void reset() { x1 = y1 = 0.0f; }
+
+        float process(float x)
+        {
+            const float y = x * n0 + x1 * n1 - y1 * d1;
+            x1 = x;
+            y1 = y;
+            return y;
+        }
+    };
+
+    float sampleRate = 48000.0f;
+    float cap = 15.0e-9f;
+    float oldCollector = 0.0f;
+    float emitterFeedback = 0.0f;
+    unsigned int updateCounter = 0;
+    OnePole vc;
+    OnePole vcvo;
+    OnePole ecvc;
+    OnePole vevo;
+
+    static float bjtShape(float x)
+    {
+        float vin = clamp(7.5f * (1.0f + x), 0.0f, 15.0f);
+        const float vbe = 0.8f - 0.8f / (vin + 1.0f);
+        return (vin - vbe) * 0.1333333333f - 0.90588f;
+    }
+
+    static void setPole(OnePole& p, float n1s, float n0s,
+                        float d1s, float d0s)
+    {
+        const float norm = 1.0f / (d1s + d0s);
+        p.n1 = norm * (n0s - n1s);
+        p.n0 = norm * (n1s + n0s);
+        p.d1 = norm * (d0s - d1s);
+    }
+
+    void updateCoefficients(float ldrOhms)
+    {
+        const float r1 = 4700.0f;
+        const float ldr = clamp(ldrOhms, 10000.0f, 400000.0f);
+        const float rv = 4700.0f + ldr;
+        const float c2 = 1.0e-6f;
+        const float beta = 150.0f;
+        const float transistorGain = -beta / (beta + 1.0f);
+        const float k = 2.0f * sampleRate;
+        const float rSum = r1 + rv;
+        const float cSum = c2 + cap;
+
+        const float ed1 = k * rSum * cap;
+        const float ed0 = 1.0f + cap / c2;
+        const float en1 = k * r1 * cap;
+        setPole(vevo, en1, 1.0f, ed1, ed0);
+
+        const float cd1 = ed1;
+        const float cd0 = 1.0f + cap / c2;
+        const float cn1 = k * transistorGain * rv * cap;
+        const float cn0 = transistorGain * (1.0f + cap / c2);
+        setPole(vc, cn1, cn0, cd1, cd0);
+
+        const float ecd1 = k * cd1 * c2 / cSum;
+        const float ecn1 = k * transistorGain * r1 * cd1 * c2 / (rv * cSum);
+        setPole(ecvc, ecn1, 0.0f, ecd1, 1.0f);
+
+        const float od1 = k * rv * c2;
+        const float od0 = 1.0f + c2 / cap;
+        setPole(vcvo, od1, 1.0f, od1, od0);
+        emitterFeedback = 25.0f / ldr;
+    }
+
+public:
+    void setSampleRate(float sr)
+    {
+        sampleRate = sr > 1000.0f ? sr : 48000.0f;
+    }
+
+    void setCap(float farads)
+    {
+        cap = farads > 10.0e-12f ? farads : 10.0e-12f;
+    }
+
+    void reset()
+    {
+        vc.reset();
+        vcvo.reset();
+        ecvc.reset();
+        vevo.reset();
+        oldCollector = 0.0f;
+        emitterFeedback = 0.0f;
+        updateCounter = 0;
+    }
+
+    float process(float input, float ldrOhms)
+    {
+        if ((updateCounter++ & 3u) == 0u)
+            updateCoefficients(ldrOhms);
+        const float collector = ecvc.process(input)
+                              + vc.process(input + emitterFeedback * oldCollector);
+        const float collectorOut = vcvo.process(collector);
+        oldCollector = collectorOut;
+        const float emitterOut = vevo.process(input);
+        return bjtShape(collectorOut + emitterOut);
+    }
+};
+
 class LampLdrModel
 {
     float sampleRate = 48000.0f;

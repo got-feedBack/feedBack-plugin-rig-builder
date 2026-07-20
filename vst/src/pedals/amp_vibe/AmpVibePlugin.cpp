@@ -33,9 +33,11 @@ class AmpVibeCore
     rbmod::HighPass inputHp;
     rbmod::LowPass inputLp;
     rbmod::LowPass outputLp;
+    rbmod::LowPass toneLp;
+    rbmod::LowPass airLp;
     rbmod::HighPass outputHp;
     rbmod::LampLdrModel lamp;
-    rbmod::FirstOrderAllPass stages[4];
+    rbmod::TransistorVibeStage stages[4];
 
     float currentRateHz() const
     {
@@ -46,8 +48,9 @@ class AmpVibeCore
 
     void configureStages()
     {
-        // ElectroVibe/Uni-Vibe phase network caps; the LDR resistance does the
-        // actual sweep and stage mismatch gives the asymmetric swirl.
+        // ElectroVibe/Uni-Vibe phase network caps. Use the component-domain
+        // transistor stages rather than ideal all-pass sections so collector,
+        // emitter loading and the real stage magnitude are retained.
         stages[0].setCap(15.0e-9f);
         stages[1].setCap(220.0e-9f);
         stages[2].setCap(470.0e-12f);
@@ -61,6 +64,8 @@ class AmpVibeCore
         inputHp.setHz(28.0f, sampleRate);
         inputLp.setHz(13000.0f, sampleRate);
         outputLp.setHz(11000.0f, sampleRate);
+        toneLp.setHz(700.0f, sampleRate);
+        airLp.setHz(4500.0f, sampleRate);
         outputHp.setHz(18.0f, sampleRate);
     }
 
@@ -70,6 +75,8 @@ public:
         inputHp.reset();
         inputLp.reset();
         outputLp.reset();
+        toneLp.reset();
+        airLp.reset();
         outputHp.reset();
         lamp.reset();
         for (int i = 0; i < 4; ++i)
@@ -112,13 +119,18 @@ public:
             phase -= std::floor(phase);
 
         const float lfo = 0.5f + 0.5f * std::sin(rbmod::kTwoPi * phase);
-        // The reference is dry at Intensity minimum and reaches nearly full
-        // optical excursion by noon. Lamp/LDR inertia supplies the asymmetry.
-        const float inten = 1.0f - std::exp(-5.0f * rbmod::clamp01(intensityNow));
-        const float drive = rbmod::clamp01(0.10f + inten * (0.16f + 0.74f * lfo));
+        // Intensity changes optical excursion, not dry/wet balance. The new
+        // references retain the same long-term spectrum and level at minimum,
+        // half and maximum while their phase trajectory changes.
+        const float inten = rbmod::clamp01(intensityNow);
+        // Keep the lamp inside the measured optical window. The previous
+        // 0.26..1.00 maximum-intensity drive crossed the all-pass phase range
+        // more than once, making the correlation reverse direction above
+        // half Intensity. The references move monotonically from the static
+        // phase path toward the wider sweep.
+        const float drive = rbmod::clamp01(0.15f + inten * (0.06f + 0.10f * lfo));
         const float light = lamp.processLight(drive);
 
-        const float dryIn = in;
         float x = inputHp.process(in);
         x = inputLp.process(x);
         preBias += 0.00050f * (x - preBias);
@@ -126,26 +138,37 @@ public:
         x = rbmod::softClip(x * 1.08f) / 1.08f;
 
         const float ldrR = rbmod::LampLdrModel::nsl7530Resistance(light);
-        const float spread[4] = { 1.00f, 0.84f, 1.22f, 0.94f };
+        const float spread[4] = { 1.00f, 0.92f, 1.10f, 0.97f };
         float wet = x;
         for (int i = 0; i < 4; ++i)
         {
-            const float stageR = 4700.0f + 0.35f * ldrR * spread[i];
-            wet = stages[i].process(wet, stageR);
+            wet = stages[i].process(wet, ldrR * spread[i]);
         }
 
         wet = outputLp.process(wet);
         dc += 0.00035f * (wet - dc);
         wet -= dc;
 
-        const float chorus = 0.52f * x + 0.52f * wet;
-        const float effectDepth = 0.84f * inten;
-        float y = dryIn + effectDepth * (chorus - dryIn);
+        // The canonical two-control Uni-Vibe reference is the phase path. A
+        // dry crossfade made minimum Intensity behave like bypass and changed
+        // level by almost 5 dB across the knob, neither of which is present in
+        // the reference renders.
+        // Chorus output is the phase ladder summed against a smaller direct
+        // branch. The fixed subtractive branch sets the reference's negative
+        // correlation; Intensity only changes the optical trajectory.
+        float y = wet - 0.18f * x;
 
-        // Per-channel renders put the dry minimum near -2 dB and the working
-        // intensity range roughly 4.5 dB above it. Keep that fixed calibration
-        // separate from the real 100 k audio Volume pot.
-        const float characterGain = 0.633f + 1.50f * inten;
+        // Fixed preamp/output voicing measured in all three references. It is
+        // independent of Intensity: low frequencies are lightly attenuated,
+        // while the upper presence and air remain open.
+        const float low = toneLp.process(y);
+        y = 0.74f * low + 1.15f * (y - low);
+        const float airBase = airLp.process(y);
+        const float airGain = 3.42f - 1.28f * inten;
+        y = airBase + airGain * (y - airBase);
+
+        const float gainDb = 0.28f - 0.81f * inten + 2.14f * inten * inten;
+        const float characterGain = std::pow(10.0f, gainDb / 20.0f);
         const float defaultTaper = rbmod::audioTaper(kAmpVibeDef[kVolume]);
         const float outGain = rbmod::audioTaper(volumeNow) / defaultTaper;
         y = outputHp.process(y);
@@ -187,7 +210,7 @@ protected:
     const char* getDescription() const override { return "Uni-Vibe style optical modulation"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 2, 0); }
+    uint32_t getVersion() const override { return d_version(1, 3, 0); }
     int64_t getUniqueId() const override { return d_cconst('A', 'm', 'V', 'b'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

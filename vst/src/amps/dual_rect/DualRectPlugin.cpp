@@ -2,9 +2,9 @@
  * DualRect - Mesa/Boogie 3-Channel Dual Rectifier Solo Head for the game's
  * Amp_CA100. DPF/VST3 wrapper; DSP in DualRectCore.h (circuit-real on the shared
  * framework, CONTROLLED gain staging per channel). Rewritten from the over-gained
- * 6-stage cascade that saturated every signal to ~100% THD.
+ * 6-stage approximation that saturated every signal to ~100% THD.
  *
- * STEREO I/O, single mono core -> both outputs (dual-mono); 2x oversampling.
+ * STEREO I/O, single mono core -> both outputs (dual-mono); 4x oversampling.
  */
 #include "DistrhoPlugin.hpp"
 #include "DualRectParams.h"
@@ -22,12 +22,14 @@ static constexpr float kDualRectMakeup = 0.50f;
 class DualRectPlugin : public Plugin {
     dualrect::DualRectCore core;
     float fParams[kParamCount];
+    float inputCalibration = 1.0f;
     rbshared::Oversampler4x os;
     static constexpr int kOS = rbshared::Oversampler4x::OS;
 
     void applyAll(){
         const float chv = fParams[kChannel];
         const int ch = (chv < 0.34f) ? 0 : (chv < 0.67f) ? 1 : 2;   // Green / Orange / Red
+        inputCalibration = ch == 0 ? 1.0f : 3.2f;
         const int base = (ch==0) ? kC1Gain : (ch==1) ? kC2Gain : kC3Gain;
         core.setChannel(ch);
         core.setActive(fParams[base+0], fParams[base+1], fParams[base+2], fParams[base+3],
@@ -45,7 +47,7 @@ protected:
     const char* getDescription() const override { return "Mesa Boogie Dual Rectifier style amp — circuit-real model"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(2, 0, 2); }
+    uint32_t getVersion() const override { return d_version(2, 9, 0); }
     int64_t getUniqueId() const override { return d_cconst('D', 'R', 'C', 'T'); }
 
     void initParameter(uint32_t i, Parameter& p) override {
@@ -62,12 +64,19 @@ protected:
     void run(const float** in, float** out, uint32_t frames) override {
         const float* i0 = in[0];
         float* oL = out[0]; float* oR = out[1];
+        const float postLevel = core.outputLevel();
         for (uint32_t i=0;i<frames;++i){
             float ub[kOS];
-            os.upsample(i0[i], ub);
+            // Shared guitar-input calibration used by the validated AC30 path.
+            // Without it, feedBack's DI reaches V1 roughly 10 dB below the
+            // level used by the commercial reference renders, so the output
+            // can look compressed after makeup while the preamp remains clean.
+            os.upsample(inputCalibration * i0[i], ub);
             for (int k=0;k<kOS;++k)
                 ub[k] = rbAmpLvl(kDualRectMakeup * core.process(ub[k]));
-            const float y = os.downsample(ub);
+            // Modern's finite 6L6/OT swing is measured on the reconstructed
+            // signal, before the strictly linear loudness table.
+            const float y = core.outputKnee(os.downsample(ub)) * postLevel;
             oL[i] = y; oR[i] = y;
         }
     }

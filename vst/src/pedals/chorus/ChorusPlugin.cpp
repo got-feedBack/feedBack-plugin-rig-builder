@@ -18,37 +18,41 @@ class ChorusCore
     float sampleRate = 48000.0f;
     float rate = kChorusDef[kRate];
     float depth = kChorusDef[kDepth];
+    float rateNow = rate;
+    float depthNow = depth;
+    float smoothA = 1.0f;
     float lfoPhase = 0.0f;
-    float feedback = 0.0f;
 
     rbmod::DelayBuffer bbd;
     rbmod::HighPass inputHp;
     rbmod::LowPass inputLp;
     rbmod::LowPass bbdLp1;
     rbmod::LowPass bbdLp2;
-    rbmod::BbdCompander compander;
     rbmod::NoiseSource noise;
 
     float currentRateHz() const
     {
-        return 0.065f + 5.35f * std::pow(rbmod::clamp01(rate), 2.05f);
+        // VR1 is reverse-log: noon is around 1 Hz, not the midpoint of the
+        // electrical range. Keep the measured CE family range conservative.
+        return 0.25f * std::pow(18.0f, std::pow(rbmod::clamp01(rateNow), 1.28f));
     }
 
     void updateFilters()
     {
-        const float d = std::pow(rbmod::clamp01(depth), 1.85f);
+        // R/C networks around IC1/Q2-Q4 are fixed. Depth moves the MN3101
+        // clock and must not retune the analogue filters.
         inputHp.setHz(32.0f, sampleRate);
-        inputLp.setHz(7800.0f - 1300.0f * d, sampleRate);
-        bbdLp1.setHz(5200.0f - 1450.0f * d, sampleRate);
-        bbdLp2.setHz(3600.0f - 650.0f * d, sampleRate);
+        inputLp.setHz(7900.0f, sampleRate);
+        bbdLp1.setHz(5600.0f, sampleRate);
+        bbdLp2.setHz(4100.0f, sampleRate);
     }
 
 public:
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
-        bbd.resizeForMs(sampleRate, 36.0f);
-        compander.setSampleRate(sampleRate, 24.0f);
+        bbd.resizeForMs(sampleRate, 24.0f);
+        smoothA = 1.0f - std::exp(-1.0f / (0.012f * sampleRate));
         updateFilters();
         reset();
     }
@@ -65,9 +69,9 @@ public:
         inputLp.reset();
         bbdLp1.reset();
         bbdLp2.reset();
-        compander.reset();
         lfoPhase = 0.0f;
-        feedback = 0.0f;
+        rateNow = rate;
+        depthNow = depth;
     }
 
     void setRate(float v)
@@ -78,58 +82,57 @@ public:
     void setDepth(float v)
     {
         depth = rbmod::clamp01(v);
-        updateFilters();
     }
 
     float process(float in)
     {
-        const float d = std::pow(rbmod::clamp01(depth), 1.85f);
+        rateNow += smoothA * (rate - rateNow);
+        depthNow += smoothA * (depth - depthNow);
+        const float d = std::pow(rbmod::clamp01(depthNow), 1.45f);
         lfoPhase += currentRateHz() / sampleRate;
         if (lfoPhase >= 1.0f)
             lfoPhase -= std::floor(lfoPhase);
 
-        // TL022 LFO is rounded-triangle-ish once it hits the MN3101 clock.
-        const float tri = 4.0f * std::fabs(lfoPhase - 0.5f) - 1.0f;
+        // TL022 oscillator followed by the MN3101 control network: a rounded
+        // triangle, continuous at the phase wrap.
+        const float tri = 1.0f - 4.0f * std::fabs(lfoPhase - 0.5f);
         const float sine = std::sin(rbmod::kTwoPi * lfoPhase);
-        const float lfo = 0.58f * sine - 0.42f * tri;
+        const float lfo = 0.38f * sine + 0.62f * tri;
 
-        const float baseMs = 8.9f + 1.20f * (1.0f - d);
-        const float widthMs = 0.08f + 4.35f * d;
-        float delayMs = baseMs + widthMs * lfo;
-        delayMs = rbmod::clamp(delayMs, 3.4f, 20.0f);
+        // MN3007 has 1024 stages and MN3101 provides a two-phase clock.
+        const float clockCentre = 50000.0f;
+        const float clockSpan = 0.015f + 0.52f * d;
+        const float clockHz = rbmod::clamp(clockCentre * (1.0f + clockSpan * lfo),
+                                            28000.0f, 100000.0f);
+        const float delayMs = 1000.0f * 1024.0f / (2.0f * clockHz);
 
-        float x = inputHp.process(in);
-        x = inputLp.process(x);
-        x = rbmod::softClip(x * (1.045f + 0.075f * d));
+        float dry = inputHp.process(in);
+        dry = rbmod::softClip(dry * 1.025f) / 1.025f;
+        float x = inputLp.process(dry);
 
-        const float write = rbmod::softClip(x + 0.018f * feedback);
-        float wet = bbd.read(delayMs * 0.001f * sampleRate);
-        bbd.write(write);
+        float wet = bbd.readCubic(delayMs * 0.001f * sampleRate);
+        bbd.write(x);
 
-        const float clockPenalty = rbmod::clamp01((delayMs - 4.0f) / 18.0f);
-        wet += noise.next() * (0.00028f + 0.00125f * clockPenalty);
+        wet += noise.next() * (0.000008f + 0.000018f * d);
         wet = bbdLp2.process(bbdLp1.process(wet));
-        wet = compander.process(wet, 0.42f + 0.45f * d);
-        feedback = wet;
+        wet += 0.004f * (wet * wet * wet - wet);
 
-        // CE-2 fixed mixer: dry dominates; wet is dark and below unity.
-        const float y = 0.78f * in + 0.52f * wet;
-        return rbmod::softClip(y * 0.96f) * 0.98f;
+        // R23/R24 are equal 47 k mixer branches. The wet coefficient represents
+        // MN3007 insertion loss, not a user-facing Mix control.
+        const float y = 0.76f * (dry + 0.72f * wet);
+        return rbmod::softClip(y * 1.015f) / 1.015f;
     }
 };
 
 class ChorusPlugin : public Plugin
 {
-    ChorusCore left;
-    ChorusCore right;
+    ChorusCore core;
     float params[kParamCount];
 
     void applyAll()
     {
-        left.setRate(params[kRate]);
-        right.setRate(params[kRate]);
-        left.setDepth(params[kDepth]);
-        right.setDepth(params[kDepth]);
+        core.setRate(params[kRate]);
+        core.setDepth(params[kDepth]);
     }
 
 public:
@@ -138,10 +141,8 @@ public:
     {
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kChorusDef[i];
-        left.setSeed(0x43483231u);
-        right.setSeed(0x43483232u);
-        left.setSampleRate((float)getSampleRate());
-        right.setSampleRate((float)getSampleRate());
+        core.setSeed(0x43483231u);
+        core.setSampleRate((float)getSampleRate());
         applyAll();
     }
 
@@ -150,7 +151,7 @@ protected:
     const char* getDescription() const override { return "Boss CE-2 style MN3007 chorus"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('C', 'h', 'o', 'r'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -180,8 +181,7 @@ protected:
 
     void sampleRateChanged(double newSampleRate) override
     {
-        left.setSampleRate((float)newSampleRate);
-        right.setSampleRate((float)newSampleRate);
+        core.setSampleRate((float)newSampleRate);
         applyAll();
     }
 
@@ -194,8 +194,11 @@ protected:
 
         for (uint32_t i = 0; i < frames; ++i)
         {
-            outL[i] = left.process(inL[i]);
-            outR[i] = right.process(inR[i]);
+            const rbmod::StereoInputPair feed = rbmod::stereoPedalFeeds(inL[i], inR[i]);
+            const float mono = 0.5f * (feed.left + feed.right);
+            const float output = core.process(mono);
+            outL[i] = output;
+            outR[i] = output;
         }
     }
 

@@ -46,7 +46,6 @@ class Es56028ShortDelay
     rbmod::LowPass lpf1;
     rbmod::LowPass lpf2;
     rbmod::LowPass dacHold;
-    rbmod::BbdCompander compander;
     rbmod::NoiseSource noise;
 
 public:
@@ -54,7 +53,6 @@ public:
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
         memory.resizeForMs(sampleRate, 46.0f);
-        compander.setSampleRate(sampleRate, 18.0f);
         lpf1.setHz(11800.0f, sampleRate);
         lpf2.setHz(9300.0f, sampleRate);
         dacHold.setHz(15500.0f, sampleRate);
@@ -72,7 +70,6 @@ public:
         lpf1.reset();
         lpf2.reset();
         dacHold.reset();
-        compander.reset();
     }
 
     float process(float input, float delayMs, float depthAmount)
@@ -80,10 +77,9 @@ public:
         delayMs = rbmod::clamp(delayMs, 4.1f, 41.0f);
 
         float x = lpf1.process(input);
-        x = compander.process(x, 0.28f + 0.20f * depthAmount);
         x = rbmod::softClip(x * 1.018f);
 
-        const float delayed = memory.read(delayMs * 0.001f * sampleRate);
+        const float delayed = memory.readCubic(delayMs * 0.001f * sampleRate);
         memory.write(x);
 
         float y = lpf2.process(delayed);
@@ -101,8 +97,13 @@ class Ceb3Channel
     float depth = kBassChorusDef[kDepth];
     float lowFilter = kBassChorusDef[kLowFilter];
     float effectLevel = kBassChorusDef[kELevel];
-    float phaseOffset = 0.0f;
+    float rateNow = rate;
+    float depthNow = depth;
+    float lowFilterNow = lowFilter;
+    float effectLevelNow = effectLevel;
+    float smoothA = 1.0f;
     float lfoPhase = 0.0f;
+    unsigned int filterUpdateCounter = 0;
 
     rbshared::OpAmpStage inputAmp;
     rbshared::OpAmpStage lfoAmp;
@@ -115,17 +116,15 @@ class Ceb3Channel
     rbmod::HighPass wetHp;
     rbmod::LowPass wetLp;
     rbmod::LowPass outputLp;
-    rbmod::LowPass dryLowSense;
 
     float rateHz() const
     {
-        const float cTaper = std::pow(rbmod::clamp01(rate), 2.05f);
-        return 0.075f + 6.15f * std::pow(cTaper, 1.32f);
+        return 0.20f * std::pow(25.0f, std::pow(rbmod::clamp01(rateNow), 1.05f));
     }
 
     void updateFilters()
     {
-        const float lf = rbmod::smoothstep(lowFilter);
+        const float lf = rbmod::smoothstep(lowFilterNow);
 
         inputHp.setHz(18.0f, sampleRate);
         inputLp.setHz(13500.0f, sampleRate);
@@ -134,7 +133,6 @@ class Ceb3Channel
         // CEB-3 Low Filter: clockwise removes more low end from the wet delay.
         wetHp.setHz(45.0f + 430.0f * lf + 360.0f * lf * lf, sampleRate);
         wetLp.setHz(9000.0f - 1700.0f * lf, sampleRate);
-        dryLowSense.setHz(90.0f + 520.0f * lf, sampleRate);
         outputLp.setHz(16800.0f, sampleRate);
     }
 
@@ -151,6 +149,7 @@ public:
         switchingDiodes.setSpec(rbcomponents::diode1SS355());
         switchingDiodes.setSourceR(180000.0f);
         es56028.setSampleRate(sampleRate);
+        smoothA = 1.0f - std::exp(-1.0f / (0.012f * sampleRate));
         updateFilters();
         reset();
     }
@@ -158,12 +157,6 @@ public:
     void setSeed(unsigned int seed)
     {
         es56028.setSeed(seed);
-    }
-
-    void setPhaseOffset(float v)
-    {
-        phaseOffset = v - std::floor(v);
-        lfoPhase = phaseOffset;
     }
 
     void reset()
@@ -179,8 +172,12 @@ public:
         wetHp.reset();
         wetLp.reset();
         outputLp.reset();
-        dryLowSense.reset();
-        lfoPhase = phaseOffset;
+        lfoPhase = 0.0f;
+        rateNow = rate;
+        depthNow = depth;
+        lowFilterNow = lowFilter;
+        effectLevelNow = effectLevel;
+        filterUpdateCounter = 0;
     }
 
     void setParams(float newRate, float newDepth, float newLowFilter, float newEffectLevel)
@@ -189,24 +186,29 @@ public:
         depth = rbmod::clamp01(newDepth);
         lowFilter = rbmod::clamp01(newLowFilter);
         effectLevel = rbmod::clamp01(newEffectLevel);
-        updateFilters();
     }
 
-    float process(float input)
+    void process(float input, float& outputA, float& outputB)
     {
+        rateNow += smoothA * (rate - rateNow);
+        depthNow += smoothA * (depth - depthNow);
+        lowFilterNow += smoothA * (lowFilter - lowFilterNow);
+        effectLevelNow += smoothA * (effectLevel - effectLevelNow);
+        if ((filterUpdateCounter++ & 15u) == 0u)
+            updateFilters();
+
         lfoPhase += rateHz() / sampleRate;
         if (lfoPhase >= 1.0f)
             lfoPhase -= std::floor(lfoPhase);
 
-        const float p = lfoPhase + phaseOffset;
-        const float frac = p - std::floor(p);
+        const float frac = lfoPhase;
         const float tri = 4.0f * std::fabs(frac - 0.5f) - 1.0f;
         const float sine = std::sin(rbmod::kTwoPi * frac);
         const float lfoRaw = 0.64f * tri + 0.36f * sine;
         const float lfo = lfoAmp.process(lfoRaw, 1.0f);
 
-        const float depthLin = std::pow(rbmod::clamp01(depth), 1.75f);
-        const float depthMs = 0.12f + 6.60f * depthLin;
+        const float depthLin = std::pow(rbmod::clamp01(depthNow), 1.75f);
+        const float depthMs = 0.14f + 8.20f * depthLin;
         const float baseMs = 13.2f + 2.8f * (1.0f - depthLin);
         const float delayMs = rbmod::clamp(baseMs + depthMs * lfo, 4.1f, 32.5f);
 
@@ -221,34 +223,32 @@ public:
         float wet = es56028.process(x, delayMs, depthLin);
         wet = wetHp.process(wet);
         wet = wetLp.process(wet);
-        wet = jfetSwitch2SK879(wet, effectLevel);
+        wet = jfetSwitch2SK879(wet, effectLevelNow);
 
         const float switchLeak = switchingDiodes.process(wet * 0.18f) * 0.018f;
         wet += switchLeak;
 
-        const float lowSense = dryLowSense.process(dry);
-        const float lf = rbmod::smoothstep(lowFilter);
-        const float level = std::pow(rbmod::clamp01(effectLevel), 1.45f);
-        const float wetGain = (0.01f + 0.86f * level) * (0.96f - 0.12f * lf);
-        const float dryGain = 0.92f - 0.06f * level;
+        const float lf = rbmod::smoothstep(lowFilterNow);
+        const float level = std::pow(rbmod::clamp01(effectLevelNow), 0.90f);
+        const float wetGain = (0.02f + 1.45f * level) * (0.98f - 0.10f * lf);
 
-        float mixed = dry * dryGain + wet * wetGain + lowSense * (0.018f * lf);
+        float mixed = dry + wet * wetGain;
         mixed = mixAmp.process(mixed, 1.15f);
         mixed = outputLp.process(mixed);
-        return rbmod::softClip(mixed * 0.985f);
+        const float mixGain = 0.96f / std::sqrt(1.0f + 0.28f * wetGain * wetGain);
+        outputA = rbmod::softClip(mixed * mixGain);
+        outputB = dry * 0.96f;
     }
 };
 
 class BassChorusPlugin : public Plugin
 {
-    Ceb3Channel left;
-    Ceb3Channel right;
+    Ceb3Channel core;
     float params[kParamCount];
 
     void applyParams()
     {
-        left.setParams(params[kRate], params[kDepth], params[kLowFilter], params[kELevel]);
-        right.setParams(params[kRate], params[kDepth], params[kLowFilter], params[kELevel]);
+        core.setParams(params[kRate], params[kDepth], params[kLowFilter], params[kELevel]);
     }
 
 public:
@@ -258,12 +258,8 @@ public:
         for (int i = 0; i < kParamCount; ++i)
             params[i] = kBassChorusDef[i];
 
-        left.setSeed(0x43454231u);
-        right.setSeed(0x43454232u);
-        left.setPhaseOffset(0.00f);
-        right.setPhaseOffset(0.33f);
-        left.setSampleRate((float)getSampleRate());
-        right.setSampleRate((float)getSampleRate());
+        core.setSeed(0x43454231u);
+        core.setSampleRate((float)getSampleRate());
         applyParams();
     }
 
@@ -272,7 +268,7 @@ protected:
     const char* getDescription() const override { return "CEB-3 style ES56028 bass chorus"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 4, 0); }
     int64_t getUniqueId() const override { return d_cconst('R', 'B', 'C', 'h'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -303,8 +299,7 @@ protected:
 
     void sampleRateChanged(double newSampleRate) override
     {
-        left.setSampleRate((float)newSampleRate);
-        right.setSampleRate((float)newSampleRate);
+        core.setSampleRate((float)newSampleRate);
         applyParams();
     }
 
@@ -318,8 +313,8 @@ protected:
         for (uint32_t i = 0; i < frames; ++i)
         {
             const rbmod::StereoInputPair feed = rbmod::stereoPedalFeeds(inL[i], inR[i]);
-            outL[i] = left.process(feed.left);
-            outR[i] = right.process(feed.right);
+            const float mono = 0.5f * (feed.left + feed.right);
+            core.process(mono, outL[i], outR[i]);
         }
     }
 
