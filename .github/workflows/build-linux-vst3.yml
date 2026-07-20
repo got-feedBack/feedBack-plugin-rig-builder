@@ -59,6 +59,9 @@ jobs:
           # Seven effect Makefiles hardcode `include ../../DPF/...` (ignoring
           # DPF_PATH), so expose DPF at the relative path they expect: vst/DPF.
           ln -sfn "$DPF" "$GITHUB_WORKSPACE/vst/DPF"
+          # The 7 EQ/comp Makefiles hardcode include ../../DPF/... which post-reorg
+          # (vst/src/<cat>/<name>/) resolves to vst/src/DPF, not vst/DPF.
+          ln -sfn "$DPF" "$GITHUB_WORKSPACE/vst/src/DPF"
           cd "$GITHUB_WORKSPACE/vst/src"
           # Post-reorg the effects moved to <cat>/<name>/ and 110+ of them include
           # "../_shared/...". After the split that must resolve to <cat>/_shared,
@@ -87,6 +90,7 @@ jobs:
           done
           for cat in amps pedals racks; do rm -f "$cat/_shared"; done
           rm -f "$GITHUB_WORKSPACE/vst/DPF"
+          rm -f "$GITHUB_WORKSPACE/vst/src/DPF"
           echo "FAILED DIRS:$fail"
 
       - name: Inject x86_64-linux binaries into the committed bundles
