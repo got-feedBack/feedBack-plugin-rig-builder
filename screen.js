@@ -7320,6 +7320,17 @@ const RB_HOTKEY_SONG_SLOTS = 4;           // Rocksmith caps a song at 4 tones (A
 const RB_HOTKEY_SEEDED_LS = 'rig_builder.toneHotkeys.seeded.v2';   // one-time default-binding flag (v2 = keys 1-9)
 let _rbHotkeyRecordingTarget = null;   // target currently capturing a key combo
 let _rbHotkeyListenerInstalled = false;
+let _rbHotkeyRecordCleanup = null;     // tears down an in-progress hotkey recording (leak guard)
+
+// Abort any hotkey recording currently in progress. Safe to call anytime.
+// Exists because an abandoned recording used to leave a capture-phase keydown
+// listener attached to window that swallowed EVERY keystroke app-wide — the
+// "all text boxes stop working" bug. Any exit path can now call this to recover.
+function rbCancelToneHotkeyRecording() {
+    const fn = _rbHotkeyRecordCleanup;
+    if (fn) { _rbHotkeyRecordCleanup = null; try { fn(); } catch (_) {} }
+}
+window.rbCancelToneHotkeyRecording = rbCancelToneHotkeyRecording;
 
 // ── Background warming of hotkey-bound saved tones ───────────────────────────
 // Switching to a SONG tone is instant (RbMegaChain preloads them all + flips
@@ -7450,23 +7461,55 @@ function rbComboFromEvent(e) {
 window.rbRecordToneHotkey = function rbRecordToneHotkey(kind, idx) {
     const target = rbHotkeyTargetFor(kind, idx);
     if (!target) return;
+    // Cancel any recording already in flight (re-click, or recording a different
+    // slot) so we never stack two capture-phase keydown listeners.
+    rbCancelToneHotkeyRecording();
     _rbHotkeyRecordingTarget = target;
     rbRenderToneHotkeysUI();   // show "Press a key…"
+
+    let finished = false;
     const onKey = (e) => {
         e.preventDefault(); e.stopPropagation();
-        if (e.key === 'Escape') { done(null); return; }
+        if (e.key === 'Escape') { finish(null); return; }
         const combo = rbComboFromEvent(e);
         if (combo === null) return;   // lone modifier — keep waiting for the real key
-        done(combo);
+        finish(combo);
     };
-    const done = (combo) => {
+    // The recorder needs a KEY, not a click. So a click anywhere, losing window
+    // focus, or simply waiting too long all mean the user walked away from the
+    // "press a key" prompt — abandon the capture instead of hijacking the
+    // keyboard forever (which killed typing in every text box, app-wide).
+    const onPointer = () => finish(null);
+    const onBlur = () => finish(null);
+    const timer = setTimeout(() => finish(null), 20000);   // ultimate self-heal
+
+    const teardown = () => {
         window.removeEventListener('keydown', onKey, true);
+        window.removeEventListener('pointerdown', onPointer, true);
+        window.removeEventListener('blur', onBlur);
+        clearTimeout(timer);
+        if (_rbHotkeyRecordCleanup === teardownRef) _rbHotkeyRecordCleanup = null;
+    };
+    const finish = (combo) => {
+        if (finished) return;   // idempotent — every exit path funnels here once
+        finished = true;
+        teardown();
         const t = _rbHotkeyRecordingTarget;
         _rbHotkeyRecordingTarget = null;
         if (combo && t) rbSetToneHotkeyCombo(t, combo);
         else rbRenderToneHotkeysUI();
     };
+    const teardownRef = () => finish(null);
+    _rbHotkeyRecordCleanup = teardownRef;
+
     window.addEventListener('keydown', onKey, true);
+    // Defer the click/blur guards one tick so the very click that STARTED this
+    // recording doesn't immediately cancel it.
+    setTimeout(() => {
+        if (finished) return;
+        window.addEventListener('pointerdown', onPointer, true);
+        window.addEventListener('blur', onBlur);
+    }, 0);
 };
 
 // One combo per target, one target per combo — clear both sides then bind.
