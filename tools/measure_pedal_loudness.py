@@ -137,7 +137,8 @@ def measure_pedal(d: Path, ir_path: Path | None = None) -> tuple[str, dict] | No
         return None
     names = info["names"]
     drive_idx = [i for i, n in enumerate(names)
-                 if _DRIVE_RE.search(n) and not _EXCLUDE_RE.search(n)]
+                 if (_DRIVE_RE.search(n) and not _EXCLUDE_RE.search(n))
+                 or (info["bundle_stem"] == "buzztone" and n == "Attack")]
     level_idx = [i for i, n in enumerate(names)
                  if _LEVEL_RE.search(n) and not _EXCLUDE_RE.search(n)
                  and i not in drive_idx]

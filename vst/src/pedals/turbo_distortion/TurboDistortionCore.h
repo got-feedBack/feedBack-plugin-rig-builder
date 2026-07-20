@@ -19,6 +19,7 @@ class HP {
     float a=0.f,x1=0.f,y1=0.f;
 public:
     void setRC(float sr,float r,float c){ const float dt=1.f/sr,rc=r*c; a=rc/(rc+dt); }
+    void setHz(float sr,float hz){ const float dt=1.f/sr,rc=1.f/(2.f*kPi*hz); a=rc/(rc+dt); }
     void reset(){x1=y1=0.f;}
     float process(float x){const float y=a*(y1+x-x1);x1=x;y1=dn(y);return y1;}
 };
@@ -56,9 +57,9 @@ public:
 class TurboDistortionCore {
     float fs=192000.f,dist=.55f,tone=.5f,level=.5f;
     bool turbo=false;
-    HP inputC12,c38,c40,c39,c45,c35,toneC37,outC24;
-    LP inputMiller,q22Miller,q23Miller,turboMiller,toneLow,toneHighBase,outLoad;
-    ResBP turboRes;
+    HP inputC12,c38,c40,c39,c45,c35,toneC37,outC24,modeLowCut;
+    LP inputMiller,q22Miller,q23Miller,turboMiller,toneLow,toneHighBase,outLoad,turboTop;
+    ResBP turboRes,modeVoice;
     rbcomponents::AntiParallelDiodePair preClip,mainClip;
 
     void update(){
@@ -78,6 +79,12 @@ class TurboDistortionCore {
         // Q16-Q20 gyrator: the Turbo-II voice is a RESONANT mid peak feeding
         // the extra gain stage — the DS-2 'honk' — not a broad tilt.
         turboRes.set(fs,900.f,2.2f);
+        // The switched transistor network changes more than gain: Mode I has
+        // a broad mid recovery and less sub-bass loading, while Mode II keeps
+        // the narrower resonant voice and a lower top-end pole.
+        modeLowCut.setHz(fs,turbo?80.f:110.f);
+        modeVoice.set(fs,turbo?1120.f:1250.f,turbo?.75f:.68f);
+        turboTop.setHz(fs,turbo?6800.f:15000.f);
         // Q12/Q10/Q13 create fixed low and high branches. VR2 blends those
         // branch voltages; it does not sweep both cutoff frequencies.
         toneLow.setRC(fs,33000.f,.0068e-6f);
@@ -96,8 +103,8 @@ public:
     void setLevel(float v){level=clamp01(v);}
     void setTurbo(float v){turbo=v>=.5f;update();}
     void reset(){
-        inputC12.reset();c38.reset();c40.reset();c39.reset();c45.reset();c35.reset();toneC37.reset();outC24.reset();
-        inputMiller.reset();q22Miller.reset();q23Miller.reset();turboMiller.reset();turboRes.reset();toneLow.reset();toneHighBase.reset();outLoad.reset();
+        inputC12.reset();c38.reset();c40.reset();c39.reset();c45.reset();c35.reset();toneC37.reset();outC24.reset();modeLowCut.reset();
+        inputMiller.reset();q22Miller.reset();q23Miller.reset();turboMiller.reset();turboRes.reset();modeVoice.reset();toneLow.reset();toneHighBase.reset();outLoad.reset();turboTop.reset();
         preClip.reset();mainClip.reset();update();
     }
 
@@ -135,6 +142,16 @@ public:
         // Q17/Q18 driver into D11/D12 1SS133 shunt clipping.
         y=c35.process(y);
         y=mainClip.process(3.0f*(1.15f+1.55f*d+(turbo?.40f:0.f))*y)/3.0f;
+
+        // Q12/Q10/Q13 and the mode-dependent loading recover the vocal centre
+        // that remains visible in the reference renders. The previous Mode I
+        // path fed the LO branch almost directly, leaving a bass-heavy hole
+        // from roughly 700 Hz to 3 kHz. Mode II uses less broad recovery because
+        // Q16-Q20 already provide its resonant peak.
+        y=modeLowCut.process(y);
+        y+= (turbo?.30f:.78f)*modeVoice.process(y);
+        y=turboTop.process(y);
+        if(turbo) y*=1.25f;
 
         // Discrete active TONE network. The unequal gains are the transistor
         // recovery/loading of each branch, not tone-dependent makeup.

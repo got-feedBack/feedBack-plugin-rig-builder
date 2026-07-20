@@ -693,7 +693,7 @@
    "format": "VST3",
    "bundled": "vst/pedals/OS-2.vst3",
    "free": true,
-   "notes": "Bundled Boss OS-2 style drive/distortion blend based on the local schematic. Real panel controls: Drive, Tone, Color, Level; RS Gain maps to Drive."
+   "notes": "Bundled Boss OS-2 style parallel SD-1/DS-1-family overdrive/distortion blend based on the local schematic. Real panel controls: Drive, Tone, Color, Level; Color sweeps from asymmetric feedback overdrive to hard-clipped distortion and defaults to the electrical midpoint. RS Gain maps to Drive."
   }
  ],
  "Pedal_MarshallGuvnorPlus": [
@@ -893,7 +893,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/RingMod.vst3",
-   "notes": "Bundled Maestro/Oberheim RM-1A style ring modulator using the game's Depth, Waveform, Sensitivity and Attack knobs."
+   "notes": "Bundled component-guided Maestro/Oberheim RM-1A model: MC1458 buffers, LM741 Wien sine oscillator with 1N746 stabilisation, MC1495 four-quadrant multiplier and 2N4360 linear squelch. Real controls are Pitch, Modulation, Volume, Pitch Range and Modulate; Rocksmith controls are remapped explicitly."
   }
  ],
  "Pedal_Swole": [

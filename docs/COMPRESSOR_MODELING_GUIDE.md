@@ -1,6 +1,6 @@
 # Guia de modelado circuit-real para compresores
 
-Estado: 2026-07-15
+Estado: 2026-07-19
 
 Esta guia documenta el metodo usado para reconstruir y calibrar el MXR Dyna
 Comp. Su objetivo es conservar lo aprendido para futuros compresores OTA y
@@ -16,6 +16,11 @@ La regla principal es:
 No se deben copiar las constantes del Dyna Comp a compresores opticos, FET,
 VCA, digitales ni multibanda. Se pueden reutilizar primitivas DSP, pero cada
 topologia debe reconstruirse por separado.
+
+Esta guía complementa el workflow obligatorio de
+[`REFERENCE_MATCHING_WORKFLOW.md`](REFERENCE_MATCHING_WORKFLOW.md). El workflow
+común define DI, alineación, ventanas, estabilidad y despliegue; aquí se agregan
+las mediciones propias de detectores y elementos de control de ganancia.
 
 ## 1. Fuentes del caso Dyna Comp
 
@@ -432,6 +437,10 @@ Capturar como minimo:
 Usar siempre el mismo DI, misma frecuencia de muestreo y misma alineacion.
 Guardar tambien renders de tonos escalonados y bursts para separar respuesta
 estatica de attack/release.
+
+No usar una referencia de compresión como si fuera solo una curva de loudness:
+comparar las mismas ventanas de ataque, sustain y cola. El makeup se calibra
+después de igualar gain reduction, attack y release, nunca antes.
 
 ### Fase D: mediciones
 

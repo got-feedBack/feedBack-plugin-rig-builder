@@ -75,7 +75,7 @@ class BuzzToneCore
 {
     // Captain Fuzzle / Maestro FZ-1A style schematic:
     // 1.5 V rail, Q1/Q2/Q3 = 2N1305 PNP germanium, C1/C4 = 10 nF,
-    // C2/C3 = 1 uF, FUZZ = 50 kB in the Q2 bias/feedback network,
+    // C2/C3 = 1 uF, ATTACK = 50 kB in the Q2 bias/feedback network,
     // VOLUME = 50 kB after C4.
     static constexpr float kSupplyV = 1.5f;
     static constexpr float kR1 = 100000.0f;
@@ -87,7 +87,7 @@ class BuzzToneCore
     static constexpr float kVolumePot = 50000.0f;
 
     float sampleRate = 48000.0f;
-    float fuzz = 0.78f;
+    float attack = 0.78f;
 
     RcHighPass inputCoupling;   // R1/C1/R2 input network
     RcHighPass q1ToQ2;          // C2 into low-impedance Q2 bias network
@@ -132,14 +132,17 @@ class BuzzToneCore
         // 160 Hz, retaining the low-mid body heard in the supplied renders.
         outputCoupling.setRC(sampleRate, 2.0f * kVolumePot, kC4);
 
-        // Stray capacitance / transistor Miller equivalent. FUZZ moves Q2 away
-        // from its low-gain bias point, so its useful bandwidth and upper
-        // harmonics increase across the sweep instead of becoming duller.
-        const float f = clamp01(fuzz);
+        // Stray capacitance / transistor Miller equivalent. ATTACK moves Q2
+        // into conduction, increasing its useful bandwidth and harmonics.
+        const float f = clamp01(attack);
         q1Miller.setHz(sampleRate, 5600.0f + 900.0f * f);
         q2Miller.setHz(sampleRate, 3400.0f + 2100.0f * f);
         q3Miller.setHz(sampleRate, 4600.0f + 1700.0f * f);
-        cableLoad.setHz(sampleRate, 3000.0f + 3500.0f * f);
+        // The 50 k output pot and a normal high-impedance input do not create
+        // the old 3-6.5 kHz fourth low-pass. The supplied renders retain useful
+        // octave energy above 8 kHz, consistent with an approximately 18 kHz
+        // cable/load pole after the three transistor bandwidth limits.
+        cableLoad.setHz(sampleRate, 18000.0f);
 
         sagAttack = 1.0f - std::exp(-1.0f / (0.012f * sampleRate));
         sagRelease = 1.0f - std::exp(-1.0f / (0.090f * sampleRate));
@@ -173,16 +176,17 @@ public:
         updateComponentValues();
     }
 
-    void setFuzz(float v)
+    void setAttack(float v)
     {
-        fuzz = clamp01(v);
+        attack = clamp01(v);
         updateComponentValues();
     }
 
     float process(float in)
     {
-        const float f = clamp01(fuzz);
+        const float f = clamp01(attack);
         const float f2 = f * f;
+        const float f3 = f2 * f;
 
         // Battery starvation is not an EQ. It reduces the 1.5 V headroom and
         // shifts bias under sustained drive, producing the real spitty decay.
@@ -191,27 +195,26 @@ public:
 
         float x = inputCoupling.process(0.91f * in); // R1/R2 divider loss
 
-        // Q1: 2N1305 common-emitter input amp (R3 10 k collector load), FIXED gain.
-        // The real FZ-1A's FUZZ pot is NOT here — Q1 just sets up the signal. Low rail
+        // Q1: 2N1305 common-emitter input amp (R3 10 k collector load), fixed gain.
+        // The real FZ-1A's ATTACK pot is not here. Q1 sets up the signal; the low rail
         // + germanium leakage give the asymmetry before the fuzz network.
-        x = geStage(x, 9.5f + 5.0f * f, -0.19f, 1.45f, 2.25f,
+        x = geStage(x, 1.5f, -0.19f, 1.45f, 2.25f,
                     rail * 0.74f, rail * 0.58f);
         x = q1Miller.process(x);
         x = q1ToQ2.process(x);
 
-        // Q2: THE FUZZ stage. The real 50 kB pot sits in the Q2 bias/feedback network
-        // (R5/R6 2.2k + the 50k pot), so FUZZ collapses Q2's OPERATING POINT toward
-        // cutoff — it controls bias/gating/texture, not a clean level. Sweeping the bias
-        // ~-0.05 -> -0.45 across the knob is what makes the FZ-1A go from sputter to a
-        // hard, gated splat (instead of just "louder").
-        float y = geStage(x, 6.0f + 34.0f * f2, -0.05f - 0.40f * f,
+        // Q2 is the ATTACK stage. R5/R6 and the 50 kB rheostat move its operating
+        // point from near-cutoff at minimum to the conducting, compressed region
+        // at maximum. The previous direction did the opposite and made the top
+        // half of the control quieter instead of producing the reference sweep.
+        float y = geStage(x, 5.0f + 55.0f * f3, -0.44f + 0.39f * f,
                           1.65f + 0.45f * f, 2.55f + 0.75f * f,
                           rail * (0.72f - 0.08f * f), rail * (0.62f + 0.04f * f));
         updateSag(y);
         y = q2Miller.process(y);
         y = q2ToQ3.process(y);
 
-        // Q3: fixed recovery/output 2N1305 (also not FUZZ-controlled). It folds the
+        // Q3: fixed recovery/output 2N1305 (also not ATTACK-controlled). It folds the
         // already-square wave into the raspy 1.5 V output stage.
         y = geStage(y + 0.045f * x, 1.0f + 0.5f * f, -0.075f,
                     1.35f, 2.05f, rail * 0.70f, rail * 0.56f);

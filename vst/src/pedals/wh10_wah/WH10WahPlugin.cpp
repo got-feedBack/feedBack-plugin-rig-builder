@@ -41,7 +41,7 @@ protected:
     const char* getDescription() const override { return "Ibanez WH10 style active op-amp wah"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(2,0,1); }
+    uint32_t getVersion() const override { return d_version(2,1,0); }
     int64_t getUniqueId() const override { return d_cconst('W','H','1','0'); }
 
     void initParameter(uint32_t i, Parameter& p) override {

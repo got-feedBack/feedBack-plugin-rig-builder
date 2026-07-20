@@ -13,7 +13,7 @@
  * hotter, brighter, EL34-grind voice.
  *
  * Signal path: 4 inputs (2 per channel, High/Low) -> V1 gain stages (the HIGH
- * TREBLE/"bright" channel has a 5000pF bright cap across Loudness I; the NORMAL
+ * TREBLE/"bright" channel has a 4n7 bright cap across Loudness I; the NORMAL
  * channel is darker) -> the two Loudness pots mix (the classic "jumpered" plexi
  * tone is both channels up) -> V2 recovery + cathode follower -> Marshall tone
  * stack (Treble/Bass/Middle) -> V3 long-tail PI -> 4x EL34 (~100W) -> output
@@ -33,7 +33,7 @@ enum PlexiParamId
     kPresence = 0,   // PRESENCE (power-amp NFB high-shelf)   [RS Pres]
     kBass,           // BASS  tone stack (1M)                 [RS Bass]
     kMiddle,         // MIDDLE tone stack (25K)               [RS Mid]
-    kTreble,         // TREBLE tone stack (250K, 500pF)       [RS Treble]
+    kTreble,         // TREBLE tone stack (250K, 470pF)       [RS Treble]
     kLoudness1,      // LOUDNESS I  — High Treble/bright ch    [RS Loudness1]
     kLoudness2,      // LOUDNESS II — Normal channel           [RS Loudness2]
     kInput,          // input cable: Bright(0) / Both-jumpered(0.5) / Normal(1)

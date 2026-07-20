@@ -131,7 +131,7 @@ class LineDriveCore
     float sampleRate = 192000.0f;
     float drive = 0.45f;
     float tone = 0.50f;
-    float color = 0.58f;
+    float color = 0.50f;
     float level = 0.62f;
     float odFeedbackR = 1000.0f;
     float distFeedbackR = 12000.0f;
@@ -176,7 +176,15 @@ class LineDriveCore
         // The mechanically linked 270k tracks increase both feedback paths.
         // The loaded law keeps useful resolution around noon without changing
         // either branch's fixed capacitors or diode source resistances.
-        const float track = std::pow(clamp01(drive), 1.45f);
+        // The dual reverse-audio track must leave useful travel on the SD-1
+        // side. A shallow 1.45 exponent put about 37% of the full 270k in the
+        // loop at noon and drove both branches almost fully clipped. The linked
+        // OS-2 track needs a steeper law than the SD-1's 1M control because its
+        // OD gain leg is only 100 ohms and its DIST leg is 1.2k.
+        const float d = clamp01(drive);
+        const float d2 = d * d;
+        const float d4 = d2 * d2;
+        const float track = d4 * d4;
         odFeedbackR = 1000.0f + 270000.0f * track;   // R37 + VR3a
         distFeedbackR = 12000.0f + 270000.0f * track;// R22 + VR3b
 
@@ -185,7 +193,9 @@ class LineDriveCore
         distFeedbackC17.setRC(sampleRate, distFeedbackR, 100.0e-12f);
 
         // VR1 is explicitly 50k linear in the schematic.
-        outputGain = 2.55f * clamp01(level);
+        // VR1 follows the lossy Color/Tone network. The former 2.55 multiplier
+        // added roughly 13 dB over the calibrated SD-1 reference at Level 0.62.
+        outputGain = 0.58f * clamp01(level);
     }
 
     float processOverdrive(float x)
@@ -338,11 +348,12 @@ public:
         // VR4 never fully removes the opposite path because both sides load the
         // common IC1a node through R2/R5 and the 20k track.
         const float c = clamp01(color);
-        const float odWeight = 0.12f + 0.88f * std::cos(0.5f * kPi * c);
-        const float distWeight = 0.12f + 0.88f * std::sin(0.5f * kPi * c);
+        const float odWeight = 0.03f + 0.97f * std::cos(0.5f * kPi * c);
+        const float distWeight = 0.03f + 0.97f * std::sin(0.5f * kPi * c);
         // Q2 and the IC1a summing resistors recover the larger passive loss in
         // the hard-clipped branch, keeping Color from acting as a level knob.
-        const float mixed = odWeight * od + 1.40f * distWeight * distortion;
+        const float mixed = 1.09f * odWeight * od
+                          + 2.20f * distWeight * distortion;
         float y = mixOpamp.process(0.64f * mixed, 7.8f); // IC1a R3/R14
         y = processTone(y);
         y = toneOutputC7.process(y);

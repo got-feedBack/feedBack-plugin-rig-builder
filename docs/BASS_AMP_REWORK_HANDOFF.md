@@ -30,6 +30,9 @@ Archivos base:
   de espectro. Hoy trae spec para `en30`; agregar specs de bajo ahi.
 - `vst/src/amps/REAL_TUBE_AMP_GUIDE.md`
   Guia tecnica completa del flujo nuevo.
+- `docs/REFERENCE_MATCHING_WORKFLOW.md`
+  Protocolo obligatorio para DI exacto, alineacion, coherencia, ventanas,
+  loudness post-no-linealidad, multirate y evidencia final.
 - `vst/src/amps/en30/BoxDC30Core.h`
   Ejemplo piloto avanzado: BOX AC30 con Miller, blocking distortion, LTP,
   supply multi-nodo GZ34, pot tapers y salida reactiva.
@@ -109,6 +112,8 @@ topologia, knobs, loudness, crest y prueba en vivo.
   tiene phase inverter relevante.
 - Usar `MultiNodeBPlus` o crear un perfil propio de supply por amp.
 - Documentar en `REAL_TUBE_AMP_GUIDE.md` el estado del amp y que falta probar.
+- Seguir `docs/REFERENCE_MATCHING_WORKFLOW.md`; RMS/crest sin coherencia y
+  comparacion temporal no validan la distorsion.
 - Recompilar, instalar bundle, firmar y correr harness.
 
 ## Comandos utiles
@@ -144,6 +149,9 @@ esto, al menos debe llegar al remoto:
 - `vst/src/amps/tools/gx_tube.py`
 - `vst/src/amps/tools/calibrate_amp_core.py`
 - `vst/src/amps/REAL_TUBE_AMP_GUIDE.md`
+- `docs/REFERENCE_MATCHING_WORKFLOW.md`
+- `tools/render_amp_wav.py`
+- `tools/compare_amp_reference.py`
 - `docs/BASS_AMP_REWORK_HANDOFF.md`
 - los cores/params/plugins que se quieran compartir como referencia
 - PDFs de `tubes/*.pdf` por una de estas vias:
@@ -160,6 +168,9 @@ Ejemplo de push selectivo:
 ```bash
 git -C rig_builder status --short --branch
 git -C rig_builder add docs/BASS_AMP_REWORK_HANDOFF.md \
+  docs/REFERENCE_MATCHING_WORKFLOW.md \
+  tools/render_amp_wav.py \
+  tools/compare_amp_reference.py \
   vst/src/_shared/tube_stage.hpp \
   vst/src/_shared/koren5881_ftube.h \
   vst/src/_shared/koren6l6gc_ftube.h \

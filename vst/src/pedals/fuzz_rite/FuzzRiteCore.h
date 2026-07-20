@@ -76,7 +76,10 @@ class FuzzRiteCore {
         inHP.setRC(sampleRate, 1.0e6f, 47.0e-9f);   // C1/R1 ~3 Hz — really just a DC block
         // Both coupling caps are 2n2. C2 sees the 500k DEPTH network; C3 sees
         // Q2's lower input impedance and therefore has the higher corner.
-        c2HP.setHz(sampleRate, 160.0f);
+        // C2 is only 2.2 nF and sees the position-dependent 500 k track in
+        // parallel with the following 22 k/base network. The complete reference
+        // sweep places the effective first interstage corner near 420 Hz.
+        c2HP.setHz(sampleRate, 420.0f);
         c3HP.setHz(sampleRate, 480.0f);
         // C4 is 47 nF between the collector networks. The effective loaded
         // impedance places this feedback branch near 720 Hz in the calibrated
@@ -85,7 +88,7 @@ class FuzzRiteCore {
         // BC337 collector capacitance and the 470k collector networks provide
         // the only HF rounding in the real pedal. Keep this above the guitar
         // band instead of adding the old arbitrary 6.2 kHz de-fizz filter.
-        outLP.setHz(sampleRate, 14500.0f);
+        outLP.setHz(sampleRate, 20000.0f);
     }
 
 public:
@@ -106,9 +109,11 @@ public:
         // coefficient suppresses sustained-note windows even though the DSP
         // remains finite, which sounds like hard audio dropouts.
         const float in1 = x - 0.018f*q2fb;
-        const float top = clamp01((depth - 0.70f) / 0.30f);
-        const float topSweep = top * top * (3.0f - 2.0f * top);
-        const float q1Drive = 112.0f + 30.0f * topSweep;
+        // The 500 kB track and 500 kA Volume load alter the collector load as
+        // the wiper approaches pin 3. Keep that secondary effect modest; Depth
+        // is still an output tap, not a synthetic gain control.
+        const float loaded = std::sqrt(depth);
+        const float q1Drive = 66.0f + 16.0f * loaded * loaded;
         float A = -bjtStage(in1, q1Drive, -0.020f, 2.35f, 2.00f, 0.95f, 0.80f);
         A = dcA.process(A);
 
@@ -127,15 +132,26 @@ public:
         // loaded node follows aHP; at high frequency C3/R8 shunts it through
         // 500 k, leaving roughly R8/(500k+R8) = 0.042 of the signal. The wiper
         // reads between that node and the un-loaded C2 side.
-        const float loadedNode = aHP - 0.958f*q2DriveHp;
+        // Solving the ideal 500 k / 22 k divider in isolation produced a 0.042
+        // endpoint and an unrealistically dark, chopped output. The collector,
+        // C2, C3, R8 and 500 kA Volume load form a finite source/load network;
+        // the reference sweep gives about 4-5 dB endpoint loss, not 24 dB.
+        const float loadedNode = 0.60f*aHP - 0.12f*q2DriveHp;
 
-        // The panel rotation was reversed: increasing DEPTH selected the loaded,
-        // dark end of the 500KB pot and progressively removed the fuzz harmonics.
-        // Clockwise now moves from that loaded node toward the direct C2/Q1 side,
-        // matching the audible control direction of the pedal.
-        float out = (1.0f-depth)*loadedNode + depth*aHP;
+        // Pin 1 is the direct C2 side and pin 3 is the loaded Q2-input side.
+        // The supplied Depth sweep confirms the panel direction: clockwise moves
+        // from the louder direct endpoint toward the thinner loaded endpoint.
+        // The dominant behavior remains this passive tap; the smaller collector
+        // loading correction is applied above.
+        float out = (1.0f-loaded)*aHP + loaded*loadedNode;
 
         out = outLP.process(out);
+
+        // Static correction for the position-dependent source impedance seen by
+        // the 500 kA Volume pot. Fitted to the complete min/noon/max renders;
+        // unlike envelope makeup, it cannot pump or alter note decays.
+        const float loadCalibration = 1.188f - 0.565f*depth + 0.678f*depth*depth;
+        out *= loadCalibration;
         return dn(out);
     }
 

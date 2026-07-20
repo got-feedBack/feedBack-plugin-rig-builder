@@ -51,7 +51,7 @@ protected:
     const char* getDescription() const override { return "Mosrite FuzzRite style silicon fuzz"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1,5,0); }
+    uint32_t getVersion() const override { return d_version(1,6,0); }
     int64_t getUniqueId() const override { return d_cconst('F','z','R','t'); }
 
     void initParameter(uint32_t i, Parameter& p) override {

@@ -206,16 +206,21 @@ in·inGain → coupling → bright → ·inScale → V1 → [tonestack] → coup
 
 ## 5. Valores por etapa del AC30 (ejemplo trabajado, BOX AC30)
 
-Los tres 12AX7 del Top Boost (mismos valores que Guitarix usa para el "12ax7"):
+Auditoria 2026-07-18 contra `amps/vox ac30 (en30)/Vox_ac30c2.pdf`: el AC30 no es una
+cascada comun de tres triodos. Los dos canales nacen en mitades independientes de V1 y se
+unen recien antes del inversor de fase:
 
-| etapa | tabla Ri | Rk | fck | vplus | divider |
-|-------|----------|------|------|-------|---------|
-| V1    | 68k (0)  | 2700 | 86   | 250   | 40      |
-| V2    | 250k (1) | 1500 | 132  | 250   | 40      |
-| V3    | 250k (1) | 820  | 194  | 250   | 40      |
+| ruta | etapa real | componentes/funcion modelada |
+|------|------------|-------------------------------|
+| Normal | V1 12AX7 common-cathode | placa R14 220k, catodo 1k5, C7 47n, VR1 A500K |
+| Top Boost | V1 12AX7 common-cathode | placa R12 100k, catodo 1k5, C9 470p, VR2 A500K |
+| Top Boost | V2 12AX7 cathode follower | buffer de baja ganancia con compresion por corriente de rejilla |
+| Top Boost | stack Treble/Bass + U1B | VR3/VR4 A1M, R47 10k, R19 100k, C23 56p, C28/C38 22n; recovery limpio ~2.7x |
+| comun | V3 12AX7 LTP | inversor long-tail-pair AC30, no una etapa common-cathode adicional |
 
-Para otro amp: sacar `Rk`, `Ck` (→fck), si la rejilla es 68k o 250k, y cuántas etapas, del
-**esquemático real**. El resto del modelo no cambia.
+Cada V1 usa su Miller y acople reales por separado. Normal evita por completo el stack Top
+Boost. Para otro amp hay que reconstruir las rutas y puntos de mezcla del esquematico; no
+se debe inferir una cascada solo por contar tubos.
 
 ---
 
@@ -237,14 +242,9 @@ Vox: R1=R2=R3=220k, R4=100k, C1=470pF, C2=100nF, C3=47nF.
    cuerpo/scoop. El AC30 tiene Treble + Bass (sin Mid), así que mapeamos **Treble→t**,
    **Bass→m** (es el control de cuerpo real del circuito), y fijamos **l=0.5**. Cada amp:
    ver qué nodo está activo con sus valores y mapear las perillas reales a esos.
-2. **NO calibrar el tonestack contra el render-con-parlante.** El tonestack solo es una
-   pieza; el render de referencia (Ruby) incluye el parlante. Comparar el amp-pelado vs
-   Ruby da una diferencia grande (≈±8 dB: faltan graves, sobra low-mid, falta brillo) que
-   es **el parlante**, NO un error del tonestack. Como el amp se vozea PRE-cab (§1) y el
-   cab IR aporta esa curva, **no metas el scoop/realce del parlante en el amp** (se
-   duplicaría con el cab). Además, un EQ fuerte post-distorsión **infla el crest factor**
-   (parece más limpio) → enmascara la medición de distorsión. Mantené el voicing de
-   parlante suave/pre-cab y validá la distorsión con el crest ANTES de ese EQ.
+2. **Confirmar si la referencia tiene cabina.** Los renders Ruby de 2026-07-18 son
+   explicitamente `direct`, sin cabina, por lo que se comparan con `Cab Sim=0`. No meter
+   un scoop/rolloff de parlante en el amp: se duplicaria al conectar un IR externo.
 
 ---
 
@@ -264,44 +264,145 @@ global en su `gxpoweramp.dsp`, pero el Vox no tiene → ese es su carácter crud
    una etapa single-ended. Para que la etapa de potencia aporte breakup hay que **excitarla
    fuerte** (drive alto). El AC30 no tiene master: el VOLUMEN cocina el power amp → el drive
    debe escalar con el volumen (`6+9·vol`), no ser fijo.
-2. **El bare-amp tiene el crest un poco más alto que el Ruby-con-parlante** (el parlante del
-   Ruby comprime/rompe y baja el crest; nuestro cab IR lo aporta aparte). No persigas el
-   crest del Ruby exactamente con el amp pelado — apuntá un poco por encima.
+2. **Comparar en el mismo punto de salida.** Para los renders Ruby directos se mide el amp
+   pelado (`Cab Sim=0`); la cabina fallback se valida por separado.
 3. **El reparto de distorsión preamp↔power se recalibra.** Cuando agregás el power amp real,
    el preamp ya hacía toda la dirt → hay que rebalancear (más breakup de potencia a volumen
    alto) para que el TOTAL siga matcheando. Medí crest a gain 2/5/10 y ajustá `drive` + `out`.
 
 Class A (AC30/Vox, bias caliente ~−7.5, sin NFB) vs AB (Marshall/Fender, bias frío + NFB):
-cambia el bias, el sag y si hay NFB. BOX AC30 vs Ruby: crest 18.5/13.8/11.2 (limpio→rompe→
-mesetea), estable (sin NaN, picos 0.35 @48/96/192k).
+cambia el bias, el sag y si hay NFB. El esquema AC30C2 local usa rectificacion de silicio;
+el core conserva deliberadamente la respuesta GZ34 del AC30 vintage para la referencia
+Ruby. No cambiar esta decision sin volver a medir sag y transientes.
 
 ---
 
 ## 8. Calibración objetiva (NO afinar solo de oído)
 
+Aplicar primero el workflow común obligatorio de
+[`docs/REFERENCE_MATCHING_WORKFLOW.md`](../../../docs/REFERENCE_MATCHING_WORKFLOW.md).
+Esta sección conserva las reglas y resultados específicos de amplificadores.
+
 Workflow para igualar a una referencia comercial (ver [[amp-reference-renders]]):
 
-1. Render del **DI estándar** (`ui_public_inputs_Brit - Guitar.wav`) por nuestro core, offline.
+1. Identificar primero el **DI exacto usado por la referencia** y renderizar ese mismo
+   archivo por nuestro core. No comparar una referencia Fast Thrash contra Brit DI ni
+   asumir que dos archivos de igual duracion contienen la misma interpretacion:
+   - referencias generales de `test logic/dualrect/*.wav` y UAD Ruby AC30:
+     `test logic/ce1_ref/brit_di.wav` (Brit DI);
+   - referencias `test logic/dualrect/fast_trash/*.wav`:
+     `ui_public_inputs_Fast Thrash - Guitar.wav`.
+   Recortar DI y DSP a la duracion comun de la referencia, compensar la latencia por
+   correlacion y comparar las mismas muestras. Si la referencia termina con silencio,
+   excluirlo de las metricas activas en ambos archivos; no medir el DI completo contra
+   un render recortado.
 2. Comparar contra el **render comercial** (p.ej. UAD Ruby = AC30) las tres métricas:
    - **crest factor** (pico/RMS, dB) = proxy de distorsión. Bajo = más saturado.
    - **RMS** = nivel (para mantener volumen constante entre gains).
    - **espectro por bandas de octava** = voicing/EQ.
+   Estas tres métricas no bastan por sí solas: un compresor limpio puede igualar el crest
+   sin generar el carácter armónico de la referencia. También medir:
+   - **correlación de forma de onda entre gain min/half/max**, nivelando antes de comparar;
+     si permanece cerca de 1.0, la perilla apenas está cambiando la no linealidad.
+   - **crecimiento espectral con gain**, especialmente 2–4, 4–8 y 8–16 kHz. No basta
+     con que el espectro estático sea parecido: los armónicos deben aparecer al subir gain.
+   - **trim de loudness después de toda no linealidad**. Una tabla RMS colocada antes de
+     un limiter/clipper cambia su drive y vuelve inválida la calibración de distorsión.
+   - **comparacion temporal uno-a-uno**: ademas del valor global, medir envolvente RMS
+     por ventanas de 50 ms y revisar ataques/sustain en las mismas posiciones. Una
+     coincidencia de crest global puede ocultar gating, compresion excesiva o un modo
+     que distorsiona en una seccion distinta del riff.
+   - **distribuciones por ventanas y cuantiles de pico**: medir crest p10/p50/p90 en
+     ventanas de 20-50 ms y p90/p99/p99.9 de `abs(sample)/RMS_ventana`. Esto distingue
+     una saturacion sostenida de un limiter que solo captura transientes extremos.
+   - **clipping y cortes**: contar muestras no finitas o sobre el techo digital y ventanas
+     activas de la DI cuya salida desaparece. Un crest bajo no es valido si viene de
+     glitches, hard clipping o una cola cortada.
+   - **nivel antes de V1**: verificar la calibracion de entrada del wrapper, no solo la
+     salida del core. Un power amp, limiter o tabla de makeup puede bajar crest y hacer
+     parecer saturado un render aunque el preamp reciba la DI demasiado baja. Comparar
+     tambien una reduccion controlada de input y confirmar que cambien los armonicos,
+     no solamente el RMS final.
 3. Matchear a los **tres niveles de gain** (la referencia tiene gain 2/5/10).
 
 Lecciones:
 - Un **DI de guitarra no mide 4–8 kHz** (no hay energía ahí) → para la curva de EQ del amp,
   usar **ruido blanco** por el core (`/tmp/wn.cpp`), no el DI.
 - Para el **feel del gain**, sí usar el DI (crest factor por nivel).
-- Settings del Ruby de referencia: Treble 5 / Bass 5 / **Cut 3** (=0.3). Usar exactamente esos.
+- Settings Ruby 2026-07-18: Treble 5 / Bass 5 en Top Boost; Normal no tiene esas perillas.
+  Renders `Cut min/half/max`, todos directos sin cabina.
 
-Harnesses (en `/tmp`, regenerar si se borran):
-- `gx_tube.py` — genera las tablas.
-- `gain.cpp` — DI → core @ gain 2/5/10 → crest+RMS vs `uadruby_vol_top_{2,5,10}.wav`.
-- `stab.cpp` — estabilidad (NaN/picos) a 48/96/192k, todo al máximo. **Siempre correrlo.**
-- `stagegain.cpp` — ganancia/compresión de UNA etapa (calibrar tubos nuevos).
-- `wn.cpp` — curva de EQ con ruido blanco.
+Harnesses permanentes:
 
-BOX AC30 hoy: crest 16.8/13.5/11.4 vs Ruby 17.5/12.0/12.1 (≤1.5 dB), estable.
+- `tools/render_amp_wav.py` — compila el source del amp y procesa el DI sin UI/presets.
+- `tools/compare_amp_reference.py` — alinea y reporta RMS, ventanas, bandas, crest,
+  cuantiles de peak, correlacion y coherencia DI/salida.
+
+Ejemplo reproducible:
+
+```sh
+python3 tools/render_amp_wav.py tw26 '<DI>.wav' /tmp/tw26.wav \
+  'Inst Vol=1' 'Mic Vol=0' 'Tone=1' 'Cab Sim=0'
+uv run --with numpy --with scipy python tools/compare_amp_reference.py \
+  '<DI>.wav' '<referencia>.wav' /tmp/tw26.wav
+```
+
+Probes auxiliares que aun pueden regenerarse en `/tmp`: `gx_tube.py` para tablas,
+`stagegain.cpp` para una etapa, `stab.cpp` para estrés y `wn.cpp` para respuesta
+con ruido. Nunca dejar la unica evidencia final en un probe temporal.
+
+BOX AC30 2026-07-18, DI Brit, `Cab Sim=0`, Volume min/half/max (revision 1.2.0):
+- Normal DSP `15.5/10.8/9.0 dB` vs Ruby `16.6/10.8/10.0 dB`.
+- Top Boost DSP `15.4/11.2/10.4 dB` vs Ruby `15.5/11.3/10.8 dB`.
+- RMS interno: `-16.00 dBFS` en los tres puntos de ambos canales mediante compensacion
+  estatica post-circuito; no cambia drive, sag ni armonicos.
+- Revision 1.1.1: Volume alimenta el cathode follower/PI/power con curvas monotonicas;
+  la compensacion se aplica solo despues del circuito. Los 11 pasos mantienen nivel plano
+  mientras el crest baja continuamente al subir Volume.
+- Revision 1.2.0: se detecto que el wrapper limitaba **despues** de la tabla RMS, por lo
+  que bajar el nivel también quitaba distorsion. `outputMakeup()` ahora se aplica linealmente
+  despues del core y de `rbAmpLvl`. Top Boost crest DSP `15.70/11.53/10.98 dB` contra Ruby
+  `15.53/11.31/10.79 dB`; los 11 puntos Top Boost y Normal quedan en `-17.5 dBFS RMS`
+  para conservar headroom incluso en el Normal limpio, cuyo crest supera 17 dB.
+- Auditoria estricta 2026-07-18, revision 1.3.0: el crest por si solo ocultaba una
+  diferencia real. Top Boost maximo da `10.89 dB` vs Ruby `10.79 dB`, pero el centroide/
+  flatness son `3325 Hz/0.187` vs `4915 Hz/0.416`; correlacion half-max `0.903` vs
+  `0.725`. El AC30 conserva menos crecimiento armonico que Ruby al subir Volume.
+- Revision 1.4.0, 2026-07-19: la normalizacion interna del cathode follower que reducia
+  su excitacion al subir Volume fue eliminada. El OT ahora aumenta magnetizacion con el
+  pote real y usa el ancho amp-only `38 Hz-19 kHz` en vez del limite generico de parlante.
+  Top Boost maximo pasa a crest/centroide/flatness `10.47 dB/4102 Hz/0.287`, frente a
+  Ruby `10.79 dB/4915 Hz/0.416`; a mitad queda `11.23 dB/2930 Hz/0.159`, frente a
+  `11.30 dB/3334 Hz/0.230`. Normal maximo queda muy cerca en dinamica y densidad:
+  `10.07 dB/0.195` frente a `10.03 dB/0.196`. La diferencia espectral restante se
+  conserva documentada; no se compensa con EQ posterior.
+- Las nuevas tablas de Volume se midieron con la DI Brit completa y Master `0.60`.
+  Normal y Top Boost quedan en `-18.600 +/- 0.001 dBFS RMS` en min/half/max; el objetivo
+  mas bajo conserva `0.31 dB` de margen en el transiente extremo de Normal limpio.
+- Comparacion alineada muestra-a-muestra 2026-07-19: se usaron los primeros 32 s activos
+  de la misma Brit DI y se compenso la latencia de cada render. Top Boost Volume
+  min/half/max da crest `16.13/11.19/10.44 dB` vs Ruby `15.48/11.26/10.76 dB`; por
+  tanto la progresion de distorsion queda cerrada. La diferencia pendiente es tonal:
+  a Cut minimo el DSP queda aproximadamente `2-6 dB` por debajo de Ruby sobre 4 kHz.
+- Revision 1.5.0, 2026-07-19: comparacion directa final contra UAD Ruby con Master
+  `0.60`. Dos shelves de respuesta directa, situados antes de la recuperacion U1B,
+  devuelven el chime sin ecualizar despues de la cadena no lineal. Top Boost
+  min/half/max queda en crest `15.67/11.22/11.00 dB` vs Ruby
+  `15.53/11.30/10.79 dB`; Normal queda `17.12/11.42/10.04 dB` vs
+  `16.51/10.74/10.00 dB`. La diferencia residual se concentra sobre 8 kHz, donde
+  Ruby conserva aproximadamente `4 dB` mas de contenido en los puntos driven; no se
+  aumento mas el shelf porque empeoraba los transientes de la DI sin cambiar el
+  breakup. El Tone Cut C80/VR9 ahora se procesa entre el LTP y las EL84, con taper
+  `pow(1.30)`: en Top Boost maximo su endpoint da crest `7.38 dB` vs Ruby `7.15 dB`.
+  Las tablas independientes Normal/Top se recalibraron despues de estos cambios:
+  los 11 puntos de cada canal quedan a `-18.600 +/- 0.001 dBFS RMS` a 48 kHz.
+  Tambien se valido Normal half y Top Boost max a 44.1/96 kHz, sin clipping ni
+  dropouts; la desviacion multirate maxima de nivel fue `0.11 dB`.
+  Tone Cut maximo sigue una pendiente similar, pero a mitad nuestro control corta
+  alrededor de `2-4 dB` mas entre 2-8 kHz. No modificar sin una prueba auditiva dirigida.
+- Cut min→max: DSP/ Ruby entre 1.2–3 kHz `-5.2/-5.3 dB` (Normal) y `-6.7/-6.0 dB`
+  (Top); entre 3–8 kHz `-7.9/-8.1 dB` y `-8.6/-8.8 dB` respectivamente.
+- Estable sin NaN a 48/96/192 kHz; VST validado a 44.1/96 kHz sin dropouts.
 
 ---
 
@@ -368,16 +469,17 @@ Pentodo conectado clase-A (screen a placa): `Ipk = 2·E1^ex/kg1 · atan(Vpk/kvb)
 
 ## 11. Estado por amp / roadmap
 
-- **BOX AC30 (`en30`)** — ✅ **piloto circuito-real avanzado** (preamp + tonestack + blocking + PI + power + carga reactiva). Plantilla de referencia. Desde 2026-06-22 reemplaza los low-pass fijos tipo Guitarix entre etapas por Miller calculado (`Miller12AX7`: Cgk/Cgp + resistencia de fuente + ganancia estimada) para la entrada, V2 y V3. Desde esta prueba suma `CouplingCapGridLeak` (grid-current/blocking en V2/V3/PI), `PhaseInverterLTP12AX7::setVoxAc30`, `MultiNodeBPlus::setGZ34Ac30`, `PotTaper` y `Ac30ReactiveOutput` (OT + resonancia 2x12 + compresion termica). Harness: `python3 vst/src/amps/tools/calibrate_amp_core.py en30`.
-- **Bender Deluxe (`tw26`, 5E3)** — ✅ port Fender avanzado 2026-06-22: V1A/V1B 12AY7 Instrument/Mic con potes audio, tono **circuito-real** (`rbtube::TweedTone`, R10 1M/C4 500pF/C5 .0047µF), coupling/blocking 0.1uF/1M hacia V2A, V2B cathodyne (`PhaseInverterCathodyne12AX7`), `MultiNodeBPlus` 5Y3 con 16uF + 4k7/22k droppers, `PowerAmp6V6` sin NFB y Cab Sim 1x12 bypassable. PENDIENTE prueba en vivo/crest post-migracion.
-- **Super-Sonic 22 (`tw22`)** — ✅ port Fender avanzado 2026-06-22: Vintage (1×12AX7) + Burn (3×12AX7 cascada), Miller por etapa, coupling/blocking entre etapas Burn y hacia PI, tonestacks **circuito-real con valores EXACTOS del esquemático** (`ToneStackYeh`): Vintage TMB 250k/250k/6.8k-fijo/100k · 250pF/.1µF/.047µF; Burn TMB 250k/250k/25k/120k · 150pF/.15µF/.022µF. PI ahora usa `PhaseInverterLTP12AT7` con tabla Tung-Sol `12AT7.pdf`, supply silicon `MultiNodeBPlus`, power `PowerAmp6V6`, Cab Sim V30 bypassable. PENDIENTE prueba en vivo/crest post-migracion.
-- **Bassman (`tw40`, 5F6-A)** — ✅ port Fender avanzado 2026-06-22: 2×12AY7 (Bright/Normal), coupling/blocking hacia 12AX7 recovery, tonestack FMV migrado a `ToneStackYeh` double (250k/1M/25k/56k · 250pF/20nF/20nF), coupling hacia `PhaseInverterLTP12AX7::setMarshall`, `MultiNodeBPlus` GZ34/choke/screen/preamp y `PowerAmp5881` PP con Cab Sim 4x10 bypassable. PENDIENTE prueba en vivo/crest post-migracion.
+- **BOX AC30 (`en30`)** — ✅ **piloto circuito-real avanzado**, revision 1.5.0 re-auditada 2026-07-19 con referencias UAD Ruby directas y **Master 0.60**. Normal y Top Boost son rutas V1 independientes; Normal evita el stack, Top usa C9 470p + cathode follower + stack Treble/Bass + recovery limpio, y ambas alimentan el LTP/EL84/OT comun. Incluye Miller por V1, acoples con grid-current, `PhaseInverterLTP12AX7::setVoxAc30`, B+ GZ34, potes reales, Tone Cut C80/VR9 antes de las EL84, OT amp-only y cab fallback bypassable. Top Boost min/half/max queda en crest `15.67/11.22/11.00 dB` vs Ruby `15.53/11.30/10.79 dB`; sobre 8 kHz Ruby conserva aproximadamente 4 dB mas de contenido driven. Las tablas lineales estrictamente post-no-linealidad mantienen los 11 puntos de ambos canales en `-18.600 +/- 0.001 dBFS RMS`, sin clipping ni dropouts a 44.1/48/96 kHz.
+- **Bender Deluxe (`tw26`, 5E3, v2.4)** — recalibrado 2026-07-19 contra las 21 referencias locales enlazadas al Brit DI exacto: Instrument, Mic, jumpered, Tone min/half/max e Input 2. La auditoria visual del esquema Fender 57 corrigio V1A/V1B a 12AX7A (no 12AY7) y reemplazo la suma de canales por una solucion nodal de R10/R11/R12, C2/C3 0.1uF, C4 500pF y C5 4.7nF; esto conserva la conexion real de las senales a los wipers y la interaccion de los dos volumenes. Input 2 usa el divisor 68k/68k. V2A 12AX7 alimenta el cathodyne 56k/56k, `MultiNodeBPlus` modela 5Y3 + 16uF + 4k7/22k y 2x6V6 sin NFB llegan al OT electrico; Cab Sim sigue bypassable y separado. La v2.4 corrige el fallo que dejaba los extremos `inst_max_tone_max` y `mic_max_tone_max` casi limpios: sobre 0.58 el control ahora aumenta progresivamente el drive fisico de V2/PI/6V6, mientras el gain posterior solo nivela. A maximo, la coherencia DI/salida por bandas queda Instrument `0.682/0.379/0.039` vs referencia `0.633/0.397/0.051`, y Mic `0.661/0.378/0.037` vs `0.654/0.345/0.030`; el voicing cranked queda dentro de aproximadamente 1 dB por banda salvo el subgrave de Mic. Las tablas post-circuito de 21 puntos para Instrument, Mic y jumpered mantienen `-21.50 +/- 0.001 dBFS RMS` sin realimentar tubos ni limiter. Validado sin clipping ni dropouts a 44.1/48/96 kHz. La validacion debe conservar comparacion por ventanas y coherencia contra la DI; igualar RMS/crest/bandas por si solos no demuestra identidad de la distorsion.
+- **Bender Bassman (`tw40`, 5F6-A, v2.4)** — las seis referencias Bright/Normal min/half/max se comparan con la misma Brit DI. La respuesta de magnitud queda dentro de aproximadamente 1.5 dB por banda en los casos medidos; el empuje cranked del PI se calibro solo sobre el tramo superior del A1M para acercar la coherencia no lineal del 5881 a la referencia sin alterar clean/noon. Las curvas post-circuito Bright, Normal y jumpered se volvieron a medir a 21 puntos para sostener -21.50 dBFS durante el barrido de volumen.
+- **Super-Sonic 22 (`tw22`)** — ✅ reauditoria 2026-07-19: el esquema no es Vintage 1× / Burn 3×. V1A es comun y la ruta real queda Vintage `V1A -> tone/Volume -> V1B`; Burn `V1A -> Gain 1 -> V1B -> Gain 2 -> V2A -> divisor 470k/100k -> V2B -> TMB`. Se añadieron el cuarto triodo Burn, Miller por cada entrada y los coupling reales C2=.0022µF, C9=.22µF, C20=.047µF y C14=.22µF. Gain 2 conserva el piso R36=20k/R38=10k y concentra su subida al final del pote. Los tonestacks siguen con valores exactos: Vintage 250k/250k/6.8k-fijo/100k · 250pF/.1µF/.047µF; Burn 250k/250k/25k/120k · 150pF/.15µF/.022µF. PI `PhaseInverterLTP12AT7`, supply silicon `MultiNodeBPlus`, `PowerAmp6V6` y V30 bypassable. Las diez referencias Gain1/Gain2 con Brit DI quedan dentro de 0.9 dB RMS antes del ultimo trim de 0.75 dB; en el punto half/half final, RMS +0.08 dB, bandas 80 Hz-5 kHz dentro de 1.1 dB y sin dropout. La configuracion fija de tubos/PI/power ya no se reinicia al mover parametros. El morph Vintage/Burn tiene compensacion post-circuito para evitar el salto de volumen del Gain del juego.
+- **Bassman (`tw40`, 5F6-A, v2.3)** — ✅ recalibrado 2026-07-19 contra las seis referencias locales enlazadas al Brit DI exacto, con alineación y ventanas activas de 50 ms. V1 usa 2×12AY7 con los 100k/820R/250uF del plano, V2A 12AX7 con 100k/820R sin bypass, `ToneStackYeh` 250k/1M/25k/56k · 250pF/20nF/20nF, LTP 12AX7 82k/100k · 470R/10k, `MultiNodeBPlus` GZ34/choke y 2×5881. Presence quedó dentro del lazo de salida y el límite de excursión 5881/OT ocurre antes de la respuesta lineal final del transformador. La revisión fat baja la esquina sintética que llegaba a 120 Hz y añade la resonancia reactiva del OT a 90 Hz: Bright máximo queda a -0.34 dB en 80-250 Hz y el resto de 180 Hz-10 kHz dentro de aproximadamente +/-1.25 dB; el crest p50/p90 queda a +0.60/+0.66 dB. La normalización se aplica después del oversampling: tablas de 21 puntos para Bright, Normal y la ruta real Jumpered (Normal 0.4 + Bright sweep), sin alimentar tubos ni limiter. Bright/Jumpered quedan en -21.50 dBFS RMS; el extremo Normal 0-0.1 se deja deliberadamente más bajo para conservar su crest limpio sin clipping. Validado a 44.1/48/96 kHz sin clipping, no-finitos ni dropouts, con Cab Sim apagado.
 - **Marshall JTM45 / Bluesbreaker (`jtm45_marsten`, `bluesbreaker_marsten`)** — ✅ correccion 2026-06-22: usan la rama 5881/6L6 de 30W con GZ34, no la tabla KT66. En DSP quedan con `PowerAmp5881`, `PhaseInverterLTP12AX7`, `MultiNodeBPlus`, Miller por entrada/recovery y ahora `CouplingCapGridLeak` separado en cada canal V1→mixer/V2a y hacia PI. Reservar `PowerAmpKT66` para BT45 u otros esquemas que confirmen KT66. PENDIENTE prueba en vivo/crest post-migracion.
-- **Marshall Plexi (`plexi`, 1959 Super Lead)** — ✅ 2×12AX7 (High-Treble/Normal) + 12AX7 recovery + tonestack Marshall FMV (ya era real) + power (EL34 PP). Core inline en `PlexiPlugin.cpp` (no header). Crest matchea `plex_vol1_*` (9.5/4.9/3.0 vs ref 7.6/4.3/3.6 — ref MUY distorsionada). PENDIENTE probar en vivo. ⚠️ lección: al portar, el `cleanMakeup` viejo (×N a bajo drive, para el tanh limpio) desincroniza con los tubos reales → reducirlo; y `pushed` (smoothstepRange) controla CUÁNDO satura — corrérlo temprano si el ref rompe temprano.
+- **Marshall Plexi (`plexi`, 1959 Super Lead)** — ✅ reconstruccion 3.0.0 de 2026-07-19 contra `1959-01-60-02.pdf` y las nueve referencias locales. Rutas V1 High Treble 100k/2k7/.68u y Normal 100k/820R/330u independientes; A1M Loudness despues de V1, acoples 2n2/22n, mixers 470k con bypass 470p, V2A recovery, V2B cathode follower, stack `250k/1M/25k/33k · 470p/22n/22n`, LTP ECC83 100k/82k, 22n/220k hacia 4xEL34 y fuente de silicio mult nodo. Se elimino el LTP 12AT7/Fender y se corrigio el helper que usaba por error el tail 10k como Rk de cada triodo, causa del silencio/glitch de la implementacion anterior. La carga Miller completa del canal Normal y su perdida impulsada reproducen su ancho menor sin oscurecer Bright/jumpered. Crest min/half/max queda Bright `20.50/14.17/7.49` vs referencia `21.49/14.02/7.59`; Normal `15.71/15.23/6.71` vs `15.60/15.51/6.51`; jumpered `18.49/10.94/8.63` vs `18.87/10.76/7.42`. El wrapper trabaja a `0.50x`, fuera de la rodilla de seguridad en los puntos medidos; la distorsion viene del circuito. Tablas lineales estrictamente post-DSP mantienen los 11 pasos de cada perfil a `-21.600 dBFS RMS`. A 44.1/96 kHz, Bright min y jumpered max quedan entre `-21.628` y `-21.438 dBFS`, sin clipping ni dropouts; queda pendiente solamente la prueba auditiva en vivo.
 - **Marshall JCM800 (`jcm800_marsten`, 2204 master-volume)** — ✅ 3×12AX7 cascada (V1a→GAIN→V1b→V2) + tonestack Marshall TMB (ya era real: Treble 220k/Bass 1M/Mid 25k/slope 33k · 470pF/22nF/22nF) + power (EL34 PP). Core inline en `Jcm800Plugin.cpp` (estéreo L/R), oversampling 2× + 3.2× input agregados. Correccion 2026-06-22: el cascade 2204 ahora incluye `CouplingCapGridLeak` entre V1a→V1b, V1b→V2 y hacia PI, por lo que el bloqueo/grid-current ya no queda omitido en la zona donde el master-volume empieza a comprimir. Crest matchea `jcm800_preamp_1/4/7/10` (13.1/9.6/8.4/7.6 vs ref 12.8/7.3/6.9/6.7 — g1 casi exacto, medio ~2 dB más limpio). PENDIENTE probar en vivo. ⚠️ misma lección Plexi + dos más: (a) el `cleanMakeup` viejo INVIERTE la curva de crest (mete el tono limpio en el `softClip` de salida) → eliminarlo, dejar solo `softClip(y*level)` suave como saturación de OT; (b) el voicing de parlante viejo traía boosts irreales (+16.5 dB fizz) que inflan el crest sin distorsionar → un cab real ATENÚA los agudos (shelf negativo + LP ~11 kHz).
 - **Marshall DSL15 + JVM410 (`dsl15_marsten`, `jvm410_marsten`)** — ✅ correccion 2026-06-22: ambos ya tenian 12AX7, tonestacks Yeh, PI, B+ y power real; faltaban acoples con memoria dentro de las cascadas. DSL15 ahora tiene `CouplingCapGridLeak` por rama Classic/Crunch/Ultra y antes del cascade extra; JVM410 tiene acoples por rama Clean/Crunch y entre OD1/OD2. PENDIENTE prueba en vivo/crest post-migracion.
 - **Dr. Z EMS / MrY (`ems_mry`)** — ✅ correccion Marshall-family 2026-06-22: mantiene 12AX7 + EL34 PP, pero el cascade preamp ahora replica el mismo comportamiento de acoplo/bloqueo que el JCM800 (`CouplingCapGridLeak` entre V1a→V1b, V1b→V2 y hacia PI). Esto corrige el caso donde el modelo compilaba con bloques modernos pero aun saltaba directo entre etapas de alta ganancia. PENDIENTE prueba en vivo/crest post-migracion.
-- **Mesa Dual Rectifier (`dual_rect`, 3-channel Solo Head)** — ✅ el más complejo: 3 canales (Green/Orange/Red) × 3 modos (Raw/Vintage/Modern) + Rectifier (Spongy/Bold). Cadena única reconfigurada por canal activo (solo uno suena a la vez). Topología del esquemático (BLOCK DIAGRAM + PREAMP PT1/PT2): **V1a compartido** → Green: tonestack→V1b (limpio, 2 etapas); Orange/Red: **V2a→V2b→V3a→V3b** (4 etapas cascada)→tonestack (post-dist). Power **4×6L6GC PP** con tabla dedicada; el Rectifier mapea directo a `power.sagDepth` (Bold/silicio=tight, Spongy/5U4=saggy) → eliminé el `RectoSupply` aparte. Tonestacks **circuito-real del esquemático**: Clean (CH1) Treble 250k/250pF·Bass 250k/.1µF·Mid 25k/.047µF·slope 100k (≈Mesa Mark); Recto (CH2/CH3) Treble 250k/500pF·Bass 1M/.02µF·Mid 25k/.02µF·slope 47k. Crest vs `dual_ch*`: **Red Modern g10 = 8.9 vs 9.1 (default, exacto)**; Orange/Red vint/modern g10 todos ±1 dB; Green limpio. PENDIENTE probar en vivo. ⚠️ lecciones nuevas: (a) el crest del canal LIMPIO está dominado por el cab-scoop + power-amp floor, no por el preamp → bajar el piso de `power drive` (con fuerte dependencia de `chHot`) para que limpie; (b) ladder de modos Raw<Vint<Modern (no al revés); (c) los pisos de drive de las etapas TARDÍAS del cascade deben escalar con el knob de Gain (pot va ANTES del cascade) para que limpie a bajo gain sin tocar el match de alto gain.
+- **Mesa Dual Rectifier (`dual_rect`, 3-channel Solo Head)** — ✅ revision 2.9.0 re-auditada 2026-07-19 contra las 12 referencias Fast Thrash con **Master de canal 0.60**. Mantiene la topologia del esquema: Green `V1A -> stack/gain -> V2A -> V1B`; Orange/Red `V1A -> gain -> V2A -> V2B cold clipper 100k/39k -> V3A -> V3B follower -> stack/master`, PI 12AX7 LTP y 4x6L6GC. Conserva la calibracion `3.2x` (`+10.1 dB`) antes de V1 solo en Orange/Red; Green queda sin cambios. La 2.7 corrigio el caso donde crest/centroide globales ocultaban una distorsion demasiado redonda: V2B tiene region lineal y rodilla corta, V3A recibe `0.65-0.88x`, Vintage baja el power drive a `0.90` y Modern abre el power a `1.15/0.95` Orange/Red. La 2.8 corrige el caso donde Modern se enterraba despues de una cabina: el shelf util comienza en `1.8 kHz`, el notch de `4.8 kHz` baja de `-7.5` a `-6 dB`, el hueco de cuerpo de `950 Hz` se reduce y el aire ancho sube `1 dB`. Con la 4x12 Marsten, CH3 Modern queda a `-0.1/+1.0 dB` de la referencia entre `2.5-4 kHz` en gain half/full y a `-0.8/-0.6 dB` entre `6-10 kHz`; antes quedaba hasta `2.4 dB` abajo. La 2.9 conserva Modern sin cambios y repone la resonancia OT/parlante que estaba neutralizada a `0 dB` en Raw/Vintage: `+2.0/+1.5 dB` a `135 Hz`, Q `0.72`, para recuperar el peso del palm mute sin modificar sus agudos. Las cuatro tablas Raw/Vintage se recalibraron en sus 11 pasos despues del cambio. Todos los modos quedan en `-17.500 dBFS` en los puntos medidos, sin clipping ni dropouts. Validado a 44.1/48/96 kHz con desviacion maxima de nivel `0.05 dB`. La asociacion de referencias sigue siendo estricta: Brit DI para las generales y Fast Thrash DI solo para `dualrect/fast_trash`, con alineacion temporal uno-a-uno.
 - **Marshall DSL100H (`dsl100`, JCM2000 Dual Super Lead)** — ✅ 2 canales (Classic Clean/Crunch + Ultra OD1/OD2) en una cadena con morph paralelo (el knob de Gain de RS barre Classic clean→crunch→Ultra). 6× `TubeStage` 12AX7 (V1 compartido + paths clean/crunch/ultra + cascade extra) + `PowerAmpEL34` (4×EL34) + tonestack **circuito-real Yeh con valores JCM2000** (Treble 250k/500pF · Bass 1M/22nF · Mid 25k/22nF · slope 56k). Tone Shift (mid-scoop), Presence/Resonance (NFB), Low/High → `sagDepth`. Agregué oversampling 2× (no lo tenía). **SIN render de referencia** → calibrado por carácter+topología (crest monotónico Classic clean 13.8 → crunch 12 → Ultra 7.9, estable). PENDIENTE probar en vivo. ⚠️ mismas lecciones: piso bajo de `power drive` para que el limpio quede limpio; `cleanMakeup` reducido (invertía la curva); cab fizz +9.5 dB → atenúa.
 - **Mesa Mark III (`mark_iii`) + Mark II (`mark_ii`)** — ✅ los amps "lead" Boogie (Santana/Metallica). 2 voces en una cadena: RHYTHM (Volume→Master) y LEAD (Lead Drive cascada→Lead Master), elegidas por el switch. 4× `TubeStage` 12AX7 (V1 + rhythm + 2 cascada lead) + `PowerAmp6L6GC` (Simul-Class ~75-100W). El **tonestack ya era circuito-real** (clase propia `MarkToneStack`) PERO en float → **NaN a 192k**; lo cambié a `rbtube::ToneStackYeh` (double, mismos valores: Treble 250k/250pF · Bass 1M/22nF · **Mid 10k** scoopeado/22nF · slope 100k). Mark III tiene el **graphic EQ de 5 bandas** (80/240/750/2200/6600, la "V" Boogie) ya real; Mark II tiene pulls Shift/Bright/GainBoost/HalfPower + reverb spring. Agregué oversampling 2×. **Sin render de referencia** → por carácter: crest monotónico Rhythm 18.3 limpio → Lead 9.8 (III) / 10.0 (II — un pelo menos searing, correcto). PENDIENTE probar en vivo. ⚠️ **LECCIÓN NUEVA: un tonestack de 3er orden en `float` se va a NaN a 192k (= 96k host × 2× OS) — usar siempre `ToneStackYeh` (double) para los TMB de 3 bandas.**
 - **Laney AOR 50 (`aor50`, A50 Series II "Pro Tube Lead", = el RS Amp_GB100)** — ✅ **HÍBRIDO tubo+diodo**. 2 canales (Channel One limpio + AOR lead) en morph (RS Gain). Del esquemático `Laney_aor50_series2.pdf`: 5× ECC83 (V1B/V2A/V2B/V3A/V3B) + **clipper de diodos 1N4148** (D3/D4 en torno a un op-amp = el "Advanced Overdrive Response") en el path del lead + power EL34 (rectificador silicio = tight). Porté con `TubeStage` (los 5) + `DiodeClipper` (el mismo Shockley del JC, en serie tras el cascade del AOR) + `ToneStackYeh` con valores reales del esquemático (Treble 220k/470pF · Bass 1M/22nF · Mid 22k/22nF · slope 33k = stack JCM800) + `PowerAmpEL34`. Pull-Deep/Mid-Boost como shelves. Oversampling 2×. **Sin render de referencia** → por carácter: crest Channel One 12.6 (limpio rock) → AOR lead 7.4 (crunch duro tubo+diodo), monotónico, estable. PENDIENTE probar en vivo. ⚠️ **el diode clipper en serie tras los tubos = cómo se modela un overdrive híbrido** (no todo es tubo; el carácter agresivo del AOR es el diodo).

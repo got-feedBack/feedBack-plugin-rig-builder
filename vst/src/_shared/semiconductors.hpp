@@ -43,6 +43,13 @@ static inline JfetSpec jfet2N4339()
     return { -0.6f, -1.8f, 0.5f, 1.5f, 1700.0f, 7.0f, 3.0f };
 }
 
+static inline JfetSpec jfet2N4360()
+{
+    // P-channel 2N4360. The original squelch uses it as a voltage-controlled
+    // shunt: 3 mA minimum IDSS, 0.7..10 V cutoff and 700 Ohm maximum RDS(on).
+    return { 0.7f, 10.0f, 3.0f, 50.0f, 700.0f, 20.0f, 5.0f };
+}
+
 static inline DiodeSpec diode1N4148()
 {
     return { 2.52e-9f, 1.75f, 1.20f };

@@ -33,12 +33,13 @@ static inline float finalLimit(float x)
     return x;
 }
 
-static inline float staticFuzzMakeup(float fuzz)
+static inline float staticAttackCalibration(float attack)
 {
-    const float f = clamp01(fuzz);
-    // The old inverse-Fuzz makeup was 18-20 dB above the supplied reference
-    // and made the bias transition sound like broken output clipping.
-    return 0.1735f - 0.0661f * f + 0.0267f * f * f;
+    const float f = clamp01(attack);
+    // Static loss calibration from the supplied min/noon/max Attack renders.
+    // This follows the passive circuit as a whole; it never follows the audio
+    // envelope, so note attacks and gated decays remain those of Q2.
+    return 0.961f + 0.296f * f - 0.356f * f * f;
 }
 
 } // namespace
@@ -55,8 +56,8 @@ class BuzzTonePlugin : public Plugin
 
     void applyAll()
     {
-        left.setFuzz(params[kFuzz]);
-        right.setFuzz(params[kFuzz]);
+        left.setAttack(params[kAttack]);
+        right.setAttack(params[kAttack]);
     }
 
 public:
@@ -76,7 +77,7 @@ protected:
     const char* getDescription() const override { return "1.5 V three-2N1305 germanium fuzz"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 3, 0); }
+    uint32_t getVersion() const override { return d_version(1, 4, 0); }
     int64_t getUniqueId() const override { return d_cconst('B', 'z', 't', 'n'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -136,7 +137,7 @@ protected:
 
             const float wetL = osL.downsample(ubL);
             const float wetR = osR.downsample(ubR);
-            const float makeup = staticFuzzMakeup(params[kFuzz]);
+            const float makeup = staticAttackCalibration(params[kAttack]);
             outL[i] = finalLimit(wetL * vol * makeup);
             outR[i] = finalLimit(wetR * vol * makeup);
         }

@@ -1,11 +1,16 @@
 # Guia de modelado para pedales de distorsion
 
-Estado: 2026-07-15
+Estado: 2026-07-19
 
 Esta guia registra lo aprendido al reconstruir el Mouse, modelo del Pro Co RAT
 II. El RAT se usa como referencia de la familia distortion: clipping firme,
 ataque definido y control tonal posterior. No es una voz generica para copiar
 a DS-1, HM-2, OS-2 u OCD; cada pedal debe conservar la topologia de su esquema.
+
+Esta guía complementa el workflow obligatorio de
+[`REFERENCE_MATCHING_WORKFLOW.md`](REFERENCE_MATCHING_WORKFLOW.md). Si existe una
+contradicción sobre render, alineación, orden de calibración o gates de entrega,
+manda el workflow común; este documento define la electrónica de distorsiones.
 
 ## 1. Fuentes del RAT
 
@@ -104,6 +109,10 @@ mezclar un low-pass y un high-pass ni compensar automaticamente su perdida.
 Se renderizaron los mismos 32 segundos del DI a 48 kHz y se midieron RMS,
 crest factor y centroide espectral. Volume permanecio en 0.62.
 
+Para nuevas calibraciones no detenerse en esas tres métricas históricas. Ejecutar
+también el reporte común alineado, comparar coherencia DI/salida por bandas,
+crest p10/p50/p90, crecimiento armónico y decay en las mismas ventanas del riff.
+
 | Dist | Filter | RMS modelo/ref | Centroide modelo/ref |
 |---|---|---:|---:|
 | 0.5 | Min | -19.80 / -19.79 dBFS | 1323 / 1325 Hz |
@@ -129,9 +138,10 @@ referencia aislada del nodo de diodos.
 5. Implementar cada pote con su valor, orientacion y taper.
 6. Renderizar el mismo DI en minimo, mitad y maximo de Drive/Tone.
 7. Medir RMS, peak, crest, centroide, bandas y envolvente por ventanas.
-8. Barrer todas las perillas y comprobar que no haya saltos, NaN ni silencios.
-9. Probar silencio, impulso, ruido y bloques largos a 44.1/48/96 kHz.
-10. Compilar en un directorio limpio, instalar, firmar y cargar el VST3 real.
+8. Comparar coherencia DI/salida y crecimiento armónico contra la referencia.
+9. Barrer todas las perillas y comprobar que no haya saltos, NaN ni silencios.
+10. Probar silencio, impulso, ruido y bloques largos a 44.1/48/96 kHz.
+11. Compilar en un directorio limpio, instalar, firmar y cargar el VST3 real.
 
 Una coincidencia de RMS no valida una distorsion. El ataque, la compresion, el
 reparto de armonicos y la perdida del filtro deben coincidir por separado.

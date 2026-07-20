@@ -6060,7 +6060,7 @@ function rbStartNativeParamSync(api, slotId, piece) {
             // Persist into the piece (same shape 📸 Capture writes) so the tweak
             // survives closing the window / reloading: real-id keyed params +
             // logical-id keyed values (for the thumbnail + canvas redraw).
-            const model = rbBuildCanvasModel(live);
+            const model = rbBuildCanvasModel(live, null, rbCanvasExpectedParamNames(rbCanvasStem(piece)));
             piece._vst_param_meta = live;
             piece._vst_params = Object.assign({}, now);
             piece._vst_logical = piece._vst_logical || {};
@@ -6138,7 +6138,8 @@ async function rbStudioChainSlotIdForPiece(api, pieceIdx) {
 //      "Sample Rate", so real ids are shifted by 2: logical 0 (Gain/Volume) hit
 //      Buffer Size (no-op), logical 1 hit Sample Rate (no-op), and the rest drove
 //      the param two slots to the left. We re-fetch the meta live and map by
-//      filtered position instead of ever using the raw logical id.
+//      the exact parameter name declared by the amp face, with filtered
+//      position used only for older faces that do not declare names.
 async function rbStudioApplyKnobToEngine(piece, idx, logicalId, val) {
     const api = rbAudioApi();
     // 1. Try to resolve the engine slot. A null slot only means we can't DRIVE
@@ -6162,8 +6163,16 @@ async function rbStudioApplyKnobToEngine(piece, idx, logicalId, val) {
         catch (_) { meta = piece._vst_param_meta || []; }
     }
     const filtered = rbFilterVstParams(meta || []);
-    if (logicalId < filtered.length) {
-        const p = filtered[logicalId];
+    let expectedName = null;
+    try {
+        const stem = rbCanvasStem(piece);
+        const spec = window.RBPedalCanvas && window.RBPedalCanvas.specs && window.RBPedalCanvas.specs[stem];
+        if (spec && Array.isArray(spec.paramNames)) expectedName = spec.paramNames[logicalId];
+    } catch (_) {}
+    const p = expectedName
+        ? filtered.find(x => rbVstParamNameKey(x.name ?? x.label) === rbVstParamNameKey(expectedName))
+        : filtered[logicalId];
+    if (p) {
         const realId = p.id ?? p.paramId ?? p.index;
         if (realId != null) {
             // Persist under the REAL id REGARDLESS of whether the slot resolved —
@@ -9035,10 +9044,31 @@ function rbFilterVstParams(params) {
 //   • logicalParams — the filtered params re-id'd to their logical index
 //                  (so the generic fallback lays them out 0,1,2…).
 // `overrideById` (optional, keyed by REAL id) overlays in-progress edits.
-function rbBuildCanvasModel(rawParams, overrideById) {
+function rbVstParamNameKey(value) {
+    return String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function rbCanvasExpectedParamNames(stem) {
+    try {
+        const spec = window.RBPedalCanvas && window.RBPedalCanvas.specs && window.RBPedalCanvas.specs[stem];
+        return spec && Array.isArray(spec.paramNames) ? spec.paramNames : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function rbBuildCanvasModel(rawParams, overrideById, expectedNames) {
     const filtered = rbFilterVstParams(rawParams || []);
     const values = {}, idMap = {};
-    const logicalParams = filtered.map((p, i) => {
+    const byName = {};
+    filtered.forEach(p => {
+        const key = rbVstParamNameKey(p.name ?? p.label);
+        if (key && byName[key] == null) byName[key] = p;
+    });
+    const ordered = Array.isArray(expectedNames)
+        ? expectedNames.map((name, i) => byName[rbVstParamNameKey(name)] || filtered[i]).filter(Boolean)
+        : filtered;
+    const logicalParams = ordered.map((p, i) => {
         const realId = p.id ?? p.paramId ?? p.index ?? i;
         idMap[i] = realId;
         let v = p.value ?? p.current;
@@ -9560,7 +9590,9 @@ function rbCanvasDisplayWidth(stem) {
 // fader, and one keyed by id still lands on the right knob.
 // Full canvas model (values + logical→real idMap + logical params) for a piece.
 function rbCanvasParamModel(piece) {
-    return rbBuildCanvasModel((piece && piece._vst_param_meta) || [], (piece && piece._vst_params) || null);
+    const expectedNames = rbCanvasExpectedParamNames(rbCanvasStem(piece));
+    return rbBuildCanvasModel((piece && piece._vst_param_meta) || [],
+        (piece && piece._vst_params) || null, expectedNames);
 }
 
 // Best-known values for a NON-interactive thumbnail (the piece may never have
@@ -12233,10 +12265,11 @@ function rbAddCanvasParamNameFallback(vstPath, nameToId, idToName) {
         .replace(/[^a-z0-9]/g, '');
 
     const spec = window.RBPedalCanvas.specs[stem];
-    if (!spec || !Array.isArray(spec.names)) return false;
+    const names = spec && (Array.isArray(spec.paramNames) ? spec.paramNames : spec.names);
+    if (!Array.isArray(names)) return false;
 
     let added = 0;
-    spec.names.forEach((name, idx) => {
+    names.forEach((name, idx) => {
         if (!name) return;
         const key = String(name).trim().toLowerCase();
         if (nameToId[key] == null) {
@@ -15140,7 +15173,8 @@ async function rbCatalogCustomEditInline(g) {
         rbSetActiveVstFace(catPiece, () => {
             const cv = document.getElementById(`rb-cg-cat-canvas-${safeId}`);
             if (!cv || !document.body.contains(cv)) return;
-            const m = rbBuildCanvasModel(catPiece._vst_param_meta || [], catPiece._vst_params || null);
+            const m = rbBuildCanvasModel(catPiece._vst_param_meta || [], catPiece._vst_params || null,
+                rbCanvasExpectedParamNames(stem));
             const vv = {};
             (layout.controls || []).forEach(c => { if (typeof c.param === 'number' && typeof m.values[c.param] === 'number') vv[c.id] = m.values[c.param]; });
             PC.redraw(cv, vv);
@@ -15176,7 +15210,7 @@ async function rbCatalogCustomEditInline(g) {
         slotId = sid;
         rbState._cgCatSlotId = sid;
         rbStashGearVstParamNames(g.rs_gear, raw);
-        model = rbBuildCanvasModel(raw, null);
+        model = rbBuildCanvasModel(raw, null, rbCanvasExpectedParamNames(stem));
         if (!layout) { layout = PC.smartLayout(g.category, rbFilterVstParams(raw), { title: g.real_name || '' }); mapParams(); }
         renderFace();   // re-draw with the plugin's live values + audio wiring
     } catch (_) { /* the face is already shown */ }
@@ -17939,7 +17973,7 @@ async function rbCatalogEditInline(safeId, vstPath, vstFormat, rsGear, stem) {
         try {
             const raw = (typeof api.getParameters === 'function' ? await api.getParameters(slotId) : []) || [];
             rbStashGearVstParamNames(rsGear, raw);
-            model = rbBuildCanvasModel(raw, null);
+            model = rbBuildCanvasModel(raw, null, rbCanvasExpectedParamNames(stem));
         } catch (_) {}
         // No faithful in-app canvas recreation → open the plugin's OWN native
         // window (the real UI) instead of generic synthesized sliders. rbCatalog

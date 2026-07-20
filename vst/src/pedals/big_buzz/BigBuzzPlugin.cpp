@@ -42,7 +42,12 @@ static inline float staticFuzzMakeup(float sustain, float tone)
     const float compressed = su * su * (3.0f - 2.0f * su);
     const float loadedToneGain = 1.0f + compressed * (0.06f + 0.55f * t - 0.22f * t * t);
     const float recoveryGain = 1.0f + 0.80f * t + 0.06f * t * t;
-    return base * loadedToneGain * recoveryGain;
+    // Post-circuit calibration only: preserve the reference's audible level at
+    // the low end of Sustain and at the lossy dark end of the passive tone pot.
+    const float lowSustainTrim = 1.0f + 0.46f * std::pow(1.0f - s, 4.0f);
+    const float darkTrimAmount = 0.09f + 0.27f * compressed;
+    const float darkToneTrim = 1.0f + darkTrimAmount * std::pow(1.0f - t, 4.0f);
+    return base * loadedToneGain * recoveryGain * lowSustainTrim * darkToneTrim;
 }
 
 } // namespace
@@ -82,7 +87,7 @@ protected:
     const char* getDescription() const override { return "V1 Big Muff style silicon fuzz"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 3, 0); }
+    uint32_t getVersion() const override { return d_version(1, 4, 0); }
     int64_t getUniqueId() const override { return d_cconst('B', 'z', 'T', '2'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -143,8 +148,8 @@ protected:
             const float wetL = osL.downsample(ubL);
             const float wetR = osR.downsample(ubR);
             const float makeup = staticFuzzMakeup(params[kSustain], params[kTone]);
-            outL[i] = finalLimit(wetL * volume * makeup);
-            outR[i] = finalLimit(wetR * volume * makeup);
+            outL[i] = finalLimit(2.875f * wetL * volume * makeup);
+            outR[i] = finalLimit(2.875f * wetR * volume * makeup);
         }
     }
 
