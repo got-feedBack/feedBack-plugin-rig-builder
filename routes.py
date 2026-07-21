@@ -7226,7 +7226,9 @@ def setup(app, context):
         return {
             "platform": plat,
             "installed": _vst_installed(),
-            "has_pack": bool(pack.get("url")),
+            # Only "available" once a publish has stamped the real size — the
+            # committed manifest is a 0-byte placeholder until then.
+            "has_pack": (pack.get("bytes") or 0) > 0,
             "pack_bytes": pack.get("bytes") or None,
             "download": dl,
         }
@@ -7236,7 +7238,7 @@ def setup(app, context):
         """Start the per-platform VST pack download (409 if already running)."""
         plat = _current_vst_platform()
         pack = _vst_pack_manifest().get(plat) or {}
-        if not pack.get("url") or not pack.get("sha256"):
+        if (pack.get("bytes") or 0) <= 0 or not pack.get("sha256"):
             return JSONResponse({"error": f"no VST pack published for {plat}"}, status_code=404)
         with _vst_pack_lock:
             if _vst_pack_state["status"] == "running":
