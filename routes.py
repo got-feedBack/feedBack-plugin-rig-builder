@@ -388,7 +388,7 @@ _DEFAULT_SETTINGS = {
     # Max CUT authority. -10 (was -20): a narrower gain range makes the leveler
     # move less, so it pumps/chases dynamics less. -20 of cut let very loud tones
     # be pulled way down and the follower ride harder; per-request, tamed to -10.
-    "final_chain_min_gain_db": -10.0,
+    "final_chain_min_gain_db": -5.0,
     # Max BOOST authority. Keep it SMALL so the final leveler behaves like a
     # LIMITER (cut loud tones to target) with only a touch of make-up — NOT an
     # AGC that cranks quiet input. +20 dB let a softly-played tone get boosted
@@ -396,7 +396,7 @@ _DEFAULT_SETTINGS = {
     # (brickwall-squashed), and idle hiss rode up +20 dB when you stopped. The
     # "too-quiet tone" case that needed big boost is gone (cab gain is now baked
     # into the IR stage — _ir_stage), so a few dB of make-up is plenty.
-    "final_chain_max_gain_db": 6.0,
+    "final_chain_max_gain_db": 4.0,
     "final_chain_gate_db": -45.0,
     "final_chain_attack_ms": 12,
     "final_chain_release_ms": 120,
@@ -464,8 +464,8 @@ def _final_leveler_params_state(gate_db_override: float | None = None,
     # As of the K-weighting upgrade the leveler measures BS.1770 LUFS, so this
     # "Target RMS dB" is really a target LUFS (param name kept for state compat).
     target_rms = float(s.get("final_chain_target_rms_db", -12.0))
-    max_boost = float(s.get("final_chain_max_gain_db", 6.0))
-    max_cut = abs(float(s.get("final_chain_min_gain_db", -10.0)))
+    max_boost = float(s.get("final_chain_max_gain_db", 4.0))
+    max_cut = abs(float(s.get("final_chain_min_gain_db", -5.0)))
     gate = float(s.get("final_chain_gate_db", -45.0))
     # Bare-cab chains (no amp) run much quieter than amp chains even after the
     # pre-leveler boost stage — the caller lowers the gate so their playing
@@ -8355,8 +8355,8 @@ def setup(app, context):
             "chain_makeup": float(s.get("chain_makeup", 1.0)),
             "final_chain_normalize": bool(s.get("final_chain_normalize", True)),
             "final_chain_target_rms_db": float(s.get("final_chain_target_rms_db", -12.0)),
-            "final_chain_min_gain_db": float(s.get("final_chain_min_gain_db", -10.0)),
-            "final_chain_max_gain_db": float(s.get("final_chain_max_gain_db", 6.0)),
+            "final_chain_min_gain_db": float(s.get("final_chain_min_gain_db", -5.0)),
+            "final_chain_max_gain_db": float(s.get("final_chain_max_gain_db", 4.0)),
             "final_chain_gate_db": float(s.get("final_chain_gate_db", -45.0)),
             "final_chain_attack_ms": int(min(float(s.get("final_chain_attack_ms", 12)), 80.0)),
             "final_chain_release_ms": int(min(float(s.get("final_chain_release_ms", 120)), 250.0)),
