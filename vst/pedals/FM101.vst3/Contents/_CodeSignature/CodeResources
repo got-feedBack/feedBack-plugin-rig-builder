@@ -18,6 +18,20 @@
 			47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 			</data>
 		</dict>
+		<key>x86_64-linux/BobFilter.so</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			wHSsQdVrn3VQM73PxIo/ZshVKaa+Urh2cBN/PO3FZko=
+			</data>
+		</dict>
+		<key>x86_64-win/BobFilter.vst3</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			cJq7tX5AHORO4p9CbZRGDrUxOPPxUJLv7thVKjhAOe8=
+			</data>
+		</dict>
 	</dict>
 	<key>rules</key>
 	<dict>
