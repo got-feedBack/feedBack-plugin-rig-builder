@@ -40,8 +40,7 @@ public:
         detectorSeeded = false;
         warmupSamples = 0;
         sigSamples = 0;
-        sustainSamples = 0;
-        fastLatch = false;
+        lastRelockValue = -1.0f;
         gateHoldSamples = 0;
         gateGain = 1.0f;
         msEnv = 0.0;
@@ -98,6 +97,16 @@ public:
         const float releaseMs = *apvts.getRawParameterValue("release_ms");
         const float ceilingDb = *apvts.getRawParameterValue("ceiling_db");
         const float trimDb = *apvts.getRawParameterValue("trim_db");
+
+        // RELOCK: the host toggles this param on tone switches (a mega-chain
+        // song shares ONE leveler instance; tones swap via bypass, so the
+        // plugin can't see the switch itself). Re-open the lock window so the
+        // gain re-converges to the NEW tone's level; the current gain holds in
+        // the meantime (no mute — this happens mid-song).
+        const float relockVal = *apvts.getRawParameterValue("relock_trigger");
+        if (lastRelockValue >= 0.0f && std::abs(relockVal - lastRelockValue) > 0.25f)
+            sigSamples = 0;
+        lastRelockValue = relockVal;
 
         // BIDIRECTIONAL loudness normalization to target (-12 LUFS default): the
         // AGC boosts quiet tones UP and cuts loud tones DOWN so every tone lands
@@ -287,8 +296,15 @@ public:
         // quiet, so the AGC snapped to a big boost and the tone BLASTED then
         // dropped ("suena fuerte el bajo y luego se baja") on every song/tone
         // start. Seeding makes the very first gain decision use the real level.
+        // The seed block must also QUALIFY as signal (`integrating`: pitched
+        // vote or attack transient), not merely clear the gate level: a noisy
+        // dist/fuzz chain idles ABOVE the gate, and seeding on that hiss locked
+        // the level LOW — the first real note then took max boost and squashed
+        // against the limiter ("cambio de tono, toco y suena dist, luego baja
+        // al volumen"). A real first note still seeds instantly through the
+        // transient path.
         const double blockMs = sumSq / double(std::max(1, numSamples));
-        if (! detectorSeeded && blockMs > 1.0e-9
+        if (! detectorSeeded && integrating && blockMs > 1.0e-9
             && (-0.691 + 10.0 * std::log10(blockMs)) >= gateDb)
         {
             msEnv = blockMs;
@@ -332,8 +348,13 @@ public:
         const int kWarmupTotal = kWarmupHold + kWarmupFade;
         if (hasSignal && warmupSamples < kWarmupTotal)
             warmupSamples += numSamples;
-        if (hasSignal && sigSamples < int(0.5 * sr) + numSamples)
-            sigSamples += numSamples;   // total signal seen — switches detector speed
+        // Counts to just past the 1.0 s LOCK window (also drives the 0.5 s
+        // two-speed detector switch above). The old cap stopped at ~0.5 s,
+        // which made the scheduler's `sigSamples < 1 s` fast-cap test ALWAYS
+        // true — the follower ran at 150 ms forever and tracked the player's
+        // dynamics instead of settling.
+        if (hasSignal && sigSamples < int(1.0 * sr) + numSamples)
+            sigSamples += numSamples;   // total signal seen — lock window + detector speed
         const bool warm = warmupSamples >= kWarmupHold;
 
         if (!hasSignal || !warm)
@@ -393,47 +414,34 @@ public:
         const float confidence = juce::jlimit(0.0f, 1.0f,
             float(warmupSamples - kWarmupHold) / float(kWarmupFade));
 
-        // ── Gain scheduler: the per-tone gain is (almost) STATIC ────────────
-        // The old follower (attack/release + urgency snap from a 1 dB gap)
-        // TRACKED the loudness measure — with any detector window that means
-        // riding musical dynamics: plucks/riff rests moved the measure a few
-        // dB at note rate and the gain followed ("se baja y sube el volumen
-        // todo el rato"). A tone's normalization gain should be decided once
-        // and then barely move:
-        //   gap ≤ 1.5 dB  → tau 8 s   (center on target imperceptibly)
-        //   gap ~ 4.5 dB  → tau 2.5 s (gentle correction, still inaudible)
-        //   gap > 4.5 dB SUSTAINED (0.3 s cutting / 0.75 s boosting) → LATCH
-        //     fast (40 ms) until within 1.5 dB — a real level regime change
-        //     (pickup/volume-knob change, drastic section), not one loud chord
-        //     or one quiet bar. Cutting arms faster than boosting: too-loud is
-        //     the worse artifact. (attackMs/releaseMs params kept for state
-        //     compat; the schedule above replaces them.)
+        // ── Gain scheduler: LOCK per tone, then FREEZE ──────────────────────
+        // The leveler's job is to equalize TONES against each other, NOT to
+        // ride the player's dynamics ("si toca despacio se amplifica y si toca
+        // fuerte se baja"). Any follower that keeps tracking the loudness
+        // measure fails that: a decaying sustain reads "quieter and quieter",
+        // so the gain ramped to max boost during the tail — the idle hiss then
+        // played at +max and the next attack squashed against the limiter
+        // ("mantengo una nota, se va aumentando el volumen y después queda con
+        // ruido blanco"). (The old slow 8 s/2.5 s + latch schedule was also
+        // defeated by a counting bug: sigSamples stopped at ~0.5 s, so its
+        // `< 1 s` fast-cap test stayed true and it ran at 150 ms forever.)
+        //
+        // Now: the gain converges fast ONLY during the LOCK window — the first
+        // ~1 s of qualifying signal, i.e. the attacks/body that define the
+        // tone's level — and then FREEZES outright. It moves again only when
+        // the lock window reopens: the host pokes the Relock param on every
+        // tone switch (see above), and a fresh instance (song load) locks from
+        // scratch. Musical dynamics pass through untouched; the brickwall
+        // limiter below remains the only live safety.
+        // (attackMs/releaseMs params kept for state compat only.)
         juce::ignoreUnused(attackMs, releaseMs);
-        const float gapSigned = wantedGainDb - currentGainDb;
-        const float aGap = std::abs(gapSigned);
-        if (hasSignal && warm && aGap > 4.5f)
-            sustainSamples += numSamples;
-        else
-            sustainSamples = std::max(0, sustainSamples - 2 * numSamples);
-        const int needSustain = int((gapSigned < 0.0f ? 0.30 : 0.75) * sr);
-        if (!fastLatch && sustainSamples >= needSustain) fastLatch = true;
-        if (fastLatch && aGap < 1.5f) { fastLatch = false; sustainSamples = 0; }
-        float timeMs;
-        if (fastLatch) {
-            timeMs = 40.0f;
-        } else {
-            const float t = juce::jlimit(0.0f, 1.0f, (aGap - 1.5f) / 3.0f);
-            timeMs = 8000.0f * (1.0f - t) + 2500.0f * t;
+        const bool locking = sigSamples < int(1.0 * sr);
+        float alpha = 0.0f;
+        if (locking)
+        {
+            const float blockSeconds = float(numSamples) / float(sr);
+            alpha = 1.0f - std::exp(-blockSeconds / 0.150f);
         }
-        // First ~1 s of signal: the seed + fast detector are still locking the
-        // tone's level — keep the follower quick so the song starts at the
-        // right gain, THEN freeze into the slow schedule above.
-        if (sigSamples < int(1.0 * sr))
-            timeMs = std::min(timeMs, 150.0f);
-
-        const float blockSeconds = float(numSamples / sr);
-        const float alpha = 1.0f - std::exp(-blockSeconds / std::max(0.001f, timeMs / 1000.0f));
-
         currentGainDb += (wantedGainDb - currentGainDb) * juce::jlimit(0.0f, 1.0f, alpha);
         currentGainDb = juce::jlimit(-maxCutDb, maxBoostDb, currentGainDb);
 
@@ -512,9 +520,8 @@ private:
     bool levelInitialized = false;
     bool detectorSeeded = false;   // jump msEnv to the real level on first signal
     int warmupSamples = 0;         // signal samples seen — gates the first gain decision
-    int sigSamples = 0;            // total signal seen — two-speed detector switch
-    int sustainSamples = 0;        // how long the gain gap has stayed large
-    bool fastLatch = false;        // latched fast re-convergence (regime change)
+    int sigSamples = 0;            // total signal seen — lock window + two-speed detector
+    float lastRelockValue = -1.0f; // Relock param edge detector (-1 = not read yet)
     int gateHoldSamples = 0;       // output noise-gate hold counter
     float gateGain = 1.0f;         // output noise-gate gain (fast attack / slow release)
     double msEnv = 0.0;   // running mean-square of the K-weighted signal (400 ms; frozen in silence)
@@ -733,6 +740,16 @@ private:
             "trim_db",
             "Output Trim dB",
             juce::NormalisableRange<float>(-24.0f, 18.0f, 0.1f),
+            0.0f
+        ));
+
+        // Edge-triggered: any VALUE CHANGE reopens the per-tone lock window
+        // (the host toggles 0↔1 on tone switches). Not part of the persisted
+        // params the backend bakes — it is poked live only.
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(
+            "relock_trigger",
+            "Relock",
+            juce::NormalisableRange<float>(0.0f, 1.0f, 1.0f),
             0.0f
         ));
 

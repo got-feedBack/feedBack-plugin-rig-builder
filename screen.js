@@ -594,7 +594,7 @@ async function rbApplyChainOutputGain(opts) {
 // rbApplyChainOutputGain heuristic so playback never breaks.
 const RB_FINAL_NORM_DEFAULTS = {
     enabled: true,
-    targetRmsDb: -15.5,
+    targetRmsDb: -14.0,
     minGainDb: -20.0,
     maxGainDb: 20.0,
     gateDb: -45.0,
@@ -655,9 +655,9 @@ async function rbLoadFinalNormSettings() {
         const s = await r.json();
         return {
             enabled: s.final_chain_normalize !== false,
-            targetRmsDb: Number.isFinite(Number(s.final_chain_target_rms_db)) ? Number(s.final_chain_target_rms_db) : -15.5,
+            targetRmsDb: Number.isFinite(Number(s.final_chain_target_rms_db)) ? Number(s.final_chain_target_rms_db) : -12.0,
             minGainDb: Number.isFinite(Number(s.final_chain_min_gain_db)) ? Number(s.final_chain_min_gain_db) : -20.0,
-            maxGainDb: Number.isFinite(Number(s.final_chain_max_gain_db)) ? Number(s.final_chain_max_gain_db) : 20.0,
+            maxGainDb: Number.isFinite(Number(s.final_chain_max_gain_db)) ? Number(s.final_chain_max_gain_db) : 6.0,
             gateDb: Number.isFinite(Number(s.final_chain_gate_db)) ? Number(s.final_chain_gate_db) : -45.0,
             attackMs: Number.isFinite(Number(s.final_chain_attack_ms)) ? Math.min(Number(s.final_chain_attack_ms), 80) : 12,
             releaseMs: Number.isFinite(Number(s.final_chain_release_ms)) ? Math.min(Number(s.final_chain_release_ms), 250) : 120,
@@ -2766,6 +2766,7 @@ const RbMegaChain = (function () {
         });
         await rbApplyChainInputDrive({ chain: effectiveChain });
         await rbStartFinalChainNormalizer(effectiveChain);
+        try { await _pokeLevelerRelock(); } catch (_) {}
         _activeToneKey = activeToneKey;
         _emitState();
     }
@@ -3469,6 +3470,43 @@ const RbMegaChain = (function () {
         // leveler trim range is -24..+18 dB (see PluginProcessor.cpp).
         const norm = Math.max(0, Math.min(1, (db - (-24)) / (18 - (-24))));
         try { await api.setParameter(slotId, trimId, norm); return true; }
+        catch (_) { return false; }
+    }
+
+    // Reopen the final leveler's per-tone LOCK window on a tone switch. The
+    // mega-chain shares ONE leveler instance for the whole song (tones swap by
+    // bypass), so without this the gain measured for the previous tone stays
+    // frozen on the new one. Edge-triggered: the plugin relocks on any VALUE
+    // CHANGE of its "Relock" param, so we toggle 0↔1. Best-effort — a miss
+    // (e.g. an old leveler binary without the param) just keeps the previous
+    // tone's gain.
+    let _relockToggle = 0;
+    async function _pokeLevelerRelock() {
+        const api = _api();
+        if (!api || !_active || !_mega) return false;
+        if (typeof api.getParameters !== 'function' || typeof api.setParameter !== 'function') return false;
+        const chain = (_mega.native_preset && _mega.native_preset.chain) || [];
+        let idx = -1;
+        for (let i = 0; i < chain.length; i++) {
+            const g = chain[i] && chain[i].rs_gear;
+            if (g && String(g).includes('__rb_final_leveler__')) { idx = i; break; }
+        }
+        if (idx < 0 || idx >= _indexToSlotId.length) return false;
+        const slotId = _indexToSlotId[idx];
+        if (slotId == null) return false;
+        let relockId = null;
+        try {
+            const plist = await api.getParameters(slotId);
+            if (Array.isArray(plist)) {
+                plist.forEach((p, i2) => {
+                    const nm = (p.name ?? p.label ?? '').toLowerCase();
+                    if (nm.includes('relock')) relockId = p.id ?? p.paramId ?? p.index ?? i2;
+                });
+            }
+        } catch (_) { return false; }
+        if (relockId == null) return false;
+        _relockToggle = _relockToggle ? 0 : 1;
+        try { await api.setParameter(slotId, relockId, _relockToggle); return true; }
         catch (_) { return false; }
     }
 

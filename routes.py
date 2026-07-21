@@ -384,10 +384,7 @@ _DEFAULT_SETTINGS = {
     # LUFS) so the played tone sits right up with the song, not under it. (Was
     # -15.5, which parked it ~3.5 dB below the backing; per-request the tone is
     # now front-and-centre.)
-    "final_chain_target_rms_db": -15.5,
-    # Max CUT authority. -10 (was -20): a narrower gain range makes the leveler
-    # move less, so it pumps/chases dynamics less. -20 of cut let very loud tones
-    # be pulled way down and the follower ride harder; per-request, tamed to -10.
+    "final_chain_target_rms_db": -12.0,
     "final_chain_min_gain_db": -20.0,
     # Max BOOST authority. Keep it SMALL so the final leveler behaves like a
     # LIMITER (cut loud tones to target) with only a touch of make-up — NOT an
@@ -396,10 +393,14 @@ _DEFAULT_SETTINGS = {
     # (brickwall-squashed), and idle hiss rode up +20 dB when you stopped. The
     # "too-quiet tone" case that needed big boost is gone (cab gain is now baked
     # into the IR stage — _ir_stage), so a few dB of make-up is plenty.
-    "final_chain_max_gain_db": 20.0,
+    "final_chain_max_gain_db": 6.0,
     "final_chain_gate_db": -45.0,
     "final_chain_attack_ms": 12,
     "final_chain_release_ms": 120,
+    # Auto-enable the per-tone input noise gate for chains that carry an
+    # active high-gain stage (dist/overdrive/fuzz) and whose stored gate was
+    # never configured by the user — see _auto_gate_for_high_gain.
+    "auto_gate_high_gain": True,
 }
 
 # Tone3000 platform value to request per the game category. Amps and
@@ -463,8 +464,8 @@ def _final_leveler_params_state(gate_db_override: float | None = None,
 
     # As of the K-weighting upgrade the leveler measures BS.1770 LUFS, so this
     # "Target RMS dB" is really a target LUFS (param name kept for state compat).
-    target_rms = float(s.get("final_chain_target_rms_db", -15.5))
-    max_boost = float(s.get("final_chain_max_gain_db", 20.0))
+    target_rms = float(s.get("final_chain_target_rms_db", -12.0))
+    max_boost = float(s.get("final_chain_max_gain_db", 6.0))
     max_cut = abs(float(s.get("final_chain_min_gain_db", -20.0)))
     gate = float(s.get("final_chain_gate_db", -45.0))
     # Bare-cab chains (no amp) run much quieter than amp chains even after the
@@ -4419,7 +4420,8 @@ def _gate_kwargs_from(data: dict) -> dict:
 def _preset_gate(preset_id) -> dict:
     """Read a preset's per-tone noise gate as {enabled, threshold, release,
     depth}. Falls back to the gate's defaults (off, −60/100/−60) when the
-    preset or its row is missing."""
+    preset or its row is missing. An untouched gate on a high-gain chain gets
+    the auto-gate default instead (see _auto_gate_for_high_gain)."""
     default = {"enabled": False, "threshold": -60.0, "release": 100.0, "depth": -60.0}
     if preset_id is None:
         return default
@@ -4433,7 +4435,58 @@ def _preset_gate(preset_id) -> dict:
     if not row:
         return default
     gt, ge, gr, gd = row
+    auto = _auto_gate_for_high_gain(preset_id, ge, gt, gr, gd)
+    if auto:
+        return auto
     return {"enabled": bool(ge), "threshold": gt, "release": gr, "depth": gd}
+
+
+# Per-tone gate column defaults (presets table). A row still carrying exactly
+# these values was never configured by the user, so the auto-gate below may
+# supply a better default for its chain.
+_GATE_UNTOUCHED = (0, -60.0, 100.0, -60.0)   # enabled, threshold, release, depth
+# The auto-gate: threshold just above a typical interface/pickup noise floor,
+# release long enough not to chop note tails; depth = the normal full closure.
+_AUTO_GATE = {"enabled": True, "threshold": -55.0, "release": 150.0, "depth": -60.0}
+_HIGH_GAIN_GEAR_RE = re.compile(
+    r"fuzz|muff|dist|drive|screamer|germanium|metal|shred"
+    r"|\brat\b|\bds-?1\b|\bhm-?2\b|\bmt-?2\b",
+    re.IGNORECASE)
+
+
+def _auto_gate_for_high_gain(preset_id, enabled, threshold, release, depth) -> dict | None:
+    """An enabled input gate for high-gain chains whose stored gate was never
+    touched, else None.
+
+    Dist/OD/fuzz stages amplify the pickup/interface noise floor into loud
+    idle hiss, and the final leveler deliberately does NOT duck idle noise
+    (its output gate chopped fuzz sustain and was removed — see
+    RBFinalLeveler). The real-rig remedy is a noise gate IN FRONT of the
+    drive, so default one in for these chains. Applies ONLY while the stored
+    gate row is completely untouched (all column defaults): any
+    user-configured gate — including an explicit off — always wins.
+    Site-wide opt-out: settings auto_gate_high_gain=False."""
+    try:
+        stored = (int(enabled or 0), float(threshold), float(release), float(depth))
+    except (TypeError, ValueError):
+        return None
+    if stored != _GATE_UNTOUCHED:
+        return None
+    if _load_settings().get("auto_gate_high_gain", True) is False:
+        return None
+    try:
+        rows = _get_conn().execute(
+            "SELECT rs_gear_type, file, vst_path, bypassed "
+            "FROM preset_pieces WHERE preset_id = ?", (preset_id,)).fetchall()
+    except Exception:
+        return None
+    for gear, file, vst_path, bypassed in rows:
+        if bypassed:
+            continue
+        hay = " ".join(str(x) for x in (gear, file, vst_path) if x)
+        if _HIGH_GAIN_GEAR_RE.search(hay):
+            return dict(_AUTO_GATE)
+    return None
 
 
 def _resolve_tone_preset_id(source: str, name: str):
@@ -8354,9 +8407,9 @@ def setup(app, context):
             # multiplier). Range 0–5, default 1× (the knob value IS the multiplier).
             "chain_makeup": float(s.get("chain_makeup", 1.0)),
             "final_chain_normalize": bool(s.get("final_chain_normalize", True)),
-            "final_chain_target_rms_db": float(s.get("final_chain_target_rms_db", -15.5)),
+            "final_chain_target_rms_db": float(s.get("final_chain_target_rms_db", -12.0)),
             "final_chain_min_gain_db": float(s.get("final_chain_min_gain_db", -20.0)),
-            "final_chain_max_gain_db": float(s.get("final_chain_max_gain_db", 20.0)),
+            "final_chain_max_gain_db": float(s.get("final_chain_max_gain_db", 6.0)),
             "final_chain_gate_db": float(s.get("final_chain_gate_db", -45.0)),
             "final_chain_attack_ms": int(min(float(s.get("final_chain_attack_ms", 12)), 80.0)),
             "final_chain_release_ms": int(min(float(s.get("final_chain_release_ms", 120)), 250.0)),
@@ -10217,6 +10270,14 @@ def setup(app, context):
 
         # Siempre último: normalizador final de cadena completa.
         _append_final_leveler(chain, missing)
+
+        auto_gate = _auto_gate_for_high_gain(
+            preset_id, gate_enabled, gate_threshold, gate_release, gate_depth)
+        if auto_gate:
+            gate_enabled = 1
+            gate_threshold = auto_gate["threshold"]
+            gate_release = auto_gate["release"]
+            gate_depth = auto_gate["depth"]
 
         return {
             "id": preset_id,
