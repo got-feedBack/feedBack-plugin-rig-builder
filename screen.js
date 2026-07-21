@@ -656,7 +656,7 @@ async function rbLoadFinalNormSettings() {
         return {
             enabled: s.final_chain_normalize !== false,
             targetRmsDb: Number.isFinite(Number(s.final_chain_target_rms_db)) ? Number(s.final_chain_target_rms_db) : -12.0,
-            minGainDb: Number.isFinite(Number(s.final_chain_min_gain_db)) ? Number(s.final_chain_min_gain_db) : -20.0,
+            minGainDb: Number.isFinite(Number(s.final_chain_min_gain_db)) ? Number(s.final_chain_min_gain_db) : -10.0,
             maxGainDb: Number.isFinite(Number(s.final_chain_max_gain_db)) ? Number(s.final_chain_max_gain_db) : 6.0,
             gateDb: Number.isFinite(Number(s.final_chain_gate_db)) ? Number(s.final_chain_gate_db) : -45.0,
             attackMs: Number.isFinite(Number(s.final_chain_attack_ms)) ? Math.min(Number(s.final_chain_attack_ms), 80) : 12,
