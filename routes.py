@@ -396,7 +396,7 @@ _DEFAULT_SETTINGS = {
     # (brickwall-squashed), and idle hiss rode up +20 dB when you stopped. The
     # "too-quiet tone" case that needed big boost is gone (cab gain is now baked
     # into the IR stage — _ir_stage), so a few dB of make-up is plenty.
-    "final_chain_max_gain_db": 4.0,
+    "final_chain_max_gain_db": 5.0,
     "final_chain_gate_db": -45.0,
     "final_chain_attack_ms": 12,
     "final_chain_release_ms": 120,
@@ -464,7 +464,7 @@ def _final_leveler_params_state(gate_db_override: float | None = None,
     # As of the K-weighting upgrade the leveler measures BS.1770 LUFS, so this
     # "Target RMS dB" is really a target LUFS (param name kept for state compat).
     target_rms = float(s.get("final_chain_target_rms_db", -12.0))
-    max_boost = float(s.get("final_chain_max_gain_db", 4.0))
+    max_boost = float(s.get("final_chain_max_gain_db", 5.0))
     max_cut = abs(float(s.get("final_chain_min_gain_db", -20.0)))
     gate = float(s.get("final_chain_gate_db", -45.0))
     # Bare-cab chains (no amp) run much quieter than amp chains even after the
@@ -8356,7 +8356,7 @@ def setup(app, context):
             "final_chain_normalize": bool(s.get("final_chain_normalize", True)),
             "final_chain_target_rms_db": float(s.get("final_chain_target_rms_db", -12.0)),
             "final_chain_min_gain_db": float(s.get("final_chain_min_gain_db", -20.0)),
-            "final_chain_max_gain_db": float(s.get("final_chain_max_gain_db", 4.0)),
+            "final_chain_max_gain_db": float(s.get("final_chain_max_gain_db", 5.0)),
             "final_chain_gate_db": float(s.get("final_chain_gate_db", -45.0)),
             "final_chain_attack_ms": int(min(float(s.get("final_chain_attack_ms", 12)), 80.0)),
             "final_chain_release_ms": int(min(float(s.get("final_chain_release_ms", 120)), 250.0)),
