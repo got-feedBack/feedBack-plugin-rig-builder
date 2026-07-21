@@ -386,14 +386,19 @@ _DEFAULT_SETTINGS = {
     # now front-and-centre.)
     "final_chain_target_rms_db": -12.0,
     "final_chain_min_gain_db": -20.0,
-    # Max BOOST authority. Keep it SMALL so the final leveler behaves like a
-    # LIMITER (cut loud tones to target) with only a touch of make-up — NOT an
-    # AGC that cranks quiet input. +20 dB let a softly-played tone get boosted
-    # way up; a loud note right after then hit that huge gain and distorted
-    # (brickwall-squashed), and idle hiss rode up +20 dB when you stopped. The
-    # "too-quiet tone" case that needed big boost is gone (cab gain is now baked
-    # into the IR stage — _ir_stage), so a few dB of make-up is plenty.
-    "final_chain_max_gain_db": 6.0,
+    # Max BOOST authority. With the old continuously-tracking AGC this had to be
+    # tiny (+20 dB let a decaying sustain ramp the gain to max — hiss rode up and
+    # the next attack brickwall-squashed), so it sat at 6. But 6 dB is asymmetric
+    # against the 20 dB cut authority: a chain landing more than 6 dB under the
+    # -12 target pins at the cap and plays audibly quieter than every leveled
+    # tone ("más diferencia de volumen entre tonos entre canciones"). The
+    # lock-and-freeze leveler removed the runaway failure mode (gain freezes
+    # after ~1 s of qualifying signal; non-pitched hiss never integrates), so
+    # boost can be roomier — but NOT the full 20: the lock decision is a ~1 s
+    # snapshot, and a soft-played lock with +20 authority freezes a huge
+    # over-boost for the whole song. 12 covers realistic quiet chains while
+    # bounding the worst-case lock error.
+    "final_chain_max_gain_db": 12.0,
     "final_chain_gate_db": -45.0,
     "final_chain_attack_ms": 12,
     "final_chain_release_ms": 120,

@@ -594,9 +594,9 @@ async function rbApplyChainOutputGain(opts) {
 // rbApplyChainOutputGain heuristic so playback never breaks.
 const RB_FINAL_NORM_DEFAULTS = {
     enabled: true,
-    targetRmsDb: -14.0,
+    targetRmsDb: -12.0,
     minGainDb: -20.0,
-    maxGainDb: 20.0,
+    maxGainDb: 12.0,
     gateDb: -45.0,
     attackMs: 12,
     releaseMs: 120,
@@ -657,7 +657,7 @@ async function rbLoadFinalNormSettings() {
             enabled: s.final_chain_normalize !== false,
             targetRmsDb: Number.isFinite(Number(s.final_chain_target_rms_db)) ? Number(s.final_chain_target_rms_db) : -12.0,
             minGainDb: Number.isFinite(Number(s.final_chain_min_gain_db)) ? Number(s.final_chain_min_gain_db) : -20.0,
-            maxGainDb: Number.isFinite(Number(s.final_chain_max_gain_db)) ? Number(s.final_chain_max_gain_db) : 6.0,
+            maxGainDb: Number.isFinite(Number(s.final_chain_max_gain_db)) ? Number(s.final_chain_max_gain_db) : 12.0,
             gateDb: Number.isFinite(Number(s.final_chain_gate_db)) ? Number(s.final_chain_gate_db) : -45.0,
             attackMs: Number.isFinite(Number(s.final_chain_attack_ms)) ? Math.min(Number(s.final_chain_attack_ms), 80) : 12,
             releaseMs: Number.isFinite(Number(s.final_chain_release_ms)) ? Math.min(Number(s.final_chain_release_ms), 250) : 120,
