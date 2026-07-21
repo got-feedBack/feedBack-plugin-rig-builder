@@ -162,6 +162,121 @@ _lock = threading.Lock()
 # take `_lock` (via _get_master_preset_id) — see _get_conn.
 _conn_init_lock = threading.Lock()
 
+# ── Opt-in VST pack download (per-platform sliced) ──────────────────────────
+# The fat VST3 bundles (~650 MB) are no longer shipped in the desktop build;
+# they download on demand, sliced to the current platform, from a versioned
+# release. Written to a WRITABLE config-dir root (the bundled plugin dir is
+# read-only in packaged builds), which the loader also searches.
+import hashlib      # noqa: E402 — kept beside the download code that uses it
+import tempfile     # noqa: E402
+import zipfile      # noqa: E402
+
+_VST_DOWNLOAD_CHUNK = 1024 * 256
+_vst_pack_state: dict = {"status": "idle", "done": 0, "total": 0, "error": None}
+_vst_pack_lock = threading.Lock()
+
+
+def _current_vst_platform() -> str:
+    if sys.platform.startswith("darwin"):
+        return "mac"
+    if sys.platform.startswith("win"):
+        return "win"
+    return "linux"
+
+
+def _downloaded_vst_root() -> Path:
+    """Writable root where on-demand VST packs are extracted (works in packaged
+    read-only builds, unlike the bundled ``_plugin_dir/vst``)."""
+    return _config_dir / "nam_rig_builder" / "vst"
+
+
+def _vst_search_roots() -> list[Path]:
+    """VST roots to search: bundled (if present) + the downloaded one. The
+    downloaded root only exists once setup() has bound _config_dir."""
+    roots = [_plugin_dir / "vst"]
+    if _config_dir is not None:
+        roots.append(_downloaded_vst_root())
+    return [p for p in roots if p.exists()]
+
+
+def _vst_pack_manifest() -> dict:
+    """Parsed data/vst_packs.json ({platform: {url, sha256, bytes}}), or {}."""
+    try:
+        return json.loads((_plugin_dir / "data" / "vst_packs.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _vst_installed() -> bool:
+    """True once at least one .vst3 is present in any search root."""
+    for root in _vst_search_roots():
+        for d in (root, *(c for c in root.iterdir() if c.is_dir())):
+            if d.name == "src":
+                continue
+            if any(d.glob("*.vst3")):
+                return True
+    return False
+
+
+def _safe_extract_tree(zf: zipfile.ZipFile, dest: Path) -> None:
+    """Extract a nested zip under dest with a zip-slip guard (VST packs are
+    directory trees, unlike career's flat venue packs)."""
+    dest = dest.resolve()
+    for info in zf.infolist():
+        if info.is_dir():
+            continue
+        target = (dest / info.filename).resolve()
+        if dest != target and dest not in target.parents:
+            raise ValueError(f"unsafe path in pack: {info.filename!r}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with zf.open(info) as src, open(target, "wb") as out:
+            shutil.copyfileobj(src, out)
+
+
+def _download_vst_pack(pack: dict, state: dict) -> None:
+    """Worker: stream → sha256 verify → nested extract → merge into the
+    writable VST root. Mirrors career._download_pack, but the tree is nested."""
+    dest_root = _downloaded_vst_root()
+    dest_root.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix="rb-vst-", dir=str(dest_root.parent)))
+    zip_path = staging / "pack.zip"
+    try:
+        digest = hashlib.sha256()
+        req = urllib.request.Request(pack["url"], headers={"User-Agent": "feedBack-rig-builder"})
+        with urllib.request.urlopen(req, timeout=60) as resp, open(zip_path, "wb") as out:
+            state["total"] = int(resp.headers.get("Content-Length") or pack.get("bytes") or 0)
+            while True:
+                chunk = resp.read(_VST_DOWNLOAD_CHUNK)
+                if not chunk:
+                    break
+                digest.update(chunk)
+                out.write(chunk)
+                state["done"] += len(chunk)
+        if digest.hexdigest() != pack["sha256"]:
+            raise ValueError("sha256 mismatch — corrupt or tampered download")
+        extract = staging / "vst"
+        extract.mkdir()
+        with zipfile.ZipFile(zip_path) as zf:
+            _safe_extract_tree(zf, extract)
+        zip_path.unlink()
+        # Merge into the live root (keep anything already there, e.g. vst/src in
+        # a dev checkout); overwrite bundle files with the freshly downloaded set.
+        for item in extract.iterdir():
+            dst = dest_root / item.name
+            if item.is_dir():
+                shutil.copytree(item, dst, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, dst)
+        state["status"] = "done"
+        log.info("rig_builder: VST pack installed into %s", dest_root)
+    except Exception as exc:  # noqa: BLE001 — surface any failure to the UI
+        state["status"] = "error"
+        state["error"] = str(exc)
+        log.warning("rig_builder: VST pack download failed: %s", exc)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
 # Rig Builder reads open song packs — `.sloppak` (original) and `.feedpak`
 # (newer name for the same on-disk layout: a zip / directory holding
 # manifest.yaml + arrangements/*.json). The host `sloppak` module loads both
@@ -1826,18 +1941,23 @@ def _bundled_vst_plugins() -> list[dict]:
     native engine's scan cache. Listing them here lets batch mapping and the UI
     resolve our built-in DSP by absolute path immediately after a restart.
     """
-    root = _plugin_dir / "vst"
-    if not root.exists():
+    # Search the bundled root AND the writable downloaded root (opt-in VST
+    # packs land there in packaged builds where _plugin_dir is read-only).
+    roots = _vst_search_roots()
+    if not roots:
         return []
     # The bundles are filed under category subdirs (vst/amps, vst/pedals,
-    # vst/racks); search the root and those one-level subdirs but NOT the C++
+    # vst/racks); search each root and those one-level subdirs but NOT the C++
     # `src/` tree and NOT inside the .vst3 bundles themselves (which embed
     # per-platform binaries like Contents/x86_64-win/<name>.vst3).
-    search_dirs = [root]
-    for d in sorted(root.iterdir()):
-        if d.is_dir() and d.name != "src" and not d.name.endswith((".vst3", ".component")):
-            search_dirs.append(d)
+    search_dirs = []
+    for root in roots:
+        search_dirs.append(root)
+        for d in sorted(root.iterdir()):
+            if d.is_dir() and d.name != "src" and not d.name.endswith((".vst3", ".component")):
+                search_dirs.append(d)
     out = []
+    seen = set()
     for suffix, fmt in ((".vst3", "VST3"), (".component", "AudioUnit")):
         entries = []
         for base in search_dirs:
@@ -1846,6 +1966,11 @@ def _bundled_vst_plugins() -> list[dict]:
             if not entry.exists():
                 continue
             name = entry.name[:-len(suffix)]
+            # A bundle can appear in both the bundled and downloaded roots
+            # (dev checkout that also downloaded); first one wins.
+            if (name, fmt) in seen:
+                continue
+            seen.add((name, fmt))
             out.append({
                 "name": name,
                 "manufacturer": "Rig Builder",
@@ -7089,6 +7214,38 @@ def setup(app, context):
             return tuple(int(x) for x in str(v).split(".")[:3])
         except Exception:
             return None
+
+    @app.get("/api/plugins/rig_builder/vst_pack_status")
+    def rb_vst_pack_status():
+        """Whether the simulated-rig VSTs are present, and the pack size for the
+        current platform (for the download-consent disclosure)."""
+        plat = _current_vst_platform()
+        pack = _vst_pack_manifest().get(plat) or {}
+        with _vst_pack_lock:
+            dl = dict(_vst_pack_state)
+        return {
+            "platform": plat,
+            "installed": _vst_installed(),
+            "has_pack": bool(pack.get("url")),
+            "pack_bytes": pack.get("bytes") or None,
+            "download": dl,
+        }
+
+    @app.post("/api/plugins/rig_builder/download_vst_pack")
+    def rb_download_vst_pack():
+        """Start the per-platform VST pack download (409 if already running)."""
+        plat = _current_vst_platform()
+        pack = _vst_pack_manifest().get(plat) or {}
+        if not pack.get("url") or not pack.get("sha256"):
+            return JSONResponse({"error": f"no VST pack published for {plat}"}, status_code=404)
+        with _vst_pack_lock:
+            if _vst_pack_state["status"] == "running":
+                return JSONResponse({"error": "already downloading"}, status_code=409)
+            _vst_pack_state.update(status="running", done=0,
+                                   total=pack.get("bytes") or 0, error=None)
+            state = _vst_pack_state
+        threading.Thread(target=_download_vst_pack, args=(pack, state), daemon=True).start()
+        return {"ok": True, "platform": plat}
 
     @app.get("/api/plugins/rig_builder/update_status")
     def rb_update_status():
