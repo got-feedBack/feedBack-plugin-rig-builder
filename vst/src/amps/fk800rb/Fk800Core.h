@@ -242,7 +242,19 @@ struct Fk800Core {
                    bool boostOnP, bool biampP) {
         const float padScale = pad ? 0.316f : 1.0f;
         const float v = volume;
-        preDrive  = padScale * (0.05f + 0.15f*v + 0.85f*v*v*v*v);
+        // Drive curve vs the INPUT_CALIBRATION.md contract (hard-played DI peaks
+        // at −12 dBFS = 0.25 linear). The op-amp preamp clips when
+        // preDrive·x > Vrail/gain = 13.5/213.8 ≈ 0.063, so the clip onset in
+        // dBFS is set entirely by this curve. The old 0.05+0.15v+0.85v⁴ put the
+        // onset at −14 dBFS for v=0.66 — i.e. the amp GROWLED (≈18% THD) on the
+        // contract-level signal at song volumes ("Look Around bass distorsiona,
+        // debería sonar limpio"), betraying the design note below that the
+        // default panel stays clean. Retuned so the contract level is clean
+        // through v≈0.7 (onset −10 dBFS at the 0.70 default, ≈−9 at 0.66) and
+        // the GK growl arrives progressively above it (onset −14.5 dBFS at
+        // v=0.85, −18.8 at v=1.0) — matching the real 800RB's famous clean
+        // headroom with growl only when pushed.
+        preDrive  = padScale * (0.03f + 0.10f*v + 0.42f*v*v*v*v);
         preMakeup = 6.0f / 214.0f;
         loCutOn = loCutOnP; contourOn = contourOnP; hiBoostOn = hiBoostOnP;
         // ±15 dB per band (GK 800RB published spec; 500K/47K pot ratio supports it).
@@ -291,7 +303,17 @@ struct Fk800Core {
         // makeup slammed rbAmpLvl → "muy distorsionado". 30.4 is the clean, family-
         // matched base; the working final-normalizer lifts the (now lower) output, and
         // a real bass clears the gate easily without crushing the output stage.
-        float mkDb = 11.0f - 14.0f * v;
+        // Retuned with the preDrive curve above. Matching the OLD level at
+        // mid/high Volume would be wrong: that loudness was manufactured by the
+        // preamp saturating (flat-topped output pinned at the rbAmpLvl
+        // ceiling) — a first attempt that "compensated" the clean region
+        // (+4.5 dB) drove the now-clean signal straight into the output knee
+        // (18% ceiling-clipped samples). Base 9.5 keeps the −12 dBFS contract
+        // sine's peaks clear of the 0.90 output knee through the clean range
+        // (harness: peak ≈0.86 at v=0.66, THD 0.39% there / 0.66% at the 0.70
+        // default, growl arriving from the PREAMP only: 11% at v=0.85, 24% at
+        // v=1.0). The final-chain leveler owns the family loudness match.
+        float mkDb = 9.5f - 13.5f * v;
         if (pad) mkDb += 10.0f;     // the −10 dB input pad drops drive → restore level
         outLevel = std::pow(10.0f, 0.05f * mkDb);
     }
