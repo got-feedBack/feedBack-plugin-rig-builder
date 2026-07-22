@@ -14897,6 +14897,24 @@ function rbCabRoomBuild(g, entry, safeId, opts) {
             }
         } catch (_) {}
     }
+    // Aún sin spot visual: derivarlo del estado ACÚSTICO (x radial) sobre un
+    // driver REAL del arte — el default anterior (0.5/0.44) era el centro del
+    // frente, que en un 4x12 es el hueco entre los cuatro conos: el mic se
+    // dibujaba sin apuntar a ningún parlante aunque el sonido fuera correcto.
+    if (st._micFx == null && !st.micPx) {
+        try {
+            const _a2 = rbCabArtAspect(g.rs_gear) || 1;
+            const spk = rbCabSpeakerPositionsPhys(entry, _a2);
+            if (spk && spk.length) {
+                // driver inferior-derecho (boom corto), offset radial según x
+                const p = spk.reduce((b, c) => (c[0] + c[1] > b[0] + b[1] ? c : b), spk[0]);
+                const fx = (p[0] + (st.x || 0) * p[2]) / (_a2 * 100);
+                const fy = p[1] / 100;
+                st._micFx = fx; st._micFy = fy;
+                st.micPx = [fx * RB_CABROOM_W, fy * RB_CABROOM_H];
+            }
+        } catch (_) {}
+    }
     const cabArt = rbCabArtFor(g.rs_gear);   // recreated cab SVG (or '')
     st._hasArt = !!cabArt;
     st._artAspect = rbCabArtAspect(g.rs_gear);
@@ -15441,6 +15459,18 @@ function rbCabRoomStateFromPiece(piece) {
     m = /realcab_.*_([a-z0-9]+)_x(\d{3})_d(\d{3})_a(\d{2})\.wav$/i.exec(String(f));
     if (m) return { mic: m[1], x: parseInt(m[2], 10) / 100,
                     dist_in: parseInt(m[3], 10) / 10, angle_deg: parseInt(m[4], 10), micPx: null };
+    // 1b) IR clon parody (la forma SEMBRADA/persistida): cabs/<Clon>/<mic>_<pos>.wav
+    //     → recuperar mic + posición para que el room abra mostrando lo que el
+    //     tono REALMENTE suena (antes caía al default sm57-centro en toda canción).
+    m = /(^|\/)cabs\/[^/]+\/(dyn|cond|ribbon|tube)_(cone|edge|offaxis)\.wav$/i.exec(String(f));
+    if (m) {
+        const POS = { cone:    { x: 0.15, dist_in: 1.0, angle_deg: 0 },
+                      edge:    { x: 0.60, dist_in: 1.0, angle_deg: 0 },
+                      offaxis: { x: 0.30, dist_in: 2.0, angle_deg: 45 } };
+        const p = POS[m[3].toLowerCase()];
+        return { mic: ({ dyn: 'sm57', cond: 'tlm103', ribbon: 'r121', tube: 'tube' })[m[2].toLowerCase()],
+                 x: p.x, dist_in: p.dist_in, angle_deg: p.angle_deg, micPx: null };
+    }
     // 2) si no, del sufijo RS del gear (lo que la canción dice usar)
     const cat = rbState.realCabCatalog || {};
     const suf = /_([a-z0-9]{2})$/i.exec(String(piece.type || ''));

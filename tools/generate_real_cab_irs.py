@@ -31,7 +31,12 @@ from rb_core import cab_synth  # noqa: E402
 MICS = {"dyn": "sm57", "cond": "tlm103", "ribbon": "r121", "tube": "tube"}
 POSITIONS = {
     "cone":    {"x": 0.15, "dist_in": 1.0, "angle_deg": 0.0},
-    "edge":    {"x": 0.85, "dist_in": 1.0, "angle_deg": 0.0},
+    # Edge at x=0.85 buried the presence range (2.5-8k rolled -2..-8 dB on top
+    # of the +8 dB LF proximity lift) - songs seeded to the Edge voicing played
+    # "blanketed" next to their RS versions. x=0.60 keeps the edge character
+    # (fat lows, softened top) while retaining articulation; our model's radial
+    # interference dip at 2.5k is also shallowest around here (worst near 0.70).
+    "edge":    {"x": 0.60, "dist_in": 1.0, "angle_deg": 0.0},
     "offaxis": {"x": 0.30, "dist_in": 2.0, "angle_deg": 45.0},
 }
 
