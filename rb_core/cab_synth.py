@@ -56,13 +56,21 @@ def _tlm103(f):
 
 
 def _md421(f):
-    return (_lo_shelf(f, 110.0, -5.0, 1.0) + _bump(f, 4700.0, 4.0, 0.9)
-            + _hi_shelf(f, 15000.0, -10.0, 0.5))
+    """Calibrado vs grilla Redwirez (delta 421−SM57 @ Cap 1", err 1.3 dB RMS):
+    el 421 real es MÁS FLACO que el 57 en graves (−1.4 @100) y mucho más
+    brillante arriba (+8.7 @8k — su top se extiende donde el 57 ya cayó).
+    El modelo viejo lo tenía gordo (+3.5) y oscuro (−2.2 @8k)."""
+    return (_lo_shelf(f, 150.0, -7.0, 1.1) + _bump(f, 1200.0, 3.0, 1.2)
+            + _bump(f, 4700.0, 4.0, 0.9) + _bump(f, 9500.0, 13.0, 0.5)
+            + _hi_shelf(f, 15000.0, -6.0, 0.5))
 
 
 def _km84(f):
-    return (_lo_shelf(f, 38.0, -3.0, 0.7) + _bump(f, 9000.0, 1.5, 0.7)
-            + _hi_shelf(f, 18000.0, -5.0, 0.4))
+    """Calibrado vs grilla Redwirez (delta KM84−SM57 @ Cap 1", err 1.5 dB RMS):
+    cuerpo suave, dip en 6k y aire conservado en 8-9k (+3.6 real vs −1.6 del
+    modelo viejo)."""
+    return (_lo_shelf(f, 38.0, -3.0, 0.7) + _bump(f, 6000.0, -3.0, 0.9)
+            + _bump(f, 9000.0, 7.0, 0.55) + _hi_shelf(f, 18000.0, -7.0, 0.4))
 
 
 def _r121(f):
@@ -86,7 +94,7 @@ MICS = {
     "sm57":   (_sm57,   30.0, "cardioid"),
     "tlm103": (_tlm103, 10.0, "cardioid"),
     "md421":  (_md421,  26.0, "cardioid"),
-    "km84":   (_km84,   18.0, "cardioid"),
+    "km84":   (_km84,    6.0, "cardioid"),  # 18 lo engordaba +4 dB vs real (Redwirez fit)
     "r121":   (_r121,   20.0, "fig8"),   # 38 doblaba la proximidad real (Redwirez fit)
     "tube":   (_tube,   12.0, "cardioid"),
 }
