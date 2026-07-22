@@ -15186,6 +15186,7 @@ function rbCabRoomDrop(safeId, gear) {
         if (st._variantMap) {
             rbCabRoomSwitchVariant(safeId).then(ok => {
                 if (ok) {
+                    rbCabRoomSwapExact(safeId, gear).catch(() => {});   // refina al IR exacto (blend continuo)
                     rbCabRoomAutoPersistLocal(safeId);   // saves micPx + debounced synth persist
                 } else {
                     rbCabRoomSaveMicPx(st);
@@ -15222,15 +15223,19 @@ async function rbCabRoomSynth(safeId, gear, assign) {
 window.rbCabRoomListen = async function (safeId, gear, restart) {
     const stx = _rbCabRoom[safeId];
     if (stx && stx._studio) {
-        // Cambio EN CONTEXTO e instantáneo vía las variantes pre-cargadas
-        // (setBypass) → mantiene amp + pedales sonando.
-        if (await rbCabRoomSwitchVariant(safeId)) return;
+        // Cambio EN CONTEXTO: primero la variante discreta más cercana
+        // (setBypass, instantáneo) y enseguida el refinado a la posición
+        // EXACTA (síntesis + replaceIR — blend continuo). Amp+pedales siguen.
+        const coarse = await rbCabRoomSwitchVariant(safeId);
+        if (await rbCabRoomSwapExact(safeId, gear)) return;
+        if (coarse) return;
         // No precargadas aún: cargar el tono COMPLETO con las 12 variantes
         // (amp+pedales incluidos), NO caer a la audición de "cab solo" — esa
         // reemplaza la cadena y dejaba de sonar el amp (se oía la guitarra
         // casi limpia). Un reintento de switch tras la carga suena la posición.
         if (await rbCabRoomPreloadVariants(safeId, gear)) {
             await rbCabRoomSwitchVariant(safeId);
+            await rbCabRoomSwapExact(safeId, gear);
             return;
         }
         // Preload imposible (p.ej. sin song piece) → NO tocar cab-solo;
@@ -15311,18 +15316,38 @@ function rbCabRoomPersistSong(safeId) {
     const piece = tone && tone.chain && tone.chain[info.pIdx];
     if (!tone || !piece || tone.preset_id == null) return;       // need a preset to scope to (never bulk-swap)
     rbCabRoomSaveMicPx(st);                                       // visual spot + mic/angle (localStorage)
-    // Encode mic+pos → RS suffix. mic_suffixes maps char→mic; fold the 6 UI mics
-    // down to the 4 acoustic archetypes (_RB_CR_MIC_TOK) that actually have IRs.
-    const micS = (rbState.realCabCatalog || {}).mic_suffixes || {};
-    const tokChar = {};
-    for (const ch in micS) { const tok = _RB_CR_MIC_TOK[micS[ch]]; if (tok && !(tok in tokChar)) tokChar[tok] = ch; }
-    const micChar = tokChar[_RB_CR_MIC_TOK[st.mic] || 'dyn'] || Object.keys(micS)[0] || '5';
-    const posChar = ({ cone: 'c', edge: 'e', offaxis: 'o' })[rbCabRoomSnapPos(st)] || 'c';
-    const cur = String(piece.type || '');
-    const to = `${cur.replace(/_[a-z0-9]{2}$/i, '')}_${micChar}${posChar}`;
-    if (to === cur) return;                                       // already on this mic/pos
     clearTimeout(st._songPersistT);
     st._songPersistT = setTimeout(async () => {
+        // 1) Posición EXACTA: renderiza el IR (cacheado por parámetros) y lo
+        //    asigna SOLO al preset de este tono — kind 'ir' + archivo realcab
+        //    con x/dist/angle codificados en el nombre, que el reopen parsea
+        //    tal cual (nada de redondear a cone/edge/offaxis).
+        try {
+            const r = await fetch(`${window.RB_API}/cab/synthesize`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ gear_type: String(piece.type || ''), mic: st.mic,
+                                       x: st.x, dist_in: st.dist_in, angle_deg: st.angle_deg,
+                                       speaker: st.speaker || undefined,
+                                       assign: true, preset_id: tone.preset_id }),
+            });
+            const d = await r.json();
+            if (r.ok && d && d.assigned > 0 && d.name) {
+                piece.file = d.name;
+                if (piece.assigned) piece.assigned.file = d.name;
+                delete piece._uploaded_file;
+                return;
+            }
+        } catch (_) {}
+        // 2) Fallback (synth caído / backend sin preset_id): swap discreto por
+        //    sufijo RS — mejor que no persistir nada.
+        const micS = (rbState.realCabCatalog || {}).mic_suffixes || {};
+        const tokChar = {};
+        for (const ch in micS) { const tok = _RB_CR_MIC_TOK[micS[ch]]; if (tok && !(tok in tokChar)) tokChar[tok] = ch; }
+        const micChar = tokChar[_RB_CR_MIC_TOK[st.mic] || 'dyn'] || Object.keys(micS)[0] || '5';
+        const posChar = ({ cone: 'c', edge: 'e', offaxis: 'o' })[rbCabRoomSnapPos(st)] || 'c';
+        const cur = String(piece.type || '');
+        const to = `${cur.replace(/_[a-z0-9]{2}$/i, '')}_${micChar}${posChar}`;
+        if (to === cur) return;                                   // already on this mic/pos
         try {
             const r = await fetch(`${window.RB_API}/gear/replace_with`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -15687,6 +15712,7 @@ async function rbCabRoomPreloadVariants(safeId, gear) {
         const m = /^(.*nam_irs)\//i.exec((orig.path || '').replace(/\\/g, '/'));
         const root = m ? m[1] : null;
         if (!root) return false;
+        st._variantRoot = root;   // para el swap de posición EXACTA (rbCabRoomSwapExact)
         let stObj = null;
         try { stObj = JSON.parse(atob(orig.state || '')); } catch (_) { stObj = null; }
         const activeKey = `${_RB_CR_MIC_TOK[st.mic] || 'dyn'}_${rbCabRoomSnapPos(st)}`;
@@ -15766,6 +15792,52 @@ async function rbCabRoomPreloadVariants(safeId, gear) {
     } catch (e) {
         if (status) status.textContent = '⚠ variants unavailable — using cab-only audition';
         return false;
+    }
+}
+
+// Blend CONTINUO en contexto: sintetiza el IR de la posición exacta del mic
+// (st.x radial, distancia, ángulo, mic, parlante) y lo inyecta en caliente con
+// api.replaceIR sobre el slot de la variante activa. Antes el drag solo elegía
+// entre los 3 IRs discretos por mic (cone/edge/offaxis vía setBypass): mover el
+// mic cerca del cono no cambiaba nada y al alejarse saltaba de golpe al edge.
+async function rbCabRoomSwapExact(safeId, gear) {
+    const st = _rbCabRoom[safeId];
+    const api = rbAudioApi();
+    if (!st || !st._variantMap || !st._variantRoot || !api
+        || typeof api.replaceIR !== 'function') return false;
+    const key = `${_RB_CR_MIC_TOK[st.mic] || 'dyn'}_${rbCabRoomSnapPos(st)}`;
+    const idx = st._variantMap[key];
+    if (idx == null) return false;
+    const seq = st._exactSeq = (st._exactSeq || 0) + 1;   // drops viejos no pisan al nuevo
+    const status = document.getElementById(`rb-cabroom-status-${safeId}`);
+    try {
+        const r = await fetch(`${window.RB_API}/cab/synthesize`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gear_type: gear, mic: st.mic, x: st.x,
+                                   dist_in: st.dist_in, angle_deg: st.angle_deg,
+                                   speaker: st.speaker || undefined }),
+        });
+        const d = await r.json();
+        if (!r.ok || !d.name) throw new Error(d.error || r.status);
+        if (st._exactSeq !== seq) return true;   // llegó un drop más nuevo — ceder
+        let ids = null;
+        try {
+            const loaded = await api.getChainState();
+            if (Array.isArray(loaded))
+                ids = loaded.map((sl, i) => (sl && (sl.id ?? sl.slotId)) ?? i);
+        } catch (_) {}
+        const slotOf = i2 => (ids ? ids[st._variantBase + i2] : st._variantBase + i2);
+        if (!(await api.replaceIR(slotOf(idx), `${st._variantRoot}/${d.name}`)))
+            throw new Error('replaceIR failed');
+        if (st._variantActive && st._variantActive !== key
+            && st._variantMap[st._variantActive] != null && typeof api.setBypass === 'function')
+            await api.setBypass(slotOf(st._variantMap[st._variantActive]), true);
+        if (typeof api.setBypass === 'function') await api.setBypass(slotOf(idx), false);
+        st._variantActive = key;
+        if (status) status.textContent = `✓ exact — x ${st.x.toFixed(2)} · ${st.dist_in}"${st.angle_deg ? ' · 45°' : ''}`;
+        return true;
+    } catch (_) {
+        return false;   // el caller cae a la variante discreta
     }
 }
 

@@ -9914,14 +9914,32 @@ def setup(app, context):
 
         assigned = 0
         if data.get("assign"):
+            pid = data.get("preset_id")
+            try:
+                pid = int(pid) if pid is not None else None
+            except (ValueError, TypeError):
+                pid = None
             conn = _get_conn()
             with _lock:
-                cur = conn.execute(
-                    "UPDATE preset_pieces SET file = ?, kind = 'ir', "
-                    "assigned_mode = 'manual' WHERE slot = 'cabinet' AND "
-                    "(rs_gear_type = ? OR rs_gear_type LIKE ?)",
-                    (rel, base_gear, base_gear + "_%"))
-                assigned = cur.rowcount or 0
+                if pid is not None:
+                    # Cab Room de una CANCIÓN: persiste la posición exacta SOLO
+                    # en el preset de ese tono — el mic que el usuario afinó para
+                    # una canción no debe re-micar toda la librería.
+                    cur = conn.execute(
+                        "UPDATE preset_pieces SET file = ?, kind = 'ir', "
+                        "assigned_mode = 'manual' WHERE slot = 'cabinet' AND "
+                        "preset_id = ? AND (rs_gear_type = ? OR rs_gear_type LIKE ?)",
+                        (rel, pid, base_gear, base_gear + "_%"))
+                    assigned = cur.rowcount or 0
+                    if assigned:
+                        _recompute_preset_primaries(conn, pid)
+                else:
+                    cur = conn.execute(
+                        "UPDATE preset_pieces SET file = ?, kind = 'ir', "
+                        "assigned_mode = 'manual' WHERE slot = 'cabinet' AND "
+                        "(rs_gear_type = ? OR rs_gear_type LIKE ?)",
+                        (rel, base_gear, base_gear + "_%"))
+                    assigned = cur.rowcount or 0
                 conn.commit()
         return {"ok": True, "name": rel, "assigned": assigned,
                 "params": {"mic": mic, "x": x, "dist_in": dist_in,
