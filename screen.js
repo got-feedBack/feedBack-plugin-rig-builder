@@ -15310,7 +15310,13 @@ function rbCabRoomPersistSong(safeId) {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ from_rs_gear: cur, to_rs_gear: to, preset_id: tone.preset_id }),
             });
-            if (r.ok) piece.type = to;   // reflect locally so a reopen reads the new mic/pos
+            // 200 with pieces_updated=0 means the backend SKIPPED the row (it
+            // couldn't resolve an IR) — treating that as saved left piece.type
+            // claiming a mic/pos the DB never got, so the next drag compared
+            // against a lie and the tone kept reloading with the old IR.
+            let saved = r.ok;
+            try { const d = await r.json(); if (d && d.pieces_updated === 0 && !d.noop) saved = false; } catch (_) {}
+            if (saved) piece.type = to;   // reflect locally so a reopen reads the new mic/pos
         } catch (_) {}
     }, 450);
 }

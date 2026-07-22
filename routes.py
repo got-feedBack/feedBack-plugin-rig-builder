@@ -5672,28 +5672,51 @@ def _resolve_gear_assignment(rs_gear: str, level: str | None,
     if category == "cab" or rs_gear.lower().startswith(("cab_", "bass_cab_")):
         irs_root = _config_dir / "nam_irs"
         mic_map = _load_rs_cab_mic_map().get(rs_gear) or {}
+        # The Cab Room persists a mic/pos change as the SUFFIXED gear form
+        # ("Cab_EN212C_5c"), but the mic map is keyed by the BASE gear with the
+        # suffix as a sub-key — the suffixed form resolved to nothing here and
+        # gear/replace_with silently skipped the row, so song mic moves never
+        # stuck (the tone reloaded with its old IR). Split base + suffix-level.
+        if not mic_map and "_" in rs_gear:
+            _base, _, _suf = rs_gear.rpartition("_")
+            if re.fullmatch(r"[A-Za-z0-9]{2}", _suf):
+                _base_map = _load_rs_cab_mic_map().get(_base)
+                if _base_map:
+                    mic_map = _base_map
+                    if not level or level == "auto":
+                        level = _suf.lower()
+
+        def _ir_on_disk(cand: str | None) -> str | None:
+            # The mic map still points at the purged Rocksmith IR files; route
+            # every candidate through the parody override (same mic position)
+            # and accept only files that exist on disk.
+            if not cand:
+                return None
+            swapped = _apply_cab_override(cand)
+            for c in ([swapped, cand] if swapped != cand else [cand]):
+                if c and (irs_root / c).exists():
+                    return c
+            return None
+
         chosen_file: str | None = None
         # 1. If the caller asked for a specific mic-position level, use it.
         if level and level != "auto" and level in mic_map:
-            cand = (mic_map[level] or {}).get("ir_file")
-            if cand and (irs_root / cand).exists():
-                chosen_file = cand
+            chosen_file = _ir_on_disk((mic_map[level] or {}).get("ir_file"))
         # 2. Default mic: prefer "Dynamic Cone" (5c), then any close-mic
         #    variant, then the first available — keeps the swap experience
         #    consistent ("similar mic, different cab").
         if chosen_file is None:
             preferred_order = ["5c", "cc", "tc", "rc", "5e", "ce", "te"]
             for k in preferred_order + sorted(mic_map):
-                cand = (mic_map.get(k) or {}).get("ir_file")
-                if cand and (irs_root / cand).exists():
-                    chosen_file = cand
+                chosen_file = _ir_on_disk((mic_map.get(k) or {}).get("ir_file"))
+                if chosen_file:
                     break
         # 3. Fallback to the legacy rs_cab_to_ir list (no labels).
         if chosen_file is None:
             rs_entry = _load_rs_cab_to_ir().get(rs_gear) or {}
             for cand in rs_entry.get("irs") or []:
-                if (irs_root / cand).exists():
-                    chosen_file = cand
+                chosen_file = _ir_on_disk(cand)
+                if chosen_file:
                     break
         if chosen_file:
             return {"kind": "rs_ir", "file": chosen_file,
