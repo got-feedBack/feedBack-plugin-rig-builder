@@ -125,6 +125,66 @@ uv run --with numpy --with scipy python tools/compare_amp_reference.py \
 Aunque el script conserva su nombre histórico, sirve para amps y pedales cuyo
 render usa el mismo DI. El reporte separa nivel, dinámica, espectro y coherencia.
 
+Cuando dos renders conservan diferencias audibles aunque las bandas y el crest
+global parezcan cercanos, usar la comparación no lineal por ventanas:
+
+```sh
+uv run --with numpy --with scipy python tools/compare_nonlinear_reference.py \
+  '<DI exacto>.wav' '<referencia>.wav' '<candidate>.wav' \
+  --sample-rate 48000 --window-ms 20
+```
+
+Este segundo reporte iguala nivel solo para el análisis y separa:
+
+- `spectrum_delta_db`: balance tonal realmente audible;
+- `linear_transfer_delta_db`: parte linealmente predecible desde el DI;
+- `nonlinear_residual_delta_db`: saturación, compresión temporal y ruido no
+  explicables por una transferencia lineal;
+- `attack/steady/decay`: diferencias de ganancia en los mismos eventos.
+
+No corregir un déficit de `nonlinear_residual_delta_db` con EQ. Tampoco subir
+drive si solo difiere `spectrum_delta_db`: primero identificar cuál de las dos
+categorías está fuera de referencia.
+
+Para riffs que comienzan tocados suavemente, no basta el tercil global. Aislar
+el inicio y revisar `input_level_bins.quiet`:
+
+```sh
+tools/compare_nonlinear_reference.py '<DI>.wav' '<ref>.wav' '<candidate>.wav' \
+  --start-seconds 0 --duration-seconds 3
+```
+
+Comparar `crest_p50_delta_db`, `nonlinear_residual_delta_db` y su desglose por
+banda. Esto detecta amps que coinciden en los golpes fuertes pero permanecen
+limpios en notas suaves.
+
+### 4.1 Comparación obligatoria por nivel de entrada
+
+El rework del DR103 demostró que una coincidencia global puede ocultar un error
+grave: el candidato coincidía en golpes fuertes, pero el inicio suave del Brit DI
+permanecía limpio. Desde ese caso, todo amp nuevo o corregido debe validarse en
+estas cuatro vistas, siempre con el mismo DI y las mismas muestras:
+
+1. Archivo activo completo, para balance y dinámica general.
+2. Inicio o pasaje suave aislado con `--start-seconds` y `--duration-seconds`.
+3. `input_level_bins.quiet`, `.medium` y `.strong`, comparando crest y residuo no
+   lineal por banda.
+4. Sweep de cada control de gain/volume en al menos 11 puntos, comprobando que
+   el carácter cambia sin introducir dropouts, clipping digital ni saltos de
+   volumen ajenos al comportamiento definido para Slopsmith.
+
+No aprobar un amp si solo coincide el bin `strong`. Las notas suaves deben tener
+el mismo tipo de breakup, compresión y cuerpo que la referencia. Tampoco aprobar
+un resultado porque la compensación de salida reduzca el crest: confirmar que la
+no linealidad se genera en V1, etapas intermedias, PI o power amp según el esquema.
+
+Cuando no existe una referencia directa, no declarar el modelo como *matched*.
+Se puede usar como límite comparativo un amp de la misma familia únicamente si
+se documenta qué circuito comparten. Renderizar ambos con el mismo DI/controles,
+conservar las partes eléctricamente idénticas y justificar cada diferencia desde
+el esquema. Ejemplo: DR504 contra DR103 para el preamp común, pero con su propia
+fuente, bias, resistencias de pantalla, par de EL34 y transformador de salida.
+
 Después del core offline, compilar, instalar y volver a probar el VST3 real. El
 render del source no detecta un bundle viejo, un mapeo incorrecto de parámetros
 o un wrapper que altera la señal después del core.

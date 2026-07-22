@@ -25,6 +25,7 @@ needs) are exact.
 
 Run:  python3 tools/measure_cab_loudness.py            # all cabs, write the table
       python3 tools/measure_cab_loudness.py --dry      # measure + print, no write
+      python3 tools/measure_cab_loudness.py --retarget # intentionally adopt a new median
 """
 import json
 import math
@@ -37,6 +38,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent.parent          # plugins/rig_builder
 IR_ROOT = HERE / "assets" / "cab_irs"
 OUT = HERE / "data" / "cab_loudness_makeup.json"
+OVERRIDES = HERE / "data" / "rb_cab_overrides.json"
 
 SR = 48000
 REF_SECONDS = 4.0
@@ -101,7 +103,14 @@ def _k_weight_response(nfft: int) -> np.ndarray:
 def measure() -> dict:
     n = int(SR * REF_SECONDS)
     pink = _pink_noise(n)
-    cabs = sorted(d for d in IR_ROOT.iterdir() if d.is_dir() and not d.name.startswith("_"))
+    overrides = json.loads(OVERRIDES.read_text(encoding="utf-8"))
+    active_names = {
+        value["ir_dir"].split("/", 1)[-1]
+        for key, value in overrides.items()
+        if key != "_meta" and isinstance(value, dict) and value.get("ir_dir")
+    }
+    cabs = sorted(
+        IR_ROOT / name for name in active_names if (IR_ROOT / name).is_dir())
     # One shared FFT size for pink*IR (IRs are short, ~2048 taps).
     nfft = 1 << int(math.ceil(math.log2(n + 8192)))
     P = np.fft.rfft(pink, n=nfft)
@@ -125,6 +134,17 @@ def measure() -> dict:
     return results
 
 
+def _target_loudness(values, retarget=False):
+    """Preserve the established output level across IR model revisions."""
+    if not retarget and OUT.is_file():
+        try:
+            existing = json.loads(OUT.read_text(encoding="utf-8"))
+            return float(existing["target_lufs_rel"]), "preserved"
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+    return float(np.median(values)), "median"
+
+
 def main():
     dry = "--dry" in sys.argv
     lufs = measure()
@@ -132,16 +152,14 @@ def main():
         print("no cab IRs found under", IR_ROOT)
         sys.exit(1)
     vals = sorted(lufs.values())
-    # Target = median so guitar cabs (the majority) stay near their current level
-    # and the correction is balanced; the leveler re-normalizes the absolute level.
-    target = float(np.median(vals))
+    target, target_source = _target_loudness(vals, "--retarget" in sys.argv)
     makeup = {}
     for name, l in lufs.items():
         db = max(MAKEUP_MIN_DB, min(MAKEUP_MAX_DB, target - l))
         makeup[name] = round(10.0 ** (db / 20.0), 5)
     spread = vals[-1] - vals[0]
     print(f"{len(lufs)} cabs measured | LUFS(rel) spread = {spread:.1f} dB "
-          f"| target(median) = {target:.1f}")
+          f"| target({target_source}) = {target:.1f}")
     order = sorted(lufs.items(), key=lambda kv: kv[1])
     for name, l in order[:5] + order[-5:]:
         print(f"  {name:26s} {l:6.1f} LUFSrel  -> makeup {20*math.log10(makeup[name]):+5.1f} dB")

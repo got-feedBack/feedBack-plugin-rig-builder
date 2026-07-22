@@ -4277,14 +4277,14 @@ const RB_CAB_ART = {
     // wordmark (PKBebas). BT410C = navy 4x10; BT1120C = black BC112; BT1121C =
     // cream 1x12 (AC15); EN212C = cream AC30 2x12.
     'Cab_BT410C':  u => rbBoxCab(u, { w: 448, h: 440, tolex: 'navy', grille: 'diamond', piping: '#efe7d2', logo: 'gold', logoL: true, port: true, corners: true }),
-    'Cab_BT1120C': u => rbBoxCab(u, { w: 470, h: 420, tolex: 'black', grille: 'blackdiamond', piping: '#f0f0ee', logo: 'chrome', logoL: true, corners: true }),
+    'Cab_BT1120C': u => rbBoxCab(u, { w: 491, h: 420, tolex: 'black', grille: 'blackdiamond', piping: '#f0f0ee', logo: 'chrome', logoL: true, corners: true }), // BC112 1x12
     'Cab_BT1121C': u => rbBoxCab(u, { w: 500, h: 384, tolex: 'cream', grille: 'diamond', logo: 'chrome', logoL: false }),
     'Cab_EN212C':  u => rbBoxCab(u, { w: 500, h: 424, tolex: 'black', grille: 'diamond', logoPanel: true, piping: '#f0efe9', logo: 'gold', corners: true, logoS: 1.05 }),
     // Fender/"Bender" cabs (rbBenderCab): black tolex, silverface grille (grid or
     // horizontal stripe), chrome diagonal "Bender" script (PKInk, the amps' font).
-    'Cab_TW410C':      u => rbBenderCab(u, { w: 360, h: 500, grille: 'grid', logoL: true, corners: 'black' }),   // Bassman 4x10
+    'Cab_TW410C':      u => rbBenderCab(u, { w: 460, h: 500, grille: 'grid', logoL: true, corners: 'black' }),   // Rumble 4x10
     'Bass_Cab_TW215BC': u => rbBenderCab(u, { w: 380, h: 520, grille: 'grid', logoL: true, corners: 'white' }),  // Bass 2x15
-    'Cab_TW110C':      u => rbBenderCab(u, { w: 500, h: 370, grille: 'stripe', logoL: false, corners: 'black' }), // Deluxe 1x12
+    'Cab_TW110C':      u => rbBenderCab(u, { w: 500, h: 389, grille: 'stripe', logoL: false, corners: 'black' }), // Hot Rod 1x12
     'Cab_TW112C':      u => rbBenderCab(u, { w: 460, h: 418, grille: 'stripe', logoL: true, corners: 'black' }),  // Supernova 1x12
     // Marsten 1x12 Combo — black tolex, cream salt-and-pepper grille, gold piping,
     // chrome "MARSTEN" plate top-right.
@@ -4850,11 +4850,11 @@ const RB_CAB_ART_ASPECT = {
     'Cab_ORANGEJIMMYBEAN': 448 / 430, 'Cab_CS1120C': 470 / 376,
     'Cab_CS1515C': 440 / 424, 'Bass_Cab_ORANGEOBC810': 300 / 580,
     'Bass_Cab_ORANGEOBC115': 460 / 400,
-    'Cab_BT410C': 448 / 440, 'Cab_BT1120C': 470 / 420,
+    'Cab_BT410C': 448 / 440, 'Cab_BT1120C': 491 / 420,
     'Cab_BT1121C': 500 / 384, 'Cab_EN212C': 500 / 424,
     'Cab_AT0112C': 440 / 420, 'Cab_AT1121C': 482 / 416,
-    'Cab_TW410C': 360 / 500, 'Bass_Cab_TW215BC': 380 / 520,
-    'Cab_TW110C': 500 / 370, 'Cab_TW112C': 460 / 418,
+    'Cab_TW410C': 460 / 500, 'Bass_Cab_TW215BC': 380 / 520,
+    'Cab_TW110C': 500 / 389, 'Cab_TW112C': 460 / 418,
     'Cab_CA412C': 460 / 430, 'Cab_CA112C': 500 / 334,
     'Cab_CA215C': 340 / 548, 'Bass_Cab_CA1510BC': 480 / 370,
     'Cab_CS212C': 470 / 338, 'Cab_EN4120C': 444 / 430,
@@ -14690,11 +14690,21 @@ async function rbLoadRealCabCatalog() {
 
 const RB_SPEAKER_LABELS = {
     g12m: 'Greenback G12M', blue: 'Alnico Blue', v30: 'Vintage 30',
-    g12t75: 'G12T-75', g12h: 'G12H', c12n: 'Jensen C12N', p10q: 'Jensen P10Q', mod12110: 'Jensen MOD 12-110', evm15l: 'EV EVM15L', evm12l: 'EV EVM12L',
+    g12t75: 'G12T-75', g12h: 'G12H', seventy80: 'Seventy 80',
+    vtype: 'Celestion V-Type', fane122231_proxy: 'Hiwatt/Fane 122231 proxy',
+    c12n: 'Jensen C12N', p10q: 'Jensen P10Q', mod12110: 'Jensen MOD 12-110', evm15l: 'EV EVM15L', evm12l: 'EV EVM12L',
     // parlantes de BAJO
     bp102: 'Legend BP102', cb158: 'Legend CB158',
     deltalite2510: 'Deltalite 2510', deltalite2512: 'Deltalite 2512',
     p15n: 'Jensen P15N', c15n: 'Jensen C15N', pulse15: 'Pulse 15',
+    rumble10_proxy: 'Fender Special Design 10 proxy',
+    gk_cx10_proxy: 'GK CX ceramic 10 proxy',
+    hydrive10_proxy: 'Hartke HyDrive 10 proxy',
+    hydrive12_proxy: 'Hartke HyDrive 12 proxy',
+    hydrive15_proxy: 'Hartke HyDrive 15 proxy',
+    mesa_powerhouse15_proxy: 'MESA PowerHouse 15 proxy',
+    mesa_subway15_proxy: 'MESA Subway Neo 15 proxy',
+    fane_bass15_proxy: 'Fane bass 15 proxy',
     // voicings NOVELTY (radio/gramófono/jukebox/boombox/hi-fi/PA)
     gramophone: 'Bocina acústica', cabinetradio: 'Radio de consola',
     jukebox: 'Jukebox', boombox: 'Boombox', audiophile: 'Hi-Fi plano',

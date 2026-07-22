@@ -23,11 +23,63 @@ Validación absoluta (datasheet → sonido, sin ancla, 1/3-oct 100 Hz-10 kHz):
 Todo en <1 ms por render — se puede regenerar al arrastrar el mic en la UI.
 """
 
+import re
+
 import numpy as np
 from scipy.special import j1
 from scipy.io import wavfile
 
 C_SOUND = 343.0  # m/s
+
+_ENCLOSURE_DSP_KEYS = (
+    "width_m", "height_m", "depth_m", "volume_l", "panel_thickness_m",
+    "tuning_hz", "dipole_hz", "open_back_ratio", "low_cut_hz",
+    "cab_resonance_hz", "hf_kind", "hf_crossover_hz", "hf_level_db",
+    "hf_rolloff_hz", "system_f3_hz", "system_f6_hz", "system_f10_hz",
+)
+
+
+def enclosure_kwargs(entry):
+    """Extract only enclosure fields understood by ``synthesize_ir``."""
+    return {
+        key: entry[key]
+        for key in _ENCLOSURE_DSP_KEYS
+        if entry.get(key) is not None
+    }
+
+
+def _cache_slug(value):
+    value = str(value or "").strip().replace(".", "")
+    value = re.sub(r"[^0-9A-Za-z_-]+", "_", value)
+    return re.sub(r"_+", "_", value).strip("_")
+
+
+def cache_filename(base_gear, entry, speaker, mic, x, dist_in, angle_deg):
+    """Stable cache key for every parameter that changes a synthesized IR."""
+    gear_key = _cache_slug(base_gear) or "cab"
+    speaker_key = _cache_slug(speaker) or "speaker"
+    voicing_key = _cache_slug(entry.get("voicing") or "physical")
+    back = str(entry.get("back", "closed"))
+    back_key = {"closed": "c", "open": "o", "ported": "p"}.get(
+        back, _cache_slug(back) or "x")
+    drivers = int(entry.get("drivers", 1))
+    size = f"{float(entry.get('size_in', 12)):g}".replace(".", "p")
+    baffle_mm = int(round(float(entry.get("baffle_m", 0.6)) * 1000.0))
+    geometry = []
+    for key in _ENCLOSURE_DSP_KEYS:
+        value = entry.get(key)
+        if value is None:
+            continue
+        if isinstance(value, float):
+            value = f"{value:.6g}"
+        geometry.append(f"{key[:2]}{value}")
+    geometry_key = _cache_slug("_".join(geometry)) or "generic"
+    return (
+        f"realcab_{gear_key}_{speaker_key}_{drivers}x{size}{back_key}"
+        f"_b{baffle_mm:04d}_g{geometry_key}_v{voicing_key}_{mic}"
+        f"_x{int(round(x * 100)):03d}_d{int(round(dist_in * 10)):03d}"
+        f"_a{int(round(angle_deg)):02d}.wav"
+    )
 
 
 # ── micrófonos (curvas desde los specsheets oficiales, Cabs/mics/) ────────
@@ -92,12 +144,52 @@ def _tube(f):
             + _bump(f, 10800.0, 2.2, 0.5) + _hi_shelf(f, 15000.0, -12.0, 0.6))
 
 
-# Cuánto se exagera el CARÁCTER de cada mic respecto al SM57 (ver
-# synthesize_ir): 1.0 = curvas calibradas tal cual (físico; los no-dinámicos
-# quedan casi iguales a través de un parlante de guitarra), 2.0 = delta doble.
-# 1.8 = elección de juego: diferencias claramente audibles partiendo de la
-# física real (el espíritu de los voicings RS, sin inventar curvas).
-MIC_CHARACTER = 1.8
+# Residuales anchos medidos siempre como delta contra el SM57 en el MISMO
+# parlante, punto y distancia. Redwirez 1960A/G12M aporta el R121 y el pack
+# AC30/Blue aporta el TLM103. Son correcciones de baja resolución: eliminan el
+# color de la cadena de referencia y no incorporan combs ni el IR de terceros.
+_MIC_CAL_FREQS = np.array([
+    80.0, 100.0, 160.0, 250.0, 400.0, 630.0, 1000.0,
+    1600.0, 2500.0, 4000.0, 6300.0, 8000.0, 10000.0, 12500.0,
+])
+_MIC_CAL_DB = {
+    # AC30: recupera presencia útil 4-7 kHz. El antiguo boost a 11 kHz
+    # quedaba detrás del cliff del parlante y el condensador sonaba tapado.
+    "tlm103": np.array([
+        -1.1, -2.7, -2.9, -1.7, -1.9, -2.2, -3.2,
+        -1.2, 0.3, 0.5, 2.1, 0.2, -2.8, -2.5,
+    ]),
+    # Redwirez: mantiene el dip ribbon 5-7 kHz y devuelve cuerpo/presencia
+    # 1-5 kHz. Top re-optimizado contra el barrido de 4 distancias (0.5-4",
+    # err medio 1.37 dB, 0.80 @1"): el corte anterior de -6 dB @10-12.5k
+    # enterraba el AIRE real del R121 (+2.0 @8k medido a 1") — su oscuridad
+    # es el dip 5-7k, no una frazada; graves -1.5 (iban +1.7 sobre lo real).
+    "r121": np.array([
+        -6.9, -7.5, -7.5, -3.4, 0.0, 1.2, 1.7,
+        0.8, 2.6, 3.1, 1.7, 3.0, 0.0, -3.0,
+    ]),
+}
+
+# Residuo del R121 angulado 45 grados después de la directividad de pistón.
+# Promedio de Cap/CapEdge @2" en la grilla Redwirez. En figura 8 el top no se
+# apaga como en el modelo cardioide genérico; esta era otra fuente de oscuridad.
+_R121_ANGLE_45_DB = np.array([
+    -3.1, -3.2, -3.3, -2.8, -1.3, 0.1, -1.7,
+    -1.6, -1.2, -1.6, -0.7, 2.3, 6.0, 4.5,
+])
+
+
+def _log_interp_db(f, freqs, values):
+    return np.interp(
+        np.log(np.maximum(f, freqs[0])), np.log(freqs), values,
+        left=float(values[0]), right=float(values[-1]))
+
+
+def _mic_calibration_db(f, mic):
+    values = _MIC_CAL_DB.get(mic)
+    if values is None:
+        return np.zeros_like(f)
+    return _log_interp_db(f, _MIC_CAL_FREQS, values)
 
 # nombre → (curva, proximity_strength dB @2.5 cm nominal, patrón)
 MICS = {
@@ -105,7 +197,9 @@ MICS = {
     "tlm103": (_tlm103, 10.0, "cardioid"),
     "md421":  (_md421,  26.0, "cardioid"),
     "km84":   (_km84,    6.0, "cardioid"),  # 18 lo engordaba +4 dB vs real (Redwirez fit)
-    "r121":   (_r121,   20.0, "fig8"),   # 38 doblaba la proximidad real (Redwirez fit)
+    # El barrido 0.5-12" de Redwirez da 55.5 dB nominales para el R121. La
+    # corrección estática anterior ocultaba esa dependencia con la distancia.
+    "r121":   (_r121,   55.5, "fig8"),
     "tube":   (_tube,   12.0, "cardioid"),  # U47 digitalizado (ya no provisional)
 }
 
@@ -148,6 +242,36 @@ _G12T75_POINTS = [
     (3600, 105.5), (4200, 105.0), (4800, 103.0), (5400, 99.0),
     (6500, 86.0), (7500, 78.0), (8500, 74.0), (10000, 72.0), (12000, 73.0),
     (15000, 69.0), (20000, 64.0),
+]
+# Celestion Seventy 80, originalmente G12P-80 (curva oficial 8 ohm).
+# Fs=85 Hz, 98 dB. Mantiene graves controlados, valle ~1.4 kHz y una cresta
+# agresiva 2.3-3.5 kHz antes de caer sobre 5.5 kHz.
+_SEVENTY80_POINTS = [
+    (20, 72.0), (30, 77.5), (40, 82.0), (50, 86.0), (63, 91.0),
+    (80, 93.5), (100, 96.5), (150, 98.5), (200, 98.5), (300, 98.0),
+    (400, 97.5), (500, 99.0), (700, 100.0), (850, 100.5), (1000, 99.0),
+    (1200, 97.5), (1400, 94.5), (1600, 99.0), (1800, 102.5),
+    (2000, 102.5), (2300, 103.5), (2600, 107.5), (3000, 106.0),
+    (3300, 107.0), (3800, 104.0), (4300, 100.5), (5000, 99.0),
+    (5500, 99.5), (6000, 94.5), (6500, 88.5), (7000, 86.0),
+    (8000, 87.5), (9000, 83.0), (10000, 76.0), (11000, 75.0),
+    (12000, 76.0), (14000, 79.5), (16000, 74.0), (18000, 66.0),
+    (20000, 64.0),
+]
+# Celestion V-Type (curva oficial 8 ohm). Fs=75 Hz, 98 dB. Comparte la
+# claridad del Seventy 80, pero con una cresta de presencia más suave y cuerpo
+# medio más parejo, que es la voz documentada del VOX BC112.
+_VTYPE_POINTS = [
+    (20, 73.0), (30, 79.0), (40, 83.5), (50, 87.0), (63, 91.0),
+    (80, 92.5), (100, 95.0), (150, 97.0), (200, 97.0), (300, 96.5),
+    (400, 96.0), (500, 98.0), (700, 98.5), (850, 99.0), (1000, 97.5),
+    (1200, 97.0), (1400, 93.0), (1600, 99.0), (1800, 100.5),
+    (2000, 101.5), (2300, 105.5), (2600, 102.5), (3000, 102.0),
+    (3300, 103.5), (3800, 101.5), (4300, 100.5), (5000, 98.0),
+    (5500, 93.5), (6000, 87.5), (6500, 84.0), (7000, 80.5),
+    (8000, 80.5), (9000, 80.5), (10000, 79.0), (11000, 79.5),
+    (12000, 69.5), (14000, 78.0), (16000, 73.0), (18000, 74.0),
+    (20000, 66.0),
 ]
 # Celestion G12H Anniversary (speakers/Celestion_G12H_Anniversary_1.pdf).
 # Fs=85, 100 dB. Low-mids potentes + upper-mid atacante, "ice-cool top".
@@ -295,11 +419,111 @@ def _interp_points(points, f):
     return db - np.mean(pd[(pf >= 150) & (pf <= 400)])
 
 
+def _proxy_blend(f, *weighted_points):
+    """Blend documented donor curves for an unavailable proprietary driver.
+
+    These are deliberately separate speaker IDs: a proxy must never silently
+    claim to be the donor Eminence/Celestion model used to construct it.
+    """
+    total = sum(float(weight) for weight, _ in weighted_points)
+    if total <= 0.0:
+        raise ValueError("proxy blend requires a positive total weight")
+    return sum(
+        float(weight) * _interp_points(points, f)
+        for weight, points in weighted_points
+    ) / total
+
+
+def _g12b150_proxy(f):
+    # The discontinued G12B-150 has no recoverable manufacturer response plot.
+    # Marshall documents it in the 1912; published Celestion specifications give
+    # Fs 77 Hz, 60-4000 Hz, a 2-inch coil and a 50 oz ceramic magnet. Blend the
+    # closest measured high-power 12-inch donors, then enforce its darker upper
+    # range. This remains an explicit proxy until a measured curve/IR is found.
+    return (_proxy_blend(
+                f, (0.42, _EVM12L_POINTS), (0.33, _G12T75_POINTS),
+                (0.25, _BP102_POINTS))
+            + _bump(f, 360.0, 1.3, 0.85)
+            + _bump(f, 1050.0, 0.8, 0.9)
+            + _bump(f, 2800.0, -0.8, 0.55)
+            + _lp_db(f, 4200.0, 1))
+
+
+def _rumble10_proxy(f):
+    # 2010 Fender Special Design 10: ferrite, 4 ohm, 125 W/driver. The BP102
+    # supplies the older bass voicing and the 2510 restores usable upper mids.
+    return (_proxy_blend(f, (0.68, _BP102_POINTS), (0.32, _DL2510_POINTS))
+            + _bump(f, 850.0, 0.8, 0.75)
+            + _bump(f, 2400.0, -0.7, 0.55))
+
+
+def _gk_cx10_proxy(f):
+    # CX410: four ceramic 10s, 200 W/driver. A broader upper-mid response than
+    # the Rumble proxy matches the published 51 Hz-18 kHz system character.
+    return (_proxy_blend(f, (0.42, _BP102_POINTS), (0.58, _DL2510_POINTS))
+            + _bump(f, 1200.0, 0.9, 0.75)
+            + _bump(f, 3100.0, 0.7, 0.55))
+
+
+def _hydrive10_proxy(f):
+    # Hartke's paper/aluminium inner cone is cleaner and more extended than a
+    # conventional paper bass cone; the cabinet horn is modelled separately.
+    return (_proxy_blend(f, (0.18, _BP102_POINTS), (0.82, _DL2510_POINTS))
+            + _bump(f, 1700.0, 1.0, 0.75)
+            + _bump(f, 3400.0, 0.9, 0.5))
+
+
+def _hydrive12_proxy(f):
+    return (_proxy_blend(f, (0.74, _DL2512_POINTS), (0.26, _EVM12L_POINTS))
+            + _bump(f, 1500.0, 0.7, 0.8)
+            + _bump(f, 3600.0, 0.8, 0.55))
+
+
+def _hydrive15_proxy(f):
+    return (_proxy_blend(f, (0.54, _PULSE15_POINTS), (0.46, _CB158_POINTS))
+            + _bump(f, 1350.0, 0.8, 0.85)
+            + _bump(f, 2850.0, 0.7, 0.55))
+
+
+def _mesa_powerhouse15_proxy(f):
+    # Custom ferrite Eminence: warm low mids with enough 2-4 kHz information
+    # for the selectable 3/4/5 kHz Player Control crossover.
+    return (_proxy_blend(f, (0.66, _CB158_POINTS), (0.34, _PULSE15_POINTS))
+            + _bump(f, 520.0, 0.8, 0.75)
+            + _bump(f, 2200.0, 0.6, 0.65))
+
+
+def _mesa_subway15_proxy(f):
+    # Lightweight custom neo driver: tighter and more extended than the older
+    # PowerHouse unit, anchored to Mesa's published 2x15 system response.
+    return (_proxy_blend(f, (0.72, _PULSE15_POINTS), (0.28, _CB158_POINTS))
+            + _bump(f, 800.0, 0.7, 0.85)
+            + _bump(f, 2600.0, 0.8, 0.6))
+
+
+def _fane122231_proxy(f):
+    # Hiwatt/Fane 122231, Fs 75 Hz and usable to 8 kHz. G12H supplies the
+    # vintage cone breakup while EVM12L adds the flatter high-power character.
+    return (_proxy_blend(f, (0.64, _G12H_POINTS), (0.36, _EVM12L_POINTS))
+            + _bump(f, 950.0, 0.6, 0.85)
+            + _bump(f, 3600.0, -0.8, 0.55))
+
+
+def _fane_bass15_proxy(f):
+    # Modern Fane Sovereign 15-400 is the documented donor family: ferrite,
+    # Fs 37 Hz, 40 Hz-4 kHz. It is a proxy, not an identification of the OEM.
+    return (_proxy_blend(f, (0.58, _CB158_POINTS), (0.42, _EVM15L_POINTS))
+            + _bump(f, 900.0, 0.6, 0.8)
+            + _bump(f, 2600.0, 0.7, 0.6))
+
+
 DRIVERS = {
     "g12m": lambda f: _interp_points(_G12M_POINTS, f),
     "blue": lambda f: _interp_points(_BLUE_POINTS, f),
     "v30": lambda f: _interp_points(_V30_POINTS, f),
     "g12t75": lambda f: _interp_points(_G12T75_POINTS, f),
+    "seventy80": lambda f: _interp_points(_SEVENTY80_POINTS, f),
+    "vtype": lambda f: _interp_points(_VTYPE_POINTS, f),
     "g12h": lambda f: _interp_points(_G12H_POINTS, f),
     "c12n": lambda f: _interp_points(_C12N_POINTS, f),
     "p10q": lambda f: _interp_points(_P10Q_POINTS, f),
@@ -313,6 +537,16 @@ DRIVERS = {
     "p15n": lambda f: _interp_points(_P15N_POINTS, f),
     "c15n": lambda f: _interp_points(_C15N_POINTS, f),
     "pulse15": lambda f: _interp_points(_PULSE15_POINTS, f),
+    "g12b150_proxy": _g12b150_proxy,
+    "rumble10_proxy": _rumble10_proxy,
+    "gk_cx10_proxy": _gk_cx10_proxy,
+    "hydrive10_proxy": _hydrive10_proxy,
+    "hydrive12_proxy": _hydrive12_proxy,
+    "hydrive15_proxy": _hydrive15_proxy,
+    "mesa_powerhouse15_proxy": _mesa_powerhouse15_proxy,
+    "mesa_subway15_proxy": _mesa_subway15_proxy,
+    "fane122231_proxy": _fane122231_proxy,
+    "fane_bass15_proxy": _fane_bass15_proxy,
 }
 
 
@@ -372,7 +606,7 @@ def _position_db(f, x_norm, dist, size_in):
     return 20.0 * np.log10(np.maximum(mag_mix, 1e-9)) + bk
 
 
-def _directivity_db(f, theta_rad, dist, size_in):
+def _directivity_db(f, theta_rad, dist, size_in, mic="sm57"):
     if abs(theta_rad) < 1e-4:
         return np.zeros_like(f)
     a = speaker_geom(size_in)[0]
@@ -380,39 +614,132 @@ def _directivity_db(f, theta_rad, dist, size_in):
     a_eff = a / (1.0 + (f / p["f_decouple"]) ** p["p_decouple"])
     ka = np.maximum(2.0 * np.pi * f / C_SOUND * a_eff * np.sin(abs(theta_rad)), 1e-9)
     db = 20.0 * np.log10(np.maximum(np.abs(2.0 * j1(ka) / ka), 1e-4))
-    return db * (dist / (dist + a))       # suavizado de campo cercano
+    db = db * (dist / (dist + a))       # suavizado de campo cercano
+
+    # El patrón polar pertenece al mic, no al parlante. Para los cardioides la
+    # directividad de pistón ya reproduce el delta medido del SM57 (0.5 dB de
+    # error medio). El R121 figura-8 necesita el residual medido propio.
+    pattern = MICS[mic][2]
+    if pattern == "fig8":
+        amount = min(abs(theta_rad) / np.deg2rad(45.0), 1.5)
+        db += amount * _log_interp_db(
+            f, _MIC_CAL_FREQS, _R121_ANGLE_45_DB)
+    return db
 
 
 def _proximity_db(f, dist, mic):
-    curve, strength, pattern = MICS[mic]
-    if strength <= 0.0:
+    _, strength, pattern = MICS[mic]
+    if pattern == "omni" or strength <= 0.0:
         return np.zeros_like(f)
     d_eff = np.hypot(max(dist, 0.005), 0.08)   # campo cercano fuente grande
     gain = strength * (0.025 / d_eff)
     return gain / (1.0 + np.exp(np.log2(np.maximum(f, 1.0) / 250.0) * 2.0))
 
 
-def _enclosure_db(f, drivers=4, size_in=12.0, back="closed", baffle_m=0.76):
+def _mic_response_db(f, dist, mic):
+    curve, _, _ = MICS[mic]
+    return curve(f) + _mic_calibration_db(f, mic) + _proximity_db(f, dist, mic)
+
+
+# Cuánto se exagera el CARÁCTER de cada mic respecto al SM57 (que queda
+# intacto por construcción). Con las curvas calibradas 1:1 los no-dinámicos
+# difieren sobre todo en 8-10k — banda que el cliff del parlante (~6.5k)
+# entierra — y en el juego sonaban "completamente iguales" (validado por el
+# usuario A/B). 1.0 = físico puro; 1.8 = separación claramente audible
+# partiendo de las firmas REALES (medidas + residuales), no de voicings
+# inventados. Se aplica en synthesize_ir sobre _mic_response_db completo.
+MIC_CHARACTER = 1.8
+
+
+def _mic_character_db(f, dist, mic):
+    """Respuesta de mic con el carácter estirado alrededor del SM57."""
+    ref = _mic_response_db(f, dist, "sm57")
+    if mic == "sm57" or MIC_CHARACTER == 1.0:
+        return _mic_response_db(f, dist, mic)
+    return ref + MIC_CHARACTER * (_mic_response_db(f, dist, mic) - ref)
+
+
+def _enclosure_db(f, drivers=4, size_in=12.0, back="closed", baffle_m=0.76,
+                  width_m=None, height_m=None, depth_m=None, volume_l=None,
+                  panel_thickness_m=None, tuning_hz=None, dipole_hz=None,
+                  open_back_ratio=None, low_cut_hz=None,
+                  cab_resonance_hz=None):
+    """First-order enclosure acoustics from documented cabinet geometry.
+
+    Nominal impedance, material and construction notes remain catalog metadata:
+    a static IR cannot reproduce amp/load interaction, and panel vibration needs
+    measured mechanical data. Dimensions, volume and port/dipole tuning do have
+    deterministic acoustic effects and are consumed here.
+    """
     d = np.zeros_like(f)
-    f_baffle = C_SOUND / (np.pi * max(baffle_m, 0.2))
+    width = float(width_m) if width_m else float(baffle_m)
+    height = float(height_m) if height_m else None
+    depth = float(depth_m) if depth_m else None
+    f_baffle = C_SOUND / (np.pi * max(width, 0.2))
     x = np.log2(np.maximum(f, 1.0) / f_baffle)
     d += 6.0 / (1.0 + np.exp(-x * 1.8)) - 6.0
+
+    # If the manufacturer omits internal volume, estimate it conservatively
+    # from the external dimensions. This is intentionally disabled for open
+    # backs, where the dipole path dominates over sealed-cavity compliance.
+    volume = float(volume_l) if volume_l else None
+    if volume is None and back != "open" and height and depth:
+        wall = float(panel_thickness_m or 0.019)
+        iw = max(width - 2.0 * wall, 0.1)
+        ih = max(height - 2.0 * wall, 0.1)
+        id_ = max(depth - 2.0 * wall, 0.1)
+        volume = 1000.0 * iw * ih * id_ * 0.88  # drivers/bracing displacement
+
+    # A cabinet's first axial modes are low-amplitude but audible broad color,
+    # especially around 200-650 Hz. Keep them subtle because damping/bracing
+    # are not documented in most manuals.
+    for dimension, gain in ((width, 0.55), (height, 0.45), (depth, -0.45)):
+        if dimension:
+            d += _bump(f, C_SOUND / (2.0 * dimension), gain, 0.42)
+
+    ref_volume_per_driver = 40.0 * (float(size_in) / 12.0) ** 3
+    volume_per_driver = volume / max(drivers, 1) if volume else None
     if back == "closed":
         # bloom medido en el 4x12 (+11 dB <550); escala ±3 dB por duplicación
         bloom = 11.0 + 3.0 * np.log2(max(drivers, 1) / 4.0)
         d += bloom / (1.0 + np.exp(np.log2(np.maximum(f, 1.0) / 550.0) * 1.6))
+        resonance = float(cab_resonance_hz) if cab_resonance_hz else None
+        if resonance is None and volume_per_driver:
+            resonance = 105.0 * np.sqrt(
+                ref_volume_per_driver / max(volume_per_driver, 5.0))
+        if resonance:
+            d += _bump(f, np.clip(resonance, 45.0, 180.0), 1.6, 0.46)
     elif back == "ported":
-        # bass-reflex: bloom de caja + HUMP del puerto (~55 Hz) + rolloff
-        # subsónico bajo la sintonía (el puerto descarga el cono)
+        # Bass reflex: documented tuning wins; otherwise estimate it from the
+        # volume per driver while retaining 55 Hz as the legacy reference.
+        fb = float(tuning_hz) if tuning_hz else None
+        if fb is None and volume_per_driver:
+            fb = 55.0 * np.sqrt(
+                ref_volume_per_driver / max(volume_per_driver, 5.0))
+        fb = float(np.clip(fb or 55.0, 28.0, 110.0))
         bloom = 10.0 + 3.0 * np.log2(max(drivers, 1) / 4.0)
         d += bloom / (1.0 + np.exp(np.log2(np.maximum(f, 1.0) / 500.0) * 1.6))
-        d += 3.5 * np.exp(-0.5 * (np.log2(np.maximum(f, 1.0) / 55.0) / 0.5) ** 2)
-        d -= 10.0 / (1.0 + np.exp(np.log2(np.maximum(f, 1.0) / 38.0) * 3.0))
+        d += _bump(f, fb, 3.5, 0.5)
+        unload_hz = min(float(low_cut_hz or (0.69 * fb)), 0.82 * fb)
+        d -= 10.0 / (
+            1.0 + np.exp(np.log2(np.maximum(f, 1.0) / unload_hz) * 3.0))
     else:
-        # open-back: bloom menor + cancelación dipolo (medido en el AC30 2x12)
+        # Open back: rear radiation cancels bass according to the shortest path
+        # around the baffle. An explicit calibrated value can override geometry.
+        if dipole_hz:
+            dipole = float(dipole_hz)
+        elif height and depth:
+            path = 0.5 * min(width, height) + 0.5 * depth
+            dipole = C_SOUND / (2.0 * np.pi * max(path, 0.15))
+        else:
+            dipole = 140.0
+        opening = float(np.clip(
+            1.0 if open_back_ratio is None else open_back_ratio, 0.15, 1.0))
+        cancellation = 8.0 * (0.72 + 0.28 * opening)
         bloom = 8.0 + 3.0 * np.log2(max(drivers, 1) / 2.0)
         d += bloom / (1.0 + np.exp(np.log2(np.maximum(f, 1.0) / 450.0) * 1.6))
-        d -= 8.0 / (1.0 + np.exp(np.log2(np.maximum(f, 1.0) / 140.0) * 2.0))
+        d -= cancellation / (
+            1.0 + np.exp(np.log2(np.maximum(f, 1.0) / dipole) * 2.0))
     return d
 
 
@@ -431,6 +758,59 @@ def _hp_db(f, fc, order=2):
 def _lp_db(f, fc, order=2):
     r = (np.maximum(f, 1.0) / fc) ** (2 * order)
     return 10.0 * np.log10(1.0 / (1.0 + r))
+
+
+def _with_hf_driver(lf_db, f, kind=None, crossover_hz=None,
+                    level_db=None, rolloff_hz=None):
+    """Power-sum a distant horn/tweeter into the close-miked LF radiator.
+
+    Catalog HF levels include the real attenuator setting plus spatial loss:
+    Cab Room positions sit on a woofer, not directly on the horn. This keeps
+    the extension audible without turning a close-miked bass IR into a PA IR.
+    """
+    if not kind:
+        return lf_db
+    fc = float(crossover_hz or (4200.0 if kind == "piezo" else 3500.0))
+    top = float(rolloff_hz or 17000.0)
+    level = float(-14.0 if level_db is None else level_db)
+    order = 1 if kind == "piezo" else 2
+    hf_db = level + _hp_db(f, fc, order) + _lp_db(f, top, 2)
+    if kind == "piezo":
+        hf_db += _bump(f, 6200.0, 1.8, 0.45)
+        hf_db += _bump(f, 10500.0, -2.2, 0.5)
+    elif kind == "titanium":
+        hf_db += _bump(f, 5200.0, 1.0, 0.55)
+        hf_db += _bump(f, 11000.0, 0.7, 0.65)
+    elif kind == "mesa":
+        hf_db += _bump(f, 6500.0, 0.6, 0.7)
+
+    lf_power = 10.0 ** (lf_db / 10.0)
+    hf_power = 10.0 ** (hf_db / 10.0)
+    return 10.0 * np.log10(np.maximum(lf_power + hf_power, 1e-12))
+
+
+def _calibrate_system_lf(db, f, f3_hz=None, f6_hz=None, f10_hz=None):
+    """Constrain a proxy to manufacturer-published low-frequency anchors."""
+    if not any(value is not None for value in (f3_hz, f6_hz, f10_hz)):
+        return db
+    known = [float(v) for v in (f3_hz, f6_hz, f10_hz) if v is not None]
+    ref_hz = max(160.0, min(250.0, max(known) * 3.0))
+    ref_db = float(np.interp(ref_hz, f, db))
+    anchors = []
+    for hz, target in ((f10_hz, -10.0), (f6_hz, -6.0), (f3_hz, -3.0)):
+        if hz is None:
+            continue
+        hz = float(hz)
+        current_rel = float(np.interp(hz, f, db)) - ref_db
+        anchors.append((hz, target - current_rel))
+    anchors.append((ref_hz, 0.0))
+    anchors.sort()
+    af = np.array([item[0] for item in anchors], dtype=float)
+    ac = np.array([item[1] for item in anchors], dtype=float)
+    correction = np.interp(
+        np.log(np.maximum(f, 1.0)), np.log(af), ac,
+        left=float(ac[0]), right=0.0)
+    return db + correction
 
 
 VOICINGS = {
@@ -506,29 +886,46 @@ _PA_NEXO15_POINTS = [
 
 def synthesize_ir(speaker="g12m", mic="sm57", x=0.15, dist_in=1.0,
                   angle_deg=0.0, drivers=4, size_in=12.0, back="closed",
-                  baffle_m=0.76, voicing=None, sr=48000, n_fft=8192, n_out=2048):
+                  baffle_m=0.76, voicing=None, width_m=None, height_m=None,
+                  depth_m=None, volume_l=None, panel_thickness_m=None,
+                  tuning_hz=None, dipole_hz=None, open_back_ratio=None,
+                  low_cut_hz=None, cab_resonance_hz=None, hf_kind=None,
+                  hf_crossover_hz=None, hf_level_db=None,
+                  hf_rolloff_hz=None, system_f3_hz=None, system_f6_hz=None,
+                  system_f10_hz=None, sr=48000, n_fft=8192, n_out=2048):
     """Parámetros físicos → IR float32 fase-mínima listo para el engine.
 
     Si `voicing` está en VOICINGS (cabs novelty), se usa esa curva de
-    carácter en vez del motor driver+caja; el mic aporta un tilt leve."""
+    carácter en vez del driver+caja. Posición, ángulo y mic siguen actuando a
+    escala reducida para que los controles del Cab Room no sean decorativos."""
     f = np.fft.rfftfreq(n_fft, 1.0 / sr)
     f[0] = f[1]
     dist = float(dist_in) * 0.0254 + 0.015    # + offset de rejilla
     if voicing and voicing in VOICINGS:
-        db = VOICINGS[voicing](f) + 0.35 * MICS[mic][0](f)
+        db = VOICINGS[voicing](f)
+        db += 0.35 * _position_db(f, x, dist, size_in)
+        db += 0.35 * _directivity_db(
+            f, np.deg2rad(angle_deg), dist, size_in, mic)
+        db += 0.35 * _mic_character_db(f, dist, mic)
     else:
         db = DRIVERS[speaker](f)
         db = db + _position_db(f, x, dist, size_in)
-        db = db + _directivity_db(f, np.deg2rad(angle_deg), dist, size_in)
-        # Carácter de mic AMPLIFICADO alrededor del SM57 (que queda intacto):
-        # con las curvas calibradas 1:1, los 4 no-dinámicos difieren sobre todo
-        # en 8-10k — banda que el cliff del parlante (~6.5k) entierra — y en el
-        # juego sonaban "completamente iguales". MIC_CHARACTER estira el delta
-        # de cada mic vs el 57 (curva + proximidad juntas); 1.0 = físico puro.
-        mic_db = MICS[mic][0](f) + _proximity_db(f, dist, mic)
-        ref_db = MICS["sm57"][0](f) + _proximity_db(f, dist, "sm57")
-        db = db + ref_db + MIC_CHARACTER * (mic_db - ref_db)
-        db = db + _enclosure_db(f, drivers, size_in, back, baffle_m)
+        db = db + _directivity_db(
+            f, np.deg2rad(angle_deg), dist, size_in, mic)
+        db = _with_hf_driver(
+            db, f, kind=hf_kind, crossover_hz=hf_crossover_hz,
+            level_db=hf_level_db, rolloff_hz=hf_rolloff_hz)
+        db = db + _mic_character_db(f, dist, mic)
+        db = db + _enclosure_db(
+            f, drivers, size_in, back, baffle_m,
+            width_m=width_m, height_m=height_m, depth_m=depth_m,
+            volume_l=volume_l, panel_thickness_m=panel_thickness_m,
+            tuning_hz=tuning_hz, dipole_hz=dipole_hz,
+            open_back_ratio=open_back_ratio, low_cut_hz=low_cut_hz,
+            cab_resonance_hz=cab_resonance_hz)
+        db = _calibrate_system_lf(
+            db, f, f3_hz=system_f3_hz, f6_hz=system_f6_hz,
+            f10_hz=system_f10_hz)
     db -= np.max(db)
 
     mag = np.maximum(10.0 ** (db / 20.0), 1e-6)

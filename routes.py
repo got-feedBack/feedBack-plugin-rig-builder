@@ -2739,9 +2739,10 @@ def _install_bundled_cab_irs() -> None:
     The override layer (rb_cab_overrides.json) points songs/catalog at
     `cabs/<Clone>/<mic>_<pos>.wav` (per-cab clone-named subfolders), which the
     engine loads from nam_irs/. So a fresh install needs those files on disk. We
-    ship them under `<plugin>/assets/cab_irs/` and copy any that are MISSING here
-    — never overwriting, so a user's own re-synthesized IR is preserved. Runs
-    once at `setup()`; no-op when either dir is absent."""
+    ship them under `<plugin>/assets/cab_irs/` and refresh files whose bundled
+    content changed. Cab Room custom renders live separately in `nam_irs/realcab`,
+    so updating these managed defaults cannot overwrite a user's saved mic
+    position. Runs once at `setup()`; no-op when either dir is absent."""
     if not _config_dir:
         return
     src = Path(__file__).resolve().parent / "assets" / "cab_irs"
@@ -2756,12 +2757,12 @@ def _install_bundled_cab_irs() -> None:
         # stray files copy too — harmless, nothing references them.
         for wav in sorted(src.rglob("*.wav")):
             target = dst / wav.relative_to(src)
-            if not target.exists():
+            if not target.exists() or target.read_bytes() != wav.read_bytes():
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(wav, target)
                 n += 1
         if n:
-            log.info("installed %d bundled cab IR(s) into nam_irs/cabs", n)
+            log.info("installed/refreshed %d bundled cab IR(s) in nam_irs/cabs", n)
     except Exception:
         log.exception("bundled cab IR install failed")
 
@@ -9893,21 +9894,25 @@ def setup(app, context):
             if req_spk not in allowed:
                 return JSONResponse({"error": f"speaker {req_spk} not offered for {base_gear}"}, 400)
             spk = req_spk
-        fname = (f"realcab_{spk}_{entry.get('drivers', 1)}x{entry.get('size_in', 12)}"
-                 f"{'c' if entry.get('back') == 'closed' else 'o'}_{mic}"
-                 f"_x{int(round(x * 100)):03d}_d{int(round(dist_in * 10)):03d}"
-                 f"_a{int(round(angle)):02d}.wav")
+        try:
+            from rb_core import cab_synth
+            fname = cab_synth.cache_filename(
+                base_gear, entry, spk, mic, x, dist_in, angle)
+        except Exception as e:
+            log.exception("cab_synthesize model load failed")
+            return JSONResponse({"error": f"{type(e).__name__}: {e}"}, 500)
         out_path = out_dir / fname
         rel = f"realcab/{fname}"
         if not out_path.exists():
             try:
-                from rb_core import cab_synth
                 cab_synth.synthesize_ir_wav(
                     str(out_path), speaker=spk, mic=mic, x=x, dist_in=dist_in,
                     angle_deg=angle, drivers=int(entry.get("drivers", 1)),
                     size_in=float(entry.get("size_in", 12)),
                     back=str(entry.get("back", "closed")),
-                    baffle_m=float(entry.get("baffle_m", 0.6)))
+                    baffle_m=float(entry.get("baffle_m", 0.6)),
+                    voicing=entry.get("voicing"),
+                    **cab_synth.enclosure_kwargs(entry))
             except Exception as e:
                 log.exception("cab_synthesize failed")
                 return JSONResponse({"error": f"{type(e).__name__}: {e}"}, 500)

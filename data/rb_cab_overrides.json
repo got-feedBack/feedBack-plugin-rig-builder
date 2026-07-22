@@ -3,112 +3,112 @@
  "Bass_Cab_AT1150BC": {
   "ir_dir": "cabs/Sampleg_1x15",
   "prefix": "",
-  "source": "Real Cab parametric model: cb158 1x15 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: cb158 1x15 ported-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Bass_Cab_AT810BC": {
   "ir_dir": "cabs/Sampleg_SVT_8x10",
   "prefix": "",
-  "source": "Real Cab parametric model: bp102 8x10 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: bp102 8x10 closed-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Bass_Cab_BT115BC": {
   "ir_dir": "cabs/Freddy_1x15",
   "prefix": "",
-  "source": "Real Cab parametric model: cb158 1x15 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: cb158 1x15 ported-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Bass_Cab_BT212BC": {
   "ir_dir": "cabs/Freddy_2x12",
   "prefix": "",
-  "source": "Real Cab parametric model: deltalite2512 2x12 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: deltalite2512 2x12 ported-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Bass_Cab_BT410BC": {
   "ir_dir": "cabs/Freddy_4x10",
   "prefix": "",
-  "source": "Real Cab parametric model: bp102 4x10 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: gk_cx10_proxy 4x10 ported-back (documented proxy, cab_synth.py); Cabs/enclosure/gallien_krueger_cx_series.pdf (CX410: front-ported, 26.5x23x14.5 in, -3 dB at 51 Hz)"
  },
  "Bass_Cab_CA1510BC": {
-  "ir_dir": "cabs/Silla_Bass_1x15",
+  "ir_dir": "cabs/Silla_PowerHouse_1x15",
   "prefix": "",
-  "source": "Real Cab parametric model: evm15l 1x15 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: mesa_powerhouse15_proxy 1x15 ported-back (documented proxy, cab_synth.py); MESA/Boogie official Standard PowerHouse 1x15 specifications (Tri-Port, 19 3/8x24 1/2x19 3/4 in, custom Eminence, selectable 3/4/5 kHz crossover)"
  },
  "Bass_Cab_CH210BC": {
   "ir_dir": "cabs/SBR_2x10",
   "prefix": "",
-  "source": "Real Cab parametric model: deltalite2510 2x10 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: deltalite2510 2x10 ported-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Bass_Cab_CH310BC": {
   "ir_dir": "cabs/Seismik_3x10",
   "prefix": "",
-  "source": "Real Cab parametric model: deltalite2510 3x10 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: deltalite2510 3x10 ported-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Bass_Cab_CH410BC": {
   "ir_dir": "cabs/SBR_4x10",
   "prefix": "",
-  "source": "Real Cab parametric model: deltalite2510 4x10 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: deltalite2510 4x10 ported-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Bass_Cab_CS112BC": {
-  "ir_dir": "cabs/Sharke_1x12",
+  "ir_dir": "cabs/Sharke_HyDrive_HD112",
   "prefix": "",
-  "source": "Real Cab parametric model: deltalite2512 1x12 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: hydrive12_proxy 1x12 ported-back (documented proxy, cab_synth.py); Hartke official HyDrive HD112 specifications (vented, 16x19x15 in, -3 dB 35 Hz-17 kHz, -10 dB at 25 Hz)"
  },
  "Bass_Cab_CS15BC": {
-  "ir_dir": "cabs/Sharke_1x15",
+  "ir_dir": "cabs/Sharke_HyDrive_HL115",
   "prefix": "",
-  "source": "Real Cab parametric model: cb158 1x15 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: hydrive15_proxy 1x15 ported-back (documented proxy, cab_synth.py); Hartke official HyDrive HL115 specifications (front-ported, 24x24x15 in, -3 dB 35 Hz-17 kHz, -10 dB at 20 Hz)"
  },
  "Bass_Cab_CS410BC": {
-  "ir_dir": "cabs/Sharke_4x10",
+  "ir_dir": "cabs/Sharke_HyDrive_HD410",
   "prefix": "",
-  "source": "Real Cab parametric model: bp102 4x10 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: hydrive10_proxy 4x10 closed-back (documented proxy, cab_synth.py); Hartke official HyDrive HD410 specifications (sealed dual chamber, 24x24x15 in, -3 dB 50 Hz-17 kHz)"
  },
  "Bass_Cab_EDEND115XLT": {
   "ir_dir": "cabs/Edena_D115XLT",
   "prefix": "",
-  "source": "Real Cab parametric model: cb158 1x15 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: cb158 1x15 ported-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Bass_Cab_EDEND212XLT": {
   "ir_dir": "cabs/Edena_D212XLT",
   "prefix": "",
-  "source": "Real Cab parametric model: deltalite2512 2x12 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: deltalite2512 2x12 ported-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Bass_Cab_EDEND410XST": {
   "ir_dir": "cabs/Edena_D410XST",
   "prefix": "",
-  "source": "Real Cab parametric model: deltalite2510 4x10 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: deltalite2510 4x10 ported-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Bass_Cab_EDEND610XST": {
   "ir_dir": "cabs/Edena_D610XST",
   "prefix": "",
-  "source": "Real Cab parametric model: deltalite2510 6x10 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: deltalite2510 6x10 ported-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Bass_Cab_GB415BC": {
   "ir_dir": "cabs/Lovolt_Bass_4x15",
   "prefix": "",
-  "source": "Real Cab parametric model: cb158 4x15 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: fane_bass15_proxy 4x15 ported-back (documented proxy, cab_synth.py); Cabs/enclosure/hiwatt bass.pdf confirms Hiwatt/Fane bass-driver construction for related cabinets; exact legacy 4x15 dimensions remain unverified"
  },
  "Bass_Cab_ORANGEOBC115": {
   "ir_dir": "cabs/Citrus_OBC115",
   "prefix": "",
-  "source": "Real Cab parametric model: cb158 1x15 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: cb158 1x15 closed-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Bass_Cab_ORANGEOBC810": {
   "ir_dir": "cabs/Citrus_OBC810",
   "prefix": "",
-  "source": "Real Cab parametric model: bp102 8x10 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: bp102 8x10 closed-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Bass_Cab_TW215BC": {
   "ir_dir": "cabs/Bender_Bass_2x15",
   "prefix": "",
-  "source": "Real Cab parametric model: c15n 2x15 ported-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: c15n 2x15 ported-back (datasheet-driven, cab_synth.py); Cabs/enclosure/fender2x15bassman.pdf (7.3 ft3 corrected to 206.7 L; manufacturer metric value is a typo)"
  },
  "Cab_AT0112C": {
   "ir_dir": "cabs/Marsten_1x12_Combo",
   "prefix": "",
-  "source": "Real Cab parametric model: g12m 1x12 open-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: seventy80 1x12 closed-back (datasheet-driven, cab_synth.py); Cabs/enclosure/marshall1x12.png and Marshall official MX112 specifications (500x470x290 mm, closed MDF enclosure, one 16-ohm Celestion Seventy-80)"
  },
  "Cab_AT1121C": {
   "ir_dir": "cabs/Marsten_1x12_Vintage",
   "prefix": "",
-  "source": "Real Cab parametric model: g12m 2x12 open-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: g12b150_proxy 1x12 ported-back (documented proxy, cab_synth.py); Marshall Japan 1912 archive (510x465x290 mm, one 8-ohm G12B-150); front-vented closed cabinet topology retained from the physical 1912 design"
  },
  "Cab_AUDIOPHILE": {
   "ir_dir": "cabs/Audiophile_Hi-Fi",
@@ -121,34 +121,34 @@
   "source": "Real Cab novelty voicing model: boombox (character curve, cab_synth.py VOICINGS)"
  },
  "Cab_BT1120C": {
-  "ir_dir": "cabs/Box_1x12",
+  "ir_dir": "cabs/Box_BC112_1x12",
   "prefix": "",
-  "source": "Real Cab parametric model: blue 1x12 open-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: vtype 1x12 open-back (datasheet-driven, cab_synth.py); Cabs/enclosure/vox bc112.pdf + VOX BC112 official specifications (semi-open back with oval port, 520x445x260 mm, Celestion V-Type)"
  },
  "Cab_BT1121C": {
   "ir_dir": "cabs/Box_1x12_Alnico",
   "prefix": "",
-  "source": "Real Cab parametric model: blue 1x12 open-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: blue 1x12 open-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Cab_BT410C": {
   "ir_dir": "cabs/Box_4x10",
   "prefix": "",
-  "source": "Real Cab parametric model: p10q 4x10 open-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: p10q 4x10 open-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Cab_CA112C": {
-  "ir_dir": "cabs/Silla_1x12",
+  "ir_dir": "cabs/Silla_Recto_1x12",
   "prefix": "",
-  "source": "Real Cab parametric model: evm12l 1x12 open-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: v30 1x12 closed-back (datasheet-driven, cab_synth.py); MESA/Boogie official 1x12 Recto specifications (sealed, Vintage 30, 18 1/3x18 2/3x14 in)"
  },
  "Cab_CA215C": {
-  "ir_dir": "cabs/Silla_2x15",
+  "ir_dir": "cabs/Silla_Subway_2x15",
   "prefix": "",
-  "source": "Real Cab parametric model: evm15l 2x15 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: mesa_subway15_proxy 2x15 ported-back (documented proxy, cab_synth.py); MESA/Boogie official Subway 2x15 Vertical specifications (Tri-Port, 34 3/8x19 1/4x19 1/2 in, F3 57.2 Hz, F6 47.2 Hz, F10 38.6 Hz)"
  },
  "Cab_CA412C": {
-  "ir_dir": "cabs/Silla_Dual_Recto_4x12",
+  "ir_dir": "cabs/Silla_Recto_Standard_OS_4x12",
   "prefix": "",
-  "source": "Real Cab parametric model: v30 4x12 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: v30 4x12 closed-back (datasheet-driven, cab_synth.py); MESA/Boogie official Rectifier Standard Oversized 4x12 specifications (sealed, 32 7/8x30 1/8x14 1/4 in)"
  },
  "Cab_CABINETRADIO": {
   "ir_dir": "cabs/Console_Radio",
@@ -158,42 +158,42 @@
  "Cab_CS1120C": {
   "ir_dir": "cabs/Citrus_PPC112",
   "prefix": "",
-  "source": "Real Cab parametric model: v30 1x12 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: v30 1x12 closed-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Cab_CS1515C": {
   "ir_dir": "cabs/Citrus_1x15",
   "prefix": "",
-  "source": "Real Cab parametric model: g12h 1x15 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: g12h 1x15 closed-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Cab_CS212C": {
   "ir_dir": "cabs/Ronald_JC-120_2x12",
   "prefix": "",
-  "source": "Real Cab parametric model: mod12110 2x12 open-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: mod12110 2x12 open-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Cab_EN212C": {
   "ir_dir": "cabs/Box_AC30_2x12",
   "prefix": "",
-  "source": "Real Cab parametric model: blue 2x12 open-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: blue 2x12 open-back (datasheet-driven, cab_synth.py); Cabs/enclosure/vox2x12c.pdf (AC30C2X dimensions/speakers) + vox2x12c.png (V212C open-back confirmation)"
  },
  "Cab_EN4120C": {
   "ir_dir": "cabs/Engel_Fireball_4x12",
   "prefix": "",
-  "source": "Real Cab parametric model: v30 4x12 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: v30 4x12 closed-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Cab_GB412CMKI": {
   "ir_dir": "cabs/Lovolt_4x12",
   "prefix": "",
-  "source": "Real Cab parametric model: g12h 4x12 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: fane122231_proxy 4x12 ported-back (documented proxy, cab_synth.py); Cabs/enclosure/hiwatt4x12.pdf (SE 4123 lead cabinet: ported/tuned, 30x30x13 in, 50-8000 Hz, 75 Hz driver resonance)"
  },
  "Cab_GB412CMKII": {
   "ir_dir": "cabs/Mr_Y_Maz_4x12",
   "prefix": "",
-  "source": "Real Cab parametric model: g12h 4x12 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: g12h 4x12 closed-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Cab_GB412CMKIII": {
   "ir_dir": "cabs/Raney_AOR_4x12",
   "prefix": "",
-  "source": "Real Cab parametric model: g12t75 4x12 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: g12t75 4x12 closed-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Cab_GRAMOPHONE": {
   "ir_dir": "cabs/Gramophone",
@@ -203,17 +203,17 @@
  "Cab_HG2120C": {
   "ir_dir": "cabs/PeeBee_2120",
   "prefix": "",
-  "source": "Real Cab parametric model: g12t75 2x12 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: g12t75 2x12 closed-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Cab_HG212C": {
   "ir_dir": "cabs/PeeBee_2x12",
   "prefix": "",
-  "source": "Real Cab parametric model: g12t75 2x12 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: g12t75 2x12 closed-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Cab_HG215C": {
   "ir_dir": "cabs/PeeBee_2x15",
   "prefix": "",
-  "source": "Real Cab parametric model: g12h 2x15 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: g12h 2x15 closed-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Cab_JUKEBOX": {
   "ir_dir": "cabs/Jukebox",
@@ -223,37 +223,37 @@
  "Cab_MARSHALL1936": {
   "ir_dir": "cabs/Marsten_1936_2x12",
   "prefix": "",
-  "source": "Real Cab parametric model: g12t75 2x12 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: g12t75 2x12 closed-back (datasheet-driven, cab_synth.py); Cabs/enclosure/marshall1936A2x12.png and Marshall official 1936 specifications (740x600x305 mm, closed plywood cabinet, two G12T-75)"
  },
  "Cab_MARSHALL1960A": {
   "ir_dir": "cabs/Marsten_1960A_4x12",
   "prefix": "",
-  "source": "Real Cab parametric model: g12t75 4x12 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: g12t75 4x12 closed-back (datasheet-driven, cab_synth.py); Cabs/enclosure/marshall1960A4x12.png and Marshall official 1960A specifications (770x755x365 mm, angled closed cabinet, four G12T-75)"
  },
  "Cab_MARSHALL1960AX": {
   "ir_dir": "cabs/Marsten_1960AX_4x12",
   "prefix": "",
-  "source": "Real Cab parametric model: g12m 4x12 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: g12m 4x12 closed-back (datasheet-driven, cab_synth.py); Cabs/enclosure/marshall1960AX4x12.png and Marshall official 1960AX specifications (770x755x365 mm, angled closed cabinet, four G12M-25)"
  },
  "Cab_MARSHALL1960TV": {
   "ir_dir": "cabs/Marsten_1960TV_4x12",
   "prefix": "",
-  "source": "Real Cab parametric model: g12m 4x12 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: g12m 4x12 closed-back (datasheet-driven, cab_synth.py); Cabs/enclosure/marshall1960TV4x12.png and Marshall official 1960TV specifications (770x820x365 mm, tall angled closed cabinet, four G12M-25)"
  },
  "Cab_ORANGEJIMMYBEAN": {
   "ir_dir": "cabs/Citrus_Jimmy_Bean_4x12",
   "prefix": "",
-  "source": "Real Cab parametric model: v30 4x12 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: v30 4x12 closed-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Cab_ORANGEPPC212OB": {
   "ir_dir": "cabs/Citrus_PPC212_Open-Back",
   "prefix": "",
-  "source": "Real Cab parametric model: v30 2x12 open-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: v30 2x12 open-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Cab_ORANGEPPC412": {
   "ir_dir": "cabs/Citrus_PPC412",
   "prefix": "",
-  "source": "Real Cab parametric model: v30 4x12 closed-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: v30 4x12 closed-back (datasheet-driven, cab_synth.py); generic enclosure geometry"
  },
  "Cab_PA1152C": {
   "ir_dir": "cabs/PS-1152C_PA",
@@ -271,19 +271,19 @@
   "source": "Real Cab novelty voicing model: pa999c (character curve, cab_synth.py VOICINGS)"
  },
  "Cab_TW110C": {
-  "ir_dir": "cabs/Bender_Deluxe_1x12",
+  "ir_dir": "cabs/Bender_Hot_Rod_1x12",
   "prefix": "",
-  "source": "Real Cab parametric model: c12n 1x12 open-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: seventy80 1x12 closed-back (datasheet-driven, cab_synth.py); Cabs/enclosure/fender1x12hotrod.pdf (closed back, G12P-80, 1.23 ft3, 597x464x267 mm)"
  },
  "Cab_TW112C": {
   "ir_dir": "cabs/Bender_Supernova_1x12",
   "prefix": "",
-  "source": "Real Cab parametric model: g12m 1x12 open-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: v30 1x12 open-back (datasheet-driven, cab_synth.py); Cabs/enclosure/fender2x12supersonic.pdf confirms the Vintage 30 and 19 mm 13-ply birch construction; the 1x12 open-back topology is retained from the user mapping, without copying the 2x12 dimensions"
  },
  "Cab_TW410C": {
-  "ir_dir": "cabs/Bender_Bassman_4x10",
+  "ir_dir": "cabs/Bender_Rumble_4x10",
   "prefix": "",
-  "source": "Real Cab parametric model: p10q 4x10 open-back (datasheet-driven, cab_synth.py)"
+  "source": "Real Cab parametric model: rumble10_proxy 4x10 ported-back (documented proxy, cab_synth.py); Cabs/enclosure/fender4x10rumble.pdf (584.2x635x365 mm, four Fender Special Design 10-inch drivers, piezo tweeter); front slot-port topology from the product drawing"
  },
  "Cab_VINTAGEHIFI": {
   "ir_dir": "cabs/Vintage_Hi-Fi",
