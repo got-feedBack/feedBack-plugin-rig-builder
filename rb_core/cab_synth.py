@@ -83,10 +83,13 @@ def _r121(f):
 
 
 def _tube(f):
-    """U47-style PROVISIONAL (specsheet en Cabs/mics/ pendiente de digitalizar):
-    condensador cálido — leve low-mid, top suavizado vs TLM103."""
-    return (_lo_shelf(f, 45.0, -2.0, 0.8) + _bump(f, 180.0, 1.0, 1.0)
-            + _bump(f, 8000.0, 2.0, 0.8) + _hi_shelf(f, 14000.0, -7.0, 0.5))
+    """Neumann U47 cardioide, digitalizado del datasheet Gotham/Neumann
+    (Cabs/mics/Neumann-U-47-Microphone.pdf p.2, curva ♡; fit 0.40 dB RMS
+    sobre 19 puntos 40 Hz-14 kHz): −2 dB @40, plano hasta ~1.3k, meseta de
+    presencia +3.5..4 entre 3-10k con pico ~10k, caída fuerte sobre 12k
+    (respuesta especificada 30-15,000 cps)."""
+    return (_lo_shelf(f, 55.0, -2.8, 0.9) + _bump(f, 5800.0, 3.8, 1.2)
+            + _bump(f, 10800.0, 2.2, 0.5) + _hi_shelf(f, 15000.0, -12.0, 0.6))
 
 
 # nombre → (curva, proximity_strength dB @2.5 cm nominal, patrón)
@@ -96,7 +99,7 @@ MICS = {
     "md421":  (_md421,  26.0, "cardioid"),
     "km84":   (_km84,    6.0, "cardioid"),  # 18 lo engordaba +4 dB vs real (Redwirez fit)
     "r121":   (_r121,   20.0, "fig8"),   # 38 doblaba la proximidad real (Redwirez fit)
-    "tube":   (_tube,   12.0, "cardioid"),
+    "tube":   (_tube,   12.0, "cardioid"),  # U47 digitalizado (ya no provisional)
 }
 
 
