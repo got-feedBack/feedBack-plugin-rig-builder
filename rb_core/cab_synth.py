@@ -92,6 +92,13 @@ def _tube(f):
             + _bump(f, 10800.0, 2.2, 0.5) + _hi_shelf(f, 15000.0, -12.0, 0.6))
 
 
+# Cuánto se exagera el CARÁCTER de cada mic respecto al SM57 (ver
+# synthesize_ir): 1.0 = curvas calibradas tal cual (físico; los no-dinámicos
+# quedan casi iguales a través de un parlante de guitarra), 2.0 = delta doble.
+# 1.8 = elección de juego: diferencias claramente audibles partiendo de la
+# física real (el espíritu de los voicings RS, sin inventar curvas).
+MIC_CHARACTER = 1.8
+
 # nombre → (curva, proximity_strength dB @2.5 cm nominal, patrón)
 MICS = {
     "sm57":   (_sm57,   30.0, "cardioid"),
@@ -513,7 +520,14 @@ def synthesize_ir(speaker="g12m", mic="sm57", x=0.15, dist_in=1.0,
         db = DRIVERS[speaker](f)
         db = db + _position_db(f, x, dist, size_in)
         db = db + _directivity_db(f, np.deg2rad(angle_deg), dist, size_in)
-        db = db + MICS[mic][0](f) + _proximity_db(f, dist, mic)
+        # Carácter de mic AMPLIFICADO alrededor del SM57 (que queda intacto):
+        # con las curvas calibradas 1:1, los 4 no-dinámicos difieren sobre todo
+        # en 8-10k — banda que el cliff del parlante (~6.5k) entierra — y en el
+        # juego sonaban "completamente iguales". MIC_CHARACTER estira el delta
+        # de cada mic vs el 57 (curva + proximidad juntas); 1.0 = físico puro.
+        mic_db = MICS[mic][0](f) + _proximity_db(f, dist, mic)
+        ref_db = MICS["sm57"][0](f) + _proximity_db(f, dist, "sm57")
+        db = db + ref_db + MIC_CHARACTER * (mic_db - ref_db)
         db = db + _enclosure_db(f, drivers, size_in, back, baffle_m)
     db -= np.max(db)
 
