@@ -66,8 +66,12 @@ def _km84(f):
 
 
 def _r121(f):
-    return (_bump(f, 55.0, 2.0, 0.8) + _bump(f, 6000.0, -2.8, 1.0)
-            + _bump(f, 12500.0, 1.0, 0.4) + _hi_shelf(f, 15000.0, -8.0, 0.5))
+    """Calibrado contra la grilla Redwirez 1960A (delta R121−SM57 @ Cap 1",
+    fit numérico err 1.1 dB RMS): el modelo viejo era una caricatura — doble
+    proximidad (+13.8 dB @100 vs +7.3 real) y top enterrado (−4.5 @8k vs +2.0
+    real: el R121 real conserva aire en 8-10k; su oscuridad es el dip 4-6k)."""
+    return (_bump(f, 6000.0, -2.2, 1.0) + _bump(f, 9500.0, 5.5, 0.5)
+            + _bump(f, 12500.0, 1.0, 0.4) + _hi_shelf(f, 15000.0, -4.0, 0.5))
 
 
 def _tube(f):
@@ -83,7 +87,7 @@ MICS = {
     "tlm103": (_tlm103, 10.0, "cardioid"),
     "md421":  (_md421,  26.0, "cardioid"),
     "km84":   (_km84,   18.0, "cardioid"),
-    "r121":   (_r121,   38.0, "fig8"),
+    "r121":   (_r121,   20.0, "fig8"),   # 38 doblaba la proximidad real (Redwirez fit)
     "tube":   (_tube,   12.0, "cardioid"),
 }
 
