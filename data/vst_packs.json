@@ -1,0 +1,17 @@
+{
+    "mac": {
+        "url": "https://github.com/got-feedBack/feedBack/releases/download/vst-mac-v1/vst-mac-pack-v1.zip",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "bytes": 0
+    },
+    "win": {
+        "url": "https://github.com/got-feedBack/feedBack/releases/download/vst-win-v1/vst-win-pack-v1.zip",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "bytes": 0
+    },
+    "linux": {
+        "url": "https://github.com/got-feedBack/feedBack/releases/download/vst-linux-v1/vst-linux-pack-v1.zip",
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "bytes": 0
+    }
+}

@@ -15,6 +15,129 @@ window.RB_API = window.RB_API || '/api/plugins/rig_builder';
 
 window.NAM_API = window.NAM_API || '/api/plugins/nam_tone';
 
+// ── Opt-in simulated-rig VST pack: first-run prompt + achievements ──────────
+// DESIGN INTENT (for other contributors): these achievements reward *real
+// musician learning*, not game busywork — the same arc as career's. The VSTs
+// (~650 MB) are no longer bundled; the player opts in and grows into the game:
+//   - deciding to learn simulated amps/effects (downloads the rig pack),
+//   - building a rig from a downloaded tone,
+//   - or running their own real gear alongside the game (a rig, no tones).
+// Keep future achievements in that spirit. Contributed to the achievements
+// plugin via its cross-plugin API (rig_builder is a source, competency only).
+const RB_VST_WELCOME_KEY = 'feedBack-rig-vst-prompt';    // 'dismissed' once declined
+const RB_TONE_DOWNLOADED_KEY = 'feedBack-rig-downloaded-tone';  // '1' after any tone dl
+const RB_ACHIEVEMENTS = [
+    { id: 'rig_simulated', title: 'Simulated Rig',
+      description: 'Download the simulated amp & effects pack.', category: 'rig', sourceId: 'rig_builder' },
+    { id: 'rig_from_tone', title: 'First Rig from Tone',
+      description: 'Build a rig from a downloaded tone.', category: 'rig', sourceId: 'rig_builder' },
+    { id: 'rig_gearhead', title: 'Gearhead',
+      description: 'Build a rig with your own gear — no downloaded tones.', category: 'rig', sourceId: 'rig_builder' },
+];
+
+function rbWithAchievements(fn) {
+    const api = window.feedBack && window.feedBack.achievements;
+    if (api) { try { fn(api); } catch (_) { /* optional */ } return; }
+    (window.__feedBackAchievementsPending =
+        window.__feedBackAchievementsPending || []).push(fn);
+}
+function rbGrantAchievement(id) { rbWithAchievements((api) => api.unlock(id)); }
+function rbRegisterAchievements() { rbWithAchievements((api) => api.registerAll(RB_ACHIEVEMENTS)); }
+
+// '' when unknown, so callers can omit the "(~X MB)" suffix.
+function rbFormatBytes(n) {
+    if (!n || n <= 0) return '';
+    const mb = n / (1024 * 1024);
+    return mb >= 1024 ? `~${(mb / 1024).toFixed(1)} GB` : `~${Math.round(mb)} MB`;
+}
+function rbLsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
+function rbLsSet(k, v) { try { localStorage.setItem(k, v); } catch (_) { /* ok */ } }
+function rbHasDownloadedTone() { return rbLsGet(RB_TONE_DOWNLOADED_KEY) === '1'; }
+// Built a rig → which achievement? Downloaded a tone first vs used own gear.
+function rbRigSaveAchievement(hasTone) { return hasTone ? 'rig_from_tone' : 'rig_gearhead'; }
+
+async function rbFetchVstPackStatus() {
+    const r = await fetch(`${window.RB_API}/vst_pack_status`);
+    if (!r.ok) throw new Error(`vst_pack_status ${r.status}`);
+    return r.json();
+}
+
+// First run: if the simulated-rig VSTs aren't installed and a pack is published,
+// offer the download (with its size) unless the user already declined.
+async function rbMaybeShowRigPrompt() {
+    let st;
+    try { st = await rbFetchVstPackStatus(); } catch (_) { return; }
+    if (!st || st.installed || !st.has_pack) return;
+    if (rbLsGet(RB_VST_WELCOME_KEY) === 'dismissed') return;
+    const root = document.getElementById('rb-root');
+    if (!root || document.getElementById('rb-vst-prompt')) return;
+    const size = rbFormatBytes(st.pack_bytes);
+    const el = document.createElement('div');
+    el.id = 'rb-vst-prompt';
+    el.className = 'mb-4';
+    el.innerHTML = rbBanner('blue', 'Use a simulated rig?',
+        `Download the simulated amp & effects pack${size ? ` (${size})` : ''} to play through modeled gear. ` +
+        `Prefer your own rig? You can skip this and route your real amp instead.` +
+        `<div class="mt-3 flex items-center gap-2">` +
+        `<button id="rb-vst-download" class="career-btn career-btn-primary">Download${size ? ` (${size})` : ''}</button>` +
+        `<button id="rb-vst-skip" class="career-btn career-btn-ghost">Not now</button></div>` +
+        `<div data-rb-vst-msg class="text-gray-400 mt-2"></div>`);
+    root.prepend(el);
+    document.getElementById('rb-vst-skip')?.addEventListener('click', () => {
+        rbLsSet(RB_VST_WELCOME_KEY, 'dismissed');
+        el.remove();
+    });
+    document.getElementById('rb-vst-download')?.addEventListener('click', () => rbStartVstDownload(el));
+}
+
+async function rbStartVstDownload(el) {
+    const btn = document.getElementById('rb-vst-download');
+    if (btn) btn.disabled = true;
+    const msg = el.querySelector('[data-rb-vst-msg]');
+    try {
+        const r = await fetch(`${window.RB_API}/download_vst_pack`, { method: 'POST' });
+        if (!r.ok) {
+            const d = await r.json().catch(() => ({}));
+            if (msg) msg.textContent = `Couldn't start: ${d.error || r.status}`;
+            if (btn) btn.disabled = false;
+            return;
+        }
+    } catch (e) {
+        if (msg) msg.textContent = `Couldn't start: ${e.message || e}`;
+        if (btn) btn.disabled = false;
+        return;
+    }
+    rbVstPollUntilDone(el);
+}
+
+// One-shot download poll (mirrors rbOauthPoll's recursive-setTimeout model).
+async function rbVstPollUntilDone(el) {
+    let st;
+    try { st = await rbFetchVstPackStatus(); } catch (_) { st = null; }
+    const dl = (st && st.download) || {};
+    const msg = el.querySelector('[data-rb-vst-msg]');
+    if (dl.status === 'running') {
+        const pct = dl.total ? Math.round((dl.done / dl.total) * 100) : 0;
+        if (msg) msg.textContent = `Downloading the simulated rig… ${pct}%`;
+        setTimeout(() => rbVstPollUntilDone(el), 800);
+        return;
+    }
+    if (dl.status === 'error') {
+        if (msg) msg.textContent = `Download failed: ${dl.error || ''} — try again`;
+        const btn = document.getElementById('rb-vst-download');
+        if (btn) btn.disabled = false;
+        return;
+    }
+    // done (or idle after a completed run): the simulated rig is installed.
+    rbGrantAchievement('rig_simulated');
+    el.remove();
+}
+
+window.__rbTest = {
+    rbFormatBytes, rbRigSaveAchievement, rbHasDownloadedTone,
+    RB_ACHIEVEMENTS, RB_VST_WELCOME_KEY, RB_TONE_DOWNLOADED_KEY,
+};
+
 function rbScopeCss(css) {
     const prefixSelector = (selector) => {
         const s = selector.trim();
@@ -3889,6 +4012,8 @@ async function rbInit() {
         return;
     }
     rbRenderStatus();
+    rbRegisterAchievements();                // idempotent; renders greyed before earned
+    rbMaybeShowRigPrompt();                  // first-run opt-in VST download (async, non-blocking)
     rbShowTab(rbState.currentTab);
     rbStudioRenderToneChips();              // show the current-tone label right away
     rbStudioLoadSavedTones().catch(() => {});   // then fill in saved tones
@@ -8472,6 +8597,9 @@ async function rbStudioCommitSaveTone(name) {
         if (!r.ok) { alert(`Save failed: ${d.error || r.status} — restart the app if you just updated (new backend route).`); return; }
     } catch (e) { alert('Save failed: ' + (e.message || e)); return; }
     document.getElementById('rb-tone-menu')?.classList.add('hidden');
+    // Built & saved a rig → a real musician milestone: from a downloaded tone,
+    // or from the player's own gear (no tones). Idempotent; only the first fires.
+    rbGrantAchievement(rbRigSaveAchievement(rbHasDownloadedTone()));
     await rbStudioLoadSavedTones();
     rbStudioShowSavedTone(name);
 }
@@ -9463,7 +9591,7 @@ async function rbAutoDownloadSong(filename, unmappedCount, container) {
             return;
         }
         const parts = [];
-        if (result.downloaded) parts.push(`${result.downloaded} downloaded`);
+        if (result.downloaded) { parts.push(`${result.downloaded} downloaded`); rbLsSet(RB_TONE_DOWNLOADED_KEY, '1'); }
         if (result.rs_ir_used) parts.push(`${result.rs_ir_used} IRs`);
         if (result.skipped_assigned) parts.push(`${result.skipped_assigned} reused`);
         if (result.skipped_no_candidate) parts.push(`${result.skipped_no_candidate} unmatched`);
