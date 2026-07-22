@@ -1,0 +1,34 @@
+name: tests
+
+# The repo shipped Python + JS tests but nothing ran them (only the four
+# VST3-build workflows existed), so regressions — including the opt-in VST
+# pack download path — merged unguarded. This runs both suites on every PR.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # No requirements.txt: the plugin gets its deps from feedBack core at
+      # runtime. The tests need only these to import routes.py + helpers.
+      - run: pip install fastapi pytest pyyaml
+      - run: pytest tests/ -q
+
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --test tests/*.test.js
