@@ -15314,9 +15314,23 @@ function rbCabRoomPersistSong(safeId) {
             // couldn't resolve an IR) — treating that as saved left piece.type
             // claiming a mic/pos the DB never got, so the next drag compared
             // against a lie and the tone kept reloading with the old IR.
-            let saved = r.ok;
-            try { const d = await r.json(); if (d && d.pieces_updated === 0 && !d.noop) saved = false; } catch (_) {}
-            if (saved) piece.type = to;   // reflect locally so a reopen reads the new mic/pos
+            let saved = r.ok, resolved = null;
+            try {
+                const d = await r.json();
+                if (d && d.pieces_updated === 0 && !d.noop) saved = false;
+                if (d && d.resolved_file) resolved = d.resolved_file;
+            } catch (_) {}
+            if (saved) {
+                piece.type = to;   // reflect locally so a reopen reads the new mic/pos
+                // Keep the FILE in step with the suffix: a later tone re-save
+                // (rbPersistTone) serializes this piece, and a stale file would
+                // resurrect the old mic position under a fresh-looking suffix.
+                if (resolved) {
+                    piece.file = resolved;
+                    if (piece.assigned) piece.assigned.file = resolved;
+                    delete piece._uploaded_file;
+                }
+            }
         } catch (_) {}
     }, 450);
 }

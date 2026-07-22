@@ -6100,6 +6100,16 @@ def _manual_piece_usable(prev: dict) -> bool:
     return False
 
 
+def _is_suffixed_cab_gear(rs_gear: str) -> bool:
+    """True for the Cab Room's suffixed cab form ("Cab_EN212C_5c") — a base
+    cab gear present in the mic map plus a 2-char mic/pos suffix."""
+    if "_" not in (rs_gear or ""):
+        return False
+    base, _, suf = rs_gear.rpartition("_")
+    return bool(re.fullmatch(r"[A-Za-z0-9]{2}", suf)) \
+        and base in _load_rs_cab_mic_map()
+
+
 def _resolve_song_swap_assignment(to_gear: str, params_json: str | None,
                                   rs_gain: float | None) -> dict | None:
     """Resolve the target gear for a per-song swap.
@@ -6108,8 +6118,18 @@ def _resolve_song_swap_assignment(to_gear: str, params_json: str | None,
     plays today. That means an existing manual/manual_vst assignment wins over
     curated amp gain variants; otherwise swapping to an amp with EN30/TW22 VST
     assigned globally silently falls back to the old NAM variant.
+
+    EXCEPT suffixed cab targets ("Cab_EN212C_5c"): those name an exact mic/pos
+    the user just picked in the Cab Room, so they resolve deterministically
+    from the mic map. _existing_assignment_for_gear would propagate whatever
+    file some historical row stored under that name (e.g. a saved tone's
+    custom realcab IR), silently overriding the chosen position.
     """
-    res = _existing_assignment_for_gear(to_gear)
+    res = None
+    if _is_suffixed_cab_gear(to_gear):
+        res = _resolve_gear_assignment(to_gear, None, rs_gain)
+    if res is None:
+        res = _existing_assignment_for_gear(to_gear)
     if res is None:
         res = _resolve_gear_assignment(to_gear, None, rs_gain)
     if res and res.get("kind") == "vst" and res.get("vst_path") and not res.get("vst_state"):
@@ -12429,6 +12449,7 @@ def setup(app, context):
             ).fetchall()
         updated = 0
         skipped = 0
+        resolved_file = None
         affected_presets = set()
         with _lock:
             for pid_row, preset_id, params_json in rows:
@@ -12475,12 +12496,18 @@ def setup(app, context):
                     )
                 updated += 1
                 affected_presets.add(preset_id)
+                if res["kind"] != "vst":
+                    resolved_file = res.get("file")
             for pid in affected_presets:
                 _recompute_preset_primaries(conn, pid)
             conn.commit()
         return {"ok": True, "from": from_gear, "to": to_gear,
                 "pieces_updated": updated, "skipped": skipped,
-                "presets_affected": len(affected_presets)}
+                "presets_affected": len(affected_presets),
+                # What the rows now play (last non-VST file) — the Cab Room
+                # persist uses it to keep its local piece.file in step with
+                # the DB (a later tone re-save serializes that piece).
+                "resolved_file": resolved_file}
 
     @app.post("/api/plugins/rig_builder/nam_purge")
     def purge_nam(data: dict = Body(...)):

@@ -2977,25 +2977,25 @@
       "position": "Off-axis"
     },
     "cc": {
-      "effect_name": "Cab_Marshall1960a_Condenser_Edge",
-      "ir_file": "rocksmith/cab_marshall1960a_05.wav",
-      "ir_index": 5,
+      "effect_name": "Cab_Marshall1960a_Condenser_Cone",
+      "ir_file": "rocksmith/cab_marshall1960a_04.wav",
+      "ir_index": 4,
       "label": "Condenser Cone",
       "mic_type": "Condenser",
       "position": "Cone (close)"
     },
     "ce": {
-      "effect_name": "Cab_Marshall1960a_Condenser_OffAxis",
-      "ir_file": "rocksmith/cab_marshall1960a_03.wav",
-      "ir_index": 3,
+      "effect_name": "Cab_Marshall1960a_Condenser_Edge",
+      "ir_file": "rocksmith/cab_marshall1960a_05.wav",
+      "ir_index": 5,
       "label": "Condenser Edge",
       "mic_type": "Condenser",
       "position": "Edge"
     },
     "co": {
-      "effect_name": "Cab_Marshall1960a_Condenser_Cone",
-      "ir_file": "rocksmith/cab_marshall1960a_04.wav",
-      "ir_index": 4,
+      "effect_name": "Cab_Marshall1960a_Condenser_OffAxis",
+      "ir_file": "rocksmith/cab_marshall1960a_03.wav",
+      "ir_index": 3,
       "label": "Condenser OffAxis",
       "mic_type": "Condenser",
       "position": "Off-axis"
