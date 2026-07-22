@@ -15715,6 +15715,11 @@ async function rbCabRoomPreloadVariants(safeId, gear) {
         st._variantRoot = root;   // para el swap de posición EXACTA (rbCabRoomSwapExact)
         let stObj = null;
         try { stObj = JSON.parse(atob(orig.state || '')); } catch (_) { stObj = null; }
+        // Ganancia BAKEADA del stage del cab (makeup ×8 + loudness por-cab):
+        // viaja en el state blob del IRLoader, así que un replaceIR (IRLoader
+        // nuevo, gain 1.0) la PIERDE → el cab caía ~18-26 dB (casi inaudible).
+        // La guardamos para re-aplicarla en cada swap por replaceIR.
+        st._variantGain = (stObj && typeof stObj.gain === 'number') ? stObj.gain : null;
         const activeKey = `${_RB_CR_MIC_TOK[st.mic] || 'dyn'}_${rbCabRoomSnapPos(st)}`;
         const variants = [];
         const vmap = {};
@@ -15762,8 +15767,14 @@ async function rbCabRoomPreloadVariants(safeId, gear) {
                             // the catch below and fall through to the full reload,
                             // rather than reporting an instant swap that didn't
                             // actually change the cab audio.
-                            if (!(await api.replaceIR(id, variants[k].path)))
+                            if (!(await api.replaceIR(id, variants[k].path,
+                                                      st._variantGain != null ? st._variantGain : undefined)))
                                 throw new Error('replaceIR failed');
+                            // replaceIR instala un IRLoader FRESCO (gain interno 1.0)
+                            // — re-aplicar la ganancia bakeada como postGain del slot,
+                            // si no el cab queda ~18-26 dB abajo (casi inaudible).
+                            if (st._variantGain != null && typeof api.setPostGain === 'function')
+                                await api.setPostGain(id, st._variantGain);
                             if (typeof api.setBypass === 'function')
                                 await api.setBypass(id, !!variants[k].bypassed);
                         }
@@ -15827,8 +15838,13 @@ async function rbCabRoomSwapExact(safeId, gear) {
                 ids = loaded.map((sl, i) => (sl && (sl.id ?? sl.slotId)) ?? i);
         } catch (_) {}
         const slotOf = i2 => (ids ? ids[st._variantBase + i2] : st._variantBase + i2);
-        if (!(await api.replaceIR(slotOf(idx), `${st._variantRoot}/${d.name}`)))
+        if (!(await api.replaceIR(slotOf(idx), `${st._variantRoot}/${d.name}`,
+                                  st._variantGain != null ? st._variantGain : undefined)))
             throw new Error('replaceIR failed');
+        // IRLoader fresco = gain interno 1.0: re-aplicar la ganancia bakeada del
+        // stage (makeup + loudness por-cab) o el cab queda casi inaudible.
+        if (st._variantGain != null && typeof api.setPostGain === 'function')
+            await api.setPostGain(slotOf(idx), st._variantGain);
         if (st._variantActive && st._variantActive !== key
             && st._variantMap[st._variantActive] != null && typeof api.setBypass === 'function')
             await api.setBypass(slotOf(st._variantMap[st._variantActive]), true);
