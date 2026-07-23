@@ -389,56 +389,63 @@
    "drivers": 2,
    "size_in": 12,
    "back": "closed",
-   "baffle_m": 0.68,
+   "baffle_m": 0.7087,
    "speaker_confidence": "low",
    "name": "PeeBee 2120",
    "speakers": [
     "g12t75",
     "v30"
    ],
-   "width_m": 0.68,
-   "height_m": 0.53,
-   "depth_m": 0.29,
+   "width_m": 0.7087,
+   "height_m": 0.4496,
+   "depth_m": 0.2896,
    "panel_thickness_m": 0.018,
-   "geometry_confidence": "medium",
-   "enclosure_source": "Cabs/enclosure/hiwatt bass.pdf p.20 (Hiwatt Hi-Gain 2x12: 680x530x290 mm, 18 mm birch ply, Fane) - the game pairs HG cabs with the Hiwatt heads"
+   "geometry_confidence": "high",
+   "enclosure_source": "Peavey 212-C published specs (27.9 x 17.7 x 11.4 in, 18 mm plywood, convertible back run closed; ships a Celestion V30 + G12T-75 pair - the family identity is Peavey per the user)",
+   "real_model": "Peavey 212-C"
   },
   "Cab_HG212C": {
    "speaker": "g12t75",
    "drivers": 2,
    "size_in": 12,
    "back": "closed",
-   "baffle_m": 0.68,
+   "baffle_m": 0.7087,
    "speaker_confidence": "low",
    "name": "PeeBee 2x12",
    "speakers": [
     "g12t75",
     "v30"
    ],
-   "width_m": 0.68,
-   "height_m": 0.53,
-   "depth_m": 0.29,
+   "width_m": 0.7087,
+   "height_m": 0.4496,
+   "depth_m": 0.2896,
    "panel_thickness_m": 0.018,
-   "geometry_confidence": "medium",
-   "enclosure_source": "Cabs/enclosure/hiwatt bass.pdf p.20 (Hiwatt Hi-Gain 2x12: 680x530x290 mm, 18 mm birch ply, Fane)"
+   "geometry_confidence": "high",
+   "enclosure_source": "Peavey 212-C published specs (27.9 x 17.7 x 11.4 in, 18 mm plywood, convertible back run closed; ships a Celestion V30 + G12T-75 pair - the family identity is Peavey per the user)",
+   "real_model": "Peavey 212-C"
   },
   "Cab_HG215C": {
-   "speaker": "g12h",
+   "speaker": "evm15l",
    "drivers": 2,
    "size_in": 15,
    "back": "closed",
-   "baffle_m": 0.76,
+   "baffle_m": 0.6413,
    "speaker_confidence": "low",
    "name": "PeeBee 2x15",
    "speakers": [
+    "evm15l",
     "g12h",
     "g12t75"
    ],
-   "width_m": 0.76,
-   "height_m": 0.84,
-   "depth_m": 0.38,
-   "geometry_confidence": "low",
-   "enclosure_source": "No documented vintage Hiwatt/UK 2x15 dimensions found; estimated from the Hi-Gain 4x12 shell proportions"
+   "width_m": 0.6413,
+   "height_m": 1.016,
+   "depth_m": 0.3651,
+   "geometry_confidence": "medium",
+   "enclosure_source": "Vintage Peavey 215 Enclosure, owner-measured 40 x 25.25 x 14.375 in (Reverb listings agree at 102-112 x 65 x 36-38 cm); sealed column, factory Black Widow pair",
+   "panel_thickness_m": 0.015,
+   "real_model": "Peavey 215 Enclosure",
+   "speaker_proxy": true,
+   "proxy_basis": "Peavey Black Widow 1505 pro 15 proxied by the EVM15L datasheet curve (closest documented pro full-range 15)"
   },
   "Cab_MARSHALL1936": {
    "speaker": "g12t75",

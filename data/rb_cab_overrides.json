@@ -203,17 +203,17 @@
  "Cab_HG2120C": {
   "ir_dir": "cabs/PeeBee_2120",
   "prefix": "",
-  "source": "Real Cab parametric model: g12t75 2x12 closed-back (datasheet-driven, cab_synth.py); Cabs/enclosure/hiwatt bass.pdf p.20 (Hiwatt Hi-Gain 2x12: 680x530x290 mm, 18 mm birch ply, Fane) - the game pairs HG cabs with the Hiwatt heads"
+  "source": "Real Cab parametric model: g12t75 2x12 closed-back (datasheet-driven, cab_synth.py); Peavey 212-C published specs (27.9 x 17.7 x 11.4 in, 18 mm plywood, convertible back run closed; ships a Celestion V30 + G12T-75 pair - the family identity is Peavey per the user)"
  },
  "Cab_HG212C": {
   "ir_dir": "cabs/PeeBee_2x12",
   "prefix": "",
-  "source": "Real Cab parametric model: g12t75 2x12 closed-back (datasheet-driven, cab_synth.py); Cabs/enclosure/hiwatt bass.pdf p.20 (Hiwatt Hi-Gain 2x12: 680x530x290 mm, 18 mm birch ply, Fane)"
+  "source": "Real Cab parametric model: g12t75 2x12 closed-back (datasheet-driven, cab_synth.py); Peavey 212-C published specs (27.9 x 17.7 x 11.4 in, 18 mm plywood, convertible back run closed; ships a Celestion V30 + G12T-75 pair - the family identity is Peavey per the user)"
  },
  "Cab_HG215C": {
   "ir_dir": "cabs/PeeBee_2x15",
   "prefix": "",
-  "source": "Real Cab parametric model: g12h 2x15 closed-back (datasheet-driven, cab_synth.py); No documented vintage Hiwatt/UK 2x15 dimensions found; estimated from the Hi-Gain 4x12 shell proportions"
+  "source": "Real Cab parametric model: evm15l 2x15 closed-back (documented proxy, cab_synth.py); Vintage Peavey 215 Enclosure, owner-measured 40 x 25.25 x 14.375 in (Reverb listings agree at 102-112 x 65 x 36-38 cm); sealed column, factory Black Widow pair"
  },
  "Cab_JUKEBOX": {
   "ir_dir": "cabs/Jukebox",
