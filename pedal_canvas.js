@@ -5980,13 +5980,13 @@
   //    0 Gain 1 Bass 2 Middle 3 Treble 4 Deep 5 Presence 6 Master 8 Channel.
   P.deezelvh4 = { w:1560, h:600, ptr:rgb(238,240,244),
     knobs:[
-      {id:0,cx:.455,cy:.630,r:.0205,style:'vh4'},   // GAIN
-      {id:3,cx:.405,cy:.708,r:.0205,style:'vh4'},   // TREBLE
-      {id:2,cx:.355,cy:.786,r:.0205,style:'vh4'},   // MIDDLE
-      {id:1,cx:.305,cy:.864,r:.0205,style:'vh4'},   // BASS
-      {id:6,cx:.835,cy:.630,r:.0205,style:'vh4'},   // MASTER (Volume)
-      {id:5,cx:.785,cy:.708,r:.0205,style:'vh4'},   // PRESENCE
-      {id:4,cx:.735,cy:.786,r:.0205,style:'vh4'},   // DEEP
+      {id:0,cx:.455,cy:.668,r:.0205,style:'vh4'},   // GAIN
+      {id:3,cx:.405,cy:.740,r:.0205,style:'vh4'},   // TREBLE
+      {id:2,cx:.355,cy:.812,r:.0205,style:'vh4'},   // MIDDLE
+      {id:1,cx:.305,cy:.884,r:.0205,style:'vh4'},   // BASS
+      {id:6,cx:.835,cy:.668,r:.0205,style:'vh4'},   // MASTER (Volume)
+      {id:5,cx:.785,cy:.740,r:.0205,style:'vh4'},   // PRESENCE
+      {id:4,cx:.735,cy:.812,r:.0205,style:'vh4'},   // DEEP
       {id:8,cx:.125,cy:.740,r:.024,style:'vh4',select:4} ], // CHANNEL 1..4
     draw(d,vals){ const {ctx:c,W,H,s}=d; const ink=rgb(24,24,26);
       const bgr=c.createLinearGradient(0,0,0,H); bgr.addColorStop(0,rgb(20,20,22)); bgr.addColorStop(1,rgb(8,8,10));
@@ -6040,8 +6040,8 @@
         c.strokeStyle='rgba(255,255,255,0.07)'; c.lineWidth=1*s; c.beginPath(); c.moveTo(2*s,-bh*0.5+1*s); c.lineTo(D-2*s,-bh*0.5+1*s); c.stroke();
         c.font=`italic 700 ${Math.round(12.5*s)}px ${F.barlow}`; c.textAlign='center'; c.textBaseline='middle';
         c.fillStyle=rgb(242,244,248); c.fillText(t,D*0.40,0.5*s); c.restore(); };
-      strip(.455,.630,'Gain'); strip(.405,.708,'Treble'); strip(.355,.786,'Middle'); strip(.305,.864,'Bass');
-      strip(.835,.630,'Master',0.125); strip(.785,.708,'Presence',0.125); strip(.735,.786,'Deep',0.125);
+      strip(.455,.668,'Gain'); strip(.405,.740,'Treble'); strip(.355,.812,'Middle'); strip(.305,.884,'Bass');
+      strip(.835,.668,'Master',0.125); strip(.785,.740,'Presence',0.125); strip(.735,.812,'Deep',0.125);
       // ── CH 1-4 (fila superior despejada), el canal activo encendido ──
       const chv=Math.round(((vals&&vals[8]!=null?vals[8]:0.6667))*3);
       const names=['CH 1','CH 2','CH 3','CH 4'];
