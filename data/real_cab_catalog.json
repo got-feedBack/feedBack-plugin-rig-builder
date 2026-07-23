@@ -41,7 +41,7 @@
    "topology_confidence": "high",
    "enclosure_source": "Cabs/enclosure/marshall1x12.png and Marshall official MX112 specifications (500x470x290 mm, closed MDF enclosure, one 16-ohm Celestion Seventy-80)",
    "speaker_confidence": "high",
-   "name": "Marsten 1x12 Combo",
+   "name": "Marsten MX112",
    "speakers": [
     "seventy80",
     "g12m",
@@ -67,7 +67,7 @@
    "topology_confidence": "medium",
    "enclosure_source": "Marshall Japan 1912 archive (510x465x290 mm, one 8-ohm G12B-150); front-vented closed cabinet topology retained from the physical 1912 design",
    "speaker_confidence": "low",
-   "name": "Marsten 1x12 Vintage",
+   "name": "Marsten 1912",
    "speakers": [
     "g12b150_proxy",
     "g12m",
@@ -106,7 +106,7 @@
    "back": "open",
    "baffle_m": 0.602,
    "speaker_confidence": "high",
-   "name": "Box 1x12 Alnico",
+   "name": "Box AC15 1x12",
    "speakers": [
     "blue",
     "g12h",
@@ -307,7 +307,7 @@
    "back": "closed",
    "baffle_m": 0.74,
    "speaker_confidence": "high",
-   "name": "Engel Fireball 4x12",
+   "name": "Engel E412",
    "speakers": [
     "v30",
     "g12t75"
@@ -338,7 +338,7 @@
    "speaker_proxy": true,
    "proxy_basis": "Celestion G12H and EV EVM12L donor curves constrained by the documented 75 Hz resonance and 50 Hz-8 kHz cabinet range",
    "speaker_confidence": "medium",
-   "name": "Lovolt 4x12",
+   "name": "Lovolt SE4123",
    "speakers": [
     "fane122231_proxy",
     "g12h",
@@ -372,7 +372,7 @@
    "back": "closed",
    "baffle_m": 0.715,
    "speaker_confidence": "high",
-   "name": "Raney AOR 4x12",
+   "name": "Raney GS412",
    "speakers": [
     "g12t75",
     "v30"
@@ -411,7 +411,7 @@
    "back": "closed",
    "baffle_m": 0.7087,
    "speaker_confidence": "low",
-   "name": "PeeBee 2x12",
+   "name": "PeeBee 212-C",
    "speakers": [
     "g12t75",
     "v30"
@@ -431,7 +431,7 @@
    "back": "closed",
    "baffle_m": 0.6413,
    "speaker_confidence": "low",
-   "name": "PeeBee 2x15",
+   "name": "PeeBee 215",
    "speakers": [
     "evm15l",
     "g12h",
@@ -714,7 +714,7 @@
    "enclosure_source": "Ampeg SVT-810E published specs (sealed infinite-baffle, 26x48x16 in, -3 dB 58 Hz, -10 dB 40 Hz, 100 dB)"
   },
   "Bass_Cab_AT1150BC": {
-   "name": "Sampleg 1x15",
+   "name": "Sampleg SVT-15E",
    "speaker": "cb158",
    "speakers": [
     "cb158",
@@ -738,7 +738,7 @@
    "enclosure_source": "Ampeg SVT-15E published specs (24x22x16 in, -3 dB 50 Hz, -10 dB 33 Hz, 98 dB)"
   },
   "Bass_Cab_BT115BC": {
-   "name": "Freddy 1x15",
+   "name": "Freddy CX115",
    "speaker": "cb158",
    "speakers": [
     "cb158",
@@ -765,7 +765,7 @@
    "enclosure_source": "Cabs/enclosure/gallien_krueger_cx_series.pdf (CX115: front-ported, 19x23x14.5 in, -3 dB 51 Hz, 91 dB)"
   },
   "Bass_Cab_BT212BC": {
-   "name": "Freddy 2x12",
+   "name": "Freddy Neo 212",
    "speaker": "deltalite2512",
    "speakers": [
     "deltalite2512",
@@ -791,7 +791,7 @@
    "enclosure_source": "GK Neo 212-II published specs (front-ported, 23.5x24.5x16.5 in, -3 dB 53 Hz, Paragon horn, 11-ply poplar)"
   },
   "Bass_Cab_BT410BC": {
-   "name": "Freddy 4x10",
+   "name": "Freddy CX410",
    "speaker": "gk_cx10_proxy",
    "speakers": [
     "gk_cx10_proxy",
@@ -857,7 +857,7 @@
    "speaker_confidence": "medium"
   },
   "Bass_Cab_CH210BC": {
-   "name": "SBR 2x10",
+   "name": "SBR Workingman 2x10",
    "speaker": "deltalite2510",
    "speakers": [
     "deltalite2510",
@@ -880,7 +880,7 @@
    "enclosure_source": "SWR Workingman's 2x10T manual specs (23x17x16.25 in, -3 dB 63 Hz, Le-Son piezo tweeter)"
   },
   "Bass_Cab_CH310BC": {
-   "name": "Seismik 3x10",
+   "name": "Seismik SA-310",
    "speaker": "deltalite2510",
    "speakers": [
     "deltalite2510",
@@ -903,7 +903,7 @@
    "enclosure_source": "Seismic Audio SA-310 published specs (21.5x23x16.5 in, 5/8 in plywood, claimed 40 Hz-16 kHz, piezo tweeter)"
   },
   "Bass_Cab_CH410BC": {
-   "name": "SBR 4x10",
+   "name": "SBR Goliath 4x10",
    "speaker": "deltalite2510",
    "speakers": [
     "deltalite2510",
@@ -1130,7 +1130,7 @@
    "enclosure_source": "Eden D610XST published specs (ported, 23x38.5x16 in, 50 Hz-14 kHz)"
   },
   "Bass_Cab_GB415BC": {
-   "name": "Lovolt Bass 4x15",
+   "name": "Lovolt B415HN",
    "speaker": "fane_bass15_proxy",
    "speakers": [
     "fane_bass15_proxy",
@@ -1196,7 +1196,7 @@
    "enclosure_source": "Orange OBC810 published specs (rear-ported, 61.5x123x46 cm, four voiced compartments, 13-ply 18 mm birch)"
   },
   "Bass_Cab_TW215BC": {
-   "name": "Bender Bass 2x15",
+   "name": "Bender Bassman 2x15",
    "speaker": "c15n",
    "speakers": [
     "c15n",
