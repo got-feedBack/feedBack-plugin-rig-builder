@@ -83,7 +83,7 @@
  "Bass_Cab_GB415BC": {
   "ir_dir": "cabs/Lovolt_Bass_4x15",
   "prefix": "",
-  "source": "Real Cab parametric model: fane_bass15_proxy 4x15 ported-back (documented proxy, cab_synth.py); No official documentation found for the vintage Hiwatt/Marshall-style square 4x15; dimensions estimated from 2x2 15-inch driver packing"
+  "source": "Real Cab parametric model: fane_bass15_proxy 4x15 ported-back (documented proxy, cab_synth.py); Cabs/enclosure/hiwatt bass.pdf p.23: Hiwatt B410HN (665 x 730 x 475 mm, 18 mm birch ply, piezo horn, 600 W) as the documented Hiwatt bass-cab reference, baffle plane scaled x1.5 for the 2x2 grid of 15-inch drivers"
  },
  "Bass_Cab_ORANGEOBC115": {
   "ir_dir": "cabs/Citrus_OBC115",
