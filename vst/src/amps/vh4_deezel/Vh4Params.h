@@ -34,22 +34,24 @@ enum Vh4ParamId
     kPresence,      // PRESENCE — power-amp NFB high-shelf (~4 kHz); noon = flat
     kMaster,        // MASTER — output / power-amp drive
     kCabSim,        // fallback 4x12 voice: 0 = amp-only, 1 = internal cab sim
+    kChannel,       // 0..1 -> Ch1 Clean / Ch2 Crunch / Ch3 Mega / Ch4 Lead
     kParamCount
-    // (future channels: append kChannel + per-channel banks here — see header)
 };
 
 static const char* const kVh4Names[kParamCount] = {
     "Gain", "Bass", "Middle", "Treble", "Deep", "Presence", "Master", "Cab Sim",
+    "Channel",
 };
 static const char* const kVh4Symbols[kParamCount] = {
     "gain", "bass", "middle", "treble", "deep", "presence", "master", "cabsim",
+    "channel",
 };
-static const float kVh4Min[kParamCount] = { 0,0,0,0,0,0,0,0 };
-static const float kVh4Max[kParamCount] = { 1,1,1,1,1,1,1,1 };
+static const float kVh4Min[kParamCount] = { 0,0,0,0,0,0,0,0,0 };
+static const float kVh4Max[kParamCount] = { 1,1,1,1,1,1,1,1,1 };
 // Manual-insert defaults: the saturated-but-tight VH4 Mega rhythm — Gain past
 // noon, tone centred, Deep/Presence flat, Master up.
 static const float kVh4Def[kParamCount] = {
-    0.60f, 0.50f, 0.55f, 0.55f, 0.50f, 0.50f, 0.55f, 1.00f,
+    0.60f, 0.50f, 0.55f, 0.55f, 0.50f, 0.50f, 0.55f, 1.00f, 0.6667f,   // default Ch3 Mega
 };
 
 #endif // VH4_PARAMS_H

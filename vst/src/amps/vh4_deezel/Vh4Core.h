@@ -31,6 +31,8 @@ struct Biquad {
     void reset(){ x1=x2=y1=y2=0; }
     void highShelf(float sr,float f,float dB){ if(f>sr*0.49f)f=sr*0.49f; float A=std::pow(10.f,dB/40.f),w=2*kPi*f/sr,c=std::cos(w),sn=std::sin(w),al=sn*0.5f*1.4142135f,rA=std::sqrt(A),t=2*rA*al;
         float a0=(A+1)-(A-1)*c+t; b0=A*((A+1)+(A-1)*c+t)/a0; b1=-2*A*((A-1)+(A+1)*c)/a0; b2=A*((A+1)+(A-1)*c-t)/a0; a1=2*((A-1)-(A+1)*c)/a0; a2=((A+1)-(A-1)*c-t)/a0; }
+    void peak(float sr,float f,float dB,float Q){ if(f>sr*0.49f)f=sr*0.49f; float A=std::pow(10.f,dB/40.f),w=2*kPi*f/sr,c=std::cos(w),al=std::sin(w)/(2*Q);
+        float a0=1+al/A; b0=(1+al*A)/a0; b1=-2*c/a0; b2=(1-al*A)/a0; a1=-2*c/a0; a2=(1-al/A)/a0; }
     void lowShelf(float sr,float f,float dB){ if(f>sr*0.49f)f=sr*0.49f; float A=std::pow(10.f,dB/40.f),w=2*kPi*f/sr,c=std::cos(w),sn=std::sin(w),al=sn*0.5f*1.4142135f,rA=std::sqrt(A),t=2*rA*al;
         float a0=(A+1)+(A-1)*c+t; b0=A*((A+1)-(A-1)*c+t)/a0; b1=2*A*((A-1)-(A+1)*c)/a0; b2=A*((A+1)-(A-1)*c-t)/a0; a1=-2*((A-1)+(A+1)*c)/a0; a2=((A+1)+(A-1)*c-t)/a0; }
 };
@@ -38,9 +40,10 @@ struct Biquad {
 struct Vh4Core {
     float sr = 96000.0f;
     int   channel = 2;                    // 0=Clean 1=Crunch 2=MEGA(Ch3) 3=Lead(Ch4). Only 2 modelled.
-    rbtube::HP1 inCoupling, hp12, hp23;   // tight interstage coupling = the VH4 focus
+    rbtube::HP1 inCoupling;               // input cap
+    rbtube::CouplingCapGridLeak cp12, cp23, cp34;  // real coupling: blocking + recovery = attack over sustain
     rbtube::TubeStage v1, v2, v3, v4;
-    Biquad deepShelf, presenceShelf, outTilt;
+    Biquad deepShelf, presenceShelf, outTilt, lowMidContour;
     rbtube::ToneStackYeh tone;
     rbtube::PhaseInverterLTP12AT7 pi;
     rbtube::PowerAmpEL34 power;           // 4x EL34 (~100W)
@@ -50,7 +53,8 @@ struct Vh4Core {
     Biquad spkPresence;
 
     float pGain=.60f,pBass=.5f,pMid=.55f,pTreble=.55f,pDeep=.5f,pPres=.5f,pMaster=.55f,pCab=1.f;
-    float g1=1,g2=1,g3=1,g4=1,piDrive=6.f,outLevel=1.f; int nStages=4;
+    float g1=1,g2=1,g3=1,g4=1,piDrive=1.f,outLevel=1.f; int nStages=4;
+    float contourDb=-4.5f, lvlBase=4.5f, lvlGain=-5.0f;   // per-channel voicing extras
 
     void setSampleRate(float s){ sr=s; recalc(); reset(); }
     void setChannel(int ch){ channel=ch; recalc(); }
@@ -63,28 +67,81 @@ struct Vh4Core {
     void setMaster(float v){ pMaster=clamp01(v); recalc(); }
     void setCabSim(float v){ pCab=clamp01(v); }
 
-    void reset(){ inCoupling.reset(); hp12.reset(); hp23.reset(); v1.reset(); v2.reset(); v3.reset(); v4.reset();
-        deepShelf.reset(); presenceShelf.reset(); outTilt.reset(); tone.reset(); pi.reset(); power.reset(); otVoice.reset();
+    void reset(){ inCoupling.reset(); cp12.reset(); cp23.reset(); cp34.reset(); v1.reset(); v2.reset(); v3.reset(); v4.reset();
+        deepShelf.reset(); presenceShelf.reset(); outTilt.reset(); lowMidContour.reset(); tone.reset(); pi.reset(); power.reset(); otVoice.reset();
         spkHP.reset(); spkLP1.reset(); spkLP2.reset(); spkPresence.reset(); }
 
-    // Per-channel voicing. Only MEGA (Ch3) is filled today; others fall through.
+    // Per-channel voicing, calibrated per-channel against the Plugin Alliance
+    // VH4 references (test logic/vh4/ch{1..4}_gain_{min,half,max}.wav, Brit DI,
+    // amp-only). Coherence/crest/band targets in the session notes.
     void voiceChannel(){
         const float gA = rbtube::PotTaper::audio(pGain, 1.55f);   // steep -> wide high-gain range
         switch(channel){
-            default:            // reserved: Clean(0)/Crunch(1)/Lead(3) -> fall back to MEGA for now
-            case 2:             // ── MEGA (Ch3): deep, tight 4-stage cascade ──
-                inCoupling.set(sr, 100.0f);   // very tight lows (the VH4 focus); DEEP adds them back
-                hp12.set(sr, 150.0f);         // interstage coupling caps keep the cascade tight
-                hp23.set(sr, 160.0f);
+            case 0:             // ── CH1 CLEAN: 2 stages, big headroom, full lows ──
+                inCoupling.set(sr, 25.0f);
+                cp12.set(sr, 1.0e6f, 2.2e-9f, 68.0e3f, 0.60f, 0.35f, 0.8f);    // fc ~72 Hz, soft blocking
+                cp23.set(sr, 1.0e6f, 2.2e-9f, 68.0e3f, 0.60f, 0.35f, 0.8f);
+                cp34.set(sr, 1.0e6f, 2.2e-9f, 68.0e3f, 0.60f, 0.35f, 0.8f);
                 v1.set(sr, 1, 250.0f, 40.0f, 25.0f, 1500.0f);
-                v2.set(sr, 1, 250.0f, 40.0f, 25.0f, 1500.0f);
-                v3.set(sr, 1, 250.0f, 40.0f, 30.0f, 1500.0f);
+                v2.set(sr, 1, 250.0f, 40.0f, 150.0f, 1500.0f);   // tight clip; el stack devuelve el grave
+                g1 = 1.0f;
+                g2 = 1.2f + 15.0f*gA;
+                nStages = 2;
+                contourDb = 0.0f;
+                lvlBase = 23.4f; lvlGain = -3.6f;  // 2 etapas pasivas pierden mucho: makeup grande
+                break;
+            case 1:             // ── CH2 CRUNCH: 3 stages, marshallesque breakup ──
+                inCoupling.set(sr, 33.0f);
+                cp12.set(sr, 1.0e6f, 1.6e-9f, 220.0e3f, 0.45f, 0.45f, 1.2f);   // fc ~100 Hz
+                cp23.set(sr, 1.0e6f, 1.4e-9f, 220.0e3f, 0.45f, 0.45f, 1.2f);   // fc ~114 Hz
+                cp34.set(sr, 1.0e6f, 1.6e-9f, 220.0e3f, 0.45f, 0.45f, 1.2f);
+                v1.set(sr, 1, 250.0f, 40.0f, 25.0f, 1500.0f);
+                v2.set(sr, 1, 250.0f, 40.0f, 160.0f, 1500.0f);
+                v3.set(sr, 1, 250.0f, 40.0f, 180.0f, 1500.0f);
+                g1 = 1.0f;
+                g2 = 3.0f + 12.0f*gA;
+                g3 = 2.2f + 7.0f*gA;
+                nStages = 3;
+                contourDb = -1.5f;
+                lvlBase = 6.0f; lvlGain = -1.7f;
+                break;
+            default:
+            case 2:             // ── CH3 MEGA: deep, tight 4-stage cascade ──
+                inCoupling.set(sr, 40.0f);    // real low thump; interstage caps keep tightness
+                // 1M grid leaks + small coupling caps (the VH4 tightness) with
+                // grid-stop charge dynamics: the attack passes whole for ~1 ms,
+                // then the cap charge ducks the stage (blocking) and recovers.
+                cp12.set(sr, 1.0e6f, 1.2e-9f, 330.0e3f, 0.35f, 0.55f, 1.6f);   // fc ~130 Hz
+                cp23.set(sr, 1.0e6f, 1.0e-9f, 330.0e3f, 0.35f, 0.55f, 1.6f);   // fc ~155 Hz
+                cp34.set(sr, 1.0e6f, 1.5e-9f, 330.0e3f, 0.40f, 0.50f, 1.4f);   // fc ~105 Hz
+                v1.set(sr, 1, 250.0f, 40.0f, 25.0f, 1500.0f);
+                v2.set(sr, 1, 250.0f, 40.0f, 160.0f, 1500.0f);
+                v3.set(sr, 1, 250.0f, 40.0f, 180.0f, 1500.0f);
                 v4.set(sr, 1, 250.0f, 40.0f, 55.0f, 1500.0f);   // recovery
                 g1 = 1.0f;
-                g2 = 0.9f + 9.0f*gA;
-                g3 = 0.6f + 7.0f*gA;
-                g4 = 1.0f + 3.5f*gA;
+                g2 = 5.2f + 13.0f*gA;
+                g3 = 3.0f + 8.0f*gA;
+                g4 = 1.6f + 3.0f*gA;
                 nStages = 4;
+                contourDb = -4.5f;
+                lvlBase = 4.4f; lvlGain = 0.0f;
+                break;
+            case 3:             // ── CH4 LEAD: hotter floors, looser lows, smoother top ──
+                inCoupling.set(sr, 33.0f);
+                cp12.set(sr, 1.0e6f, 1.7e-9f, 330.0e3f, 0.35f, 0.55f, 1.6f);   // fc ~94 Hz
+                cp23.set(sr, 1.0e6f, 1.4e-9f, 330.0e3f, 0.35f, 0.55f, 1.6f);   // fc ~114 Hz
+                cp34.set(sr, 1.0e6f, 1.9e-9f, 330.0e3f, 0.40f, 0.50f, 1.4f);   // fc ~84 Hz
+                v1.set(sr, 1, 250.0f, 40.0f, 25.0f, 1500.0f);
+                v2.set(sr, 1, 250.0f, 40.0f, 140.0f, 1500.0f);
+                v3.set(sr, 1, 250.0f, 40.0f, 150.0f, 1500.0f);
+                v4.set(sr, 1, 250.0f, 40.0f, 50.0f, 1500.0f);
+                g1 = 1.0f;
+                g2 = 9.0f + 10.0f*gA;
+                g3 = 5.0f + 6.0f*gA;
+                g4 = 1.8f + 2.5f*gA;
+                nStages = 4;
+                contourDb = -3.5f;
+                lvlBase = 5.4f; lvlGain = -1.5f;
                 break;
         }
     }
@@ -97,19 +154,21 @@ struct Vh4Core {
         tone.update(sr, pTreble, pMid, pBass);
         // DEEP: active low boost/cut ~115 Hz (noon = flat). The VH4 low-end thump.
         deepShelf.lowShelf(sr, 115.0f, (pDeep-0.5f)*16.0f);
+        // Composite of the DZ4 interstage networks: the VH4 low-mid scoop
+        lowMidContour.peak(sr, 430.0f, contourDb, 0.9f);
         // PRESENCE: real-amp power-amp NFB high-shelf ~4 kHz (NOT the DZ4 pedal's
         // 160 Hz full-range quirk). noon = flat.
         presenceShelf.highShelf(sr, 4000.0f, (pPres-0.5f)*11.0f);
 
-        piDrive = 6.0f;
+        piDrive = 1.0f;
         pi.setFenderAB763(sr, 1.0f, 1.0f);
 
         // 4x EL34: MASTER = power drive + output. Tight OT.
         const float vol = rbtube::PotTaper::audio(pMaster, 1.15f);
-        power.set(sr, 0.5f + 2.2f*vol, -37.0f, 0.05f, 34.0f, 11000.0f);
+        power.set(sr, 0.5f + 2.2f*vol, -37.0f, 0.05f, 34.0f, 15000.0f);
         power.out = 0.011f;
-        otVoice.set(sr, 12500.0f);
-        outTilt.highShelf(sr, 2600.0f, 4.0f);
+        otVoice.set(sr, 16500.0f);
+        outTilt.highShelf(sr, 3000.0f, 6.0f);
 
         // Internal 4x12 cab-sim (Cab Sim = 1)
         spkHP.set(sr, 95.0f);
@@ -119,19 +178,18 @@ struct Vh4Core {
 
         // Loudness makeup: DECREASES with Gain so the knob is drive, not level;
         // operating point ~-16 dBFS RMS.
-        outLevel = std::pow(10.0f, 0.05f * (4.5f - 5.0f*pGain - 0.5f*pMaster));
+        outLevel = std::pow(10.0f, 0.05f * (lvlBase + lvlGain*pGain - 0.5f*pMaster));
     }
 
     inline float process(float x){
         x = inCoupling.process(x);
         float y = v1.process(x * g1);
-        y = hp12.process(y);
-        y = v2.process(y * g2);
-        y = hp23.process(y);
-        if (nStages >= 3) y = v3.process(y * g3);
-        y = tone.process(y);
-        y = deepShelf.process(y);
-        y = v4.process(y * g4);                // recovery / 4th gain stage
+        y = v2.process(cp12.process(y, g2));   // drive referred to the grid: blocking sees real V
+        if (nStages >= 3) y = v3.process(cp23.process(y, g3));
+        if (nStages >= 4) y = v4.process(cp34.process(y, g4));   // 4th cascade stage (DZ4: BEFORE the stack)
+        y = tone.process(y);                   // post-distortion shaping: the added
+        y = deepShelf.process(y);              // lows ride ON TOP of the clipped wave
+        y = lowMidContour.process(y);          // (the VH4 thump + spiky crest)
         y = pi.process(y * piDrive);
         y = power.process(y);
         y = presenceShelf.process(y);          // power-amp NFB presence

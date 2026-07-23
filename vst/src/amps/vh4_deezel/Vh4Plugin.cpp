@@ -35,6 +35,7 @@ class Vh4Plugin : public Plugin {
         core.setMiddle(fParams[kMiddle]); core.setTreble(fParams[kTreble]);
         core.setDeep(fParams[kDeep]); core.setPresence(fParams[kPresence]);
         core.setMaster(fParams[kMaster]); core.setCabSim(fParams[kCabSim]);
+        core.setChannel((int)std::lround(fParams[kChannel] * 3.0f));
     }
 public:
     Vh4Plugin() : Plugin(kParamCount, 0, 0) {

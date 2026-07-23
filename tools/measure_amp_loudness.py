@@ -137,6 +137,12 @@ def _prepare_ir(path: Path) -> Path:
 # values fixed, then only that channel's real gain and level controls are swept.
 # Bass amps intentionally stay out of this table.
 CHANNEL_PROFILES = {
+    "vh4_deezel": [
+        {"name": "ch1_clean", "fixed": {"Channel": 0.0}, "gain": ["Gain"], "vol": ["Master"]},
+        {"name": "ch2_crunch", "fixed": {"Channel": 0.333}, "gain": ["Gain"], "vol": ["Master"]},
+        {"name": "ch3_mega", "fixed": {"Channel": 0.667}, "gain": ["Gain"], "vol": ["Master"]},
+        {"name": "ch4_lead", "fixed": {"Channel": 1.0}, "gain": ["Gain"], "vol": ["Master"]},
+    ],
     "aor50": [
         {"name": "channel_one", "fixed": {"Channel": 0.0}, "gain": ["Ch1 Preamp"], "vol": ["Ch1 Master"]},
         {"name": "aor", "fixed": {"Channel": 1.0}, "gain": ["AOR Preamp"], "vol": ["AOR Master"]},

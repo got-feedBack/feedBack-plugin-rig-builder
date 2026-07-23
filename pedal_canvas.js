@@ -5940,81 +5940,96 @@
       textSpaced(d,(ix0+ix1)/2,py+ph*.06,F.barlow,7,rgb(150,42,30),mode,0.06);
       textSpaced(d,(G.px+G.pw)-44*s,py+ph*.90,F.bebas,12,rgb(40,34,24),'MARSTEN',0.08); } };
 
-  // ── DEEZEL VH4 (Diezel VH4, Channel 3 "Mega") — black tolex head, BLACK
-  //    diamond-plate upper panel with the silver 'Deezel' script, a SILVER
-  //    brushed control panel with black legends and a red CH3 LED. Parody brand
-  //    "Deezel". Single-channel Ch3 panel (the other 3 channels are planned):
-  //    0 Gain 1 Bass 2 Middle 3 Treble 4 Deep 5 Presence 6 Master.
+  // ── DEEZEL VH4 (Diezel VH4) — panel real: head negro, rejilla de aletas con
+  //    script 'Deezel' plateado, panel brushed con los CH 1-4 (LEDs rojos, el
+  //    activo encendido), la escalera DIAGONAL de perillas Gain/Treble/Middle/
+  //    Bass con cintas negras (como el frente real) y la escalera master
+  //    Volume/Presence/Deep a la derecha. Selector rotatorio CHANNEL (4 pasos).
+  //    0 Gain 1 Bass 2 Middle 3 Treble 4 Deep 5 Presence 6 Master 8 Channel.
   P.deezelvh4 = { w:1560, h:600, ptr:rgb(238,240,244),
     knobs:[
-      {id:0,cx:.300,cy:.770,r:.021,style:'pointer',cap:[18,18,20]},
-      {id:1,cx:.365,cy:.770,r:.021,style:'pointer',cap:[18,18,20]},
-      {id:2,cx:.430,cy:.770,r:.021,style:'pointer',cap:[18,18,20]},
-      {id:3,cx:.495,cy:.770,r:.021,style:'pointer',cap:[18,18,20]},
-      {id:4,cx:.560,cy:.770,r:.021,style:'pointer',cap:[18,18,20]},
-      {id:5,cx:.625,cy:.770,r:.021,style:'pointer',cap:[18,18,20]},
-      {id:6,cx:.690,cy:.770,r:.021,style:'pointer',cap:[18,18,20]} ],
-    draw(d,vals){ const {ctx:c,W,H,s}=d; const ink=rgb(26,26,28), red=rgb(150,42,30);
+      {id:0,cx:.415,cy:.615,r:.020,style:'pointer',cap:[16,16,18]},   // GAIN
+      {id:3,cx:.360,cy:.688,r:.020,style:'pointer',cap:[16,16,18]},   // TREBLE
+      {id:2,cx:.305,cy:.760,r:.020,style:'pointer',cap:[16,16,18]},   // MIDDLE
+      {id:1,cx:.250,cy:.832,r:.020,style:'pointer',cap:[16,16,18]},   // BASS
+      {id:6,cx:.775,cy:.640,r:.020,style:'pointer',cap:[16,16,18]},   // MASTER (Volume)
+      {id:5,cx:.720,cy:.712,r:.020,style:'pointer',cap:[16,16,18]},   // PRESENCE
+      {id:4,cx:.665,cy:.784,r:.020,style:'pointer',cap:[16,16,18]},   // DEEP
+      {id:8,cx:.128,cy:.735,r:.023,style:'pointer',cap:[16,16,18],select:4} ], // CHANNEL 1..4
+    draw(d,vals){ const {ctx:c,W,H,s}=d; const ink=rgb(24,24,26);
       const bgr=c.createLinearGradient(0,0,0,H); bgr.addColorStop(0,rgb(20,20,22)); bgr.addColorStop(1,rgb(8,8,10));
       c.fillStyle=bgr; c.fillRect(0,0,W,H);
       const bolt=(x,y,r)=>{ r=r||3*s; const g=c.createRadialGradient(x-r*0.3,y-r*0.3,r*0.15,x,y,r); g.addColorStop(0,rgb(212,214,218)); g.addColorStop(1,rgb(110,112,116));
         c.beginPath(); c.arc(x,y,r,0,7); c.fillStyle=g; c.fill(); c.strokeStyle=rgb(70,72,76); c.lineWidth=0.7*s; c.stroke(); };
-      // chrome corner caps
       const corner=(cxx,cyy,dx,dy)=>{ const k=H*.105; c.beginPath(); c.moveTo(cxx,cyy+dy*k); c.lineTo(cxx,cyy); c.lineTo(cxx+dx*k,cyy);
         c.quadraticCurveTo(cxx+dx*k*0.35,cyy+dy*k*0.35,cxx,cyy+dy*k); c.closePath();
         const cg=c.createLinearGradient(cxx,cyy,cxx+dx*k,cyy+dy*k); cg.addColorStop(0,rgb(206,208,212)); cg.addColorStop(1,rgb(120,122,126));
         c.fillStyle=cg; c.fill(); bolt(cxx+dx*k*0.42,cyy+dy*k*0.42,3*s); };
-      // carry handle
-      const hx0=.44*W,hx1=.56*W,hcy=H*.055,hh=H*.026;
+      // asa
+      const hx0=.44*W,hx1=.56*W,hcy=H*.048,hh=H*.024;
       rr(c,hx0,hcy-hh,hx1-hx0,2*hh,hh); c.fillStyle=rgb(22,22,24); c.fill(); c.strokeStyle=rgb(8,8,10); c.lineWidth=1.2*s; c.stroke();
-      // ── upper BLACK diamond-plate panel ──
-      const dy0=H*.115, dh=H*.40, dx0=W*.055, dw=W*.89;
-      const dg=c.createLinearGradient(0,dy0,0,dy0+dh); dg.addColorStop(0,rgb(36,36,39)); dg.addColorStop(.5,rgb(19,19,21)); dg.addColorStop(1,rgb(11,11,13));
+      // ── rejilla superior con ALETAS (los vents shark-fin del VH4) ──
+      const dy0=H*.095, dh=H*.385, dx0=W*.055, dw=W*.89;
+      const dg=c.createLinearGradient(0,dy0,0,dy0+dh); dg.addColorStop(0,rgb(30,30,33)); dg.addColorStop(.55,rgb(16,16,18)); dg.addColorStop(1,rgb(10,10,12));
       rr(c,dx0,dy0,dw,dh,5*s); c.fillStyle=dg; c.fill();
       c.save(); rr(c,dx0,dy0,dw,dh,5*s); c.clip();
-      const step=26*s;
-      for(let yy=dy0; yy<dy0+dh; yy+=step){ const off=((Math.round((yy-dy0)/step))%2)*step*0.5;
-        for(let xx=dx0-step; xx<dx0+dw+step; xx+=step){ const px2=xx+off;
-          c.strokeStyle='rgba(255,255,255,0.075)'; c.lineWidth=2.6*s; c.beginPath(); c.moveTo(px2,yy+5*s); c.lineTo(px2+10*s,yy-4*s); c.stroke();
-          c.strokeStyle='rgba(0,0,0,0.55)'; c.lineWidth=2.6*s; c.beginPath(); c.moveTo(px2+1*s,yy+6*s); c.lineTo(px2+11*s,yy-3*s); c.stroke();
-          c.strokeStyle='rgba(255,255,255,0.055)'; c.lineWidth=2.4*s; c.beginPath(); c.moveTo(px2+12*s,yy-4*s); c.lineTo(px2+22*s,yy+5*s); c.stroke(); } }
+      const fw=44*s, fh=26*s;
+      for(let row=0; row<3; row++){ const fy=dy0+dh*(0.20+0.30*row); const off=(row%2)*fw*0.5;
+        for(let fx=dx0+10*s-off; fx<dx0+dw; fx+=fw){
+          // aleta: cuña curva oscura con canto iluminado
+          c.beginPath(); c.moveTo(fx,fy+fh*0.5); c.quadraticCurveTo(fx+fw*0.30,fy-fh*0.42,fx+fw*0.62,fy-fh*0.18);
+          c.quadraticCurveTo(fx+fw*0.40,fy+fh*0.10,fx+fw*0.34,fy+fh*0.52); c.closePath();
+          c.fillStyle='rgba(0,0,0,0.85)'; c.fill();
+          c.strokeStyle='rgba(255,255,255,0.10)'; c.lineWidth=1.6*s; c.beginPath();
+          c.moveTo(fx,fy+fh*0.5); c.quadraticCurveTo(fx+fw*0.30,fy-fh*0.42,fx+fw*0.62,fy-fh*0.18); c.stroke(); } }
       c.restore();
       rr(c,dx0,dy0,dw,dh,5*s); c.strokeStyle=rgb(70,72,76); c.lineWidth=1.4*s; c.stroke();
-      // ── 'Deezel' silver script logo (centre) ──
+      // script 'Deezel' plateado al centro de la rejilla
       c.save(); c.textAlign='center'; c.textBaseline='middle';
-      c.font=`italic 800 ${Math.round(78*s)}px ${F.anton}`;
-      c.strokeStyle='rgba(0,0,0,0.6)'; c.lineWidth=5*s; c.strokeText('Deezel',W*.5,dy0+dh*.46);
-      const lg=c.createLinearGradient(0,dy0+dh*.24,0,dy0+dh*.70); lg.addColorStop(0,rgb(246,248,252)); lg.addColorStop(.5,rgb(196,198,204)); lg.addColorStop(1,rgb(146,148,154));
-      c.fillStyle=lg; c.fillText('Deezel',W*.5,dy0+dh*.46); c.restore();
+      c.font=`italic 800 ${Math.round(74*s)}px ${F.anton}`;
+      c.strokeStyle='rgba(0,0,0,0.65)'; c.lineWidth=5*s; c.strokeText('Deezel',W*.5,dy0+dh*.50);
+      const lg=c.createLinearGradient(0,dy0+dh*.28,0,dy0+dh*.72); lg.addColorStop(0,rgb(246,248,252)); lg.addColorStop(.5,rgb(196,198,204)); lg.addColorStop(1,rgb(146,148,154));
+      c.fillStyle=lg; c.fillText('Deezel',W*.5,dy0+dh*.50); c.restore();
       corner(0,0,1,1); corner(W,0,-1,1); corner(0,H,1,-1); corner(W,H,-1,-1);
-      // ── SILVER brushed control panel ──
-      const py=H*.585, ph=H*.36, px=W*.055, pw=W*.89, lblY=py+ph*.235;
-      const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,rgb(216,218,222)); pg.addColorStop(.5,rgb(188,190,195)); pg.addColorStop(1,rgb(168,170,175));
+      // ── panel de control brushed (abajo) ──
+      const py=H*.535, ph=H*.42, px=W*.055, pw=W*.89;
+      const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,rgb(218,220,224)); pg.addColorStop(.5,rgb(190,192,197)); pg.addColorStop(1,rgb(170,172,177));
       rr(c,px,py,pw,ph,4*s); c.fillStyle=pg; c.fill();
       c.save(); rr(c,px,py,pw,ph,4*s); c.clip(); c.strokeStyle='rgba(255,255,255,0.10)'; c.lineWidth=1;
       for(let y=py; y<py+ph; y+=1.8*s){ c.beginPath(); c.moveTo(px,y); c.lineTo(px+pw,y); c.stroke(); } c.restore();
       rr(c,px,py,pw,ph,4*s); c.strokeStyle=rgb(118,120,124); c.lineWidth=1.4*s; c.stroke();
       bolt(px+14*s,py+ph*.5,3*s); bolt(px+pw-14*s,py+ph*.5,3*s);
-      // knob labels (black on silver)
-      const lbl=(cx,t,sz)=>textSpaced(d,cx*W,lblY,F.barlow,sz||10.5,ink,t,0.04);
-      lbl(.300,'GAIN'); lbl(.365,'BASS'); lbl(.430,'MIDDLE'); lbl(.495,'TREBLE'); lbl(.560,'DEEP'); lbl(.625,'PRESENCE',9.5); lbl(.690,'MASTER');
-      // ── red CH 3 / MEGA LED (left) ──
-      const lx=.155*W, ly=py+ph*.46;
-      c.beginPath(); c.arc(lx,ly,8.5*s,0,7); c.fillStyle=rgb(40,8,6); c.fill();
-      const jg=c.createRadialGradient(lx-2*s,ly-2*s,1*s,lx,ly,8.5*s); jg.addColorStop(0,rgb(255,150,120)); jg.addColorStop(.5,rgb(226,46,32)); jg.addColorStop(1,rgb(120,14,10));
-      c.beginPath(); c.arc(lx,ly,6*s,0,7); c.fillStyle=jg; c.fill();
-      c.strokeStyle=rgb(118,120,124); c.lineWidth=1.4*s; c.beginPath(); c.arc(lx,ly,8.5*s,0,7); c.stroke();
-      textSpaced(d,lx,lblY,F.barlow,9,ink,'CH 3',0.04);
-      textSpaced(d,lx,py+ph*.72,F.barlow,7.5,red,'MEGA',0.08);
-      // ── power rocker (right) ──
-      const rx=.855*W;
-      rr(c,rx-11*s,ly-15*s,22*s,30*s,3*s); c.fillStyle=rgb(28,28,30); c.fill(); c.strokeStyle=rgb(90,92,96); c.lineWidth=1.2*s; c.stroke();
-      rr(c,rx-8*s,ly-12*s,16*s,12*s,2*s); c.fillStyle=rgb(58,58,62); c.fill();
-      textSpaced(d,rx,lblY,F.barlow,8,ink,'POWER',0.03);
-      // ── 'VH4' script + designation (bottom right) ──
+      // ── cinta negra diagonal con texto blanco (como el frente real) ──
+      const strip=(cx0,cy0,t)=>{ const bw=118*s, bh=17*s, sk=-0.20;
+        c.save(); c.translate(cx0*W,cy0*H); c.transform(1,sk,0,1,0,0);
+        rr(c,-bw,-bh*0.5,bw,bh,3*s); c.fillStyle=rgb(16,16,18); c.fill();
+        c.font=`italic 700 ${Math.round(11.5*s)}px ${F.barlow}`; c.textAlign='center'; c.textBaseline='middle';
+        c.fillStyle=rgb(240,242,246); c.fillText(t,-bw*0.5,0.5*s); c.restore(); };
+      strip(.392,.615,'Gain');  strip(.337,.688,'Treble'); strip(.282,.760,'Middle'); strip(.227,.832,'Bass');
+      strip(.752,.640,'Master'); strip(.697,.712,'Presence'); strip(.642,.784,'Deep');
+      // ── CH 1-4: LEDs rojos, el canal ACTIVO encendido ──
+      const chv=Math.round(((vals&&vals[8]!=null?vals[8]:0.6667))*3);
+      const names=['CH 1','CH 2','CH 3','CH 4'];
+      for(let i=0;i<4;i++){ const lx=W*(.40+.115*i), ly=py+ph*.135;
+        const on=(i===chv);
+        c.beginPath(); c.arc(lx,ly,7.5*s,0,7); c.fillStyle=on?rgb(70,10,8):rgb(38,10,8); c.fill();
+        if(on){ const jg=c.createRadialGradient(lx-2*s,ly-2*s,1*s,lx,ly,7*s); jg.addColorStop(0,rgb(255,160,130)); jg.addColorStop(.5,rgb(230,48,34)); jg.addColorStop(1,rgb(130,16,10));
+          c.beginPath(); c.arc(lx,ly,5.6*s,0,7); c.fillStyle=jg; c.fill();
+          c.save(); c.globalAlpha=0.30; c.beginPath(); c.arc(lx,ly,11*s,0,7); c.fillStyle=rgb(255,70,50); c.fill(); c.restore(); }
+        else { c.beginPath(); c.arc(lx,ly,5.6*s,0,7); c.fillStyle=rgb(88,20,14); c.fill(); }
+        c.strokeStyle=rgb(118,120,124); c.lineWidth=1.2*s; c.beginPath(); c.arc(lx,ly,7.5*s,0,7); c.stroke();
+        textSpaced(d,lx,ly-16*s,F.barlow,9,ink,names[i],0.05); }
+      // selector CHANNEL (izquierda)
+      textSpaced(d,.128*W,py+ph*.30,F.barlow,9.5,ink,'CHANNEL',0.05);
+      textSpaced(d,.128*W,py+ph*.93,F.barlow,7.5,rgb(90,92,96),'CLEAN · CRUNCH · MEGA · LEAD',0.02);
+      // power rocker (derecha)
+      const rx=.885*W, ry=py+ph*.42;
+      rr(c,rx-11*s,ry-15*s,22*s,30*s,3*s); c.fillStyle=rgb(28,28,30); c.fill(); c.strokeStyle=rgb(90,92,96); c.lineWidth=1.2*s; c.stroke();
+      rr(c,rx-8*s,ry-12*s,16*s,12*s,2*s); c.fillStyle=rgb(58,58,62); c.fill();
+      textSpaced(d,rx,ry-24*s,F.barlow,8,ink,'POWER',0.03);
+      // 'VH4' script (abajo derecha)
       c.save(); c.textAlign='right'; c.textBaseline='middle'; c.font=`italic 800 ${Math.round(30*s)}px ${F.anton}`; c.fillStyle=rgb(38,38,42);
-      c.fillText('VH4', (px+pw)-16*s, py+ph*.80); c.restore();
-      textSpaced(d,(px+pw)-96*s,py+ph*.82,F.bebas,11,rgb(90,92,96),'DEEZEL',0.10); } };
+      c.fillText('VH4',(px+pw)-16*s,py+ph*.86); c.restore(); } };
 
   // ── MARSTEN BLUESBREAKER (Marshall 1962) — JTM45 voice + Tremolo, gold combo
   //    panel. 0 Speed 1 Intensity 2 Presence 3 Bass 4 Middle 5 Treble 6 Loudness1
