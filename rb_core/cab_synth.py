@@ -650,13 +650,23 @@ def _mic_response_db(f, dist, mic):
 # inventados. Se aplica en synthesize_ir sobre _mic_response_db completo.
 MIC_CHARACTER = 1.8
 
+# Tope del delta estirado (dB). Sin tope, el R121 del seed de Muse
+# (ribbon@cone x carácter 1.8 sobre un 4x12 cerrado con bloom) apilaba
+# +13 dB de graves y -8 dB en 6 kHz: "el disco es oscuro pero no tanto,
+# y se pierde en el mix al tocar". El clip conserva la identidad (orden
+# y forma de los deltas) pero garantiza que TODO mic siga usable en
+# mezcla: graves acotados (sin barro) y presencia nunca enterrada.
+_MIC_CHARACTER_MAX_DB = 9.0
+_MIC_CHARACTER_MIN_DB = -6.0
+
 
 def _mic_character_db(f, dist, mic):
     """Respuesta de mic con el carácter estirado alrededor del SM57."""
     ref = _mic_response_db(f, dist, "sm57")
     if mic == "sm57" or MIC_CHARACTER == 1.0:
         return _mic_response_db(f, dist, mic)
-    return ref + MIC_CHARACTER * (_mic_response_db(f, dist, mic) - ref)
+    delta = MIC_CHARACTER * (_mic_response_db(f, dist, mic) - ref)
+    return ref + np.clip(delta, _MIC_CHARACTER_MIN_DB, _MIC_CHARACTER_MAX_DB)
 
 
 def _enclosure_db(f, drivers=4, size_in=12.0, back="closed", baffle_m=0.76,
