@@ -194,6 +194,31 @@
       c.beginPath(); c.arc(cx+R*0.84*Math.cos(a),cy+R*0.84*Math.sin(a),2*s,0,7); c.fillStyle=ptrCol; c.fill();
       return;
     }
+    if (style==='irt') {
+      // Laney IRT: perilla negra glossy con falda suave y FRANJA blanca ancha.
+      c.beginPath(); c.arc(cx,cy,R*1.06,0,7); c.fillStyle=rgb(8,8,9); c.fill();
+      const bg=c.createRadialGradient(cx-R*0.35,cy-R*0.45,R*0.08,cx,cy,R);
+      bg.addColorStop(0,rgb(96,98,104)); bg.addColorStop(0.35,rgb(44,45,49)); bg.addColorStop(1,rgb(16,16,18));
+      c.beginPath(); c.arc(cx,cy,R,0,7); c.fillStyle=bg; c.fill();
+      c.strokeStyle=rgb(4,4,5); c.lineWidth=1.2*s; c.stroke();
+      // falda: estrias suaves
+      c.strokeStyle='rgba(255,255,255,0.05)'; c.lineWidth=1*s;
+      for(let i=0;i<24;i++){ const t=i/24*Math.PI*2; c.beginPath();
+        c.moveTo(cx+R*0.84*Math.cos(t),cy+R*0.84*Math.sin(t)); c.lineTo(cx+R*0.98*Math.cos(t),cy+R*0.98*Math.sin(t)); c.stroke(); }
+      // cara superior glossy
+      const fg=c.createRadialGradient(cx-R*0.22,cy-R*0.3,R*0.04,cx,cy,R*0.68);
+      fg.addColorStop(0,rgb(70,72,78)); fg.addColorStop(0.5,rgb(28,28,32)); fg.addColorStop(1,rgb(12,12,14));
+      c.beginPath(); c.arc(cx,cy,R*0.66,0,7); c.fillStyle=fg; c.fill();
+      c.strokeStyle='rgba(255,255,255,0.10)'; c.lineWidth=0.8*s; c.stroke();
+      // reflejo superior
+      c.save(); c.globalAlpha=0.18; c.beginPath();
+      c.ellipse(cx-R*0.10,cy-R*0.30,R*0.42,R*0.20,-0.5,0,7); c.fillStyle=rgb(255,255,255); c.fill(); c.restore();
+      // FRANJA blanca del puntero (ancha, de centro a borde como el IRT)
+      c.save(); c.translate(cx,cy); c.rotate(a);
+      rr(c,R*0.10,-2.4*s,R*0.92,4.8*s,2*s); c.fillStyle=rgb(240,242,246); c.fill();
+      c.strokeStyle='rgba(0,0,0,0.35)'; c.lineWidth=0.7*s; c.stroke(); c.restore();
+      return;
+    }
     if (style==='vh4') {
       // Diezel VH4: perilla negra con LOBULOS de agarre (gira con el valor),
       // cara conica glossy y tornillo hex plateado al centro.
@@ -6067,97 +6092,180 @@
       c.save(); c.textAlign='right'; c.textBaseline='middle'; c.font=`italic 800 ${Math.round(30*s)}px ${F.anton}`; c.fillStyle=rgb(38,38,42);
       c.fillText('VH4',(px+pw)-16*s,py+ph*.90); c.restore(); } };
 
-  // ── RANEY IRONHEART (Laney IRT60H) — head negro de cuero, rejilla de rombos
-  //    con brillo ROJO de valvulas y placa 'Raney' plateada; panel negro con
-  //    PRE-BOOST (perilla roja + toggle + LED), selector CLEAN/RHYTHM/LEAD con
-  //    LEDs, Gain/EQ/Volume, seccion master Dynamics/Tone/Watts, jewel POWER.
+  // ── RANEY IRONHEART (Laney IRT60H) — head de cuero negro con esquineras,
+  //    rejilla expanded-metal con VALVULAS brillando en rojo detras, placa
+  //    'Raney' estilo Laney (marco plateado + campo negro + logo blanco),
+  //    panel negro con abanicos de numeros 0-10 por perilla, labels DEBAJO,
+  //    PRE-BOOST rojo + toggle + LED, selector de canal con LEDs, seccion
+  //    master y jewel POWER. Perillas estilo 'irt'.
   //    0 Gain 1 Bass 2 Middle 3 Treble 4 Volume 5 Dynamics 6 Tone 7 Watts
   //    9 Channel(3) 10 Boost 11 Boost On.
-  P.raneyironheart = { w:1660, h:600, ptr:rgb(238,240,244),
+  P.raneyironheart = { w:1660, h:620, ptr:rgb(238,240,244),
     knobs:[
-      {id:10,cx:.155,cy:.700,r:.0185,style:'capplain',cap:[196,40,30]},  // PRE-BOOST (roja)
-      {id:11,cx:.108,cy:.700,r:.014,style:'bat'},                        // BOOST ON
-      {id:9, cx:.225,cy:.700,r:.020,style:'boss',select:3},              // CHANNEL
-      {id:0, cx:.315,cy:.700,r:.020,style:'boss'},                       // GAIN
-      {id:1, cx:.395,cy:.700,r:.020,style:'boss'},                       // BASS
-      {id:2, cx:.460,cy:.700,r:.020,style:'boss'},                       // MIDDLE
-      {id:3, cx:.525,cy:.700,r:.020,style:'boss'},                       // TREBLE
-      {id:4, cx:.605,cy:.700,r:.020,style:'boss'},                       // VOLUME
-      {id:5, cx:.700,cy:.700,r:.020,style:'boss'},                       // DYNAMICS
-      {id:6, cx:.765,cy:.700,r:.020,style:'boss'},                       // TONE
-      {id:7, cx:.830,cy:.700,r:.020,style:'boss'} ],                     // WATTS
-    draw(d,vals){ const {ctx:c,W,H,s}=d; const wht=rgb(232,234,238);
-      const bgr=c.createLinearGradient(0,0,0,H); bgr.addColorStop(0,rgb(18,18,20)); bgr.addColorStop(1,rgb(8,8,10));
+      {id:10,cx:.152,cy:.660,r:.0205,style:'capplain',cap:[188,34,26]},  // PRE-BOOST (roja)
+      {id:11,cx:.104,cy:.660,r:.014,style:'bat'},                        // BOOST ON
+      {id:9, cx:.226,cy:.660,r:.022,style:'irt',select:3},               // CHANNEL
+      {id:0, cx:.318,cy:.660,r:.022,style:'irt'},                        // GAIN
+      {id:1, cx:.398,cy:.660,r:.022,style:'irt'},                        // BASS
+      {id:2, cx:.464,cy:.660,r:.022,style:'irt'},                        // MIDDLE
+      {id:3, cx:.530,cy:.660,r:.022,style:'irt'},                        // TREBLE
+      {id:4, cx:.610,cy:.660,r:.022,style:'irt'},                        // VOLUME
+      {id:5, cx:.703,cy:.660,r:.022,style:'irt'},                        // DYNAMICS
+      {id:6, cx:.768,cy:.660,r:.022,style:'irt'},                        // TONE
+      {id:7, cx:.833,cy:.660,r:.022,style:'irt'} ],                      // WATTS
+    draw(d,vals){ const {ctx:c,W,H,s}=d; const wht=rgb(232,234,238), grey=rgb(176,178,184);
+      // ── cuero negro con textura y viñeta ──
+      const bgr=c.createLinearGradient(0,0,0,H); bgr.addColorStop(0,rgb(22,22,24)); bgr.addColorStop(1,rgb(10,10,12));
       c.fillStyle=bgr; c.fillRect(0,0,W,H);
-      // textura cuero sutil
-      c.save(); c.globalAlpha=0.05; c.strokeStyle=rgb(120,120,124); c.lineWidth=1;
-      for(let i=0;i<260;i++){ const x=(i*97)%W, y=(i*61)%H; c.beginPath(); c.arc(x,y,2.2*s,0,7); c.stroke(); } c.restore();
-      // ── rejilla de ROMBOS con brillo rojo de valvulas ──
-      const dy0=H*.075, dh=H*.43, dx0=W*.075, dw=W*.85;
-      rr(c,dx0,dy0,dw,dh,4*s); c.fillStyle=rgb(6,6,7); c.fill();
+      c.save(); c.globalAlpha=0.06; c.strokeStyle=rgb(140,140,144); c.lineWidth=1;
+      for(let i=0;i<420;i++){ const x=(i*127)%W, y=(i*83)%H, r0=1.4+((i*7)%14)/10;
+        c.beginPath(); c.arc(x,y,r0*s,0,7); c.stroke(); } c.restore();
+      const vg=c.createRadialGradient(W*.5,H*.5,H*.35,W*.5,H*.5,W*.62);
+      vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.42)');
+      c.fillStyle=vg; c.fillRect(0,0,W,H);
+      const bolt=(x,y,r)=>{ r=r||2.8*s; const g=c.createRadialGradient(x-r*0.3,y-r*0.3,r*0.15,x,y,r);
+        g.addColorStop(0,rgb(190,192,196)); g.addColorStop(1,rgb(84,86,90));
+        c.beginPath(); c.arc(x,y,r,0,7); c.fillStyle=g; c.fill(); c.strokeStyle=rgb(40,42,46); c.lineWidth=0.7*s; c.stroke();
+        c.strokeStyle=rgb(48,50,54); c.lineWidth=0.9*s;
+        c.beginPath(); c.moveTo(x-r*0.55,y); c.lineTo(x+r*0.55,y); c.stroke(); };
+      // esquineras negras
+      const corner=(cxx,cyy,dx,dy)=>{ const k=H*.10;
+        c.beginPath(); c.moveTo(cxx,cyy+dy*k); c.lineTo(cxx,cyy); c.lineTo(cxx+dx*k,cyy);
+        c.quadraticCurveTo(cxx+dx*k*0.42,cyy+dy*k*0.42,cxx,cyy+dy*k); c.closePath();
+        const cg=c.createLinearGradient(cxx,cyy,cxx+dx*k*0.8,cyy+dy*k*0.8);
+        cg.addColorStop(0,rgb(46,47,50)); cg.addColorStop(1,rgb(18,18,20));
+        c.fillStyle=cg; c.fill(); c.strokeStyle=rgb(6,6,8); c.lineWidth=1.2*s; c.stroke();
+        bolt(cxx+dx*k*0.40,cyy+dy*k*0.40,2.6*s); };
+      // ── rejilla expanded-metal con valvulas ──
+      const dy0=H*.065, dh=H*.44, dx0=W*.068, dw=W*.864;
+      rr(c,dx0-4*s,dy0-4*s,dw+8*s,dh+8*s,6*s); c.fillStyle=rgb(26,26,29); c.fill();
+      c.strokeStyle=rgb(8,8,10); c.lineWidth=1.6*s; c.stroke();
+      rr(c,dx0,dy0,dw,dh,4*s); c.fillStyle=rgb(4,4,5); c.fill();
       c.save(); rr(c,dx0,dy0,dw,dh,4*s); c.clip();
-      // glow rojo (valvulas atras)
-      for(const gx of [.30,.52,.74]){ const g=c.createRadialGradient(W*gx,dy0+dh*.55,6*s,W*gx,dy0+dh*.55,dh*.75);
-        g.addColorStop(0,'rgba(215,40,18,0.50)'); g.addColorStop(.55,'rgba(130,18,8,0.25)'); g.addColorStop(1,'rgba(0,0,0,0)');
-        c.fillStyle=g; c.fillRect(dx0,dy0,dw,dh); }
-      // malla de rombos
-      c.strokeStyle='rgba(0,0,0,0.9)'; c.lineWidth=2.6*s;
-      const mp=15*s;
-      for(let k=-dh; k<dw+dh; k+=mp){ c.beginPath(); c.moveTo(dx0+k,dy0); c.lineTo(dx0+k+dh,dy0+dh); c.stroke();
-        c.beginPath(); c.moveTo(dx0+k+dh,dy0); c.lineTo(dx0+k,dy0+dh); c.stroke(); }
-      c.strokeStyle='rgba(255,255,255,0.05)'; c.lineWidth=1*s;
-      for(let k=-dh; k<dw+dh; k+=mp){ c.beginPath(); c.moveTo(dx0+k+1.5*s,dy0); c.lineTo(dx0+k+dh+1.5*s,dy0+dh); c.stroke(); }
+      // fondo calido
+      const warm=c.createLinearGradient(0,dy0,0,dy0+dh);
+      warm.addColorStop(0,rgb(16,7,5)); warm.addColorStop(1,rgb(6,3,2));
+      c.fillStyle=warm; c.fillRect(dx0,dy0,dw,dh);
+      // VALVULAS: botellas con nucleo brillante + transformadores oscuros
+      const tube=(tx,tw2,th2,glow)=>{ const ty=dy0+dh*0.98;
+        if(glow){ const g=c.createRadialGradient(tx,ty-th2*0.55,2*s,tx,ty-th2*0.55,th2*0.9);
+          g.addColorStop(0,'rgba(255,120,60,0.85)'); g.addColorStop(.35,'rgba(220,50,20,0.45)'); g.addColorStop(1,'rgba(0,0,0,0)');
+          c.fillStyle=g; c.fillRect(tx-th2,ty-th2*1.6,th2*2,th2*1.8); }
+        const bg2=c.createLinearGradient(tx-tw2,0,tx+tw2,0);
+        bg2.addColorStop(0,'rgba(120,60,40,0.25)'); bg2.addColorStop(.5,'rgba(210,120,80,0.5)'); bg2.addColorStop(1,'rgba(90,45,30,0.25)');
+        c.beginPath(); rr(c,tx-tw2,ty-th2,tw2*2,th2,tw2);
+        c.fillStyle=bg2; c.fill();
+        if(glow){ c.beginPath(); rr(c,tx-tw2*0.30,ty-th2*0.85,tw2*0.6,th2*0.55,tw2*0.3);
+          c.fillStyle='rgba(255,170,110,0.9)'; c.fill(); } };
+      const box=(bx2,bw2,bh2)=>{ const by2=dy0+dh*0.98;
+        rr(c,bx2-bw2/2,by2-bh2,bw2,bh2,2*s);
+        c.fillStyle='rgba(40,30,28,0.85)'; c.fill();
+        c.strokeStyle='rgba(150,90,60,0.25)'; c.lineWidth=1.2*s; c.stroke(); };
+      box(W*.205,W*.055,dh*.62); box(W*.79,W*.06,dh*.70);
+      tube(W*.265,9*s,dh*.55,true); tube(W*.30,8*s,dh*.48,false);
+      tube(W*.44,9*s,dh*.60,true);  tube(W*.475,8*s,dh*.50,true);
+      tube(W*.545,8*s,dh*.46,false); tube(W*.71,9*s,dh*.58,true); tube(W*.745,8*s,dh*.47,false);
+      // malla expanded-metal (celdas de rombo con luz y sombra)
+      const mw=13*s, mh=8.5*s;
+      for(let ry=dy0-mh; ry<dy0+dh+mh; ry+=mh){ const off=((Math.round((ry-dy0)/mh))%2)*mw*0.5;
+        for(let rx3=dx0-mw+off; rx3<dx0+dw+mw; rx3+=mw){
+          c.beginPath(); c.moveTo(rx3,ry); c.lineTo(rx3+mw*0.5,ry-mh*0.5); c.lineTo(rx3+mw,ry);
+          c.lineTo(rx3+mw*0.5,ry+mh*0.5); c.closePath();
+          c.strokeStyle='rgba(0,0,0,0.88)'; c.lineWidth=3.4*s; c.stroke();
+          c.strokeStyle='rgba(190,190,196,0.10)'; c.lineWidth=1.1*s;
+          c.beginPath(); c.moveTo(rx3,ry); c.lineTo(rx3+mw*0.5,ry-mh*0.5); c.stroke(); } }
+      // vineta interna de la rejilla
+      const iv=c.createRadialGradient(W*.5,dy0+dh*.5,dh*.35,W*.5,dy0+dh*.5,dw*.55);
+      iv.addColorStop(0,'rgba(0,0,0,0)'); iv.addColorStop(1,'rgba(0,0,0,0.55)');
+      c.fillStyle=iv; c.fillRect(dx0,dy0,dw,dh);
       c.restore();
-      rr(c,dx0,dy0,dw,dh,4*s); c.strokeStyle=rgb(52,54,58); c.lineWidth=1.6*s; c.stroke();
-      // placa 'Raney' plateada al centro
-      const bw=W*.17, bh=H*.115, bx=W*.5-bw/2, by=dy0+dh*.5-bh/2;
-      const bg2=c.createLinearGradient(0,by,0,by+bh); bg2.addColorStop(0,rgb(238,240,244)); bg2.addColorStop(.5,rgb(196,198,204)); bg2.addColorStop(1,rgb(150,152,158));
-      rr(c,bx,by,bw,bh,5*s); c.fillStyle=bg2; c.fill(); c.strokeStyle=rgb(70,72,76); c.lineWidth=1.6*s; c.stroke();
-      c.save(); c.textAlign='center'; c.textBaseline='middle'; c.font=`800 ${Math.round(40*s)}px ${F.anton}`;
-      c.fillStyle=rgb(20,20,22); c.fillText('Raney',W*.5,by+bh*.54); c.restore();
+      // tornillos del marco
+      bolt(dx0+8*s,dy0+8*s); bolt(dx0+dw-8*s,dy0+8*s); bolt(dx0+8*s,dy0+dh-8*s); bolt(dx0+dw-8*s,dy0+dh-8*s);
+      // ── placa Raney estilo Laney: marco plateado + campo negro + logo blanco ──
+      const bw=W*.20, bh=H*.15, bx=W*.5-bw/2, by=dy0+dh*.5-bh/2;
+      const mg=c.createLinearGradient(0,by,0,by+bh); mg.addColorStop(0,rgb(236,238,242)); mg.addColorStop(.5,rgb(184,186,192)); mg.addColorStop(1,rgb(130,132,138));
+      rr(c,bx,by,bw,bh,7*s); c.fillStyle=mg; c.fill();
+      c.strokeStyle=rgb(60,62,66); c.lineWidth=1.6*s; c.stroke();
+      rr(c,bx+5*s,by+5*s,bw-10*s,bh-10*s,5*s); c.fillStyle=rgb(12,12,14); c.fill();
+      c.save(); c.textAlign='center'; c.textBaseline='middle';
+      c.font=`italic 800 ${Math.round(42*s)}px ${F.anton}`;
+      c.fillStyle=rgb(240,242,246); c.fillText('Raney',W*.5,by+bh*.52);
+      c.font=`700 ${Math.round(8*s)}px ${F.barlow}`; c.fillStyle=rgb(190,192,198);
+      c.fillText('TM',bx+bw-11*s,by+bh-10*s); c.restore();
+      corner(0,0,1,1); corner(W,0,-1,1); corner(0,H,1,-1); corner(W,H,-1,-1);
       // ── panel de control negro ──
-      const py=H*.545, ph=H*.41, px=W*.075, pw=W*.85, lblY=py+ph*.20;
-      const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,rgb(30,30,33)); pg.addColorStop(1,rgb(16,16,18));
-      rr(c,px,py,pw,ph,4*s); c.fillStyle=pg; c.fill(); c.strokeStyle=rgb(60,62,66); c.lineWidth=1.4*s; c.stroke();
-      const lbl=(cx2,t,sz)=>textSpaced(d,cx2*W,lblY,F.barlow,sz||9.5,wht,t,0.05);
-      // INPUT jack
-      const jx=.088*W, jy=py+ph*.55;
-      c.beginPath(); c.arc(jx,jy,9.5*s,0,7); c.fillStyle=rgb(180,182,188); c.fill(); c.strokeStyle=rgb(60,62,66); c.stroke();
-      c.beginPath(); c.arc(jx,jy,4.5*s,0,7); c.fillStyle=rgb(10,10,12); c.fill();
-      textSpaced(d,jx,py+ph*.20,F.barlow,8.5,wht,'INPUT',0.05);
-      // PRE-BOOST: LED rojo si Boost On
+      const py=H*.545, ph=H*.42, px=W*.068, pw=W*.864;
+      const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,rgb(34,34,37)); pg.addColorStop(.15,rgb(24,24,27)); pg.addColorStop(1,rgb(14,14,16));
+      rr(c,px,py,pw,ph,4*s); c.fillStyle=pg; c.fill(); c.strokeStyle=rgb(52,54,58); c.lineWidth=1.4*s; c.stroke();
+      bolt(px+10*s,py+10*s); bolt(px+pw-10*s,py+10*s); bolt(px+10*s,py+ph-10*s); bolt(px+pw-10*s,py+ph-10*s);
+      const ky=.660*H;
+      // abanico de numeros 0-10 alrededor de una perilla (como el panel real)
+      const fan=(cx2,R2,sel)=>{ c.save(); c.textAlign='center'; c.textBaseline='middle';
+        c.font=`600 ${Math.round(6.8*s)}px ${F.barlow}`; c.fillStyle=grey;
+        const N=sel?sel-1:10;
+        for(let i=0;i<=N;i++){ const aa=ang(i/N); const rr2=R2*1.52;
+          c.fillText(sel?String(i+1):String(i), cx2+rr2*Math.cos(aa), ky+rr2*Math.sin(aa));
+          c.strokeStyle=rgb(120,122,126); c.lineWidth=0.9*s; c.beginPath();
+          c.moveTo(cx2+R2*1.18*Math.cos(aa),ky+R2*1.18*Math.sin(aa));
+          c.lineTo(cx2+R2*1.30*Math.cos(aa),ky+R2*1.30*Math.sin(aa)); c.stroke(); }
+        c.restore(); };
+      const KR=.022*W;
+      for(const kx of [.318,.398,.464,.530,.610,.703,.768,.833]) fan(kx*W,KR);
+      fan(.226*W,KR,3); fan(.152*W,.0185*W);
+      // labels DEBAJO de las perillas (como el frente real)
+      const lb=(cx2,t,sz)=>textSpaced(d,cx2*W,py+ph*.845,F.barlow,sz||9.5,wht,t,0.06);
+      lb(.152,'PRE-BOOST',8.5); lb(.226,'CHANNEL'); lb(.318,'GAIN'); lb(.398,'BASS');
+      lb(.464,'MIDDLE'); lb(.530,'TREBLE'); lb(.610,'VOLUME'); lb(.703,'DYNAMICS',8.5);
+      lb(.768,'TONE'); lb(.833,'WATTS');
+      textSpaced(d,.104*W,py+ph*.845,F.barlow,7.5,grey,'ON / OFF',0.04);
+      // INPUT jack con tuerca hex
+      const jx=.086*W, jy=ky;
+      c.save(); c.translate(jx,jy); c.beginPath();
+      for(let i=0;i<6;i++){ const t=i/6*Math.PI*2+0.26; const x=12.5*s*Math.cos(t), y=12.5*s*Math.sin(t);
+        i?c.lineTo(x,y):c.moveTo(x,y); }
+      c.closePath(); const hg=c.createLinearGradient(-12*s,-12*s,12*s,12*s);
+      hg.addColorStop(0,rgb(198,200,206)); hg.addColorStop(1,rgb(108,110,116));
+      c.fillStyle=hg; c.fill(); c.strokeStyle=rgb(40,42,46); c.lineWidth=1*s; c.stroke(); c.restore();
+      c.beginPath(); c.arc(jx,jy,7*s,0,7); c.fillStyle=rgb(160,162,168); c.fill();
+      c.beginPath(); c.arc(jx,jy,3.8*s,0,7); c.fillStyle=rgb(6,6,8); c.fill();
+      textSpaced(d,jx,py+ph*.845,F.barlow,8.5,wht,'INPUT',0.06);
+      // LED del PRE-BOOST
       const bOn=(vals&&vals[11]!=null?vals[11]:0)>0.5;
-      const blx=.185*W, bly=py+ph*.42;
-      c.beginPath(); c.arc(blx,bly,4.6*s,0,7);
-      c.fillStyle=bOn?rgb(235,60,40):rgb(70,16,12); c.fill(); c.strokeStyle=rgb(90,92,96); c.lineWidth=1*s; c.stroke();
-      if(bOn){ c.save(); c.globalAlpha=.35; c.beginPath(); c.arc(blx,bly,8.5*s,0,7); c.fillStyle=rgb(255,90,60); c.fill(); c.restore(); }
-      lbl(.132,'PRE-BOOST');
-      // CHANNEL LEDs: CLEAN verde / RHYTHM verde / LEAD rojo
+      const blx=.183*W, bly=ky-KR*0.2;
+      c.beginPath(); c.arc(blx,bly,4.4*s,0,7);
+      c.fillStyle=bOn?rgb(240,64,42):rgb(64,16,12); c.fill(); c.strokeStyle=rgb(84,86,90); c.lineWidth=0.9*s; c.stroke();
+      if(bOn){ c.save(); c.globalAlpha=.4; c.beginPath(); c.arc(blx,bly,8.5*s,0,7); c.fillStyle=rgb(255,96,66); c.fill(); c.restore(); }
+      // LEDs de canal con label del canal activo
       const chv=Math.round(((vals&&vals[9]!=null?vals[9]:0.5))*2);
       const chNames=['CLEAN','RHYTHM','LEAD'];
-      for(let i=0;i<3;i++){ const lx=W*(.205+.02*i), ly=py+ph*.90;
-        const on=(i===chv); const col=i===2?[235,60,40]:[70,220,90];
-        c.beginPath(); c.arc(lx,ly,3.8*s,0,7);
-        c.fillStyle=on?rgb(col[0],col[1],col[2]):rgb(30,34,32); c.fill();
-        c.strokeStyle=rgb(80,82,86); c.lineWidth=0.8*s; c.stroke(); }
-      lbl(.225,'CHANNEL');
-      textSpaced(d,.225*W,py+ph*.975,F.barlow,7,rgb(150,152,158),chNames[chv],0.06);
-      // labels perillas
-      lbl(.315,'GAIN'); lbl(.395,'BASS'); lbl(.460,'MIDDLE'); lbl(.525,'TREBLE'); lbl(.605,'VOLUME');
-      lbl(.700,'DYNAMICS',9); lbl(.765,'TONE'); lbl(.830,'WATTS');
-      // separadores de seccion
-      c.strokeStyle=rgb(58,60,64); c.lineWidth=1*s;
-      for(const sx of [.268,.652,.578]){ c.beginPath(); c.moveTo(sx*W,py+8*s); c.lineTo(sx*W,py+ph-8*s); c.stroke(); }
-      // POWER jewel + switch
-      const rx2=.905*W, ry=py+ph*.44;
-      const jg=c.createRadialGradient(rx2-2*s,ry-3*s,1*s,rx2,ry,9*s);
-      jg.addColorStop(0,rgb(255,140,110)); jg.addColorStop(.5,rgb(215,42,28)); jg.addColorStop(1,rgb(110,12,8));
-      c.beginPath(); c.arc(rx2,ry,8.5*s,0,7); c.fillStyle=jg; c.fill(); c.strokeStyle=rgb(90,92,96); c.lineWidth=1.4*s; c.stroke();
-      textSpaced(d,rx2,lblY,F.barlow,8.5,wht,'POWER',0.05);
-      // 'IRONHEART' outline (derecha)
+      for(let i=0;i<3;i++){ const lx=W*(.207+.019*i), ly=py+ph*.19;
+        const on=(i===chv); const col=i===2?[240,64,42]:[80,225,96];
+        c.beginPath(); c.arc(lx,ly,4.2*s,0,7);
+        c.fillStyle=on?rgb(col[0],col[1],col[2]):rgb(28,32,30); c.fill();
+        c.strokeStyle=rgb(80,82,86); c.lineWidth=0.8*s; c.stroke();
+        if(on){ c.save(); c.globalAlpha=.35; c.beginPath(); c.arc(lx,ly,7.5*s,0,7); c.fillStyle=rgb(col[0],col[1],col[2]); c.fill(); c.restore(); } }
+      textSpaced(d,.226*W,py+ph*.10,F.barlow,7.5,rgb(170,172,178),chNames[chv],0.08);
+      // separadores
+      c.strokeStyle=rgb(50,52,56); c.lineWidth=1*s;
+      for(const sx of [.272,.578,.655]){ c.beginPath(); c.moveTo(sx*W,py+10*s); c.lineTo(sx*W,py+ph-10*s); c.stroke(); }
+      // POWER: jewel rojo facetado + switch I/0
+      const rx2=.906*W;
+      const jg=c.createRadialGradient(rx2-3*s,ky-4*s,1.5*s,rx2,ky,11*s);
+      jg.addColorStop(0,rgb(255,150,120)); jg.addColorStop(.45,rgb(222,44,28)); jg.addColorStop(1,rgb(96,10,7));
+      c.beginPath(); c.arc(rx2,ky,10.5*s,0,7); c.fillStyle=jg; c.fill();
+      c.strokeStyle=rgb(120,122,128); c.lineWidth=1.8*s; c.stroke();
+      c.save(); c.globalAlpha=.5; c.strokeStyle=rgb(255,180,150); c.lineWidth=0.9*s;
+      for(let i=0;i<6;i++){ const t=i/6*Math.PI*2; c.beginPath(); c.moveTo(rx2+3*s*Math.cos(t),ky+3*s*Math.sin(t));
+        c.lineTo(rx2+9*s*Math.cos(t),ky+9*s*Math.sin(t)); c.stroke(); } c.restore();
+      c.save(); c.globalAlpha=.28; c.beginPath(); c.arc(rx2,ky,16*s,0,7); c.fillStyle=rgb(255,70,45); c.fill(); c.restore();
+      textSpaced(d,rx2,py+ph*.845,F.barlow,9,wht,'POWER',0.06);
+      // 'IRONHEART' con el marco tipo placa del real
+      const iw=W*.085, ih=H*.052, ix=.906*W-iw/2, iy=py+ph*.135;
       c.save(); c.textAlign='center'; c.textBaseline='middle';
-      c.font=`800 ${Math.round(17*s)}px ${F.bebas}`; c.strokeStyle=rgb(190,192,198); c.lineWidth=1.1*s;
-      c.strokeText('I R O N H E A R T',.905*W,py+ph*.86); c.restore(); } };
+      c.font=`800 ${Math.round(13.5*s)}px ${F.bebas}`;
+      c.strokeStyle=rgb(210,212,218); c.lineWidth=1*s;
+      rr(c,ix,iy,iw,ih,2*s); c.stroke();
+      c.fillStyle=rgb(224,226,232); c.fillText('IRONHEART',.906*W,iy+ih*.52); c.restore(); } };
 
   // ── MARSTEN BLUESBREAKER (Marshall 1962) — JTM45 voice + Tremolo, gold combo
   //    panel. 0 Speed 1 Intensity 2 Presence 3 Bass 4 Middle 5 Treble 6 Loudness1
