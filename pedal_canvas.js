@@ -6201,23 +6201,24 @@
       const ky=.660*H;
       // abanico de numeros 0-10 alrededor de una perilla (como el panel real)
       const fan=(cx2,R2,sel)=>{ c.save(); c.textAlign='center'; c.textBaseline='middle';
-        c.font=`600 ${Math.round(6.8*s)}px ${F.barlow}`; c.fillStyle=grey;
+        c.font=`600 ${Math.round(6.0*s)}px ${F.barlow}`; c.fillStyle=grey;
         const N=sel?sel-1:10;
-        for(let i=0;i<=N;i++){ const aa=ang(i/N); const rr2=R2*1.52;
+        for(let i=0;i<=N;i++){ const aa=ang(i/N); const rr2=R2*1.30;
           c.fillText(sel?String(i+1):String(i), cx2+rr2*Math.cos(aa), ky+rr2*Math.sin(aa));
           c.strokeStyle=rgb(120,122,126); c.lineWidth=0.9*s; c.beginPath();
-          c.moveTo(cx2+R2*1.18*Math.cos(aa),ky+R2*1.18*Math.sin(aa));
-          c.lineTo(cx2+R2*1.30*Math.cos(aa),ky+R2*1.30*Math.sin(aa)); c.stroke(); }
+          c.moveTo(cx2+R2*1.06*Math.cos(aa),ky+R2*1.06*Math.sin(aa));
+          c.lineTo(cx2+R2*1.16*Math.cos(aa),ky+R2*1.16*Math.sin(aa)); c.stroke(); }
         c.restore(); };
       const KR=.022*W;
       for(const kx of [.318,.398,.464,.530,.610,.703,.768,.833]) fan(kx*W,KR);
-      fan(.226*W,KR,3); fan(.152*W,.0185*W);
+      fan(.152*W,.0185*W);
       // labels DEBAJO de las perillas (como el frente real)
       const lb=(cx2,t,sz)=>textSpaced(d,cx2*W,py+ph*.845,F.barlow,sz||9.5,wht,t,0.06);
       lb(.152,'PRE-BOOST',8.5); lb(.226,'CHANNEL'); lb(.318,'GAIN'); lb(.398,'BASS');
       lb(.464,'MIDDLE'); lb(.530,'TREBLE'); lb(.610,'VOLUME'); lb(.703,'DYNAMICS',8.5);
       lb(.768,'TONE'); lb(.833,'WATTS');
-      textSpaced(d,.104*W,py+ph*.845,F.barlow,7.5,grey,'ON / OFF',0.04);
+      textSpaced(d,.104*W,ky-.052*H,F.barlow,6.5,grey,'ON',0.04);
+      textSpaced(d,.104*W,ky+.052*H,F.barlow,6.5,grey,'OFF',0.04);
       // INPUT jack con tuerca hex
       const jx=.086*W, jy=ky;
       c.save(); c.translate(jx,jy); c.beginPath();
@@ -6260,12 +6261,12 @@
       c.save(); c.globalAlpha=.28; c.beginPath(); c.arc(rx2,ky,16*s,0,7); c.fillStyle=rgb(255,70,45); c.fill(); c.restore();
       textSpaced(d,rx2,py+ph*.845,F.barlow,9,wht,'POWER',0.06);
       // 'IRONHEART' con el marco tipo placa del real
-      const iw=W*.085, ih=H*.052, ix=.906*W-iw/2, iy=py+ph*.135;
+      const iw=W*.074, ih=H*.052, ix=.888*W-iw/2, iy=py+ph*.115;
       c.save(); c.textAlign='center'; c.textBaseline='middle';
-      c.font=`800 ${Math.round(13.5*s)}px ${F.bebas}`;
+      c.font=`800 ${Math.round(12*s)}px ${F.bebas}`;
       c.strokeStyle=rgb(210,212,218); c.lineWidth=1*s;
       rr(c,ix,iy,iw,ih,2*s); c.stroke();
-      c.fillStyle=rgb(224,226,232); c.fillText('IRONHEART',.906*W,iy+ih*.52); c.restore(); } };
+      c.fillStyle=rgb(224,226,232); c.fillText('IRONHEART',.888*W,iy+ih*.52); c.restore(); } };
 
   // ── MARSTEN BLUESBREAKER (Marshall 1962) — JTM45 voice + Tremolo, gold combo
   //    panel. 0 Speed 1 Intensity 2 Presence 3 Bass 4 Middle 5 Treble 6 Loudness1
