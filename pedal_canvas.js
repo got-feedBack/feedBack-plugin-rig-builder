@@ -6102,17 +6102,17 @@
   //    9 Channel(3) 10 Boost 11 Boost On.
   P.raneyironheart = { w:1660, h:620, ptr:rgb(238,240,244),
     knobs:[
-      {id:10,cx:.152,cy:.660,r:.0205,style:'capplain',cap:[188,34,26]},  // PRE-BOOST (roja)
-      {id:11,cx:.104,cy:.660,r:.014,style:'bat'},                        // BOOST ON
-      {id:9, cx:.226,cy:.660,r:.022,style:'irt',select:3},               // CHANNEL
-      {id:0, cx:.318,cy:.660,r:.022,style:'irt'},                        // GAIN
-      {id:1, cx:.398,cy:.660,r:.022,style:'irt'},                        // BASS
-      {id:2, cx:.464,cy:.660,r:.022,style:'irt'},                        // MIDDLE
-      {id:3, cx:.530,cy:.660,r:.022,style:'irt'},                        // TREBLE
-      {id:4, cx:.610,cy:.660,r:.022,style:'irt'},                        // VOLUME
-      {id:5, cx:.703,cy:.660,r:.022,style:'irt'},                        // DYNAMICS
-      {id:6, cx:.768,cy:.660,r:.022,style:'irt'},                        // TONE
-      {id:7, cx:.833,cy:.660,r:.022,style:'irt'} ],                      // WATTS
+      {id:10,cx:.152,cy:.720,r:.0205,style:'capplain',cap:[188,34,26]},  // PRE-BOOST (roja)
+      {id:11,cx:.104,cy:.720,r:.014,style:'bat'},                        // BOOST ON
+      {id:9, cx:.226,cy:.720,r:.022,style:'irt',select:3},               // CHANNEL
+      {id:0, cx:.318,cy:.720,r:.022,style:'irt'},                        // GAIN
+      {id:1, cx:.398,cy:.720,r:.022,style:'irt'},                        // BASS
+      {id:2, cx:.464,cy:.720,r:.022,style:'irt'},                        // MIDDLE
+      {id:3, cx:.530,cy:.720,r:.022,style:'irt'},                        // TREBLE
+      {id:4, cx:.610,cy:.720,r:.022,style:'irt'},                        // VOLUME
+      {id:5, cx:.703,cy:.720,r:.022,style:'irt'},                        // DYNAMICS
+      {id:6, cx:.768,cy:.720,r:.022,style:'irt'},                        // TONE
+      {id:7, cx:.833,cy:.720,r:.022,style:'irt'} ],                      // WATTS
     draw(d,vals){ const {ctx:c,W,H,s}=d; const wht=rgb(232,234,238), grey=rgb(176,178,184);
       // ── cuero negro con textura y viñeta ──
       const bgr=c.createLinearGradient(0,0,0,H); bgr.addColorStop(0,rgb(22,22,24)); bgr.addColorStop(1,rgb(10,10,12));
@@ -6198,7 +6198,7 @@
       const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,rgb(34,34,37)); pg.addColorStop(.15,rgb(24,24,27)); pg.addColorStop(1,rgb(14,14,16));
       rr(c,px,py,pw,ph,4*s); c.fillStyle=pg; c.fill(); c.strokeStyle=rgb(52,54,58); c.lineWidth=1.4*s; c.stroke();
       bolt(px+10*s,py+10*s); bolt(px+pw-10*s,py+10*s); bolt(px+10*s,py+ph-10*s); bolt(px+pw-10*s,py+ph-10*s);
-      const ky=.660*H;
+      const ky=.720*H;
       // abanico de numeros 0-10 alrededor de una perilla (como el panel real)
       const fan=(cx2,R2,sel)=>{ c.save(); c.textAlign='center'; c.textBaseline='middle';
         c.font=`600 ${Math.round(6.0*s)}px ${F.barlow}`; c.fillStyle=grey;
@@ -6213,7 +6213,8 @@
       for(const kx of [.318,.398,.464,.530,.610,.703,.768,.833]) fan(kx*W,KR);
       fan(.152*W,.0185*W);
       // labels DEBAJO de las perillas (como el frente real)
-      const lb=(cx2,t,sz)=>textSpaced(d,cx2*W,py+ph*.845,F.barlow,sz||9.5,wht,t,0.06);
+      const lbY=ky+.102*H;
+      const lb=(cx2,t,sz)=>textSpaced(d,cx2*W,lbY,F.barlow,sz||9.5,wht,t,0.06);
       lb(.152,'PRE-BOOST',8.5); lb(.226,'CHANNEL'); lb(.318,'GAIN'); lb(.398,'BASS');
       lb(.464,'MIDDLE'); lb(.530,'TREBLE'); lb(.610,'VOLUME'); lb(.703,'DYNAMICS',8.5);
       lb(.768,'TONE'); lb(.833,'WATTS');
@@ -6229,7 +6230,7 @@
       c.fillStyle=hg; c.fill(); c.strokeStyle=rgb(40,42,46); c.lineWidth=1*s; c.stroke(); c.restore();
       c.beginPath(); c.arc(jx,jy,7*s,0,7); c.fillStyle=rgb(160,162,168); c.fill();
       c.beginPath(); c.arc(jx,jy,3.8*s,0,7); c.fillStyle=rgb(6,6,8); c.fill();
-      textSpaced(d,jx,py+ph*.845,F.barlow,8.5,wht,'INPUT',0.06);
+      textSpaced(d,jx,lbY,F.barlow,8.5,wht,'INPUT',0.06);
       // LED del PRE-BOOST
       const bOn=(vals&&vals[11]!=null?vals[11]:0)>0.5;
       const blx=.183*W, bly=ky-KR*0.2;
@@ -6239,7 +6240,7 @@
       // LEDs de canal con label del canal activo
       const chv=Math.round(((vals&&vals[9]!=null?vals[9]:0.5))*2);
       const chNames=['CLEAN','RHYTHM','LEAD'];
-      for(let i=0;i<3;i++){ const lx=W*(.207+.019*i), ly=py+ph*.19;
+      for(let i=0;i<3;i++){ const lx=W*(.207+.019*i), ly=py+ph*.15;
         const on=(i===chv); const col=i===2?[240,64,42]:[80,225,96];
         c.beginPath(); c.arc(lx,ly,4.2*s,0,7);
         c.fillStyle=on?rgb(col[0],col[1],col[2]):rgb(28,32,30); c.fill();
@@ -6259,9 +6260,9 @@
       for(let i=0;i<6;i++){ const t=i/6*Math.PI*2; c.beginPath(); c.moveTo(rx2+3*s*Math.cos(t),ky+3*s*Math.sin(t));
         c.lineTo(rx2+9*s*Math.cos(t),ky+9*s*Math.sin(t)); c.stroke(); } c.restore();
       c.save(); c.globalAlpha=.28; c.beginPath(); c.arc(rx2,ky,16*s,0,7); c.fillStyle=rgb(255,70,45); c.fill(); c.restore();
-      textSpaced(d,rx2,py+ph*.845,F.barlow,9,wht,'POWER',0.06);
+      textSpaced(d,rx2,lbY,F.barlow,9,wht,'POWER',0.06);
       // 'IRONHEART' con el marco tipo placa del real
-      const iw=W*.074, ih=H*.052, ix=.888*W-iw/2, iy=py+ph*.115;
+      const iw=W*.074, ih=H*.052, ix=.888*W-iw/2, iy=py+ph*.82;
       c.save(); c.textAlign='center'; c.textBaseline='middle';
       c.font=`800 ${Math.round(12*s)}px ${F.bebas}`;
       c.strokeStyle=rgb(210,212,218); c.lineWidth=1*s;
