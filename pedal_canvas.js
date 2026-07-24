@@ -5099,6 +5099,20 @@
         c.quadraticCurveTo(cxx+dx*k*0.35,cyy+dy*k*0.35,cxx,cyy+dy*k); c.closePath();
         c.fillStyle=rgb(10,10,11); c.fill(); bolt(cxx+dx*k*0.42,cyy+dy*k*0.42,2.6*s); };
       corner(0,0,1,1); corner(W,0,-1,1); corner(0,H,1,-1); corner(W,H,-1,-1);
+      // ── asas laterales verticales de diamante (las partes negras de los lados) ──
+      const sideHandle=(hx)=>{ const hy0=H*.17, hy1=H*.53;
+        bolt(hx,hy0-9*s,3.4*s); bolt(hx,hy1+9*s,3.4*s);
+        rr(c,hx-11*s,hy0,22*s,hy1-hy0,10*s); c.fillStyle=rgb(17,17,18); c.fill();
+        c.strokeStyle=rgb(3,3,4); c.lineWidth=1.2*s; c.stroke();
+        c.save(); rr(c,hx-11*s,hy0,22*s,hy1-hy0,10*s); c.clip();
+        c.strokeStyle='rgba(255,255,255,0.10)'; c.lineWidth=1*s;
+        for(let yy=hy0-22*s; yy<hy1+22*s; yy+=9*s){
+          c.beginPath(); c.moveTo(hx-11*s,yy); c.lineTo(hx+11*s,yy+22*s); c.stroke();
+          c.beginPath(); c.moveTo(hx+11*s,yy); c.lineTo(hx-11*s,yy+22*s); c.stroke(); }
+        c.restore();
+        c.strokeStyle='rgba(255,255,255,0.07)'; c.lineWidth=1.4*s;
+        c.beginPath(); c.moveTo(hx-7*s,hy0+8*s); c.lineTo(hx-7*s,hy1-8*s); c.stroke(); };
+      sideHandle(.024*W); sideHandle(.976*W);
       // ── maroon control panel (brushed wine) ──
       const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,wineHi); pg.addColorStop(0.5,wine); pg.addColorStop(1,rgb(80,18,34));
       rr(c,px,py,pw,ph,5*s); c.fillStyle=pg; c.fill();
@@ -5172,16 +5186,16 @@
   //    11 Reverb. RS: Gain->Channel, Treble/Bass/Mid->Burn, Bright->Norm/Fat.
   P.bendersupernova22 = { w:1520, h:600, ptr:rgb(238,238,234),
     knobs:[
-      {id:0, cx:.095,cy:.224,r:.018,style:'skirt'},   // VINTAGE Volume
-      {id:1, cx:.190,cy:.224,r:.018,style:'skirt'},   // VINTAGE Treble
-      {id:2, cx:.248,cy:.224,r:.018,style:'skirt'},   // VINTAGE Bass
-      {id:5, cx:.355,cy:.224,r:.018,style:'skirt'},   // BURN Gain 1
-      {id:6, cx:.420,cy:.224,r:.018,style:'skirt'},   // BURN Gain 2
-      {id:7, cx:.485,cy:.224,r:.018,style:'skirt'},   // BURN Treble (RS Treble)
-      {id:8, cx:.550,cy:.224,r:.018,style:'skirt'},   // BURN Bass   (RS Bass)
-      {id:9, cx:.615,cy:.224,r:.018,style:'skirt'},   // BURN Middle (RS Mid)
-      {id:10,cx:.680,cy:.224,r:.018,style:'skirt'},   // BURN Volume
-      {id:11,cx:.760,cy:.224,r:.018,style:'skirt'} ], // REVERB
+      {id:0, cx:.095,cy:.224,r:.018,style:'cream'},   // VINTAGE Volume
+      {id:1, cx:.190,cy:.224,r:.018,style:'cream'},   // VINTAGE Treble
+      {id:2, cx:.248,cy:.224,r:.018,style:'cream'},   // VINTAGE Bass
+      {id:5, cx:.355,cy:.224,r:.018,style:'cream'},   // BURN Gain 1
+      {id:6, cx:.420,cy:.224,r:.018,style:'cream'},   // BURN Gain 2
+      {id:7, cx:.485,cy:.224,r:.018,style:'cream'},   // BURN Treble (RS Treble)
+      {id:8, cx:.550,cy:.224,r:.018,style:'cream'},   // BURN Bass   (RS Bass)
+      {id:9, cx:.615,cy:.224,r:.018,style:'cream'},   // BURN Middle (RS Mid)
+      {id:10,cx:.680,cy:.224,r:.018,style:'cream'},   // BURN Volume
+      {id:11,cx:.760,cy:.224,r:.018,style:'cream'} ], // REVERB
     switches:[
       {id:3,cx:.140,cy:.224,hs:.009,style:'bat'},     // Norm/Fat   (RS Bright)
       {id:4,cx:.300,cy:.224,hs:.009,style:'bat'} ],   // Vintage/Burn (RS Gain morph)
@@ -5216,19 +5230,24 @@
         const gg=c.createLinearGradient(cxx,cyy,cxx+dx*k,cyy+dy*k);
         gg.addColorStop(0,rgb(232,236,240)); gg.addColorStop(0.45,rgb(150,154,160)); gg.addColorStop(0.55,rgb(196,200,206)); gg.addColorStop(1,rgb(110,114,120));
         c.fillStyle=gg; c.fill(); c.strokeStyle=rgb(70,72,78); c.lineWidth=0.9*s; c.stroke(); bolt(cxx+dx*k*0.42,cyy+dy*k*0.42,2.6*s); };
-      corner(0,0,1,1); corner(W,0,-1,1); corner(0,H,1,-1); corner(W,H,-1,-1);
+      corner(0,H,1,-1); corner(W,H,-1,-1);   // cromo solo abajo, como la foto
+      [[W*.030],[W*.970-52*s]].forEach(([gx0])=>{ rr(c,gx0,H*.006,52*s,10*s,4*s);
+        const gg=c.createLinearGradient(0,H*.006,0,H*.006+10*s); gg.addColorStop(0,rgb(238,242,246)); gg.addColorStop(.5,rgb(164,168,174)); gg.addColorStop(1,rgb(206,210,216));
+        c.fillStyle=gg; c.fill(); c.strokeStyle=rgb(70,72,78); c.lineWidth=0.8*s; c.stroke();
+        bolt(gx0+8*s,H*.006+5*s,2.2*s); bolt(gx0+44*s,H*.006+5*s,2.2*s); });
       // ── black control faceplate (wide, brushed) ──
       const py=H*.09, ph=H*.32, px=W*.025, pw=W*.95;
       rr(c,px-2*s,py-2*s,pw+4*s,ph+4*s,8*s); c.fillStyle=rgb(6,6,8); c.fill();   // bezel
-      const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,rgb(40,40,44)); pg.addColorStop(0.5,rgb(24,24,27)); pg.addColorStop(1,rgb(15,15,18));
+      const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,rgb(112,113,116)); pg.addColorStop(0.5,rgb(95,96,99)); pg.addColorStop(1,rgb(74,75,78));
       rr(c,px,py,pw,ph,6*s); c.fillStyle=pg; c.fill();
-      c.save(); rr(c,px,py,pw,ph,6*s); c.clip(); c.strokeStyle='rgba(255,255,255,0.035)'; c.lineWidth=0.7*s;
+      c.save(); rr(c,px,py,pw,ph,6*s); c.clip(); c.strokeStyle='rgba(255,255,255,0.07)'; c.lineWidth=0.7*s;
       for(let yy=py+2.5*s; yy<py+ph; yy+=2.6*s){ c.beginPath(); c.moveTo(px,yy); c.lineTo(px+pw,yy); c.stroke(); }
       c.strokeStyle='rgba(255,255,255,0.10)'; c.lineWidth=1.1*s; c.beginPath(); c.moveTo(px,py+1.5*s); c.lineTo(px+pw,py+1.5*s); c.stroke();
       c.restore();
       rr(c,px,py,pw,ph,6*s); c.strokeStyle=rgb(6,6,8); c.lineWidth=1.2*s; c.stroke();
+      rr(c,px+4*s,py+4*s,pw-8*s,ph-8*s,4*s); c.strokeStyle='rgba(240,242,246,0.85)'; c.lineWidth=1.3*s; c.stroke();
       // section dividers (white hairlines): Vintage | Burn | Reverb
-      [.323,.726].forEach(xx=>{ c.beginPath(); c.moveTo(xx*W,py+ph*.12); c.lineTo(xx*W,py+ph*.92); c.strokeStyle='rgba(210,212,218,0.55)'; c.lineWidth=1.1*s; c.stroke(); });
+      [.323,.726].forEach(xx=>{ c.beginPath(); c.moveTo(xx*W,py+ph*.12); c.lineTo(xx*W,py+ph*.92); c.strokeStyle='rgba(240,242,246,0.85)'; c.lineWidth=1.3*s; c.stroke(); });
       const cy=py+ph*.42, lblY=py+ph*.72;
       // ── INPUT jack ──
       const ij=.040*W;
@@ -5236,32 +5255,43 @@
       c.fillStyle=ig; c.fill(); c.strokeStyle=chr; c.lineWidth=2*s; c.stroke();
       c.beginPath(); c.arc(ij,cy,2.6*s,0,7); c.fillStyle=rgb(54,54,58); c.fill();
       textSpaced(d,ij,lblY,F.barlow,8.5,ink,'INPUT',0.05);
-      // ── knob labels (numeral arcs removed — cleaner, like the GT-550) ──
+      // ── abanicos 1-10 impresos en el panel (como el Super-Sonic real) ──
+      const KR=.018*W;
+      const fan=(kx)=>{ c.save(); c.textAlign='center'; c.textBaseline='middle';
+        c.font=`700 ${Math.round(7.2*s)}px ${F.barlow}`; c.fillStyle=ink;
+        for(let n=1;n<=10;n++){ const aa=ang((n-1)/9); const rr2=KR*1.45;
+          c.fillText(String(n), kx*W+rr2*Math.cos(aa), cy+rr2*Math.sin(aa)); }
+        c.restore(); };
+      [.095,.190,.248,.355,.420,.485,.550,.615,.680,.760].forEach(fan);
       const lbl=(kx,t)=>textSpaced(d,kx*W,lblY,F.barlow,8.5,ink,t,0.02);
       lbl(.095,'VOLUME'); lbl(.190,'TREBLE'); lbl(.248,'BASS');
       lbl(.355,'GAIN 1'); lbl(.420,'GAIN 2'); lbl(.485,'TREBLE'); lbl(.550,'BASS'); lbl(.615,'MIDDLE'); lbl(.680,'VOLUME');
       lbl(.760,'REVERB');
       // ── mini toggles: label arriba + LEDs cuadrados indicadores (como la foto) ──
-      const sqled=(x,y,on)=>{ if(on){ c.save(); c.globalAlpha=0.55; c.beginPath(); c.arc(x,y,6.5*s,0,7);
-          const gl=c.createRadialGradient(x,y,1*s,x,y,6.5*s); gl.addColorStop(0,'rgba(255,200,90,0.9)'); gl.addColorStop(1,'rgba(255,200,90,0)');
-          c.fillStyle=gl; c.fill(); c.restore(); }
-        rr(c,x-3.2*s,y-3.2*s,6.4*s,6.4*s,1*s); c.fillStyle=on?rgb(255,204,96):rgb(58,56,52); c.fill();
+      const glow=(x,y,r2)=>{ c.save(); c.globalAlpha=0.55; c.beginPath(); c.arc(x,y,r2*2.2,0,7);
+          const gl=c.createRadialGradient(x,y,r2*0.3,x,y,r2*2.2); gl.addColorStop(0,'rgba(255,200,90,0.9)'); gl.addColorStop(1,'rgba(255,200,90,0)');
+          c.fillStyle=gl; c.fill(); c.restore(); };
+      const sqled=(x,y,on)=>{ if(on) glow(x,y,3.2*s);
+        rr(c,x-3.2*s,y-3.2*s,6.4*s,6.4*s,1*s); c.fillStyle=on?rgb(255,204,96):rgb(46,45,44); c.fill();
+        c.strokeStyle=rgb(10,10,12); c.lineWidth=0.8*s; c.stroke(); };
+      const dotled=(x,y,on)=>{ if(on) glow(x,y,2.9*s);
+        c.beginPath(); c.arc(x,y,2.9*s,0,7); c.fillStyle=on?rgb(255,204,96):rgb(46,45,44); c.fill();
         c.strokeStyle=rgb(10,10,12); c.lineWidth=0.8*s; c.stroke(); };
       const swv=(i,def)=> (vals&&vals[i]!=null)?vals[i]:def;
       const ledY=py+ph*.22;
-      textSpaced(d,.140*W,py+ph*.09,F.barlow,5.5,faint,'VIBROLUXE / BASSMAN',0.01);
-      sqled(.140*W-9*s,ledY,swv(3,0)<0.5); sqled(.140*W+9*s,ledY,swv(3,0)>=0.5);
-      textSpaced(d,.300*W,py+ph*.09,F.barlow,5.5,faint,'VINTAGE / BURN',0.01);
-      sqled(.300*W-9*s,ledY,swv(4,0)<0.5); sqled(.300*W+9*s,ledY,swv(4,0)>=0.5);
+      textSpaced(d,.140*W,py+ph*.08,F.barlow,6.5,ink,'VIBROLUXE / BASSMAN',0.01);
+      sqled(.140*W-9*s,ledY,swv(3,0)<0.5); dotled(.140*W+9*s,ledY,swv(3,0)>=0.5);
+      textSpaced(d,.300*W,py+ph*.08,F.barlow,6.5,ink,'VINTAGE / BURN',0.01);
+      sqled(.300*W-9*s,ledY,swv(4,0)<0.5); dotled(.300*W+9*s,ledY,swv(4,0)>=0.5);
       // ── RIGHT: "Super-Nova" script + maker + glossy red jewel ──
       const sxc=.880*W, syc=cy;
       c.save(); c.translate(sxc,syc); c.transform(1,0,-0.17,1,0,0); c.textAlign='center'; c.textBaseline='middle';
-      const slg=c.createLinearGradient(0,-16*s,0,16*s); slg.addColorStop(0,rgb(248,249,252)); slg.addColorStop(1,rgb(190,194,200));
+      const slg=c.createLinearGradient(0,-16*s,0,16*s); slg.addColorStop(0,rgb(252,252,254)); slg.addColorStop(1,rgb(216,220,226));
       setFont(d,F.ink,21); c.lineWidth=2*s; c.strokeStyle=rgb(14,14,16);
       c.strokeText('Super',-20*s,-6*s); c.fillStyle=slg; c.fillText('Super',-20*s,-6*s);
       setFont(d,F.ink,18); c.strokeText('-Nova',26*s,8*s); c.fillStyle=slg; c.fillText('-Nova',26*s,8*s);
       c.restore();
-      textSpaced(d,sxc,syc+ph*.30,F.barlow,6.5,rgb(198,200,206),'BENDER MUSICAL INSTRUMENTS',0.02);
+      textSpaced(d,sxc,syc+ph*.30,F.barlow,7.5,rgb(228,230,234),'BENDER MUSICAL INSTRUMENTS',0.02);
       const jx=.962*W;
       c.beginPath(); c.arc(jx,cy,8*s,0,7); c.fillStyle=rgb(40,40,44); c.fill();
       c.beginPath(); c.arc(jx,cy,8*s,0,7); c.strokeStyle=chr; c.lineWidth=2*s; c.stroke();
@@ -5300,6 +5330,7 @@
       c.beginPath(); c.moveTo(-78*s,26*s); c.quadraticCurveTo(10*s,40*s,96*s,18*s);
       c.lineWidth=6*s; c.strokeStyle=rgb(10,10,12); c.stroke();
       c.lineWidth=3*s; c.strokeStyle=big; c.stroke();
+      bolt(-92*s,-20*s,2.4*s); bolt(102*s,14*s,2.4*s);
       c.restore();
       // ── "Bender" chrome script logo on a subtle recessed plate (grille, lower-left) ──
       const lx=gx+gw*.18, ly=gy+gh*.55;
@@ -5428,7 +5459,7 @@
       // ── abanicos 1-12 + labels de las 3 perillas ──
       const ky=.700*H, KR=.0235*W;
       const fan=(cx2)=>{ c.save(); c.textAlign='center'; c.textBaseline='middle';
-        c.font=`700 ${Math.round(6.4*s)}px ${F.barlow}`; c.fillStyle=ink;
+        c.font=`700 ${Math.round(7.6*s)}px ${F.barlow}`; c.fillStyle=ink;
         for(let i=0;i<12;i++){ const aa=ang(i/11); const rr2=KR*1.42;
           c.fillText(String(i+1), cx2+rr2*Math.cos(aa), ky+rr2*Math.sin(aa)); }
         c.restore(); };
@@ -5826,7 +5857,7 @@
       // ── abanicos 0-10 (pares) + labels de las 6 perillas ──
       const KR=.0145*W, ky=.750*H;
       const fan=(kx)=>{ c.save(); c.textAlign='center'; c.textBaseline='middle';
-        c.font=`700 ${Math.round(5.8*s)}px ${F.barlow}`; c.fillStyle=ink;
+        c.font=`700 ${Math.round(7.2*s)}px ${F.barlow}`; c.fillStyle=ink;
         for(let n=0;n<=10;n+=2){ const aa=ang(n/10); const rr2=KR*1.50;
           c.fillText(String(n), kx*W+rr2*Math.cos(aa), ky+rr2*Math.sin(aa)); }
         c.restore(); };
@@ -7110,7 +7141,7 @@
       const ky=.745*H, lbY=ky+.115*H;
       // arcos de numeros 1-12 (tweed real) alrededor de cada perilla
       const fan=(cx2,R2)=>{ c.save(); c.textAlign='center'; c.textBaseline='middle';
-        c.font=`700 ${Math.round(6.4*s)}px ${F.barlow}`; c.fillStyle=ink;
+        c.font=`700 ${Math.round(7.6*s)}px ${F.barlow}`; c.fillStyle=ink;
         for(let i=0;i<12;i++){ const aa=ang(i/11); const rr2=R2*1.42;
           c.fillText(String(i+1), cx2+rr2*Math.cos(aa), ky+rr2*Math.sin(aa)); }
         c.restore(); };
@@ -8405,10 +8436,10 @@
     citrusrumbleverb50:1.15, sinampbassdriver:1.18, lovolt100:1.25,
     lovoltdr504:1.45, lovoltdr103:1.45, samplegvh140c:1.78,
     // British / boutique heads
-    boxac30:1.22, bendersupernova22:1.45, dualrect:1.72, dsl100:1.45, plexi:1.55,
+    boxac30:1.30, bendersupernova22:1.45, dualrect:1.72, dsl100:1.45, plexi:1.75,
     marstenvs100:1.45, marstenjcm800:1.60, marstenjtm45:1.55, marstenbluesbreaker:1.60, marstenmajor:1.55, deezelvh4:1.45, raneyironheart:1.45,
     marstendsl15:1.60, marstenjvm410:1.60, marstensilverjubilee:1.62, aor50:1.38, jc90:1.15, engelfireball:1.45,
-    polystoneminibrute:1.28, ronaldjc120:1.22, tw40:1.28, superdrive45:1.45,
+    polystoneminibrute:1.28, ronaldjc120:1.22, tw40:1.45, benderdeluxe:1.45, tw26:1.45, superdrive45:1.45,
     markiii:1.80, markii:1.80, unparalleldc30:1.78, unparallelchieftain:1.75,
     mrymaz38:1.45, mryems:1.45, citrusor100:1.60, citrusor50:1.60, citrusad50:1.45,
     citrusjimmybean:1.58, multiversal610:1.45,
