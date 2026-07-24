@@ -5791,7 +5791,7 @@
       {id:3,cx:.570,cy:.748,r:.0165,style:'plexigold'},  // TREBLE
       {id:4,cx:.629,cy:.748,r:.0165,style:'plexigold'},  // VOLUME I
       {id:5,cx:.688,cy:.748,r:.0165,style:'plexigold'} ],// VOLUME II
-    sw3:[{id:6,cx:.750,cy:.748,hw:48,hh:46,hidden:true}], // cable Bright/Both/Normal
+    sw3:[{id:6,cx:.756,cy:.748,hw:48,hh:46,hidden:true}], // cable Bright/Both/Normal
     draw(d,vals){ const {ctx:c,W,H,s}=d;
       const gold=rgb(198,170,96), ink=rgb(52,40,22), inkF='rgba(52,40,22,0.62)',
             cream=rgb(242,235,214);
@@ -5905,7 +5905,7 @@
       textSpaced(d,.629*W,botY,F.barlow,7.5,ink,'VOLUME I',0.02);
       textSpaced(d,.688*W,botY,F.barlow,7.5,ink,'VOLUME II',0.02);
       // ── INPUTS 2x2 (columnas = canal I / II, filas = high / low) ──
-      const xA=.729*W, xB=.771*W, iy0=py+ph*.30, iy1=py+ph*.72;
+      const xA=.736*W, xB=.776*W, iy0=py+ph*.28, iy1=py+ph*.68;
       const jack=(jx2,jy2)=>{ c.beginPath();
         for(let i=0;i<6;i++){ const t2=i/6*Math.PI*2+0.26;
           const vx=jx2+9.5*s*Math.cos(t2), vy=jy2+9.5*s*Math.sin(t2);
@@ -5919,7 +5919,7 @@
       jack(xA,iy0); jack(xB,iy0); jack(xA,iy1); jack(xB,iy1);
       textSpaced(d,xA-17*s,iy0,F.barlow,8,ink,'I',0); textSpaced(d,xB+17*s,iy0,F.barlow,8,ink,'II',0);
       textSpaced(d,xA-17*s,iy1,F.barlow,8,ink,'I',0); textSpaced(d,xB+17*s,iy1,F.barlow,8,ink,'II',0);
-      textSpaced(d,xA-36*s,cyP,F.barlow,7.5,ink,'INPUTS',0.03);
+      textSpaced(d,(xA+xB)/2,py+ph*.08,F.barlow,7.5,ink,'INPUTS',0.03);
       // cable / puente (click: Bright CH I -> Both -> Normal CH II)
       const inp=(vals&&vals[6]!=null)?vals[6]:0.5;
       const plug=(jx,jy)=>{ rr(c,jx-4.6*s,jy-5.5*s,9.2*s,6.5*s,2*s); c.fillStyle=rgb(36,34,32); c.fill();
