@@ -194,6 +194,21 @@
       c.beginPath(); c.arc(cx+R*0.84*Math.cos(a),cy+R*0.84*Math.sin(a),2*s,0,7); c.fillStyle=ptrCol; c.fill();
       return;
     }
+    if (style==='recto') {
+      // Mesa Recto: perilla DOMO CROMO con falda negra, banda de reflejo y
+      // puntero grabado oscuro.
+      c.beginPath(); c.arc(cx,cy,R*1.08,0,7); c.fillStyle=rgb(10,10,11); c.fill();
+      const g=c.createRadialGradient(cx-R*0.35,cy-R*0.45,R*0.05,cx,cy,R);
+      g.addColorStop(0,rgb(250,251,253)); g.addColorStop(.4,rgb(198,201,207)); g.addColorStop(.75,rgb(132,135,141)); g.addColorStop(1,rgb(84,86,92));
+      c.beginPath(); c.arc(cx,cy,R,0,7); c.fillStyle=g; c.fill();
+      c.strokeStyle=rgb(40,42,46); c.lineWidth=1*s; c.stroke();
+      c.save(); c.globalAlpha=.5; c.beginPath();
+      c.ellipse(cx-R*0.15,cy-R*0.35,R*0.55,R*0.22,-0.4,0,7); c.fillStyle=rgb(255,255,255); c.fill(); c.restore();
+      c.beginPath(); c.moveTo(cx+R*0.30*Math.cos(a),cy+R*0.30*Math.sin(a)); c.lineTo(cx+R*0.92*Math.cos(a),cy+R*0.92*Math.sin(a));
+      c.strokeStyle=rgb(50,52,58); c.lineWidth=2.6*s; c.lineCap='round'; c.stroke(); c.lineCap='butt';
+      c.beginPath(); c.arc(cx+R*0.78*Math.cos(a),cy+R*0.78*Math.sin(a),1.8*s,0,7); c.fillStyle=rgb(26,28,32); c.fill();
+      return;
+    }
     if (style==='irt') {
       // Laney IRT: perilla negra glossy con falda suave y FRANJA blanca ancha.
       c.beginPath(); c.arc(cx,cy,R*1.06,0,7); c.fillStyle=rgb(8,8,9); c.fill();
@@ -5233,11 +5248,12 @@
       plug(xI, brightOn ? cyHi : cyLo); } };
   P.tw26 = P.benderdeluxe;   // show the face on the current (pre-rename) TW26.vst3 too
 
-  // ── SILLA BOOGIE DUO RECTIFIER (Mesa/Boogie 3-Channel Dual Rectifier Solo
-  //    Head) — diamond-plate head, 1:1 with the real panel. Layout L->R:
-  //    Power/Standby/jewel, Duo Rectifier logo, Solo/Output, then CH3/CH2/CH1
-  //    (each Presence/Bass · Master/Mid · Gain/Treble + mode + LED), Input.
-  //    ids: 0 Channel 1 Output 2 Rectifier, Green 3-9, Orange 10-16, Red 17-23.
+  // ── SILLA DUAL RECTO (Mesa 3-Ch Dual Rectifier) — placa de DIAMANTE cromada
+  //    con vent central (valvulas naranjas tras las ranuras) y placa SILLA;
+  //    panel negro SIMPLIFICADO: selector CHANNEL (LEDs verde/naranja/rojo) +
+  //    UN banco Gain/Treble/Mid/Bass/Presence/Master + MODE cuyo id salta al
+  //    banco del canal activo (C1=3..9, C2=10..16, C3=17..23, stride 7),
+  //    Output, Rectifier (Spongy/Bold). Perillas domo cromo 'recto'.
   P.dualrect = { w:1700, h:680, ptr:rgb(238,240,244),
     paramNames:[
       'Channel','Output','Rectifier',
@@ -5246,108 +5262,135 @@
       'Red Gain','Red Treble','Red Mid','Red Bass','Red Presence','Red Master','Red Mode','Cab Sim'
     ],
     knobs:[
-      {id:1, cx:.250,cy:.845,r:.014,style:'fender'},                              // OUTPUT (lowered to sit by its label)
-      // CH3 RED
-      {id:21,cx:.300,cy:.700,r:.014,style:'fender'},{id:22,cx:.345,cy:.700,r:.014,style:'fender'},{id:17,cx:.390,cy:.700,r:.014,style:'fender'},
-      {id:20,cx:.300,cy:.845,r:.014,style:'fender'},{id:19,cx:.345,cy:.845,r:.014,style:'fender'},{id:18,cx:.390,cy:.845,r:.014,style:'fender'},
-      // CH2 ORANGE
-      {id:14,cx:.475,cy:.700,r:.014,style:'fender'},{id:15,cx:.520,cy:.700,r:.014,style:'fender'},{id:10,cx:.565,cy:.700,r:.014,style:'fender'},
-      {id:13,cx:.475,cy:.845,r:.014,style:'fender'},{id:12,cx:.520,cy:.845,r:.014,style:'fender'},{id:11,cx:.565,cy:.845,r:.014,style:'fender'},
-      // CH1 GREEN
-      {id:7, cx:.650,cy:.700,r:.014,style:'fender'},{id:8, cx:.695,cy:.700,r:.014,style:'fender'},{id:3, cx:.740,cy:.700,r:.014,style:'fender'},
-      {id:6, cx:.650,cy:.845,r:.014,style:'fender'},{id:5, cx:.695,cy:.845,r:.014,style:'fender'},{id:4, cx:.740,cy:.845,r:.014,style:'fender'} ],
-    sw3:[
-      {id:23,cx:.428,cy:.760,hw:11,hh:20},          // Red mode  Raw/Vtg/Modern
-      {id:16,cx:.603,cy:.760,hw:11,hh:20},          // Orange mode
-      {id:9, cx:.778,cy:.760,hw:11,hh:20,two:true}, // Green mode Clean/Pushed
-      {id:0, cx:.880,cy:.787,hw:14,hh:26,sc:1.4},          // Channel select 1/2/3
-      {id:2, cx:.915,cy:.787,hw:14,hh:26,two:true,sc:1.4} ],// Rectifier Spongy/Bold
-    draw(d,vals){ const {ctx:c,W,H,s}=d;
-      const ink=rgb(232,233,236), faint='rgba(220,222,226,0.6)';
-      // ── black tolex body ──
-      const bgr=c.createLinearGradient(0,0,0,H); bgr.addColorStop(0,rgb(26,26,28)); bgr.addColorStop(1,rgb(12,12,14));
+      {id:0, cx:.200,cy:.720,r:.020,style:'recto',select:3},   // CHANNEL
+      {id:9, cx:.268,cy:.720,r:.018,style:'recto',select:2},   // MODE (id/select dinamicos)
+      {id:3, cx:.375,cy:.720,r:.019,style:'recto'},            // GAIN    (banco dinamico)
+      {id:4, cx:.440,cy:.720,r:.019,style:'recto'},            // TREBLE
+      {id:5, cx:.505,cy:.720,r:.019,style:'recto'},            // MID
+      {id:6, cx:.570,cy:.720,r:.019,style:'recto'},            // BASS
+      {id:7, cx:.635,cy:.720,r:.019,style:'recto'},            // PRESENCE
+      {id:8, cx:.700,cy:.720,r:.019,style:'recto'},            // MASTER
+      {id:1, cx:.778,cy:.720,r:.019,style:'recto'},            // OUTPUT
+      {id:2, cx:.843,cy:.720,r:.017,style:'recto',select:2} ], // RECTIFIER Spongy/Bold
+    draw(d,vals){ const {ctx:c,W,H,s}=d; const wht=rgb(232,234,238), grey=rgb(168,170,176);
+      // ── remapeo del banco al canal activo ──
+      const chv=Math.round(((vals&&vals[0]!=null?vals[0]:0))*2);      // 0 verde / 1 naranja / 2 rojo
+      const base=3+chv*7, KN=P.dualrect.knobs;
+      for(let i=0;i<6;i++) KN[2+i].id=base+i;
+      KN[1].id=base+6; KN[1].select=(chv===0?2:3);
+      // ── fondo cuero negro ──
+      const bgr=c.createLinearGradient(0,0,0,H); bgr.addColorStop(0,rgb(24,24,26)); bgr.addColorStop(1,rgb(10,10,12));
       c.fillStyle=bgr; c.fillRect(0,0,W,H);
-      const bolt=(x,y,r)=>{ r=r||3*s; const g=c.createRadialGradient(x-r*0.3,y-r*0.3,r*0.15,x,y,r); g.addColorStop(0,rgb(70,70,74)); g.addColorStop(1,rgb(20,20,22));
-        c.beginPath(); c.arc(x,y,r,0,7); c.fillStyle=g; c.fill(); };
-      // corner caps
-      const corner=(cxx,cyy,dx,dy)=>{ const k=H*.085; c.beginPath(); c.moveTo(cxx,cyy+dy*k); c.lineTo(cxx,cyy); c.lineTo(cxx+dx*k,cyy);
-        c.quadraticCurveTo(cxx+dx*k*0.35,cyy+dy*k*0.35,cxx,cyy+dy*k); c.closePath(); c.fillStyle=rgb(8,8,9); c.fill(); bolt(cxx+dx*k*0.45,cyy+dy*k*0.45,2.6*s); };
-      // ── diamond-plate upper panel ──
-      const dy0=H*.10, dh=H*.46, dx0=W*.03, dw=W*.94;
-      const dg=c.createLinearGradient(0,dy0,0,dy0+dh); dg.addColorStop(0,rgb(214,216,220)); dg.addColorStop(0.5,rgb(176,179,184)); dg.addColorStop(1,rgb(198,201,206));
-      rr(c,dx0,dy0,dw,dh,5*s); c.fillStyle=dg; c.fill();
+      c.save(); c.globalAlpha=0.06; c.strokeStyle=rgb(140,140,144); c.lineWidth=1;
+      for(let i=0;i<380;i++){ const x=(i*131)%W, y=(i*71)%H; c.beginPath(); c.arc(x,y,1.8*s,0,7); c.stroke(); } c.restore();
+      const bolt=(x,y,r)=>{ r=r||2.8*s; const g=c.createRadialGradient(x-r*0.3,y-r*0.3,r*0.15,x,y,r);
+        g.addColorStop(0,rgb(200,202,206)); g.addColorStop(1,rgb(92,94,98));
+        c.beginPath(); c.arc(x,y,r,0,7); c.fillStyle=g; c.fill(); c.strokeStyle=rgb(44,46,50); c.lineWidth=0.7*s; c.stroke(); };
+      // ── PLACA DE DIAMANTE cromada ──
+      const dy0=H*.06, dh=H*.45, dx0=W*.062, dw=W*.876;
+      const pg0=c.createLinearGradient(0,dy0,0,dy0+dh);
+      pg0.addColorStop(0,rgb(226,229,234)); pg0.addColorStop(.35,rgb(196,200,207));
+      pg0.addColorStop(.65,rgb(168,172,180)); pg0.addColorStop(1,rgb(142,146,154));
+      rr(c,dx0,dy0,dw,dh,5*s); c.fillStyle=pg0; c.fill();
       c.save(); rr(c,dx0,dy0,dw,dh,5*s); c.clip();
-      // diamond tread: rows of slanted chrome dashes
-      const step=24*s;
-      for(let yy=dy0; yy<dy0+dh; yy+=step){ const off=((Math.round((yy-dy0)/step))%2)*step*0.5;
-        for(let xx=dx0-step; xx<dx0+dw+step; xx+=step){ const px=xx+off;
-          c.strokeStyle='rgba(255,255,255,0.55)'; c.lineWidth=2.4*s; c.beginPath(); c.moveTo(px,yy+4*s); c.lineTo(px+9*s,yy-3*s); c.stroke();
-          c.strokeStyle='rgba(60,62,66,0.55)'; c.lineWidth=2.4*s; c.beginPath(); c.moveTo(px+1*s,yy+5*s); c.lineTo(px+10*s,yy-2*s); c.stroke();
-          c.strokeStyle='rgba(255,255,255,0.45)'; c.lineWidth=2.2*s; c.beginPath(); c.moveTo(px+11*s,yy-3*s); c.lineTo(px+20*s,yy+4*s); c.stroke(); } }
+      // manchas de reflejo del metal
+      for(const [mx2,al] of [[.30,.10],[.62,.14],[.85,.08]]){
+        const rg=c.createRadialGradient(W*mx2,dy0+dh*.4,10*s,W*mx2,dy0+dh*.4,dh*1.1);
+        rg.addColorStop(0,'rgba(70,74,82,'+al+')'); rg.addColorStop(1,'rgba(0,0,0,0)');
+        c.fillStyle=rg; c.fillRect(dx0,dy0,dw,dh); }
+      // estrellas 4 puntas (tread) tresbolillo
+      const sp=44*s;
+      for(let ry=dy0+10*s; ry<dy0+dh; ry+=sp*0.62){ const off=((Math.round((ry-dy0)/(sp*0.62)))%2)*sp*0.5;
+        for(let rx3=dx0+8*s+off; rx3<dx0+dw; rx3+=sp){
+          c.save(); c.translate(rx3,ry); c.rotate(0.5);
+          const st=(l,w2)=>{ c.beginPath(); c.moveTo(-l,0); c.lineTo(0,-w2); c.lineTo(l,0); c.lineTo(0,w2); c.closePath(); };
+          st(11*s,3.2*s); c.fillStyle='rgba(30,32,38,0.85)'; c.fill();
+          c.save(); c.translate(-1*s,-1*s); st(10*s,2.6*s); c.fillStyle='rgba(255,255,255,0.55)'; c.fill(); c.restore();
+          st(7*s,2*s); c.fillStyle='rgba(90,94,102,0.9)'; c.fill();
+          c.restore(); } }
       c.restore();
-      rr(c,dx0,dy0,dw,dh,5*s); c.strokeStyle=rgb(120,122,126); c.lineWidth=1.4*s; c.stroke();
-      // ── SILLA badge + two vent grilles ──
-      const vent=(x0,x1)=>{ const vy=dy0+dh*.30, vh=dh*.42; rr(c,x0*W,vy,(x1-x0)*W,vh,3*s); c.fillStyle=rgb(208,210,214); c.fill();
-        c.save(); rr(c,x0*W,vy,(x1-x0)*W,vh,3*s); c.clip(); c.strokeStyle=rgb(20,20,22); c.lineWidth=2.4*s;
-        for(let xx=x0*W+6*s; xx<x1*W-3*s; xx+=6.5*s){ c.beginPath(); c.moveTo(xx,vy+3*s); c.lineTo(xx,vy+vh-3*s); c.stroke(); } c.restore();
-        rr(c,x0*W,vy,(x1-x0)*W,vh,3*s); c.strokeStyle=rgb(150,152,156); c.lineWidth=1.4*s; c.stroke(); };
-      vent(.20,.40); vent(.60,.80);
-      const bx=W*.5, by=dy0+dh*.5, bw=W*.085, bh=dh*.34;
-      rr(c,bx-bw,by-bh,2*bw,2*bh,5*s); const bgd=c.createLinearGradient(0,by-bh,0,by+bh); bgd.addColorStop(0,rgb(34,34,38)); bgd.addColorStop(1,rgb(10,10,12));
-      c.fillStyle=bgd; c.fill(); rr(c,bx-bw,by-bh,2*bw,2*bh,5*s); c.strokeStyle=rgb(150,152,158); c.lineWidth=1.6*s; c.stroke();
-      textSpaced(d,bx,by-bh*0.30,F.bebas,30,rgb(232,234,238),'SILLA',0.04);
-      textSpaced(d,bx,by+bh*0.45,F.barlow,11,rgb(200,202,208),'ENGINEERING',0.22);
-      // ── black control panel ──
-      const py=H*.61, ph=H*.34, px=W*.02, pw=W*.96;
-      const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,rgb(20,20,22)); pg.addColorStop(1,rgb(8,8,10));
-      rr(c,px,py,pw,ph,4*s); c.fillStyle=pg; c.fill(); rr(c,px,py,pw,ph,4*s); c.strokeStyle=rgb(60,62,66); c.lineWidth=1.2*s; c.stroke();
-      corner(0,0,1,1); corner(W,0,-1,1); corner(0,H,1,-1); corner(W,H,-1,-1);
-      const cyT=py+ph*.691, cyB=py+ph*.691, swY=py+ph*.49;  // cyT: lowered SOLO/loop knob row · cyB: channel LEDs aligned to bottom knob row
-      // ── power / standby toggles + jewel ──
-      batToggle(d,.035*W,swY,8*s,true); batToggle(d,.066*W,swY,8*s,true);
-      textSpaced(d,.035*W,py+ph*.14,F.barlow,8,ink,'ON',0.05); textSpaced(d,.066*W,py+ph*.14,F.barlow,8,ink,'ON',0.05);
-      textSpaced(d,.035*W,py+ph*.70,F.barlow,8.5,ink,'POWER',0.04); textSpaced(d,.066*W,py+ph*.70,F.barlow,7.5,ink,'STANDBY',0.02);
-      ledDot(d,.092*W,swY,true,224,40,36);
-      // ── "Duo Rectifier" script logo ──
-      c.save(); c.translate(.150*W,py+ph*.46); c.transform(1,0,-0.18,1,0,0); c.textAlign='center'; c.textBaseline='middle';
-      setFont(d,F.ink,30); c.lineWidth=2.4*s; c.strokeStyle=rgb(20,20,22);
-      const slg=c.createLinearGradient(0,-18*s,0,18*s); slg.addColorStop(0,rgb(246,242,224)); slg.addColorStop(1,rgb(206,200,170));
-      c.strokeText('Rectifier',0,4*s); c.fillStyle=slg; c.fillText('Rectifier',0,4*s);
-      setFont(d,F.bebas,14); c.fillStyle=rgb(232,228,210); c.fillText('DUO',-30*s,-16*s);
+      rr(c,dx0,dy0,dw,dh,5*s); c.strokeStyle=rgb(70,72,78); c.lineWidth=1.6*s; c.stroke();
+      bolt(dx0+9*s,dy0+9*s); bolt(dx0+dw-9*s,dy0+9*s); bolt(dx0+9*s,dy0+dh-9*s); bolt(dx0+dw-9*s,dy0+dh-9*s);
+      // ── VENT central con valvulas naranjas + placa SILLA ──
+      const vw=W*.44, vh=H*.14, vx=W*.5-vw/2, vy=dy0+dh*.5-vh/2;
+      const vg2=c.createLinearGradient(0,vy,0,vy+vh); vg2.addColorStop(0,rgb(206,209,215)); vg2.addColorStop(1,rgb(150,153,160));
+      rr(c,vx,vy,vw,vh,5*s); c.fillStyle=vg2; c.fill(); c.strokeStyle=rgb(70,72,78); c.lineWidth=1.4*s; c.stroke();
+      bolt(vx+8*s,vy+vh*.5,2.4*s); bolt(vx+vw-8*s,vy+vh*.5,2.4*s);
+      // ranuras con glow de valvulas
+      const slotW=7.5*s, gap=13*s, sy=vy+vh*.16, sh2=vh*.68;
+      c.save();
+      for(let sx2=vx+16*s; sx2<vx+vw-16*s; sx2+=gap){
+        if (sx2 > W*.5-W*.085 && sx2 < W*.5+W*.085) continue;   // hueco de la placa
+        rr(c,sx2,sy,slotW,sh2,slotW*0.5); c.fillStyle=rgb(8,8,9); c.fill();
+        const dcenter=Math.min(Math.abs(sx2-(vx+vw*0.26)),Math.abs(sx2-(vx+vw*0.74)));
+        if (dcenter < vw*0.14){ const gl=1-dcenter/(vw*0.14);
+          c.save(); c.globalAlpha=0.75*gl; rr(c,sx2+1.4*s,sy+sh2*0.25,slotW-2.8*s,sh2*0.55,slotW*0.4);
+          const tg=c.createLinearGradient(0,sy,0,sy+sh2); tg.addColorStop(0,rgb(255,140,60)); tg.addColorStop(1,rgb(160,50,15));
+          c.fillStyle=tg; c.fill(); c.restore(); } }
       c.restore();
-      textSpaced(d,.150*W,py+ph*.88,F.barlow,8,rgb(220,216,200),'100W HEAD',0.05);
-      // ── SOLO (decorative) + OUTPUT labels ──
-      const soloX=.205*W; c.beginPath(); c.arc(soloX,cyT,d.W*.014,0,7); const kg=c.createRadialGradient(soloX-3*s,cyT-3*s,1*s,soloX,cyT,d.W*.014); kg.addColorStop(0,rgb(70,72,76)); kg.addColorStop(1,rgb(14,14,16)); c.fillStyle=kg; c.fill(); c.strokeStyle=rgb(150,152,158); c.lineWidth=1.4*s; c.stroke();
-      c.beginPath(); c.arc(soloX,cyT-d.W*.010,2*s,0,7); c.fillStyle=rgb(230,232,236); c.fill();
-      textSpaced(d,(soloX+.250*W)/2,py+ph*.42,F.barlow,8,faint,'LOOP ACTIVE',0.06);
-      textSpaced(d,soloX,py+ph*.90,F.barlow,9,ink,'SOLO',0.05); textSpaced(d,.250*W,py+ph*.90,F.barlow,9,ink,'OUTPUT',0.04);
-      // ── channel blocks: column labels + mode + LED ──
-      const lbl2=(cx,t1,t2)=>{ textSpaced(d,cx*W,py+ph*.47,F.barlow,8,ink,t1,0.02); textSpaced(d,cx*W,py+ph*.90,F.barlow,8,ink,t2,0.02); };
-      const inp=(vals&&vals[0]!=null)?vals[0]:1;
-      const block=(c0,c1,c2,ledR,ledG,ledB,on,chTxt)=>{
-        lbl2(c0,'PRESENCE','BASS'); lbl2(c1,'MASTER','MID'); lbl2(c2,'GAIN','TREBLE');
-        const mx=(c2+0.038); // mode/LED column to the right of the block
-        ledDot(d,mx*W,cyB,on,ledR,ledG,ledB); textSpaced(d,mx*W,py+ph*.92,F.barlow,8.5,ink,chTxt,0.04);
-      };
-      const modeLabels=(mx,top,middle,bottom)=>{
-        const x=(mx+.014)*W, y=.760*H;
-        textSpaced(d,x,y-17*s,F.barlow,5.8,faint,top,0.0);
-        textSpaced(d,x,y,F.barlow,5.8,faint,middle,0.0);
-        textSpaced(d,x,y+17*s,F.barlow,5.8,faint,bottom,0.0);
-      };
-      block(.300,.345,.390,224,40,36, inp>=0.75, 'CH 3');
-      block(.475,.520,.565,230,150,40, inp>=0.25&&inp<0.75, 'CH 2');
-      block(.650,.695,.740,70,210,90, inp<0.25, 'CH 1');
-      modeLabels(.428,'MOD','VTG','RAW');
-      modeLabels(.603,'MOD','VTG','RAW');
-      modeLabels(.778,'PUSH','','CLN');
-      // ── channel select + rectifier labels ──
-      textSpaced(d,.880*W,py+ph*.34,F.barlow,8.5,ink,'CHANNEL',0.03);
-      textSpaced(d,.915*W,py+ph*.70,F.barlow,8,ink,'RECT',0.03);
-      // ── INPUT jack ──
-      const ijx=.952*W; c.beginPath(); c.arc(ijx,swY,8*s,0,7); c.fillStyle=rgb(18,16,16); c.fill(); c.strokeStyle=rgb(180,182,188); c.lineWidth=2*s; c.stroke();
-      c.beginPath(); c.arc(ijx,swY,2.6*s,0,7); c.fillStyle=rgb(54,54,58); c.fill();
-      textSpaced(d,ijx,py+ph*.70,F.barlow,9,ink,'INPUT',0.04); } };
+      // placa negra SILLA + ovalo DUAL RECTO
+      const pbw=W*.155, pbh=vh*1.06, pbx=W*.5-pbw/2, pby=vy+vh*.5-pbh/2;
+      rr(c,pbx,pby,pbw,pbh,4*s); c.fillStyle=rgb(16,16,18); c.fill();
+      c.strokeStyle=rgb(120,122,128); c.lineWidth=1.6*s; c.stroke();
+      c.save(); c.globalAlpha=.22; c.strokeStyle=rgb(255,255,255); c.lineWidth=0.8*s;
+      for(let yy=pby+2*s; yy<pby+pbh; yy+=2.4*s){ c.beginPath(); c.moveTo(pbx+2*s,yy); c.lineTo(pbx+pbw-2*s,yy); c.stroke(); } c.restore();
+      bolt(pbx+7*s,pby+7*s,2*s); bolt(pbx+pbw-7*s,pby+7*s,2*s); bolt(pbx+7*s,pby+pbh-7*s,2*s); bolt(pbx+pbw-7*s,pby+pbh-7*s,2*s);
+      c.save(); c.textAlign='center'; c.textBaseline='middle';
+      c.font=`800 ${Math.round(26*s)}px ${F.bebas}`; c.fillStyle=rgb(234,236,240);
+      c.fillText('S I L L A',W*.5,pby+pbh*.36);
+      // ovalo DUAL RECTO
+      const ow=pbw*.78, oh=pbh*.30, ox=W*.5, oy=pby+pbh*.72;
+      c.strokeStyle=rgb(200,202,208); c.lineWidth=1.4*s;
+      c.beginPath(); c.ellipse(ox,oy,ow/2,oh/2,0,0,7); c.stroke();
+      c.font=`700 ${Math.round(11*s)}px ${F.bebas}`; c.fillStyle=rgb(214,216,222);
+      c.fillText('DUAL RECTO',ox,oy+0.5*s); c.restore();
+      // ── panel de control negro ──
+      const py=H*.545, ph=H*.41, px=W*.062, pw=W*.876;
+      const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,rgb(32,32,35)); pg.addColorStop(.12,rgb(22,22,25)); pg.addColorStop(1,rgb(13,13,15));
+      rr(c,px,py,pw,ph,4*s); c.fillStyle=pg; c.fill(); c.strokeStyle=rgb(52,54,58); c.lineWidth=1.4*s; c.stroke();
+      bolt(px+10*s,py+10*s); bolt(px+pw-10*s,py+10*s); bolt(px+10*s,py+ph-10*s); bolt(px+pw-10*s,py+ph-10*s);
+      const ky=.720*H, lbY=ky+.100*H;
+      const lb=(cx2,t,sz)=>textSpaced(d,cx2*W,lbY,F.barlow,sz||9.5,wht,t,0.06);
+      // POWER: bat + jewel rojo grande (boton del Recto)
+      batToggle(d,.094*W,ky,.010*W,true);
+      textSpaced(d,.094*W,lbY,F.barlow,8.5,wht,'POWER',0.06);
+      const jx=.133*W;
+      const jg=c.createRadialGradient(jx-3*s,ky-4*s,1.5*s,jx,ky,11.5*s);
+      jg.addColorStop(0,rgb(255,150,120)); jg.addColorStop(.45,rgb(220,44,28)); jg.addColorStop(1,rgb(96,10,7));
+      c.beginPath(); c.arc(jx,ky,11*s,0,7); c.fillStyle=jg; c.fill();
+      c.strokeStyle=rgb(126,128,134); c.lineWidth=1.8*s; c.stroke();
+      c.beginPath(); c.moveTo(jx,ky-5.5*s); c.lineTo(jx+4.8*s,ky+3.8*s); c.lineTo(jx-4.8*s,ky+3.8*s); c.closePath();
+      c.fillStyle='rgba(255,190,160,0.85)'; c.fill();
+      // CHANNEL: LEDs verde/naranja/rojo (canales Mesa) + label
+      const cols=[[80,225,96],[255,150,40],[240,64,42]];
+      for(let i=0;i<3;i++){ const lx=W*(.183+.017*i), ly=py+ph*.15;
+        const on=(i===chv);
+        c.beginPath(); c.arc(lx,ly,4.2*s,0,7);
+        c.fillStyle=on?rgb(cols[i][0],cols[i][1],cols[i][2]):rgb(28,30,30); c.fill();
+        c.strokeStyle=rgb(80,82,86); c.lineWidth=0.8*s; c.stroke();
+        if(on){ c.save(); c.globalAlpha=.35; c.beginPath(); c.arc(lx,ly,7.5*s,0,7); c.fillStyle=rgb(cols[i][0],cols[i][1],cols[i][2]); c.fill(); c.restore(); } }
+      const chNames=['CH 1 · CLEAN','CH 2 · VINTAGE','CH 3 · MODERN'];
+      textSpaced(d,.20*W,py+ph*.06,F.barlow,7.5,grey,['GREEN','ORANGE','RED'][chv],0.08);
+      lb(.20,'CHANNEL');
+      // MODE: nombre del modo activo del canal
+      const modeV=(vals&&vals[base+6]!=null?vals[base+6]:0);
+      const modeName=chv===0?(modeV>0.5?'PUSHED':'CLEAN'):(modeV<0.25?'RAW':(modeV>0.75?'MODERN':'VINTAGE'));
+      textSpaced(d,.268*W,py+ph*.06,F.barlow,7.5,grey,modeName,0.08);
+      lb(.268,'MODE');
+      // labels del banco
+      lb(.375,'GAIN'); lb(.440,'TREBLE'); lb(.505,'MID'); lb(.570,'BASS');
+      lb(.635,'PRESENCE',8.5); lb(.700,'MASTER');
+      lb(.778,'OUTPUT'); lb(.843,'RECTIFIER',8);
+      textSpaced(d,.843*W,py+ph*.06,F.barlow,7,grey,(vals&&vals[2]!=null&&vals[2]>0.5)?'BOLD':'SPONGY',0.08);
+      // separadores
+      c.strokeStyle=rgb(50,52,56); c.lineWidth=1*s;
+      for(const sx of [.160,.318,.742]){ c.beginPath(); c.moveTo(sx*W,py+10*s); c.lineTo(sx*W,py+ph-10*s); c.stroke(); }
+      // script 'Silla 100W HEAD' (derecha, como el logo del panel real)
+      c.save(); c.textAlign='center'; c.textBaseline='middle';
+      c.font=`italic 800 ${Math.round(21*s)}px ${F.anton}`; c.fillStyle=rgb(196,198,204);
+      c.fillText('Silla',.915*W,ky-8*s);
+      c.font=`700 ${Math.round(8.5*s)}px ${F.bebas}`; c.fillStyle=rgb(150,152,158);
+      c.fillText('100W HEAD',.915*W,ky+14*s); c.restore(); } };
 
   // ── MARSTEN DSL100 (Marshall JCM2000 DSL100H) — black tolex head, gold panel ──
   //    Full DSL100HR panel, 1:1. Parody brand "Marsten" (same as GM-2/UV-1 pedals).
