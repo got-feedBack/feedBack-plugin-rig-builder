@@ -4949,6 +4949,23 @@ function rbStudioPedalImg(p) {
     }
     return null;
 }
+
+// Room view of an amp: amps whose control panel is on TOP (AC30/5E3 combos)
+// register a separate FRONT drawing in RBPedalCanvas.fronts — the room shows
+// that (the amp as seen from the player), while zooming in still swaps to the
+// interactive PANEL face. Falls back to the panel face art.
+function rbStudioAmpRoomImg(p) {
+    try {
+        if (p && !p._custom_ui && window.RBPedalCanvas && window.RBPedalCanvas.frontDataURL) {
+            const stem = rbStudioPieceStem(p);
+            if (stem && window.RBPedalCanvas.hasFront(stem)) {
+                const u = window.RBPedalCanvas.frontDataURL(stem);
+                if (u) return u;
+            }
+        }
+    } catch (_) {}
+    return rbStudioPedalImg(p);
+}
 function rbStudioIsBypassed(p) { return !!p._bypassed || !!(p.assigned && p.assigned.bypassed); }
 
 // Mirror each saved knob value under its param NAME as well as its numeric id.
@@ -5180,7 +5197,7 @@ function rbRenderStudioRoom() {
         const cabAspect = rbCabArtAspect(cabGear);    // real width/height → sizes the room cab
         // Mic on a boom stand over the cab, at the position/model chosen in the Cab Room.
         const micStand = cabArtUrl ? rbStudioRoomMicStandHtml(rbStudioRoomMicSetup(g.cab[0] && g.cab[0].p), cabAspect) : '';
-        const img = rbStudioPedalImg(entry.p);
+        const img = rbStudioAmpRoomImg(entry.p);
         const head = img
             ? `<div class="rb-amp-face"><img src="${img}" alt="${rbEsc(nm)}"></div>`
             : `<div class="rb-amp-head"><div class="rb-amp-name">${rbEsc(nm)}</div><div class="rb-amp-knobs">${knobs}</div></div>`;
@@ -5717,7 +5734,7 @@ async function rbStudioCloseFocus() {
         const face = (stack && stack.querySelector('.rb-amp-face'))
                   || document.querySelector('#rb-studio-room .rb-amp-face');
         if (piece && face) {
-            const img = rbStudioPedalImg(piece);
+            const img = rbStudioAmpRoomImg(piece);
             face.innerHTML = img ? `<img src="${img}" alt="${rbEsc(piece.real_name || piece.type || 'Amp')}">` : '';
         }
     }

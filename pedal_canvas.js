@@ -9340,8 +9340,117 @@
   // Convenience: layout → PNG data URL (used for the catalog/photo thumbnails).
   function layoutDataURL(layout, values) { return dataURLSpec(specFromLayout(layout), values); }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  //  Studio room FRONT views — amps cuyo panel de control va ARRIBA (combos
+  //  tipo AC30 / 5E3) tienen un dibujo FRONTAL estatico aparte para la sala de
+  //  The Studio: la sala muestra el amp como se ve desde la posicion del
+  //  musico, y el zoom sigue abriendo el panel interactivo de siempre.
+  // ══════════════════════════════════════════════════════════════════════════
+  const FRONTS = {};
+
+  // BOX AC30 de frente: tolex negro, piping crema, logo BOX, franja dorada y
+  // la rejilla de rombos cafe clasica (lineas doradas + hilos rojo/verde).
+  FRONTS.boxac30 = { w:1000, h:740, knobs:[], draw(d){ const {ctx:c,W,H,s}=d;
+    const pip=rgb(226,220,204), goldT=rgb(196,162,80);
+    rr(c,0,0,W,H,16*s); c.fillStyle=rgb(15,15,16); c.fill();
+    c.save(); rr(c,0,0,W,H,16*s); c.clip();
+    const bg=c.createLinearGradient(0,0,0,H); bg.addColorStop(0,rgb(35,34,36)); bg.addColorStop(.5,rgb(25,24,26)); bg.addColorStop(1,rgb(14,13,15));
+    c.fillStyle=bg; c.fillRect(0,0,W,H);
+    for(let i=0;i<900;i++){ const hx=Math.abs(Math.sin(i*127.1)*43758.5453)%1, hy=Math.abs(Math.sin(i*311.7)*268.5453)%1;
+      c.fillStyle=(i%2)?'rgba(255,255,255,0.028)':'rgba(0,0,0,0.25)';
+      c.fillRect(hx*W,hy*H,1.4*s,1.4*s); }
+    const vg=c.createRadialGradient(W*.5,H*.42,H*.4,W*.5,H*.5,W*.65);
+    vg.addColorStop(0,'rgba(255,255,255,0.03)'); vg.addColorStop(1,'rgba(0,0,0,0.38)');
+    c.fillStyle=vg; c.fillRect(0,0,W,H);
+    // asita superior
+    rr(c,W*.42,H*.012,W*.16,H*.034,10*s); c.fillStyle=rgb(10,10,11); c.fill();
+    c.strokeStyle='rgba(255,255,255,0.08)'; c.lineWidth=1*s; c.stroke();
+    c.restore();
+    // piping crema exterior
+    rr(c,W*.025,H*.035,W*.95,H*.93,12*s); c.strokeStyle=pip; c.lineWidth=3*s; c.stroke();
+    // logo BOX dorado (arriba-izquierda, como el VOX real)
+    c.save(); c.textAlign='center'; c.textBaseline='middle';
+    setFont(d,F.bebas,48);
+    c.fillStyle='rgba(0,0,0,0.6)'; c.fillText('BOX',W*.20+2*s,H*.16+2.5*s);
+    const lg=c.createLinearGradient(0,H*.12,0,H*.20); lg.addColorStop(0,rgb(232,206,140)); lg.addColorStop(1,rgb(168,132,62));
+    c.fillStyle=lg; c.fillText('BOX',W*.20,H*.16); c.restore();
+    // franja dorada separadora
+    c.beginPath(); c.moveTo(W*.045,H*.275); c.lineTo(W*.955,H*.275);
+    c.strokeStyle=goldT; c.lineWidth=4*s; c.stroke();
+    c.strokeStyle='rgba(255,240,190,0.35)'; c.lineWidth=1.2*s; c.stroke();
+    // rejilla de rombos
+    const gx=W*.048, gy=H*.31, gw=W*.904, gh=H*.615;
+    rr(c,gx-5*s,gy-5*s,gw+10*s,gh+10*s,10*s); c.strokeStyle=pip; c.lineWidth=3*s; c.stroke();
+    rr(c,gx,gy,gw,gh,8*s);
+    const gb=c.createRadialGradient(W*.5,gy+gh*.45,gh*.2,W*.5,gy+gh*.5,gw*.6);
+    gb.addColorStop(0,rgb(60,33,19)); gb.addColorStop(.7,rgb(38,20,12)); gb.addColorStop(1,rgb(22,11,7));
+    c.fillStyle=gb; c.fill();
+    c.save(); rr(c,gx,gy,gw,gh,8*s); c.clip();
+    const step=32*s, slope=1.55;   // rombos anchos tipo Vox
+    for(let b=gx-gh*slope-step*6; b<gx+gw+step*6; b+=step){
+      c.lineWidth=1.5*s; c.strokeStyle='rgba(206,168,92,0.55)';
+      c.beginPath(); c.moveTo(b,gy); c.lineTo(b+gh*slope,gy+gh); c.stroke();
+      c.beginPath(); c.moveTo(b,gy); c.lineTo(b-gh*slope,gy+gh); c.stroke();
+      c.lineWidth=0.8*s; c.strokeStyle='rgba(170,46,46,0.32)';
+      c.beginPath(); c.moveTo(b+3.5*s,gy); c.lineTo(b+3.5*s+gh*slope,gy+gh); c.stroke();
+      c.strokeStyle='rgba(64,130,78,0.28)';
+      c.beginPath(); c.moveTo(b-3.5*s,gy); c.lineTo(b-3.5*s-gh*slope,gy+gh); c.stroke(); }
+    const sh=c.createLinearGradient(0,gy,0,gy+gh);
+    sh.addColorStop(0,'rgba(255,220,160,0.10)'); sh.addColorStop(.4,'rgba(0,0,0,0)'); sh.addColorStop(1,'rgba(0,0,0,0.30)');
+    c.fillStyle=sh; c.fillRect(gx,gy,gw,gh);
+    c.restore(); } };
+
+  // BENDER DELUXE de frente: combo tweed 5E3 con ventana de tela oxblood.
+  FRONTS.benderdeluxe = { w:1000, h:680, knobs:[], draw(d){ const {ctx:c,W,H,s}=d;
+    rr(c,0,0,W,H,18*s); c.fillStyle=rgb(150,116,64); c.fill();
+    c.save(); rr(c,0,0,W,H,18*s); c.clip();
+    const base=c.createLinearGradient(0,0,0,H); base.addColorStop(0,rgb(196,156,90)); base.addColorStop(.5,rgb(182,142,78)); base.addColorStop(1,rgb(158,120,64));
+    c.fillStyle=base; c.fillRect(0,0,W,H);
+    c.lineWidth=2.2*s;
+    for(let k=-H;k<W+H;k+=7*s){ c.strokeStyle='rgba(104,74,36,0.35)'; c.beginPath(); c.moveTo(k,0); c.lineTo(k+H,H); c.stroke(); }
+    for(let k=-H;k<W+H;k+=7*s){ c.strokeStyle='rgba(240,206,138,0.30)'; c.beginPath(); c.moveTo(k+3*s,0); c.lineTo(k+H+3*s,H); c.stroke(); }
+    c.lineWidth=1*s;
+    for(let y=0;y<H;y+=3.4*s){ c.strokeStyle='rgba(70,48,22,0.10)'; c.beginPath(); c.moveTo(0,y); c.lineTo(W,y); c.stroke(); }
+    const vg=c.createRadialGradient(W*.5,H*.45,H*.42,W*.5,H*.5,W*.62);
+    vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(60,38,12,0.38)');
+    c.fillStyle=vg; c.fillRect(0,0,W,H);
+    // asa de cuero arriba
+    rr(c,W*.40,H*.015,W*.20,H*.045,12*s); c.fillStyle=rgb(74,42,24); c.fill();
+    c.strokeStyle=rgb(36,20,12); c.lineWidth=1.2*s; c.stroke();
+    c.restore();
+    // ventana de rejilla oxblood
+    const gx=W*.17, gy=H*.13, gw=W*.66, gh=H*.55;
+    rr(c,gx-6*s,gy-6*s,gw+12*s,gh+12*s,16*s); c.strokeStyle=rgb(110,80,40); c.lineWidth=4*s; c.stroke();
+    rr(c,gx,gy,gw,gh,12*s);
+    const gb=c.createRadialGradient(W*.5,gy+gh*.45,gh*.25,W*.5,gy+gh*.5,gw*.6);
+    gb.addColorStop(0,rgb(74,34,26)); gb.addColorStop(.7,rgb(52,22,17)); gb.addColorStop(1,rgb(32,13,10));
+    c.fillStyle=gb; c.fill();
+    c.save(); rr(c,gx,gy,gw,gh,12*s); c.clip();
+    c.lineWidth=1*s;
+    for(let k=gx-gh;k<gx+gw;k+=5*s){ c.strokeStyle='rgba(214,140,92,0.14)'; c.beginPath(); c.moveTo(k,gy); c.lineTo(k+gh,gy+gh); c.stroke(); }
+    for(let k=gx;k<gx+gw+gh;k+=5*s){ c.strokeStyle='rgba(0,0,0,0.30)'; c.beginPath(); c.moveTo(k,gy); c.lineTo(k-gh,gy+gh); c.stroke(); }
+    const sh=c.createLinearGradient(0,gy,0,gy+gh);
+    sh.addColorStop(0,'rgba(255,200,150,0.10)'); sh.addColorStop(.5,'rgba(0,0,0,0)'); sh.addColorStop(1,'rgba(0,0,0,0.32)');
+    c.fillStyle=sh; c.fillRect(gx,gy,gw,gh);
+    c.restore();
+    // script en tinta abajo-derecha del tweed
+    c.save(); c.translate(W*.86,H*.86); c.transform(1,0,-0.16,1,0,0);
+    c.textAlign='center'; c.textBaseline='middle';
+    c.font=`italic 800 ${Math.round(26*s)}px ${F.ink}`; c.fillStyle=rgb(82,54,28);
+    c.fillText('Bender',0,0); c.restore(); } };
+  FRONTS.tw26 = FRONTS.benderdeluxe;
+
+  function frontDataURL(stem) {
+    const spec = FRONTS[stem]; if (!spec) return null;
+    const cv = document.createElement('canvas'); cv.style.width = '220px';
+    Object.defineProperty(cv, 'clientWidth', { value: 220, configurable: true });
+    try { drawSpec(cv, spec, {}); } catch (e) { try { console.warn('[rig_builder] front draw failed', e); } catch (_) {} }
+    try { return cv.toDataURL('image/png'); } catch (_) { return null; }
+  }
+
   window.RBPedalCanvas = {
     ready, has: s => !!P[s], attach, render, renderSpec, redraw, dataURL, specs: P,
+    hasFront: s => !!FRONTS[s], frontDataURL, fronts: FRONTS,
     // custom-gear API
     defaultFace, smartLayout, normalizeLayout, specFromLayout, attachSpec, dataURLSpec,
     layoutDataURL, hexToRgb, rgbToHex, CTRL_KINDS: RB_CTRL_KINDS, templates,
