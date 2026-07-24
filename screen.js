@@ -5779,7 +5779,7 @@ async function rbStudioCloseFocus() {
             const face2 = (stack2 && stack2.querySelector('.rb-amp-face'))
                        || document.querySelector('#rb-studio-room .rb-amp-stack.rb-amp-focused .rb-amp-face');
             if (p2 && face2) {
-                const img2 = rbStudioPedalImg(p2);
+                const img2 = rbStudioAmpRoomImg(p2);
                 if (img2) face2.innerHTML = `<img src="${img2}" alt="${rbEsc(p2.real_name || p2.type || 'Amp')}">`;
             }
         } catch (_) {}
