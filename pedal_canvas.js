@@ -5022,20 +5022,20 @@
   P.boxac30 = { w:1400, h:560, ptr:rgb(240,237,230),
     paramNames:['Normal Vol','TB Vol','Treble','Bass','Rev Tone','Rev Level','Speed','Depth','Tone Cut','Master','Input','Bright','Cab Sim'],
     knobs:[
-      {id:0,cx:.140,cy:.738,r:.019,style:'tweed'},   // NORMAL VOLUME
-      {id:1,cx:.210,cy:.738,r:.019,style:'tweed'},   // TOP BOOST VOLUME (RS Gain)
-      {id:2,cx:.268,cy:.738,r:.019,style:'tweed'},   // TOP BOOST TREBLE (RS Treble)
-      {id:3,cx:.326,cy:.738,r:.019,style:'tweed'},   // TOP BOOST BASS   (RS Bass)
-      {id:4,cx:.405,cy:.738,r:.019,style:'tweed'},   // REVERB TONE
-      {id:5,cx:.463,cy:.738,r:.019,style:'tweed'},   // REVERB LEVEL
-      {id:6,cx:.542,cy:.738,r:.019,style:'tweed'},   // TREMOLO SPEED
-      {id:7,cx:.600,cy:.738,r:.019,style:'tweed'},   // TREMOLO DEPTH
-      {id:8,cx:.679,cy:.738,r:.019,style:'tweed'},   // MASTER TONE CUT  (RS Pres inv)
-      {id:9,cx:.737,cy:.738,r:.019,style:'tweed'} ], // MASTER VOLUME
+      {id:0,cx:.208,cy:.738,r:.019,style:'tweed'},   // NORMAL VOLUME
+      {id:1,cx:.265,cy:.738,r:.019,style:'tweed'},   // TOP BOOST VOLUME (RS Gain)
+      {id:2,cx:.312,cy:.738,r:.019,style:'tweed'},   // TOP BOOST TREBLE (RS Treble)
+      {id:3,cx:.359,cy:.738,r:.019,style:'tweed'},   // TOP BOOST BASS   (RS Bass)
+      {id:4,cx:.423,cy:.738,r:.019,style:'tweed'},   // REVERB TONE
+      {id:5,cx:.470,cy:.738,r:.019,style:'tweed'},   // REVERB LEVEL
+      {id:6,cx:.534,cy:.738,r:.019,style:'tweed'},   // TREMOLO SPEED
+      {id:7,cx:.581,cy:.738,r:.019,style:'tweed'},   // TREMOLO DEPTH
+      {id:8,cx:.645,cy:.738,r:.019,style:'tweed'},   // MASTER TONE CUT  (RS Pres inv)
+      {id:9,cx:.692,cy:.738,r:.019,style:'tweed'} ], // MASTER VOLUME
     // input cable selector (id 10): click the input area to cycle the cable
     // Normal -> Both(jumpered) -> Top Boost. Drawn as a real plugged-in cable in
     // draw(); `hidden` so the engine doesn't also stamp a lever over it.
-    sw3:[{id:10,cx:.075,cy:.753,hw:34,hh:34,hidden:true}],
+    sw3:[{id:10,cx:.1555,cy:.753,hw:34,hh:34,hidden:true}],
     draw(d,vals){ const {ctx:c,W,H,s}=d;
       const gold=rgb(196,160,78), wine=rgb(122,26,46), wineHi=rgb(150,38,60),
             ink=rgb(238,228,208), boxLn='rgba(230,216,200,0.55)', chr=rgb(190,194,200);
@@ -5061,7 +5061,7 @@
         g.addColorStop(0,rgb(246,248,250)); g.addColorStop(1,rgb(116,120,126));
         c.beginPath(); c.arc(x,y,r,0,7); c.fillStyle=g; c.fill(); c.strokeStyle=rgb(52,54,58); c.lineWidth=0.7*s; c.stroke(); };
       // ── maroon panel strip near the bottom ──
-      const py=H*.58, ph=H*.36, px=W*.025, pw=W*.95;
+      const py=H*.58, ph=H*.36, px=W*.115, pw=W*.77;
       const lblY=py+ph*.69;
       // ── gold piping (top + above the panel) ──
       [H*.045, H*.075, py-H*.025, H*.978].forEach(yy=>{ c.beginPath(); c.moveTo(W*.04,yy); c.lineTo(W*.96,yy); c.strokeStyle=gold; c.lineWidth=1.8*s; c.stroke(); });
@@ -5100,23 +5100,25 @@
         c.fillStyle=rgb(10,10,11); c.fill(); bolt(cxx+dx*k*0.42,cyy+dy*k*0.42,2.6*s); };
       corner(0,0,1,1); corner(W,0,-1,1); corner(0,H,1,-1); corner(W,H,-1,-1);
       // ── asas laterales verticales de diamante (las partes negras de los lados) ──
-      const sideHandle=(hx)=>{ const hy0=H*.17, hy1=H*.53;
+      const sideHandle=(hx)=>{ const hy0=H*.14, hy1=H*.57;
         bolt(hx,hy0-9*s,3.4*s); bolt(hx,hy1+9*s,3.4*s);
-        rr(c,hx-11*s,hy0,22*s,hy1-hy0,10*s); c.fillStyle=rgb(17,17,18); c.fill();
+        rr(c,hx-13*s,hy0,26*s,hy1-hy0,11*s); c.fillStyle=rgb(17,17,18); c.fill();
         c.strokeStyle=rgb(3,3,4); c.lineWidth=1.2*s; c.stroke();
-        c.save(); rr(c,hx-11*s,hy0,22*s,hy1-hy0,10*s); c.clip();
+        c.save(); rr(c,hx-13*s,hy0,26*s,hy1-hy0,11*s); c.clip();
         c.strokeStyle='rgba(255,255,255,0.10)'; c.lineWidth=1*s;
         for(let yy=hy0-22*s; yy<hy1+22*s; yy+=9*s){
-          c.beginPath(); c.moveTo(hx-11*s,yy); c.lineTo(hx+11*s,yy+22*s); c.stroke();
-          c.beginPath(); c.moveTo(hx+11*s,yy); c.lineTo(hx-11*s,yy+22*s); c.stroke(); }
+          c.beginPath(); c.moveTo(hx-13*s,yy); c.lineTo(hx+13*s,yy+26*s); c.stroke();
+          c.beginPath(); c.moveTo(hx+13*s,yy); c.lineTo(hx-13*s,yy+26*s); c.stroke(); }
         c.restore();
         c.strokeStyle='rgba(255,255,255,0.07)'; c.lineWidth=1.4*s;
         c.beginPath(); c.moveTo(hx-7*s,hy0+8*s); c.lineTo(hx-7*s,hy1-8*s); c.stroke(); };
-      sideHandle(.024*W); sideHandle(.976*W);
+      sideHandle(.048*W); sideHandle(.952*W);
       // ── maroon control panel (brushed wine) ──
       const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,wineHi); pg.addColorStop(0.5,wine); pg.addColorStop(1,rgb(80,18,34));
       rr(c,px,py,pw,ph,5*s); c.fillStyle=pg; c.fill();
       rr(c,px,py,pw,ph,5*s); c.strokeStyle=rgb(150,42,60); c.lineWidth=1.4*s; c.stroke();
+      bolt(px+8*s,py+8*s,2.4*s); bolt(px+pw-8*s,py+8*s,2.4*s);
+      bolt(px+8*s,py+ph-8*s,2.4*s); bolt(px+pw-8*s,py+ph-8*s,2.4*s);
       // section group box (rounded rect with the name breaking the top edge)
       const box=(x0,x1,name)=>{ const bx0=x0*W,bx1=x1*W, by0=py+ph*.07, by1=py+ph*.95, mid=(bx0+bx1)/2, r=5*s;
         setFont(d,F.barlow,15); const tw=name?c.measureText(name).width+10*s:0;
@@ -5131,11 +5133,11 @@
       // INPUTS: HIGH/LOW (rotated) + 2x2 jacks. A guitar cable is plugged into the
       // selected channel; clicking the input cycles Normal -> Both(jumpered) ->
       // Top Boost (id 10). Both = main cable in Top Boost + a jumper patch.
-      box(.025,.108,'INPUTS');
+      box(.115,.182,'INPUTS');
       const inp = (vals && vals[10] != null) ? vals[10] : 1.0;
-      const jyH=py+ph*.34, jyL=py+ph*.62, ijN=.058*W, ijT=.092*W;
-      c.save(); c.translate(.034*W,jyH); c.rotate(-Math.PI/2); textSpaced(d,0,0,F.barlow,6.5,ink,'HIGH',0.04); c.restore();
-      c.save(); c.translate(.034*W,jyL); c.rotate(-Math.PI/2); textSpaced(d,0,0,F.barlow,6.5,ink,'LOW',0.04); c.restore();
+      const jyH=py+ph*.34, jyL=py+ph*.62, ijN=.142*W, ijT=.169*W;
+      c.save(); c.translate(.124*W,jyH); c.rotate(-Math.PI/2); textSpaced(d,0,0,F.barlow,6.5,ink,'HIGH',0.04); c.restore();
+      c.save(); c.translate(.124*W,jyL); c.rotate(-Math.PI/2); textSpaced(d,0,0,F.barlow,6.5,ink,'LOW',0.04); c.restore();
       jack(ijN,jyH); jack(ijT,jyH); jack(ijN,jyL); jack(ijT,jyL);
       // plugged-in cable: black barrel + chrome collar in the jack + lead off the bottom
       const plug=(jx,jy)=>{
@@ -5157,23 +5159,23 @@
       else if (inp < 0.75) { jumper(ijT,jyL,ijN,jyH); plug(ijT,jyH); mode='JUMPERED'; }
       else                 { plug(ijT,jyH); mode='TOP BOOST'; }
       textSpaced(d,ijN,lblY,F.barlow,6.5,ink,'NORMAL',0.02); textSpaced(d,ijT,lblY,F.barlow,5.5,ink,'TOP BOOST',0.02);
-      textSpaced(d,.066*W,py+ph*.03,F.barlow,7,gold,mode,0.06);
+      textSpaced(d,.148*W,py+ph+10*s,F.barlow,7,gold,mode,0.06);
       // NORMAL channel volume
-      box(.110,.172,'NORMAL'); lbl(.140,'VOLUME');
+      box(.184,.234,'NORMAL'); lbl(.208,'VOLUME');
       // TOP BOOST channel (volume + treble + bass)
-      box(.180,.356,'TOP BOOST'); lbl(.210,'VOLUME'); lbl(.268,'TREBLE'); lbl(.326,'BASS');
+      box(.241,.383,'TOP BOOST'); lbl(.265,'VOLUME'); lbl(.312,'TREBLE'); lbl(.359,'BASS');
       // REVERB (tone + level)
-      box(.376,.492,'REVERB'); lbl(.405,'TONE'); lbl(.463,'LEVEL');
+      box(.400,.494,'REVERB'); lbl(.423,'TONE'); lbl(.470,'LEVEL');
       // TREMOLO (speed + depth)
-      box(.513,.629,'TREMOLO'); lbl(.542,'SPEED'); lbl(.600,'DEPTH');
+      box(.511,.605,'TREMOLO'); lbl(.534,'SPEED'); lbl(.581,'DEPTH');
       // MASTER (tone cut + volume)
-      box(.650,.766,'MASTER'); lbl(.679,'TONE CUT'); lbl(.737,'VOLUME');
+      box(.622,.716,'MASTER'); lbl(.645,'TONE CUT'); lbl(.692,'VOLUME');
       // STANDBY + POWER (real switches, non-audio) + status jewels
       const swY=py+ph*.42;
-      batToggle(d,.820*W,swY,9*s,true); batToggle(d,.884*W,swY,9*s,true);
-      textSpaced(d,.820*W,py+ph*.13,F.barlow,8.5,ink,'STANDBY',0.04); textSpaced(d,.884*W,py+ph*.13,F.barlow,8.5,ink,'POWER',0.04);
-      textSpaced(d,.820*W,lblY,F.barlow,6.5,ink,'HT  ON',0.03); textSpaced(d,.884*W,lblY,F.barlow,6.5,ink,'OFF  ON',0.03);
-      ledDot(d,.840*W,swY+ph*.20,true,70,200,90); ledDot(d,.904*W,swY+ph*.20,true,212,60,52);
+      batToggle(d,.759*W,swY,9*s,true); batToggle(d,.811*W,swY,9*s,true);
+      textSpaced(d,.759*W,py+ph*.13,F.barlow,8.5,ink,'STANDBY',0.04); textSpaced(d,.811*W,py+ph*.13,F.barlow,8.5,ink,'POWER',0.04);
+      textSpaced(d,.759*W,lblY,F.barlow,6.5,ink,'HT  ON',0.03); textSpaced(d,.811*W,lblY,F.barlow,6.5,ink,'OFF  ON',0.03);
+      ledDot(d,.776*W,swY+ph*.20,true,70,200,90); ledDot(d,.828*W,swY+ph*.20,true,212,60,52);
       // maker (bottom-right, parody of "a VOX product")
       textSpaced(d,(px+pw)-58*s,py+ph*.90,F.bebas,15,rgb(226,196,160),'BOX',0.06);
       textSpaced(d,(px+pw)-22*s,py+ph*.905,F.barlow,8,rgb(216,188,156),'PRODUCT',0.05); } };
@@ -5766,13 +5768,13 @@
   //    RS: Gain->Volume I, Bass/Mid/Treble->stack, Pres->Presence.
   P.plexi = { w:1560, h:600, ptr:rgb(244,242,236),
     knobs:[
-      {id:0,cx:.400,cy:.750,r:.0145,style:'plexigold'},  // PRESENCE
-      {id:1,cx:.455,cy:.750,r:.0145,style:'plexigold'},  // BASS
-      {id:2,cx:.510,cy:.750,r:.0145,style:'plexigold'},  // MIDDLE
-      {id:3,cx:.565,cy:.750,r:.0145,style:'plexigold'},  // TREBLE
-      {id:4,cx:.620,cy:.750,r:.0145,style:'plexigold'},  // VOLUME I
-      {id:5,cx:.675,cy:.750,r:.0145,style:'plexigold'} ],// VOLUME II
-    sw3:[{id:6,cx:.733,cy:.750,hw:46,hh:42,hidden:true}], // cable Bright/Both/Normal
+      {id:0,cx:.383,cy:.748,r:.0165,style:'plexigold'},  // PRESENCE
+      {id:1,cx:.447,cy:.748,r:.0165,style:'plexigold'},  // BASS
+      {id:2,cx:.512,cy:.748,r:.0165,style:'plexigold'},  // MIDDLE
+      {id:3,cx:.576,cy:.748,r:.0165,style:'plexigold'},  // TREBLE
+      {id:4,cx:.640,cy:.748,r:.0165,style:'plexigold'},  // VOLUME I
+      {id:5,cx:.705,cy:.748,r:.0165,style:'plexigold'} ],// VOLUME II
+    sw3:[{id:6,cx:.772,cy:.748,hw:52,hh:46,hidden:true}], // cable Bright/Both/Normal
     draw(d,vals){ const {ctx:c,W,H,s}=d;
       const gold=rgb(198,170,96), ink=rgb(52,40,22), inkF='rgba(52,40,22,0.62)',
             cream=rgb(242,235,214);
@@ -5816,7 +5818,7 @@
       c.lineWidth=4.5*s; c.lineJoin='round'; c.strokeStyle=rgb(96,80,44); c.strokeText('Marsten',W*.5,H*.268);
       c.fillStyle=cream; c.fillText('Marsten',W*.5,H*.268); c.restore();
       // ── panel GOLD chico inset (abajo, como el JMP real) ──
-      const px=W*.235, pw=W*.53, py=H*.655, ph=H*.19;
+      const px=W*.19, pw=W*.62, py=H*.635, ph=H*.225;
       rr(c,px-4*s,py-4*s,pw+8*s,ph+8*s,7*s); c.fillStyle=rgb(5,5,6); c.fill();     // recess
       rr(c,px-4*s,py-4*s,pw+8*s,ph+8*s,7*s); c.strokeStyle=gold; c.lineWidth=1.8*s; c.stroke();
       const pg=c.createLinearGradient(0,py,0,py+ph);
@@ -5830,7 +5832,7 @@
       rr(c,px,py,pw,ph,5*s); c.strokeStyle=rgb(130,104,52); c.lineWidth=1.2*s; c.stroke();
       const topY=py+ph*.10, botY=py+ph*.88, cyP=py+ph*.50;
       // JMP
-      textSpaced(d,.258*W,cyP,F.bebas,12,ink,'JMP',0.10);
+      textSpaced(d,.217*W,cyP,F.bebas,12,ink,'JMP',0.10);
       // ── toggles cromados OFF / STANDBY ──
       const toggle=(x,up)=>{ c.beginPath(); c.arc(x,cyP,6.2*s,0,7);
         const ng=c.createRadialGradient(x-2*s,cyP-2*s,1*s,x,cyP,6.2*s); ng.addColorStop(0,rgb(244,246,248)); ng.addColorStop(1,rgb(130,134,140));
@@ -5841,11 +5843,11 @@
         c.beginPath(); c.arc(x,cyP+ly,2.6*s,0,7);
         const bg2=c.createRadialGradient(x-1*s,cyP+ly-1*s,0.5*s,x,cyP+ly,2.6*s); bg2.addColorStop(0,rgb(250,252,254)); bg2.addColorStop(1,rgb(150,154,160));
         c.fillStyle=bg2; c.fill(); };
-      toggle(.292*W,true); toggle(.326*W,true);
-      textSpaced(d,.292*W,topY,F.barlow,6,ink,'OFF',0.04); textSpaced(d,.326*W,topY,F.barlow,6,ink,'STANDBY',0.02);
-      textSpaced(d,.292*W,botY,F.barlow,6,inkF,'ON',0.04); textSpaced(d,.326*W,botY,F.barlow,6,inkF,'ON',0.04);
+      toggle(.257*W,true); toggle(.296*W,true);
+      textSpaced(d,.257*W,topY,F.barlow,6,ink,'OFF',0.04); textSpaced(d,.296*W,topY,F.barlow,6,ink,'STANDBY',0.02);
+      textSpaced(d,.257*W,botY,F.barlow,6,inkF,'ON',0.04); textSpaced(d,.296*W,botY,F.barlow,6,inkF,'ON',0.04);
       // indicador ROJO cuadrado
-      const qx=.358*W;
+      const qx=.334*W;
       c.save(); c.globalAlpha=0.45; c.beginPath(); c.arc(qx,cyP,10*s,0,7);
       const qg=c.createRadialGradient(qx,cyP,1.5*s,qx,cyP,10*s); qg.addColorStop(0,'rgba(255,90,60,0.9)'); qg.addColorStop(1,'rgba(255,90,60,0)');
       c.fillStyle=qg; c.fill(); c.restore();
@@ -5855,21 +5857,21 @@
       c.fillStyle=rq; c.fill();
       textSpaced(d,qx,botY,F.barlow,5.5,inkF,'INDICATOR',0.02);
       // ── abanicos 0-10 (pares) + labels de las 6 perillas ──
-      const KR=.0145*W, ky=.750*H;
+      const KR=.0165*W, ky=.748*H;
       const fan=(kx)=>{ c.save(); c.textAlign='center'; c.textBaseline='middle';
         c.font=`700 ${Math.round(7.2*s)}px ${F.barlow}`; c.fillStyle=ink;
         for(let n=0;n<=10;n+=2){ const aa=ang(n/10); const rr2=KR*1.50;
           c.fillText(String(n), kx*W+rr2*Math.cos(aa), ky+rr2*Math.sin(aa)); }
         c.restore(); };
-      [.400,.455,.510,.565,.620,.675].forEach(fan);
-      textSpaced(d,.400*W,topY,F.barlow,6.5,ink,'PRESENCE',0.02);
-      textSpaced(d,.455*W,topY,F.barlow,6.5,ink,'BASS',0.03);
-      textSpaced(d,.510*W,topY,F.barlow,6.5,ink,'MIDDLE',0.02);
-      textSpaced(d,.565*W,topY,F.barlow,6.5,ink,'TREBLE',0.02);
-      textSpaced(d,.620*W,botY,F.barlow,6.5,ink,'VOLUME I',0.02);
-      textSpaced(d,.675*W,botY,F.barlow,6.5,ink,'VOLUME II',0.02);
+      [.383,.447,.512,.576,.640,.705].forEach(fan);
+      textSpaced(d,.383*W,topY,F.barlow,6.5,ink,'PRESENCE',0.02);
+      textSpaced(d,.447*W,topY,F.barlow,6.5,ink,'BASS',0.03);
+      textSpaced(d,.512*W,topY,F.barlow,6.5,ink,'MIDDLE',0.02);
+      textSpaced(d,.576*W,topY,F.barlow,6.5,ink,'TREBLE',0.02);
+      textSpaced(d,.640*W,botY,F.barlow,6.5,ink,'VOLUME I',0.02);
+      textSpaced(d,.705*W,botY,F.barlow,6.5,ink,'VOLUME II',0.02);
       // ── INPUTS 2x2 (columnas = canal I / II, filas = high / low) ──
-      const xA=.713*W, xB=.752*W, iy0=py+ph*.30, iy1=py+ph*.72;
+      const xA=.749*W, xB=.795*W, iy0=py+ph*.30, iy1=py+ph*.72;
       const jack=(jx2,jy2)=>{ c.beginPath(); c.arc(jx2,jy2,7.5*s,0,7); c.fillStyle=rgb(14,13,13); c.fill();
         c.strokeStyle=rgb(40,36,30); c.lineWidth=2*s; c.stroke();
         c.beginPath(); c.arc(jx2,jy2,2.5*s,0,7); c.fillStyle=rgb(52,50,46); c.fill(); };
