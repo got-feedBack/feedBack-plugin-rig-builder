@@ -537,39 +537,42 @@
       return;
     }
     if (style==='plexigold') {
-      // Marshall JMP vintage: aro moleteado de LATON + domo de aluminio
-      // hilado plateado con linea indicadora grabada (panel 1959 real).
+      // Marshall: tapa DORADA torneada dominante + falda negra acanalada
+      // FINA con ranura indicadora negra (como el knob gold-top real).
       c.save(); c.globalAlpha=0.32; c.beginPath();
       c.ellipse(cx+1.2*s,cy+2*s,R*1.04,R*0.98,0,0,7); c.fillStyle=rgb(0,0,0); c.fill(); c.restore();
-      // aro laton oscuro (gira con el valor)
+      // falda negra fina (gira con el valor)
       const sk=c.createRadialGradient(cx-R*0.3,cy-R*0.35,R*0.1,cx,cy,R*1.05);
-      sk.addColorStop(0,rgb(126,104,60)); sk.addColorStop(.55,rgb(78,62,34)); sk.addColorStop(1,rgb(40,32,18));
+      sk.addColorStop(0,rgb(58,58,60)); sk.addColorStop(.55,rgb(26,26,28)); sk.addColorStop(1,rgb(8,8,9));
       c.beginPath(); c.arc(cx,cy,R,0,7); c.fillStyle=sk; c.fill();
-      c.strokeStyle=rgb(22,17,9); c.lineWidth=1*s; c.stroke();
+      c.strokeStyle=rgb(3,3,4); c.lineWidth=1*s; c.stroke();
       c.lineWidth=1.8*s;
       for(let i=0;i<28;i++){ const t=i/28*Math.PI*2+a;
-        c.strokeStyle=(i%2)?'rgba(0,0,0,0.55)':'rgba(255,240,190,0.30)';
+        c.strokeStyle=(i%2)?'rgba(0,0,0,0.55)':'rgba(255,255,255,0.08)';
         c.beginPath();
-        c.moveTo(cx+R*0.78*Math.cos(t),cy+R*0.78*Math.sin(t));
+        c.moveTo(cx+R*0.84*Math.cos(t),cy+R*0.84*Math.sin(t));
         c.lineTo(cx+R*0.985*Math.cos(t),cy+R*0.985*Math.sin(t)); c.stroke(); }
-      // domo de aluminio hilado
-      const cg=c.createRadialGradient(cx-R*0.30,cy-R*0.34,R*0.06,cx,cy,R*0.85);
-      cg.addColorStop(0,rgb(252,252,250)); cg.addColorStop(.45,rgb(206,208,210)); cg.addColorStop(1,rgb(132,134,136));
-      c.beginPath(); c.arc(cx,cy,R*0.80,0,7); c.fillStyle=cg; c.fill();
-      c.strokeStyle=rgb(86,82,70); c.lineWidth=0.9*s; c.stroke();
-      // anillos del hilado
-      for(let rr2=R*0.12; rr2<R*0.76; rr2+=R*0.085){
+      // tapa dorada torneada
+      const cg=c.createRadialGradient(cx-R*0.30,cy-R*0.34,R*0.05,cx,cy,R*0.88);
+      cg.addColorStop(0,rgb(252,228,150)); cg.addColorStop(.5,rgb(224,188,96)); cg.addColorStop(1,rgb(168,132,54));
+      c.beginPath(); c.arc(cx,cy,R*0.86,0,7); c.fillStyle=cg; c.fill();
+      c.strokeStyle=rgb(110,84,36); c.lineWidth=0.9*s; c.stroke();
+      // anillos concentricos del maquinado
+      for(let rr2=R*0.10; rr2<R*0.82; rr2+=R*0.075){
         c.beginPath(); c.arc(cx,cy,rr2,0,7);
-        c.strokeStyle='rgba(90,92,96,0.18)'; c.lineWidth=0.7*s; c.stroke(); }
-      // destello radial del hilado
-      c.save(); c.beginPath(); c.arc(cx,cy,R*0.78,0,7); c.clip();
-      c.globalAlpha=0.35; c.beginPath();
-      c.moveTo(cx,cy); c.arc(cx,cy,R*0.80,-2.4,-1.7); c.closePath();
-      c.fillStyle=rgb(255,255,255); c.fill(); c.restore();
-      // linea indicadora grabada
-      c.beginPath(); c.moveTo(cx+R*0.16*Math.cos(a),cy+R*0.16*Math.sin(a));
-      c.lineTo(cx+R*0.74*Math.cos(a),cy+R*0.74*Math.sin(a));
-      c.lineCap='round'; c.strokeStyle=rgb(44,40,34); c.lineWidth=2*s; c.stroke(); c.lineCap='butt';
+        c.strokeStyle='rgba(120,90,30,0.20)'; c.lineWidth=0.7*s; c.stroke(); }
+      // destello diagonal del anodizado
+      c.save(); c.beginPath(); c.arc(cx,cy,R*0.84,0,7); c.clip();
+      c.globalAlpha=0.30; c.beginPath();
+      c.moveTo(cx-R*0.7,cy+R*0.15); c.lineTo(cx-R*0.05,cy-R*0.85); c.lineTo(cx+R*0.25,cy-R*0.85); c.lineTo(cx-R*0.4,cy+R*0.15); c.closePath();
+      c.fillStyle=rgb(255,244,200); c.fill(); c.restore();
+      // ranura indicadora negra + filo de luz
+      c.beginPath(); c.moveTo(cx+R*0.24*Math.cos(a),cy+R*0.24*Math.sin(a));
+      c.lineTo(cx+R*0.80*Math.cos(a),cy+R*0.80*Math.sin(a));
+      c.lineCap='round'; c.strokeStyle=rgb(16,13,8); c.lineWidth=2.6*s; c.stroke();
+      c.strokeStyle='rgba(255,240,190,0.5)'; c.lineWidth=0.9*s;
+      c.beginPath(); c.moveTo(cx+R*0.24*Math.cos(a)+1*s,cy+R*0.24*Math.sin(a)+1*s);
+      c.lineTo(cx+R*0.80*Math.cos(a)+1*s,cy+R*0.80*Math.sin(a)+1*s); c.stroke(); c.lineCap='butt';
       return;
     }
     // pointer + tick fan (default)
