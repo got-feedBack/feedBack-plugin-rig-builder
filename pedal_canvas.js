@@ -5768,13 +5768,13 @@
   //    RS: Gain->Volume I, Bass/Mid/Treble->stack, Pres->Presence.
   P.plexi = { w:1560, h:600, ptr:rgb(244,242,236),
     knobs:[
-      {id:0,cx:.383,cy:.748,r:.0165,style:'plexigold'},  // PRESENCE
-      {id:1,cx:.447,cy:.748,r:.0165,style:'plexigold'},  // BASS
-      {id:2,cx:.512,cy:.748,r:.0165,style:'plexigold'},  // MIDDLE
-      {id:3,cx:.576,cy:.748,r:.0165,style:'plexigold'},  // TREBLE
-      {id:4,cx:.640,cy:.748,r:.0165,style:'plexigold'},  // VOLUME I
-      {id:5,cx:.705,cy:.748,r:.0165,style:'plexigold'} ],// VOLUME II
-    sw3:[{id:6,cx:.772,cy:.748,hw:52,hh:46,hidden:true}], // cable Bright/Both/Normal
+      {id:0,cx:.392,cy:.748,r:.0165,style:'plexigold'},  // PRESENCE
+      {id:1,cx:.451,cy:.748,r:.0165,style:'plexigold'},  // BASS
+      {id:2,cx:.511,cy:.748,r:.0165,style:'plexigold'},  // MIDDLE
+      {id:3,cx:.570,cy:.748,r:.0165,style:'plexigold'},  // TREBLE
+      {id:4,cx:.629,cy:.748,r:.0165,style:'plexigold'},  // VOLUME I
+      {id:5,cx:.688,cy:.748,r:.0165,style:'plexigold'} ],// VOLUME II
+    sw3:[{id:6,cx:.750,cy:.748,hw:48,hh:46,hidden:true}], // cable Bright/Both/Normal
     draw(d,vals){ const {ctx:c,W,H,s}=d;
       const gold=rgb(198,170,96), ink=rgb(52,40,22), inkF='rgba(52,40,22,0.62)',
             cream=rgb(242,235,214);
@@ -5818,7 +5818,7 @@
       c.lineWidth=4.5*s; c.lineJoin='round'; c.strokeStyle=rgb(96,80,44); c.strokeText('Marsten',W*.5,H*.268);
       c.fillStyle=cream; c.fillText('Marsten',W*.5,H*.268); c.restore();
       // ── panel GOLD chico inset (abajo, como el JMP real) ──
-      const px=W*.19, pw=W*.62, py=H*.635, ph=H*.225;
+      const px=W*.215, pw=W*.57, py=H*.635, ph=H*.225;
       rr(c,px-4*s,py-4*s,pw+8*s,ph+8*s,7*s); c.fillStyle=rgb(5,5,6); c.fill();     // recess
       rr(c,px-4*s,py-4*s,pw+8*s,ph+8*s,7*s); c.strokeStyle=gold; c.lineWidth=1.8*s; c.stroke();
       const pg=c.createLinearGradient(0,py,0,py+ph);
@@ -5832,7 +5832,7 @@
       rr(c,px,py,pw,ph,5*s); c.strokeStyle=rgb(130,104,52); c.lineWidth=1.2*s; c.stroke();
       const topY=py+ph*.10, botY=py+ph*.88, cyP=py+ph*.50;
       // JMP
-      textSpaced(d,.217*W,cyP,F.bebas,12,ink,'JMP',0.10);
+      textSpaced(d,.240*W,cyP,F.bebas,13,ink,'JMP',0.10);
       // ── toggles cromados OFF / STANDBY ──
       const toggle=(x,up)=>{ c.beginPath(); c.arc(x,cyP,6.2*s,0,7);
         const ng=c.createRadialGradient(x-2*s,cyP-2*s,1*s,x,cyP,6.2*s); ng.addColorStop(0,rgb(244,246,248)); ng.addColorStop(1,rgb(130,134,140));
@@ -5843,11 +5843,11 @@
         c.beginPath(); c.arc(x,cyP+ly,2.6*s,0,7);
         const bg2=c.createRadialGradient(x-1*s,cyP+ly-1*s,0.5*s,x,cyP+ly,2.6*s); bg2.addColorStop(0,rgb(250,252,254)); bg2.addColorStop(1,rgb(150,154,160));
         c.fillStyle=bg2; c.fill(); };
-      toggle(.257*W,true); toggle(.296*W,true);
-      textSpaced(d,.257*W,topY,F.barlow,6,ink,'OFF',0.04); textSpaced(d,.296*W,topY,F.barlow,6,ink,'STANDBY',0.02);
-      textSpaced(d,.257*W,botY,F.barlow,6,inkF,'ON',0.04); textSpaced(d,.296*W,botY,F.barlow,6,inkF,'ON',0.04);
+      toggle(.277*W,true); toggle(.312*W,true);
+      textSpaced(d,.277*W,topY,F.barlow,7,ink,'OFF',0.04); textSpaced(d,.312*W,topY,F.barlow,7,ink,'STANDBY',0.02);
+      textSpaced(d,.277*W,botY,F.barlow,6.5,inkF,'ON',0.04); textSpaced(d,.312*W,botY,F.barlow,6.5,inkF,'ON',0.04);
       // indicador ROJO cuadrado
-      const qx=.334*W;
+      const qx=.347*W;
       c.save(); c.globalAlpha=0.45; c.beginPath(); c.arc(qx,cyP,10*s,0,7);
       const qg=c.createRadialGradient(qx,cyP,1.5*s,qx,cyP,10*s); qg.addColorStop(0,'rgba(255,90,60,0.9)'); qg.addColorStop(1,'rgba(255,90,60,0)');
       c.fillStyle=qg; c.fill(); c.restore();
@@ -5855,30 +5855,30 @@
       rr(c,qx-4.2*s,cyP-4.2*s,8.4*s,8.4*s,1*s);
       const rq=c.createLinearGradient(qx,cyP-4*s,qx,cyP+4*s); rq.addColorStop(0,rgb(255,120,90)); rq.addColorStop(.5,rgb(214,40,26)); rq.addColorStop(1,rgb(120,14,10));
       c.fillStyle=rq; c.fill();
-      textSpaced(d,qx,botY,F.barlow,5.5,inkF,'INDICATOR',0.02);
+      textSpaced(d,qx,botY,F.barlow,6.5,inkF,'INDICATOR',0.02);
       // ── abanicos 0-10 (pares) + labels de las 6 perillas ──
       const KR=.0165*W, ky=.748*H;
       const fan=(kx)=>{ c.save(); c.textAlign='center'; c.textBaseline='middle';
-        c.font=`700 ${Math.round(7.2*s)}px ${F.barlow}`; c.fillStyle=ink;
+        c.font=`700 ${Math.round(7.8*s)}px ${F.barlow}`; c.fillStyle=ink;
         for(let n=0;n<=10;n+=2){ const aa=ang(n/10); const rr2=KR*1.50;
           c.fillText(String(n), kx*W+rr2*Math.cos(aa), ky+rr2*Math.sin(aa)); }
         c.restore(); };
-      [.383,.447,.512,.576,.640,.705].forEach(fan);
-      textSpaced(d,.383*W,topY,F.barlow,6.5,ink,'PRESENCE',0.02);
-      textSpaced(d,.447*W,topY,F.barlow,6.5,ink,'BASS',0.03);
-      textSpaced(d,.512*W,topY,F.barlow,6.5,ink,'MIDDLE',0.02);
-      textSpaced(d,.576*W,topY,F.barlow,6.5,ink,'TREBLE',0.02);
-      textSpaced(d,.640*W,botY,F.barlow,6.5,ink,'VOLUME I',0.02);
-      textSpaced(d,.705*W,botY,F.barlow,6.5,ink,'VOLUME II',0.02);
+      [.392,.451,.511,.570,.629,.688].forEach(fan);
+      textSpaced(d,.392*W,topY,F.barlow,7.5,ink,'PRESENCE',0.02);
+      textSpaced(d,.451*W,topY,F.barlow,7.5,ink,'BASS',0.03);
+      textSpaced(d,.511*W,topY,F.barlow,7.5,ink,'MIDDLE',0.02);
+      textSpaced(d,.570*W,topY,F.barlow,7.5,ink,'TREBLE',0.02);
+      textSpaced(d,.629*W,botY,F.barlow,7.5,ink,'VOLUME I',0.02);
+      textSpaced(d,.688*W,botY,F.barlow,7.5,ink,'VOLUME II',0.02);
       // ── INPUTS 2x2 (columnas = canal I / II, filas = high / low) ──
-      const xA=.749*W, xB=.795*W, iy0=py+ph*.30, iy1=py+ph*.72;
+      const xA=.729*W, xB=.771*W, iy0=py+ph*.30, iy1=py+ph*.72;
       const jack=(jx2,jy2)=>{ c.beginPath(); c.arc(jx2,jy2,7.5*s,0,7); c.fillStyle=rgb(14,13,13); c.fill();
         c.strokeStyle=rgb(40,36,30); c.lineWidth=2*s; c.stroke();
         c.beginPath(); c.arc(jx2,jy2,2.5*s,0,7); c.fillStyle=rgb(52,50,46); c.fill(); };
       jack(xA,iy0); jack(xB,iy0); jack(xA,iy1); jack(xB,iy1);
-      textSpaced(d,xA-15*s,iy0,F.barlow,7,ink,'I',0); textSpaced(d,xB+15*s,iy0,F.barlow,7,ink,'II',0);
-      textSpaced(d,xA-15*s,iy1,F.barlow,7,ink,'I',0); textSpaced(d,xB+15*s,iy1,F.barlow,7,ink,'II',0);
-      textSpaced(d,(xA+xB)/2,cyP,F.barlow,6.5,ink,'INPUTS',0.03);
+      textSpaced(d,xA-15*s,iy0,F.barlow,8,ink,'I',0); textSpaced(d,xB+15*s,iy0,F.barlow,8,ink,'II',0);
+      textSpaced(d,xA-15*s,iy1,F.barlow,8,ink,'I',0); textSpaced(d,xB+15*s,iy1,F.barlow,8,ink,'II',0);
+      textSpaced(d,(xA+xB)/2,cyP,F.barlow,7.5,ink,'INPUTS',0.03);
       // cable / puente (click: Bright CH I -> Both -> Normal CH II)
       const inp=(vals&&vals[6]!=null)?vals[6]:0.5;
       const plug=(jx,jy)=>{ rr(c,jx-4.6*s,jy-5.5*s,9.2*s,6.5*s,2*s); c.fillStyle=rgb(36,34,32); c.fill();
@@ -5897,7 +5897,7 @@
       if (inp < 0.25)      { plug(xA,iy0); mode='CH I'; }
       else if (inp < 0.75) { jumper(xA,iy1,xB,iy0); plug(xA,iy0); mode='JUMPED'; }
       else                 { plug(xB,iy0); mode='CH II'; }
-      textSpaced(d,(xA+xB)/2,py-10*s,F.barlow,7,gold,mode,0.06);
+      textSpaced(d,(xA+xB)/2,py-10*s,F.barlow,7.5,gold,mode,0.06);
       // ── patas ──
       [.085,.915].forEach(fx=>{ rr(c,fx*W-16*s,H*.965,32*s,H*.03,4*s); c.fillStyle=rgb(8,8,9); c.fill(); }); } };
 
