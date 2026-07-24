@@ -4959,31 +4959,40 @@
   P.boxac30 = { w:1400, h:560, ptr:rgb(240,237,230),
     paramNames:['Normal Vol','TB Vol','Treble','Bass','Rev Tone','Rev Level','Speed','Depth','Tone Cut','Master','Input','Bright','Cab Sim'],
     knobs:[
-      {id:0,cx:.140,cy:.738,r:.019,style:'vox'},   // NORMAL VOLUME
-      {id:1,cx:.210,cy:.738,r:.019,style:'vox'},   // TOP BOOST VOLUME (RS Gain)
-      {id:2,cx:.268,cy:.738,r:.019,style:'vox'},   // TOP BOOST TREBLE (RS Treble)
-      {id:3,cx:.326,cy:.738,r:.019,style:'vox'},   // TOP BOOST BASS   (RS Bass)
-      {id:4,cx:.405,cy:.738,r:.019,style:'vox'},   // REVERB TONE
-      {id:5,cx:.463,cy:.738,r:.019,style:'vox'},   // REVERB LEVEL
-      {id:6,cx:.542,cy:.738,r:.019,style:'vox'},   // TREMOLO SPEED
-      {id:7,cx:.600,cy:.738,r:.019,style:'vox'},   // TREMOLO DEPTH
-      {id:8,cx:.679,cy:.738,r:.019,style:'vox'},   // MASTER TONE CUT  (RS Pres inv)
-      {id:9,cx:.737,cy:.738,r:.019,style:'vox'} ], // MASTER VOLUME
+      {id:0,cx:.140,cy:.738,r:.019,style:'tweed'},   // NORMAL VOLUME
+      {id:1,cx:.210,cy:.738,r:.019,style:'tweed'},   // TOP BOOST VOLUME (RS Gain)
+      {id:2,cx:.268,cy:.738,r:.019,style:'tweed'},   // TOP BOOST TREBLE (RS Treble)
+      {id:3,cx:.326,cy:.738,r:.019,style:'tweed'},   // TOP BOOST BASS   (RS Bass)
+      {id:4,cx:.405,cy:.738,r:.019,style:'tweed'},   // REVERB TONE
+      {id:5,cx:.463,cy:.738,r:.019,style:'tweed'},   // REVERB LEVEL
+      {id:6,cx:.542,cy:.738,r:.019,style:'tweed'},   // TREMOLO SPEED
+      {id:7,cx:.600,cy:.738,r:.019,style:'tweed'},   // TREMOLO DEPTH
+      {id:8,cx:.679,cy:.738,r:.019,style:'tweed'},   // MASTER TONE CUT  (RS Pres inv)
+      {id:9,cx:.737,cy:.738,r:.019,style:'tweed'} ], // MASTER VOLUME
     // input cable selector (id 10): click the input area to cycle the cable
     // Normal -> Both(jumpered) -> Top Boost. Drawn as a real plugged-in cable in
     // draw(); `hidden` so the engine doesn't also stamp a lever over it.
     sw3:[{id:10,cx:.075,cy:.753,hw:34,hh:34,hidden:true}],
     draw(d,vals){ const {ctx:c,W,H,s}=d;
-      const gold=rgb(190,154,72), wine=rgb(98,24,42), wineHi=rgb(124,34,54),
+      const gold=rgb(196,160,78), wine=rgb(122,26,46), wineHi=rgb(150,38,60),
             ink=rgb(238,228,208), boxLn='rgba(230,216,200,0.55)', chr=rgb(190,194,200);
       // ── tolex body ──
       const bgr=c.createLinearGradient(0,0,0,H); bgr.addColorStop(0,rgb(26,25,27)); bgr.addColorStop(1,rgb(13,12,14));
       c.fillStyle=bgr; c.fillRect(0,0,W,H);
-      c.save(); c.beginPath(); c.rect(0,0,W,H); c.clip(); c.lineWidth=1;
-      c.strokeStyle='rgba(255,255,255,0.022)';
-      for(let x=-H;x<W;x+=8*s){ c.beginPath(); c.moveTo(x,0); c.lineTo(x+H,H); c.stroke(); }
-      c.strokeStyle='rgba(0,0,0,0.20)';
-      for(let x=-H;x<W;x+=8*s){ c.beginPath(); c.moveTo(x+4*s,0); c.lineTo(x+4*s-H,H); c.stroke(); }
+      // BASKETWEAVE Vox: celdas tejidas alternando trama H/V + relieve
+      c.save(); c.beginPath(); c.rect(0,0,W,H); c.clip();
+      const cell=7.5*s;
+      for(let gy=0; gy<H/cell; gy++){ for(let gx=0; gx<W/cell; gx++){
+        const x0=gx*cell, y0=gy*cell, hor=((gx+gy)%2===0);
+        c.strokeStyle=hor?'rgba(255,255,255,0.045)':'rgba(0,0,0,0.30)'; c.lineWidth=1;
+        for(let k=1;k<4;k++){ c.beginPath();
+          if(hor){ c.moveTo(x0+1,y0+k*cell/4); c.lineTo(x0+cell-1,y0+k*cell/4); }
+          else   { c.moveTo(x0+k*cell/4,y0+1); c.lineTo(x0+k*cell/4,y0+cell-1); }
+          c.stroke(); }
+        if(!hor){ c.fillStyle='rgba(0,0,0,0.10)'; c.fillRect(x0,y0,cell,cell); } } }
+      const shx=c.createRadialGradient(W*.5,H*.4,H*.3,W*.5,H*.5,W*.6);
+      shx.addColorStop(0,'rgba(255,255,255,0.03)'); shx.addColorStop(1,'rgba(0,0,0,0.28)');
+      c.fillStyle=shx; c.fillRect(0,0,W,H);
       c.restore();
       const bolt=(x,y,r)=>{ r=r||3*s; const g=c.createRadialGradient(x-r*0.3,y-r*0.3,r*0.15,x,y,r);
         g.addColorStop(0,rgb(246,248,250)); g.addColorStop(1,rgb(116,120,126));
@@ -4992,14 +5001,22 @@
       const py=H*.58, ph=H*.36, px=W*.025, pw=W*.95;
       const lblY=py+ph*.69;
       // ── gold piping (top + above the panel) ──
-      [H*.05, py-H*.025].forEach(yy=>{ c.beginPath(); c.moveTo(W*.04,yy); c.lineTo(W*.96,yy); c.strokeStyle=gold; c.lineWidth=1.8*s; c.stroke(); });
+      [H*.045, H*.075, py-H*.025, H*.978].forEach(yy=>{ c.beginPath(); c.moveTo(W*.04,yy); c.lineTo(W*.96,yy); c.strokeStyle=gold; c.lineWidth=1.8*s; c.stroke(); });
       // ── louver vents (across the wide head) ──
-      const vent=(x0,x1)=>{ const vy=H*.10, vh=H*.20, vw=(x1-x0)*W;
-        rr(c,x0*W,vy,vw,vh,4*s); c.fillStyle=rgb(7,7,8); c.fill();
-        c.save(); rr(c,x0*W,vy,vw,vh,4*s); c.clip(); c.strokeStyle='rgba(150,152,158,0.15)'; c.lineWidth=2.2*s;
-        for(let yy=vy+6*s; yy<vy+vh-3*s; yy+=6.5*s){ c.beginPath(); c.moveTo(x0*W+6*s,yy); c.lineTo(x1*W-6*s,yy); c.stroke(); }
+      const vent=(x0,x1)=>{ const vy=H*.115, vh=H*.185, vw=(x1-x0)*W;
+        rr(c,x0*W-3*s,vy-3*s,vw+6*s,vh+6*s,5*s); c.fillStyle=rgb(20,20,22); c.fill();
+        c.strokeStyle='rgba(255,255,255,0.06)'; c.lineWidth=1*s; c.stroke();
+        rr(c,x0*W,vy,vw,vh,4*s); c.fillStyle=rgb(6,6,7); c.fill();
+        c.save(); rr(c,x0*W,vy,vw,vh,4*s); c.clip();
+        const sw2=4.5*s, sh3=vh*0.24, gapx=9*s, gapy=vh*0.32;
+        for(let row=0; row<3; row++){ const yy=vy+vh*0.10+row*gapy; const off=(row%2)*gapx*0.5;
+          for(let xx=x0*W+7*s+off; xx<x1*W-9*s; xx+=gapx){
+            rr(c,xx,yy,sw2,sh3,sw2*0.5); c.fillStyle=rgb(30,31,34); c.fill();
+            c.strokeStyle='rgba(0,0,0,0.7)'; c.lineWidth=0.8*s; c.stroke();
+            c.strokeStyle='rgba(255,255,255,0.06)'; c.beginPath();
+            c.moveTo(xx+0.6*s,yy+sh3-0.8*s); c.lineTo(xx+sw2-0.6*s,yy+sh3-0.8*s); c.stroke(); } }
         c.restore(); };
-      vent(.20,.34); vent(.37,.49); vent(.52,.64); vent(.67,.80);
+      vent(.155,.335); vent(.41,.59); vent(.665,.845);
       // ── centre diamond handle (just above the panel) ──
       const hx0=.45*W, hx1=.55*W, hy=H*.34, hh=H*.10;
       rr(c,hx0,hy,hx1-hx0,hh,6*s); c.fillStyle=rgb(13,13,14); c.fill();
@@ -5007,7 +5024,12 @@
       for(let x=hx0-hh;x<hx1+hh;x+=7*s){ c.beginPath(); c.moveTo(x,hy); c.lineTo(x+hh,hy+hh); c.stroke();
         c.beginPath(); c.moveTo(x,hy+hh); c.lineTo(x+hh,hy); c.stroke(); }
       c.restore();
-      [hx0,hx1].forEach(bx=>{ rr(c,bx-6*s,hy+hh*.22,8*s,hh*.56,3*s); c.fillStyle=chr; c.fill(); bolt(bx,hy+hh*.5,3.2*s); });
+      [hx0,hx1].forEach(bx=>{
+        rr(c,bx-4.5*s,hy-hh*.42,9*s,hh*1.84,3.5*s);
+        const mg2=c.createLinearGradient(bx-5*s,0,bx+5*s,0);
+        mg2.addColorStop(0,rgb(234,236,240)); mg2.addColorStop(.5,rgb(164,167,173)); mg2.addColorStop(1,rgb(120,122,128));
+        c.fillStyle=mg2; c.fill(); c.strokeStyle=rgb(50,52,56); c.lineWidth=0.9*s; c.stroke();
+        bolt(bx,hy-hh*.28,2.6*s); bolt(bx,hy+hh*1.28,2.6*s); });
       // ── 4 corner caps ──
       const corner=(cxx,cyy,dx,dy)=>{ const k=H*.11; c.beginPath();
         c.moveTo(cxx,cyy+dy*k); c.lineTo(cxx,cyy); c.lineTo(cxx+dx*k,cyy);
