@@ -194,6 +194,25 @@
       c.beginPath(); c.arc(cx+R*0.84*Math.cos(a),cy+R*0.84*Math.sin(a),2*s,0,7); c.fillStyle=ptrCol; c.fill();
       return;
     }
+    if (style==='tweed') {
+      // Fender tweed-era: perilla BARRIL negra conica con cuña puntero clara.
+      c.beginPath(); c.arc(cx,cy,R*1.04,0,7); c.fillStyle=rgb(8,8,9); c.fill();
+      const g=c.createRadialGradient(cx-R*0.3,cy-R*0.4,R*0.06,cx,cy,R);
+      g.addColorStop(0,rgb(66,64,60)); g.addColorStop(.5,rgb(34,33,31)); g.addColorStop(1,rgb(14,14,13));
+      c.beginPath(); c.arc(cx,cy,R,0,7); c.fillStyle=g; c.fill();
+      c.strokeStyle=rgb(4,4,5); c.lineWidth=1*s; c.stroke();
+      // cono superior
+      const fg=c.createRadialGradient(cx-R*0.18,cy-R*0.25,R*0.04,cx,cy,R*0.62);
+      fg.addColorStop(0,rgb(56,54,50)); fg.addColorStop(1,rgb(20,20,19));
+      c.beginPath(); c.arc(cx,cy,R*0.60,0,7); c.fillStyle=fg; c.fill();
+      c.strokeStyle='rgba(255,255,255,0.08)'; c.lineWidth=0.8*s; c.stroke();
+      // CUÑA puntero (barril): triangulo largo claro del centro al borde
+      c.save(); c.translate(cx,cy); c.rotate(a);
+      c.beginPath(); c.moveTo(R*0.05,-3.4*s); c.lineTo(R*1.00,-1.1*s); c.lineTo(R*1.00,1.1*s); c.lineTo(R*0.05,3.4*s); c.closePath();
+      const wg=c.createLinearGradient(0,0,R,0); wg.addColorStop(0,rgb(230,228,220)); wg.addColorStop(1,rgb(198,196,188));
+      c.fillStyle=wg; c.fill(); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=0.7*s; c.stroke(); c.restore();
+      return;
+    }
     if (style==='recto') {
       // Mesa Recto: perilla DOMO CROMO con falda negra, banda de reflejo y
       // puntero grabado oscuro.
@@ -6774,108 +6793,112 @@
       c.textAlign='left'; c.textBaseline='middle'; setFont(d,F.anton,Math.round(mr*1.4)); c.fillStyle=rgb(244,245,248);
       c.fillText('Ronald', lx+mr+14*s, ly); } };
 
-  // ── BENDER BASSMAN (Fender Bassman 5F6-A tweed) — same family/look as the
-  //    Bender Deluxe: golden lacquered tweed + brushed-aluminium panel, vintage
-  //    chicken-head knobs with 1-12 numeral arcs + clear labels, leather strap
-  //    handle. ids: 0 Input(Bright/Both/Normal) 1 BrightVol 2 NormalVol 3 Treble
-  //    4 Bass 5 Middle 6 Presence. RS: Gain->Bright Vol, Treble/Bass/Mid->stack,
-  //    Pres->Presence; input pinned to Both (jumpered).
-  P.tw40 = { w:1260, h:500, ptr:rgb(236,236,232),
+  // ── BENDER BASSMAN (Fender Bassman 5F6-A tweed) — TWEED tejido dorado con
+  //    desgaste, asa de cuero con soportes cromados, placa cafe con script
+  //    'Bender', panel NIQUELADO envejecido abajo con arcos 1-12 y perillas
+  //    barril 'tweed'. ids: 0 Input(Bright/Both/Normal) 1 BrightVol 2 NormalVol
+  //    3 Treble 4 Bass 5 Middle 6 Presence.
+  P.tw40 = { w:1260, h:520, ptr:rgb(236,236,232),
     knobs:[
-      {id:6,cx:.360,cy:.512,r:.022,style:'vox'},   // PRESENCE
-      {id:5,cx:.440,cy:.512,r:.022,style:'vox'},   // MIDDLE
-      {id:4,cx:.520,cy:.512,r:.022,style:'vox'},   // BASS
-      {id:3,cx:.600,cy:.512,r:.022,style:'vox'},   // TREBLE
-      {id:1,cx:.682,cy:.512,r:.022,style:'vox'},   // VOL. BRIGHT  (RS Gain)
-      {id:2,cx:.762,cy:.512,r:.022,style:'vox'} ], // VOL. NORMAL
-    // clickable input cable (id 0): Bright -> Both(jumpered) -> Normal. Drawn as
-    // a plugged-in cable; `hidden` so the engine doesn't stamp a lever over it.
-    sw3:[{id:0,cx:.855,cy:.512,hw:110,hh:34,hidden:true}],
-    draw(d,vals){ const {ctx:c,W,H,s}=d;
-      const chr=rgb(198,202,208), ink=rgb(42,42,46), faint='rgba(40,40,44,0.62)';
-      const inp=(vals&&vals[0]!=null)?vals[0]:0.5;
-      // ── golden lacquered tweed (diagonal twill weave) — same as Bender Deluxe ──
-      const bg=c.createLinearGradient(0,0,0,H); bg.addColorStop(0,rgb(206,170,98)); bg.addColorStop(0.5,rgb(192,156,88)); bg.addColorStop(1,rgb(170,134,72));
-      c.fillStyle=bg; c.fillRect(0,0,W,H);
-      c.save(); c.beginPath(); c.rect(0,0,W,H); c.clip();
-      c.lineWidth=1.4*s; c.strokeStyle='rgba(232,206,150,0.45)';
-      for(let x=-H;x<W;x+=5*s){ c.beginPath(); c.moveTo(x,0); c.lineTo(x+H,H); c.stroke(); }
-      c.lineWidth=1*s; c.strokeStyle='rgba(120,92,46,0.40)';
-      for(let x=-H;x<W;x+=5*s){ c.beginPath(); c.moveTo(x+2.5*s,0); c.lineTo(x+2.5*s+H,H); c.stroke(); }
-      c.lineWidth=0.8*s; c.strokeStyle='rgba(90,68,34,0.18)';
-      for(let x=-H;x<W+H;x+=9*s){ c.beginPath(); c.moveTo(x,0); c.lineTo(x-H,H); c.stroke(); }
+      {id:6,cx:.330,cy:.745,r:.0215,style:'tweed'},              // PRESENCE
+      {id:5,cx:.408,cy:.745,r:.0215,style:'tweed'},              // MIDDLE
+      {id:4,cx:.486,cy:.745,r:.0215,style:'tweed'},              // BASS
+      {id:3,cx:.564,cy:.745,r:.0215,style:'tweed'},              // TREBLE
+      {id:1,cx:.648,cy:.745,r:.0215,style:'tweed'},              // VOL. BRIGHT (RS Gain)
+      {id:2,cx:.726,cy:.745,r:.0215,style:'tweed'},              // VOL. NORMAL
+      {id:0,cx:.816,cy:.745,r:.017,style:'tweed',select:3} ],    // INPUT Bright/Both/Normal
+    draw(d,vals){ const {ctx:c,W,H,s}=d; const ink=rgb(52,48,40);
+      // ── TWEED: tejido diagonal dorado con vetas y desgaste ──
+      const base=c.createLinearGradient(0,0,0,H); base.addColorStop(0,rgb(176,142,84)); base.addColorStop(.5,rgb(163,129,74)); base.addColorStop(1,rgb(142,110,62));
+      c.fillStyle=base; c.fillRect(0,0,W,H);
+      c.save();
+      // trama diagonal (dos pasadas cruzadas)
+      c.lineWidth=2.2*s;
+      for(let k=-H; k<W+H; k+=7*s){ c.strokeStyle='rgba(94,68,34,0.35)'; c.beginPath(); c.moveTo(k,0); c.lineTo(k+H,H); c.stroke(); }
+      for(let k=-H; k<W+H; k+=7*s){ c.strokeStyle='rgba(228,196,130,0.28)'; c.beginPath(); c.moveTo(k+3*s,0); c.lineTo(k+H+3*s,H); c.stroke(); }
+      // bandas horizontales del tejido
+      c.lineWidth=1*s;
+      for(let y=0; y<H; y+=3.4*s){ c.strokeStyle='rgba(60,42,20,0.10)'; c.beginPath(); c.moveTo(0,y); c.lineTo(W,y); c.stroke(); }
+      // manchas de envejecido
+      for(const [mx2,my2,mr,al] of [[.18,.30,.30,.10],[.78,.22,.26,.08],[.5,.75,.4,.07],[.06,.8,.2,.12]]){
+        const g=c.createRadialGradient(W*mx2,H*my2,4*s,W*mx2,H*my2,H*mr);
+        g.addColorStop(0,'rgba(70,50,22,'+al+')'); g.addColorStop(1,'rgba(0,0,0,0)');
+        c.fillStyle=g; c.fillRect(0,0,W,H); }
       c.restore();
-      const bolt=(x,y,r)=>{ r=r||3*s; const g=c.createRadialGradient(x-r*0.3,y-r*0.3,r*0.15,x,y,r);
-        g.addColorStop(0,rgb(238,240,244)); g.addColorStop(1,rgb(120,124,130));
-        c.beginPath(); c.arc(x,y,r,0,7); c.fillStyle=g; c.fill(); c.strokeStyle=rgb(70,72,78); c.lineWidth=0.7*s; c.stroke(); };
-      // ── leather strap handle (top centre) + chrome end mounts ──
-      const hx0=.42*W, hx1=.58*W, hcy=H*.105, hth=H*.062;
-      const lg=c.createLinearGradient(0,hcy-hth,0,hcy+hth); lg.addColorStop(0,rgb(108,66,38)); lg.addColorStop(0.5,rgb(78,44,24)); lg.addColorStop(1,rgb(52,28,15));
-      rr(c,hx0,hcy-hth,hx1-hx0,2*hth,hth); c.fillStyle=lg; c.fill();
-      rr(c,hx0,hcy-hth,hx1-hx0,2*hth,hth); c.strokeStyle=rgb(32,18,10); c.lineWidth=1.2*s; c.stroke();
-      c.save(); rr(c,hx0+6*s,hcy-hth+3*s,hx1-hx0-12*s,2*hth-6*s,hth*0.7); c.clip();
-      c.setLineDash([5*s,4*s]); c.strokeStyle='rgba(238,228,206,0.7)'; c.lineWidth=1*s;
-      c.beginPath(); c.moveTo(hx0+8*s,hcy-hth*0.5); c.lineTo(hx1-8*s,hcy-hth*0.5); c.stroke();
-      c.beginPath(); c.moveTo(hx0+8*s,hcy+hth*0.5); c.lineTo(hx1-8*s,hcy+hth*0.5); c.stroke();
-      c.setLineDash([]); c.restore();
-      [hx0,hx1].forEach(bx=>{ rr(c,bx-9*s,hcy-hth*0.9,18*s,hth*1.8,3*s); c.fillStyle=chr; c.fill();
-        c.strokeStyle=rgb(110,112,118); c.lineWidth=0.8*s; c.stroke(); bolt(bx-4*s,hcy-hth*0.4,2.4*s); bolt(bx+4*s,hcy+hth*0.4,2.4*s); });
-      // ── brushed-aluminium control panel (same finish as the Deluxe) ──
-      const py=H*.30, ph=H*.40, px=W*.025, pw=W*.95, cy=py+ph*.50, lblY=py+ph*.88;
-      const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,rgb(208,210,214)); pg.addColorStop(0.5,rgb(184,187,192)); pg.addColorStop(1,rgb(158,161,166));
-      rr(c,px,py,pw,ph,4*s); c.fillStyle=pg; c.fill();
-      c.save(); rr(c,px,py,pw,ph,4*s); c.clip(); c.strokeStyle='rgba(255,255,255,0.30)'; c.lineWidth=0.6*s;
-      for(let yy=py+2*s; yy<py+ph; yy+=2.4*s){ c.beginPath(); c.moveTo(px,yy); c.lineTo(px+pw,yy); c.stroke(); }
+      // viñeta + esquinas gastadas
+      const vg=c.createRadialGradient(W*.5,H*.45,H*.42,W*.5,H*.5,W*.60);
+      vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(50,32,10,0.38)');
+      c.fillStyle=vg; c.fillRect(0,0,W,H);
+      const bolt=(x,y,r)=>{ r=r||2.6*s; const g=c.createRadialGradient(x-r*0.3,y-r*0.3,r*0.15,x,y,r);
+        g.addColorStop(0,rgb(212,214,218)); g.addColorStop(1,rgb(110,112,116));
+        c.beginPath(); c.arc(x,y,r,0,7); c.fillStyle=g; c.fill(); c.strokeStyle=rgb(72,64,50); c.lineWidth=0.7*s; c.stroke();
+        c.strokeStyle=rgb(70,72,76); c.lineWidth=0.8*s; c.beginPath(); c.moveTo(x-r*0.5,y+r*0.2); c.lineTo(x+r*0.5,y-r*0.2); c.stroke(); };
+      bolt(W*.03,H*.42); bolt(W*.97,H*.42); bolt(W*.03,H*.88); bolt(W*.97,H*.88);
+      // ── placa cafe con script (arriba, como la referencia) ──
+      const pbw=W*.30, pbh=H*.085, pbx=W*.5-pbw/2, pby=H*.055;
+      rr(c,pbx,pby,pbw,pbh,3*s); const bg2=c.createLinearGradient(0,pby,0,pby+pbh);
+      bg2.addColorStop(0,rgb(74,42,32)); bg2.addColorStop(1,rgb(52,28,22));
+      c.fillStyle=bg2; c.fill(); c.strokeStyle=rgb(210,200,186); c.lineWidth=1.4*s; c.stroke();
+      bolt(pbx+6*s,pby+pbh*.5,2*s); bolt(pbx+pbw-6*s,pby+pbh*.5,2*s);
+      c.save(); c.textAlign='center'; c.textBaseline='middle';
+      c.font=`italic 800 ${Math.round(21*s)}px ${F.ink}`;
+      c.fillStyle=rgb(238,230,214); c.fillText('Bender Bassman',W*.5,pby+pbh*.54); c.restore();
+      // ── asa de cuero con soportes cromados ──
+      const hx0=W*.395,hx1=W*.605,hy=H*.30;
+      const mount=(mx3)=>{ rr(c,mx3-4.5*s,hy-26*s,9*s,52*s,3*s);
+        const mg=c.createLinearGradient(mx3-5*s,0,mx3+5*s,0); mg.addColorStop(0,rgb(226,228,232)); mg.addColorStop(.5,rgb(160,162,168)); mg.addColorStop(1,rgb(120,122,128));
+        c.fillStyle=mg; c.fill(); c.strokeStyle=rgb(70,64,54); c.lineWidth=0.9*s; c.stroke();
+        bolt(mx3,hy-21*s,2.2*s); bolt(mx3,hy+21*s,2.2*s); };
+      mount(hx0); mount(hx1);
+      rr(c,hx0,hy-9*s,hx1-hx0,18*s,8*s);
+      const hg=c.createLinearGradient(0,hy-9*s,0,hy+9*s); hg.addColorStop(0,rgb(88,58,42)); hg.addColorStop(.5,rgb(64,42,30)); hg.addColorStop(1,rgb(44,28,20));
+      c.fillStyle=hg; c.fill(); c.strokeStyle=rgb(30,20,14); c.lineWidth=1.2*s; c.stroke();
+      c.strokeStyle='rgba(0,0,0,0.35)'; c.lineWidth=1*s;
+      for(let gx=hx0+22*s; gx<hx1-22*s; gx+=6*s){ c.beginPath(); c.moveTo(gx,hy-7*s); c.lineTo(gx,hy+7*s); c.stroke(); }
+      // ── panel NIQUELADO envejecido (abajo) ──
+      const py=H*.575, ph=H*.355, px=W*.075, pw=W*.85;
+      const pg=c.createLinearGradient(0,py,0,py+ph);
+      pg.addColorStop(0,rgb(206,206,204)); pg.addColorStop(.4,rgb(178,178,176)); pg.addColorStop(1,rgb(148,148,146));
+      rr(c,px,py,pw,ph,ph*0.5); c.fillStyle=pg; c.fill();
+      c.save(); rr(c,px,py,pw,ph,ph*0.5); c.clip();
+      // patina/manchas del niquel
+      for(const [mx2,al] of [[.14,.16],[.36,.10],[.62,.13],[.88,.18]]){
+        const g=c.createRadialGradient(W*mx2,py+ph*.5,6*s,W*mx2,py+ph*.5,ph*1.4);
+        g.addColorStop(0,'rgba(96,92,84,'+al+')'); g.addColorStop(1,'rgba(0,0,0,0)');
+        c.fillStyle=g; c.fillRect(px,py,pw,ph); }
+      c.strokeStyle='rgba(255,255,255,0.16)'; c.lineWidth=1;
+      for(let y=py+2*s; y<py+ph; y+=2.2*s){ c.beginPath(); c.moveTo(px,y); c.lineTo(px+pw,y); c.stroke(); }
       c.restore();
-      rr(c,px,py,pw,ph,4*s); c.strokeStyle=rgb(120,122,126); c.lineWidth=1.4*s; c.stroke();
-      bolt(px+10*s,py+10*s,3*s); bolt(px+pw-10*s,py+10*s,3*s); bolt(px+10*s,py+ph-10*s,3*s); bolt(px+pw-10*s,py+ph-10*s,3*s);
-      // ── left cluster: power socket + ground toggle + red jewel ──
-      c.beginPath(); c.arc(.052*W,cy,9*s,0,7); c.fillStyle=rgb(28,28,30); c.fill(); c.strokeStyle=rgb(120,122,128); c.lineWidth=2*s; c.stroke();
-      c.beginPath(); c.arc(.052*W-3*s,cy,2*s,0,7); c.fillStyle=rgb(150,152,158); c.fill(); c.beginPath(); c.arc(.052*W+3*s,cy,2*s,0,7); c.fillStyle=rgb(150,152,158); c.fill();
-      batToggle(d,.092*W,cy,8*s,true); textSpaced(d,.092*W,py+ph*.18,F.barlow,6.5,ink,'GND',0.03);
-      ledDot(d,.128*W,cy,true,224,52,46); c.beginPath(); c.arc(.128*W,cy,8*s,0,7); c.strokeStyle=chr; c.lineWidth=1.6*s; c.stroke();
-      textSpaced(d,.128*W,py+ph*.18,F.barlow,6.5,ink,'STBY',0.03);
-      // ── "Bender Bassman" script + maker text ──
-      c.save(); c.translate(.222*W,py+ph*.34); c.transform(1,0,-0.16,1,0,0);
-      setFont(d,F.ink,20); c.textAlign='center'; c.textBaseline='middle';
-      c.fillStyle=rgb(40,40,44); c.fillText('Bender',-30*s,0);
-      setFont(d,F.ink,15); c.fillText('Bassman',32*s,7*s);
-      c.restore();
-      textSpaced(d,.222*W,py+ph*.66,F.barlow,7,ink,'BENDER ELECTRIC INSTRUMENT CO.',0.02);
-      textSpaced(d,.222*W,py+ph*.80,F.barlow,6.5,faint,'FULLERTON, CALIFORNIA',0.05);
-      // ── 6 chicken-head knobs: 1-12 numeral arcs + labels (like the Deluxe) ──
-      const numArc=(kxF)=>{ const kx=kxF*W; setFont(d,F.barlow,6.5); c.fillStyle=faint; c.textAlign='center'; c.textBaseline='middle';
-        for(let n=1;n<=12;n++){ const aa=ang((n-1)/11); const rad=.030*W;
-          c.fillText(String(n), kx+rad*Math.cos(aa), cy+rad*Math.sin(aa)); } };
-      const lbl=(kxF,t,sz)=>textSpaced(d,kxF*W,lblY,F.barlow,sz||9.5,ink,t,0.03);
-      [.360,.440,.520,.600,.682,.762].forEach(kx=>numArc(kx));
-      lbl(.360,'PRESENCE',8.5); lbl(.440,'MIDDLE'); lbl(.520,'BASS'); lbl(.600,'TREBLE');
-      lbl(.682,'BRIGHT'); lbl(.762,'NORMAL');
-      textSpaced(d,.722*W,py+ph*.22,F.barlow,7.5,ink,'VOLUME',0.06);
-      // ── right: 2x2 inputs — BRIGHT + NORMAL columns, each with Hi(1)/Lo(2) ──
-      const jack=(jx,jy)=>{ c.beginPath(); c.arc(jx,jy,7*s,0,7); c.fillStyle=rgb(24,23,23); c.fill(); c.strokeStyle=chr; c.lineWidth=1.8*s; c.stroke();
-        c.beginPath(); c.arc(jx,jy,2.4*s,0,7); c.fillStyle=rgb(60,60,64); c.fill(); };
-      const xB=.860*W, xN=.928*W, cyHi=cy-13*s, cyLo=cy+13*s;
-      jack(xB,cyHi); jack(xB,cyLo); jack(xN,cyHi); jack(xN,cyLo);
-      textSpaced(d,xB,lblY,F.barlow,8.5,ink,'BRIGHT',0.02);
-      textSpaced(d,xN,lblY,F.barlow,8.5,ink,'NORMAL',0.02);
-      textSpaced(d,.832*W,cyHi,F.barlow,6,ink,'1',0); textSpaced(d,.832*W,cyLo,F.barlow,6,ink,'2',0);
-      const plug=(jx,jy)=>{ rr(c,jx-4.4*s,jy-5.5*s,8.8*s,6.5*s,2*s); c.fillStyle=rgb(40,40,44); c.fill();
-        const cg=c.createLinearGradient(jx-4.4*s,jy,jx+4.4*s,jy); cg.addColorStop(0,rgb(182,186,192)); cg.addColorStop(0.5,rgb(120,124,130)); cg.addColorStop(1,rgb(182,186,192));
-        rr(c,jx-4.4*s,jy+1*s,8.8*s,3.6*s,1.4*s); c.fillStyle=cg; c.fill();
-        c.beginPath(); c.moveTo(jx,jy+6*s); c.bezierCurveTo(jx+4*s,jy+34*s, jx-34*s,jy+42*s, jx-40*s,H*0.99);
-        c.lineWidth=5*s; c.lineCap='round'; c.strokeStyle=rgb(20,20,22); c.stroke();
-        c.lineWidth=1.6*s; c.strokeStyle='rgba(255,255,255,0.10)'; c.stroke(); c.lineCap='butt'; };
-      const jumper=(x1,y1,x2,y2)=>{ const mx=(x1+x2)/2, my=Math.max(y1,y2)+13*s;
-        c.beginPath(); c.arc(x1,y1,3*s,0,7); c.fillStyle=rgb(40,40,44); c.fill();
-        c.beginPath(); c.arc(x2,y2,3*s,0,7); c.fillStyle=rgb(40,40,44); c.fill();
-        c.beginPath(); c.moveTo(x1,y1); c.quadraticCurveTo(mx,my,x2,y2);
-        c.lineWidth=3.6*s; c.lineCap='round'; c.strokeStyle=rgb(20,20,22); c.stroke(); c.lineCap='butt'; };
-      let mode;
-      if (inp < 0.25)      { plug(xB,cyHi); mode='BRIGHT'; }
-      else if (inp < 0.75) { jumper(xB,cyLo,xN,cyHi); plug(xB,cyHi); mode='JUMPERED'; }
-      else                 { plug(xN,cyHi); mode='NORMAL'; }
-      textSpaced(d,.894*W,py+ph*.12,F.barlow,7,rgb(120,40,30),mode,0.06); } };
+      rr(c,px,py,pw,ph,ph*0.5); c.strokeStyle=rgb(96,90,78); c.lineWidth=1.6*s; c.stroke();
+      const ky=.745*H, lbY=ky+.115*H;
+      // arcos de numeros 1-12 (tweed real) alrededor de cada perilla
+      const fan=(cx2,R2)=>{ c.save(); c.textAlign='center'; c.textBaseline='middle';
+        c.font=`700 ${Math.round(6.4*s)}px ${F.barlow}`; c.fillStyle=ink;
+        for(let i=0;i<12;i++){ const aa=ang(i/11); const rr2=R2*1.42;
+          c.fillText(String(i+1), cx2+rr2*Math.cos(aa), ky+rr2*Math.sin(aa)); }
+        c.restore(); };
+      const KR=.0215*W;
+      for(const kx of [.330,.408,.486,.564,.648,.726]) fan(kx*W,KR);
+      // labels bajo las perillas
+      const lb=(cx2,t,sz)=>textSpaced(d,cx2*W,lbY,F.barlow,sz||9,ink,t,0.06);
+      lb(.330,'PRESENCE',8.5); lb(.408,'MIDDLE'); lb(.486,'BASS'); lb(.564,'TREBLE');
+      lb(.648,'VOL. BRIGHT',8); lb(.726,'VOL. NORMAL',8);
+      // INPUT selector con sus 3 posiciones
+      const inNames=['BRIGHT','BOTH','NORMAL'];
+      const inv=Math.round(((vals&&vals[0]!=null?vals[0]:0.5))*2);
+      textSpaced(d,.816*W,ky-.088*H,F.barlow,7,ink,inNames[inv],0.06);
+      lb(.816,'INPUT',8.5);
+      // ON/OFF + jewel POWER (izquierda)
+      batToggle(d,.128*W,ky,.0095*W,true);
+      textSpaced(d,.128*W,ky-.088*H,F.barlow,7,ink,'ON',0.05);
+      textSpaced(d,.128*W,lbY,F.barlow,7,ink,'OFF',0.05);
+      const jx=.175*W;
+      const jg=c.createRadialGradient(jx-2.5*s,ky-3*s,1.2*s,jx,ky,9.5*s);
+      jg.addColorStop(0,rgb(255,150,120)); jg.addColorStop(.5,rgb(215,42,28)); jg.addColorStop(1,rgb(100,12,8));
+      c.beginPath(); c.arc(jx,ky,9*s,0,7); c.fillStyle=jg; c.fill();
+      c.strokeStyle=rgb(120,116,108); c.lineWidth=1.6*s; c.stroke();
+      c.save(); c.globalAlpha=.25; c.beginPath(); c.arc(jx,ky,14*s,0,7); c.fillStyle=rgb(255,80,50); c.fill(); c.restore();
+      textSpaced(d,.175*W,ky-.088*H,F.barlow,7,ink,'POWER',0.05); } };
 
   // ── GANDDI SUPERDRIVE 45 (Budda Superdrive 45 Series II) — black tolex head,
   //    purple control panel, white piping chevron, "GANDDI" oval badge. 6 knobs:
