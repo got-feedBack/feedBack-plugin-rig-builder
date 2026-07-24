@@ -6067,6 +6067,98 @@
       c.save(); c.textAlign='right'; c.textBaseline='middle'; c.font=`italic 800 ${Math.round(30*s)}px ${F.anton}`; c.fillStyle=rgb(38,38,42);
       c.fillText('VH4',(px+pw)-16*s,py+ph*.90); c.restore(); } };
 
+  // ── RANEY IRONHEART (Laney IRT60H) — head negro de cuero, rejilla de rombos
+  //    con brillo ROJO de valvulas y placa 'Raney' plateada; panel negro con
+  //    PRE-BOOST (perilla roja + toggle + LED), selector CLEAN/RHYTHM/LEAD con
+  //    LEDs, Gain/EQ/Volume, seccion master Dynamics/Tone/Watts, jewel POWER.
+  //    0 Gain 1 Bass 2 Middle 3 Treble 4 Volume 5 Dynamics 6 Tone 7 Watts
+  //    9 Channel(3) 10 Boost 11 Boost On.
+  P.raneyironheart = { w:1660, h:600, ptr:rgb(238,240,244),
+    knobs:[
+      {id:10,cx:.155,cy:.700,r:.0185,style:'capplain',cap:[196,40,30]},  // PRE-BOOST (roja)
+      {id:11,cx:.108,cy:.700,r:.014,style:'bat'},                        // BOOST ON
+      {id:9, cx:.225,cy:.700,r:.020,style:'boss',select:3},              // CHANNEL
+      {id:0, cx:.315,cy:.700,r:.020,style:'boss'},                       // GAIN
+      {id:1, cx:.395,cy:.700,r:.020,style:'boss'},                       // BASS
+      {id:2, cx:.460,cy:.700,r:.020,style:'boss'},                       // MIDDLE
+      {id:3, cx:.525,cy:.700,r:.020,style:'boss'},                       // TREBLE
+      {id:4, cx:.605,cy:.700,r:.020,style:'boss'},                       // VOLUME
+      {id:5, cx:.700,cy:.700,r:.020,style:'boss'},                       // DYNAMICS
+      {id:6, cx:.765,cy:.700,r:.020,style:'boss'},                       // TONE
+      {id:7, cx:.830,cy:.700,r:.020,style:'boss'} ],                     // WATTS
+    draw(d,vals){ const {ctx:c,W,H,s}=d; const wht=rgb(232,234,238);
+      const bgr=c.createLinearGradient(0,0,0,H); bgr.addColorStop(0,rgb(18,18,20)); bgr.addColorStop(1,rgb(8,8,10));
+      c.fillStyle=bgr; c.fillRect(0,0,W,H);
+      // textura cuero sutil
+      c.save(); c.globalAlpha=0.05; c.strokeStyle=rgb(120,120,124); c.lineWidth=1;
+      for(let i=0;i<260;i++){ const x=(i*97)%W, y=(i*61)%H; c.beginPath(); c.arc(x,y,2.2*s,0,7); c.stroke(); } c.restore();
+      // ── rejilla de ROMBOS con brillo rojo de valvulas ──
+      const dy0=H*.075, dh=H*.43, dx0=W*.075, dw=W*.85;
+      rr(c,dx0,dy0,dw,dh,4*s); c.fillStyle=rgb(6,6,7); c.fill();
+      c.save(); rr(c,dx0,dy0,dw,dh,4*s); c.clip();
+      // glow rojo (valvulas atras)
+      for(const gx of [.30,.52,.74]){ const g=c.createRadialGradient(W*gx,dy0+dh*.55,6*s,W*gx,dy0+dh*.55,dh*.75);
+        g.addColorStop(0,'rgba(215,40,18,0.50)'); g.addColorStop(.55,'rgba(130,18,8,0.25)'); g.addColorStop(1,'rgba(0,0,0,0)');
+        c.fillStyle=g; c.fillRect(dx0,dy0,dw,dh); }
+      // malla de rombos
+      c.strokeStyle='rgba(0,0,0,0.9)'; c.lineWidth=2.6*s;
+      const mp=15*s;
+      for(let k=-dh; k<dw+dh; k+=mp){ c.beginPath(); c.moveTo(dx0+k,dy0); c.lineTo(dx0+k+dh,dy0+dh); c.stroke();
+        c.beginPath(); c.moveTo(dx0+k+dh,dy0); c.lineTo(dx0+k,dy0+dh); c.stroke(); }
+      c.strokeStyle='rgba(255,255,255,0.05)'; c.lineWidth=1*s;
+      for(let k=-dh; k<dw+dh; k+=mp){ c.beginPath(); c.moveTo(dx0+k+1.5*s,dy0); c.lineTo(dx0+k+dh+1.5*s,dy0+dh); c.stroke(); }
+      c.restore();
+      rr(c,dx0,dy0,dw,dh,4*s); c.strokeStyle=rgb(52,54,58); c.lineWidth=1.6*s; c.stroke();
+      // placa 'Raney' plateada al centro
+      const bw=W*.17, bh=H*.115, bx=W*.5-bw/2, by=dy0+dh*.5-bh/2;
+      const bg2=c.createLinearGradient(0,by,0,by+bh); bg2.addColorStop(0,rgb(238,240,244)); bg2.addColorStop(.5,rgb(196,198,204)); bg2.addColorStop(1,rgb(150,152,158));
+      rr(c,bx,by,bw,bh,5*s); c.fillStyle=bg2; c.fill(); c.strokeStyle=rgb(70,72,76); c.lineWidth=1.6*s; c.stroke();
+      c.save(); c.textAlign='center'; c.textBaseline='middle'; c.font=`800 ${Math.round(40*s)}px ${F.anton}`;
+      c.fillStyle=rgb(20,20,22); c.fillText('Raney',W*.5,by+bh*.54); c.restore();
+      // ── panel de control negro ──
+      const py=H*.545, ph=H*.41, px=W*.075, pw=W*.85, lblY=py+ph*.20;
+      const pg=c.createLinearGradient(0,py,0,py+ph); pg.addColorStop(0,rgb(30,30,33)); pg.addColorStop(1,rgb(16,16,18));
+      rr(c,px,py,pw,ph,4*s); c.fillStyle=pg; c.fill(); c.strokeStyle=rgb(60,62,66); c.lineWidth=1.4*s; c.stroke();
+      const lbl=(cx2,t,sz)=>textSpaced(d,cx2*W,lblY,F.barlow,sz||9.5,wht,t,0.05);
+      // INPUT jack
+      const jx=.088*W, jy=py+ph*.55;
+      c.beginPath(); c.arc(jx,jy,9.5*s,0,7); c.fillStyle=rgb(180,182,188); c.fill(); c.strokeStyle=rgb(60,62,66); c.stroke();
+      c.beginPath(); c.arc(jx,jy,4.5*s,0,7); c.fillStyle=rgb(10,10,12); c.fill();
+      textSpaced(d,jx,py+ph*.20,F.barlow,8.5,wht,'INPUT',0.05);
+      // PRE-BOOST: LED rojo si Boost On
+      const bOn=(vals&&vals[11]!=null?vals[11]:0)>0.5;
+      const blx=.185*W, bly=py+ph*.42;
+      c.beginPath(); c.arc(blx,bly,4.6*s,0,7);
+      c.fillStyle=bOn?rgb(235,60,40):rgb(70,16,12); c.fill(); c.strokeStyle=rgb(90,92,96); c.lineWidth=1*s; c.stroke();
+      if(bOn){ c.save(); c.globalAlpha=.35; c.beginPath(); c.arc(blx,bly,8.5*s,0,7); c.fillStyle=rgb(255,90,60); c.fill(); c.restore(); }
+      lbl(.132,'PRE-BOOST');
+      // CHANNEL LEDs: CLEAN verde / RHYTHM verde / LEAD rojo
+      const chv=Math.round(((vals&&vals[9]!=null?vals[9]:0.5))*2);
+      const chNames=['CLEAN','RHYTHM','LEAD'];
+      for(let i=0;i<3;i++){ const lx=W*(.205+.02*i), ly=py+ph*.90;
+        const on=(i===chv); const col=i===2?[235,60,40]:[70,220,90];
+        c.beginPath(); c.arc(lx,ly,3.8*s,0,7);
+        c.fillStyle=on?rgb(col[0],col[1],col[2]):rgb(30,34,32); c.fill();
+        c.strokeStyle=rgb(80,82,86); c.lineWidth=0.8*s; c.stroke(); }
+      lbl(.225,'CHANNEL');
+      textSpaced(d,.225*W,py+ph*.975,F.barlow,7,rgb(150,152,158),chNames[chv],0.06);
+      // labels perillas
+      lbl(.315,'GAIN'); lbl(.395,'BASS'); lbl(.460,'MIDDLE'); lbl(.525,'TREBLE'); lbl(.605,'VOLUME');
+      lbl(.700,'DYNAMICS',9); lbl(.765,'TONE'); lbl(.830,'WATTS');
+      // separadores de seccion
+      c.strokeStyle=rgb(58,60,64); c.lineWidth=1*s;
+      for(const sx of [.268,.652,.578]){ c.beginPath(); c.moveTo(sx*W,py+8*s); c.lineTo(sx*W,py+ph-8*s); c.stroke(); }
+      // POWER jewel + switch
+      const rx2=.905*W, ry=py+ph*.44;
+      const jg=c.createRadialGradient(rx2-2*s,ry-3*s,1*s,rx2,ry,9*s);
+      jg.addColorStop(0,rgb(255,140,110)); jg.addColorStop(.5,rgb(215,42,28)); jg.addColorStop(1,rgb(110,12,8));
+      c.beginPath(); c.arc(rx2,ry,8.5*s,0,7); c.fillStyle=jg; c.fill(); c.strokeStyle=rgb(90,92,96); c.lineWidth=1.4*s; c.stroke();
+      textSpaced(d,rx2,lblY,F.barlow,8.5,wht,'POWER',0.05);
+      // 'IRONHEART' outline (derecha)
+      c.save(); c.textAlign='center'; c.textBaseline='middle';
+      c.font=`800 ${Math.round(17*s)}px ${F.bebas}`; c.strokeStyle=rgb(190,192,198); c.lineWidth=1.1*s;
+      c.strokeText('I R O N H E A R T',.905*W,py+ph*.86); c.restore(); } };
+
   // ── MARSTEN BLUESBREAKER (Marshall 1962) — JTM45 voice + Tremolo, gold combo
   //    panel. 0 Speed 1 Intensity 2 Presence 3 Bass 4 Middle 5 Treble 6 Loudness1
   //    7 Loudness2 + Input jumper(8). RS Gain -> Loudness1.
@@ -7901,7 +7993,7 @@
     lovoltdr504:1.45, lovoltdr103:1.45, samplegvh140c:1.78,
     // British / boutique heads
     boxac30:1.22, bendersupernova22:1.45, dualrect:1.72, dsl100:1.45, plexi:1.55,
-    marstenvs100:1.45, marstenjcm800:1.60, marstenjtm45:1.55, marstenbluesbreaker:1.60, marstenmajor:1.55, deezelvh4:1.45,
+    marstenvs100:1.45, marstenjcm800:1.60, marstenjtm45:1.55, marstenbluesbreaker:1.60, marstenmajor:1.55, deezelvh4:1.45, raneyironheart:1.45,
     marstendsl15:1.60, marstenjvm410:1.60, marstensilverjubilee:1.62, aor50:1.38, jc90:1.15, engelfireball:1.45,
     polystoneminibrute:1.28, ronaldjc120:1.22, tw40:1.28, superdrive45:1.45,
     markiii:1.80, markii:1.80, unparalleldc30:1.78, unparallelchieftain:1.75,

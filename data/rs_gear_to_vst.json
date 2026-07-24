@@ -1888,5 +1888,16 @@
    "bundled": "vst/amps/DeezelVH4.vst3",
    "notes": "Diezel VH4 Channel 3 'Mega' (parody Deezel) — tight 12AX7 high-gain cascade + 4x EL34."
   }
+ ],
+ "Extra_RaneyIronheart": [
+  {
+   "name": "RaneyIronheart",
+   "manufacturer": "Rig Builder",
+   "format": "VST3",
+   "url": "",
+   "free": true,
+   "bundled": "vst/amps/RaneyIronheart.vst3",
+   "notes": "Laney Ironheart IRT60H (parody Raney) - op-amp Pre-Boost + Clean/Rhythm/Lead ECC83 paths + 2x 6L6, from the official service schematic."
+  }
  ]
 }
