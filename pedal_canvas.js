@@ -9400,45 +9400,120 @@
     c.fillStyle=sh; c.fillRect(gx,gy,gw,gh);
     c.restore(); } };
 
-  // BENDER DELUXE de frente: combo tweed 5E3 con ventana de tela oxblood.
-  FRONTS.benderdeluxe = { w:1000, h:680, knobs:[], draw(d){ const {ctx:c,W,H,s}=d;
-    rr(c,0,0,W,H,18*s); c.fillStyle=rgb(150,116,64); c.fill();
-    c.save(); rr(c,0,0,W,H,18*s); c.clip();
-    const base=c.createLinearGradient(0,0,0,H); base.addColorStop(0,rgb(196,156,90)); base.addColorStop(.5,rgb(182,142,78)); base.addColorStop(1,rgb(158,120,64));
+  // BENDER DELUXE de frente (5E3 vintage, 51x43 cm): tweed patinado, placa
+  //  metalica "Bender Deluxe", asa de cuero y la gran ventana de tela cafe.
+  FRONTS.benderdeluxe = { w:1000, h:843, knobs:[], draw(d){ const {ctx:c,W,H,s}=d;
+    rr(c,0,0,W,H,20*s); c.fillStyle=rgb(148,112,62); c.fill();
+    c.save(); rr(c,0,0,W,H,20*s); c.clip();
+    const base=c.createLinearGradient(0,0,0,H); base.addColorStop(0,rgb(190,150,88)); base.addColorStop(.5,rgb(176,136,76)); base.addColorStop(1,rgb(150,112,60));
     c.fillStyle=base; c.fillRect(0,0,W,H);
     c.lineWidth=2.2*s;
-    for(let k=-H;k<W+H;k+=7*s){ c.strokeStyle='rgba(104,74,36,0.35)'; c.beginPath(); c.moveTo(k,0); c.lineTo(k+H,H); c.stroke(); }
-    for(let k=-H;k<W+H;k+=7*s){ c.strokeStyle='rgba(240,206,138,0.30)'; c.beginPath(); c.moveTo(k+3*s,0); c.lineTo(k+H+3*s,H); c.stroke(); }
+    for(let k=-H;k<W+H;k+=7*s){ c.strokeStyle='rgba(104,74,36,0.38)'; c.beginPath(); c.moveTo(k,0); c.lineTo(k+H,H); c.stroke(); }
+    for(let k=-H;k<W+H;k+=7*s){ c.strokeStyle='rgba(238,204,136,0.28)'; c.beginPath(); c.moveTo(k+3*s,0); c.lineTo(k+H+3*s,H); c.stroke(); }
     c.lineWidth=1*s;
     for(let y=0;y<H;y+=3.4*s){ c.strokeStyle='rgba(70,48,22,0.10)'; c.beginPath(); c.moveTo(0,y); c.lineTo(W,y); c.stroke(); }
+    // manchas de patina vintage
+    for(const [mx,my,mr,al] of [[.10,.14,.30,.14],[.88,.18,.25,.12],[.5,.92,.5,.10],[.06,.86,.22,.16],[.93,.9,.2,.13]]){
+      const g=c.createRadialGradient(W*mx,H*my,4*s,W*mx,H*my,H*mr);
+      g.addColorStop(0,'rgba(86,58,24,'+al+')'); g.addColorStop(1,'rgba(0,0,0,0)');
+      c.fillStyle=g; c.fillRect(0,0,W,H); }
     const vg=c.createRadialGradient(W*.5,H*.45,H*.42,W*.5,H*.5,W*.62);
-    vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(60,38,12,0.38)');
+    vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(56,36,12,0.42)');
     c.fillStyle=vg; c.fillRect(0,0,W,H);
-    // asa de cuero arriba
-    rr(c,W*.40,H*.015,W*.20,H*.045,12*s); c.fillStyle=rgb(74,42,24); c.fill();
-    c.strokeStyle=rgb(36,20,12); c.lineWidth=1.2*s; c.stroke();
+    // asa de cuero gastada
+    rr(c,W*.38,H*.012,W*.24,H*.05,14*s); c.fillStyle=rgb(88,52,30); c.fill();
+    c.strokeStyle=rgb(40,22,12); c.lineWidth=1.4*s; c.stroke();
     c.restore();
-    // ventana de rejilla oxblood
-    const gx=W*.17, gy=H*.13, gw=W*.66, gh=H*.55;
-    rr(c,gx-6*s,gy-6*s,gw+12*s,gh+12*s,16*s); c.strokeStyle=rgb(110,80,40); c.lineWidth=4*s; c.stroke();
-    rr(c,gx,gy,gw,gh,12*s);
+    // tornillos de esquina
+    const scr=(x,y)=>{ c.beginPath(); c.arc(x,y,4.5*s,0,7);
+      const g=c.createRadialGradient(x-1.5*s,y-1.5*s,0.5*s,x,y,4.5*s);
+      g.addColorStop(0,rgb(210,196,160)); g.addColorStop(1,rgb(110,92,58));
+      c.fillStyle=g; c.fill(); c.strokeStyle=rgb(60,44,22); c.lineWidth=0.8*s; c.stroke(); };
+    scr(W*.043,H*.05); scr(W*.957,H*.05); scr(W*.043,H*.95); scr(W*.957,H*.95);
+    // ventana de rejilla (casi todo el frente, tela cafe a cuadros finos)
+    const gx=W*.062, gy=H*.135, gw=W*.876, gh=H*.79;
+    rr(c,gx-6*s,gy-6*s,gw+12*s,gh+12*s,14*s); c.strokeStyle=rgb(112,82,42); c.lineWidth=4*s; c.stroke();
+    rr(c,gx,gy,gw,gh,10*s);
     const gb=c.createRadialGradient(W*.5,gy+gh*.45,gh*.25,W*.5,gy+gh*.5,gw*.6);
-    gb.addColorStop(0,rgb(74,34,26)); gb.addColorStop(.7,rgb(52,22,17)); gb.addColorStop(1,rgb(32,13,10));
+    gb.addColorStop(0,rgb(58,34,24)); gb.addColorStop(.7,rgb(40,22,15)); gb.addColorStop(1,rgb(26,13,9));
     c.fillStyle=gb; c.fill();
-    c.save(); rr(c,gx,gy,gw,gh,12*s); c.clip();
+    c.save(); rr(c,gx,gy,gw,gh,10*s); c.clip();
     c.lineWidth=1*s;
-    for(let k=gx-gh;k<gx+gw;k+=5*s){ c.strokeStyle='rgba(214,140,92,0.14)'; c.beginPath(); c.moveTo(k,gy); c.lineTo(k+gh,gy+gh); c.stroke(); }
-    for(let k=gx;k<gx+gw+gh;k+=5*s){ c.strokeStyle='rgba(0,0,0,0.30)'; c.beginPath(); c.moveTo(k,gy); c.lineTo(k-gh,gy+gh); c.stroke(); }
+    for(let x=gx;x<gx+gw;x+=3.5*s){ c.strokeStyle='rgba(158,96,62,0.22)'; c.beginPath(); c.moveTo(x,gy); c.lineTo(x,gy+gh); c.stroke(); }
+    for(let y=gy;y<gy+gh;y+=3.5*s){ c.strokeStyle='rgba(0,0,0,0.35)'; c.beginPath(); c.moveTo(gx,y); c.lineTo(gx+gw,y); c.stroke(); }
+    c.lineWidth=1.2*s;
+    for(let y=gy;y<gy+gh;y+=14*s){ c.strokeStyle='rgba(20,10,6,0.4)'; c.beginPath(); c.moveTo(gx,y); c.lineTo(gx+gw,y); c.stroke(); }
     const sh=c.createLinearGradient(0,gy,0,gy+gh);
-    sh.addColorStop(0,'rgba(255,200,150,0.10)'); sh.addColorStop(.5,'rgba(0,0,0,0)'); sh.addColorStop(1,'rgba(0,0,0,0.32)');
+    sh.addColorStop(0,'rgba(255,210,160,0.09)'); sh.addColorStop(.5,'rgba(0,0,0,0)'); sh.addColorStop(1,'rgba(0,0,0,0.32)');
     c.fillStyle=sh; c.fillRect(gx,gy,gw,gh);
     c.restore();
-    // script en tinta abajo-derecha del tweed
-    c.save(); c.translate(W*.86,H*.86); c.transform(1,0,-0.16,1,0,0);
-    c.textAlign='center'; c.textBaseline='middle';
-    c.font=`italic 800 ${Math.round(26*s)}px ${F.ink}`; c.fillStyle=rgb(82,54,28);
-    c.fillText('Bender',0,0); c.restore(); } };
+    // placa metalica "Bender Deluxe" (arriba, centro)
+    const bw=W*.30, bh=H*.062, bx=W*.5-bw/2, by=H*.052;
+    rr(c,bx,by,bw,bh,6*s);
+    const mg=c.createLinearGradient(0,by,0,by+bh); mg.addColorStop(0,rgb(214,206,188)); mg.addColorStop(.5,rgb(166,158,138)); mg.addColorStop(1,rgb(120,112,94));
+    c.fillStyle=mg; c.fill(); c.strokeStyle=rgb(64,52,32); c.lineWidth=1.4*s; c.stroke();
+    rr(c,bx+5*s,by+4*s,bw-10*s,bh-8*s,4*s); c.fillStyle=rgb(52,36,24); c.fill();
+    c.save(); c.textAlign='center'; c.textBaseline='middle';
+    c.font=`italic 800 ${Math.round(17*s)}px ${F.ink}`; c.fillStyle=rgb(226,214,190);
+    c.fillText('Bender Deluxe', W*.5, by+bh*.40);
+    c.font=`700 ${Math.round(6*s)}px ${F.barlow}`; c.fillStyle=rgb(190,176,150);
+    c.fillText('FULLERTON,  CALIFORNIA', W*.5, by+bh*.78); c.restore(); } };
   FRONTS.tw26 = FRONTS.benderdeluxe;
+
+  // BENDER BASSMAN de frente ('59 4x10, 59.7x56.8 cm — casi cuadrado): tweed
+  //  lacado brillante, rejilla de costillas horizontales y placa oxblood.
+  FRONTS.tw40 = { w:1000, h:952, knobs:[], draw(d){ const {ctx:c,W,H,s}=d;
+    rr(c,0,0,W,H,20*s); c.fillStyle=rgb(178,132,66); c.fill();
+    c.save(); rr(c,0,0,W,H,20*s); c.clip();
+    const base=c.createLinearGradient(0,0,0,H); base.addColorStop(0,rgb(214,166,86)); base.addColorStop(.5,rgb(200,152,76)); base.addColorStop(1,rgb(178,132,64));
+    c.fillStyle=base; c.fillRect(0,0,W,H);
+    c.lineWidth=2.2*s;
+    for(let k=-H;k<W+H;k+=7*s){ c.strokeStyle='rgba(120,84,38,0.36)'; c.beginPath(); c.moveTo(k,0); c.lineTo(k+H,H); c.stroke(); }
+    for(let k=-H;k<W+H;k+=7*s){ c.strokeStyle='rgba(250,216,142,0.32)'; c.beginPath(); c.moveTo(k+3*s,0); c.lineTo(k+H+3*s,H); c.stroke(); }
+    c.lineWidth=1*s;
+    for(let y=0;y<H;y+=3.4*s){ c.strokeStyle='rgba(82,56,24,0.10)'; c.beginPath(); c.moveTo(0,y); c.lineTo(W,y); c.stroke(); }
+    const vg=c.createRadialGradient(W*.5,H*.45,H*.42,W*.5,H*.5,W*.62);
+    vg.addColorStop(0,'rgba(255,244,214,0.05)'); vg.addColorStop(1,'rgba(70,44,14,0.36)');
+    c.fillStyle=vg; c.fillRect(0,0,W,H);
+    // asa de cuero
+    rr(c,W*.40,H*.010,W*.20,H*.042,12*s); c.fillStyle=rgb(80,46,26); c.fill();
+    c.strokeStyle=rgb(38,20,11); c.lineWidth=1.4*s; c.stroke();
+    c.restore();
+    // tornillos de esquina
+    const scr=(x,y)=>{ c.beginPath(); c.arc(x,y,4.5*s,0,7);
+      const g=c.createRadialGradient(x-1.5*s,y-1.5*s,0.5*s,x,y,4.5*s);
+      g.addColorStop(0,rgb(216,202,166)); g.addColorStop(1,rgb(116,96,60));
+      c.fillStyle=g; c.fill(); c.strokeStyle=rgb(64,46,22); c.lineWidth=0.8*s; c.stroke(); };
+    scr(W*.042,H*.042); scr(W*.958,H*.042); scr(W*.042,H*.958); scr(W*.958,H*.958);
+    // rejilla de costillas horizontales
+    const gx=W*.065, gy=H*.105, gw=W*.87, gh=H*.83;
+    rr(c,gx-6*s,gy-6*s,gw+12*s,gh+12*s,14*s); c.strokeStyle=rgb(128,94,46); c.lineWidth=4*s; c.stroke();
+    rr(c,gx,gy,gw,gh,10*s);
+    const gb=c.createRadialGradient(W*.5,gy+gh*.45,gh*.25,W*.5,gy+gh*.5,gw*.6);
+    gb.addColorStop(0,rgb(56,34,20)); gb.addColorStop(.7,rgb(42,24,14)); gb.addColorStop(1,rgb(28,15,9));
+    c.fillStyle=gb; c.fill();
+    c.save(); rr(c,gx,gy,gw,gh,10*s); c.clip();
+    for(let y=gy;y<gy+gh;y+=4.5*s){
+      c.strokeStyle='rgba(198,138,82,0.30)'; c.lineWidth=1.7*s;
+      c.beginPath(); c.moveTo(gx,y); c.lineTo(gx+gw,y); c.stroke();
+      c.strokeStyle='rgba(0,0,0,0.45)'; c.lineWidth=1*s;
+      c.beginPath(); c.moveTo(gx,y+2.2*s); c.lineTo(gx+gw,y+2.2*s); c.stroke(); }
+    c.lineWidth=1*s;
+    for(let x=gx;x<gx+gw;x+=3*s){ c.strokeStyle='rgba(0,0,0,0.16)'; c.beginPath(); c.moveTo(x,gy); c.lineTo(x,gy+gh); c.stroke(); }
+    const sh=c.createLinearGradient(0,gy,0,gy+gh);
+    sh.addColorStop(0,'rgba(255,214,160,0.10)'); sh.addColorStop(.5,'rgba(0,0,0,0)'); sh.addColorStop(1,'rgba(0,0,0,0.30)');
+    c.fillStyle=sh; c.fillRect(gx,gy,gw,gh);
+    c.restore();
+    // placa oxblood "Bender Bassman" (arriba, centro)
+    const bw=W*.30, bh=H*.055, bx=W*.5-bw/2, by=H*.040;
+    rr(c,bx,by,bw,bh,8*s);
+    const pgb=c.createLinearGradient(0,by,0,by+bh); pgb.addColorStop(0,rgb(112,32,34)); pgb.addColorStop(1,rgb(76,20,22));
+    c.fillStyle=pgb; c.fill();
+    c.strokeStyle=rgb(226,210,180); c.lineWidth=1.8*s; c.stroke();
+    rr(c,bx+4*s,by+3.5*s,bw-8*s,bh-7*s,6*s); c.strokeStyle='rgba(226,210,180,0.55)'; c.lineWidth=0.9*s; c.stroke();
+    c.save(); c.textAlign='center'; c.textBaseline='middle';
+    c.font=`italic 800 ${Math.round(18*s)}px ${F.ink}`; c.fillStyle=rgb(238,228,206);
+    c.fillText('Bender Bassman', W*.5, by+bh*.52); c.restore(); } };
 
   function frontDataURL(stem) {
     const spec = FRONTS[stem]; if (!spec) return null;
