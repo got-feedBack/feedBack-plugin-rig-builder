@@ -551,29 +551,29 @@
       for(let i=0;i<24;i++){ const t=i/24*Math.PI*2+a;
         c.strokeStyle=(i%2)?'rgba(0,0,0,0.55)':'rgba(255,255,255,0.06)';
         c.beginPath();
-        c.moveTo(cx+R*0.70*Math.cos(t),cy+R*0.70*Math.sin(t));
+        c.moveTo(cx+R*0.80*Math.cos(t),cy+R*0.80*Math.sin(t));
         c.lineTo(cx+R*0.985*Math.cos(t),cy+R*0.985*Math.sin(t)); c.stroke(); }
       // tapa dorada torneada
-      const cg=c.createRadialGradient(cx-R*0.24,cy-R*0.28,R*0.05,cx,cy,R*0.70);
+      const cg=c.createRadialGradient(cx-R*0.28,cy-R*0.32,R*0.05,cx,cy,R*0.84);
       cg.addColorStop(0,rgb(252,228,150)); cg.addColorStop(.5,rgb(224,188,96)); cg.addColorStop(1,rgb(168,132,54));
-      c.beginPath(); c.arc(cx,cy,R*0.68,0,7); c.fillStyle=cg; c.fill();
+      c.beginPath(); c.arc(cx,cy,R*0.82,0,7); c.fillStyle=cg; c.fill();
       c.strokeStyle=rgb(110,84,36); c.lineWidth=0.9*s; c.stroke();
       // anillos concentricos del maquinado
-      for(let rr2=R*0.10; rr2<R*0.64; rr2+=R*0.075){
+      for(let rr2=R*0.10; rr2<R*0.78; rr2+=R*0.075){
         c.beginPath(); c.arc(cx,cy,rr2,0,7);
         c.strokeStyle='rgba(120,90,30,0.20)'; c.lineWidth=0.7*s; c.stroke(); }
       // destello diagonal del anodizado
-      c.save(); c.beginPath(); c.arc(cx,cy,R*0.66,0,7); c.clip();
+      c.save(); c.beginPath(); c.arc(cx,cy,R*0.80,0,7); c.clip();
       c.globalAlpha=0.30; c.beginPath();
       c.moveTo(cx-R*0.7,cy+R*0.15); c.lineTo(cx-R*0.05,cy-R*0.7); c.lineTo(cx+R*0.25,cy-R*0.7); c.lineTo(cx-R*0.4,cy+R*0.15); c.closePath();
       c.fillStyle=rgb(255,244,200); c.fill(); c.restore();
       // ranura indicadora negra + filo de luz
-      c.beginPath(); c.moveTo(cx+R*0.22*Math.cos(a),cy+R*0.22*Math.sin(a));
-      c.lineTo(cx+R*0.64*Math.cos(a),cy+R*0.64*Math.sin(a));
+      c.beginPath(); c.moveTo(cx+R*0.24*Math.cos(a),cy+R*0.24*Math.sin(a));
+      c.lineTo(cx+R*0.76*Math.cos(a),cy+R*0.76*Math.sin(a));
       c.lineCap='round'; c.strokeStyle=rgb(16,13,8); c.lineWidth=2.6*s; c.stroke();
       c.strokeStyle='rgba(255,240,190,0.5)'; c.lineWidth=0.9*s;
-      c.beginPath(); c.moveTo(cx+R*0.22*Math.cos(a)+1*s,cy+R*0.22*Math.sin(a)+1*s);
-      c.lineTo(cx+R*0.64*Math.cos(a)+1*s,cy+R*0.64*Math.sin(a)+1*s); c.stroke(); c.lineCap='butt';
+      c.beginPath(); c.moveTo(cx+R*0.24*Math.cos(a)+1*s,cy+R*0.24*Math.sin(a)+1*s);
+      c.lineTo(cx+R*0.76*Math.cos(a)+1*s,cy+R*0.76*Math.sin(a)+1*s); c.stroke(); c.lineCap='butt';
       return;
     }
     // pointer + tick fan (default)
