@@ -195,37 +195,66 @@
       return;
     }
     if (style==='tweed') {
-      // Fender tweed-era: perilla BARRIL negra conica con cuña puntero clara.
-      c.beginPath(); c.arc(cx,cy,R*1.04,0,7); c.fillStyle=rgb(8,8,9); c.fill();
-      const g=c.createRadialGradient(cx-R*0.3,cy-R*0.4,R*0.06,cx,cy,R);
-      g.addColorStop(0,rgb(66,64,60)); g.addColorStop(.5,rgb(34,33,31)); g.addColorStop(1,rgb(14,14,13));
-      c.beginPath(); c.arc(cx,cy,R,0,7); c.fillStyle=g; c.fill();
-      c.strokeStyle=rgb(4,4,5); c.lineWidth=1*s; c.stroke();
-      // cono superior
-      const fg=c.createRadialGradient(cx-R*0.18,cy-R*0.25,R*0.04,cx,cy,R*0.62);
-      fg.addColorStop(0,rgb(56,54,50)); fg.addColorStop(1,rgb(20,20,19));
-      c.beginPath(); c.arc(cx,cy,R*0.60,0,7); c.fillStyle=fg; c.fill();
-      c.strokeStyle='rgba(255,255,255,0.08)'; c.lineWidth=0.8*s; c.stroke();
-      // CUÑA puntero (barril): triangulo largo claro del centro al borde
+      // Fender tweed: CHICKEN-HEAD negra glossy — el cuerpo gota gira y la
+      // PUNTA es el indicador (como el panel real del 5F6-A).
       c.save(); c.translate(cx,cy); c.rotate(a);
-      c.beginPath(); c.moveTo(R*0.05,-3.4*s); c.lineTo(R*1.00,-1.1*s); c.lineTo(R*1.00,1.1*s); c.lineTo(R*0.05,3.4*s); c.closePath();
-      const wg=c.createLinearGradient(0,0,R,0); wg.addColorStop(0,rgb(230,228,220)); wg.addColorStop(1,rgb(198,196,188));
-      c.fillStyle=wg; c.fill(); c.strokeStyle='rgba(0,0,0,0.4)'; c.lineWidth=0.7*s; c.stroke(); c.restore();
+      // sombra
+      c.save(); c.translate(1.5*s,2*s); c.globalAlpha=0.35;
+      c.beginPath(); c.arc(-R*0.15,0,R*0.72,0.62,-0.62,false); c.lineTo(R*1.18,0); c.closePath();
+      c.fillStyle=rgb(0,0,0); c.fill(); c.restore();
+      // cuerpo gota: circulo trasero + punta
+      c.beginPath(); c.arc(-R*0.15,0,R*0.72,0.62,-0.62,false); c.lineTo(R*1.18,0); c.closePath();
+      const bg=c.createRadialGradient(-R*0.35,-R*0.35,R*0.08,-R*0.1,0,R*1.2);
+      bg.addColorStop(0,rgb(76,74,70)); bg.addColorStop(.45,rgb(34,33,31)); bg.addColorStop(1,rgb(10,10,10));
+      c.fillStyle=bg; c.fill();
+      c.strokeStyle=rgb(4,4,5); c.lineWidth=1.1*s; c.stroke();
+      // meseta superior (cara elevada de la gota)
+      c.beginPath(); c.arc(-R*0.15,0,R*0.46,0.72,-0.72,false); c.lineTo(R*0.98,0); c.closePath();
+      const fg=c.createLinearGradient(-R*0.5,-R*0.4,R*0.6,R*0.4);
+      fg.addColorStop(0,rgb(60,58,54)); fg.addColorStop(.5,rgb(28,28,26)); fg.addColorStop(1,rgb(14,14,13));
+      c.fillStyle=fg; c.fill();
+      c.strokeStyle='rgba(255,255,255,0.10)'; c.lineWidth=0.8*s; c.stroke();
+      // brillo superior
+      c.save(); c.globalAlpha=0.20; c.beginPath();
+      c.ellipse(-R*0.12,-R*0.28,R*0.5,R*0.16,-0.25,0,7); c.fillStyle=rgb(255,255,255); c.fill(); c.restore();
+      // linea de la punta (leve, guia visual)
+      c.beginPath(); c.moveTo(R*0.35,0); c.lineTo(R*1.05,0);
+      c.strokeStyle='rgba(255,255,255,0.22)'; c.lineWidth=1.1*s; c.stroke();
+      c.restore();
       return;
     }
     if (style==='recto') {
-      // Mesa Recto: perilla DOMO CROMO con falda negra, banda de reflejo y
-      // puntero grabado oscuro.
-      c.beginPath(); c.arc(cx,cy,R*1.08,0,7); c.fillStyle=rgb(10,10,11); c.fill();
-      const g=c.createRadialGradient(cx-R*0.35,cy-R*0.45,R*0.05,cx,cy,R);
-      g.addColorStop(0,rgb(250,251,253)); g.addColorStop(.4,rgb(198,201,207)); g.addColorStop(.75,rgb(132,135,141)); g.addColorStop(1,rgb(84,86,92));
-      c.beginPath(); c.arc(cx,cy,R,0,7); c.fillStyle=g; c.fill();
-      c.strokeStyle=rgb(40,42,46); c.lineWidth=1*s; c.stroke();
-      c.save(); c.globalAlpha=.5; c.beginPath();
-      c.ellipse(cx-R*0.15,cy-R*0.35,R*0.55,R*0.22,-0.4,0,7); c.fillStyle=rgb(255,255,255); c.fill(); c.restore();
-      c.beginPath(); c.moveTo(cx+R*0.30*Math.cos(a),cy+R*0.30*Math.sin(a)); c.lineTo(cx+R*0.92*Math.cos(a),cy+R*0.92*Math.sin(a));
-      c.strokeStyle=rgb(50,52,58); c.lineWidth=2.6*s; c.lineCap='round'; c.stroke(); c.lineCap='butt';
-      c.beginPath(); c.arc(cx+R*0.78*Math.cos(a),cy+R*0.78*Math.sin(a),1.8*s,0,7); c.fillStyle=rgb(26,28,32); c.fill();
+      // Mesa Recto: falda negra MOLETEADA (gira con el valor) + domo cromo
+      // espejo con banda de horizonte, como el knob real.
+      // falda knurled
+      c.beginPath(); c.arc(cx,cy,R*1.12,0,7); c.fillStyle=rgb(6,6,7); c.fill();
+      c.save();
+      for(let i=0;i<28;i++){ const t=i/28*Math.PI*2+a;
+        c.strokeStyle=(i%2)?'rgba(70,72,78,0.9)':'rgba(20,20,22,0.9)'; c.lineWidth=2.6*s;
+        c.beginPath(); c.moveTo(cx+R*0.94*Math.cos(t),cy+R*0.94*Math.sin(t));
+        c.lineTo(cx+R*1.10*Math.cos(t),cy+R*1.10*Math.sin(t)); c.stroke(); }
+      c.restore();
+      c.strokeStyle=rgb(3,3,4); c.lineWidth=1*s; c.beginPath(); c.arc(cx,cy,R*1.12,0,7); c.stroke();
+      // domo cromo espejo
+      const g=c.createRadialGradient(cx-R*0.30,cy-R*0.42,R*0.04,cx,cy,R*0.95);
+      g.addColorStop(0,rgb(255,255,255)); g.addColorStop(.30,rgb(224,227,233));
+      g.addColorStop(.55,rgb(150,154,162)); g.addColorStop(.78,rgb(92,95,103)); g.addColorStop(1,rgb(58,60,66));
+      c.beginPath(); c.arc(cx,cy,R*0.92,0,7); c.fillStyle=g; c.fill();
+      // banda de horizonte (reflejo de sala): franja oscura cruzando el domo
+      c.save(); c.beginPath(); c.arc(cx,cy,R*0.92,0,7); c.clip();
+      c.globalAlpha=0.55; c.fillStyle=rgb(46,48,54);
+      c.beginPath(); c.ellipse(cx,cy+R*0.10,R*0.95,R*0.30,0.06,0,7); c.fill();
+      c.globalAlpha=0.35; c.fillStyle=rgb(238,240,245);
+      c.beginPath(); c.ellipse(cx,cy+R*0.52,R*0.7,R*0.18,0,0,7); c.fill();
+      c.globalAlpha=0.9; c.fillStyle=rgb(252,253,255);
+      c.beginPath(); c.ellipse(cx-R*0.28,cy-R*0.40,R*0.30,R*0.16,-0.5,0,7); c.fill();
+      c.restore();
+      c.strokeStyle=rgb(40,42,46); c.lineWidth=1*s; c.beginPath(); c.arc(cx,cy,R*0.92,0,7); c.stroke();
+      // indicador: dot grabado en el borde del domo (visible sobre el cromo)
+      c.beginPath(); c.arc(cx+R*0.72*Math.cos(a),cy+R*0.72*Math.sin(a),2.6*s,0,7);
+      c.fillStyle=rgb(30,32,36); c.fill();
+      c.beginPath(); c.arc(cx+R*0.72*Math.cos(a)-0.8*s,cy+R*0.72*Math.sin(a)-0.8*s,0.9*s,0,7);
+      c.fillStyle='rgba(255,255,255,0.5)'; c.fill();
       return;
     }
     if (style==='irt') {
