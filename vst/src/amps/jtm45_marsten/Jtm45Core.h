@@ -56,7 +56,7 @@ struct Jtm45Core {
     rbtube::HP1 inCoupling;
     rbtube::TubeStage vBright, vNormal, v2a;     // V1 (dos mitades) + V2a post-mezcla
     rbtube::CouplingCapGridLeak cpBright, cpNormal, cp2;
-    Biquad brightShelf, normalBody, normalTop, presenceShelf, outTilt, loadBassRes, loadMid, jumpTopTrim;
+    Biquad brightShelf, normalBody, normalTop, presenceShelf, outTilt, loadBassRes, loadMid, loadAir, jumpTopTrim;
     rbtube::ToneStackYeh tone;
     rbtube::PhaseInverterLTP12AX7 pi;            // ECC83 real (set() generico; setMarshall gatea)
     rbtube::PowerAmp5881 power;                  // ~KT66
@@ -77,7 +77,7 @@ struct Jtm45Core {
     void reset(){ inCoupling.reset(); vBright.reset(); vNormal.reset(); v2a.reset();
         cpBright.reset(); cpNormal.reset(); cp2.reset();
         brightShelf.reset(); normalBody.reset(); normalTop.reset(); tone.reset(); presenceShelf.reset(); outTilt.reset();
-        loadBassRes.reset(); loadMid.reset(); jumpTopTrim.reset(); pi.reset(); power.reset(); otVoice.reset(); }
+        loadBassRes.reset(); loadMid.reset(); loadAir.reset(); jumpTopTrim.reset(); pi.reset(); power.reset(); otVoice.reset(); }
 
     // V2b cathode follower acoplado directo (mismo modelo que el Jcm800Core).
     static inline float cfSquash(float x){
@@ -125,14 +125,19 @@ struct Jtm45Core {
         power.out = 0.0135f;
         otVoice.set(sr, 16500.0f);
         outTilt.highShelf(sr, 2800.0f, 6.2f);                 // aire contra carga (fit vs grilla A2)
-        loadMid.peak(sr, 1300.0f, 1.6f, 0.9f);                // 800-2k quedaba -1.2..-2.1 vs la grilla
-        loadBassRes.peak(sr, 100.0f, 0.3f + 2.0f * drvA, 0.9f); // resonancia OT+carga (crece con drive; a V3 el sub sobraba)
+        // La carga reactiva deja crecer LF/HF con el drive del power: los picos
+        // reales a V8/V10 cabalgan esas bandas POR SOBRE el clip plano de medios
+        // (el crest -2..-3.4 que bias/sag/drive NO movian; fit V8/V10 grilla A2).
+        const float hot = std::fmax(0.0f, drvA - 0.45f);
+        loadAir.highShelf(sr, 4800.0f, 8.5f * hot * (0.80f + 0.55f * pPres));   // con presence alto el NFB HF cede mas
+        loadMid.peak(sr, 1300.0f, 1.6f + 1.3f * hot, 0.9f);   // 800-2k (el aire alto se lo comia a V10)
+        loadBassRes.peak(sr, 100.0f, 0.3f + 2.0f * drvA + 1.4f * hot, 0.9f); // resonancia OT+carga (crece con drive; a V3 el sub sobraba)
         // Jumpereado el balance real pierde un pelo de 2-5k (fit vs V10BOTH).
         const float jbR = (pInput <= 0.5f) ? 1.0f : (1.0f - (pInput-0.5f)*2.0f);
         const float jnR = (pInput >= 0.5f) ? 1.0f : (pInput*2.0f);
         jumpTopTrim.peak(sr, 3000.0f, -1.5f * jbR * jnR, 0.85f);
 
-        outLevel = std::pow(10.0f, 0.05f * (-0.33f - 6.93f * drv0 - 1.46f * drv0 * drv0));
+        outLevel = std::pow(10.0f, 0.05f * (-0.33f - 6.93f * drv0 - 1.46f * drv0 * drv0 - 1.6f * hot));
     }
 
     inline float process(float x){
@@ -153,6 +158,7 @@ struct Jtm45Core {
         y = otVoice.process(y);
         y = outTilt.process(y);
         y = loadMid.process(y);
+        y = loadAir.process(y);
         y = loadBassRes.process(y);
         y = jumpTopTrim.process(y);
         return y * outLevel;

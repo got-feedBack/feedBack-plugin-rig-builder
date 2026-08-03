@@ -51,7 +51,7 @@ struct Jcm800Core {
     rbtube::CouplingCapGridLeak cp1, cp2;  // .022u couplings with grid blocking
     Biquad brightShelf;                    // 470k || 470p interstage bright (fixed)
     rbtube::ToneStackYeh tone;             // Marshall TMB (real 2203 values)
-    Biquad presenceShelf, outTilt, lowMidDip;  // NFB presence + top tilt + ajuste 160Hz
+    Biquad presenceShelf, outTilt, lowMidDip, loadBassRes, loadMid, loadAir;  // NFB presence + top tilt + 160Hz + carga reactiva (master alto)
     rbtube::PhaseInverterLTP12AX7 pi;      // ECC83 LTP (82k/100k)
     rbtube::PowerAmpPPT<rbtube::TubeEL34> power;
     rbtube::LP1 otVoice;
@@ -68,7 +68,7 @@ struct Jcm800Core {
     void setVolume(float v){ pVol=clamp01(v); recalc(); }
 
     void reset(){ inCoupling.reset(); v1a.reset(); v1b.reset(); cp1.reset(); cp2.reset();
-        brightShelf.reset(); tone.reset(); presenceShelf.reset(); outTilt.reset(); lowMidDip.reset();
+        brightShelf.reset(); tone.reset(); presenceShelf.reset(); outTilt.reset(); lowMidDip.reset(); loadBassRes.reset(); loadMid.reset(); loadAir.reset();
         pi.reset(); power.reset(); otVoice.reset(); }
 
     // V2b direct-coupled cathode follower driving the stack: the positive swing
@@ -108,12 +108,21 @@ struct Jcm800Core {
         power.out = 0.011f;
         otVoice.set(sr, 16000.0f);
         outTilt.highShelf(sr, 2600.0f, 10.0f + 2.5f*pGain);
+        // Carga reactiva con el POWER exigido (receta del Jtm45Core, fit V8/V10
+        // de su grilla A2): la impedancia deja crecer LF (~100 Hz) y HF por
+        // sobre el clip plano de medios — es el crest que bias/sag/drive no dan.
+        // hot=0 en el punto de calibracion (master noon): las refs preamp_min/
+        // half/max quedan bit-identicas; entra solo con master arriba.
+        const float hot = std::fmax(0.0f, vol - 0.55f);
+        loadBassRes.peak(sr, 100.0f, 6.0f * hot, 0.9f);
+        loadMid.peak(sr, 1300.0f, 1.6f * hot, 0.9f);
+        loadAir.highShelf(sr, 4800.0f, 10.5f * hot * (0.80f + 0.55f * pPres));
 
         // Level trajectory vs the references (min -22.6 / half -15.2 / max -14.7 RMS).
         // Trayectoria RMS calibrada a las refs (min->max ~ +8 dB); el absoluto va
         // -4.5 dB bajo la ref para caer en familia (~-8 LUFS post-cab como
         // plexi/jtm45/dualrect) — el leveler final usa el modelo de loudness.
-        outLevel = std::pow(10.0f, 0.05f * (-2.4f + 9.6f*pGain - 6.4f*pGain*pGain));
+        outLevel = std::pow(10.0f, 0.05f * (-2.4f + 9.6f*pGain - 6.4f*pGain*pGain - 4.2f * hot));
     }
 
     inline float process(float x){
@@ -129,6 +138,9 @@ struct Jcm800Core {
         y = power.process(y);                            // EL34 push-pull
         y = otVoice.process(y);
         y = outTilt.process(y);
+        y = loadMid.process(y);
+        y = loadAir.process(y);
+        y = loadBassRes.process(y);
         return y * outLevel;
     }
 };
