@@ -67,7 +67,7 @@ struct Jvm410Core {
     rbtube::HP1 inCoupling;
     rbtube::TubeStage v1, v2, v3, v4, vR;
     rbtube::CouplingCapGridLeak cp12, cp23, cp34, cpR;   // blocking real entre etapas (la mugre LF que faltaba vs el pack A2)
-    Biquad brightShelf, presenceShelf, resoShelf, outTilt, loadLowTrim, loadMidFill, chLowTrim, od2MidCut;
+    Biquad brightShelf, presenceShelf, resoShelf, outTilt, loadLowTrim, loadMidFill, chLowTrim, od2MidCut, od2MidCut2, od2LowFat;
     Biquad cabHP, cabLowShelf, cabPresence, cabTopRoll;     // fallback 4x12
     rbtube::ToneStackYeh tone;
     rbtube::PhaseInverterLTP12AT7 pi;
@@ -85,7 +85,7 @@ struct Jvm410Core {
     void setSampleRate(float s){ sr=s; recalc(); reset(); }
     void reset(){ inCoupling.reset(); v1.reset();v2.reset();v3.reset();v4.reset();vR.reset();
         cp12.reset();cp23.reset();cp34.reset();cpR.reset();
-        brightShelf.reset();presenceShelf.reset();resoShelf.reset();outTilt.reset();loadLowTrim.reset();loadMidFill.reset();chLowTrim.reset();od2MidCut.reset();
+        brightShelf.reset();presenceShelf.reset();resoShelf.reset();outTilt.reset();loadLowTrim.reset();loadMidFill.reset();chLowTrim.reset();od2MidCut.reset();od2MidCut2.reset();od2LowFat.reset();
         cabHP.reset();cabLowShelf.reset();cabPresence.reset();cabTopRoll.reset();
         tone.reset(); pi.reset(); power.reset(); otVoice.reset(); }
 
@@ -160,7 +160,18 @@ struct Jvm410Core {
         outTilt.highShelf(sr, 2600.0f, 9.0f);
         loadLowTrim.lowShelf(sr, 150.0f, -3.6f);        // el real es mas magro abajo (fit A2, todas las refs)
         loadMidFill.peak(sr, 1300.0f, 2.5f, 0.8f);      // 800-2k que faltaba
-        od2MidCut.peak(sr, 380.0f, ch==3 ? -2.2f : 0.0f, 0.9f);
+        // OD2 real es mas magro en 100-600 de lo que el shelf de 550 alcanza; el
+        // deficit crece con el modo (peor caso medido: Red +3.4 dB en 250-800,
+        // meseta +2 en 80-600 tras el primer corte).
+        od2MidCut.peak(sr, 340.0f, ch==3 ? -(2.2f + 3.0f*m) : 0.0f, 0.60f);
+        od2MidCut2.peak(sr, 520.0f, ch==3 ? -1.9f*m : 0.0f, 1.00f);   // el residuo 320-600 que el de 340 no alcanza
+        // A gain BAJO el OD2 real es mucho mas magro en 100-180 (fit II/IV/VI:
+        // +6.5/+2.2/0 en green; red ~1.2 dB menos gordo) — corte que decrece
+        // con gain y con el modo, centrado bajo para no tocar 320-600.
+        {
+            const float lowFat = std::max(0.0f, std::min(6.5f, 22.0f*(0.45f - g)) - 2.0f*m);
+            od2LowFat.peak(sr, 150.0f, ch==3 ? -lowFat : 0.0f, 0.90f);
+        }
 
         // Fallback 4x12 (CabSim; host bypasses with an external IR).
         cabHP.highpass(sr, 80.0f, 0.70f);
@@ -171,7 +182,8 @@ struct Jvm410Core {
         // Loudness makeup: per-channel base, decreasing with Gain so the knob adds
         // dirt not level; ~-16 dBFS at the operating point. Clean is intrinsically
         // quiet (little gain) -> a bigger base; OD2 the smallest.
-        const float mkBase = ch==0 ? 5.8f : ch==1 ? 6.0f : ch==2 ? 3.7f : 3.3f;   // re-medido al punto de operacion (~-16 dBFS)
+        const float mkBase = ch==0 ? 5.8f : ch==1 ? 6.0f : ch==2 ? 3.7f
+                           : 3.3f + 1.6f*m;   // OD2: compensa el midCut por modo
         outLevel = std::pow(10.0f, 0.05f * (mkBase - 5.0f * pGain));
     }
 
@@ -193,6 +205,8 @@ struct Jvm410Core {
         y = loadMidFill.process(y);
         y = chLowTrim.process(y);   // POST-power: despues del ultimo clip (vR/PI re-saturan y lavan todo lo pre-stack)
         y = od2MidCut.process(y);
+        y = od2MidCut2.process(y);
+        y = od2LowFat.process(y);
         y = resoShelf.process(y);
         if (cabOn) { y = cabHP.process(y); y = cabLowShelf.process(y); y = cabPresence.process(y); y = cabTopRoll.process(y); }
         return y * outLevel;
