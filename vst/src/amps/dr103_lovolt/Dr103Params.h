@@ -9,7 +9,7 @@
  *
  * A high-headroom, clean-and-loud EL34 amp (3x ECC83 + ECC81 PI + 4x EL34 ~100W):
  * two jumperable channels — NORMAL and BRILLIANT (the bright channel runs a
- * treble bright cap) — summing into a shared tone stack (Bass 500K, Treble 250K,
+ * treble bright cap) — summing into a shared tone stack (Bass A470K, Treble L220K,
  * Middle 100K -> the strong Hiwatt mids), a MASTER VOLUME, then the EL34 power
  * amp. PRESENCE taps the power-amp NFB. The Hiwatt stays clean far longer than a
  * Plexi; breakup comes mostly from cranking the MASTER.
@@ -21,18 +21,18 @@
  * BRILLIANT VOL (the bright channel volume = the breakup driver); Bass/Mid/Treble
  * -> tone stack, Pres -> Presence. Input pinned to BOTH (jumpered) with Normal
  * Vol + Master at musical defaults via _static; all editable by hand.
- * CAB SIM is a temporary bundled Fane-style 4x12 voicing; the host can set it
- * to 0 when an external cab/IR is present.
+ * CAB SIM is an optional audition-only Fane-style fallback. Reference matching
+ * and normal amp-only operation use 0; an external cabinet/IR remains separate.
  */
 enum Dr103ParamId
 {
-    kNormalVol = 0,  // NORMAL channel volume (500K)
-    kBrightVol,      // BRILLIANT channel volume (500K, bright cap)  [RS Gain]
-    kBass,           // BASS  tone stack (500K)                      [RS Bass]
-    kTreble,         // TREBLE tone stack (250K)                     [RS Treble]
-    kMiddle,         // MIDDLE tone stack (100K, the Hiwatt mids)    [RS Mid]
-    kPresence,       // PRESENCE (100K, power-amp NFB)               [RS Pres]
-    kMaster,         // MASTER VOLUME (250K)
+    kNormalVol = 0,  // NORMAL channel volume (A470K)
+    kBrightVol,      // BRILLIANT channel volume (A470K, 1n coupling) [RS Gain]
+    kBass,           // BASS  tone stack (A470K)                      [RS Bass]
+    kTreble,         // TREBLE tone stack (L220K)                     [RS Treble]
+    kMiddle,         // MIDDLE tone stack (L100K, the Hiwatt mids)  [RS Mid]
+    kPresence,       // PRESENCE (L100K, power-amp NFB)             [RS Pres]
+    kMaster,         // MASTER VOLUME (A220K)
     kInput,          // input cable: Normal(0) / Both-jumpered(0.5) / Brilliant(1)
     kCabSim,         // temporary internal Fane 4x12 cab filter       [host]
     kParamCount
@@ -54,7 +54,7 @@ static const float kDr103Max[kParamCount] = { 1,1,1,1,1,1,1,1,1 };
 // Hiwatt mids, Master past noon for that clean-loud punch. Tweak the volumes /
 // switch the input cable by hand.
 static const float kDr103Def[kParamCount] = {
-    0.50f, 0.55f, 0.50f, 0.60f, 0.60f, 0.50f, 0.55f, 0.50f, 1.00f,
+    0.50f, 0.55f, 0.50f, 0.50f, 0.50f, 0.50f, 0.60f, 0.50f, 0.00f,
 };
 
 #endif // DR103_PARAMS_H
