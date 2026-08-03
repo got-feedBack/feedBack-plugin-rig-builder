@@ -633,7 +633,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/pedals/FM101.vst3",
-   "notes": "Bundled Moog MF-101 Lowpass Filter style ENVELOPE filter (rebuilt; the previous MuRF sequencer model never tracked the pick). Envelope follower sweeping a 4-pole tanh transistor ladder with resonance; panel Drive, Output, Cutoff, Resonance, Envelope, Attack, Release, Mix, Mode(2/4-pole). RS Sens/Attack/Release/Mix/Filter map to Envelope/Attack/Release/Mix/Mode."
+   "notes": "Bundled Moog MF-101S Lowpass Filter style envelope filter, calibrated against Mayer-DI references. Post-Drive full-wave follower sweeps a nonlinear LM3046-style ladder. Real controls: Drive, Output, Cutoff, Resonance, bipolar Amount, Follow Rate, Mix and 2/4 Poles. RS Sens/Attack/Mix/Filter map to Amount/Follow Rate/Mix/Poles."
   }
  ],
  "Pedal_AutoFilter": [
@@ -1205,7 +1205,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/LovoltDR504.vst3",
-   "notes": "Bundled Hiwatt DR504 'Custom Hiwatt 50' style amp (parody brand 'Lovolt'), full front panel (Normal Vol, Brilliant Vol, Bass, Treble, Middle, Presence, Master Vol, 4 jumperable inputs) modelled component-by-component from the local DR504 schematic. A high-headroom clean-and-loud EL34 amp (3xECC83 + ECC81-style low-gain LTP PI + stiff diode B+ nodes + 2xEL34 ~50W) with two jumperable channels + a shared tone stack (strong Hiwatt mids, 100K mid pot) + Master Volume. the game's Gain knob drives the Brilliant Vol (the breakup driver); Bass/Mid/Treble->tone stack, Pres->Presence (input pinned BOTH/jumpered + Cab Sim via _static)."
+   "notes": "Bundled early-70s Hiwatt DR504 Custom 50 style amp (parody brand 'Lovolt'), rebuilt component-by-component from the local preamp, power, PSU and layout schematics. ECC83 Normal/Brilliant channels -> active V2 mixer -> exact five-cap Hiwatt tone network -> ECC83 gain/bias follower -> fixed-bias ECC81 PI -> -36V 2xEL34 stage with 1K screens -> Partridge TG6556/TH7551 OT. It shares the DR103 preamp but compresses and breaks up earlier in its 50W power stage. RS Gain drives the full Brilliant Vol; input is jumpered and Cab Sim stays off for amp-only operation."
   }
  ],
  "Amp_HG100": [
@@ -1216,7 +1216,7 @@
    "url": "",
    "free": true,
    "bundled": "vst/amps/LovoltDR103.vst3",
-   "notes": "Bundled Hiwatt DR103 'Custom Hiwatt 100' style amp (parody brand 'Lovolt'), the 100W sibling of the DR504. Same panel (Normal Vol, Brilliant Vol, Bass, Treble, Middle, Presence, Master Vol, 4 jumperable inputs) + same preamp/tone stack, but with ECC81-style low-gain LTP PI, very stiff diode B+ nodes and 4xEL34 (~100W): even more clean headroom, less sag, bigger/tighter lows (the big clean-and-loud DR103, incl. the bridged jumpered voice). the game's Gain drives the Brilliant Vol; Bass/Mid/Treble->tone stack, Pres->Presence (input pinned BOTH + Cab Sim via _static)."
+   "notes": "Bundled early-70s Hiwatt DR103 Custom 100 style amp (parody brand Lovolt), rebuilt from the Mark Huss four-input preamp, DR103 output and power-supply schematics. Component topology: dual ECC83 Normal/Brilliant inputs, A470K channel volumes, exact five-cap Hiwatt TMB network, A220K master, ECC83 bias follower, fixed-bias ECC81 PI, presence/NFB, stiff diode B+ nodes and 4xEL34 through a Partridge-style OT response. The game's Gain drives Brilliant Vol over its full range; Input is jumpered, Master is 0.6 and Cab Sim is off for the amp-only studio chain."
   }
  ],
  "Amp_HG180": [

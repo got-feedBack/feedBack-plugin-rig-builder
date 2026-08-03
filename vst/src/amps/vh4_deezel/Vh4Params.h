@@ -14,13 +14,11 @@
  * Rammstein). Ch3 = Marshall-style TMB tone stack, an active DEEP (~115 Hz low
  * boost) and a real-amp PRESENCE (power-amp NFB ~4 kHz), Gain + Master.
  *
- * ── DESIGNED FOR EXPANSION ──
- * The core (Vh4Core) is channel-parameterised: it carries a `channel` index and
- * a voiceChannel() switch, with Ch3 ("Mega") filled in now and Ch1 (Clean),
- * Ch2 (Crunch) and Ch4 (Lead) reserved as future cases. When those land, add a
- * kChannel selector + the per-channel Gain/Bass/Mid/Treble/Volume banks AFTER
- * kCabSim (so these indices never shift), and the global Deep/Presence/Master
- * become shared. For now the panel is the single-channel Ch3 layout.
+ * The first nine indices are retained for preset/automation compatibility.
+ * Gain/Bass/Middle/Treble at indices 0..3 are the legacy CH3 bank; the new
+ * per-channel banks are appended after kChannel so old parameter IDs never
+ * move. Deep, Presence and Master remain global, like the physical master
+ * section. Each channel owns Gain/Bass/Middle/Treble/Volume.
  *
  * EXTRA gear (not mapped to any RS song).
  */
@@ -35,23 +33,66 @@ enum Vh4ParamId
     kMaster,        // MASTER — output / power-amp drive
     kCabSim,        // fallback 4x12 voice: 0 = amp-only, 1 = internal cab sim
     kChannel,       // 0..1 -> Ch1 Clean / Ch2 Crunch / Ch3 Mega / Ch4 Lead
+
+    kCh1Gain,
+    kCh1Bass,
+    kCh1Middle,
+    kCh1Treble,
+    kCh1Volume,
+
+    kCh2Gain,
+    kCh2Bass,
+    kCh2Middle,
+    kCh2Treble,
+    kCh2Volume,
+
+    kCh3Volume,     // CH3 tone bank reuses legacy indices 0..3
+
+    kCh4Gain,
+    kCh4Bass,
+    kCh4Middle,
+    kCh4Treble,
+    kCh4Volume,
     kParamCount
 };
 
 static const char* const kVh4Names[kParamCount] = {
     "Gain", "Bass", "Middle", "Treble", "Deep", "Presence", "Master", "Cab Sim",
     "Channel",
+    "CH1 Gain", "CH1 Bass", "CH1 Middle", "CH1 Treble", "CH1 Volume",
+    "CH2 Gain", "CH2 Bass", "CH2 Middle", "CH2 Treble", "CH2 Volume",
+    "CH3 Volume",
+    "CH4 Gain", "CH4 Bass", "CH4 Middle", "CH4 Treble", "CH4 Volume",
 };
 static const char* const kVh4Symbols[kParamCount] = {
     "gain", "bass", "middle", "treble", "deep", "presence", "master", "cabsim",
     "channel",
+    "ch1_gain", "ch1_bass", "ch1_middle", "ch1_treble", "ch1_volume",
+    "ch2_gain", "ch2_bass", "ch2_middle", "ch2_treble", "ch2_volume",
+    "ch3_volume",
+    "ch4_gain", "ch4_bass", "ch4_middle", "ch4_treble", "ch4_volume",
 };
-static const float kVh4Min[kParamCount] = { 0,0,0,0,0,0,0,0,0 };
-static const float kVh4Max[kParamCount] = { 1,1,1,1,1,1,1,1,1 };
+static const float kVh4Min[kParamCount] = {
+    0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0, 0,0,0,0,0, 0, 0,0,0,0,0
+};
+static const float kVh4Max[kParamCount] = {
+    1,1,1,1,1,1,1,1,1,
+    1,1,1,1,1, 1,1,1,1,1, 1, 1,1,1,1,1
+};
 // Manual-insert defaults: the saturated-but-tight VH4 Mega rhythm — Gain past
 // noon, tone centred, Deep/Presence flat, Master up.
 static const float kVh4Def[kParamCount] = {
-    0.60f, 0.50f, 0.55f, 0.55f, 0.50f, 0.50f, 0.55f, 1.00f, 0.6667f,   // default Ch3 Mega
+    // Legacy CH3 bank + global master section + selected channel.
+    0.60f, 0.50f, 0.55f, 0.55f, 0.50f, 0.50f, 0.80f, 1.00f, 0.6667f,
+    // CH1 clean
+    0.38f, 0.55f, 0.50f, 0.58f, 0.72f,
+    // CH2 crunch
+    0.52f, 0.52f, 0.53f, 0.58f, 0.70f,
+    // CH3 volume
+    0.68f,
+    // CH4 lead
+    0.66f, 0.48f, 0.56f, 0.56f, 0.66f,
 };
 
 #endif // VH4_PARAMS_H

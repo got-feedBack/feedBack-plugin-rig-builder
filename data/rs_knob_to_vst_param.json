@@ -653,11 +653,11 @@
  "Pedal_ModernFlanger": {
   "modernflanger": {
    "_static": {
-    "Drive": 0.38,
-    "Output Level": 0.88,
-    "Time": 0.54,
+    "Drive": 0.5,
+    "Output Level": 0.5,
+    "Time": 0.5,
     "Range": 0.0,
-    "LFO Shape": 0.08
+    "LFO Shape": 0.0
    },
    "Rate": {
     "param": "LFO Rate",
@@ -728,11 +728,11 @@
   },
   "fm108": {
    "_static": {
-    "Drive": 0.38,
-    "Output Level": 0.88,
-    "Time": 0.54,
+    "Drive": 0.5,
+    "Output Level": 0.5,
+    "Time": 0.5,
     "Range": 0.0,
-    "LFO Shape": 0.08
+    "LFO Shape": 0.0
    },
    "Rate": {
     "param": "LFO Rate",
@@ -759,11 +759,11 @@
   },
   "fm107": {
    "_static": {
-    "Drive": 0.38,
-    "Output Level": 0.88,
-    "Time": 0.54,
+    "Drive": 0.5,
+    "Output Level": 0.5,
+    "Time": 0.5,
     "Range": 0.0,
-    "LFO Shape": 0.08
+    "LFO Shape": 0.0
    },
    "Rate": {
     "param": "LFO Rate",
@@ -1696,8 +1696,8 @@
  "Pedal_AnalogueDelay": {
   "analogdelay": {
    "_static": {
-    "Drive": 0.36,
-    "Output": 0.68
+    "Drive": 0.5,
+    "Output": 0.5
    },
    "Time": {
     "param": "Time",
@@ -1716,8 +1716,8 @@
   },
   "fm104": {
    "_static": {
-    "Drive": 0.36,
-    "Output": 0.68
+    "Drive": 0.5,
+    "Output": 0.5
    },
    "Time": {
     "param": "Time",
@@ -3525,32 +3525,29 @@
   "fm101": {
    "_static": {
     "Output": 0.6,
-    "Cutoff": 0.22,
+    "Cutoff": 0.325,
     "Resonance": 0.55,
-    "Drive": 0.35
+    "Drive": 0.35,
+    "Follow Rate": 0.65
    },
    "Sens": {
-    "param": "Envelope",
-    "scale": 0.008,
-    "offset": 0.2,
-    "_hint": "RS Sens = MF-101 envelope Amount; floor keeps low values sweeping."
+    "param": "Amount",
+    "scale": 0.005,
+    "offset": 0.5,
+    "_hint": "RS Sens uses the positive half of the real bipolar -10..+10 Amount pot."
    },
    "Attack": {
-    "param": "Attack",
+    "param": "Follow Rate",
     "scale": 0.004,
-    "_hint": "RS Attack observed 1-250 ms -> pot 0..1."
-   },
-   "Release": {
-    "param": "Release",
-    "scale": 0.002,
-    "_hint": "RS Release ms -> pot (pot=1 ~= 925 ms)."
+    "invert": true,
+    "_hint": "Longer RS Attack means a slower setting of the single real Follow Rate control."
    },
    "Mix": {
     "param": "Mix",
     "scale": 0.01
    },
    "Filter": {
-    "param": "Mode",
+    "param": "Poles",
     "scale": 1.0,
     "_hint": "game binary Filter switch -> 2-pole/4-pole (the real MF-101 switch)."
    }
@@ -6284,12 +6281,11 @@
  },
  "Amp_HG500": {
   "lovoltdr504": {
-   "_hint": "Lovolt DR504 = the Hiwatt DR504 'Custom 50' (the gear map's generic name is 'Peavey 5150' but the folder + schematic are the Hiwatt DR504). No gain knob, so RS Gain -> BRILLIANT VOL (the brilliant channel volume = the breakup driver). Bass/Mid/Treble -> tone stack, Pres -> Presence. _static pins the input to BOTH (jumpered), Normal Vol, Master Vol and Cab Sim at musical defaults. Switch the input cable / volumes on the face by hand.",
+   "_hint": "Lovolt DR504 = the early-70s Hiwatt DR504 Custom 50 circuit. RS Gain -> the full A500K BRILLIANT VOL; Bass/Mid/Treble -> the five-cap Hiwatt network; Pres -> the NFB Presence. Input is pinned BOTH for songs and the amp remains amp-only (Cab Sim off).",
    "Gain": {
     "param": "Brilliant Vol",
-    "scale": 0.0076,
-    "_hint": "RS Gain -> BRILLIANT VOL (the bright channel volume; the Hiwatt has no gain knob). Higher = more breakup. Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
-    "offset": 0.24
+    "scale": 0.01,
+    "_hint": "RS Gain -> the full Brilliant Vol control. The A500K law drives real V1/V2/V3, fixed-bias ECC81 PI and the earlier 2xEL34 breakup; post-circuit makeup holds song loudness constant."
    },
    "Bass": {
     "param": "Bass",
@@ -6314,35 +6310,34 @@
    "_static": {
     "Input": 0.5,
     "Normal Vol": 0.4,
-    "Master Vol": 0.55,
-    "Cab Sim": 1.0,
-    "_note": "Input pinned to BOTH (jumpered Normal+Brilliant). Normal Vol as the blend, Master past noon for the clean-loud Hiwatt punch. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Volumes + the input cable stay editable by hand."
+    "Master Vol": 0.6,
+    "Cab Sim": 0.0,
+    "_note": "Input pinned to BOTH (jumpered), Normal Vol at 0.4 and Master at 0.6. Cab Sim is off because the plug-in is amp-only; cabinets and IRs remain separate studio nodes."
    }
   }
  },
  "Amp_HG100": {
   "lovoltdr103": {
-   "_hint": "Lovolt DR103 = the Hiwatt DR103 'Custom 100' (the 100W sibling of the DR504). No gain knob, so RS Gain -> BRILLIANT VOL (the breakup driver). Bass/Mid/Treble -> tone stack, Pres -> Presence. _static pins the input to BOTH (jumpered = the bridged DR103 voice), Normal Vol, Master Vol and Cab Sim at musical defaults.",
+   "_hint": "Lovolt DR103 = the early-70s Hiwatt DR103 Custom 100 circuit. RS Gain -> the real A470K BRILLIANT VOL; Bass/Mid/Treble -> the exact five-cap Hiwatt network; Pres -> the NFB Presence. Input is pinned BOTH for songs and the amp remains amp-only (Cab Sim off).",
    "Gain": {
     "param": "Brilliant Vol",
-    "scale": 0.0076,
-    "_hint": "RS Gain -> BRILLIANT VOL (the bright channel volume; the Hiwatt has no gain knob). Higher = more breakup (the 100W stays clean even longer). Loudness held ~flat by the makeup. RS 0 now maps to a low-but-audible real pot position instead of muting the amp.",
-    "offset": 0.24
+    "scale": 0.01,
+    "_hint": "RS Gain -> the full Brilliant Vol control. The A470K law drives real V1/V2/V3, fixed-bias ECC81 PI and EL34 breakup; post-circuit makeup holds song loudness constant."
    },
    "Bass": {
     "param": "Bass",
     "scale": 0.01,
-    "_hint": "RS Bass -> Hiwatt tone-stack bass (500K)."
+    "_hint": "RS Bass -> Hiwatt tone-stack bass (A470K)."
    },
    "Mid": {
     "param": "Middle",
     "scale": 0.01,
-    "_hint": "RS Mid -> Hiwatt tone-stack middle (100K, the strong Hiwatt mids)."
+    "_hint": "RS Mid -> Hiwatt tone-stack middle (L100K with 1n bypass)."
    },
    "Treble": {
     "param": "Treble",
     "scale": 0.01,
-    "_hint": "RS Treble -> Hiwatt tone-stack treble (250K)."
+    "_hint": "RS Treble -> Hiwatt tone-stack treble (L220K, 1n/220p bridge)."
    },
    "Pres": {
     "param": "Presence",
@@ -6352,9 +6347,9 @@
    "_static": {
     "Input": 0.5,
     "Normal Vol": 0.4,
-    "Master Vol": 0.55,
-    "Cab Sim": 1.0,
-    "_note": "Input pinned to BOTH (the bridged jumpered DR103 voice). Normal Vol as the blend, Master past noon for the big clean-loud Hiwatt punch. Cab Sim stays on until the host bypasses it for an external cabinet/IR. Volumes + the input cable stay editable by hand."
+    "Master Vol": 0.6,
+    "Cab Sim": 0.0,
+    "_note": "Input pinned to BOTH (jumpered), Normal Vol at 0.4 and Master at the 0.6 reference position. Cab Sim is off because the plug-in is amp-only; cabinets and IRs remain separate studio nodes."
    }
   }
  },

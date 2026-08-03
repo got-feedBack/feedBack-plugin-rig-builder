@@ -15,6 +15,7 @@
 #include "Vh4Params.h"
 #include "Vh4Core.h"
 #include "../../_shared/oversampler.hpp"
+#include <algorithm>
 #include <cmath>
 
 START_NAMESPACE_DISTRHO
@@ -31,11 +32,22 @@ class Vh4Plugin : public Plugin {
     static constexpr int kOS = rbshared::Oversampler4x::OS;
 
     void applyAll(){
-        core.setGain(fParams[kGain]); core.setBass(fParams[kBass]);
-        core.setMiddle(fParams[kMiddle]); core.setTreble(fParams[kTreble]);
+        const int channel = std::max(0, std::min(3,
+            (int)std::lround(fParams[kChannel] * 3.0f)));
+        static constexpr int gainByChannel[]   = { kCh1Gain,   kCh2Gain,   kGain,      kCh4Gain };
+        static constexpr int bassByChannel[]   = { kCh1Bass,   kCh2Bass,   kBass,      kCh4Bass };
+        static constexpr int middleByChannel[] = { kCh1Middle, kCh2Middle, kMiddle,    kCh4Middle };
+        static constexpr int trebleByChannel[] = { kCh1Treble, kCh2Treble, kTreble,    kCh4Treble };
+        static constexpr int volumeByChannel[] = { kCh1Volume, kCh2Volume, kCh3Volume, kCh4Volume };
+
+        core.setChannel(channel);
+        core.setGain(fParams[gainByChannel[channel]]);
+        core.setBass(fParams[bassByChannel[channel]]);
+        core.setMiddle(fParams[middleByChannel[channel]]);
+        core.setTreble(fParams[trebleByChannel[channel]]);
         core.setDeep(fParams[kDeep]); core.setPresence(fParams[kPresence]);
-        core.setMaster(fParams[kMaster]); core.setCabSim(fParams[kCabSim]);
-        core.setChannel((int)std::lround(fParams[kChannel] * 3.0f));
+        core.setMaster(fParams[kMaster] * fParams[volumeByChannel[channel]]);
+        core.setCabSim(fParams[kCabSim]);
     }
 public:
     Vh4Plugin() : Plugin(kParamCount, 0, 0) {
