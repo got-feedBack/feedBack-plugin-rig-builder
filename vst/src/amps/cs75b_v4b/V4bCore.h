@@ -59,7 +59,7 @@ struct V4bCore {
     rbtube::TubeStage v3;                // V3 12DW7 high-mu (12AX7-type) gain/driver section
     rbtube::PhaseInverterV4B phaseInverter;  // V4 12AU7 long-tail-pair phase inverter
     rbtube::PowerAmp6L6GC power;         // 4×7027A push-pull (~100W)
-    Biquad otVoice;
+    Biquad otVoice, airShelf;
 
     float pGain=0.5f, pBass=0.5f, pMid=0.5f, pFreq=0.5f, pTreble=0.5f, pMaster=0.7f;
     bool  pPad=false, pUltraLo=false, pUltraHi=false;
@@ -79,7 +79,7 @@ struct V4bCore {
     void reset(){ inCoupling.reset(); v1.reset(); v2.reset(); v3.reset();
         ulLow.reset(); ulMid.reset(); ulHigh.reset(); uhShelf.reset();
         bqBass.reset(); bqMid.reset(); bqTreble.reset();
-        phaseInverter.reset(); power.reset(); otVoice.reset(); }
+        phaseInverter.reset(); power.reset(); otVoice.reset(); airShelf.reset(); }
 
     void recalc(){
         inCoupling.set(sr, 5.0f);
@@ -90,9 +90,9 @@ struct V4bCore {
         const float pad   = pPad ? 0.178f : 1.0f;
         const float gAud  = rbtube::PotTaper::audio(pGain, 1.20f);
         inGain  = pad;
-        inScale = 0.9f + 3.4f * gAud;                 // 4.6→3.4 (2026-06-23): a HOT real bass DI
+        inScale = 0.9f + 7.5f * std::pow(gAud, 1.5f); // re-fit v4b_a2: la escalera de crest real 11/7/3 pide MUCHO mas drive arriba
                                                       // over-drove V1; trimmed for a cleaner default.
-        preGain = 0.85f + 0.55f * gAud;
+        preGain = 0.85f + 1.30f * gAud * gAud;
         gainOut = 1.0f;                                   // scale V3 output into the V4 phase inverter
 
         if (pUltraLo){ ulLow.lowShelf(sr,50.f,6.0f); ulMid.peaking(sr,500.f,0.8f,-9.0f); ulHigh.highShelf(sr,8000.f,4.0f); }
@@ -109,16 +109,20 @@ struct V4bCore {
         const float master = rbtube::PotTaper::audio(pMaster, 1.20f);
         // V4 12AU7 long-tail-pair PI: drive rises with Master + Gain (it hardens when
         // pushed, like the real V-4B splitter). Feeds the 4×7027A power stage.
-        phaseInverter.set(sr, 0.4f + 0.7f*master + 0.3f*gAud, 1.0f);
-        power.set(sr, 0.55f + 3.0f*master, -45.0f, 0.14f, 30.0f, 9000.0f);
+        phaseInverter.set(sr, 0.4f + 0.7f*master + 1.6f*gAud*gAud, 1.0f);   // el 12AU7 endurece empujado: armonicos del pack a G alto
+        power.set(sr, 0.55f + 3.0f*master, -45.0f, 0.14f, 30.0f, 14000.0f);   // top real del pack V-4B 2026 (estabamos -8.5 en 5-10k)
         power.out = 0.0050f;
-        otVoice.lowpass(sr, 7500.0f, 0.7f);
+        otVoice.lowpass(sr, 11500.0f, 0.7f);
+        // El top que falta a drive alto son ARMONICOS de clip (un shelf de +12
+        // solo movio +1.3 dB: no hay contenido >5k que amplificar) — se genera
+        // clipeando mas duro abajo, no con EQ. airShelf queda neutro.
+        airShelf.highShelf(sr, 6000.0f, 0.0f);
 
         // Loudness makeup (same family target as the SVT: ~−13 clean → ~−9 cranked).
         // Flatten to the SVT/family level (~-12 dB): the new V1/V2 → V3 12DW7 → V4
         // 12AU7 PI → power chain ramps intrinsic level ~20 dB across Gain, so the
         // makeup DECREASES with Gain (Gain reads as growl-amount, loudness ~flat).
-        outLevel = std::pow(10.0f, 0.05f * (39.0f - 17.0f * pGain));
+        outLevel = std::pow(10.0f, 0.05f * (38.5f + 21.7f * pGain - 36.7f * pGain * pGain));   // fit rms G9/G12/G15 (ronda 4)
         if (pPad) outLevel *= 0.45f;     // pad-aware (cleaner padded input, see SvtCore)
     }
 
@@ -133,6 +137,7 @@ struct V4bCore {
         x = phaseInverter.process(x * gainOut);  // V4 12AU7 long-tail-pair phase inverter
         x = power.process(x);                     // 4×7027A push-pull (PI-driven)
         x = otVoice.process(x);
+        x = airShelf.process(x);
         return x * outLevel;
     }
 };

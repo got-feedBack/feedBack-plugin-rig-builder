@@ -133,10 +133,10 @@ struct SvtCore {
         // ── 6×6550 push-pull. NFB SVT → LOW sag (stiff supply) + low bias drift; the
         //    Master cooks the power tubes. Bias ~−48 V (6550 table operating point).
         const float master = rbtube::PotTaper::audio(pMaster, 1.20f);
-        power.set(sr, 0.45f + 2.6f*master, -48.0f, 0.12f, 30.0f, 9000.0f); // (drive, bias, sag, OT HP, OT LP)
+        power.set(sr, 0.45f + 2.6f*master, -48.0f, 0.12f, 30.0f, 14000.0f); // OT LP 9k->14k: el pack SVT-CL es brillante (5-10k estaba -12..-16)
         power.out = 0.0045f;                                            // plate-volt differential → signal
         // Gentle pre-cab output voicing (the cab IR adds the speaker; keep this soft).
-        otVoice.lowpass(sr, 7500.0f, 0.7f);
+        otVoice.lowpass(sr, 12000.0f, 0.7f);
 
         // Loudness makeup. The old gain-dependent RISE (13+12·Gain) compensated a
         // natural RMS that FELL with Gain — an artifact of the slammed power stage
@@ -145,7 +145,7 @@ struct SvtCore {
         // so the makeup is a flat −1 dB anchored to the family contract at
         // default knobs (DI pk ~0.54, MT −25.8 dB ≈ GK's −26). The rig's leveler
         // finishes the loudness like for every other amp.
-        outLevel = std::pow(10.0f, 0.05f * -1.0f);
+        outLevel = std::pow(10.0f, 0.05f * 4.0f);   // re-fit vs svtcl_a2 (rms -4..-6)
         // Pad-aware makeup: the −15 dB pad cuts pre-NAM drive (cleaner, less
         // compression), so the gain-staged makeup above over-drives the now-cleaner
         // signal into the ceiling. Trim it back when padded → the padded input stays

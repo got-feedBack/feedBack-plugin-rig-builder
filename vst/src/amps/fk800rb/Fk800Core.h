@@ -264,8 +264,14 @@ struct Fk800Core {
         hiMidG = std::pow(10.f, (hiMid  - 0.5f) * 30.f / 20.f);
         trebG  = std::pow(10.f, (treble - 0.5f) * 30.f / 20.f);
         boostOn  = boostOnP;
-        boostInj = 0.04f;
-        boostMakeup = std::pow(10.f, (boostLevel * 15.f) / 20.f);
+        // Manual 800RB: "BOOST PRESET: Switch to Ground, 15dB Max" y "the boost
+        // control is footswitchable... the LED indicates that boost is on".
+        // O sea: el switch/footswitch EXISTE (OFF = etapa fuera, perilla
+        // inerte); ON = preset de volumen de hasta +15 dB cuyo empuje contra
+        // Q1 y el power ES el growl ("can add distortion"). La perilla mueve
+        // el DRIVE (antes movia solo makeup = perilla muerta).
+        boostInj = 0.306f * std::pow(10.f, boostLevel * 15.f / 20.f);   // unidad en 0, +15 dB (y growl Q1) en 10
+        boostMakeup = 1.0f;
         biamp = biampP;
         const double fc = 100.0 + 940.0 * xover;
         xLp.set(fc, false); xHp.set(fc, true);
@@ -327,22 +333,26 @@ struct Fk800Core {
         { const double bp = lmLp.proc(lmHp.proc(d)); d += (loMidG - 1.0) * bp; }
         { const double bp = hmLp.proc(hmHp.proc(d)); d += (hiMidG - 1.0) * bp; }
         d = tLp.proc(d) + trebG * tHp.proc(d);
-        if (boostOn) d = boostStage.process(d, boostInj) * boostMakeup;
+        if (boostOn) d = boostStage.process(d, boostInj) * boostMakeup;   // footswitch real: OFF = bypass
         // Crossover → master → POWER AMP. Each amp clips at its own rail (real
         // topology: the master pot feeds the power-amp input, which flat-tops at
         // the supply). Pushing master/volume drives it into clip; outLevel after
         // is the non-physical family loudness-match (retuned by the A-step harness).
+        // Staging real hacia los power amps: sin esto la señal quedaba tan
+        // bajo los rieles que masters/bi-amp/crossover eran inaudibles.
+        d *= 7.0;
         const double low = xLp.proc(d), high = xHp.proc(d);
         if (biamp) {
             const double a300 = pa300.process(low  * g300);   // low band → 300W/4Ω
             const double a100 = pa100.process(high * g100);   // high band → 100W/8Ω
-            return (float)((a300 + a100) * outLevel);
+            return (float)((a300 + a100) * outLevel * (1.0/7.0));
         }
-        // Full-range: both amps see the whole band, each scaled by its own master
-        // and clipping independently; halved to one mixed output (one rig channel).
+        // Full-range = el hookup estandar de UN gabinete: SOLO el 300W ve señal
+        // (el 100W queda desconectado y su master no hace nada, como el jack
+        // vacio real). Antes se mezclaban ambos a banda completa -> full y
+        // bi-amp sonaban iguales y el crossover era inaudible.
         const double a300 = pa300.process(d * g300);
-        const double a100 = pa100.process(d * g100);
-        return (float)(0.5 * (a300 + a100) * outLevel);
+        return (float)(a300 * outLevel * (1.0/7.0));
     }
 };
 
