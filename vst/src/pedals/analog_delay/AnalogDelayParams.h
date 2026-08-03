@@ -46,14 +46,14 @@ static const char* const kAnalogDelaySymbols[kParamCount] = {
 static const float kAnalogDelayMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
 static const float kAnalogDelayMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
 static const float kAnalogDelayDef[kParamCount] = {
-    0.36f,
-    0.68f,
-    (360.0f - 40.0f) / (1000.0f - 40.0f),
-    0.28f,
-    0.32f,
+    0.50f,
+    0.50f,
+    0.50f,
+    0.20f,
+    0.50f,
     0.0f,     // SHORT (matches the old fixed window)
-    0.08f,    // LFO rate  (the old hardcoded value)
-    0.18f,    // LFO amount (the old hardcoded value)
+    0.50f,    // logarithmic 0.05-50 Hz LFO rate
+    0.00f,    // no LFO modulation at zero, as on the hardware
     0.0f,     // sine (the old hardcoded shape)
 };
 

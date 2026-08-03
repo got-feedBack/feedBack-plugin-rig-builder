@@ -22,6 +22,7 @@ struct DelayVoice
     float maxDelayMs;
     bool reverseDelayKnob;
     bool logDelayTaper;
+    float delayTaperPower;
     bool rangeScales;   // DE7-style S/M/L RANGE rescales the delay window
 
     float inputHpHz;
@@ -29,15 +30,20 @@ struct DelayVoice
     float loopHpHz;
     float loopLpHz;
     float outputLpHz;
+    int outputFilterPoles;
+    float wetSign;
     float toneDepth;
 
     float feedbackMax;
+    float feedbackRunaway;
+    float feedbackRunawayOutputDb;
     float wetGain;
     float dryDucking;
     float driveMinDb;
     float driveMaxDb;
     float outputMinDb;
     float outputMaxDb;
+    float outputCalibrationDb;
     float companderAmount;
 
     float noiseBase;
@@ -49,6 +55,15 @@ struct DelayVoice
     float flutterMs;
     float smearMs;
     float stereoSpreadMs;
+    float minRateHz;
+    float maxRateHz;
+    float longRangeMultiplier;
+    float longRangeFilterScale;
+    bool zeroDepthDisablesModulation;
+    bool monoWet;
+    bool trueCrossfade;
+    bool drivenDryPath;
+    bool logRateTaper;
 
     int headCount;
     float headRatio[4];
@@ -60,20 +75,26 @@ struct DelayVoice
           maxDelayMs(600.0f),
           reverseDelayKnob(false),
           logDelayTaper(false),
+          delayTaperPower(1.0f),
           rangeScales(false),
           inputHpHz(28.0f),
           inputLpHz(7600.0f),
           loopHpHz(70.0f),
           loopLpHz(4200.0f),
           outputLpHz(6800.0f),
+          outputFilterPoles(1),
+          wetSign(1.0f),
           toneDepth(0.35f),
           feedbackMax(0.78f),
+          feedbackRunaway(0.0f),
+          feedbackRunawayOutputDb(0.0f),
           wetGain(1.0f),
           dryDucking(0.16f),
           driveMinDb(-2.0f),
           driveMaxDb(8.0f),
           outputMinDb(-8.0f),
           outputMaxDb(4.0f),
+          outputCalibrationDb(0.0f),
           companderAmount(0.45f),
           noiseBase(0.00004f),
           noiseDelayScale(0.00045f),
@@ -84,6 +105,15 @@ struct DelayVoice
           flutterMs(0.08f),
           smearMs(0.0f),
           stereoSpreadMs(0.0f),
+          minRateHz(0.045f),
+          maxRateHz(7.545f),
+          longRangeMultiplier(1.0f),
+          longRangeFilterScale(1.0f),
+          zeroDepthDisablesModulation(false),
+          monoWet(false),
+          trueCrossfade(false),
+          drivenDryPath(false),
+          logRateTaper(false),
           headCount(1)
     {
         headRatio[0] = 1.0f;
@@ -120,10 +150,10 @@ struct DelayControls
           tone(0.55f),
           rate(0.20f),
           depth(0.15f),
-          shape(0.0f),
           mode(0.0f),
           range(0.5f),
-          heads(1.0f)
+          heads(1.0f),
+          shape(0.0f)
     {}
 };
 
@@ -162,6 +192,8 @@ class ComponentDelayCore
     rbmod::LowPass loopLp2;
     rbmod::LowPass outputLpL;
     rbmod::LowPass outputLpR;
+    rbmod::LowPass outputLpL2;
+    rbmod::LowPass outputLpR2;
     rbmod::BbdCompander compander;
     rbmod::NoiseSource noise;
 
@@ -181,6 +213,7 @@ class ComponentDelayCore
         for (int i = 0; i < voice.headCount && i < 4; ++i)
             maxMs = std::fmax(maxMs, voice.maxDelayMs * voice.headRatio[i]);
         if (voice.rangeScales) maxMs *= 1.75f;   // RANGE can scale the window up
+        maxMs *= std::fmax(1.0f, voice.longRangeMultiplier);
         return maxMs + voice.stereoSpreadMs + voice.smearMs + 80.0f;
     }
 
@@ -189,6 +222,7 @@ class ComponentDelayCore
         float t = rbmod::clamp01(controls.delay);
         if (voice.reverseDelayKnob)
             t = 1.0f - t;
+        t = std::pow(t, std::fmax(0.05f, voice.delayTaperPower));
         float ms = voice.logDelayTaper ? logLerp(voice.minDelayMs, voice.maxDelayMs, t)
                                        : lerp(voice.minDelayMs, voice.maxDelayMs, t);
         // DE7-style S/M/L RANGE switch: rescale the whole delay-time window.
@@ -196,6 +230,8 @@ class ComponentDelayCore
         // rangeScales — which pass the default range=0.5 — are unaffected.
         if (voice.rangeScales)
             ms *= 0.30f + 1.40f * rbmod::clamp01(controls.range);
+        if (voice.longRangeMultiplier > 1.0f && controls.range >= 0.5f)
+            ms *= voice.longRangeMultiplier;
         return ms;
     }
 
@@ -206,14 +242,18 @@ class ComponentDelayCore
                                             std::fmax(1.0f, voice.maxDelayMs - voice.minDelayMs));
         const float toneTilt = 0.48f + 0.86f * tone;
         const float longDelayLoss = 1.0f - 0.26f * delayN;
+        const float rangeFilter = (voice.longRangeMultiplier > 1.0f && controls.range >= 0.5f)
+            ? voice.longRangeFilterScale : 1.0f;
 
         inputHp.setHz(voice.inputHpHz, sampleRate);
         inputLp.setHz(voice.inputLpHz * (0.70f + 0.52f * tone), sampleRate);
         loopHp.setHz(voice.loopHpHz * (0.85f + 0.55f * controls.feedback), sampleRate);
-        loopLp1.setHz(voice.loopLpHz * toneTilt * longDelayLoss, sampleRate);
-        loopLp2.setHz(voice.loopLpHz * (0.72f + 0.42f * tone) * longDelayLoss, sampleRate);
-        outputLpL.setHz(voice.outputLpHz * (0.62f + voice.toneDepth * tone), sampleRate);
-        outputLpR.setHz(voice.outputLpHz * (0.62f + voice.toneDepth * tone), sampleRate);
+        loopLp1.setHz(voice.loopLpHz * toneTilt * longDelayLoss * rangeFilter, sampleRate);
+        loopLp2.setHz(voice.loopLpHz * (0.72f + 0.42f * tone) * longDelayLoss * rangeFilter, sampleRate);
+        outputLpL.setHz(voice.outputLpHz * (0.62f + voice.toneDepth * tone) * rangeFilter, sampleRate);
+        outputLpR.setHz(voice.outputLpHz * (0.62f + voice.toneDepth * tone) * rangeFilter, sampleRate);
+        outputLpL2.setHz(voice.outputLpHz * (0.62f + voice.toneDepth * tone) * rangeFilter, sampleRate);
+        outputLpR2.setHz(voice.outputLpHz * (0.62f + voice.toneDepth * tone) * rangeFilter, sampleRate);
         compander.setSampleRate(sampleRate, 16.0f + 30.0f * voice.companderAmount);
     }
 
@@ -328,6 +368,8 @@ public:
         loopLp2.reset();
         outputLpL.reset();
         outputLpR.reset();
+        outputLpL2.reset();
+        outputLpR2.reset();
         compander.reset();
         smoothedDelayMs = currentDelayMs();
         wowPhase = 0.0f;
@@ -362,7 +404,9 @@ public:
         const float slewHz = 6.0f + 22.0f * (1.0f - rbmod::clamp01(targetMs / std::fmax(80.0f, voice.maxDelayMs)));
         smoothedDelayMs += rbmod::onePoleCoeffHz(slewHz, sampleRate) * (targetMs - smoothedDelayMs);
 
-        const float rateHz = 0.045f + 7.5f * rbmod::smoothstep(controls.rate);
+        const float rateHz = voice.logRateTaper
+            ? logLerp(voice.minRateHz, voice.maxRateHz, controls.rate)
+            : voice.minRateHz + (voice.maxRateHz - voice.minRateHz) * rbmod::smoothstep(controls.rate);
         wowPhase += rateHz / sampleRate;
         wowPhase -= std::floor(wowPhase);
         flutterPhase += (5.5f + 13.0f * controls.depth) / sampleRate;
@@ -387,13 +431,16 @@ public:
                 lastShPhase = ph; lfo = shValue; break;
             }
         }
-        const float wow = lfo * voice.wowMs * (0.15f + 0.85f * controls.depth);
+        const float depthScale = voice.zeroDepthDisablesModulation
+            ? controls.depth : (0.15f + 0.85f * controls.depth);
+        const float wow = lfo * voice.wowMs * depthScale;
         const float flutter = std::sin(rbmod::kTwoPi * flutterPhase + 0.7f * std::sin(rbmod::kTwoPi * wowPhase)) *
-                              voice.flutterMs * (0.18f + 0.82f * controls.depth);
+                              voice.flutterMs * (voice.zeroDepthDisablesModulation
+                                  ? controls.depth : (0.18f + 0.82f * controls.depth));
         const float modMs = wow + flutter;
 
         float tapL = readHeads(smoothedDelayMs, modMs, false);
-        float tapR = readHeads(smoothedDelayMs, -0.62f * modMs, true);
+        float tapR = voice.monoWet ? tapL : readHeads(smoothedDelayMs, -0.62f * modMs, true);
         const float fbTap = 0.5f * (tapL + tapR);
 
         float feedbackPath = loopHp.process(fbTap);
@@ -407,20 +454,35 @@ public:
         const float driveGain = dbToGain(lerp(voice.driveMinDb, voice.driveMaxDb, controls.drive));
         x = characterDrive(x, driveGain);
 
-        const float fb = voice.feedbackMax * rbmod::smoothstep(controls.feedback);
+        const float fb = voice.feedbackMax * rbmod::smoothstep(controls.feedback)
+                       + voice.feedbackRunaway * std::pow(controls.feedback, 12.0f);
         const float write = std::tanh(x + feedbackPath * fb);
         line.write(write);
 
         tapL = outputLpL.process(characterWet(tapL, smoothedDelayMs));
         tapR = outputLpR.process(characterWet(tapR, smoothedDelayMs));
+        if (voice.outputFilterPoles > 1)
+        {
+            tapL = outputLpL2.process(tapL);
+            tapR = outputLpR2.process(tapR);
+        }
 
-        const float outputGain = dbToGain(lerp(voice.outputMinDb, voice.outputMaxDb, controls.output));
-        const float wetLevel = controls.mix * voice.wetGain * outputGain;
-        const float dryTrim = 1.0f - voice.dryDucking * controls.mix;
+        const float outputGain = dbToGain(lerp(voice.outputMinDb, voice.outputMaxDb, controls.output)
+                                           + voice.outputCalibrationDb);
+        const float drySourceL = voice.drivenDryPath ? x : feed.left;
+        const float drySourceR = voice.drivenDryPath ? x : feed.right;
+        const float wetLevel = controls.mix * voice.wetGain * voice.wetSign;
+        const float dryTrim = voice.trueCrossfade
+            ? (1.0f - controls.mix) : (1.0f - voice.dryDucking * controls.mix);
+        const float runawayGain = dbToGain(voice.feedbackRunawayOutputDb
+                                            * std::pow(controls.feedback, 12.0f));
+        const float finalGain = (voice.trueCrossfade ? outputGain : 1.0f) * runawayGain;
 
         StereoOut out;
-        out.left = std::tanh(feed.left * dryTrim + tapL * wetLevel);
-        out.right = std::tanh(feed.right * dryTrim + tapR * wetLevel);
+        out.left = std::tanh((drySourceL * dryTrim + tapL * wetLevel *
+                              (voice.trueCrossfade ? 1.0f : outputGain)) * finalGain);
+        out.right = std::tanh((drySourceR * dryTrim + tapR * wetLevel *
+                               (voice.trueCrossfade ? 1.0f : outputGain)) * finalGain);
         return out;
     }
 };
@@ -430,25 +492,40 @@ static inline DelayVoice fm104Voice()
     DelayVoice v;
     v.character = kCharacterBbd;
     v.minDelayMs = 40.0f;
-    v.maxDelayMs = 800.0f;
+    v.maxDelayMs = 400.0f;
+    v.logDelayTaper = true;
+    v.longRangeMultiplier = 2.0f;
+    v.longRangeFilterScale = 0.75f;
     v.inputLpHz = 8200.0f;
-    v.loopLpHz = 4300.0f;
-    v.outputLpHz = 6500.0f;
+    v.loopLpHz = 3000.0f;
+    v.outputLpHz = 2300.0f;
+    v.outputFilterPoles = 2;
+    v.wetSign = -1.0f;
     v.toneDepth = 0.50f;
-    v.feedbackMax = 0.86f;
-    v.wetGain = 1.05f;
+    v.feedbackMax = 1.55f;
+    v.feedbackRunaway = 10.0f;
+    v.feedbackRunawayOutputDb = 15.0f;
+    v.wetGain = 0.42f;
     v.dryDucking = 0.10f;
     v.driveMinDb = -4.0f;
     v.driveMaxDb = 12.0f;
     v.outputMinDb = -10.0f;
     v.outputMaxDb = 5.0f;
+    v.outputCalibrationDb = 11.2f;
     v.companderAmount = 0.62f;
     v.noiseBase = 0.000035f;
     v.noiseDelayScale = 0.00070f;
     v.clockBleed = 0.00022f;
     v.clockBuckets = 4096.0f;
-    v.wowMs = 0.52f;
+    v.wowMs = 16.0f;
     v.flutterMs = 0.08f;
+    v.minRateHz = 0.05f;
+    v.maxRateHz = 50.0f;
+    v.zeroDepthDisablesModulation = true;
+    v.monoWet = true;
+    v.trueCrossfade = true;
+    v.drivenDryPath = true;
+    v.logRateTaper = true;
     return v;
 }
 
@@ -456,15 +533,37 @@ static inline DelayVoice dm2Voice()
 {
     DelayVoice v;
     v.character = kCharacterBbd;
-    v.minDelayMs = 20.0f;
-    v.maxDelayMs = 300.0f;
+    // The 50 k Repeat Rate network is strongly non-linear in time. The matched
+    // Mayer-DI references measure 315.44 / 229.19 / 19.40 ms at min/half/max;
+    // sqrt(1-knob) follows all three anchors instead of the old linear 160 ms
+    // midpoint.
+    v.minDelayMs = 19.4f;
+    v.maxDelayMs = 315.44f;
     v.reverseDelayKnob = true;
-    v.inputLpHz = 6800.0f;
+    v.delayTaperPower = 0.497f;
+    // The isolated first repeat in the seven references is only about 2-3 dB
+    // down at 4-8 kHz. The old 6.8 kHz input pole plus two 5 kHz output poles
+    // accumulated roughly 10 dB too much loss. Keep the darkening in the
+    // feedback loop, but place the fixed anti-alias/reconstruction corners high
+    // enough to match the measured first return. The wet path also shows the
+    // expected coupling-cap bass loss below roughly 200 Hz.
+    v.inputHpHz = 120.0f;
+    v.inputLpHz = 24000.0f;
     v.loopLpHz = 3250.0f;
-    v.outputLpHz = 4100.0f;
-    v.feedbackMax = 0.91f;
-    v.wetGain = 1.12f;
-    v.dryDucking = 0.07f;
+    // IC1/IC2 surround the BBD with multiple RC anti-alias/reconstruction
+    // sections. Two reconstruction poles match the short-delay HF loss; one
+    // generic pole left the first repeat much too bright.
+    v.outputLpHz = 28000.0f;
+    v.outputFilterPoles = 2;
+    v.feedbackMax = 0.96f;
+    // The last part of Intensity reaches self-oscillation while its midpoint
+    // remains controlled. Keep the normal loop law and add only the steep
+    // end-stop contribution used by ComponentDelayCore.
+    v.feedbackRunaway = 0.55f;
+    v.wetGain = 0.86f;
+    // Echo is the return level into the output mixer; it does not attenuate the
+    // direct path on the DM-2 schematic.
+    v.dryDucking = 0.0f;
     v.driveMinDb = -3.0f;
     v.driveMaxDb = 6.0f;
     v.outputMinDb = -8.0f;
@@ -476,6 +575,7 @@ static inline DelayVoice dm2Voice()
     v.clockBuckets = 4096.0f;
     v.wowMs = 0.20f;
     v.flutterMs = 0.045f;
+    v.monoWet = true;
     return v;
 }
 

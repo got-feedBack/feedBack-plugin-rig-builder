@@ -117,8 +117,27 @@ The 2026-07-17 Fuzz-Tone/FuzzRite reference set added two stronger anchors:
   endpoint and produces a dark, interrupted result because it ignores the
   finite collector, coupling and Volume-pot impedances. The measured min/noon/
   max RMS values are -9.57/-13.88/-14.15 dBFS; the calibrated model reaches
-  -9.61/-13.88/-14.15 dBFS. Keep C4 feedback below the sustained-note
+  -9.58/-13.88/-14.15 dBFS. Keep C4 feedback below the sustained-note
   cancellation point and verify complete active windows, not only finite output.
+  The reference output polarity is positive relative to the Brit DI, so the
+  wrapper corrects the common-emitter inversion after the circuit. This matters
+  when the pedal is used in a parallel path even though it does not alter RMS.
+
+The 2026-07-20 safety audit also removed discontinuous output rails from both
+plugins. A limiter must meet the identity branch continuously: returning near
+zero immediately above an absolute input of 1.0 creates a sample discontinuity
+and can sound like a digital click. The replacement remains transparent below
+0.90 and approaches the rail continuously. Buzz-Tone does not normally reach
+it; FuzzRite only approaches it at the loud Depth endpoint. At 44.1, 48 and
+96 kHz both models keep every active DI window and vary by less than 0.05 dB RMS.
+
+FuzzRite still has less pick-crest variation than the supplied reference in
+some 50 ms windows even though its level, broad spectrum and dropout behavior
+match closely. Lowering Q1 drive was tested and rejected because it made the
+pedal darker, cleaner and less coherent at all three Depth positions. Do not
+compensate this with dry blend or envelope expansion: neither exists in the
+schematic. A future improvement should replace the analytic BC337 transfer with
+a coupled collector/base nodal solve and must improve min/noon/max together.
 
 The follow-up audit established topology regression anchors using a 220 Hz sine
 at 0.03 amplitude (110 Hz at 0.05 for bass). These are not universal fidelity

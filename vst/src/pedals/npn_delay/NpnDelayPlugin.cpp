@@ -9,6 +9,7 @@
 #include "DistrhoPlugin.hpp"
 #include "NpnDelayParams.h"
 #include "../../_shared/DelayComponents.h"
+#include <cmath>
 
 START_NAMESPACE_DISTRHO
 
@@ -30,7 +31,10 @@ class NpnDelayPlugin : public Plugin
     {
         rbdelay::DelayControls c;
         c.delay = params[kRepeatRate];
-        c.mix = params[kEcho];
+        // VR5 is nominally 50 kB, but the matched hardware/plugin references
+        // place the electrical midpoint at 64.4% of the maximum return
+        // (-3.82 dB), not the -6.02 dB of a linear amplitude crossfade.
+        c.mix = std::pow(params[kEcho], 0.635f);
         c.feedback = params[kIntensity];
         c.drive = 0.34f;
         c.output = 0.66f;
@@ -56,7 +60,7 @@ protected:
     const char* getDescription() const override { return "Boss DM-2 component-guided BBD delay"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 2, 0); }
     int64_t getUniqueId() const override { return d_cconst('N', 'p', 'D', 'l'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
@@ -95,8 +99,15 @@ protected:
         for (uint32_t i = 0; i < frames; ++i)
         {
             const rbdelay::StereoOut y = core.process(inputs[0][i], inputs[1][i]);
-            outputs[0][i] = y.left;
-            outputs[1][i] = y.right;
+            // The hardware is mono and every matched reference is dual-mono.
+            // Sum the two internal numerical taps so BBD noise/modulation cannot
+            // create a stereo image that the pedal does not have.
+            // The IC1 output mixer in the matched renders sits 0.7 dB below the
+            // generic core. Keep that calibration after the nonlinear mixer so
+            // it does not change loop saturation or self-oscillation onset.
+            const float mono = 0.92f * 0.5f * (y.left + y.right);
+            outputs[0][i] = mono;
+            outputs[1][i] = mono;
         }
     }
 

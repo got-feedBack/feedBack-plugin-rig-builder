@@ -21,9 +21,13 @@ START_NAMESPACE_DISTRHO
 
 static inline float clamp01(float v){ return v<0.0f?0.0f:(v>1.0f?1.0f:v); }
 static inline float passiveOutput(float x){
-    if (x > 1.0f) return 1.0f-std::exp(-(x-1.0f));
-    if (x < -1.0f) return -1.0f+std::exp(x+1.0f);
-    return x;
+    // Continuous emergency rail. The former branch jumped from +/-1 toward
+    // zero as soon as it crossed the threshold, which could sound like a
+    // sample discontinuity on hot inputs.
+    const float magnitude = std::fabs(x);
+    if (magnitude <= 0.90f) return x;
+    const float limited = 0.90f + 0.099f*std::tanh((magnitude-0.90f)/0.099f);
+    return std::copysign(limited, x);
 }
 
 class FuzzRitePlugin : public Plugin {
@@ -51,7 +55,7 @@ protected:
     const char* getDescription() const override { return "Mosrite FuzzRite style silicon fuzz"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1,6,0); }
+    uint32_t getVersion() const override { return d_version(1,7,0); }
     int64_t getUniqueId() const override { return d_cconst('F','z','R','t'); }
 
     void initParameter(uint32_t i, Parameter& p) override {
@@ -78,8 +82,10 @@ protected:
         for (uint32_t i=0;i<frames;++i){
             osL.upsample(iL[i], ubL); osR.upsample(iR[i], ubR);
             for (int k=0;k<kOS;++k){ ubL[k]=left.process(ubL[k]); ubR[k]=right.process(ubR[k]); }
-            oL[i]=passiveOutput(osL.downsample(ubL)*vol);
-            oR[i]=passiveOutput(osR.downsample(ubR)*vol);
+            // Match the reference output polarity. This does not change the
+            // fuzz amount, but prevents phase cancellation in parallel paths.
+            oL[i]=passiveOutput(-osL.downsample(ubL)*vol);
+            oR[i]=passiveOutput(-osR.downsample(ubR)*vol);
         }
     }
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(FuzzRitePlugin)

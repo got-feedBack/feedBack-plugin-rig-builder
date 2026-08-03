@@ -3303,16 +3303,17 @@
 
   // Bob Filter — Moog MF-101 Lowpass Filter (envelope filter), from the real
   // panel photo: black face + wood rails, boxed ENVELOPE / FILTER sections with
-  // white header pills, big silver knobs, orange rockers, 3 LEDs center column,
-  // foog logo bottom-right. Params: Drive0 Output1 Cutoff2 Resonance3
-  // Envelope4 Attack5 Release6 Mix7 Mode8(2/4-pole).
+  // white header pills, big silver knobs, orange pole rocker and LEDs. Params:
+  // Drive0 Output1 Cutoff2 Resonance3 Amount4 FollowRate5 Mix6 Poles7.
   P.fm101 = { w:320,h:500, knobs:[
       {id:4,cx:.27,cy:.215,r:.072,style:'moog'},   // AMOUNT (env amount)
-      {id:7,cx:.27,cy:.505,r:.066,style:'moog'},   // MIX
+      {id:5,cx:.27,cy:.390,r:.060,style:'moog'},   // FOLLOW RATE
+      {id:6,cx:.27,cy:.555,r:.066,style:'moog'},   // MIX
       {id:0,cx:.50,cy:.205,r:.048,style:'moog'},   // DRIVE
+      {id:1,cx:.50,cy:.390,r:.048,style:'moog'},   // OUTPUT
       {id:2,cx:.73,cy:.215,r:.072,style:'moog'},   // CUTOFF
-      {id:3,cx:.73,cy:.505,r:.066,style:'moog'}],  // RESONANCE
-    switches:[{id:5,cx:.27,cy:.365,hs:.036},{id:8,cx:.73,cy:.365,hs:.036}],
+      {id:3,cx:.73,cy:.555,r:.066,style:'moog'}],  // RESONANCE
+    switches:[{id:7,cx:.73,cy:.390,hs:.036}],
     tick:rgb(150,152,158), ptr:rgb(238,240,244),
     draw(d,values){ const {ctx:c,W,H,s}=d; foogBody(d); const wt=rgb(230,232,236), dim=rgb(150,152,158);
       // header (photo: moogerfooger™ + LOWPASS FILTER two lines)
@@ -3324,24 +3325,27 @@
         rr(c,x*W,y*H,w*W,h*H,8*s); c.strokeStyle=wt; c.lineWidth=1.5*s; c.stroke();
         rr(c,(x+w*.5-.105)*W,(y-.016)*H,.21*W,.032*H,4*s); c.fillStyle=rgb(240,240,238); c.fill();
         textC(d,(x+w*.5)*W,(y+.001)*H,F.barlow,10.5,rgb(22,22,25),title); };
-      panel(.095,.115,.35,.475,'ENVELOPE');
-      panel(.555,.115,.35,.475,'FILTER');
+      panel(.095,.115,.35,.525,'ENVELOPE');
+      panel(.555,.115,.35,.525,'FILTER');
       // knob labels
       textSpaced(d,.27*W,.158*H,F.barlow,8.5,wt,'AMOUNT',0.25);
-      textSpaced(d,.27*W,.425*H,F.barlow,8.5,wt,'MIX',0.25);
+      textSpaced(d,.27*W,.325*H,F.barlow,8.0,wt,'FOLLOW RATE',0.18);
+      textSpaced(d,.27*W,.485*H,F.barlow,8.5,wt,'MIX',0.25);
       textSpaced(d,.50*W,.142*H,F.barlow,8.5,wt,'DRIVE',0.25);
+      textSpaced(d,.50*W,.325*H,F.barlow,8.0,wt,'OUTPUT',0.18);
       textSpaced(d,.73*W,.158*H,F.barlow,8.5,wt,'CUTOFF',0.25);
-      textSpaced(d,.73*W,.425*H,F.barlow,8,wt,'RESONANCE',0.2);
-      // dial numbers (photo): 0-10 on amount/mix/resonance, freq marks on cutoff
+      textSpaced(d,.73*W,.485*H,F.barlow,8,wt,'RESONANCE',0.2);
+      // dial numbers: bipolar Amount, 0-10 Mix/Resonance, frequency Cutoff.
       const nums=(cx,cy,r,labels)=>{ const angs=[135,180,225,270,315,405];
         labels.forEach((t,i)=>{ const a=(angs[i])*Math.PI/180;
           textC(d,cx*W+Math.cos(a)*(r+.032)*W,cy*H+Math.sin(a)*(r+.032)*W*(H/W)*0+Math.sin(a)*(r+.030)*H*0.72,F.barlow,6,dim,t); }); };
-      nums(.27,.215,.072,['0','2','4','6','8','10']);
-      nums(.27,.505,.066,['0','2','4','6','8','10']);
-      nums(.73,.505,.066,['0','2','4','6','8','10']);
+      nums(.27,.215,.072,['-10','-6','-2','2','6','10']);
+      nums(.27,.555,.066,['0','2','4','6','8','10']);
+      nums(.73,.555,.066,['0','2','4','6','8','10']);
+      textC(d,.205*W,.432*H,F.barlow,6,dim,'SLOW'); textC(d,.335*W,.432*H,F.barlow,6,dim,'FAST');
       textC(d,.635*W,.185*H,F.barlow,6,dim,'250'); textC(d,.825*W,.185*H,F.barlow,6,dim,'1K');
       textC(d,.645*W,.275*H,F.barlow,6,dim,'20');  textC(d,.815*W,.275*H,F.barlow,6,dim,'12K');
-      // the two orange rockers (photo): SMOOTH/FAST (env attack) + 2-POLE/4-POLE
+      // Orange 2-pole / 4-pole rocker.
       const rocker=(cx,cy,val,l1,l2)=>{
         const tw=W*.150, th=H*.030;
         textSpaced(d,(cx-.075)*W,(cy-.028)*H,F.barlow,6.4,val<0.5?wt:dim,l1,0.15);
@@ -3349,16 +3353,13 @@
         rr(c,(cx-.075)*W,cy*H-th/2,tw,th,3*s); c.fillStyle=rgb(120,40,10); c.fill();
         rr(c,(val>=0.5?cx:cx-.075)*W,cy*H-th*0.63,tw*.5,th*1.27,3*s); c.fillStyle=rgb(235,120,30); c.fill();
         rr(c,(val>=0.5?cx:cx-.075)*W,cy*H-th*0.63,tw*.5,th*1.27,3*s); c.strokeStyle=rgb(60,25,8); c.lineWidth=s; c.stroke(); };
-      // SMOOTH/FAST drives the env ATTACK param (id5): SMOOTH=slow(1), FAST=quick(0).
-      const av=(values&&values[5]!=null)?values[5]:0.15;
-      rocker(.27,.365,av<0.5?1:0,'SMOOTH','FAST');   // painted: right=FAST when attack is fast
-      const mv=(values&&values[8]!=null)?values[8]:1;
-      rocker(.73,.365,mv,'2-POLE','4-POLE');
+      const mv=(values&&values[7]!=null)?values[7]:1;
+      rocker(.73,.390,mv,'2-POLE','4-POLE');
       // LED column (photo: LEVEL / ENV / BYPASS)
       const led=(y,lbl,r2,g2,b2)=>{ ledDot(d,.50*W,y*H,true,r2,g2,b2); textSpaced(d,.50*W,(y-.028)*H,F.barlow,6.5,wt,lbl,0.2); };
-      led(.335,'LEVEL',220,70,60);
-      led(.435,'ENV',255,120,40);
-      led(.535,'BYPASS',150,196,255);
+      led(.300,'LEVEL',220,70,60);
+      led(.465,'ENV',255,120,40);
+      led(.610,'BYPASS',150,196,255);
       // big centered foog logo + stomp (photo)
       textC(d,.50*W,.660*H,F.crete,30,wt,'foog');
       footRound(d,W*.50,H*.815,17*s); } };

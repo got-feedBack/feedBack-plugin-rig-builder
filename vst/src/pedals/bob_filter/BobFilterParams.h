@@ -8,20 +8,20 @@
 // sequencer, a different pedal entirely — it stepped a rhythm instead of
 // tracking the pick, which is why it never behaved as an envelope filter.)
 //
-// Real MF-101 panel: Drive, Output, Cutoff, Resonance, Envelope Amount,
-// Smooth/Fast switch, 2-pole/4-pole switch. The game gives CONTINUOUS
-// Attack/Release, so those replace the Smooth/Fast switch.
+// Real MF-101S panel: Drive, Output, Cutoff, Resonance, bipolar Envelope
+// Amount, Follow Rate, Mix and the 2-pole/4-pole switch. Rocksmith's separate
+// Attack/Release controls are translated onto Follow Rate in the mapping table;
+// they are not extra controls on the pedal face.
 enum BobFilterParamId
 {
     kDrive = 0,
     kOutput,
     kCutoff,
     kResonance,
-    kEnvelope,      // envelope AMOUNT (octaves of sweep)
-    kAttack,
-    kRelease,
+    kEnvelope,      // -10..+10, stored normalized with zero at 0.5
+    kFollowRate,    // slow..fast
     kMix,
-    kMode,          // 2-pole (0) / 4-pole (1)
+    kPoles,         // 2-pole (0) / 4-pole (1)
     kParamCount
 };
 
@@ -30,11 +30,10 @@ static const char* const kBobFilterNames[kParamCount] = {
     "Output",
     "Cutoff",
     "Resonance",
-    "Envelope",
-    "Attack",
-    "Release",
+    "Amount",
+    "Follow Rate",
     "Mix",
-    "Mode",
+    "Poles",
 };
 
 static const char* const kBobFilterSymbols[kParamCount] = {
@@ -42,25 +41,23 @@ static const char* const kBobFilterSymbols[kParamCount] = {
     "output",
     "cutoff",
     "resonance",
-    "envelope",
-    "attack",
-    "release",
+    "amount",
+    "follow_rate",
     "mix",
-    "mode",
+    "poles",
 };
 
-static const float kBobFilterMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
-static const float kBobFilterMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
+static const float kBobFilterMin[kParamCount] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+static const float kBobFilterMax[kParamCount] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
 static const float kBobFilterDef[kParamCount] = {
-    0.35f,   // Drive
-    0.60f,   // Output
-    0.22f,   // Cutoff (base ~160 Hz, mostly closed at rest)
-    0.55f,   // Resonance (juicy quack, below self-osc)
-    0.65f,   // Envelope amount
-    0.15f,   // Attack (fast — the "Fast" switch feel)
-    0.45f,   // Release
+    0.60f,   // Drive (about 1 o'clock)
+    0.75f,   // Output
+    0.612f,  // Cutoff = 1 kHz on the real 20 Hz..12 kHz scale
+    0.70f,   // Resonance
+    1.00f,   // Amount = +10
+    1.00f,   // Follow Rate = fast
     1.00f,   // Mix (MF-101 is full wet; the game maps Mix)
-    1.00f,   // Mode = 4-pole
+    1.00f,   // 4-pole
 };
 
 #endif // BOB_FILTER_PARAMS_H

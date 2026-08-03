@@ -61,7 +61,7 @@ static inline BbdChipSpec mn3009Spec()
 
 static inline BbdChipSpec mf108mChainSpec()
 {
-    return { 1408, 12000.0f, 200000.0f, 0.5f, 1.12f, 0.0007f, 0.000025f };
+    return { 1280, 12000.0f, 200000.0f, 0.5f, 1.12f, 0.0007f, 0.000025f };
 }
 
 static inline float dbToGain(float db)
@@ -118,6 +118,26 @@ public:
         clockHz = rbmod::clamp(clockHz, spec.clockMinHz, spec.clockMaxHz);
         const float delaySamples = (spec.delayClockFactor * (float)spec.buckets * sampleRate) / clockHz;
 
+        return processInternal(input, delaySamples, clockHz, postFilterHz, grit, bleed);
+    }
+
+    float processAtDelay(float input, float delayMs, int effectiveBuckets,
+                         float postFilterHz, float grit, float bleed)
+    {
+        const int buckets = effectiveBuckets > 0 ? effectiveBuckets : spec.buckets;
+        const float seconds = rbmod::clamp(delayMs, 0.1f, 80.0f) * 0.001f;
+        const float clockHz = rbmod::clamp(spec.delayClockFactor * (float)buckets / seconds,
+                                           spec.clockMinHz, spec.clockMaxHz);
+        const float delaySamples = rbmod::clamp(delayMs * sampleRate * 0.001f,
+                                                 1.0f, sampleRate * 0.080f);
+        return processInternal(input, delaySamples, clockHz, postFilterHz, grit, bleed);
+    }
+
+private:
+    float processInternal(float input, float delaySamples, float clockHz,
+                          float postFilterHz, float grit, float bleed)
+    {
+
         const float driven = spec.headroom * std::tanh(input / spec.headroom);
         const float tap = delay.readCubic(delaySamples);
         delay.write(driven);
@@ -150,6 +170,8 @@ struct FlangerVoicing
     float bbdLpHz = 5200.0f;
     float outputLpHz = 6200.0f;
     float colorHpHz = 2300.0f;
+    float feedbackColorBase = 0.08f;
+    float feedbackColorScale = 0.32f;
     float delaySlewHz = 0.0f;
     float feedbackMax = 0.62f;
     float feedbackSign = -1.0f;
@@ -169,20 +191,48 @@ struct FlangerVoicing
     float driveMaxDb = 1.5f;
     float outputMinDb = -1.0f;
     float outputMaxDb = 1.0f;
+    float outputTaperExponent = 1.0f;
+    float mixTaperExponent = 1.0f;
+    float outputCalibrationDb = 0.0f;
+    float feedbackExtremeOutputDb = 0.0f;
+    float alternateRangeOutputDb = 0.0f;
+    float positiveFeedbackScale = 1.0f;
+    float feedbackRunaway = 0.0f;
+    float feedbackRunawayExponent = 12.0f;
     float compander = 0.45f;
     float rateTaperExponent = 1.7f;
     float manualTaperExponent = 1.7f;
+    float alternateManualTaperExponent = 0.0f;
+    float negativeFeedbackExponent = 2.6f;
+    float positiveFeedbackExponent = 1.7f;
     float widthTaperExponent = 1.0f;
     float manualCenterMaxRatio = 1.0f;
     float depthCenterMinScale = 0.0f;
     float depthCenterMaxScale = 0.0f;
     float manualDepthScale = 0.0f;
     float highRateDepthReduction = 0.0f;
+    float highRateDepthExponent = 3.0f;
     float widthCenterShift = 0.0f;
     float widthCenterShiftExponent = 3.0f;
+    float widthCenterBellShift = 0.0f;
+    float rateKnee1Input = 0.0f;
+    float rateKnee1Output = 0.0f;
+    float rateKnee2Input = 0.0f;
+    float rateKnee2Output = 0.0f;
+    float rateKnee3Input = 0.0f;
+    float rateKnee3Output = 0.0f;
     bool useCompander = true;
     bool linearPath = false;
     bool reverseLinearRate = false;
+    bool manualIncreasesDelay = false;
+    bool bipolarFeedback = false;
+    bool trueCrossfade = false;
+    bool directDelayTarget = false;
+    bool feedbackAfterOutputFilter = false;
+    float alternateMinDelayMs = 0.0f;
+    float alternateMaxDelayMs = 0.0f;
+    int shortRangeBuckets = 0;
+    int longRangeBuckets = 0;
 };
 
 class AnalogBbdFlanger
@@ -212,8 +262,11 @@ class AnalogBbdFlanger
     bool frozen = false;
     float feedbackState = 0.0f;
     float smoothedDelayMs = 0.0f;
+    float lastLfoPhase = 0.0f;
+    float randomStep = 0.0f;
+    unsigned randomSeed = 0x10831u;
 
-    float lfoShape(float p) const
+    float lfoShape(float p)
     {
         p -= std::floor(p);
         const float tri = 4.0f * std::fabs(p - 0.5f) - 1.0f;
@@ -221,21 +274,26 @@ class AnalogBbdFlanger
         if (lfoShapeControl < 0.0f)
             return voice.lfoTriangle * tri + (1.0f - voice.lfoTriangle) * sine;
 
-        const float shape = rbmod::clamp01(lfoShapeControl);
+        const int shape = (int)(rbmod::clamp01(lfoShapeControl) * 5.999f);
         const float rampUp = 2.0f * p - 1.0f;
         const float rampDown = 1.0f - 2.0f * p;
         const float square = p < 0.5f ? 1.0f : -1.0f;
-        const float stepped = std::floor((p * 8.0f)) / 3.5f - 1.0f;
+        if (shape == 5 && p < lastLfoPhase)
+        {
+            randomSeed = randomSeed * 1664525u + 1013904223u;
+            randomStep = 2.0f * (float)((randomSeed >> 8) & 0x00ffffffu) / 16777215.0f - 1.0f;
+        }
+        lastLfoPhase = p;
 
-        if (shape < 0.20f)
-            return sine;
-        if (shape < 0.40f)
-            return tri;
-        if (shape < 0.60f)
-            return rampUp;
-        if (shape < 0.80f)
-            return rampDown;
-        return 0.55f * square + 0.45f * stepped;
+        switch (shape)
+        {
+        default: return sine;
+        case 1: return tri;
+        case 2: return square;
+        case 3: return rampUp;
+        case 4: return rampDown;
+        case 5: return randomStep;
+        }
     }
 
 public:
@@ -250,7 +308,7 @@ public:
     void setSampleRate(float sr)
     {
         sampleRate = sr > 1000.0f ? sr : 48000.0f;
-        bbd.setSampleRate(sampleRate, voice.maxDelayMs);
+        bbd.setSampleRate(sampleRate, std::fmax(voice.maxDelayMs, voice.alternateMaxDelayMs));
         inputOpamp.setSampleRate(sampleRate);
         inputHp.setHz(voice.inputHpHz, sampleRate);
         inputLp.setHz(voice.inputLpHz, sampleRate);
@@ -280,6 +338,9 @@ public:
         phase = phaseOffset;
         feedbackState = 0.0f;
         smoothedDelayMs = 0.0f;
+        lastLfoPhase = phase;
+        randomStep = 0.0f;
+        randomSeed = 0x10831u;
     }
 
     void setControls(float manualControl, float widthControl, float rateControl,
@@ -301,7 +362,26 @@ public:
 
     float process(float in)
     {
-        const float rateCurve = std::pow(rbmod::clamp01(rate), voice.rateTaperExponent);
+        float mappedRate = rbmod::clamp01(rate);
+        if (voice.rateKnee3Input > voice.rateKnee2Input &&
+            voice.rateKnee2Input > voice.rateKnee1Input)
+        {
+            const float x[5] = { 0.0f, voice.rateKnee1Input, voice.rateKnee2Input,
+                                 voice.rateKnee3Input, 1.0f };
+            const float y[5] = { 0.0f, voice.rateKnee1Output, voice.rateKnee2Output,
+                                 voice.rateKnee3Output, 1.0f };
+            for (int i = 0; i < 4; ++i)
+            {
+                if (mappedRate <= x[i + 1])
+                {
+                    const float segment = (mappedRate - x[i]) /
+                                          std::fmax(1.0e-6f, x[i + 1] - x[i]);
+                    mappedRate = y[i] + (y[i + 1] - y[i]) * rbmod::clamp01(segment);
+                    break;
+                }
+            }
+        }
+        const float rateCurve = std::pow(mappedRate, voice.rateTaperExponent);
         const float rateHz = voice.reverseLinearRate
             ? voice.minRateHz + (voice.maxRateHz - voice.minRateHz) * rbmod::reverseAudioTaper(rate)
             : logInterp(voice.minRateHz, voice.maxRateHz, rateCurve);
@@ -313,14 +393,21 @@ public:
 
         const float lfo = frozen ? 0.0f : lfoShape(phase);
         const bool longRange = rangeControl >= 0.5f;
-        const float rangeMinMs = longRange ? std::min(voice.maxDelayMs * 0.20f, voice.minDelayMs * 3.3f)
-                                           : voice.minDelayMs;
+        const float rangeMinMs = longRange && voice.alternateMinDelayMs > 0.0f
+            ? voice.alternateMinDelayMs
+            : (longRange ? std::min(voice.maxDelayMs * 0.20f, voice.minDelayMs * 3.3f)
+                         : voice.minDelayMs);
         const float shortRangeMaxMs = voice.flangeRangeMaxMs > 0.0f
             ? voice.flangeRangeMaxMs
             : std::max(voice.minDelayMs * 2.2f, 17.5f);
-        const float rangeMaxMs = longRange ? voice.maxDelayMs
-                                           : std::min(voice.maxDelayMs, shortRangeMaxMs);
-        const float manualCurve = std::pow(rbmod::clamp01(manual), voice.manualTaperExponent);
+        const float rangeMaxMs = longRange && voice.alternateMaxDelayMs > 0.0f
+            ? voice.alternateMaxDelayMs
+            : (longRange ? voice.maxDelayMs
+                         : std::min(voice.maxDelayMs, shortRangeMaxMs));
+        const float manualExponent = longRange && voice.alternateManualTaperExponent > 0.0f
+            ? voice.alternateManualTaperExponent
+            : voice.manualTaperExponent;
+        const float manualCurve = std::pow(rbmod::clamp01(manual), manualExponent);
         const float depthCurve = rbmod::smoothstep(width);
         const float centerMinMs = rangeMinMs
                                 + (rangeMaxMs - rangeMinMs) * voice.depthCenterMinScale * depthCurve;
@@ -330,11 +417,16 @@ public:
                                 + (centerMaxBaseMs - centerMinMs)
                                   * std::exp(-voice.depthCenterMaxScale * depthCurve);
         const float widthShift = std::exp(voice.widthCenterShift
-                                        * std::pow(width, voice.widthCenterShiftExponent));
-        const float centerMs = rbmod::clamp(logInterp(centerMaxMs, centerMinMs, manualCurve) * widthShift,
+                                        * std::pow(width, voice.widthCenterShiftExponent)
+                                        + voice.widthCenterBellShift * width * (1.0f - width));
+        const float manualMs = voice.manualIncreasesDelay
+            ? logInterp(centerMinMs, centerMaxMs, manualCurve)
+            : logInterp(centerMaxMs, centerMinMs, manualCurve);
+        const float centerMs = rbmod::clamp(manualMs * widthShift,
                                             rangeMinMs, rangeMaxMs);
         const float widthCurve = std::pow(rbmod::smoothstep(width), voice.widthTaperExponent);
-        const float highRateDepth = 1.0f - voice.highRateDepthReduction * rate * rate * rate;
+        const float highRateDepth = 1.0f - voice.highRateDepthReduction
+                                  * std::pow(rate, voice.highRateDepthExponent);
         const float span = std::log(rangeMaxMs / rangeMinMs)
                          * (voice.depthBase
                             + voice.depthScale * widthCurve
@@ -352,30 +444,69 @@ public:
         float x = inputHp.process(in);
         const float driveDb = voice.driveMinDb + (voice.driveMaxDb - voice.driveMinDb) * rbmod::audioTaper(drive);
         x = inputOpamp.process(x * dbToGain(driveDb), 2.0f + 18.0f * rbmod::audioTaper(drive));
-        x = inputLp.process(x);
+        const float direct = inputLp.process(x);
 
-        const float fb = voice.feedbackMax * rbmod::smoothstep(feedback);
-        const float feedbackInput = x + voice.feedbackSign * feedbackState * fb;
+        float feedbackControl = rbmod::smoothstep(feedback);
+        if (voice.bipolarFeedback)
+        {
+            const float signedKnob = 2.0f * feedback - 1.0f;
+            const float exponent = signedKnob < 0.0f
+                ? voice.negativeFeedbackExponent
+                : voice.positiveFeedbackExponent;
+            feedbackControl = std::copysign(std::pow(std::fabs(signedKnob), exponent), signedKnob);
+            if (feedbackControl > 0.0f)
+                feedbackControl *= voice.positiveFeedbackScale;
+        }
+        float fb = voice.feedbackMax * feedbackControl;
+        if (voice.bipolarFeedback && voice.feedbackRunaway > 0.0f)
+        {
+            const float signedKnob = 2.0f * feedback - 1.0f;
+            fb += std::copysign(voice.feedbackRunaway *
+                                std::pow(std::fabs(signedKnob), voice.feedbackRunawayExponent),
+                                signedKnob);
+        }
+        const float feedbackInput = direct + voice.feedbackSign * feedbackState * fb;
         const float write = voice.linearPath ? feedbackInput : rbmod::softClip(feedbackInput);
-        float wet = bbd.process(write, clockHz, voice.bbdLpHz * (1.06f - 0.24f * rbmod::smoothstep(width)),
-                                rbmod::smoothstep(feedback), rbmod::smoothstep(width));
+        const float bbdFilterHz = voice.bbdLpHz * (1.06f - 0.24f * rbmod::smoothstep(width));
+        float wet = voice.directDelayTarget
+            ? bbd.processAtDelay(write, delayMs,
+                                 longRange ? voice.longRangeBuckets : voice.shortRangeBuckets,
+                                 bbdFilterHz, rbmod::smoothstep(std::fabs(feedbackControl)),
+                                 rbmod::smoothstep(width))
+            : bbd.process(write, clockHz, bbdFilterHz,
+                          rbmod::smoothstep(feedback), rbmod::smoothstep(width));
 
         if (voice.useCompander)
             wet = compander.process(wet, voice.compander);
         const float colorBand = wet - colorLp.process(wet);
-        const float coloredWet = wet + colorBand * (0.08f + 0.32f * rbmod::smoothstep(feedback));
+        const float coloredWet = wet + colorBand *
+            (voice.feedbackColorBase + voice.feedbackColorScale *
+             rbmod::smoothstep(std::fabs(feedbackControl)));
         wet = voice.linearPath ? coloredWet : rbmod::softClip(coloredWet);
-        feedbackState = wet;
-
+        if (!voice.feedbackAfterOutputFilter)
+            feedbackState = wet;
         wet = outputLp2.process(outputLp1.process(wet));
+        if (voice.feedbackAfterOutputFilter)
+            feedbackState = wet;
 
-        const float rangeFeedback = rbmod::smoothstep(width) * rbmod::smoothstep(feedback);
-        const float dry = voice.dryLevel * (1.0f - voice.dryDucking * mix
-            - voice.rangeFeedbackDryDucking * rangeFeedback);
-        const float wetGain = voice.wetLevel * (voice.wetMixMin + voice.wetMixScale * mix)
-            * (1.0f + voice.rangeFeedbackWetBoost * rangeFeedback);
-        const float outputDb = voice.outputMinDb + (voice.outputMaxDb - voice.outputMinDb) * output;
-        const float mixed = (dry * x + voice.wetSign * wetGain * wet) * dbToGain(outputDb);
+        const float rangeFeedback = rbmod::smoothstep(width) * rbmod::smoothstep(std::fabs(feedbackControl));
+        const float crossfadeMix = std::pow(mix, voice.mixTaperExponent);
+        const float dry = voice.trueCrossfade
+            ? voice.dryLevel * (1.0f - crossfadeMix)
+            : voice.dryLevel * (1.0f - voice.dryDucking * mix
+                - voice.rangeFeedbackDryDucking * rangeFeedback);
+        const float wetGain = voice.trueCrossfade
+            ? voice.wetLevel * crossfadeMix
+            : voice.wetLevel * (voice.wetMixMin + voice.wetMixScale * mix)
+                * (1.0f + voice.rangeFeedbackWetBoost * rangeFeedback);
+        const float outputCurve = 1.0f - std::pow(1.0f - output, voice.outputTaperExponent);
+        const float feedbackExtreme = voice.bipolarFeedback
+            ? std::pow(std::fabs(2.0f * feedback - 1.0f), 12.0f) : 0.0f;
+        const float outputDb = voice.outputMinDb + (voice.outputMaxDb - voice.outputMinDb) * outputCurve
+                             + voice.outputCalibrationDb
+                             + voice.feedbackExtremeOutputDb * feedbackExtreme
+                             + (longRange ? voice.alternateRangeOutputDb : 0.0f);
+        const float mixed = (dry * direct + voice.wetSign * wetGain * wet) * dbToGain(outputDb);
         return voice.linearPath ? mixed : rbmod::softClip(mixed);
     }
 };

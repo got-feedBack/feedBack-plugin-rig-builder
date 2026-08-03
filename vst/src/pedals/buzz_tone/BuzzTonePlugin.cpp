@@ -26,11 +26,11 @@ static inline float finalLimit(float x)
 {
     // All audible asymmetry is produced by the three biased Ge stages. Keep a
     // transparent emergency rail here instead of adding a fourth waveshaper.
-    if (x > 1.0f)
-        return 1.0f - std::exp(-(x - 1.0f));
-    if (x < -1.0f)
-        return -1.0f + std::exp(x + 1.0f);
-    return x;
+    const float magnitude = std::fabs(x);
+    if (magnitude <= 0.90f)
+        return x;
+    const float limited = 0.90f + 0.099f * std::tanh((magnitude - 0.90f) / 0.099f);
+    return std::copysign(limited, x);
 }
 
 static inline float staticAttackCalibration(float attack)
@@ -77,7 +77,7 @@ protected:
     const char* getDescription() const override { return "1.5 V three-2N1305 germanium fuzz"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 4, 0); }
+    uint32_t getVersion() const override { return d_version(1, 5, 0); }
     int64_t getUniqueId() const override { return d_cconst('B', 'z', 't', 'n'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override

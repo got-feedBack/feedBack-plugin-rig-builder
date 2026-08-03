@@ -36,7 +36,7 @@ class AnalogDelayPlugin : public Plugin
         c.tone = 0.55f;
         // MF-104M panel: SHORT/LONG doubles the delay window; the LFO section
         // modulates the BBD clock. Defaults equal the old hardcoded values.
-        c.range = params[kRange] < 0.5f ? 0.5f : 1.0f;   // 0.5 = neutral window
+        c.range = params[kRange] < 0.5f ? 0.0f : 1.0f;
         c.rate = params[kRate];
         c.depth = params[kAmount];
         c.shape = params[kWaveform];
@@ -59,7 +59,7 @@ protected:
     const char* getDescription() const override { return "FM104 / MF-104 component-guided BBD delay"; }
     const char* getMaker() const override { return "RigBuilder"; }
     const char* getLicense() const override { return "ISC"; }
-    uint32_t getVersion() const override { return d_version(1, 1, 0); }
+    uint32_t getVersion() const override { return d_version(1, 3, 0); }
     int64_t getUniqueId() const override { return d_cconst('A', 'n', 'D', 'l'); }
 
     void initParameter(uint32_t index, Parameter& parameter) override
