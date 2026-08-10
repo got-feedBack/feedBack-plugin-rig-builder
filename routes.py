@@ -2361,8 +2361,10 @@ def _pick_installed_primary_vst(rs_gear: str, known_lookup: dict) -> dict | None
     for cand in candidates:
         if not isinstance(cand, dict):
             continue
-        if cand.get("bundled"):
-            continue
+        # Thin packaged builds download Rig Builder VSTs into the writable
+        # config root instead of _plugin_dir. _build_known_vst_lookup() scans
+        # both roots, so a missing read-only bundle must still fall back to its
+        # detected plugin name here.
         if not cand.get("name") or not known_lookup:
             continue
         installed = known_lookup.get(cand["name"].lower())
