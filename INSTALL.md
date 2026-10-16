@@ -11,13 +11,13 @@ simulations instead of the generic engine sounds.
 2. Unzip into the user plugins directory:
 
    ```bash
-   cd ~/Library/Application\ Support/slopsmith-desktop/plugins/
+   cd ~/Library/Application\ Support/feedback-desktop/plugins/
    unzip ~/Downloads/rig_builder.zip
    ```
 3. Open feedBack. **"Rig Builder"** appears in the side nav.
 
 That's it — no Python, no extra dependencies. The plugin runs inside the
-slopsmith backend.
+feedBack backend.
 
 ## How it works out of the box
 
@@ -49,8 +49,10 @@ Two modes:
 
 ## Songs
 
-Rig Builder reads songs in feedBack's own `.sloppak` format. Point it at a
-raw archive and it will tell you to convert it to `.sloppak` first.
+Rig Builder reads songs in feedBack's open song-pack format, `.feedpak` or
+the older `.sloppak`. Point it at a raw archive and it will tell you to
+convert it first. `.feedpak` songs don't carry per-song gear data yet, so
+they play through your **Default tone** when it's turned on.
 
 ## Quick verification
 

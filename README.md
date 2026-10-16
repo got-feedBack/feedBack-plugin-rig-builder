@@ -1,6 +1,6 @@
 # Rig Builder
 
-A [feedBack](https://slopsmith.app) plugin that turns each song's tone into a
+A [feedBack](https://github.com/got-feedback/feedBack) plugin that turns each song's tone into a
 **real guitar/bass rig**. Every amp, cab, pedal, and rack in a tone is rendered
 by either a **bundled VST3/AU effect** or a **NAM capture / IR** from
 [tone3000.com](https://www.tone3000.com), chained into a realistic
@@ -79,7 +79,9 @@ candidate listing and auto-download. Without it, deep-link mode works fully.
 - A tone3000 account is optional (enables in-app candidate listing and
   auto-download).
 
-Rig Builder reads songs in feedBack's own `.sloppak` format only.
+Rig Builder reads songs in feedBack's own `.feedpak` / `.sloppak` format only.
+`.feedpak` songs don't carry per-song gear data yet, so they play through your
+**Default tone** when it's turned on.
 
 ---
 
