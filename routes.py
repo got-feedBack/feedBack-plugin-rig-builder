@@ -861,6 +861,39 @@ def _get_conn_locked() -> sqlite3.Connection:
         _conn = sqlite3.connect(_require_db_path(), check_same_thread=False)
         _conn.execute("PRAGMA journal_mode=WAL")
         _conn.execute("PRAGMA foreign_keys=ON")
+        # nam_tone owns `presets`/`tone_mappings` but creates them lazily on
+        # its first request. rig_builder reads/writes both (batch mapping,
+        # chain persistence), so on a fresh profile — where no nam_tone
+        # endpoint has been hit yet — those tables would not exist and the
+        # first query would crash with "no such table". Create them here
+        # with the exact nam_tone schema; CREATE TABLE IF NOT EXISTS keeps
+        # this idempotent and nam_tone's own creation a no-op.
+        _conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS presets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                model_file TEXT,
+                ir_file TEXT,
+                input_gain REAL NOT NULL DEFAULT 1.0,
+                output_gain REAL NOT NULL DEFAULT 0.5,
+                gate_threshold REAL NOT NULL DEFAULT -60.0,
+                settings_json TEXT NOT NULL DEFAULT '{}'
+            )
+            """
+        )
+        _conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tone_mappings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filename TEXT NOT NULL,
+                tone_key TEXT NOT NULL,
+                preset_id INTEGER NOT NULL,
+                UNIQUE(filename, tone_key),
+                FOREIGN KEY (preset_id) REFERENCES presets(id)
+            )
+            """
+        )
         _conn.execute(
             """
             CREATE TABLE IF NOT EXISTS preset_pieces (
@@ -3432,12 +3465,22 @@ def _get_master_preset_id(role: str) -> int | None:
 def _load_master_chain(role: str) -> list[dict]:
     """Return the master pre or post chain as a list of enriched pieces
     (same shape as _load_saved_chain). Empty list if the sentinel
-    preset has no pieces yet."""
+    preset has no pieces yet. Unassigned gear pieces (kind='none') are
+    resolved through the gear's global assignment so they display what
+    they play."""
     pid = _get_master_preset_id(role)
     if pid is None:
         return []
     conn = _get_conn()
-    return _load_saved_chain(conn, pid) or []
+    out = _load_saved_chain(conn, pid, resolve_unassigned=True) or []
+    _rb_debug_log(f"load_master_chain role={role}", {
+        "preset_id": pid,
+        "pieces": [{"slot": p.get("slot"), "type": p.get("type"),
+                    "assigned_kind": (p.get("assigned") or {}).get("kind"),
+                    "vst": ((p.get("assigned") or {}).get("vst_path") or "")[-90:]}
+                   for p in out],
+    })
+    return out
 
 
 # ── Default tone ────────────────────────────────────────────────────
@@ -3581,6 +3624,68 @@ def _load_default_tone_chain() -> list[dict]:
     return _load_saved_chain(conn, pid) or []
 
 
+def _rb_debug_log(msg: str, data=None) -> None:
+    """Append one line to <config_dir>/rb-debug.log (rig-builder diagnostics).
+
+    Never raises — tracing must not break the request path. The file is
+    capped (~4 MB, keeps the tail) so a long session can't grow it unbounded.
+    """
+    try:
+        if _config_dir is None:
+            return
+        path = _config_dir / "rb-debug.log"
+        try:
+            if path.exists() and path.stat().st_size > 4 * 1024 * 1024:
+                path.write_bytes(path.read_bytes()[-2 * 1024 * 1024:])
+        except Exception:
+            pass
+        line = f"[{datetime.now().isoformat(timespec='milliseconds')}] {msg}"
+        if data is not None:
+            try:
+                line += " " + json.dumps(data, default=str)[:2000]
+            except Exception:
+                line += " " + repr(data)[:2000]
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
+
+
+def _source_playable(src: dict | None) -> bool:
+    """True when a resolved piece source actually plays (VST path or NAM/IR file)."""
+    if not src:
+        return False
+    return ((src.get("kind") == "vst" and src.get("vst_path"))
+            or (src.get("kind") in ("nam", "ir", "rs_ir") and src.get("file")))
+
+
+def _resolve_piece_source(gear, kind, file, vst_path, vst_format, vst_state):
+    """Effective playable source for a master-chain piece row.
+
+    Pieces added from the gear picker are stored as kind='none' with no
+    file/vst_path until the user explicitly assigns one. For those, inherit
+    the gear's global assignment — the same resolution the consolidation and
+    the client's add-picker use: the most-used NAM/VST in preset_pieces for
+    this rs_gear. Rows that already carry a file or vst_path are returned
+    unchanged. Returns None when nothing resolves."""
+    if (kind == "vst" and vst_path) or (kind in ("nam", "ir", "rs_ir") and file):
+        return {"kind": kind, "file": file, "vst_path": vst_path,
+                "vst_format": vst_format, "vst_state": vst_state}
+    if not gear:
+        return None
+    try:
+        res = _resolve_gear_assignment(gear, "auto", None)
+    except Exception as e:
+        _rb_debug_log("resolve_piece_source failed", {"gear": gear, "error": str(e)})
+        return None
+    if not res:
+        return None
+    return {"kind": res.get("kind"), "file": res.get("file"),
+            "vst_path": res.get("vst_path"),
+            "vst_format": res.get("vst_format"),
+            "vst_state": res.get("vst_state")}
+
+
 def _build_master_stages(role: str, models_dir, irs_dir,
                          output_gain: float, missing: list) -> list[dict]:
     """Return native-engine stages (type:0/1/2) for the master pre or post
@@ -3603,6 +3708,13 @@ def _build_master_stages(role: str, models_dir, irs_dir,
     for slot, kind, file, gear, bypassed, _slot_order, vst_path, vst_format, vst_state in rows:
         bypassed = bool(bypassed)
         slot_tag = f"master_{role}:{slot or 'unspecified'}"
+        # A gear piece added from the picker lands here as kind='none' with no
+        # file/vst_path; inherit the gear's global assignment so it actually
+        # plays instead of being silently skipped.
+        src = _resolve_piece_source(gear, kind, file, vst_path, vst_format, vst_state)
+        if src is not None:
+            kind, file, vst_path = src["kind"], src["file"], src["vst_path"]
+            vst_format, vst_state = src["vst_format"], src["vst_state"]
         if kind == "nam" and file:
             path = _safe_child(models_dir, file)
             if not path or not path.exists():
@@ -3628,11 +3740,19 @@ def _build_master_stages(role: str, models_dir, irs_dir,
                 state=_vst_stage_state(str(vp), vst_format, vst_state),
                 slot=slot_tag, rs_gear=gear))
         # else: kind == 'none' or no file → skip (user placeholder)
+    _rb_debug_log(f"master_stages role={role}", {
+        "rows": len(rows),
+        "stages": [{"slot": s.get("slot"), "type": s.get("type"),
+                    "rs_gear": s.get("rs_gear"),
+                    "path": str(s.get("path") or s.get("file") or "")[-90:]}
+                   for s in stages],
+    })
     return stages
 
 
 def _load_saved_chain(conn: sqlite3.Connection, preset_id: int,
-                      img_idx: dict | None = None) -> list[dict] | None:
+                      img_idx: dict | None = None,
+                      resolve_unassigned: bool = False) -> list[dict] | None:
     """Return the user-edited chain for a preset, rebuilt from preset_pieces
     rows + enriched the same way as a PSARC-derived chain. Returns None if
     the preset has no rows (yet), in which case the caller falls back to
@@ -3690,6 +3810,25 @@ def _load_saved_chain(conn: sqlite3.Connection, preset_id: int,
             "vst_state": _effective_vst_state_for_piece(rs_gear, vst_path, vst_state, knobs)
             if kind == "vst" and vst_path else vst_state,
         }
+        # Master/default chains: a gear piece saved as kind='none' (added from
+        # the picker, never explicitly assigned) inherits the gear's global
+        # assignment, so the UI shows what it actually plays and the in-chain
+        # VST editor can match it. Song-tone chains keep showing the raw row.
+        if resolve_unassigned and rs_gear:
+            src = _resolve_piece_source(rs_gear, kind, file, vst_path,
+                                        vst_format, vst_state)
+            if _source_playable(src):
+                enriched["assigned"] = {
+                    **enriched["assigned"],
+                    "kind": src["kind"],
+                    "file": _apply_cab_override(src["file"]),
+                    "vst_path": src["vst_path"],
+                    "vst_format": src["vst_format"],
+                    "vst_state": (_effective_vst_state_for_piece(rs_gear, src["vst_path"],
+                                                                src["vst_state"], knobs)
+                                  if src["kind"] == "vst" and src["vst_path"] else src["vst_state"]),
+                    "resolved_from_gear": True,
+                }
         enriched["bypassed"] = bool(bypassed)
         enriched["_preset_piece_id"] = piece_id   # so the UI can reorder/remove by id
         enriched["_slot_order"] = slot_order
@@ -7491,9 +7630,9 @@ def _batch_worker(mode: str = "all", categories=None):
                     _batch_log(f"Restored {_rev} piece(s) onto their bundled VST")
             except Exception:
                 log.exception("bundled-VST restore (factory) step crashed")
-    except Exception:
+    except Exception as e:
         log.exception("batch worker crashed")
-        _batch_log("ERROR — see server log")
+        _batch_log(f"ERROR — {type(e).__name__}: {e} (details in server log)")
     finally:
         with _batch_lock:
             _batch_state["running"] = False
@@ -8372,18 +8511,6 @@ def setup(app, context):
 
     # ── Status / setup ────────────────────────────────────────────────
 
-    @app.post("/api/plugins/rig_builder/debug_log")
-    async def debug_log(request: Request):
-        # Frontend diagnostics relay: the renderer's console isn't visible when
-        # the app runs from a terminal, but this server's stdout is (the main
-        # process echoes it as [python:stdout]). Print-and-forget.
-        try:
-            body = await request.json()
-            print(f"[rb-debug] {str(body.get('msg', ''))[:2000]}", flush=True)
-        except Exception:
-            pass
-        return {"ok": True}
-
     # ── Plugin self-update (Setup → Rig Builder version) ────────────────────
     # Self-contained: reads its own version from plugin.json and the latest from
     # GitHub raw, and updates via `git` when this copy is a clone. Does NOT depend
@@ -8778,6 +8905,35 @@ def setup(app, context):
         pieces = data.get("pieces") or []
         if not isinstance(pieces, list):
             return JSONResponse({"error": "pieces must be a list"}, 400)
+        # Gear pieces added from the picker arrive as kind='none' with no
+        # file/vst_path; inherit the gear's global assignment so the saved row
+        # is immediately playable and survives restart as a real VST/NAM/IR.
+        for p in pieces:
+            if not isinstance(p, dict):
+                continue
+            if (p.get("kind") == "vst" and p.get("vst_path")) \
+                    or (p.get("kind") in ("nam", "ir", "rs_ir") and p.get("file")):
+                continue
+            gear = p.get("rs_gear_type") or ""
+            if not gear:
+                continue
+            src = _resolve_piece_source(gear, p.get("kind"), p.get("file"),
+                                        p.get("vst_path"), p.get("vst_format"),
+                                        p.get("vst_state"))
+            if _source_playable(src):
+                p["kind"] = src["kind"]
+                p["file"] = src["file"]
+                p["vst_path"] = src["vst_path"]
+                p["vst_format"] = src["vst_format"]
+                p["vst_state"] = src["vst_state"]
+        _rb_debug_log("save_master_chain", {
+            "role": role,
+            "pieces": [{"slot": p.get("slot"), "gear": p.get("rs_gear_type"),
+                        "kind": p.get("kind"),
+                        "vst": str(p.get("vst_path") or "")[-90:],
+                        "file": p.get("file")}
+                       for p in pieces if isinstance(p, dict)],
+        })
         pid = _get_master_preset_id(role)
         if pid is None:
             return JSONResponse({"error": "could not get master preset"}, 500)
@@ -8794,9 +8950,39 @@ def setup(app, context):
             )
         except Exception as e:
             log.exception("save_master_chain failed")
+            _rb_debug_log("save_master_chain ERROR", {"role": role, "error": f"{type(e).__name__}: {e}"})
             return JSONResponse({"error": f"{type(e).__name__}: {e}"}, 500)
+        _rb_debug_log("save_master_chain done", {"role": role, "preset_id": preset_id,
+                                                  "piece_count": len(pieces)})
         return {"ok": True, "preset_id": preset_id, "role": role,
                 "piece_count": len(pieces)}
+
+    @app.get("/api/plugins/rig_builder/gear_source/{rs_gear}")
+    def get_gear_source(rs_gear: str):
+        """Resolved playable source for a gear (kind/file/vst_path/...) — what
+        the gear's global assignment currently plays. The master/default
+        add-piece picker calls this so a gear piece attaches its source the
+        moment it is added: it plays and shows as assigned immediately instead
+        of sitting unassigned (kind='none') until a manual Assign."""
+        try:
+            src = _resolve_piece_source(rs_gear, None, None, None, None, None)
+        except Exception as e:
+            return JSONResponse({"error": f"{type(e).__name__}: {e}"}, 500)
+        if not _source_playable(src):
+            return {"rs_gear": rs_gear, "resolved": False}
+        return {"rs_gear": rs_gear, "resolved": True, **src}
+
+    @app.post("/api/plugins/rig_builder/debug_log")
+    def debug_log(data: dict = Body(...)):
+        """Client trace mirror: the renderer POSTs {msg, data} here
+        fire-and-forget; the backend appends it to rb-debug.log and echoes
+        to stdout as a fallback so traces survive file-write issues."""
+        try:
+            _rb_debug_log("client " + str(data.get("msg") or ""), data.get("data"))
+            print(f"[rb-debug] client {str(data.get('msg') or '')[:2000]}", flush=True)
+        except Exception:
+            pass
+        return {"ok": True}
 
     @app.get("/api/plugins/rig_builder/default_tone")
     def get_default_tone():
@@ -10431,6 +10617,9 @@ def setup(app, context):
             master_pre_stages  = _build_master_stages("pre",  models_dir, irs_dir, output_gain, missing)
             master_post_stages = _build_master_stages("post", models_dir, irs_dir, output_gain, missing)
             chain = master_pre_stages + chain + master_post_stages
+            _rb_debug_log("native_preset_full master wrap", {
+                "preset_id": preset_id,
+                "pre": len(master_pre_stages), "post": len(master_post_stages)})
 
         # Siempre último: normalizador final de cadena completa.
         _append_final_leveler(chain, missing)
@@ -10708,6 +10897,9 @@ def setup(app, context):
         # off and everything IN the list on.
         master_pre_stages  = _build_master_stages("pre",  models_dir, irs_dir, 1.0, missing)
         master_post_stages = _build_master_stages("post", models_dir, irs_dir, 1.0, missing)
+        _rb_debug_log("mega_chain master wrap", {
+            "filename": filename,
+            "pre": len(master_pre_stages), "post": len(master_post_stages)})
 
         final_leveler = _final_leveler_stage(missing)
         if final_leveler:
@@ -12011,6 +12203,12 @@ def setup(app, context):
                     files = sorted(p for p in entry.iterdir() if p.is_file())
                     for p in files:
                         if p.name.startswith("."):
+                            continue
+                        if p.name == "_rb_unit_impulse.wav":
+                            # rig_builder-internal identity IR (amp-trim
+                            # gain stage, see _unit_impulse_ir_path) — a
+                            # runtime artifact, not user content. Never
+                            # listed so it can't show up as an "orphan".
                             continue
                         rel = f"{entry.name}/{p.name}"
                         bucket = _bucket_for(rel, p, kind, entry.name)

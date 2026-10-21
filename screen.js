@@ -1,5 +1,30 @@
 // NAM Rig Builder plugin — the game tone → NAM preset mapping UI.
 
+// ── Top-level crash capture ─────────────────────────────────────────────────
+// If this file's top-level evaluation aborts (an uncaught throw anywhere
+// below), every let/const declared after the throw point stays in the
+// temporal dead zone and every handler registered after it is dead — which
+// is exactly how "Rig Tones On does nothing" and the
+// "Cannot access '_rbPreloadPollTimer' before initialization" alert happen.
+// Capture the primary exception (this file only) so the next launch can show
+// it instead of failing silently. Installed before any other code runs.
+try {
+    window.addEventListener('error', function (ev) {
+        try {
+            if (!ev || !ev.filename || String(ev.filename).indexOf('rig_builder/screen.js') === -1) return;
+            var err = ev.error;
+            localStorage.setItem('rb-last-toplevel-error', JSON.stringify({
+                message: (err && err.message) || String(ev.message || ''),
+                source: String(ev.filename || ''),
+                line: (ev && ev.lineno) || 0,
+                col: (ev && ev.colno) || 0,
+                stack: (err && err.stack) || '',
+                at: Date.now(),
+            }));
+        } catch (_) { /* storage full/blocked — ignore */ }
+    });
+} catch (_) { /* ignore */ }
+
 // ── Desktop-bridge back-compat ──────────────────────────────────────────────
 // The host renamed window.slopsmithDesktop → window.feedBackDesktop
 // (got-feedback/feedBack-desktop#40). On desktop builds that still expose only
@@ -1473,6 +1498,7 @@ let rbState = {
     knownVsts: [],          // list of installed VST3/AU plugins (synced from engine)
     _vstScanInProgress: false,
     _vstEditorSlot: null,   // engine slotId currently being edited (for Capture State)
+    _rbLastChainSpec: null, // chain spec of the last engine load (piece → live slot mapping)
 };
 
 // ── Effective-assignment readers ────────────────────────────────────
@@ -1487,6 +1513,18 @@ function rbEffKind(p)     { return p._uploaded_kind || (p.assigned && p.assigned
 function rbEffVstPath(p)  { return p._vst_path || (p.assigned && p.assigned.vst_path) || ''; }
 function rbEffVstFormat(p){ return p._vst_format || (p.assigned && p.assigned.vst_format) || 'VST3'; }
 function rbEffVstState(p) { return p._vst_state ?? (p.assigned && p.assigned.vst_state) ?? null; }
+
+// Fire-and-forget trace to the backend's rb-debug.log (diagnostics only —
+// never blocks, never alerts).
+function rbDebugLog(msg, data) {
+    try {
+        fetch(`${window.RB_API}/debug_log`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ msg, data: data === undefined ? null : data }),
+        }).catch(() => {});
+    } catch (_) {}
+}
 
 const RB_API = '/api/plugins/rig_builder';
 const RB_PLUGIN_ID = 'rig_builder';
@@ -1818,8 +1856,22 @@ async function rbActivateSegmentWithHost(segmentId, toneKey) {
 }
 
 async function rbLoadNativePresetPayload(api, payload, options) {
+    // This load REPLACES the whole engine chain (clearChain + loadPreset, or
+    // the audio-effects executor's rebuild): any open VST editor points at a
+    // slot that load tears down — leaving it open crashes the host (same rule
+    // as rbStopPreview / rbShowTab). Close it first; that also flushes its
+    // pending master saves while its slot is still alive.
+    try { await rbCloseActiveVstEditor(); } catch (_) {}
     const ready = await rbEnsureNativeAudioReady(api, options);
     if (!ready.ok) throw new Error(ready.reason || 'Native audio input is not ready');
+
+    // Remember the chain spec of the LAST load: the VST editors map a UI piece
+    // to its LIVE engine slot through it (in-chain editing — see
+    // rbMasterChainSlotIdForPiece). Every chain load funnels through here.
+    try {
+        const spec = payload && payload.native_preset && payload.native_preset.chain;
+        if (Array.isArray(spec)) rbState._rbLastChainSpec = spec;
+    } catch (_) {}
 
     // Push this tone's per-tone noise gate to the engine as the tone loads, so
     // the saved gate governs while this tone plays (no-op without an audio
@@ -2520,6 +2572,7 @@ const RbMegaChain = (function () {
     // same — the engine assigns its own IDs during loadPreset. We capture
     // them via getChainState() right after loading.
     let _indexToSlotId = [];   // chain index → engine slotId
+    let _lastEffectiveChain = null;   // effective chain of the most recent _applyActiveTone
 
     function _settingOn() {
         // Master Rig Builder switch (Gear → "Rig Builder: ON/OFF"). When the
@@ -2818,15 +2871,16 @@ const RbMegaChain = (function () {
         }
     }
 
-    async function _applyActiveTone(activeToneKey) {
-        const api = _api();
-        if (!api || !_mega) return;
-        const tone = _findToneByKey(activeToneKey);
-        const toneIndex = tone && Array.isArray(_mega.tones) ? _mega.tones.indexOf(tone) : -1;
-        const segmentId = tone ? rbToneSegmentId(tone, toneIndex >= 0 ? toneIndex : 0) : '';
-        const chainSpec = (_mega.native_preset && _mega.native_preset.chain) || [];
+    // Compute the effective chain for a tone: every stage NOT belonging to the
+    // active tone (or the master pre/post) is bypassed (passthrough); master
+    // and active-tone slots keep their persisted bypass. Returns the tone, the
+    // idx → bypass map (for the setMultiBypass flip) and the effective chain
+    // (for the gain computations). Shared by _applyActiveTone and by the
+    // load-time gain target in buildForSong.
+    function _effectiveChainForTone(activeToneKey) {
+        const chainSpec = (_mega && _mega.native_preset && _mega.native_preset.chain) || [];
         const totalStages = chainSpec.length || 0;
-        if (!totalStages) return;
+        const tone = _findToneByKey(activeToneKey);
 
         // Build a map: idx → desired bypass. Default for every slot is
         // bypassed=true (passthrough). For master + active-tone slots,
@@ -2842,6 +2896,28 @@ const RbMegaChain = (function () {
         (_mega.master_pre_slots  || []).forEach(applyEntry);
         (_mega.master_post_slots || []).forEach(applyEntry);
         if (tone && Array.isArray(tone.slots)) tone.slots.forEach(applyEntry);
+
+        const effectiveChain = chainSpec.map((stage, idx) => {
+            const copy = Object.assign({}, stage, { bypassed: !!bypassByIdx[idx] });
+            const activeEntry = activeToneSlotByIdx.get(idx);
+            if (activeEntry) {
+                if (activeEntry.rs_gain != null) copy.rs_gain = activeEntry.rs_gain;
+                if (activeEntry.rs_gear != null) copy.rs_gear = activeEntry.rs_gear;
+                if (activeEntry.slot != null) copy.slot = activeEntry.slot;
+                if (activeEntry.type != null) copy.type = activeEntry.type;
+            }
+            return copy;
+        });
+        return { tone, bypassByIdx, effectiveChain, totalStages };
+    }
+
+    async function _applyActiveTone(activeToneKey) {
+        const api = _api();
+        if (!api || !_mega) return;
+        const { tone, bypassByIdx, effectiveChain, totalStages } = _effectiveChainForTone(activeToneKey);
+        if (!totalStages) return;
+        const toneIndex = tone && Array.isArray(_mega.tones) ? _mega.tones.indexOf(tone) : -1;
+        const segmentId = tone ? rbToneSegmentId(tone, toneIndex >= 0 ? toneIndex : 0) : '';
 
         // Only trust the audio-effects PROVIDER's segment activation when the chain
         // was ACTUALLY loaded through that provider. When we fell back to legacy
@@ -2876,17 +2952,11 @@ const RbMegaChain = (function () {
                 }
             });
         }
-        const effectiveChain = chainSpec.map((stage, idx) => {
-            const copy = Object.assign({}, stage, { bypassed: !!bypassByIdx[idx] });
-            const activeEntry = activeToneSlotByIdx.get(idx);
-            if (activeEntry) {
-                if (activeEntry.rs_gain != null) copy.rs_gain = activeEntry.rs_gain;
-                if (activeEntry.rs_gear != null) copy.rs_gear = activeEntry.rs_gear;
-                if (activeEntry.slot != null) copy.slot = activeEntry.slot;
-                if (activeEntry.type != null) copy.type = activeEntry.type;
-            }
-            return copy;
-        });
+        // Remember the active tone's effective chain: the post-load re-assert in
+        // buildForSong re-applies its gain after the executor's scheduled
+        // preload restore fires (that restore targets the LOAD-TIME chain gain
+        // and would otherwise overwrite this per-tone value).
+        _lastEffectiveChain = effectiveChain;
         await rbApplyChainInputDrive({ chain: effectiveChain });
         await rbStartFinalChainNormalizer(effectiveChain);
         try { await _pokeLevelerRelock(); } catch (_) {}
@@ -3111,6 +3181,21 @@ const RbMegaChain = (function () {
         //    load mute/fade, initial route gain, and startAudio. The legacy
         //    fallback still performs rbPreLoadMute immediately before its
         //    direct clearChain + loadPreset call.
+        // The executor ramps the chain gain back to `executorOptions.gains.chain`
+        // `holdMs` after the load resolves (schedulePreloadRestore). Computing
+        // that target on the FULL mega-chain counts every tone's NAMs (+2 dB per
+        // extra unique NAM) and the restore then re-imposes the inflated value
+        // over the per-tone gain _applyActiveTone sets right after load -- the
+        // "Rig tone crackles / too distorted" bug. (The AMP path loads a
+        // single-tone chain, so its load target is already per-tone and sounds
+        // correct.) Compute the load target on the EFFECTIVE chain of the tone
+        // that will be active at load -- highway-resolved, first tone as fallback,
+        // mirroring the initial apply below -- so the restore target matches.
+        const initialLoadKey = _resolveActiveToneKey();
+        const initialLoadTone = (Array.isArray(mega.tones) && mega.tones.length === 1)
+            ? mega.tones[0]
+            : (initialLoadKey ? _findToneByKey(initialLoadKey) : (mega.tones && mega.tones[0]));
+        const effectiveLoadChain = _effectiveChainForTone(initialLoadTone ? initialLoadTone.tone_key : null).effectiveChain;
         let loadedViaAudioEffects = false;
         try {
             const loaded = await rbLoadNativePresetPayload(api, mega, {
@@ -3118,7 +3203,7 @@ const RbMegaChain = (function () {
                 ref: 'song',
                 filename,
                 authorization: 'playback-session',
-                executorOptions: rbAudioEffectsLoadOptionsForChain(mega.native_preset.chain, { startAudio: true }),
+                executorOptions: rbAudioEffectsLoadOptionsForChain(effectiveLoadChain, { startAudio: true }),
             });
             loadedViaAudioEffects = !!loaded.viaAudioEffects;
             _loadedViaAudioEffects = loadedViaAudioEffects;   // module flag for _applyActiveTone
@@ -3212,6 +3297,22 @@ const RbMegaChain = (function () {
             ? mega.tones[0]
             : (initialKey ? _findToneByKey(initialKey) : null);
         await _applyActiveTone(initialTone ? initialTone.tone_key : null);
+        // The executor's scheduled preload restore fires `holdMs` after the load
+        // and ramps the chain gain to the LOAD-TIME target. If the highway
+        // resolves a different first tone than the load-time fallback, or the
+        // song switches tone inside that window, the restored value no longer
+        // matches the active tone. Re-assert the active tone's gain once the
+        // restore ramp has finished (holdMs + margin).
+        const restoreHoldMs = (typeof window.__rbMutePreLoadHold === 'number')
+            ? Math.max(20, window.__rbMutePreLoadHold | 0)
+            : 250 + 120 * Math.max(1, mega.native_preset.chain.length | 0);
+        setTimeout(() => {
+            if (!_active || !_mega) return;
+            const c = _lastEffectiveChain;
+            if (Array.isArray(c) && c.length) {
+                rbApplyChainOutputGain({ chain: c }).catch(() => {});
+            }
+        }, restoreHoldMs + 250);
         // The chain is fully loaded, VST params re-applied, and the active tone's
         // bypass is set — un-mute ONLY if a REAL tone is active. If the highway
         // wasn't ready (initialTone null → everything bypassed), STAY muted; the
@@ -3515,6 +3616,10 @@ const RbMegaChain = (function () {
         _stopPolling();
         _stopAmpGuard();
         if (!silent) _restoreGuitarStem();
+        // The clearChain below tears down every engine slot — close any open VST
+        // editor first (same rule as rbStopPreview) or its slot is destroyed
+        // under the still-open editor and the host crashes.
+        try { if (typeof rbCloseActiveVstEditor === 'function') await rbCloseActiveVstEditor(); } catch (_) {}
         if (_active) {
             const api = _api();
             // Mute around the teardown: clearChain removes stages one by one
@@ -3541,6 +3646,7 @@ const RbMegaChain = (function () {
         _pendingFilename = null;
         if (!silent) _lastError = null;
         _indexToSlotId = [];
+        _lastEffectiveChain = null;
         _emitState();
     }
 
@@ -3674,6 +3780,24 @@ const RbMegaChain = (function () {
     return api;
 })();
 
+// Surface the top-level exception captured at the top of this file (if any).
+// Shown when a feature that depends on post-abort state is used, so the user
+// gets an actionable message instead of a silently dead button.
+function rbShowTopLevelErrorNotice() {
+    let captured = '';
+    try { captured = localStorage.getItem('rb-last-toplevel-error') || ''; } catch (_) { captured = ''; }
+    if (captured) {
+        let parsed = null;
+        try { parsed = JSON.parse(captured); } catch (_) { parsed = null; }
+        const where = parsed && parsed.source
+            ? ` (${String(parsed.source).replace(/^.*\/(?=[^\/]*$)/, '')}:${parsed.line})`
+            : '';
+        alert(`Rig Builder failed to initialise${where}:\n\n${(parsed && parsed.message) || captured}\n\nReload the app and open Rig Builder again — if it still fails, report this message.`);
+        return;
+    }
+    alert('Rig Builder failed to initialise. Reload the app and open Rig Builder again — if it still fails, report this.');
+}
+
 function rbInjectPlayerToneButton() {
     const controls = document.getElementById('player-controls');
     if (!controls) return;
@@ -3703,6 +3827,11 @@ function rbInjectPlayerToneButton() {
         try {
             if (window.RbMegaChain && typeof window.RbMegaChain.toggleEnabled === 'function') {
                 await window.RbMegaChain.toggleEnabled();
+            } else {
+                // The mega-chain IIFE never ran — the top-level aborted before
+                // it (see the crash capture at the top of this file). Surface
+                // the captured exception instead of failing silently.
+                rbShowTopLevelErrorNotice();
             }
         } finally {
             btn.disabled = false;
@@ -3717,6 +3846,14 @@ function rbInjectPlayerToneButton() {
 function rbUpdatePlayerToneButton() {
     const btn = document.getElementById('btn-rig-tones');
     if (!btn) return;
+    if (!window.RbMegaChain) {
+        // Top-level aborted before the mega-chain IIFE — say so instead of
+        // showing a dead "Rig Tones Off" button.
+        btn.textContent = 'Rig Tones Unavailable';
+        btn.title = 'Rig Builder failed to initialise. Click for the captured error, then reload the app.';
+        btn.className = 'px-3 py-1.5 bg-red-700/50 hover:bg-red-700/70 rounded-lg text-xs text-red-100 transition';
+        return;
+    }
     const state = window.RbMegaChain && typeof window.RbMegaChain.state === 'function'
         ? window.RbMegaChain.state()
         : { active: false, pending: false, failed: false, error: '', enabled: false, activeToneKey: '' };
@@ -3750,6 +3887,15 @@ function rbUpdatePlayerToneButton() {
 
 window.addEventListener('rig-builder:tones-state', () => rbInjectPlayerToneButton());
 
+// Tone-override state — declared HERE, not next to its Setup UI far below, so
+// that triggerBuild (reachable SYNCHRONOUSLY from the song-lifecycle hook
+// below via the currentSong catch-up, i.e. while this file is still
+// evaluating) never hits a temporal-dead-zone ReferenceError. A TDZ throw
+// there once aborted the whole top-level — killing tone selection, the
+// Rig Tones button and the preload polling. See the crash capture at the top
+// of this file.
+const rbToneOverride = { enabled: false, name: '' };
+
 // Hook into the slopsmith song lifecycle. `song:loaded` fires from
 // highway.js whenever the in-game player has fully loaded a CDLC.
 // `song:unloaded` doesn't appear to fire reliably across all builds, so
@@ -3779,6 +3925,12 @@ window.addEventListener('rig-builder:tones-state', () => rbInjectPlayerToneButto
         }
         if (s && typeof s.mega_chain_mode !== 'undefined') {
             window.__rbMegaChainSetting = !!s.mega_chain_mode;
+            // The Setup checkbox for this key was removed, so the persisted
+            // value alone was dead: mirror it onto the runtime kill-switch at
+            // boot so triggerBuild / the poll / buildForSong skip the mega-chain.
+            // The player "Rig Tones" button can still force it ON for the session
+            // (toggleEnabled deletes window.__rbMegaChain).
+            if (!window.__rbMegaChainSetting) window.__rbMegaChain = false;
             console.log(`[rig_builder mega-chain] boot setting=${window.__rbMegaChainSetting} (read from /settings)`);
             const cur = window.slopsmith && window.slopsmith.currentSong;
             const filename = cur && cur.filename;
@@ -5630,7 +5782,13 @@ async function rbStudioOpenNativeWindow() {
     if (!rbIsAddedVst(piece)) { alert("This is native gear — the real plugin window is only for gear you added as a VST."); return; }
     let slotId = piece._vst_slot_id;
     if (slotId == null) { try { slotId = await rbStudioChainSlotIdForPiece(api, idx); } catch (_) {} }
-    if (slotId == null) { alert('Load the gear first (it is still initialising), then try again.'); return; }
+    if (slotId == null) {
+        const bypassed = !!(piece._bypassed || (piece.assigned && piece.assigned.bypassed));
+        alert(bypassed
+            ? 'This gear is bypassed — it is not loaded in the engine, so there is no live slot to edit or open. Re-enable it to edit it live; edits made now apply on the next chain reload.'
+            : 'Load the gear first (it is still initialising), then try again.');
+        return;
+    }
     if (!(await rbTryOpenNativeEditor(api, slotId))) {
         alert("This plugin has no native editor window (it's UI-less).");
         return;
@@ -7341,10 +7499,17 @@ async function rbStudioFinishMonitorLoad(api, chain) {
 // tone or a saved Studio tone — instead of its own tone, reusing the proven
 // default-tone / saved-tone legacy load path. Persisted as tone_override_enabled
 // / tone_override_name in /settings.
-const rbToneOverride = { enabled: false, name: '' };
+// NOTE: rbToneOverride itself is declared near the top of this file (just
+// before the song-lifecycle hook) — it MUST be initialised before any
+// synchronous triggerBuild call, or the top-level aborts on a TDZ error.
 let _rbOverrideLoadedKey = null;   // (songFile|toneName) the override last loaded
 
-function rbToneOverrideActive() { return !!rbToneOverride.enabled; }
+function rbToneOverrideActive() {
+    // Defensive: if this is ever reached before the declaration runs (a
+    // top-level abort, an event landing mid-evaluation), a TDZ
+    // ReferenceError here used to kill the whole plugin boot — fail closed.
+    try { return !!rbToneOverride.enabled; } catch (_) { return false; }
+}
 function rbResetOverrideLoaded() { _rbOverrideLoadedKey = null; }
 
 // Load the chosen override tone NOW. name '' = Default tone; otherwise a saved
@@ -8866,7 +9031,12 @@ async function rbDownloadTone3000Gears() {
 // backend's /preload_status every 500ms while a run is in flight,
 // stops automatically when `running` flips to false, and surfaces the
 // final summary in an alert.
-let _rbPreloadPollTimer = null;
+// `var`, not `let`: if the top-level ever aborts before this line, a `let`
+// would leave the binding in the temporal dead zone and every hoisted caller
+// (rbPreloadStartPolling, rbDownloadTone3000Gears…) would throw "Cannot access
+// '_rbPreloadPollTimer' before initialization". `var` is hoisted AND
+// initialised to undefined, so the polling still works after an abort.
+var _rbPreloadPollTimer = null;
 
 function rbPreloadStartPolling() {
     if (_rbPreloadPollTimer) return;   // already polling
@@ -10448,6 +10618,34 @@ async function rbTeardownVstEditor(api) {
     }
 }
 
+// The standalone VST editor path (rbSafeLoadStandaloneVst ->
+// rbResetStandaloneVstHost) zeroes the engine's input/chain gains, sets the
+// monitor mute and clearChain()s the live rig -- and no code path restored
+// them, so the whole chain stayed dead until the user manually reloaded the
+// song. Rebuild the active chain (song mega-chain, else the idle default
+// tone) after a standalone editor session so the rig comes back on its own.
+async function rbRebuildChainAfterEditorSession(reason) {
+    try {
+        const filename = (window.slopsmith && window.slopsmith.currentSong && window.slopsmith.currentSong.filename)
+            || rbState.currentSongFile || '';
+        const mega = window.RbMegaChain;
+        if (filename && mega && typeof mega.settingOn === 'function' && mega.settingOn()) {
+            // buildForSong tears down the stale session itself: the editor nuke
+            // leaves the mega-chain's JS state active, which would otherwise
+            // make the 2 s poll skip the rebuild.
+            console.log('[rig_builder] rebuilding chain after VST editor session:', reason || '');
+            const ok = await mega.buildForSong(filename);
+            if (ok) return;
+        }
+    } catch (e) {
+        console.warn('[rig_builder] post-editor chain rebuild failed:', e);
+    }
+    try {
+        if (typeof rbReloadDefaultTone === 'function') await rbReloadDefaultTone();
+        if (typeof rbApplyChainInputDrive === 'function') await rbApplyChainInputDrive({});
+    } catch (_) {}
+}
+
 // Map a song-tone piece to the engine slot id of its stage WITHIN the currently
 // loaded preview chain, so editing tweaks the pedal in place (the whole chain
 // keeps playing) instead of loading an isolated, louder single copy. Returns
@@ -10492,6 +10690,140 @@ async function rbChainSlotIdForPiece(api, payload, toneIdx, pIdx) {
     } catch (_) { return null; }
 }
 
+// Map a MASTER-chain piece to the engine slot id of its stage WITHIN the
+// currently loaded chain (song mega-chain or idle default tone), so the
+// editor tweaks the plugin in place: the rig keeps playing and the plugin
+// sees real signal (a noise gate like ShutUp can only detect the chain while
+// it runs). Returns null when there's no live chain or the piece isn't in
+// it — callers then fall back to the isolated single-VST editor.
+//
+// Master stages are identifiable in the chain spec by their slot tag:
+//   pre     → "master_pre:<slot>"    (prepended before the tone's stages)
+//   post    → "master_post:<slot>"   (appended after them; the final leveler
+//                                     carries slot "master_post" WITHOUT the
+//                                     colon and rs_gear __rb_final_leveler__,
+//                                     so the prefix never matches it)
+//   default → "master_default"       (the idle rig's own pieces)
+// The engine's loaded slots are index-aligned with that spec (getChainState,
+// the same alignment the mega-chain's _indexToSlotId capture uses); each slot
+// carries its VST `path`, cross-checked before the id is returned so a stale
+// spec can never hand out a wrong slot. When the spec can't produce a
+// verified slot (stale spec, index drift from a partial load, leftover
+// slots), a DIRECT match on the live getChainState() slots by VST path takes
+// over — via the audio-effects plan those slots are named "master-post-vst" /
+// "master-pre-vst", which tags master stages unambiguously; without tags the
+// path match alone still finds the plugin.
+async function rbMasterChainSlotIdForPiece(api, role, idx) {
+    try {
+        if (!api || typeof api.getChainState !== 'function') return null;
+        const arr = rbState.master[role] || [];
+        const piece = arr[idx];
+        if (!piece) return null;
+        const effPath = rbEffVstPath(piece);
+        if (!effPath) return null;
+        const norm = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+        const want = norm(effPath);
+        const wantName = want.split(/[\/]/).pop();
+        const slotPrefix = role === 'pre' ? 'master_pre:'
+            : role === 'post' ? 'master_post:'
+            : 'master_default';
+        // Duplicate identical pieces: pair the Nth UI piece with the Nth
+        // matching stage (same dup-skip idea as rbChainSlotIdForPiece).
+        let dupSkip = 0;
+        for (let k = 0; k < idx; k++) {
+            const q = arr[k];
+            if (q && q.type === piece.type && norm(rbEffVstPath(q)) === want) dupSkip++;
+        }
+        const loaded = await api.getChainState();
+        if (!Array.isArray(loaded) || !loaded.length) {
+            rbDebugLog('slotIdForPiece', { role, idx, stage: 'noLiveChain', want: wantName });
+            return null;
+        }
+        const slotIdOf = (slot) => slot.id != null ? slot.id : (slot.slotId != null ? slot.slotId : null);
+
+        // ── Path 1: spec-based match (most precise when spec↔engine align) ──
+        // The last chain load's spec tags master stages ("master_post:<slot>"
+        // etc.) and the engine's loaded slots are index-aligned with it. A
+        // stale or misaligned spec must NOT hand out a wrong slot: the slot at
+        // the mapped index is cross-checked (type + path), and any mismatch
+        // falls through to the direct match below instead of returning null.
+        const chain = rbState._rbLastChainSpec;
+        if (Array.isArray(chain) && chain.length) {
+            let seen = 0, chainIdx = -1;
+            for (let i = 0; i < chain.length; i++) {
+                const st = chain[i];
+                if (!st || Number(st.type) !== 0) continue;   // VST stages only
+                const slot = typeof st.slot === 'string' ? st.slot : '';
+                const isMasterStage = role === 'default'
+                    ? slot === slotPrefix
+                    : slot.indexOf(slotPrefix) === 0;
+                if (!isMasterStage) continue;
+                if (st.rs_gear != null && piece.type != null && st.rs_gear !== piece.type) continue;
+                if (!st.path || norm(st.path) !== want) continue;
+                if (seen++ < dupSkip) continue;
+                chainIdx = i; break;
+            }
+            if (chainIdx >= 0) {
+                // Same alignment as the mega-chain's _indexToSlotId capture:
+                // when the engine reports more slots than the spec, the freshly
+                // loaded chain is the most recent `chain.length` slots.
+                const relevant = loaded.length > chain.length
+                    ? loaded.slice(loaded.length - chain.length) : loaded;
+                const slot = chainIdx < relevant.length ? relevant[chainIdx] : null;
+                if (slot && Number(slot.type) === 0 && (!slot.path || norm(slot.path) === want)) {
+                    const id = slotIdOf(slot);
+                    rbDebugLog('slotIdForPiece', { role, idx, stage: 'spec', slotId: id,
+                        chainLen: chain.length, chainIdx, loaded: loaded.length, want: wantName });
+                    return id;
+                }
+                rbDebugLog('slotIdForPiece', { role, idx, stage: 'specMiss',
+                    chainLen: chain.length, chainIdx, loaded: loaded.length, want: wantName,
+                    slotType: slot ? Number(slot.type) : null,
+                    slotPath: slot && slot.path ? norm(slot.path).split(/[\/]/).pop() : null });
+            } else {
+                rbDebugLog('slotIdForPiece', { role, idx, stage: 'specNoStage',
+                    chainLen: chain.length, want: wantName });
+            }
+        } else {
+            rbDebugLog('slotIdForPiece', { role, idx, stage: 'noSpec', want: wantName });
+        }
+
+        // ── Path 2: DIRECT live-chain match (immune to spec↔engine drift) ──
+        // The engine slots carry type + path. Via the audio-effects plan they
+        // also carry name = "<role>-<kind>" ("master-post-vst" /
+        // "master-pre-vst"), which tags master stages unambiguously even when
+        // the spec is stale or the index alignment shifted. Prefer tagged
+        // slots when any exist; otherwise accept any path-matching VST slot
+        // (last resort — a tone using the same VST could collide, but only
+        // when no tag exists at all).
+        const namePrefix = role === 'pre' ? 'master-pre-'
+            : role === 'post' ? 'master-post-'
+            : null;
+        const candidates = [];
+        for (const slot of loaded) {
+            if (!slot || Number(slot.type) !== 0) continue;
+            if (!slot.path || norm(slot.path) !== want) continue;
+            candidates.push(slot);
+        }
+        const tagged = namePrefix
+            ? candidates.filter((s) => String(s.name || '').indexOf(namePrefix) === 0)
+            : [];
+        const pool = (namePrefix && tagged.length) ? tagged : candidates;
+        if (pool.length > dupSkip) {
+            const slot = pool[dupSkip];
+            let id = slotIdOf(slot);
+            if (id == null) id = loaded.indexOf(slot);   // engine index as last resort
+            rbDebugLog('slotIdForPiece', { role, idx, stage: 'direct', slotId: id,
+                pool: pool.length, tagged: tagged.length, dupSkip,
+                name: String(slot.name || ''), want: wantName });
+            return id;
+        }
+        rbDebugLog('slotIdForPiece', { role, idx, stage: 'directMiss',
+            candidates: candidates.length, tagged: tagged.length, dupSkip, want: wantName });
+        return null;
+    } catch (_) { return null; }
+}
+
 // Close any inline VST editor's NATIVE window + clear the tracked slot, but
 // WITHOUT clearing the chain (the caller's own clearChain/loadPreset handles
 // that). MUST run before navigating away (tab switch, song load) and before
@@ -10513,6 +10845,13 @@ async function rbCloseActiveVstEditor() {
     if (slot == null) return;
     rbState._vstEditorSlot = null;
     rbState._vstEditorInChain = false;
+    // Drop the stale editor-slot pointer on the master piece that owned it —
+    // re-opening re-maps the piece to its live chain slot anyway.
+    for (const r of ['pre', 'post', 'default']) {
+        const list = rbState.master && rbState.master[r];
+        if (!Array.isArray(list)) continue;
+        for (const p of list) { if (p && p._vst_slot_id === slot) p._vst_slot_id = null; }
+    }
     const api = rbAudioApi();
     if (api && api.closePluginEditor) {
         try { await api.closePluginEditor(slot); } catch (_) {}
@@ -10614,12 +10953,17 @@ async function rbOnLeaveRigBuilder() {
     try { rbCloseAllRbOverlays('leave-rig-builder'); } catch (_) {}
     try {
         const hadEditor = rbState._vstEditorSlot != null;
+        // An IN-CHAIN editor's slot belongs to the rig's own chain — clearing
+        // it here would kill the sound we're meant to hand over. Only a
+        // STANDALONE editor (its VST is an extra slot outside the rig chain)
+        // needs the clear + rebuild below.
+        const editorWasInChain = !!rbState._vstEditorInChain;
         await rbAutoCaptureActiveVstEditor();     // persist on-the-fly VST tweaks before teardown
         rbState._vstEditorCtx = null;
         await rbCloseActiveVstEditor();           // close native window first
         if (rbState.listeningTone !== null || rbState._auditionId) {
             await rbStopPreview();                // also clears chain + stops audio
-        } else if (hadEditor) {
+        } else if (hadEditor && !editorWasInChain) {
             // The inline editor left its VST loaded in the engine; clear it so
             // it doesn't linger or get torn down under a half-closed window.
             const api = rbAudioApi();
@@ -10631,6 +10975,10 @@ async function rbOnLeaveRigBuilder() {
                 try { await rbPreLoadMute(1, window.__rbPendingChainGainTarget); } catch (_) {}
                 await api.clearChain().catch(() => {});
             }
+            // The standalone editor left the engine muted with zeroed gains
+            // and an empty chain -- rebuild the active chain (song mega-chain,
+            // else the idle default tone) so the next screen has sound.
+            rbRebuildChainAfterEditorSession('leave-rig-builder').catch(() => {});
         }
     } finally {
         _rbLeaving = false;
@@ -10944,7 +11292,15 @@ function rbCustomUiValues(piece) {
 // instead of generic synthesized sliders. Awaits so we can fall back cleanly.
 async function rbTryOpenNativeEditor(api, slotId) {
     if (!api || typeof api.openPluginEditor !== 'function' || slotId == null) return false;
-    try { await api.openPluginEditor(slotId); return true; }
+    try {
+        // openPluginEditor resolves FALSE when the engine has no editor for the
+        // slot (UI-less plugin, dead sandbox, stale slot id). Check it: this
+        // used to return true unconditionally, so the "Plugin window" button
+        // silently did nothing.
+        const ok = await api.openPluginEditor(slotId);
+        try { rbDebugLog('openPluginEditor result', { slotId, ok: !!ok }); } catch (_) {}
+        return !!ok;
+    }
     catch (e) { console.warn('[rig_builder] this plugin has no native editor window:', e); return false; }
 }
 
@@ -10968,8 +11324,27 @@ async function rbMasterOpenNativeWindow(role, idx) {
     const piece = rbState.master && rbState.master[role] && rbState.master[role][idx];
     if (!api || !piece) return;
     if (piece._vst_slot_id == null) { alert('Load the gear first (open its editor), then try again.'); return; }
+    // DIAG: dump the engine's view of this slot before asking for the native
+    // window — tells us whether the engine even knows an editor exists.
+    let slotHasEditor = null;
+    try {
+        const st = await api.getChainState();
+        const slots = Array.isArray(st) ? st : (st && Array.isArray(st.slots) ? st.slots : []);
+        const me = slots.find(s => s && (s.slotId != null ? s.slotId : s.id) === piece._vst_slot_id);
+        slotHasEditor = me ? !!me.hasEditor : null;
+        rbDebugLog('masterOpenNativeWindow slotState', {
+            slotId: piece._vst_slot_id,
+            found: !!me,
+            hasEditor: me ? !!me.hasEditor : null,
+            type: me ? (me.type || null) : null,
+            name: me ? (me.name || null) : null,
+            chainLen: slots.length,
+        });
+    } catch (e) { try { rbDebugLog('masterOpenNativeWindow slotState err', { err: String(e) }); } catch (_) {} }
     if (!(await rbTryOpenNativeEditor(api, piece._vst_slot_id))) {
-        alert("This plugin has no native editor window (it's UI-less).");
+        alert(slotHasEditor === false
+            ? "No native window for this plugin — the engine reports no editor for its slot. If it also stopped producing sound, the plugin's audio sandbox has crashed: reload the tone/song (or pick another plugin). The in-app editor stays usable."
+            : "This plugin has no native editor window (it's UI-less).");
         return;
     }
     rbStartNativeParamSync(api, piece._vst_slot_id, piece);
@@ -11688,6 +12063,7 @@ async function rbLoadMasterChain() {
         const data = await r.json();
         rbState.master.pre  = Array.isArray(data.pre)  ? data.pre  : [];
         rbState.master.post = Array.isArray(data.post) ? data.post : [];
+        rbDebugLog('loadMasterChain', { pre: rbState.master.pre.length, post: rbState.master.post.length });
         if (statusEl) {
             const n = rbState.master.pre.length + rbState.master.post.length;
             statusEl.textContent = n > 0
@@ -11695,20 +12071,26 @@ async function rbLoadMasterChain() {
                 : 'No master pieces configured yet — every song uses just its own chain.';
         }
     } catch (e) {
+        rbDebugLog('loadMasterChain error', { error: e.message || String(e) });
         if (statusEl) statusEl.textContent = `Failed to load master chain: ${e.message || e}`;
         rbState.master.pre = [];
         rbState.master.post = [];
     }
     rbRenderMasterChain('pre');
     rbRenderMasterChain('post');
-    // Auto-open the first VST's inline UI so the user doesn't have to click
-    // "Edit VST" to see it (the engine hosts one VST editor at a time — pre wins).
-    rbMasterAutoOpenFirstVst().catch(() => {});
+    // NOTE: rbMasterAutoOpenFirstVst() is deliberately NOT called anymore.
+    // Opening a VST editor loads it standalone (rbSafeLoadStandaloneVst),
+    // which zeroes the engine gains, mutes the monitor and clearChain()s the
+    // live rig -- auto-opening on every Master-tab entry kept killing the
+    // user's chain. "Edit VST" stays a manual click; closing the editor
+    // rebuilds the chain (rbRebuildChainAfterEditorSession).
 }
 
 // Open the inline editor for the FIRST VST piece across the master chains without
 // a manual "Edit VST" click. Only ONE VST editor slot exists in the engine, so we
 // open a single one (pre chain has priority) and never steal one already open.
+// DISABLED as an automatic action (see the note in rbLoadMasterChain): opening
+// the editor tears the live chain down, so it must stay a deliberate click.
 async function rbMasterAutoOpenFirstVst() {
     if (rbState._vstEditorSlot != null || rbState._vstEditorBusy) return;
     for (const role of ['pre', 'post']) {
@@ -12023,6 +12405,7 @@ async function rbMasterRemovePiece(role, idx) {
     const name = piece?.real_name || piece?.type || 'piece';
     if (!confirm(`Remove "${name}" from master ${role} chain?`)) return;
     arr.splice(idx, 1);
+    rbDebugLog('masterRemovePiece', { role, idx, count: arr.length });
     rbAfterMasterEdit(role);
 }
 
@@ -12031,10 +12414,72 @@ function rbMasterToggleBypass(role, idx, btn) {
     const p = arr[idx];
     if (!p) return;
     p._bypassed = !p._bypassed;
+    rbDebugLog('masterToggleBypass', { role, idx, bypassed: p._bypassed, count: arr.length });
     rbAfterMasterEdit(role);
 }
 
+// Reload whatever is actually playing so a master-chain edit is heard live.
+// Shared by rbAfterMasterEdit (after a save) and rbMasterEditVst (before
+// falling back to the muting standalone editor — retry the in-chain match
+// against a fresh spec first).
+async function rbRebuildActiveChainForMasterEdit() {
+    rbDebugLog('rebuildActiveChain enter', {
+        listeningTone: rbState.listeningTone,
+        hasPreviewPayload: !!(rbState._previewPayload && rbState._previewPayload.id),
+        audition: !!rbState._auditionId,
+        previewMode: rbState._previewMode || null,
+        defaultToneActive: !!rbState._defaultToneActive,
+        studioView: rbState.studioView ? rbState.studioView.source : null,
+    });
+    // If a tone preview is running, reload it so the new master wrap is heard live.
+    if (rbState.listeningTone !== null && rbState._previewPayload?.id) {
+        await rbReloadPreview(rbState._previewPayload.id).catch(() => {});
+        return;
+    }
+    // An audition owns the engine -- leave it alone.
+    if (rbState._auditionId || rbState._previewMode) return;
+    // No preview: reload whatever is actually playing so the edit (e.g. a
+    // newly added VST) is heard immediately -- previously the change sat on
+    // disk until an app restart or a manual tone switch.
+    const mega = window.RbMegaChain;
+    const filename = (window.slopsmith && window.slopsmith.currentSong && window.slopsmith.currentSong.filename)
+        || rbState.currentSongFile || '';
+    if (filename && mega && typeof mega.isActive === 'function' && mega.isActive()
+        && typeof mega.settingOn === 'function' && mega.settingOn()) {
+        // A song is playing through the mega-chain: rebuild it with the new
+        // master wrap.
+        await mega.buildForSong(filename).catch(() => {});
+    } else if (rbState._defaultToneActive) {
+        // Idle rig: the default tone wraps the master pre/post -- reload it.
+        // A Studio monitor (a saved/song tone loaded as the idle monitor)
+        // ALSO wraps the master chain, so re-run the studio monitor load:
+        // rbReloadDefaultTone alone no-ops (and clears the flag) when the
+        // default tone isn't configured, which left the engine chain without
+        // the new master wrap -- Edit VST then found no live slot and fell
+        // back to the muting standalone editor.
+        if (typeof rbStudioLoadMonitor === 'function') {
+            rbDebugLog('rebuildActiveChain studioMonitor', {
+                source: rbState.studioView ? rbState.studioView.source : null });
+            await rbStudioLoadMonitor().catch(() => {});
+        } else {
+            await rbReloadDefaultTone().catch(() => {});
+        }
+    } else {
+        // Nothing is playing (no preview, no song, no active monitor). If a
+        // default tone is configured, load it so the editor attaches IN-CHAIN
+        // (the rig keeps sounding) instead of falling back to the muting
+        // standalone editor. rbReloadDefaultTone no-ops when unconfigured.
+        await rbReloadDefaultTone().catch(() => {});
+    }
+}
+
 async function rbAfterMasterEdit(role) {
+    rbDebugLog('afterMasterEdit', { role, count: (rbState.master[role] || []).length });
+    // The rebuild below reloads the live chain (clearChain + loadPreset): an
+    // open VST editor points at a slot that reload tears down — close it first
+    // or the host crashes (same rule as rbStopPreview). Also flushes the
+    // editor's pending saves while its slot is still alive.
+    try { await rbCloseActiveVstEditor(); } catch (_) {}
     await rbPersistMasterChain(role).catch(() => null);
     rbRenderMasterChain(role);
     if (role === 'default') {
@@ -12046,13 +12491,11 @@ async function rbAfterMasterEdit(role) {
         if (rbState._defaultToneActive) await rbReloadDefaultTone().catch(() => {});
         return;
     }
-    // If a tone preview is running, reload it so the new master wrap is heard live.
-    if (rbState.listeningTone !== null && rbState._previewPayload?.id) {
-        await rbReloadPreview(rbState._previewPayload.id).catch(() => {});
-    }
+    await rbRebuildActiveChainForMasterEdit().catch(() => {});
 }
 
 async function rbPersistMasterChain(role) {
+    rbDebugLog('persistMasterChain enter', { role, count: (rbState.master[role] || []).length });
     const arr = rbState.master[role] || [];
     const pieces = arr.map(p => {
         const fc = rbFullChainPayloadPiece(p);
@@ -12091,19 +12534,28 @@ async function rbPersistMasterChain(role) {
     const url  = isDefault ? `${window.RB_API}/default_tone/save` : `${window.RB_API}/master_chain/save`;
     const body = isDefault ? { pieces } : { role, pieces };
     const what = isDefault ? 'default tone' : `master ${role}`;
+    rbDebugLog('persistMasterChain', {
+        role, count: arr.length,
+        pieces: pieces.map(p => ({ slot: p.slot, gear: p.rs_gear_type, kind: p.kind,
+            vst: (p.vst_path || '').split(/[\/]/).pop(), file: p.file })),
+    });
     try {
         const r = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         });
+        rbDebugLog('persistMasterChain http', { role, status: r.status });
         if (!r.ok) {
             const err = await r.json().catch(() => ({}));
             alert(`Save ${what} failed: ${err.error || r.status}`);
             return null;
         }
-        return await r.json();
+        const respJson = await r.json();
+        rbDebugLog('persistMasterChain ok', { role, resp: respJson });
+        return respJson;
     } catch (e) {
+        rbDebugLog('persistMasterChain error', { role, error: e.message || String(e) });
         alert(`Save ${what} failed: ${e.message || e}`);
         return null;
     }
@@ -12130,10 +12582,19 @@ async function rbMasterEditVst(role, idx) {
         // in the plugin's OWN window (or param-less plugins that emit no slider
         // events) persist without a manual "Capture state" click.
         try { await rbMasterCaptureVstState(role, idx); } catch (_) {}
+        // An IN-CHAIN editor never touched the engine (the rig kept playing);
+        // only a STANDALONE editor cleared the chain and zeroed the gains.
+        const wasInChain = !!rbState._vstEditorInChain;
         editor.classList.add('hidden');
         editor.innerHTML = '';
         await rbTeardownVstEditor(api);
         piece._vst_slot_id = null;
+        if (!wasInChain) {
+            // The standalone editor cleared the engine chain and zeroed the
+            // gains (rbResetStandaloneVstHost) -- rebuild the active chain so
+            // the rig comes back instead of staying dead until a manual reload.
+            rbRebuildChainAfterEditorSession('master-vst-editor-closed').catch(() => {});
+        }
         return;
     }
     await rbEnsureCustomUi(piece);   // custom gear → created UI, not the native window
@@ -12148,39 +12609,75 @@ async function rbMasterEditVst(role, idx) {
     }
     if (rbState._vstEditorBusy) return;   // ignore rapid double-clicks while a load is in flight
     rbState._vstEditorBusy = true;
+    rbState._vstEditorCtx = { role, idx, master: true };   // which piece is being edited (master saves flush by slot id)
     editor.classList.remove('hidden');
     editor.innerHTML = `<div class="text-xs text-gray-500">loading ${rbEsc(vstPath.split(/[\\/]/).pop())}…</div>`;
     try {
-        // Close + clear any previously-open editor (this or another piece)
-        // before loading — closing its native window first avoids the crash.
-        await rbTeardownVstEditor(api);
+        // Close any previously-open editor cleanly first: flush its pending
+        // saves (master by slot id, per-tone via the old ctx) and close its
+        // native window -- without touching the running chain.
+        await rbCloseActiveVstEditor();
         await api.startAudio().catch(() => {});
-        const slotId = await rbSafeLoadStandaloneVst(api, vstPath);
-        if (slotId == null || slotId < 0) {
-            editor.innerHTML = `<div class="text-xs text-red-400">${rbEsc(rbVstRefusedMsg())}</div>`;
-            return;
+        // rbCloseActiveVstEditor collapses inline panels -- re-open ours.
+        editor.classList.remove('hidden');
+        editor.innerHTML = `<div class="text-xs text-gray-500">loading ${rbEsc(vstPath.split(/[\\/]/).pop())}…</div>`;
+        // Preferred: edit the VST IN the live chain. setParameter then hits
+        // the stage the rig is actually playing -- the chain keeps sounding
+        // (no cut when clicking "Edit VST") and the plugin sees real signal,
+        // so e.g. a noise gate like ShutUp detects the master chain while
+        // you tweak it.
+        let slotId = await rbMasterChainSlotIdForPiece(api, role, idx);
+        rbDebugLog('masterEditVst slotMatch', { role, idx, slotId,
+            specLen: Array.isArray(rbState._rbLastChainSpec) ? rbState._rbLastChainSpec.length : -1 });
+        if (slotId == null) {
+            // The live spec may predate this piece's save (or the chain was
+            // loaded before it). Rebuild the active chain ONCE and retry: an
+            // in-chain editor keeps the rig playing; the standalone fallback
+            // mutes everything until the editor is closed.
+            rbDebugLog('masterEditVst rebuild+retry', { role, idx });
+            await rbRebuildActiveChainForMasterEdit().catch(() => {});
+            slotId = await rbMasterChainSlotIdForPiece(api, role, idx);
+            rbDebugLog('masterEditVst slotMatch retry', { role, idx, slotId });
         }
-        rbState._vstEditorSlot = slotId;
+        if (slotId != null) {
+            rbState._vstEditorSlot = slotId;
+            rbState._vstEditorInChain = true;
+            // The chain load already re-applied the saved state; read the
+            // live params back so the editor opens reflecting what's playing.
+            try { piece._vst_param_meta = await api.getParameters(slotId); }
+            catch (_) { piece._vst_param_meta = piece._vst_param_meta || []; }
+        } else {
+            // Fallback (no live chain / piece not found in it): isolated
+            // single-VST editor. This owns + clears the chain -- muted until
+            // closed; rbRebuildChainAfterEditorSession then restores the rig.
+            rbDebugLog('masterEditVst standalone', { role, idx, vst: vstPath.split(/[\/]/).pop() });
+            slotId = await rbSafeLoadStandaloneVst(api, vstPath);
+            if (slotId == null || slotId < 0) {
+                editor.innerHTML = `<div class="text-xs text-red-400">${rbEsc(rbVstRefusedMsg())}</div>`;
+                return;
+            }
+            rbState._vstEditorSlot = slotId;
+            rbState._vstEditorInChain = false;
+            // Re-apply any previously-captured param state. Helper resolves
+            // NAME keys -> numeric ids and clamps to [0,1]; same fix as the
+            // per-tone editor path.
+            const saved = piece._vst_params
+                || (piece.assigned && piece.assigned.vst_state
+                    ? rbParseVstStateParams(piece.assigned.vst_state) : null);
+            piece._vst_param_meta = await rbRestoreSavedParamsToSlot(api, slotId, saved, vstPath);
+        }
         piece._vst_slot_id = slotId;
         // Keep any previously-saved opaque blob so re-saving without a fresh
         // capture doesn't drop it.
         piece._vst_opaque = piece._vst_opaque
             || rbParseVstStateOpaque(piece._vst_state)
             || rbParseVstStateOpaque(piece.assigned && piece.assigned.vst_state);
-        // Re-apply any previously-captured param state. Helper resolves
-        // NAME keys → numeric ids and clamps to [0,1]; same fix as the
-        // per-tone editor path.
-        const saved = piece._vst_params
-            || (piece.assigned && piece.assigned.vst_state
-                ? rbParseVstStateParams(piece.assigned.vst_state) : null);
-        const params = await rbRestoreSavedParamsToSlot(api, slotId, saved, vstPath)
-        piece._vst_param_meta = params;
         // Seed _vst_params with the FULL current snapshot. Without this,
-        // subsequent slider drags would write a PARTIAL dict — untouched
+        // subsequent slider drags would write a PARTIAL dict -- untouched
         // params would silently revert to plugin defaults on the next
         // chain rebuild. Now any drag modifies a complete state.
         piece._vst_params = {};
-        for (const param of params) {
+        for (const param of (piece._vst_param_meta || [])) {
             const id = param.id ?? param.paramId ?? param.index;
             const v  = param.value ?? param.current;
             if (id != null && typeof v === 'number') piece._vst_params[id] = v;
@@ -12373,6 +12870,7 @@ function rbDebouncedMasterSave(role) {
 // fired, losing the edit, or (b) let a late timer fire AFTER the re-fetch and
 // overwrite the DB with the freshly-reloaded plugin's DEFAULT values.
 async function rbFlushMasterSaves() {
+    rbDebugLog('flushMasterSaves', { slot: rbState._vstEditorSlot });
     const slot = rbState._vstEditorSlot;
     // Roles with a debounced save still pending (canvas/slider edits) — cancel the
     // timer and mark the role to persist now.
@@ -12404,6 +12902,7 @@ async function rbMasterCaptureVstState(role, idx) {
     const api = rbAudioApi();
     const piece = rbState.master[role][idx];
     if (!piece) return;
+    rbDebugLog('masterCaptureVstState', { role, idx });
     const editor = document.getElementById(`rb-master-${role}-editor-${idx}`);
     try {
         // Snapshot the live values (preferred over the staged dict because
@@ -12614,10 +13113,46 @@ function rbMasterAddPiece(role, rsGearType, category) {
     };
     rbAttachCustomSource(piece, catalogEntry);
     rbState.master[role].push(piece);
+    rbDebugLog('masterAddPiece', { role, gear: rsGearType, count: rbState.master[role].length });
+    // Inherit the gear's global assignment so the piece plays + shows as
+    // assigned right away — a bare gear piece would otherwise sit unassigned
+    // and be skipped by the chain builder until a manual Assign.
+    rbResolveMasterPieceSource(role, rbState.master[role].length - 1).catch(() => {});
     // Close picker.
     const picker = document.getElementById(`rb-master-${role}-picker`);
     if (picker) { picker.classList.add('hidden'); picker.innerHTML = ''; }
     rbAfterMasterEdit(role);
+}
+
+// Fetch the gear's current global assignment and attach it to a freshly
+// added master piece (mirrors rbAttachCustomSource for custom gear). Lets the
+// piece play + display immediately; no-op when the gear has no assignment or
+// the piece already carries a source.
+async function rbResolveMasterPieceSource(role, idx) {
+    const p = rbState.master[role] && rbState.master[role][idx];
+    if (!p || rbEffVstPath(p) || rbEffFile(p)) return;
+    try {
+        const r = await fetch(`${window.RB_API}/gear_source/${encodeURIComponent(p.type)}`);
+        if (!r.ok) return;
+        const src = await r.json();
+        if (!src || !src.resolved) return;
+        if (src.kind === 'vst' && src.vst_path) {
+            p._vst_path = src.vst_path;
+            p._vst_format = src.vst_format || 'VST3';
+            p._vst_kind = 'vst';
+            if (src.vst_state) p._vst_state = src.vst_state;
+        } else if ((src.kind === 'nam' || src.kind === 'ir' || src.kind === 'rs_ir') && src.file) {
+            p._uploaded_file = src.file;
+            p._uploaded_kind = src.kind === 'rs_ir' ? 'ir' : src.kind;
+        } else {
+            return;
+        }
+        rbDebugLog('masterPieceSourceResolved', { role, idx, gear: p.type, kind: src.kind,
+            vst: (src.vst_path || '').split(/[\/]/).pop(), file: src.file });
+        // Persist the resolved source so the row is complete, then refresh the tile.
+        await rbPersistMasterChain(role).catch(() => null);
+        rbRenderMasterChain(role);
+    } catch (_) {}
 }
 
 // ── Master Assign picker (per-piece NAM library / VST file) ──
@@ -12730,6 +13265,7 @@ async function rbMasterAssignVstPath(role, idx, path) {
     if (!path) return;
     const p = rbState.master[role][idx];
     if (!p) return;
+    rbDebugLog('masterAssignVstPath', { role, idx, vst: path.split(/[\/]/).pop() });
     const fmt = path.toLowerCase().endsWith('.component') ? 'AudioUnit' : 'VST3';
     p._vst_path = path;
     p._vst_format = fmt;
@@ -17517,6 +18053,9 @@ async function rbCgApplyVstParamLayout(path) {
 async function rbCgFetchVstParams(vstPath) {
     const api = rbAudioApi();
     if (!api || typeof api.getParameters !== 'function' || typeof rbLoadVSTWhenReady !== 'function') return null;
+    // The clearChain below replaces the whole chain — close any open VST editor
+    // first (same rule as rbStopPreview) or its slot is torn down under it.
+    try { if (typeof rbCloseActiveVstEditor === 'function') await rbCloseActiveVstEditor(); } catch (_) {}
     try {
         if (api.clearChain) await api.clearChain();
         if (typeof api.startAudio === 'function') await api.startAudio().catch(() => {});
@@ -19260,7 +19799,24 @@ async function rbHardResetVstAudio(api) {
 async function rbResetStandaloneVstHost(api) {
     if (!api) return;
 
-    try { if (api.closePluginEditor && rbState._vstEditorSlot != null) await api.closePluginEditor(rbState._vstEditorSlot); } catch (_) {}
+    try {
+        if (api.closePluginEditor) {
+            if (rbState._vstEditorSlot != null) {
+                await api.closePluginEditor(rbState._vstEditorSlot);
+            } else if (typeof api.getChainState === 'function') {
+                // The editor-slot pointer can be lost while the native editor
+                // is still open (e.g. the master list re-rendered under it) —
+                // the clearChain below would then tear the slot down under the
+                // open editor and crash the host. Close every VST slot's editor.
+                const st = await api.getChainState().catch(() => null);
+                const slots = Array.isArray(st) ? st : (st && Array.isArray(st.slots) ? st.slots : []);
+                for (const s of slots) {
+                    const sid = s && (s.slotId != null ? s.slotId : s.id);
+                    if (sid != null && s.path) { try { await api.closePluginEditor(sid); } catch (_) {} }
+                }
+            }
+        }
+    } catch (_) {}
 
     rbState._vstEditorSlot = null;
     rbState._vstEditorInChain = false;
@@ -19301,6 +19857,10 @@ async function rbRecoverFailedVstLoad(api, partialSlot = null) {
             await api.setGain('chain', 0.0);
         }
     } catch (_) {}
+
+    // The failed load left the host muted with zeroed gains and no chain --
+    // rebuild whatever was active before the editor attempt.
+    rbRebuildChainAfterEditorSession('vst-load-recovery').catch(() => {});
 }
 
 async function rbSafeLoadStandaloneVst(api, vstPath) {
@@ -21002,7 +21562,13 @@ async function rbAdvOpenNativeWindow() {
     if (!rbIsAddedVst(piece)) { alert("This is native gear — the real plugin window is only for gear you added as a VST."); return; }
     let slotId = piece._vst_slot_id;
     if (slotId == null) { try { slotId = await rbStudioChainSlotIdForPiece(api, idx); } catch (_) {} }
-    if (slotId == null) { alert('Load the gear first (it is still initialising), then try again.'); return; }
+    if (slotId == null) {
+        const bypassed = !!(piece._bypassed || (piece.assigned && piece.assigned.bypassed));
+        alert(bypassed
+            ? 'This gear is bypassed — it is not loaded in the engine, so there is no live slot to edit or open. Re-enable it to edit it live; edits made now apply on the next chain reload.'
+            : 'Load the gear first (it is still initialising), then try again.');
+        return;
+    }
     if (!(await rbTryOpenNativeEditor(api, slotId))) { alert("This plugin has no native editor window (it's UI-less)."); return; }
     rbStartNativeParamSync(api, slotId, piece);
 }
@@ -21529,7 +22095,7 @@ async function rbAdvOnPanInput(id, val) {
 // Dev-only stereo/routing trace, mirrored to the backend relay ([python:stdout]
 // [rb-debug]). OFF by default — enable with `window.RB_DEBUG = true` or
 // localStorage 'rbDebug' when diagnosing parallel/pan routing.
-function rbDebugLog(msg) {
+function rbStereoDebugLog(msg) {
     try { if (!(window.RB_DEBUG || localStorage.getItem('rbDebug'))) return; } catch (_) { return; }
     try { console.log('[rb-stereo]', msg); } catch (_) {}
     try {
@@ -21546,9 +22112,9 @@ async function rbStudioApplyStereoToEngine() {
     const hasPan = typeof audio.setPan === 'function';
     const hasBranch = typeof audio.setBranch === 'function';
     const hasBranchSrc = typeof audio.setBranchSrc === 'function';
-    if (!hasPan && !hasBranch) { rbDebugLog('stereo: engine has NO setPan/setBranch API'); return; }
+    if (!hasPan && !hasBranch) { rbStereoDebugLog('stereo: engine has NO setPan/setBranch API'); return; }
     const chain = rbStudioCurrentChain();
-    if (!Array.isArray(chain) || !chain.length) { rbDebugLog('stereo: empty chain, nothing to route'); return; }
+    if (!Array.isArray(chain) || !chain.length) { rbStereoDebugLog('stereo: empty chain, nothing to route'); return; }
     let ampIdxs = [];
     try { ampIdxs = (rbStudioGroupDefault().amp || []).map(e => e.idx); } catch (_) { ampIdxs = []; }
     // Branch rule: ONLY the amps split (n-th amp → branch n). The shared cab,
@@ -21663,7 +22229,7 @@ async function rbStudioApplyStereoToEngine() {
                 for (let k = lo; k <= hi && ok; k++) if (!trial.has(ids[k])) ok = false;
             }
             if (ok) for (const [sid, b] of cabClaims) branchOfSlot.set(sid, b);
-            else rbDebugLog('per-amp cabs skipped: an unclaimed trunk slot sits inside the branch region');
+            else rbStereoDebugLog('per-amp cabs skipped: an unclaimed trunk slot sits inside the branch region');
         }
     }
     if (hasBranch) {
@@ -21700,8 +22266,8 @@ async function rbStudioApplyStereoToEngine() {
             const g = (typeof s.postGain === 'number' && s.postGain !== 1) ? ` g=${s.postGain.toFixed(3)}` : '';
             return `#${k} id=${s.id} ${nm} b=${s.branch | 0} pan=${Number(s.pan || 0).toFixed(2)}${g}${s.bypassed ? ' BYP' : ''}`;
         }).join('  |  ');
-        rbDebugLog(`amps@${JSON.stringify(ampIdxs)} claims=${JSON.stringify([...branchOfSlot.entries()])} engine: ${summary}`);
-    } catch (e) { rbDebugLog('readback failed: ' + e); }
+        rbStereoDebugLog(`amps@${JSON.stringify(ampIdxs)} claims=${JSON.stringify([...branchOfSlot.entries()])} engine: ${summary}`);
+    } catch (e) { rbStereoDebugLog('readback failed: ' + e); }
 }
 
 // Make the node GRAPH actually gate the audio:
