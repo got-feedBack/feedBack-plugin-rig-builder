@@ -5076,6 +5076,26 @@ function rbStudioPedalImg(p) {
 }
 function rbStudioIsBypassed(p) { return !!p._bypassed || !!(p.assigned && p.assigned.bypassed); }
 
+// Small engine badge for the Signal Strip (Bundled / NAM / IR / none).
+function rbStudioEngineBadge(p) {
+    if (!p) return '<span class="rb-engine">—</span>';
+    if (rbIsFullChainPiece(p)) return '<span class="rb-engine rb-engine-baked">Baked</span>';
+    const kind = (rbEffKind(p) || '').toLowerCase();
+    if (kind === 'ir') return '<span class="rb-engine rb-engine-ir">IR</span>';
+    if (kind === 'nam' || kind === 'nam_fullchain') return '<span class="rb-engine rb-engine-nam">NAM</span>';
+    if (kind === 'vst') {
+        return rbIsBundledVstPath(rbEffVstPath(p))
+            ? '<span class="rb-engine rb-engine-bundled">Bundled</span>'
+            : '<span class="rb-engine">VST</span>';
+    }
+    // Cab pieces often resolve as IR via assigned file even when kind is empty.
+    const cat = (p.category || p.rs_category || '').toLowerCase();
+    if (cat === 'cab' || (p.slot || '').toLowerCase() === 'cabinet') {
+        return '<span class="rb-engine rb-engine-ir">IR</span>';
+    }
+    return '<span class="rb-engine">—</span>';
+}
+
 // Mirror each saved knob value under its param NAME as well as its numeric id.
 // On a fresh room load there's no live VST param model to map ids → knobs, so
 // the static face thumbnail resolves values by NAME (via the canvas spec). Keep
@@ -5242,9 +5262,253 @@ function rbStudioRefreshRoomMic() {
     });
 }
 
+function rbStudioViewMode() {
+    const v = (rbLsGet('rig_builder.studioViewMode') || 'strip').toLowerCase();
+    return v === 'room' ? 'room' : 'strip';
+}
+function rbStudioSetViewMode(mode) {
+    const m = (mode === 'room') ? 'room' : 'strip';
+    rbLsSet('rig_builder.studioViewMode', m);
+    try { rbStudioSyncViewModeBtn(); } catch (_) {}
+    try { rbRenderStudioRoom(); } catch (_) {}
+}
+window.rbStudioToggleViewMode = function rbStudioToggleViewMode() {
+    rbStudioSetViewMode(rbStudioViewMode() === 'room' ? 'strip' : 'room');
+};
+function rbStudioSyncViewModeBtn() {
+    const btn = document.getElementById('rb-studio-viewmode-btn');
+    if (!btn) return;
+    const room = rbStudioViewMode() === 'room';
+    btn.textContent = room ? '▭ Strip' : '⌂ Room';
+    btn.title = room
+        ? 'Switch to the simplified Signal Strip'
+        : 'Switch to the 3D Studio room';
+    btn.setAttribute('aria-pressed', room ? 'true' : 'false');
+}
 function rbRenderStudioRoom() {
+    const mode = rbStudioViewMode();
+    if (mode === 'room') rbRenderStudioRoom3d();
+    else rbRenderStudioStrip();
+    try { rbStudioSyncViewModeBtn(); } catch (_) {}
+}
+
+function rbRenderStudioStrip() {
     const el = document.getElementById('rb-studio-room');
     if (!el) return;
+    // Custom gear loaded from a saved tone lacks its UI until opened — attach it
+    // up front so the strip shows the created face on first paint (re-render once
+    // the gear map arrives if it wasn't cached yet).
+    try { rbEnsureChainCustomUi(rbStudioCurrentChain(), () => { try { rbRenderStudioRoom(); } catch (_) {} }); } catch (_) {}
+    // Re-rendering wipes any open focus layer / bar / swap rail (room children),
+    // so clear the focus state + tear down its editor VST — otherwise switching
+    // tones mid-focus strands a broken, can't-exit focus view.
+    if (el.classList.contains('rb-focus-active') || el.classList.contains('rb-pfocus')) {
+        el.classList.remove('rb-focus-active', 'rb-pfocus', 'rb-gfocus-pedal', 'rb-gfocus-rack', 'rb-swap-active');
+        rbState._studioPedalAddMode = false;
+        try { rbTeardownVstEditor(rbAudioApi()); } catch (_) {}
+    }
+    el.classList.add('rb-strip-mode');
+    const g = rbStudioGroupDefault();
+    const amp = g.amp[0];
+    const cabEntry = g.cab[0];
+    const cabName = cabEntry ? (cabEntry.p.real_name || cabEntry.p.type || 'Cab') : 'Cab';
+    const knobs = RB_STUDIO_KNOB_ANGLES
+        .map(deg => `<span class="rb-knob" style="--rb-knob-rot:${deg}deg"></span>`).join('');
+
+    const amps = g.amp.slice(0, 6);
+    const primaryAmp = amps[0];
+    const ampExtra = amps.length > 1 ? ` <span class="rb-engine">+${amps.length - 1}</span>` : '';
+    let ampBlock;
+    if (primaryAmp) {
+        const nm = primaryAmp.p.real_name || primaryAmp.p.type || 'Amp';
+        const img = rbStudioPedalImg(primaryAmp.p);
+        const face = img
+            ? `<div class="rb-amp-face"><img src="${img}" alt="${rbEsc(nm)}"></div>`
+            : `<div class="rb-amp-head"><div class="rb-amp-name">${rbEsc(nm)}</div><div class="rb-amp-knobs">${knobs}</div></div>`;
+        const byp = rbStudioIsBypassed(primaryAmp.p) ? ' rb-stomp-bypassed' : '';
+        ampBlock = `<div class="rb-strip-block rb-amp-stack${byp}" data-amp-idx="${primaryAmp.idx}"
+                         onclick="rbStudioClickAmp(${primaryAmp.idx})" title="${rbEsc(nm)} — edit / swap">
+                ${face}
+                <div class="rb-strip-k">Amp${ampExtra}</div>
+                <div class="rb-strip-n">${rbEsc(nm)}</div>
+                ${rbStudioEngineBadge(primaryAmp.p)}
+            </div>`;
+        // Keep extra amps addressable for multi-amp focus (hidden; Advanced still owns parallel layout).
+        ampBlock += amps.slice(1).map(entry => {
+            const n = entry.p.real_name || entry.p.type || 'Amp';
+            return `<div class="rb-amp-stack rb-amp-extra" data-amp-idx="${entry.idx}" style="display:none"
+                         onclick="rbStudioClickAmp(${entry.idx})" title="${rbEsc(n)}">
+                        <div class="rb-amp-face"></div><div class="rb-amp-cab"></div>
+                    </div>`;
+        }).join('');
+    } else {
+        ampBlock = `<div class="rb-strip-block rb-amp-stack rb-amp-stack-empty rb-strip-empty"
+                         onclick="rbStudioBrowseAmps()" title="Click to add an amp">
+                <div class="rb-amp-face rb-amp-face-empty">＋ amp</div>
+                <div class="rb-strip-k">Amp</div>
+                <div class="rb-strip-n">Add amp</div>
+            </div>`;
+    }
+
+    let cabBlock;
+    if (cabEntry) {
+        cabBlock = `<div class="rb-strip-block" onclick="rbStudioOpenCabRoom()" title="${rbEsc(cabName)} — Cab Room">
+                <div class="rb-strip-k">Cab</div>
+                <div class="rb-strip-n">${rbEsc(cabName)}</div>
+                ${rbStudioEngineBadge(cabEntry.p)}
+            </div>`;
+    } else {
+        cabBlock = `<div class="rb-strip-block rb-strip-empty" onclick="rbStudioOpenCabRoom()" title="Add a cab">
+                <div class="rb-strip-k">Cab</div>
+                <div class="rb-strip-n">＋ cab</div>
+            </div>`;
+    }
+
+    const racks = g.rack.slice(0, RB_MAX_RACKS);
+    const postPedals = g.pedal.filter(e => ((e.p.slot || '').toLowerCase() === 'post_pedal'));
+    const prePedals = g.pedal.filter(e => ((e.p.slot || '').toLowerCase() !== 'post_pedal')).slice(0, RB_MAX_PEDALS);
+    const primaryRack = racks[0];
+    let postBlock;
+    if (primaryRack) {
+        const rn = primaryRack.p.real_name || primaryRack.p.type || 'Rack';
+        const byp = rbStudioIsBypassed(primaryRack.p) ? ' rb-stomp-bypassed' : '';
+        const moreRacks = racks.length > 1 ? ` <span class="rb-engine">+${racks.length - 1}</span>` : '';
+        postBlock = `<div class="rb-strip-block${byp}" onclick="rbStudioClickRack(${primaryRack.idx})" title="${rbEsc(rn)} — edit / swap">
+                <div class="rb-strip-k">Post${moreRacks}</div>
+                <div class="rb-strip-n">${rbEsc(rn)}</div>
+                ${rbStudioEngineBadge(primaryRack.p)}
+                ${postPedals.length ? `<div class="rb-strip-post-extra">${postPedals.map(pd => {
+                    const pn = pd.p.real_name || pd.p.type || 'Pedal';
+                    return `<span class="rb-strip-chip" onclick="event.stopPropagation();rbStudioClickPedal(${pd.idx})" title="${rbEsc(pn)}">${rbEsc(pn)}</span>`;
+                }).join('')}</div>` : ''}
+            </div>`;
+    } else if (postPedals.length) {
+        const pd = postPedals[0];
+        const pn = pd.p.real_name || pd.p.type || 'Pedal';
+        postBlock = `<div class="rb-strip-block" onclick="rbStudioClickPedal(${pd.idx})" title="${rbEsc(pn)}">
+                <div class="rb-strip-k">Post</div>
+                <div class="rb-strip-n">${rbEsc(pn)}</div>
+                ${rbStudioEngineBadge(pd.p)}
+                ${postPedals.length > 1 ? `<div class="rb-strip-post-extra">${postPedals.slice(1).map(x => {
+                    const n = x.p.real_name || x.p.type || 'Pedal';
+                    return `<span class="rb-strip-chip" onclick="event.stopPropagation();rbStudioClickPedal(${x.idx})" title="${rbEsc(n)}">${rbEsc(n)}</span>`;
+                }).join('')}</div>` : ''}
+            </div>`;
+    } else {
+        postBlock = `<div class="rb-strip-block rb-strip-empty" onclick="rbStudioBrowseRacks()" title="Add post FX / rack">
+                <div class="rb-strip-k">Post</div>
+                <div class="rb-strip-n">＋ rack</div>
+            </div>`;
+    }
+
+    // Do NOT reuse .rb-pedal / .rb-pedalboard here — those class names carry absolute
+    // 3D-room layout and push stomps out of bounds in strip mode.
+    const pedalHtml = prePedals.length
+        ? prePedals.map(pd => {
+            const img = rbStudioPedalImg(pd.p);
+            const name = pd.p.real_name || pd.p.type || 'Pedal';
+            const byp = rbStudioIsBypassed(pd.p) ? ' rb-stomp-bypassed' : '';
+            return `<div class="rb-stomp${byp}" onclick="event.stopPropagation();rbStudioClickPedal(${pd.idx})" title="${rbEsc(name)} — edit / swap">
+                <div class="rb-stomp-led"></div>
+                <div class="rb-stomp-face">${img ? `<img src="${img}" alt="${rbEsc(name)}">` : `<div class="rb-pedal-fallback">${rbEsc(name)}</div>`}</div>
+                <div class="rb-stomp-name">${rbEsc(name)}</div>
+                ${rbStudioEngineBadge(pd.p)}
+                <div class="rb-stomp-foot"></div>
+            </div>`;
+        }).join('')
+        : '';
+    const canAddPedal = prePedals.length < RB_MAX_PEDALS;
+    const boardHtml = `
+        <div class="rb-strip-board">
+            <div class="rb-strip-board-label">Pedalboard <span>pre-amp · tap to edit</span></div>
+            <div class="rb-strip-pedals">
+                ${pedalHtml}
+                ${canAddPedal ? `<button type="button" class="rb-stomp-add" onclick="event.stopPropagation();rbStudioBrowsePedals()" title="Add a pre-amp pedal">+ Pedal</button>` : ''}
+            </div>
+        </div>`;
+
+    // Full-chain / full-rig NAM: when active, the strip becomes THAT capture —
+    // not a greyed amp/cab/pedal board that isn't what's sounding.
+    const _fcPiece = rbFindFullChainPiece(rbStudioCurrentChain());
+    const _fcOn = !!(_fcPiece && !rbFcBypassed(_fcPiece));
+    const fcName = _fcPiece
+        ? (_fcPiece.real_name || _fcPiece.name || _fcPiece.type || 'NAM')
+        : '';
+    let fcBannerHtml = '';
+    // When the override is OFF but still attached, keep the compact banner so
+    // Enable can restore it without hunting for the Full-chain button.
+    if (_fcPiece && !_fcOn) {
+        fcBannerHtml = `<div class="rb-fc-banner off">
+            <span class="rb-fc-banner-txt">🎛 Full-rig (off): <b>${rbEsc(fcName)}</b></span>
+            <button class="rb-fc-banner-btn" onclick="rbToggleFullChainOverride(true)">Enable</button>
+            <button class="rb-fc-banner-x" onclick="rbRemoveFullChainOverride()" title="Remove the full-rig override">✕</button>
+        </div>`;
+    }
+    el.classList.toggle('rb-fullchain-active', _fcOn);
+
+    let stripBody;
+    if (_fcOn && _fcPiece) {
+        const underlying = rbStudioGroupDefault();
+        const nAmp = underlying.amp.length, nCab = underlying.cab.length;
+        const nPed = underlying.pedal.length, nRack = underlying.rack.length;
+        const parts = [];
+        if (nAmp) parts.push(nAmp + (nAmp === 1 ? ' amp' : ' amps'));
+        if (nPed) parts.push(nPed + (nPed === 1 ? ' pedal' : ' pedals'));
+        if (nCab) parts.push(nCab === 1 ? 'cab' : 'cabs');
+        if (nRack) parts.push(nRack + (nRack === 1 ? ' rack' : ' racks'));
+        const paused = parts.length
+            ? `Discrete gear paused (${parts.join(', ')}). Disable to edit amp / cab / pedals again.`
+            : 'This tone is a single baked NAM capture (amp + cab + pedals in one file).';
+        stripBody = `
+            <div class="rb-strip rb-strip-fullrig-mode" id="rb-signal-strip">
+                <div class="rb-strip-fullrig" title="${rbEsc(fcName)}">
+                    <div class="rb-strip-fullrig-k">Full rig NAM</div>
+                    <div class="rb-strip-fullrig-n">${rbEsc(fcName)}</div>
+                    <div class="rb-strip-fullrig-sub">One capture is driving the tone — amp, cab, and pedals are baked in, so the discrete strip is hidden while this is on.</div>
+                    <div class="rb-strip-fullrig-meta">
+                        <span class="rb-engine rb-engine-baked">Baked</span>
+                        <span class="rb-engine rb-engine-nam">NAM</span>
+                    </div>
+                    <div class="rb-strip-fullrig-actions">
+                        <button type="button" class="rb-strip-fc-primary" onclick="rbStudioLoadFullChainNam()">Swap full rig…</button>
+                        <button type="button" onclick="rbToggleFullChainOverride(false)">Disable</button>
+                        <button type="button" onclick="rbRemoveFullChainOverride()" title="Remove the full-rig override">Remove</button>
+                    </div>
+                    <div class="rb-strip-fullrig-note">${rbEsc(paused)}</div>
+                </div>
+            </div>`;
+    } else {
+        stripBody = `
+            <div class="rb-strip" id="rb-signal-strip">
+                <div class="rb-strip-spine">
+                    ${ampBlock}
+                    <div class="rb-strip-flow">→</div>
+                    ${cabBlock}
+                    <div class="rb-strip-flow">→</div>
+                    ${postBlock}
+                </div>
+                ${boardHtml}
+            </div>`;
+    }
+
+    el.innerHTML = `
+        ${fcBannerHtml}
+        ${stripBody}`;
+    // Focus overlays still expect a camera host; keep a minimal stub for blur CSS.
+    if (!document.getElementById('rb-room-camera')) {
+        const cam = document.createElement('div');
+        cam.id = 'rb-room-camera';
+        cam.className = 'rb-room-camera';
+        cam.style.cssText = 'position:absolute;inset:0;pointer-events:none;opacity:0;z-index:0';
+        el.appendChild(cam);
+    }
+}
+
+
+function rbRenderStudioRoom3d() {
+    const el = document.getElementById('rb-studio-room');
+    if (!el) return;
+    el.classList.remove('rb-strip-mode');
     // Custom gear loaded from a saved tone lacks its UI until opened — attach it
     // up front so the room shows the created face on first paint (re-render once
     // the gear map arrives if it wasn't cached yet).
@@ -5428,6 +5692,7 @@ function rbRenderStudioRoom() {
     rbStudioApplyScale();       // scale the fixed-px gear up to fill a larger room
 }
 
+
 // Sample each floor pedal's lower-body colour and expose it as --rb-edge so the
 // box-shadow extrusion (the 3D side/bottom) is tinted to match that pedal.
 function rbStudioTintPedalEdges() {
@@ -5539,6 +5804,7 @@ if (!window.__rbStudioEscHook) {
 async function rbLoadStudioRoom() {
     try { await rbLoadDefaultToneEditor(); } catch (_) {}
     rbRenderStudioRoom();
+    try { rbStudioSyncViewModeBtn(); } catch (_) {}
     // Repaint once when the pedal-canvas fonts finish loading (same trick as
     // the catalog) so the pedal renders come out with the right typeface.
     if (!rbState._studioFontsRepaint && window.RBPedalCanvas && window.RBPedalCanvas.ready) {
@@ -5672,11 +5938,11 @@ async function rbStudioFocusAmp(idx) {
     bar.className = 'rb-focus-bar2';
     // Amp name omitted here — the swap rail on the right already labels it.
     bar.innerHTML = `
-        <button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Room</button>
+        <button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Back to rig</button>
         <div class="rb-focus-actions" style="min-width:80px"></div>`;
     rbStudioSyncFocusBarActions();   // 🪟 Plugin window (VST amps only)
     requestAnimationFrame(() => bar.classList.add('rb-focus-open'));
-    // The amp-alternatives rail is always shown in focus (amp sits left for it).
+    // Component browser (grid by default) for swapping the focused amp.
     rbStudioOpenSwap(idx);
 
     // Edit the amp IN-CHAIN (shared path with pedals/racks): the whole rig keeps
@@ -6020,7 +6286,7 @@ async function rbStudioFocusAmpAdd() {
     let bar = document.getElementById('rb-studio-focus-bar');
     if (!bar) { bar = document.createElement('div'); bar.id = 'rb-studio-focus-bar'; room.appendChild(bar); }
     bar.className = 'rb-focus-bar2';
-    bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Room</button>
+    bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Back to rig</button>
         <div class="rb-focus-title" style="color:#aab7cf;font-size:13px;">Pick an amp →</div>
         <div class="rb-focus-actions" style="min-width:80px"></div>`;
     requestAnimationFrame(() => bar.classList.add('rb-focus-open'));
@@ -6062,7 +6328,7 @@ async function rbStudioFocusPedalAdd() {
     let bar = document.getElementById('rb-studio-focus-bar');
     if (!bar) { bar = document.createElement('div'); bar.id = 'rb-studio-focus-bar'; room.appendChild(bar); }
     bar.className = 'rb-focus-bar2';
-    bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Room</button>`;
+    bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Back to rig</button>`;
     requestAnimationFrame(() => bar.classList.add('rb-focus-open'));
     rbStudioOpenSwap(-1, rbStudioActiveGroup());
     requestAnimationFrame(() => layer.classList.add('rb-pf-open'));
@@ -6154,11 +6420,11 @@ async function rbStudioFocusPedal(pos) {
         let bar = document.getElementById('rb-studio-focus-bar');
         if (!bar) { bar = document.createElement('div'); bar.id = 'rb-studio-focus-bar'; room.appendChild(bar); }
         bar.className = 'rb-focus-bar2';
-        bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Room</button>
+        bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Back to rig</button>
             <div class="rb-focus-actions"></div>`;
         rbStudioSyncFocusBarActions();   // 🪟 Plugin window (VST pedals/racks only)
         requestAnimationFrame(() => bar.classList.add('rb-focus-open'));
-        rbStudioOpenSwap(idx, rbStudioActiveGroup());   // rail of alternative pedals/racks
+        rbStudioOpenSwap(idx, rbStudioActiveGroup());   // component browser for pedals/racks
         requestAnimationFrame(() => layer.classList.add('rb-pf-open'));
     } else {
         // Rail already open: just retarget + re-highlight the current pedal
@@ -6627,8 +6893,110 @@ async function rbStudioFinalizeFocusEdit(api, idx) {
     try { await rbTeardownVstEditor(api); } catch (_) {}
 }
 
-// ── Phase 3: amp swap rail — right-docked translucent carousel of alt amps ──
+// ── Component browser — full-panel grid (default) with tags + Back to rig ──
 function rbStudioSwapAmp(idx) { rbStudioOpenSwap(idx); }
+
+const RB_BROWSE_TAG_CHIPS = {
+    amp: [
+        { id: 'guitar', label: 'Guitar' },
+        { id: 'bass', label: 'Bass' },
+    ],
+    cab: [
+        { id: 'guitar', label: 'Guitar' },
+        { id: 'bass', label: 'Bass' },
+    ],
+    pedal: [
+        { id: 'overdrive', label: 'Overdrive' },
+        { id: 'distortion', label: 'Distortion' },
+        { id: 'fuzz', label: 'Fuzz' },
+        { id: 'boost', label: 'Boost' },
+        { id: 'compressor', label: 'Comp' },
+        { id: 'eq', label: 'EQ' },
+        { id: 'modulation', label: 'Mod' },
+        { id: 'chorus', label: 'Chorus' },
+        { id: 'flanger', label: 'Flanger' },
+        { id: 'phaser', label: 'Phaser' },
+        { id: 'delay', label: 'Delay' },
+        { id: 'reverb', label: 'Reverb' },
+        { id: 'tremolo', label: 'Tremolo' },
+        { id: 'wah', label: 'Wah' },
+        { id: 'octave', label: 'Octave' },
+        { id: 'gate', label: 'Gate' },
+    ],
+    rack: [
+        { id: 'eq', label: 'EQ' },
+        { id: 'compressor', label: 'Comp' },
+        { id: 'delay', label: 'Delay' },
+        { id: 'reverb', label: 'Reverb' },
+        { id: 'modulation', label: 'Mod' },
+        { id: 'gate', label: 'Gate' },
+    ],
+};
+
+function rbStudioBrowseViewMode() {
+    return rbLsGet('rig_builder.browseView') === 'list' ? 'list' : 'grid';
+}
+
+function rbStudioToggleBrowseView() {
+    const next = rbStudioBrowseViewMode() === 'grid' ? 'list' : 'grid';
+    rbLsSet('rig_builder.browseView', next);
+    const list = document.getElementById('rb-swap-list');
+    if (list) {
+        list.classList.toggle('rb-browse-grid', next === 'grid');
+        list.classList.toggle('rb-browse-list', next === 'list');
+    }
+    const btn = document.getElementById('rb-browse-viewbtn');
+    if (btn) btn.textContent = next === 'grid' ? '☰ List' : '▦ Grid';
+    try { rbStudioRenderSwapList(rbState._swapSearch || ''); } catch (_) {}
+}
+
+function rbStudioBrowseSetStatus(msg) {
+    const el = document.getElementById('rb-browse-status');
+    if (el) el.textContent = msg || '';
+}
+
+function rbStudioBrowseBackToRig() {
+    // Cab focus has its own teardown path (no VST/knob teardown).
+    if (rbState._studioFocusKind === 'cab' || document.getElementById('rb-studio-cabroom')) {
+        try { rbStudioCloseCabFocus(); } catch (_) {}
+        return;
+    }
+    try { rbStudioCloseFocus(); } catch (_) {}
+}
+
+function rbStudioBrowseSetTag(tagId) {
+    rbState._swapTag = (rbState._swapTag === tagId) ? '' : (tagId || '');
+    rbStudioRenderBrowseTags();
+    rbStudioRenderSwapList(rbState._swapSearch || '');
+}
+
+function rbStudioRenderBrowseTags() {
+    const host = document.getElementById('rb-browse-tags');
+    if (!host) return;
+    const kind = rbState._swapKind || 'amp';
+    const chips = RB_BROWSE_TAG_CHIPS[kind] || [];
+    const cur = rbState._swapTag || '';
+    if (!chips.length) { host.innerHTML = ''; return; }
+    host.innerHTML = chips.map(c =>
+        `<button type="button" class="rb-browse-tag${cur === c.id ? ' on' : ''}"
+                 onclick="rbStudioBrowseSetTag(${rbEsc(JSON.stringify(c.id))})">${rbEsc(c.label)}</button>`
+    ).join('');
+}
+
+function rbStudioBrowseItemMatchesTag(g, tag) {
+    if (!tag) return true;
+    if (tag === 'guitar' || tag === 'bass') {
+        const inst = rbGearInstrument(g);
+        if (inst === 'all') return true;
+        return inst === tag;
+    }
+    // Modulation umbrella covers chorus/flanger/phaser/tremolo/vibe synonyms.
+    if (tag === 'modulation') {
+        const hay = rbGearTypeTags(g);
+        return /\b(chorus|flanger|phaser|tremolo|vibrato|vibe|mod)\b/.test(hay);
+    }
+    return rbGearTypeTags(g).includes(tag);
+}
 
 async function rbStudioOpenSwap(idx, kind) {
     kind = kind || 'amp';
@@ -6644,21 +7012,31 @@ async function rbStudioOpenSwap(idx, kind) {
     }
     let panel = document.getElementById('rb-swap-panel');
     if (!panel) { panel = document.createElement('div'); panel.id = 'rb-swap-panel'; room.appendChild(panel); }
-    panel.className = 'rb-swap-panel';
-    // Preserve the search across a swap: swapping rebuilds the whole rail, so
-    // without this the query resets to empty and the list jumps to the top —
-    // annoying right after you searched for and picked a cab. Cleared on close.
+    // Preserve search + tag across a swap rebuild (picking rebuilds focus in some
+    // paths). Cleared on close.
     const _savedSearch = rbState._swapSearch || '';
+    const view = rbStudioBrowseViewMode();
     const _kindLabel = kind === 'pedal' ? 'pedals' : (kind === 'rack' ? 'racks' : (kind === 'cab' ? 'cabs' : 'amps'));
+    const _title = kind === 'pedal' ? 'Choose a pedal' : (kind === 'rack' ? 'Choose a rack' : (kind === 'cab' ? 'Choose a cab / IR' : 'Choose an amp'));
+    panel.className = 'rb-swap-panel rb-browse-panel';
     panel.innerHTML = `
+        <div class="rb-browse-top">
+            <button type="button" class="rb-browse-back" onclick="rbStudioBrowseBackToRig()">← Back to rig</button>
+            <div class="rb-browse-title">${rbEsc(_title)}</div>
+            <button type="button" class="rb-browse-viewbtn" id="rb-browse-viewbtn"
+                    onclick="rbStudioToggleBrowseView()">${view === 'grid' ? '☰ List' : '▦ Grid'}</button>
+        </div>
         <div class="rb-swap-head">
             <input type="text" placeholder="Search ${_kindLabel}…" value="${rbEsc(_savedSearch)}"
                    oninput="rbState._swapSearch=this.value; rbStudioRenderSwapList(this.value)">
         </div>
-        <div id="rb-swap-list" class="rb-swap-list" onscroll="rbStudioScheduleCarousel()"></div>`;
+        <div class="rb-browse-tags" id="rb-browse-tags"></div>
+        <div id="rb-swap-list" class="rb-swap-list ${view === 'list' ? 'rb-browse-list' : 'rb-browse-grid'}"></div>
+        <div class="rb-browse-status" id="rb-browse-status">Pick one to audition — stay here and keep browsing</div>`;
     room.classList.add('rb-swap-active');
+    rbStudioRenderBrowseTags();
     rbStudioRenderSwapList(_savedSearch);
-    rbStudioPinSwapRail();   // pin to the viewport's right edge (covers the host's margin)
+    rbStudioPinSwapRail();
     if (!rbState._swapResizeHooked) {
         rbState._swapResizeHooked = true;
         window.addEventListener('resize', () => { try { rbStudioPinSwapRail(); } catch (_) {} });
@@ -6670,8 +7048,20 @@ function rbStudioPinSwapRail() {
     const room = document.getElementById('rb-studio-room');
     const panel = document.getElementById('rb-swap-panel');
     if (!room || !panel) return;
+    // Full-panel browser covers the studio viewport edge-to-edge.
+    if (panel.classList.contains('rb-browse-panel')) {
+        const r = room.getBoundingClientRect();
+        panel.style.position = 'fixed';
+        panel.style.left = r.left + 'px';
+        panel.style.right = (window.innerWidth - r.right) + 'px';
+        panel.style.top = r.top + 'px';
+        panel.style.bottom = (window.innerHeight - r.bottom) + 'px';
+        panel.style.width = 'auto';
+        panel.style.height = 'auto';
+        return;
+    }
     const r = room.getBoundingClientRect();
-    const topOff = 60;   // clear the floating ← Room bar so the search stays visible
+    const topOff = 60;
     panel.style.position = 'fixed';
     panel.style.right = '0';
     panel.style.top = (r.top + topOff) + 'px';
@@ -6682,7 +7072,9 @@ function rbStudioPinSwapRail() {
 function rbStudioCloseSwap() {
     const room = document.getElementById('rb-studio-room');
     const panel = document.getElementById('rb-swap-panel');
-    rbState._swapSearch = '';   // reset the persisted rail search when the rail closes
+    rbState._swapSearch = '';
+    rbState._swapTag = '';
+    rbState._swapBusy = false;
     if (room) room.classList.remove('rb-swap-active');
     if (panel) { panel.classList.remove('rb-swap-open'); setTimeout(() => { try { panel.remove(); } catch (_) {} }, 320); }
 }
@@ -6708,62 +7100,53 @@ function rbStudioRenderSwapList(search) {
     const curGear = cur && cur.type;
     const curBase = (curGear || '').replace(/_[a-z0-9]{2}$/i, '');
     const q = rbNorm(search || '').trim();
+    const tag = rbState._swapTag || '';
+    const busy = rbState._swapBusyGear || '';
     let items;
     if (kind === 'cab') {
         // Cabs aren't VSTs — list the FULL cab catalog (all 49, clone names)
         // instead of the VST-filtered gear_catalog, so any cab is swappable.
         const cabs = (rbState.realCabCatalog && rbState.realCabCatalog.cabs) || {};
         items = Object.entries(cabs)
-            .map(([rs_gear, e]) => ({ rs_gear, real_name: e.name || rs_gear }))
-            .filter(g => !q || rbNorm(g.real_name + ' ' + g.rs_gear).includes(q))
-            // Alphabetical by display name (the catalog's own order is by type —
-            // guitar then bass; the rail should read A→Z like the Gear list).
+            .map(([rs_gear, e]) => ({ rs_gear, real_name: e.name || rs_gear, category: 'cab' }))
+            .filter(g => (!q || rbNorm(g.real_name + ' ' + g.rs_gear).includes(q))
+                      && rbStudioBrowseItemMatchesTag(g, tag))
             .sort((a, b) => a.real_name.localeCompare(b.real_name, undefined, { numeric: true, sensitivity: 'base' }));
     } else {
         items = ((rbState.gearCatalog && rbState.gearCatalog[kind]) || [])
-            .filter(g => rbGearHasVst(g) && (!q || rbGearSearchHaystack(g).includes(q)));
+            .filter(g => rbGearHasVst(g)
+                && (!q || rbGearSearchHaystack(g).includes(q))
+                && rbStudioBrowseItemMatchesTag(g, tag));
     }
     if (!items.length) {
         const label = kind === 'pedal' ? 'pedals' : (kind === 'rack' ? 'racks' : (kind === 'cab' ? 'cabs' : 'amps'));
-        list.innerHTML = `<div style="text-align:center;color:#8893a8;font-size:12px;padding:24px 0">No ${label} found</div>`;
+        list.innerHTML = `<div style="text-align:center;color:#8893a8;font-size:12px;padding:24px 0;grid-column:1/-1">No ${label} found</div>`;
         return;
     }
+    const scrollY = list.scrollTop;
     list.innerHTML = items.map(g => {
         const name = g.real_name || g.rs_gear;
         const isCur = g.rs_gear === curGear || g.rs_gear === curBase;
-        return `<div class="rb-swap-item ${isCur ? 'rb-swap-current' : ''}"
+        const loading = busy && (g.rs_gear === busy || busy.replace(/_[a-z0-9]{2}$/i, '') === g.rs_gear);
+        return `<div class="rb-swap-item ${isCur ? 'rb-swap-current' : ''} ${loading ? 'rb-swap-loading' : ''}"
+                     data-gear="${rbEsc(g.rs_gear)}"
                      onclick="rbStudioSwapToGear(${rbEsc(JSON.stringify(g.rs_gear))})" title="${rbEsc(name)}">
             <span class="rb-swap-thumb">${rbStudioAmpThumb(g)}</span>
             <span class="rb-swap-name">${rbEsc(name)}</span>
         </div>`;
     }).join('');
-    requestAnimationFrame(() => {
-        const curEl = list.querySelector('.rb-swap-item.rb-swap-current') || list.querySelector('.rb-swap-item');
-        if (curEl) curEl.scrollIntoView({ block: 'center' });
-        rbStudioUpdateSwapCarousel();
-    });
+    // Keep scroll position while filtering/picking so the grid doesn't jump.
+    list.scrollTop = scrollY;
+    if (!busy) {
+        requestAnimationFrame(() => {
+            const curEl = list.querySelector('.rb-swap-item.rb-swap-current');
+            if (curEl && !q && !tag) curEl.scrollIntoView({ block: 'nearest' });
+        });
+    }
 }
 
-function rbStudioScheduleCarousel() {
-    if (rbState._swapRaf) return;
-    rbState._swapRaf = requestAnimationFrame(() => { rbState._swapRaf = null; rbStudioUpdateSwapCarousel(); });
-}
-
-// Center-focus wheel: the item nearest the list centre is full size/opacity,
-// neighbours shrink + fade with distance.
-function rbStudioUpdateSwapCarousel() {
-    const list = document.getElementById('rb-swap-list');
-    if (!list) return;
-    const cr = list.getBoundingClientRect();
-    const mid = cr.top + cr.height / 2;
-    const half = cr.height / 2 || 1;
-    list.querySelectorAll('.rb-swap-item').forEach(it => {
-        const r = it.getBoundingClientRect();
-        const d = Math.min(1, Math.abs((r.top + r.height / 2) - mid) / half);
-        it.style.transform = `scale(${(1 - d * 0.42).toFixed(3)})`;
-        it.style.opacity = (1 - d * 0.78).toFixed(3);
-    });
-}
+function rbStudioScheduleCarousel() { /* grid browser — no carousel scaling */ }
+function rbStudioUpdateSwapCarousel() { /* no-op: kept for older callers */ }
 
 // After a gear swap/add, the live song chain (mega-chain) was built from the OLD
 // rig, so the new gear doesn't sound until the user re-selects the tone. Rebuild it
@@ -6811,90 +7194,131 @@ async function rbStudioReloadLiveChainAfterSwap() {
     } catch (_) {}
 }
 
-function rbStudioSwapToGear(rsGear) {
-    const kind = rbState._swapKind || 'amp';
-    if (kind === 'cab') {
-        // Cabs swap by rs_gear (IR), not by VST. Song: /gear/replace_with via
-        // rbStudioCabSwap, which reopens the Cab Room (re-entering focus + rail).
-        // Explorer: just re-audition the chosen cab.
-        const q = rbState._swapSearch || '';   // keep the query across the rebuild
-        const v = rbState.studioView || {};
-        if (v.source === 'song' && _rbCabRoom['studio'] && _rbCabRoom['studio']._studio) {
-            rbStudioCabSwap(rsGear);
-        } else {
-            // Default / saved tone: we own the chain array directly, so persist
-            // the chosen cab into it (create the cabinet piece if missing) — the
-            // old path only re-auditioned, so the pick never showed in the room,
-            // seeded the node editor, or survived a restart.
-            rbState._lastExploreCab = rsGear;
-            rbStudioCabApplyLocal(rsGear);
+// Refresh the focused amp/pedal face + VST knobs WITHOUT rebuilding the browser.
+function rbStudioRefreshFocusAfterSwap(kind, idx) {
+    const piece = (rbStudioCurrentChain())[idx];
+    if (!piece) return;
+    if (kind === 'amp') {
+        const stack = document.querySelector('#rb-studio-room .rb-amp-stack.rb-amp-focused')
+                   || document.querySelector(`#rb-studio-room .rb-amp-stack[data-amp-idx="${idx}"]`);
+        const face = (stack && stack.querySelector('.rb-amp-face'))
+                  || document.querySelector('#rb-studio-room .rb-amp-face');
+        if (face) {
+            const img = rbStudioPedalImg(piece);
+            face.innerHTML = img ? `<img src="${img}" alt="${rbEsc(piece.real_name || '')}">` : '';
+            try { rbStudioLoadFocusVst(idx, face, 0); } catch (_) {}
         }
-        // The swap rebuilds the room + rail ASYNCHRONOUSLY (monitor reload), which
-        // can wipe the search after we restore it — re-assert it a few times so
-        // the rail keeps showing the searched result instead of jumping to the top.
-        [80, 300, 650].forEach(t => setTimeout(() => {
-            rbState._swapSearch = q;
-            const inp = document.querySelector('#rb-swap-panel .rb-swap-head input');
-            if (inp) { if (inp.value !== q) inp.value = q; try { rbStudioRenderSwapList(q); } catch (_) {} }
-        }, t));
         return;
     }
+    if (kind === 'pedal' || kind === 'rack') {
+        // Re-entry path keeps the browser open and only refreshes the pedal face.
+        try { rbStudioFocusPedal(rbState._studioPedalPos || 0); } catch (_) {}
+    }
+}
+
+async function rbStudioSwapToGear(rsGear) {
+    if (rbState._swapBusy) return;
+    const kind = rbState._swapKind || 'amp';
+    const q = rbState._swapSearch || '';
+    const markBusy = (on) => {
+        rbState._swapBusy = !!on;
+        rbState._swapBusyGear = on ? rsGear : '';
+        try { rbStudioRenderSwapList(q); } catch (_) {}
+    };
+
+    if (kind === 'cab') {
+        // Cabs swap by rs_gear (IR). Keep the browser open — fast in-place when
+        // possible; otherwise apply without tearing down the catalog.
+        markBusy(true);
+        rbStudioBrowseSetStatus('Loading cab audio…');
+        try {
+            const v = rbState.studioView || {};
+            if (v.source === 'song' && _rbCabRoom['studio'] && _rbCabRoom['studio']._studio) {
+                // Prefer silent in-place IR replace; fall back to song replace API
+                // without forcing a full cab-room reopen when the fast path works.
+                if (!(await rbStudioFastCabSwapInPlace(rsGear))) {
+                    await rbStudioCabSwapKeepBrowser(rsGear);
+                } else {
+                    // Persist the song cab pick via replace_with so the tone sticks.
+                    try { await rbStudioCabSwapPersistOnly(rsGear); } catch (_) {}
+                }
+            } else {
+                rbState._lastExploreCab = rsGear;
+                await rbStudioCabApplyLocal(rsGear, { reopen: false });
+            }
+            rbStudioBrowseSetStatus('Cab loaded — keep browsing or go Back to rig');
+        } catch (e) {
+            rbStudioBrowseSetStatus('Cab load failed — try another');
+        }
+        markBusy(false);
+        rbState._swapSearch = q;
+        const inp = document.querySelector('#rb-swap-panel .rb-swap-head input');
+        if (inp && inp.value !== q) inp.value = q;
+        try { rbStudioRenderSwapList(q); } catch (_) {}
+        return;
+    }
+
     const g = ((rbState.gearCatalog && rbState.gearCatalog[kind]) || []).find(x => x.rs_gear === rsGear);
     if (!g) return;
+
     // Add mode (empty pedalboard / rack tower): create a new piece, append it to
     // the chain, persist, then focus the freshly-added piece.
     if ((kind === 'pedal' || kind === 'rack') && rbState._studioPedalAddMode) {
         if (rbStudioPedalOrder().length >= rbStudioFocusMax()) { rbStudioCloseFocus(); return; }
         const vp = rbGearVstPath(g);
         if (!vp) return;
+        markBusy(true);
+        rbStudioBrowseSetStatus('Adding + loading audio…');
         const newPiece = {
             type: g.rs_gear, real_name: g.real_name || g.rs_gear,
             category: kind, rs_category: kind, slot: kind === 'rack' ? 'rack' : 'pre_pedal',
             _vst_kind: 'vst', _vst_path: vp, _vst_format: g.vst_format || 'VST3',
             assigned: { kind: 'vst', vst_path: vp, vst_format: g.vst_format || 'VST3', vst_state: null },
         };
-        if (g.custom && g.ui) newPiece._custom_ui = g.ui;   // show the created face
+        if (g.custom && g.ui) newPiece._custom_ui = g.ui;
         rbStudioCurrentChain().push(newPiece);
         rbState._studioPedalAddMode = false;
         try { rbStudioPersist(); } catch (_) {}
-        rbStudioReloadLiveChainAfterSwap();   // new pedal sounds without re-selecting the tone
-        // Don't re-render the room here — it would wipe the focus layer + rail
-        // (room children). The order already reflects the new piece; the floor
-        // board repaints on close (rbStudioCloseFocus).
+        try { await rbStudioReloadLiveChainAfterSwap(); } catch (_) {}
+        markBusy(false);
+        rbStudioBrowseSetStatus('Loaded — keep browsing or go Back to rig');
         const order = rbStudioPedalOrder();
         rbStudioFocusPedal(order.length - 1);
         return;
     }
+
     // Amp add-mode: the tone had NO amp (deleted, or a fresh empty chain).
-    // Create a new amp piece and append it — mirrors the pedal/rack add branch;
-    // the plain swap path below requires an existing amp piece to mutate.
     if (kind === 'amp' && rbState._studioAmpAddMode) {
         const vp = rbGearVstPath(g);
         if (!vp) return;
+        markBusy(true);
+        rbStudioBrowseSetStatus('Adding + loading audio…');
         const newPiece = {
             type: g.rs_gear, real_name: g.real_name || g.rs_gear,
             category: 'amp', rs_category: 'amp', slot: 'amp',
             _vst_kind: 'vst', _vst_path: vp, _vst_format: g.vst_format || 'VST3',
             assigned: { kind: 'vst', vst_path: vp, vst_format: g.vst_format || 'VST3', vst_state: null },
         };
-        if (g.custom && g.ui) newPiece._custom_ui = g.ui;   // show the created face
+        if (g.custom && g.ui) newPiece._custom_ui = g.ui;
         rbStudioCurrentChain().push(newPiece);
         rbState._studioAmpAddMode = false;
         try { rbStudioPersist(); } catch (_) {}
-        rbStudioReloadLiveChainAfterSwap();
-        // The amp stack didn't exist, so re-render the room to create it, then
-        // focus the freshly-added amp (rbRenderStudioRoom wipes the swap rail +
-        // focus bar; rbStudioFocusAmp rebuilds them).
+        try { await rbStudioReloadLiveChainAfterSwap(); } catch (_) {}
+        markBusy(false);
         try { rbRenderStudioRoom(); } catch (_) {}
         const added = (rbStudioGroupDefault().amp || [])[0];
         if (added) rbStudioFocusAmp(added.idx); else { try { rbStudioCloseFocus(); } catch (_) {} }
         return;
     }
+
     const idx = rbState._studioFocusIdx;
     const piece = (rbStudioCurrentChain())[idx];
     if (!piece) return;
     const vstPath = rbGearVstPath(g);
     if (!vstPath) return;
+
+    markBusy(true);
+    rbStudioBrowseSetStatus('Loading audio…');
     piece.type = g.rs_gear;
     piece.real_name = g.real_name || g.rs_gear;
     piece.category = kind; piece.rs_category = kind;
@@ -6907,26 +7331,59 @@ function rbStudioSwapToGear(rsGear) {
     piece._vst_state = null; piece._vst_params = null; piece._vst_logical = null;
     piece._vst_param_meta = null; piece._vst_slot_id = null; piece._vst_opaque = null;
     try { rbStudioPersist(); } catch (_) {}
-    rbStudioReloadLiveChainAfterSwap();   // rebuild the live song chain so the swap sounds without re-selecting the tone
-    if (kind === 'amp') {
-        // Show the new amp face immediately, then reload focus (loads its VST +
-        // knobs and re-renders the rail with the new amp centred). Target THIS
-        // amp's stack by its chain index — a bare `.rb-amp-face` grabbed the FIRST
-        // amp, so swapping amp 2 stamped its photo onto amp 1 in a parallel rig
-        // (and both showed the new face until the room was re-rendered).
-        const stack = document.querySelector('#rb-studio-room .rb-amp-stack.rb-amp-focused')
-                   || document.querySelector(`#rb-studio-room .rb-amp-stack[data-amp-idx="${idx}"]`);
-        const face = (stack && stack.querySelector('.rb-amp-face'))
-                  || document.querySelector('#rb-studio-room .rb-amp-face');
-        if (face) { const img = rbStudioPedalImg(piece); face.innerHTML = img ? `<img src="${img}" alt="${rbEsc(piece.real_name)}">` : ''; }
-        rbStudioFocusAmp(idx);
-    } else {
-        // Reload the pedal focus at the same chain position with the new pedal.
-        rbStudioFocusPedal(rbState._studioPedalPos || 0);
+    try {
+        await rbStudioReloadLiveChainAfterSwap();
+        rbStudioBrowseSetStatus('Loaded — keep browsing or go Back to rig');
+    } catch (_) {
+        rbStudioBrowseSetStatus('Audio reload failed — try again');
     }
+    // Keep the browser open: refresh face/knobs in place instead of FocusAmp,
+    // which used to rebuild the whole rail and dump you out of browsing.
+    rbStudioRefreshFocusAfterSwap(kind, idx);
+    markBusy(false);
 }
 // Back-compat alias (older inline handlers).
 function rbStudioSwapToAmp(rsGear) { return rbStudioSwapToGear(rsGear); }
+
+// Song cab pick: persist via replace_with without forcing a cab-room reopen.
+async function rbStudioCabSwapPersistOnly(newBase) {
+    const st = _rbCabRoom['studio'];
+    const info = st && st._studio;
+    const v = rbState.studioView || {};
+    if (!info || v.source !== 'song') return;
+    const tone = rbState.songTones?.tones?.[info.toneIdx];
+    const piece = tone?.chain?.[info.pIdx];
+    if (!tone || !piece) return;
+    const cur = String(piece.type || '');
+    const suf = /_([a-z0-9]{2})$/i.exec(cur);
+    const to = newBase + (suf ? '_' + suf[1] : '');
+    // Move the highlight immediately, then persist.
+    piece.type = to;
+    try {
+        const catEntry = (rbState.realCabCatalog && rbState.realCabCatalog.cabs
+                          && rbState.realCabCatalog.cabs[newBase]) || {};
+        piece.real_name = catEntry.name || piece.real_name || newBase;
+        if (st) st._gear = newBase;
+    } catch (_) {}
+    const r = await fetch(`${window.RB_API}/gear/replace_with`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from_rs_gear: cur, to_rs_gear: to, preset_id: tone.preset_id }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.status);
+    const fresh = await rbFetchSong(rbState.currentSongFile);
+    if (fresh && !fresh.error) { rbState.songTones = fresh; try { rbSeedBypass(fresh); } catch (_) {} }
+}
+
+// Song cab swap that keeps the component browser mounted (no full reopen dance).
+async function rbStudioCabSwapKeepBrowser(newBase) {
+    if (await rbStudioFastCabSwapInPlace(newBase)) {
+        await rbStudioCabSwapPersistOnly(newBase);
+        return;
+    }
+    // Fall back to the classic reopen path only when in-place IR replace fails.
+    await rbStudioCabSwap(newBase);
+}
 
 // Entry point for the host's main-menu "Studio" item (v3 shell.js): show the
 // Gear tab and land on the Studio room regardless of the last-used tab.
@@ -7211,11 +7668,58 @@ window.rbStudioRenderToneMenu = function rbStudioRenderToneMenu(filter) {
     if (!menu) return;
     rbState._toneMenuFilter = filter || '';
     // Per-song-tone Restore/Remove is NOT here (too hidden) — it's the floating
-    // button next to "⚙ Advanced". This menu only saves the current tone.
+    // button next to "⚙ Advanced". The foot is an explicit Save menu so song
+    // tones can be UPDATED (old UI mostly only offered Save-as-new).
+    const v = rbState.studioView || { source: 'default' };
+    let saveFoot = '';
+    if (v.source === 'song') {
+        const t = rbState.songTones && rbState.songTones.tones && rbState.songTones.tones[v.toneIdx];
+        const label = (t && (t.name || t.key)) || 'Tone';
+        saveFoot = `<div class="rb-tone-save-menu">
+            <div class="rb-tone-save-hint">Editing song tone <b>${rbEsc(label)}</b>. Update writes your chain back to the song.</div>
+            <button class="rb-tone-save-btn primary" onclick="rbStudioUpdateActiveTone()">Update song tone “${rbEsc(label)}”</button>
+            <button class="rb-tone-save-btn" onclick="rbStudioSaveTone()">Save as new studio tone…</button>
+        </div>`;
+    } else if (v.source === 'saved') {
+        saveFoot = `<div class="rb-tone-save-menu">
+            <div class="rb-tone-save-hint">Editing saved tone <b>${rbEsc(v.name || '')}</b>.</div>
+            <button class="rb-tone-save-btn primary" onclick="rbStudioUpdateActiveTone()">Overwrite “${rbEsc(v.name || '')}”</button>
+            <button class="rb-tone-save-btn" onclick="rbStudioSaveTone()">Save as new studio tone…</button>
+        </div>`;
+    } else {
+        saveFoot = `<div class="rb-tone-save-menu">
+            <div class="rb-tone-save-hint">Editing the Default tone (idle / no song).</div>
+            <button class="rb-tone-save-btn primary" onclick="rbStudioUpdateActiveTone()">Update Default tone</button>
+            <button class="rb-tone-save-btn" onclick="rbStudioSaveTone()">Save as new studio tone…</button>
+            <button class="rb-tone-save-btn" onclick="document.getElementById('rb-tone-menu')?.classList.add('hidden');rbOpenNewToneDialog({preferSong:false})">＋ New tone…</button>
+        </div>`;
+    }
     menu.innerHTML = `
         <div class="rb-tone-search"><input type="text" placeholder="Search tones…" value="${rbEsc(filter || '')}" oninput="rbStudioFilterToneList(this.value)"></div>
         <div class="rb-tone-list" id="rb-tone-list">${rbStudioToneListHtml(filter)}</div>
-        <div class="rb-tone-foot"><button class="rb-tone-save" onclick="rbStudioSaveTone()">💾 Save current tone</button></div>`;
+        <div class="rb-tone-foot">${saveFoot}</div>`;
+};
+
+// Explicit Update for the active Studio view (song / saved / default).
+window.rbStudioUpdateActiveTone = async function rbStudioUpdateActiveTone() {
+    try {
+        const p = rbStudioPersist();
+        if (p && typeof p.then === 'function') await p;
+        document.getElementById('rb-tone-menu')?.classList.add('hidden');
+        const v = rbState.studioView || {};
+        const msg = v.source === 'song' ? 'Song tone updated'
+            : (v.source === 'saved' ? 'Saved tone updated' : 'Default tone updated');
+        try {
+            const toast = document.createElement('div');
+            toast.className = 'rb-fc-banner on';
+            toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;';
+            toast.textContent = '✓ ' + msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 1600);
+        } catch (_) {}
+    } catch (e) {
+        alert('Update failed: ' + (e && e.message ? e.message : e));
+    }
 };
 
 // Revert the currently-loaded SONG tone to the song's original bundled gear
@@ -8587,11 +9091,14 @@ window.rbStudioSaveTone = function rbStudioSaveTone() {
     box.querySelector('.rb-tone-savecancel').onclick = cancel;
     input.onkeydown = e => { if (e.key === 'Enter') doSave(); else if (e.key === 'Escape') cancel(); };
 };
-async function rbStudioCommitSaveTone(name) {
+async function rbStudioCommitSaveTone(name, piecesPayload) {
+    const pieces = Array.isArray(piecesPayload)
+        ? piecesPayload
+        : rbStudioChainToPayload(rbStudioCurrentChain());
     try {
         const r = await fetch(`${window.RB_API}/saved_tone/save`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, pieces: rbStudioChainToPayload(rbStudioCurrentChain()) }),
+            body: JSON.stringify({ name, pieces }),
         });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { alert(`Save failed: ${d.error || r.status} — restart the app if you just updated (new backend route).`); return; }
@@ -10165,6 +10672,36 @@ function rbSelectPiece(toneIdx, pIdx) {
 // opts: { name?: string, seedSavedId?: string|number }. name → the tone's
 // display name (and key, so it survives a reload). seedSavedId → import that
 // saved Studio tone's chain instead of the Default tone.
+function rbCloneTonePieces(pieces) {
+    try { return JSON.parse(JSON.stringify(Array.isArray(pieces) ? pieces : [])); } catch (_) { return []; }
+}
+
+// Resolve a New-tone seed into a chain array (rich piece objects).
+async function rbResolveToneSeed(opts) {
+    opts = opts || {};
+    if (opts.seedEmpty || opts.seed === 'empty') return [];
+    if (Array.isArray(opts.seedPieces)) return rbCloneTonePieces(opts.seedPieces);
+    if (opts.seed === 'current') return rbCloneTonePieces(rbStudioCurrentChain());
+    if (opts.seedSongIdx != null && opts.seedSongIdx !== '') {
+        const st = rbState.songTones;
+        const t = st && Array.isArray(st.tones) ? st.tones[Number(opts.seedSongIdx)] : null;
+        if (t && Array.isArray(t.chain)) return rbCloneTonePieces(t.chain);
+    }
+    if (opts.seedSavedId != null && opts.seedSavedId !== '') {
+        const s = (rbState.savedTones || []).find(t => String(t.id) === String(opts.seedSavedId));
+        if (s && Array.isArray(s.pieces)) return rbCloneTonePieces(s.pieces);
+    }
+    // Default tone (or explicit seed=default)
+    try {
+        const r = await fetch(`${window.RB_API}/default_tone`);
+        if (r.ok) {
+            const dt = await r.json();
+            if (Array.isArray(dt.pieces)) return rbCloneTonePieces(dt.pieces);
+        }
+    } catch (_) {}
+    return [];
+}
+
 window.rbAddSongTone = async function rbAddSongTone(filename, opts) {
     opts = opts || {};
     filename = filename || (rbState.songTones && rbState.songTones.filename) || rbState.currentSongFile;
@@ -10173,18 +10710,8 @@ window.rbAddSongTone = async function rbAddSongTone(filename, opts) {
     rbState.songTones.filename = rbState.songTones.filename || filename;
     if (!Array.isArray(rbState.songTones.tones)) rbState.songTones.tones = [];
     const tones = rbState.songTones.tones;
-    // Seed the chain: import a saved Studio tone's pieces, or fall back to the
-    // Default tone. Empty seed just means the user builds it up piece by piece.
-    let pieces = [];
-    if (opts.seedSavedId != null && opts.seedSavedId !== '') {
-        const s = (rbState.savedTones || []).find(t => String(t.id) === String(opts.seedSavedId));
-        if (s && Array.isArray(s.pieces)) pieces = s.pieces;
-    } else {
-        try {
-            const r = await fetch(`${window.RB_API}/default_tone`);
-            if (r.ok) { const dt = await r.json(); if (Array.isArray(dt.pieces)) pieces = dt.pieces; }
-        } catch (_) {}
-    }
+    // Seed the chain: empty / current / song tone / saved tone / Default.
+    const pieces = await rbResolveToneSeed(opts);
     // Key + display name. A user-typed name becomes BOTH the key and the name
     // (get_song shows a non-sentinel tone_key verbatim, so the name survives a
     // reload). No name → "__default__" for the first tone on a tone-less song,
@@ -10226,33 +10753,74 @@ window.rbAddSongTone = async function rbAddSongTone(filename, opts) {
     try { rbRenderToneHotkeysUI(); } catch (_) {}   // reads rbState.songTones — now has the new tone
 };
 
-// Small modal to name a new tone and optionally import a saved Studio tone as
-// its starting chain. Every "＋ Add tone" affordance opens this.
+// Small modal to name a new tone and choose a starting chain (empty / Default /
+// current / song tone / saved tone). Used from Studio "＋ New tone" and the
+// song bar "＋ Add tone".
 window.rbCloseAddToneDialog = function rbCloseAddToneDialog() {
     const o = document.getElementById('rb-addtone-overlay');
     if (o) o.remove();
 };
 window.rbOpenAddToneDialog = function rbOpenAddToneDialog(filename) {
-    filename = filename || (rbState.songTones && rbState.songTones.filename) || rbState.currentSongFile;
-    if (!filename) return;
+    rbOpenNewToneDialog({ filename, preferSong: true });
+};
+window.rbOpenNewToneDialog = function rbOpenNewToneDialog(opts) {
+    opts = opts || {};
     rbCloseAddToneDialog();
-    const seedOptions = ['<option value="">Default tone</option>']
-        .concat((rbState.savedTones || []).map(t => `<option value="${rbEsc(String(t.id))}">${rbEsc(t.name)}</option>`))
-        .join('');
+    const filename = opts.filename
+        || (rbState.songTones && rbState.songTones.filename)
+        || rbState.currentSongFile
+        || '';
+    const hasSong = !!filename;
+    const songTones = (hasSong && rbState.songTones && Array.isArray(rbState.songTones.tones))
+        ? rbState.songTones.tones : [];
+    const saved = rbState.savedTones || [];
+
+    const seedGroups = [];
+    seedGroups.push('<option value="empty">Empty — start from scratch</option>');
+    seedGroups.push('<option value="default">Default tone</option>');
+    seedGroups.push('<option value="current">Current Studio chain</option>');
+    if (songTones.length) {
+        seedGroups.push('<optgroup label="This song">');
+        songTones.forEach((t, i) => {
+            seedGroups.push(`<option value="song:${i}">${rbEsc(t.name || ('Tone ' + (i + 1)))}</option>`);
+        });
+        seedGroups.push('</optgroup>');
+    }
+    if (saved.length) {
+        seedGroups.push('<optgroup label="Saved studio tones">');
+        saved.forEach((t) => {
+            seedGroups.push(`<option value="saved:${rbEsc(String(t.id))}">${rbEsc(t.name)}</option>`);
+        });
+        seedGroups.push('</optgroup>');
+    }
+
+    const destBlock = hasSong ? `
+            <label style="display:block;color:#9fb0cc;font-size:12px;margin-bottom:6px;">Create as</label>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
+                <label style="display:flex;align-items:center;gap:8px;color:#e5e7eb;font-size:13px;cursor:pointer;">
+                    <input type="radio" name="rb-newtone-dest" value="song" ${opts.preferSong !== false ? 'checked' : ''}> Song tone (this song)
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;color:#e5e7eb;font-size:13px;cursor:pointer;">
+                    <input type="radio" name="rb-newtone-dest" value="studio" ${opts.preferSong === false ? 'checked' : ''}> Studio tone (saved library)
+                </label>
+            </div>` : `
+            <p style="color:#9fb0cc;font-size:12px;margin:0 0 14px;">No song loaded — creates a saved Studio tone.</p>`;
+
     const overlay = document.createElement('div');
     overlay.id = 'rb-addtone-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;';
     overlay.onclick = (e) => { if (e.target === overlay) rbCloseAddToneDialog(); };
     overlay.innerHTML = `
-        <div style="width:340px;max-width:92vw;background:#12161e;border:1px solid rgba(120,165,225,.28);border-radius:14px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.6);">
-            <h3 style="color:#fff;font-weight:600;font-size:15px;margin:0 0 12px;">Add a tone to this song</h3>
+        <div style="width:380px;max-width:92vw;background:#12161e;border:1px solid rgba(120,165,225,.28);border-radius:14px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.6);">
+            <h3 style="color:#fff;font-weight:600;font-size:15px;margin:0 0 12px;">New tone</h3>
             <label style="display:block;color:#9fb0cc;font-size:12px;margin-bottom:4px;">Name</label>
             <input id="rb-addtone-name" type="text" placeholder="e.g. Solo, Clean verse…" maxlength="60"
                    style="width:100%;box-sizing:border-box;background:#0b0f16;border:1px solid #33405a;border-radius:9px;padding:8px 10px;color:#e5e7eb;font-size:13px;margin-bottom:12px;">
             <label style="display:block;color:#9fb0cc;font-size:12px;margin-bottom:4px;">Start from</label>
-            <select id="rb-addtone-seed" style="width:100%;box-sizing:border-box;background:#0b0f16;border:1px solid #33405a;border-radius:9px;padding:8px 10px;color:#e5e7eb;font-size:13px;margin-bottom:16px;">
-                ${seedOptions}
+            <select id="rb-addtone-seed" style="width:100%;box-sizing:border-box;background:#0b0f16;border:1px solid #33405a;border-radius:9px;padding:8px 10px;color:#e5e7eb;font-size:13px;margin-bottom:14px;">
+                ${seedGroups.join('')}
             </select>
+            ${destBlock}
             <div style="display:flex;justify-content:flex-end;gap:8px;">
                 <button id="rb-addtone-cancel" style="padding:7px 14px;border-radius:9px;border:1px solid #33405a;background:none;color:#c9d3e5;font-size:13px;cursor:pointer;">Cancel</button>
                 <button id="rb-addtone-create" style="padding:7px 14px;border-radius:9px;border:1px solid rgba(110,200,150,.5);background:rgba(16,120,80,.35);color:#c9f7de;font-size:13px;cursor:pointer;">Create</button>
@@ -10261,10 +10829,32 @@ window.rbOpenAddToneDialog = function rbOpenAddToneDialog(filename) {
     document.body.appendChild(overlay);
     const nameEl = overlay.querySelector('#rb-addtone-name');
     const create = async () => {
-        const name = nameEl.value;
-        const seedSavedId = overlay.querySelector('#rb-addtone-seed').value;
+        const name = (nameEl.value || '').trim();
+        if (!name) { nameEl.focus(); return; }
+        const seedVal = overlay.querySelector('#rb-addtone-seed').value;
+        const destEl = overlay.querySelector('input[name="rb-newtone-dest"]:checked');
+        const dest = hasSong ? ((destEl && destEl.value) || 'song') : 'studio';
+        const seedOpts = {};
+        if (seedVal === 'empty') seedOpts.seedEmpty = true;
+        else if (seedVal === 'default') seedOpts.seed = 'default';
+        else if (seedVal === 'current') seedOpts.seed = 'current';
+        else if (seedVal.startsWith('song:')) seedOpts.seedSongIdx = seedVal.slice(5);
+        else if (seedVal.startsWith('saved:')) seedOpts.seedSavedId = seedVal.slice(6);
         rbCloseAddToneDialog();
-        await rbAddSongTone(filename, { name, seedSavedId });
+        try {
+            if (dest === 'song' && hasSong) {
+                await rbAddSongTone(filename, { name, ...seedOpts });
+                const st = rbState.songTones;
+                if (st && Array.isArray(st.tones) && st.tones.length) {
+                    try { rbStudioShowSongTone(st.tones.length - 1); } catch (_) {}
+                }
+            } else {
+                const pieces = await rbResolveToneSeed(seedOpts);
+                await rbStudioCommitSaveTone(name, rbStudioChainToPayload(pieces));
+            }
+        } catch (e) {
+            alert('Create failed: ' + (e && e.message ? e.message : e));
+        }
     };
     overlay.querySelector('#rb-addtone-create').onclick = create;
     overlay.querySelector('#rb-addtone-cancel').onclick = rbCloseAddToneDialog;
@@ -15603,15 +16193,13 @@ window.rbStudioOpenCabRoom = function rbStudioOpenCabRoom() {
     let bar = document.getElementById('rb-studio-focus-bar');
     if (!bar) { bar = document.createElement('div'); bar.id = 'rb-studio-focus-bar'; room.appendChild(bar); }
     bar.className = 'rb-focus-bar2';
-    bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseCabFocus()">← Room</button>
+    bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseCabFocus()">← Back to rig</button>
         <div class="rb-focus-actions" style="min-width:80px"></div>`;
     requestAnimationFrame(() => bar.classList.add('rb-focus-open'));
-    // The cab room (drawn cab + mic) is the main editor — sits centre-left so
-    // the catalog rail can pin to the right (mirrors amp: gear left, rail right).
+    // Cab room editor sits under the component browser (browser is z:80).
     const ov = document.createElement('div');
     ov.id = 'rb-studio-cabroom';
-    // Centred between the two rails (mic left, catalog right), no panel chrome —
-    // the cab fills the middle like a focused amp/pedal.
+    // Centred cab face; mic rail may dock left. Browser covers while picking.
     ov.style.cssText = 'position:absolute; left:50%; top:8%; transform:translateX(-50%); z-index:60; width:min(46%,520px); height:74%;';
     ov.innerHTML = `<div class="relative" style="height:100%"><div id="rb-cabroom-studio" style="height:100%"></div></div>`;
     room.appendChild(ov);
@@ -15984,9 +16572,12 @@ async function rbStudioFastCabSwapInPlace(base) {
             fit.innerHTML = `${rbCabArtFor(base)}${rbCabSpeakerSilhouettesSvg(entry, a)}`
                 + `<div class="rb-cabmic ${st.angle_deg ? 'rb-cabmic-ang' : ''}" id="rb-cabmic-studio" style="left:${_fx * 100}%;top:${_fy * 100}%">${rbMicOnCabHtml(st.mic, 'studio')}</div>`;
         }
-        // Reflect the pick in the catalog rail (highlight) without rebuilding it.
-        document.querySelectorAll('#rb-swap-rail .rb-swap-item').forEach(el => {
-            try { el.classList.toggle('rb-swap-current', el.dataset && el.dataset.gear && el.dataset.gear.startsWith(base)); } catch (_) {}
+        // Reflect the pick in the catalog browser (highlight) without rebuilding it.
+        document.querySelectorAll('#rb-swap-panel .rb-swap-item').forEach(el => {
+            try {
+                const g = el.dataset && el.dataset.gear;
+                el.classList.toggle('rb-swap-current', !!(g && (g === base || g.startsWith(base + '_'))));
+            } catch (_) {}
         });
         // Also refresh the main Studio-room cab face(s) BEHIND the overlay, so
         // leaving the Cab Room shows the NEW cab at once — this fast path skips
