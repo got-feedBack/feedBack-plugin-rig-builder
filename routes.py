@@ -4315,6 +4315,7 @@ def _download_candidate(
     settings: dict,
     model_id_override: int | None = None,
     model_name_override: str | None = None,
+    category_override: str | None = None,
 ) -> tuple[str, str] | None:
     """Download a model for a tone3000 tone id and stage it in the
     right nam_tone directory.
@@ -4501,7 +4502,10 @@ def _download_candidate(
         return ("ir", final_name)
 
     # NAM model — into nam_models/<category>/.
-    subdir = _category_subdir_for_gear(rs_gear)
+    if category_override in _CATEGORY_SUBDIR:
+        subdir = _CATEGORY_SUBDIR[category_override]
+    else:
+        subdir = _category_subdir_for_gear(rs_gear)
     models_dir = _config_dir / "nam_models" / subdir
     models_dir.mkdir(parents=True, exist_ok=True)
     bare_name = f"{bare_stem}.nam"
@@ -12755,13 +12759,23 @@ def setup(app, context):
             return JSONResponse({"error": "tone3000_id required"}, 400)
         rs_gear = data.get("rs_gear") or "audition"
         model_id = data.get("model_id")
-        category = (_load_rs_to_real().get(rs_gear) or {}).get("category", "amp")
+        # Prefer an explicit Studio browser category (amp/pedal/rack/cab) so
+        # previews land in nam_models/pedals|amps|… instead of other/.
+        cat_hint = (data.get("category") or "").strip().lower()
+        if cat_hint in ("amp", "pedal", "rack", "cab", "ir"):
+            category = "cab" if cat_hint in ("cab", "ir") else cat_hint
+        else:
+            category = (_load_rs_to_real().get(rs_gear) or {}).get("category", "amp")
         is_ir = bool(data.get("is_ir")) or category == "cab"
+        # Synthetic rs_gear so _download_candidate's subdir lookup hits the
+        # right folder when the client didn't pass a real Rocksmith gear id.
+        dl_gear = rs_gear if rs_gear and rs_gear != "audition" else f"__preview_{category}__"
         try:
             res = _download_candidate(
                 tone3000_id=int(tone3000_id), is_ir=is_ir,
-                rs_gear=rs_gear, settings=_load_settings(),
+                rs_gear=dl_gear, settings=_load_settings(),
                 model_id_override=int(model_id) if model_id is not None else None,
+                category_override=category,
             )
         except Exception as e:
             log.exception("audition_candidate failed")

@@ -262,6 +262,96 @@
         display:grid; place-items:center; font-size:12px; box-sizing:border-box;
     }
     .rb-stomp-add:hover{ border-color:#6ea0e0; color:#e6edf7; }
+    .rb-stomp.rb-stomp-preview,
+    .rb-stomp.rb-stomp-nam{
+        border-style:dashed; border-color:rgba(110,190,255,.65);
+        background:linear-gradient(160deg, #243448, #152030);
+        box-shadow:0 0 0 1px rgba(110,190,255,.18);
+        cursor:grab;
+    }
+    .rb-stomp.rb-stomp-nam .rb-stomp-led{ background:#6eb8ff; box-shadow:0 0 6px rgba(110,184,255,.55); }
+    .rb-stomp-face-nam{
+        background:radial-gradient(circle at 40% 30%, #3a5478, #121822 70%) !important;
+        border:1px dashed rgba(140,200,255,.35);
+    }
+    .rb-stomp-nam-mark{
+        font-size:13px; font-weight:800; letter-spacing:.12em; color:#b7dcff;
+    }
+    .rb-stomp-preview-tag{
+        font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+        color:#9ec8ef; margin-top:2px;
+    }
+    .rb-stomp-preview-actions,
+    .rb-focus-preview-actions{
+        display:flex; gap:4px; flex-wrap:wrap; justify-content:center; margin-top:4px;
+    }
+    .rb-stomp-preview-actions button,
+    .rb-focus-preview-actions button,
+    .rb-preview-save, .rb-preview-discard{
+        font-size:10px; font-weight:700; padding:3px 7px; border-radius:5px; cursor:pointer;
+        border:1px solid rgba(140,180,230,.35); background:rgba(20,28,40,.9); color:#e6edf7;
+    }
+    .rb-preview-save{ border-color:rgba(90,220,150,.5); color:#d8ffe8; background:rgba(40,90,60,.45); }
+    .rb-preview-discard{ border-color:rgba(220,120,120,.45); color:#ffd4d4; background:rgba(90,40,40,.4); }
+    .rb-focus-preview-actions-bar{
+        position:absolute; left:50%; bottom:18px; transform:translateX(-50%);
+        z-index:40; padding:8px 12px; border-radius:10px;
+        background:rgba(12,16,24,.88); border:1px solid rgba(120,170,230,.35);
+        align-items:center; gap:8px;
+    }
+    .rb-focus-preview-lbl{ font-size:11px; color:#9ec8ef; margin-right:4px; }
+    .rb-amp-preview{
+        outline:2px dashed rgba(110,190,255,.55); outline-offset:2px;
+    }
+    .rb-stomp-power{
+        margin-top:2px; font-size:9px; font-weight:800; letter-spacing:.08em;
+        padding:2px 8px; border-radius:999px; cursor:pointer; line-height:1.4;
+        border:1px solid rgba(90,220,150,.5); background:rgba(32,78,52,.85); color:#e7fff2;
+    }
+    .rb-stomp .rb-stomp-power{ margin-top:auto; }
+    .rb-stomp.rb-stomp-bypassed .rb-stomp-power,
+    .rb-pedal.rb-pedal-bypassed .rb-stomp-power{
+        border-color:rgba(160,170,185,.35); background:rgba(28,32,40,.85); color:#9aa6b8;
+    }
+    .rb-pedal .rb-stomp-power{ position:absolute; left:50%; bottom:-6px; transform:translateX(-50%); z-index:4; }
+    .rb-stomp.rb-stomp-dragging{ opacity:.45; }
+    .rb-stomp.rb-stomp-drop-before{ box-shadow:inset 3px 0 0 #6eb8ff; }
+    .rb-stomp.rb-stomp-drop-after{ box-shadow:inset -3px 0 0 #6eb8ff; }
+    .rb-pedal.rb-pedal-nam{
+        outline:2px dashed rgba(110,190,255,.7); outline-offset:3px; border-radius:6px; cursor:grab;
+    }
+    .rb-pedal-nam-badge{
+        position:absolute; left:50%; top:4px; transform:translateX(-50%);
+        z-index:2; font-size:9px; font-weight:800; letter-spacing:.08em;
+        color:#d7ebff; background:rgba(20,36,56,.85); padding:2px 6px; border-radius:4px;
+        pointer-events:none;
+    }
+    .rb-pedal .rb-stomp-preview-actions{
+        position:absolute; left:50%; bottom:-2px; transform:translateX(-50%);
+        z-index:3; white-space:nowrap;
+    }
+    .rb-pedal.rb-pedal-dragging{ opacity:.45; }
+    .rb-pedal.rb-pedal-drop-before{ outline-color:#6eb8ff; }
+    .rb-strip-board-label span.rb-dnd-hint{ opacity:.75; }
+    .rb-preview-banner{ z-index:35; }
+    #rb-browse-place{
+        position:fixed; inset:0; z-index:120; background:rgba(0,0,0,.55);
+        display:flex; align-items:center; justify-content:center;
+    }
+    #rb-browse-place .rb-browse-place-card{
+        width:min(420px,92vw); background:#12161e; border:1px solid rgba(120,165,225,.28);
+        border-radius:14px; padding:16px; box-shadow:0 20px 60px rgba(0,0,0,.55);
+    }
+    #rb-browse-place h3{ margin:0 0 8px; color:#fff; font-size:15px; font-weight:650; }
+    #rb-browse-place p{ margin:0 0 12px; color:#9fb0cc; font-size:12px; line-height:1.4; }
+    #rb-browse-place .rb-browse-place-actions{ display:flex; flex-direction:column; gap:8px; }
+    #rb-browse-place button{
+        cursor:pointer; text-align:left; border-radius:9px; padding:10px 12px; font-size:13px;
+        border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.06); color:#eaf1fb;
+    }
+    #rb-browse-place button:hover{ background:rgba(120,160,220,.2); border-color:rgba(120,170,240,.45); }
+    #rb-browse-place button.primary{ background:rgba(90,220,150,.16); border-color:rgba(90,220,150,.4); color:#eafff3; }
+    #rb-browse-place .rb-browse-place-cancel{ margin-top:4px; opacity:.85; }
     .rb-strip-post-extra{ margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; min-width:0; }
     .rb-strip-chip{
         font-size:11px; padding:4px 8px; border-radius:8px; border:1px solid #2a3548;
@@ -272,6 +362,12 @@
     #rb-studio-room.rb-focus-active .rb-strip,
     #rb-studio-room.rb-pfocus .rb-strip{
         opacity:.18; filter:blur(2px); pointer-events:none; transition:opacity .35s ease, filter .35s ease;
+    }
+    /* While focus is open but the browser hasn't mounted yet (slow catalog),
+       keep the focused amp/pedal interactive so knobs aren't locked out. */
+    #rb-studio-room.rb-focus-active:not(.rb-swap-active) .rb-strip .rb-amp-stack.rb-amp-focused,
+    #rb-studio-room.rb-focus-active:not(.rb-swap-active) .rb-strip .rb-amp-stack.rb-amp-focused *{
+        opacity:1 !important; filter:none !important; pointer-events:auto !important;
     }
     .rb-tone-save-menu{ display:grid; gap:6px; padding:8px; }
     .rb-tone-save-hint{ font-size:11px; color:#9fb0c8; line-height:1.35; padding:2px 4px 4px; }
@@ -354,6 +450,13 @@
     .rb-t3k-capsearch input{ width:100%; box-sizing:border-box; margin:2px 0 5px; background:#0e131b;
         border:1px solid rgba(255,255,255,.1); border-radius:7px; color:#e6edf7; font-size:11px; padding:5px 8px; }
     .rb-t3k-cap{ display:flex; align-items:center; gap:8px; padding:3px 4px; border-radius:6px; }
+    .rb-cap-role{
+        flex:0 0 auto; font-size:10px; font-weight:700; letter-spacing:.03em;
+        padding:2px 7px; border-radius:999px; cursor:pointer;
+        color:#d7ecff; background:rgba(80,120,180,.28); border:1px solid rgba(140,180,230,.45);
+    }
+    .rb-t3k-inccab{ display:flex; align-items:center; gap:6px; font-size:12px; color:#c5d4ea; margin:4px 0 8px; cursor:pointer; }
+    .rb-swap-section{ grid-column:1/-1; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#9fb0c8; padding:8px 2px 2px; }
     .rb-t3k-cap:hover{ background:rgba(255,255,255,.04); }
     .rb-t3k-cap-name{ flex:1; min-width:0; font-size:11px; color:#cdd7e6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .rb-t3k-cap-size{ flex:0 0 auto; font-size:9px; text-transform:uppercase; color:#6b7a90; }
@@ -739,14 +842,38 @@
     .rb-swap-panel.rb-browse-panel{
         position:fixed !important; inset:0 !important; width:auto !important; height:auto !important;
         z-index:80; display:flex; flex-direction:column; gap:10px;
-        padding:14px 16px 18px; box-sizing:border-box;
+        padding:58px 16px 18px; box-sizing:border-box;
         background:rgba(10,14,22,.94);
         -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
         border:none; transform:translateY(8px); opacity:0;
         transition:transform .28s cubic-bezier(.33,0,.2,1), opacity .22s ease;
     }
+    #rb-stage-wrap:has(#rb-studio-room.rb-swap-active) .rb-studio-adv-btn{ visibility:hidden; pointer-events:none; }
     .rb-swap-panel.rb-browse-panel.rb-swap-open{ transform:none; opacity:1; }
-    .rb-browse-top{ display:flex; align-items:center; gap:10px; flex:0 0 auto; flex-wrap:wrap; }
+    .rb-browse-top{ display:flex; align-items:center; gap:10px; flex:0 0 auto; flex-wrap:nowrap; }
+    .rb-browse-board{
+        flex:0 0 auto; display:flex; flex-direction:column; gap:6px;
+        padding:10px 12px; border-radius:12px;
+        background:rgba(255,255,255,.03); border:1px solid rgba(120,165,225,.22);
+    }
+    .rb-browse-board-label{
+        font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#c5d4ea; font-weight:700;
+        display:flex; align-items:center; gap:8px; min-height:28px;
+    }
+    .rb-browse-board-label button{
+        text-transform:none; letter-spacing:0; font-size:12px; font-weight:700;
+        padding:4px 10px; border-radius:7px; cursor:pointer;
+    }
+    .rb-browse-board-row{
+        display:flex; gap:10px; align-items:stretch; overflow-x:auto; min-height:118px;
+    }
+    .rb-browse-board-row:has(.rb-browse-swapline){ min-height:0; align-items:center; }
+    .rb-browse-swapline{ font-size:15px; font-weight:650; color:#e7eef8; padding:4px 2px; }
+    .rb-browse-swapline.on{ color:#d7ecff; }
+    .rb-preview-banner{
+        position:static !important; transform:none !important; left:auto !important; top:auto !important;
+        margin:0; z-index:2; flex-wrap:wrap;
+    }
     .rb-browse-back{
         flex:0 0 auto; cursor:pointer; padding:8px 14px; border-radius:9px; font-size:13px; font-weight:600;
         color:#eaf1fb; background:rgba(120,160,220,.22); border:1px solid rgba(120,170,240,.45);
@@ -766,7 +893,22 @@
     .rb-swap-close{ flex:0 0 auto; width:30px; height:30px; border-radius:8px; cursor:pointer;
         background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); color:#aeb8cc; font-size:14px; }
     .rb-swap-close:hover{ background:rgba(255,255,255,.12); color:#fff; }
+    .rb-browse-source{
+        display:flex; gap:6px; flex:0 0 auto; align-items:center; flex-wrap:wrap;
+    }
+    .rb-browse-srcbtn{
+        cursor:pointer; border-radius:9px; padding:6px 12px; font-size:12px; font-weight:600;
+        color:#b7c6dc; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1);
+    }
+    .rb-browse-srcbtn:hover{ border-color:rgba(120,170,240,.4); color:#fff; }
+    .rb-browse-srcbtn.on{ color:#eaf1fb; background:rgba(120,160,220,.22); border-color:rgba(120,170,240,.5); }
+    .rb-inst-toggle{ margin-left:auto; display:flex; gap:4px; align-items:center; }
+    .rb-inst-toggle .rb-browse-srcbtn{ padding:6px 10px; }
     .rb-browse-tags{ display:flex; flex-wrap:wrap; gap:6px; flex:0 0 auto; max-height:72px; overflow:auto; }
+    #rb-browse-library{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; gap:10px; }
+    #rb-browse-library.hidden, #rb-browse-t3k.hidden{ display:none !important; }
+    #rb-browse-t3k{ flex:1 1 auto; min-height:0; overflow:auto; }
+    #rb-browse-t3k .rb-fc-results{ max-height:none; }
     .rb-browse-tag{
         cursor:pointer; border-radius:999px; padding:4px 10px; font-size:11px;
         color:#b7c6dc; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1);
