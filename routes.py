@@ -4434,33 +4434,40 @@ def _download_candidate(
             break
     if _title:
         bare_stem = _safe_filename_human(_title)
+        # Same human title can belong to two captures (gain steps, mics,
+        # a different tone). The model id keeps those files apart, and a
+        # re-download of this exact capture still hits the same path.
+        if model_id is not None:
+            tag = f"_m{model_id}"
+            if not bare_stem.endswith(tag):
+                bare_stem = f"{bare_stem}{tag}"
     else:
         bare_stem = (f"tone3000_{tone3000_id}_m{model_id}_"
                      f"{_safe_filename(rs_gear)}")
+
+    if category_override in _CATEGORY_SUBDIR:
+        subdir = _CATEGORY_SUBDIR[category_override]
+    elif category_override == "ir":
+        subdir = _CATEGORY_SUBDIR["cab"]
+    else:
+        subdir = _category_subdir_for_gear(rs_gear)
 
     if is_ir:
         # tone3000 IRs come in various formats; nam_tone wants 48k
         # mono float32 WAV. We stage to a temp path, normalize, and
         # only count bytes against the budget once the final file
         # exists.
-        # New layout: drop cab IRs into nam_irs/<category>/. For cabs
-        # that's `cabs/`; for the rare IR-platform tones that happen to
-        # be assigned to a non-cab gear (audition flow) the gear's own
-        # category is used. The DB-stored path is the RELATIVE form
-        # ("cabs/foo.wav") so the engine resolves it via the same
-        # _safe_child(root, name) hop as the legacy flat layout.
-        subdir = _category_subdir_for_gear(rs_gear)
+        # Cab IRs go in nam_irs/<category>/. category_override (Studio
+        # preview) wins over the gear map, same as NAM below, so a cab
+        # audition lands in cabs/ instead of other/. The DB path is
+        # relative ("cabs/foo.wav").
         irs_dir = _config_dir / "nam_irs" / subdir
         irs_dir.mkdir(parents=True, exist_ok=True)
         bare_name = f"{bare_stem}.wav"
         final_name = f"{subdir}/{bare_name}"   # DB-relative
         final_path = _config_dir / "nam_irs" / final_name
-        # Collision guard: if two different captures have the same
-        # title, suffix with the model_id so they don't clobber. Only
-        # triggers if the existing file's content differs (we can't
-        # tell, so just disambiguate to be safe when the existing
-        # entry isn't ours to reuse). A same-content collision is
-        # benign — the engine doesn't care who put the file there.
+        # The stem already includes the model id, so an existing file
+        # is this capture, not a different one that shared the title.
         if final_path.exists():
             return ("ir", final_name)
         tmp_path = irs_dir / (bare_name + ".raw")
@@ -4501,11 +4508,8 @@ def _download_candidate(
         _batch_disk_bytes += final_path.stat().st_size
         return ("ir", final_name)
 
-    # NAM model — into nam_models/<category>/.
-    if category_override in _CATEGORY_SUBDIR:
-        subdir = _CATEGORY_SUBDIR[category_override]
-    else:
-        subdir = _category_subdir_for_gear(rs_gear)
+    # NAM model — into nam_models/<category>/. subdir was chosen above
+    # so NAM and IR honor the same category override.
     models_dir = _config_dir / "nam_models" / subdir
     models_dir.mkdir(parents=True, exist_ok=True)
     bare_name = f"{bare_stem}.nam"
