@@ -5076,6 +5076,26 @@ function rbStudioPedalImg(p) {
 }
 function rbStudioIsBypassed(p) { return !!p._bypassed || !!(p.assigned && p.assigned.bypassed); }
 
+// Small engine badge for the Signal Strip (Bundled / NAM / IR / none).
+function rbStudioEngineBadge(p) {
+    if (!p) return '<span class="rb-engine">—</span>';
+    if (rbIsFullChainPiece(p)) return '<span class="rb-engine rb-engine-baked">Baked</span>';
+    const kind = (rbEffKind(p) || '').toLowerCase();
+    if (kind === 'ir') return '<span class="rb-engine rb-engine-ir">IR</span>';
+    if (kind === 'nam' || kind === 'nam_fullchain') return '<span class="rb-engine rb-engine-nam">NAM</span>';
+    if (kind === 'vst') {
+        return rbIsBundledVstPath(rbEffVstPath(p))
+            ? '<span class="rb-engine rb-engine-bundled">Bundled</span>'
+            : '<span class="rb-engine">VST</span>';
+    }
+    // Cab pieces often resolve as IR via assigned file even when kind is empty.
+    const cat = (p.category || p.rs_category || '').toLowerCase();
+    if (cat === 'cab' || (p.slot || '').toLowerCase() === 'cabinet') {
+        return '<span class="rb-engine rb-engine-ir">IR</span>';
+    }
+    return '<span class="rb-engine">—</span>';
+}
+
 // Mirror each saved knob value under its param NAME as well as its numeric id.
 // On a fresh room load there's no live VST param model to map ids → knobs, so
 // the static face thumbnail resolves values by NAME (via the canvas spec). Keep
@@ -5242,9 +5262,368 @@ function rbStudioRefreshRoomMic() {
     });
 }
 
+function rbStudioViewMode() {
+    const v = (rbLsGet('rig_builder.studioViewMode') || 'strip').toLowerCase();
+    return v === 'room' ? 'room' : 'strip';
+}
+function rbStudioSetViewMode(mode) {
+    const m = (mode === 'room') ? 'room' : 'strip';
+    rbLsSet('rig_builder.studioViewMode', m);
+    try { rbStudioSyncViewModeBtn(); } catch (_) {}
+    try { rbRenderStudioRoom(); } catch (_) {}
+}
+window.rbStudioToggleViewMode = function rbStudioToggleViewMode() {
+    rbStudioSetViewMode(rbStudioViewMode() === 'room' ? 'strip' : 'room');
+};
+function rbStudioSyncViewModeBtn() {
+    const btn = document.getElementById('rb-studio-viewmode-btn');
+    if (!btn) return;
+    const room = rbStudioViewMode() === 'room';
+    btn.textContent = room ? '▭ Strip' : '⌂ Room';
+    btn.title = room
+        ? 'Switch to the simplified Signal Strip'
+        : 'Switch to the 3D Studio room';
+    btn.setAttribute('aria-pressed', room ? 'true' : 'false');
+}
 function rbRenderStudioRoom() {
+    const mode = rbStudioViewMode();
+    if (mode === 'room') rbRenderStudioRoom3d();
+    else rbRenderStudioStrip();
+    try { rbStudioSyncViewModeBtn(); } catch (_) {}
+    // Room rebuild wipes children — re-attach the tone3000 preview banner.
+    try { rbStudioBrowseEnsureStagingBanner(); } catch (_) {}
+    try { rbStudioBindPedalboardDnD(); } catch (_) {}
+}
+
+// Strip-mode stomp card. Temp tone3000 NAMs get a clear NAM card so you can
+// drag them into signal order among the other pedals.
+function rbStudioStripStompHtml(pd) {
+    const p = pd.p || {};
+    const img = rbStudioPedalImg(p);
+    const name = p.real_name || p.type || 'Pedal';
+    const byp = rbStudioIsBypassed(p) ? ' rb-stomp-bypassed' : '';
+    const isNamPrev = !!p._previewStaging;
+    const kind = (p._uploaded_kind || (p.assigned && p.assigned.kind) || '').toLowerCase();
+    const namish = isNamPrev || kind === 'nam' || /\.nam$/i.test(p._uploaded_file || (p.assigned && p.assigned.file) || '');
+    const cls = `rb-stomp${byp}${isNamPrev ? ' rb-stomp-preview' : ''}${namish && isNamPrev ? ' rb-stomp-nam' : ''}`;
+    const face = (isNamPrev && namish)
+        ? `<div class="rb-stomp-face rb-stomp-face-nam"><span class="rb-stomp-nam-mark">NAM</span></div>`
+        : `<div class="rb-stomp-face">${img ? `<img src="${img}" alt="${rbEsc(name)}">` : `<div class="rb-pedal-fallback">${rbEsc(name)}</div>`}</div>`;
+    const tag = isNamPrev
+        ? `<div class="rb-stomp-preview-tag">${namish ? 'NAM' : 'Temp'}</div>`
+        : '';
+    return `<div class="${cls}" draggable="true" data-pedal-idx="${pd.idx}"
+            onclick="if(window._rbPedalDnDMoved){window._rbPedalDnDMoved=false;return;}event.stopPropagation();rbStudioClickPedal(${pd.idx})"
+            title="${rbEsc(name)}${isNamPrev ? ' — temp NAM, drag to place' : ' — drag to reorder'}">
+        <div class="rb-stomp-led"></div>
+        ${face}
+        <div class="rb-stomp-name">${rbEsc(name)}</div>
+        ${tag}
+        <button type="button" class="rb-stomp-power" onclick="event.stopPropagation();event.preventDefault();rbStudioTogglePieceBypass(${pd.idx})" title="${rbStudioIsBypassed(p) ? 'Bypassed — click to turn on' : 'On — click to bypass'}">${rbStudioIsBypassed(p) ? 'OFF' : 'ON'}</button>
+        ${rbStudioEngineBadge(p)}
+        <div class="rb-stomp-foot"></div>
+    </div>`;
+}
+
+function rbStudioRoomPedalHtml(pd) {
+    const p = pd.p || {};
+    const img = rbStudioPedalImg(p);
+    const name = p.real_name || p.type || 'Pedal';
+    const byp = rbStudioIsBypassed(p) ? 'rb-pedal-bypassed' : '';
+    const isNamPrev = !!p._previewStaging;
+    const cls = `rb-pedal ${byp}${isNamPrev ? ' rb-pedal-nam' : ''}`.trim();
+    return `<div class="${cls}" draggable="true" data-pedal-idx="${pd.idx}"
+            onclick="if(window._rbPedalDnDMoved){window._rbPedalDnDMoved=false;return;}event.stopPropagation();rbStudioClickPedal(${pd.idx})"
+            title="${rbEsc(name)}${isNamPrev ? ' — NAM preview · Save or Discard' : ' — drag to reorder · click to edit'}">
+        ${isNamPrev ? `<div class="rb-pedal-nam-badge">NAM</div>` : ''}
+        ${img ? `<img src="${img}" alt="${rbEsc(name)}">`
+              : `<div class="rb-pedal-fallback">${isNamPrev ? 'NAM' : rbEsc(name)}</div>`}
+        <button type="button" class="rb-stomp-power" onclick="event.stopPropagation();event.preventDefault();rbStudioTogglePieceBypass(${pd.idx})" title="${rbStudioIsBypassed(p) ? 'Bypassed' : 'On'}">${rbStudioIsBypassed(p) ? 'OFF' : 'ON'}</button>
+    </div>`;
+}
+
+// HTML5 drag-reorder on strip + room pedalboards. Dropping updates chain order
+// (and slot if you cross pre↔post on the room board) then reloads live audio.
+function rbStudioBindPedalboardDnD() {
+    const room = document.getElementById('rb-studio-room');
+    if (!room) return;
+    room.querySelectorAll('[data-rb-dnd="pedals"]').forEach(board => {
+        if (board._rbDndBound) return;
+        board._rbDndBound = true;
+        board.addEventListener('dragstart', (e) => {
+            const card = e.target.closest('[data-pedal-idx]');
+            if (!card || !board.contains(card)) return;
+            const idx = parseInt(card.getAttribute('data-pedal-idx'), 10);
+            if (!Number.isFinite(idx)) return;
+            window._rbPedalDnDFrom = idx;
+            window._rbPedalDnDMoved = false;
+            try { e.dataTransfer.setData('text/plain', String(idx)); e.dataTransfer.effectAllowed = 'move'; } catch (_) {}
+            card.classList.add(card.classList.contains('rb-pedal') ? 'rb-pedal-dragging' : 'rb-stomp-dragging');
+        });
+        board.addEventListener('dragend', () => {
+            board.querySelectorAll('.rb-stomp-dragging,.rb-pedal-dragging,.rb-stomp-drop-before,.rb-stomp-drop-after,.rb-pedal-drop-before')
+                .forEach(el => el.classList.remove('rb-stomp-dragging', 'rb-pedal-dragging', 'rb-stomp-drop-before', 'rb-stomp-drop-after', 'rb-pedal-drop-before'));
+            window._rbPedalDnDFrom = null;
+        });
+        board.addEventListener('dragover', (e) => {
+            const card = e.target.closest('[data-pedal-idx]');
+            if (!card || !board.contains(card)) return;
+            e.preventDefault();
+            try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+            board.querySelectorAll('.rb-stomp-drop-before,.rb-stomp-drop-after,.rb-pedal-drop-before')
+                .forEach(el => el.classList.remove('rb-stomp-drop-before', 'rb-stomp-drop-after', 'rb-pedal-drop-before'));
+            const rect = card.getBoundingClientRect();
+            const before = (e.clientX - rect.left) < rect.width * 0.55;
+            if (card.classList.contains('rb-pedal')) card.classList.add('rb-pedal-drop-before');
+            else card.classList.add(before ? 'rb-stomp-drop-before' : 'rb-stomp-drop-after');
+            card._rbDropBefore = before;
+        });
+        board.addEventListener('drop', (e) => {
+            const card = e.target.closest('[data-pedal-idx]');
+            if (!card || !board.contains(card)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const toIdx = parseInt(card.getAttribute('data-pedal-idx'), 10);
+            const fromIdx = window._rbPedalDnDFrom;
+            const before = card._rbDropBefore !== false;
+            board.querySelectorAll('.rb-stomp-drop-before,.rb-stomp-drop-after,.rb-pedal-drop-before')
+                .forEach(el => el.classList.remove('rb-stomp-drop-before', 'rb-stomp-drop-after', 'rb-pedal-drop-before'));
+            if (!Number.isFinite(fromIdx) || !Number.isFinite(toIdx) || fromIdx === toIdx) return;
+            window._rbPedalDnDMoved = true;
+            rbStudioReorderPedalByDrag(fromIdx, toIdx, before);
+        });
+    });
+}
+
+function rbStudioReorderPedalByDrag(fromIdx, toIdx, insertBefore) {
+    const chain = rbStudioCurrentChain();
+    if (!chain[fromIdx] || !chain[toIdx]) return;
+    const moving = chain[fromIdx];
+    const target = chain[toIdx];
+    // Crossing pre↔post on the room board adopts the target's side of the amp.
+    const tPost = (target.slot || '').toLowerCase() === 'post_pedal';
+    const mPost = (moving.slot || '').toLowerCase() === 'post_pedal';
+    if (tPost !== mPost && (moving.category || moving.rs_category || '').toLowerCase() !== 'rack') {
+        moving.slot = tPost ? 'post_pedal' : 'pre_pedal';
+    }
+    const piece = chain.splice(fromIdx, 1)[0];
+    let insertAt = toIdx;
+    if (fromIdx < toIdx) insertAt = toIdx - 1;
+    if (!insertBefore) insertAt += 1;
+    insertAt = Math.max(0, Math.min(chain.length, insertAt));
+    chain.splice(insertAt, 0, piece);
+    try { rbStudioPersist(); } catch (_) {}
+    // Soft refresh so an open tone3000 browser isn't destroyed mid-drag.
+    if (document.getElementById('rb-swap-panel')) {
+        try { rbStudioBrowsePaintPedalboards(); } catch (_) {}
+        try { rbStudioBrowseEnsureStagingBanner(); } catch (_) {}
+    } else {
+        try { rbRenderStudioRoom(); } catch (_) {}
+        try { rbStudioBrowseEnsureStagingBanner(); } catch (_) {}
+    }
+    rbStudioReloadLiveChainAfterSwap().catch(() => {});
+}
+
+function rbRenderStudioStrip() {
     const el = document.getElementById('rb-studio-room');
     if (!el) return;
+    // Custom gear loaded from a saved tone lacks its UI until opened — attach it
+    // up front so the strip shows the created face on first paint (re-render once
+    // the gear map arrives if it wasn't cached yet).
+    try { rbEnsureChainCustomUi(rbStudioCurrentChain(), () => { try { rbRenderStudioRoom(); } catch (_) {} }); } catch (_) {}
+    // Re-rendering wipes any open focus layer / bar / swap rail (room children),
+    // so clear the focus state + tear down its editor VST — otherwise switching
+    // tones mid-focus strands a broken, can't-exit focus view.
+    if (el.classList.contains('rb-focus-active') || el.classList.contains('rb-pfocus')) {
+        el.classList.remove('rb-focus-active', 'rb-pfocus', 'rb-gfocus-pedal', 'rb-gfocus-rack', 'rb-swap-active');
+        rbState._studioPedalAddMode = false;
+        try { rbTeardownVstEditor(rbAudioApi()); } catch (_) {}
+    }
+    el.classList.add('rb-strip-mode');
+    const g = rbStudioGroupDefault();
+    const amp = g.amp[0];
+    const cabEntry = g.cab[0];
+    const cabName = cabEntry ? (cabEntry.p.real_name || cabEntry.p.type || 'Cab') : 'Cab';
+    const knobs = RB_STUDIO_KNOB_ANGLES
+        .map(deg => `<span class="rb-knob" style="--rb-knob-rot:${deg}deg"></span>`).join('');
+
+    const amps = g.amp.slice(0, 6);
+    const primaryAmp = amps[0];
+    const ampExtra = amps.length > 1 ? ` <span class="rb-engine">+${amps.length - 1}</span>` : '';
+    let ampBlock;
+    if (primaryAmp) {
+        const nm = primaryAmp.p.real_name || primaryAmp.p.type || 'Amp';
+        const img = rbStudioPedalImg(primaryAmp.p);
+        const face = img
+            ? `<div class="rb-amp-face"><img src="${img}" alt="${rbEsc(nm)}"></div>`
+            : `<div class="rb-amp-head"><div class="rb-amp-name">${rbEsc(nm)}</div><div class="rb-amp-knobs">${knobs}</div></div>`;
+        const ampPrev = primaryAmp.p && primaryAmp.p._previewStaging;
+        ampBlock = `<div class="rb-strip-block rb-amp-stack${ampPrev ? ' rb-amp-preview' : ''}" data-amp-idx="${primaryAmp.idx}"
+                         onclick="rbStudioClickAmp(${primaryAmp.idx})" title="${rbEsc(nm)}${ampPrev ? ' — preview · Save or Discard' : ' — edit / swap'}">
+                ${face}
+                <div class="rb-strip-k">Amp${ampExtra}${ampPrev ? ' · preview' : ''}</div>
+                <div class="rb-strip-n">${rbEsc(nm)}</div>
+                ${rbStudioEngineBadge(primaryAmp.p)}
+            </div>`;
+        // Keep extra amps addressable for multi-amp focus (hidden; Advanced still owns parallel layout).
+        ampBlock += amps.slice(1).map(entry => {
+            const n = entry.p.real_name || entry.p.type || 'Amp';
+            return `<div class="rb-amp-stack rb-amp-extra" data-amp-idx="${entry.idx}" style="display:none"
+                         onclick="rbStudioClickAmp(${entry.idx})" title="${rbEsc(n)}">
+                        <div class="rb-amp-face"></div><div class="rb-amp-cab"></div>
+                    </div>`;
+        }).join('');
+    } else {
+        ampBlock = `<div class="rb-strip-block rb-amp-stack rb-amp-stack-empty rb-strip-empty"
+                         onclick="rbStudioBrowseAmps()" title="Click to add an amp">
+                <div class="rb-amp-face rb-amp-face-empty">＋ amp</div>
+                <div class="rb-strip-k">Amp</div>
+                <div class="rb-strip-n">Add amp</div>
+            </div>`;
+    }
+
+    let cabBlock;
+    if (cabEntry) {
+        cabBlock = `<div class="rb-strip-block${cabEntry.p._previewStaging ? ' rb-amp-preview' : ''}" onclick="rbStudioOpenCabRoom()" title="${rbEsc(cabName)}${cabEntry.p._previewStaging ? ' — preview · Save or Discard' : ' — Cab Room'}">
+                <div class="rb-strip-k">Cab${cabEntry.p._previewStaging ? ' · preview' : ''}</div>
+                <div class="rb-strip-n">${rbEsc(cabName)}</div>
+                ${rbStudioEngineBadge(cabEntry.p)}
+            </div>`;
+    } else {
+        cabBlock = `<div class="rb-strip-block rb-strip-empty" onclick="rbStudioOpenCabRoom()" title="Add a cab">
+                <div class="rb-strip-k">Cab</div>
+                <div class="rb-strip-n">＋ cab</div>
+            </div>`;
+    }
+
+    const racks = g.rack.slice(0, RB_MAX_RACKS);
+    const preAll = g.pedal.filter(e => ((e.p.slot || '').toLowerCase() !== 'post_pedal'));
+    // Soft cap + one temp NAM preview so the staging card isn't clipped off the board.
+    const preLim = preAll.some(e => e.p && e.p._previewStaging) ? RB_MAX_PEDALS + 1 : RB_MAX_PEDALS;
+    const prePedals = preAll.slice(0, preLim);
+    const primaryRack = racks[0];
+    let postBlock;
+    if (primaryRack) {
+        const rn = primaryRack.p.real_name || primaryRack.p.type || 'Rack';
+        const byp = rbStudioIsBypassed(primaryRack.p) ? ' rb-stomp-bypassed' : '';
+        const moreRacks = racks.length > 1 ? ` <span class="rb-engine">+${racks.length - 1}</span>` : '';
+        postBlock = `<div class="rb-strip-block${byp}" onclick="rbStudioClickRack(${primaryRack.idx})" title="${rbEsc(rn)} — edit / swap">
+                <div class="rb-strip-k">Post${moreRacks}</div>
+                <div class="rb-strip-n">${rbEsc(rn)}</div>
+                ${rbStudioEngineBadge(primaryRack.p)}
+                <div class="rb-strip-post-extra">
+                    <button type="button" class="rb-strip-chip" onclick="event.stopPropagation();rbStudioBrowseRacks()">+ rack</button>
+                </div>
+                ${racks.length > 1 ? `<div class="rb-strip-post-extra">${racks.slice(1).map(r => {
+                    const name = r.p.real_name || r.p.type || 'Rack';
+                    return `<span class="rb-strip-chip" onclick="event.stopPropagation();rbStudioClickRack(${r.idx})" title="${rbEsc(name)}">${rbEsc(name)}</span>`;
+                }).join('')}</div>` : ''}
+            </div>`;
+    } else {
+        postBlock = `<div class="rb-strip-block rb-strip-empty" onclick="rbStudioBrowseRacks()" title="Add a rack after the amp">
+                <div class="rb-strip-k">Post</div>
+                <div class="rb-strip-n">＋ rack</div>
+            </div>`;
+    }
+
+    // Do NOT reuse .rb-pedal / .rb-pedalboard here — those class names carry absolute
+    // 3D-room layout and push stomps out of bounds in strip mode.
+    const pedalHtml = prePedals.length
+        ? prePedals.map(pd => rbStudioStripStompHtml(pd)).join('')
+        : '';
+    const canAddPedal = prePedals.filter(e => !(e.p && e.p._previewStaging)).length < RB_MAX_PEDALS;
+    const boardHtml = `
+        <div class="rb-strip-board">
+            <div class="rb-strip-board-label">Pedalboard <span class="rb-dnd-hint">drag to reorder · Browse for Library / tone3000</span></div>
+            <div class="rb-strip-pedals" data-rb-dnd="pedals">
+                ${pedalHtml}
+                <button type="button" class="rb-stomp-add" onclick="event.stopPropagation();rbState._browsePedalSlot='pre_pedal';rbStudioOpenPedalBrowser()" title="Open pedal browser">Browse</button>
+            </div>
+        </div>`;
+
+    // Full-chain / full-rig NAM: when active, the strip becomes THAT capture —
+    // not a greyed amp/cab/pedal board that isn't what's sounding.
+    const _fcPiece = rbFindFullChainPiece(rbStudioCurrentChain());
+    const _fcOn = !!(_fcPiece && !rbFcBypassed(_fcPiece));
+    const fcName = _fcPiece
+        ? (_fcPiece.real_name || _fcPiece.name || _fcPiece.type || 'NAM')
+        : '';
+    let fcBannerHtml = '';
+    // When the override is OFF but still attached, keep the compact banner so
+    // Enable can restore it without hunting for the Full-chain button.
+    if (_fcPiece && !_fcOn) {
+        fcBannerHtml = `<div class="rb-fc-banner off">
+            <span class="rb-fc-banner-txt">🎛 Full-rig (off): <b>${rbEsc(fcName)}</b></span>
+            <button class="rb-fc-banner-btn" onclick="rbToggleFullChainOverride(true)">Enable</button>
+            <button class="rb-fc-banner-x" onclick="rbRemoveFullChainOverride()" title="Remove the full-rig override">✕</button>
+        </div>`;
+    }
+    el.classList.toggle('rb-fullchain-active', _fcOn);
+
+    let stripBody;
+    if (_fcOn && _fcPiece) {
+        const underlying = rbStudioGroupDefault();
+        const nAmp = underlying.amp.length, nCab = underlying.cab.length;
+        const nPed = underlying.pedal.length, nRack = underlying.rack.length;
+        const parts = [];
+        if (nAmp) parts.push(nAmp + (nAmp === 1 ? ' amp' : ' amps'));
+        if (nPed) parts.push(nPed + (nPed === 1 ? ' pedal' : ' pedals'));
+        if (nCab) parts.push(nCab === 1 ? 'cab' : 'cabs');
+        if (nRack) parts.push(nRack + (nRack === 1 ? ' rack' : ' racks'));
+        const paused = parts.length
+            ? `Discrete gear paused (${parts.join(', ')}). Disable to edit amp / cab / pedals again.`
+            : 'This tone is a single baked NAM capture (amp + cab + pedals in one file).';
+        stripBody = `
+            <div class="rb-strip rb-strip-fullrig-mode" id="rb-signal-strip">
+                <div class="rb-strip-fullrig" title="${rbEsc(fcName)}">
+                    <div class="rb-strip-fullrig-k">Full rig NAM</div>
+                    <div class="rb-strip-fullrig-n">${rbEsc(fcName)}</div>
+                    <div class="rb-strip-fullrig-sub">One capture is driving the tone — amp, cab, and pedals are baked in, so the discrete strip is hidden while this is on.</div>
+                    <div class="rb-strip-fullrig-meta">
+                        <span class="rb-engine rb-engine-baked">Baked</span>
+                        <span class="rb-engine rb-engine-nam">NAM</span>
+                    </div>
+                    <div class="rb-strip-fullrig-actions">
+                        <button type="button" class="rb-strip-fc-primary" onclick="rbStudioLoadFullChainNam()">Swap full rig…</button>
+                        <button type="button" onclick="rbToggleFullChainOverride(false)">Disable</button>
+                        <button type="button" onclick="rbRemoveFullChainOverride()" title="Remove the full-rig override">Remove</button>
+                    </div>
+                    <div class="rb-strip-fullrig-note">${rbEsc(paused)}</div>
+                </div>
+            </div>`;
+    } else {
+        stripBody = `
+            <div class="rb-strip" id="rb-signal-strip">
+                <div class="rb-strip-spine">
+                    ${ampBlock}
+                    <div class="rb-strip-flow">→</div>
+                    ${cabBlock}
+                    <div class="rb-strip-flow">→</div>
+                    ${postBlock}
+                </div>
+                ${boardHtml}
+            </div>`;
+    }
+
+    el.innerHTML = `
+        ${fcBannerHtml}
+        ${rbStudioBrowseStagingBannerHtml()}
+        ${stripBody}`;
+    // Focus overlays still expect a camera host; keep a minimal stub for blur CSS.
+    if (!document.getElementById('rb-room-camera')) {
+        const cam = document.createElement('div');
+        cam.id = 'rb-room-camera';
+        cam.className = 'rb-room-camera';
+        cam.style.cssText = 'position:absolute;inset:0;pointer-events:none;opacity:0;z-index:0';
+        el.appendChild(cam);
+    }
+}
+
+
+function rbRenderStudioRoom3d() {
+    const el = document.getElementById('rb-studio-room');
+    if (!el) return;
+    el.classList.remove('rb-strip-mode');
     // Custom gear loaded from a saved tone lacks its UI until opened — attach it
     // up front so the room shows the created face on first paint (re-render once
     // the gear map arrives if it wasn't cached yet).
@@ -5362,16 +5741,9 @@ function rbRenderStudioRoom() {
 
     const pedalHtml = `
         <div class="rb-pedalboard ${g.pedal.length ? '' : 'rb-pedalboard-empty'}"
-             onclick="rbStudioBrowsePedals()" title="${g.pedal.length ? 'Pedalboard' : 'Click to add a pedal'}">
-            ${g.pedal.length ? g.pedal.map(pd => {
-                const img = rbStudioPedalImg(pd.p);
-                const name = pd.p.real_name || pd.p.type || 'Pedal';
-                const byp = rbStudioIsBypassed(pd.p) ? 'rb-pedal-bypassed' : '';
-                return `<div class="rb-pedal ${byp}" onclick="event.stopPropagation();rbStudioClickPedal(${pd.idx})" title="${rbEsc(name)} — click to edit / swap">
-                    ${img ? `<img src="${img}" alt="${rbEsc(name)}">`
-                          : `<div class="rb-pedal-fallback">${rbEsc(name)}</div>`}
-                </div>`;
-            }).join('') : `<div class="rb-pedal-placeholder">＋ pedals</div>`}
+             data-rb-dnd="pedals"
+             onclick="rbStudioBrowsePedals()" title="${g.pedal.length ? 'Pedalboard — drag to reorder' : 'Click to add a pedal'}">
+            ${g.pedal.length ? g.pedal.map(pd => rbStudioRoomPedalHtml(pd)).join('') : `<div class="rb-pedal-placeholder">＋ pedals</div>`}
         </div>`;
 
     // Full-chain override banner: when a full-chain NAM is loaded it sits ON TOP
@@ -5392,6 +5764,7 @@ function rbRenderStudioRoom() {
 
     el.innerHTML = `
         ${fcBannerHtml}
+        ${rbStudioBrowseStagingBannerHtml()}
         <div class="rb-room-camera" id="rb-room-camera">
             <div class="rb-room-3d">
                 <div class="rb-wall rb-wall-back">
@@ -5427,6 +5800,7 @@ function rbRenderStudioRoom() {
     rbStudioTintPedalEdges();   // colour each pedal's extruded depth from its render
     rbStudioApplyScale();       // scale the fixed-px gear up to fill a larger room
 }
+
 
 // Sample each floor pedal's lower-body colour and expose it as --rb-edge so the
 // box-shadow extrusion (the 3D side/bottom) is tinted to match that pedal.
@@ -5539,6 +5913,7 @@ if (!window.__rbStudioEscHook) {
 async function rbLoadStudioRoom() {
     try { await rbLoadDefaultToneEditor(); } catch (_) {}
     rbRenderStudioRoom();
+    try { rbStudioSyncViewModeBtn(); } catch (_) {}
     // Repaint once when the pedal-canvas fonts finish loading (same trick as
     // the catalog) so the pedal renders come out with the right typeface.
     if (!rbState._studioFontsRepaint && window.RBPedalCanvas && window.RBPedalCanvas.ready) {
@@ -5607,6 +5982,22 @@ function rbStudioSyncFocusBarActions() {
     if (!room) return;
     let btn = document.getElementById('rb-studio-realui-btn');
     const piece = (rbStudioCurrentChain() || [])[rbState._studioFocusIdx];
+    // tone3000 preview: Save / Discard on the focused component bar.
+    let prev = document.getElementById('rb-studio-preview-actions');
+    if (piece && piece._previewStaging) {
+        if (!prev) {
+            prev = document.createElement('div');
+            prev.id = 'rb-studio-preview-actions';
+            prev.className = 'rb-focus-preview-actions rb-focus-preview-actions-bar';
+            room.appendChild(prev);
+        }
+        prev.innerHTML = `
+            <span class="rb-focus-preview-lbl">tone3000 preview</span>
+            <button type="button" class="rb-preview-save" onclick="rbStudioBrowseCommitStaging()">Save</button>
+            <button type="button" class="rb-preview-discard" onclick="rbStudioBrowseDiscardStaging()">Discard</button>`;
+    } else if (prev) {
+        prev.remove();
+    }
     if (!rbIsAddedVst(piece)) { if (btn) btn.remove(); return; }
     if (!btn) {
         btn = document.createElement('button');
@@ -5672,11 +6063,11 @@ async function rbStudioFocusAmp(idx) {
     bar.className = 'rb-focus-bar2';
     // Amp name omitted here — the swap rail on the right already labels it.
     bar.innerHTML = `
-        <button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Room</button>
+        <button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Back to rig</button>
         <div class="rb-focus-actions" style="min-width:80px"></div>`;
     rbStudioSyncFocusBarActions();   // 🪟 Plugin window (VST amps only)
     requestAnimationFrame(() => bar.classList.add('rb-focus-open'));
-    // The amp-alternatives rail is always shown in focus (amp sits left for it).
+    // Component browser (grid by default) for swapping the focused amp.
     rbStudioOpenSwap(idx);
 
     // Edit the amp IN-CHAIN (shared path with pedals/racks): the whole rig keeps
@@ -5983,16 +6374,13 @@ function rbStudioClickRack(idx) {
     rbStudioFocusPedal(pos < 0 ? 0 : pos);
 }
 
-// Click the pedalboard itself → zoom in + show the pedal menu on the right.
-// With pedals: focus the first one. Empty board: enter add mode so picking a
-// pedal from the rail appends it to the chain.
+// Click the pedalboard itself → open the pedal browser over the strip
+// (tone3000 Preview drops a temp pedal you can drag to reorder).
 function rbStudioBrowsePedals() {
     const room = document.getElementById("rb-studio-room");
-    if (rbStudioIsFocused(room)) return;
+    if (rbStudioIsFocused(room) && document.getElementById('rb-swap-panel')) return;
     rbState._studioFocusGroup = 'pedal';
-    const order = rbStudioPedalOrder();
-    if (order.length) { rbStudioFocusPedal(0); return; }
-    rbStudioFocusPedalAdd();
+    rbStudioOpenPedalBrowser();
 }
 
 // Click the amp (or its empty placeholder) → focus the amp, or ADD one if the
@@ -6020,52 +6408,36 @@ async function rbStudioFocusAmpAdd() {
     let bar = document.getElementById('rb-studio-focus-bar');
     if (!bar) { bar = document.createElement('div'); bar.id = 'rb-studio-focus-bar'; room.appendChild(bar); }
     bar.className = 'rb-focus-bar2';
-    bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Room</button>
+    bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Back to rig</button>
         <div class="rb-focus-title" style="color:#aab7cf;font-size:13px;">Pick an amp →</div>
         <div class="rb-focus-actions" style="min-width:80px"></div>`;
     requestAnimationFrame(() => bar.classList.add('rb-focus-open'));
     rbStudioOpenSwap(-1, 'amp');
 }
 
-// Click the rack table → focus the first rack, or add one if the tower is empty.
+// + rack on the Post block. This is an add, not a swap of whatever pedal is focused.
 function rbStudioBrowseRacks() {
-    const room = document.getElementById("rb-studio-room");
-    if (rbStudioIsFocused(room)) return;
     rbState._studioFocusGroup = 'rack';
-    const order = rbStudioPedalOrder();
-    if (order.length) { rbStudioFocusPedal(0); return; }
-    rbStudioFocusPedalAdd();
+    rbState._studioPedalAddMode = true;
+    rbState._browsePedalSlot = 'rack';
+    try { rbStudioBrowseExitFocusKeepBrowser(); } catch (_) {}
+    rbState._studioFocusIdx = -1;
+    rbStudioOpenSwap(-1, 'rack');
 }
+window.rbStudioBrowseRacks = rbStudioBrowseRacks;
 
 // Add-mode focus: no current pedal — a placeholder face + the pedal swap rail.
 // Choosing a pedal in rbStudioSwapToGear creates the piece and focuses it.
 async function rbStudioFocusPedalAdd() {
-    const room = document.getElementById('rb-studio-room');
-    if (!room) return;
-    if (rbStudioPedalOrder().length >= rbStudioFocusMax()) return;   // group full
-    rbState._studioFocusKind = 'pedal';   // layer-based cleanup (same for racks)
-    rbState._studioPedalAddMode = true;
-    rbState._studioFocusIdx = -1;
-    let layer = document.getElementById('rb-pedal-focus');
-    if (!layer) { layer = document.createElement('div'); layer.id = 'rb-pedal-focus'; layer.className = 'rb-pedal-focus'; room.appendChild(layer); }
-    layer.innerHTML = `
-        <div class="rb-pf-row">
-            <div class="rb-pf-side rb-pf-side-empty"></div>
-            <div class="rb-pf-stage"><div class="rb-pf-pedal rb-pf-empty">Pick a ${rbStudioGroupLabel()} from the menu →</div></div>
-            <div class="rb-pf-side rb-pf-side-empty"></div>
-        </div>`;
-    // Pedal/rack focus is a camera move toward the floor — NOT the amp grow
-    // (rb-focus-active). The group modifier picks which floor unit stays as the
-    // backdrop (pedalboard vs rack desk).
-    room.classList.remove('rb-gfocus-pedal', 'rb-gfocus-rack');
-    room.classList.add('rb-pfocus', 'rb-gfocus-' + rbStudioActiveGroup());
-    let bar = document.getElementById('rb-studio-focus-bar');
-    if (!bar) { bar = document.createElement('div'); bar.id = 'rb-studio-focus-bar'; room.appendChild(bar); }
-    bar.className = 'rb-focus-bar2';
-    bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Room</button>`;
-    requestAnimationFrame(() => bar.classList.add('rb-focus-open'));
-    rbStudioOpenSwap(-1, rbStudioActiveGroup());
-    requestAnimationFrame(() => layer.classList.add('rb-pf-open'));
+    // No zoomed "add pedal" theater — just the browser over the pedalboard.
+    if (rbStudioActiveGroup() === 'rack') {
+        rbState._studioFocusGroup = 'rack';
+        rbStudioBrowseExitFocusKeepBrowser();
+        rbState._studioFocusIdx = -1;
+        await rbStudioOpenSwap(-1, 'rack');
+        return;
+    }
+    await rbStudioOpenPedalBrowser();
 }
 
 // Focus the pedal at position `pos` in the chain: dim the room, show it large +
@@ -6154,11 +6526,11 @@ async function rbStudioFocusPedal(pos) {
         let bar = document.getElementById('rb-studio-focus-bar');
         if (!bar) { bar = document.createElement('div'); bar.id = 'rb-studio-focus-bar'; room.appendChild(bar); }
         bar.className = 'rb-focus-bar2';
-        bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Room</button>
+        bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseFocus()">← Back to rig</button>
             <div class="rb-focus-actions"></div>`;
         rbStudioSyncFocusBarActions();   // 🪟 Plugin window (VST pedals/racks only)
         requestAnimationFrame(() => bar.classList.add('rb-focus-open'));
-        rbStudioOpenSwap(idx, rbStudioActiveGroup());   // rail of alternative pedals/racks
+        rbStudioOpenSwap(idx, rbStudioActiveGroup());   // component browser for pedals/racks
         requestAnimationFrame(() => layer.classList.add('rb-pf-open'));
     } else {
         // Rail already open: just retarget + re-highlight the current pedal
@@ -6218,18 +6590,24 @@ function rbStudioFitFocusStage(stage, piece, room) {
 }
 
 // Reorder: swap the focused pedal with its neighbour in the signal chain, then
-// re-focus it at its new position.
+// re-focus it at its new position. Reloads live audio so OD→delay vs delay→OD
+// is audible immediately (including uncommitted tone3000 previews).
 function rbStudioMovePedal(delta) {
     const order = rbState._studioPedalOrder || rbStudioPedalOrder();
     const pos = rbState._studioPedalPos || 0;
     const newPos = pos + delta;
     if (newPos < 0 || newPos >= order.length) return;
-    rbStudioQuickSavePiece(rbState._studioFocusIdx);
+    // Stay on the same side of the amp (pre vs post).
     const arr = rbStudioCurrentChain();
+    const sideOf = (i) => ((arr[order[i]] && (arr[order[i]].slot || '').toLowerCase() === 'post_pedal') ? 1 : 0);
+    if (sideOf(pos) !== sideOf(newPos)) return;
+    rbStudioQuickSavePiece(rbState._studioFocusIdx);
     const a = order[pos], b = order[newPos];
     const tmp = arr[a]; arr[a] = arr[b]; arr[b] = tmp;   // swap chain positions
     try { rbStudioPersist(); } catch (_) {}
     rbStudioFocusPedal(newPos);   // the focused pedal now lives at newPos
+    rbStudioBrowseEnsureStagingBanner();
+    rbStudioReloadLiveChainAfterSwap().catch(() => {});
 }
 
 // Send the focused pedal before (pre_pedal) or after (post_pedal) the amp. The
@@ -6246,6 +6624,8 @@ function rbStudioTogglePedalSlot() {
     // position instead of whatever now sits at the old slot.
     const np = rbStudioPedalOrder().indexOf(idx);
     rbStudioFocusPedal(np < 0 ? 0 : np);
+    rbStudioBrowseEnsureStagingBanner();
+    rbStudioReloadLiveChainAfterSwap().catch(() => {});
 }
 
 // Move to the previous/next pedal in the chain (saves the current one first).
@@ -6627,8 +7007,112 @@ async function rbStudioFinalizeFocusEdit(api, idx) {
     try { await rbTeardownVstEditor(api); } catch (_) {}
 }
 
-// ── Phase 3: amp swap rail — right-docked translucent carousel of alt amps ──
+// ── Component browser — full-panel grid (default) with tags + Back to rig ──
 function rbStudioSwapAmp(idx) { rbStudioOpenSwap(idx); }
+
+const RB_BROWSE_TAG_CHIPS = {
+    amp: [
+        { id: 'guitar', label: 'Guitar' },
+        { id: 'bass', label: 'Bass' },
+    ],
+    cab: [
+        { id: 'guitar', label: 'Guitar' },
+        { id: 'bass', label: 'Bass' },
+    ],
+    pedal: [
+        { id: 'overdrive', label: 'Overdrive' },
+        { id: 'distortion', label: 'Distortion' },
+        { id: 'fuzz', label: 'Fuzz' },
+        { id: 'boost', label: 'Boost' },
+        { id: 'compressor', label: 'Comp' },
+        { id: 'eq', label: 'EQ' },
+        { id: 'modulation', label: 'Mod' },
+        { id: 'chorus', label: 'Chorus' },
+        { id: 'flanger', label: 'Flanger' },
+        { id: 'phaser', label: 'Phaser' },
+        { id: 'delay', label: 'Delay' },
+        { id: 'reverb', label: 'Reverb' },
+        { id: 'tremolo', label: 'Tremolo' },
+        { id: 'wah', label: 'Wah' },
+        { id: 'octave', label: 'Octave' },
+        { id: 'gate', label: 'Gate' },
+    ],
+    rack: [
+        { id: 'eq', label: 'EQ' },
+        { id: 'compressor', label: 'Comp' },
+        { id: 'delay', label: 'Delay' },
+        { id: 'reverb', label: 'Reverb' },
+        { id: 'modulation', label: 'Mod' },
+        { id: 'gate', label: 'Gate' },
+    ],
+};
+
+function rbStudioBrowseViewMode() {
+    return rbLsGet('rig_builder.browseView') === 'list' ? 'list' : 'grid';
+}
+
+function rbStudioToggleBrowseView() {
+    const next = rbStudioBrowseViewMode() === 'grid' ? 'list' : 'grid';
+    rbLsSet('rig_builder.browseView', next);
+    const list = document.getElementById('rb-swap-list');
+    if (list) {
+        list.classList.toggle('rb-browse-grid', next === 'grid');
+        list.classList.toggle('rb-browse-list', next === 'list');
+    }
+    const btn = document.getElementById('rb-browse-viewbtn');
+    if (btn) btn.textContent = next === 'grid' ? '☰ List' : '▦ Grid';
+    try { rbStudioRenderSwapList(rbState._swapSearch || ''); } catch (_) {}
+}
+
+function rbStudioBrowseSetStatus(msg, opts) {
+    const el = document.getElementById('rb-browse-status');
+    if (!el) return;
+    if (opts && opts.html) el.innerHTML = msg || '';
+    else el.textContent = msg || '';
+}
+
+function rbStudioBrowseBackToRig() {
+    // Cab focus has its own teardown path (no VST/knob teardown).
+    if (rbState._studioFocusKind === 'cab' || document.getElementById('rb-studio-cabroom')) {
+        try { rbStudioCloseCabFocus(); } catch (_) {}
+        return;
+    }
+    try { rbStudioCloseFocus(); } catch (_) {}
+}
+
+function rbStudioBrowseSetTag(tagId) {
+    rbState._swapTag = (rbState._swapTag === tagId) ? '' : (tagId || '');
+    rbStudioRenderBrowseTags();
+    rbStudioRenderSwapList(rbState._swapSearch || '');
+}
+
+function rbStudioRenderBrowseTags() {
+    const host = document.getElementById('rb-browse-tags');
+    if (!host) return;
+    const kind = rbState._swapKind || 'amp';
+    const chips = RB_BROWSE_TAG_CHIPS[kind] || [];
+    const cur = rbState._swapTag || '';
+    if (!chips.length) { host.innerHTML = ''; return; }
+    host.innerHTML = chips.map(c =>
+        `<button type="button" class="rb-browse-tag${cur === c.id ? ' on' : ''}"
+                 onclick="rbStudioBrowseSetTag(${rbEsc(JSON.stringify(c.id))})">${rbEsc(c.label)}</button>`
+    ).join('');
+}
+
+function rbStudioBrowseItemMatchesTag(g, tag) {
+    if (!tag) return true;
+    if (tag === 'guitar' || tag === 'bass') {
+        const inst = rbGearInstrument(g);
+        if (inst === 'all') return true;
+        return inst === tag;
+    }
+    // Modulation umbrella covers chorus/flanger/phaser/tremolo/vibe synonyms.
+    if (tag === 'modulation') {
+        const hay = rbGearTypeTags(g);
+        return /\b(chorus|flanger|phaser|tremolo|vibrato|vibe|mod)\b/.test(hay);
+    }
+    return rbGearTypeTags(g).includes(tag);
+}
 
 async function rbStudioOpenSwap(idx, kind) {
     kind = kind || 'amp';
@@ -6644,21 +7128,47 @@ async function rbStudioOpenSwap(idx, kind) {
     }
     let panel = document.getElementById('rb-swap-panel');
     if (!panel) { panel = document.createElement('div'); panel.id = 'rb-swap-panel'; room.appendChild(panel); }
-    panel.className = 'rb-swap-panel';
-    // Preserve the search across a swap: swapping rebuilds the whole rail, so
-    // without this the query resets to empty and the list jumps to the top —
-    // annoying right after you searched for and picked a cab. Cleared on close.
+    // Preserve search + tag across a swap rebuild (picking rebuilds focus in some
+    // paths). Cleared on close.
     const _savedSearch = rbState._swapSearch || '';
+    const view = rbStudioBrowseViewMode();
+    const src = rbState._browseSource === 'tone3000' ? 'tone3000' : 'library';
+    rbState._browseSource = src;
     const _kindLabel = kind === 'pedal' ? 'pedals' : (kind === 'rack' ? 'racks' : (kind === 'cab' ? 'cabs' : 'amps'));
+    const _title = kind === 'pedal' ? 'Choose a pedal' : (kind === 'rack' ? 'Choose a rack' : (kind === 'cab' ? 'Choose a cab / IR' : 'Choose an amp'));
+    panel.className = 'rb-swap-panel rb-browse-panel';
     panel.innerHTML = `
-        <div class="rb-swap-head">
-            <input type="text" placeholder="Search ${_kindLabel}…" value="${rbEsc(_savedSearch)}"
-                   oninput="rbState._swapSearch=this.value; rbStudioRenderSwapList(this.value)">
+        <div class="rb-browse-top">
+            <button type="button" class="rb-browse-back" onclick="rbStudioBrowseBackToRig()">← Back to rig</button>
+            <div class="rb-browse-title">${rbEsc(_title)}</div>
+            <button type="button" class="rb-browse-viewbtn" id="rb-browse-viewbtn"
+                    onclick="rbStudioToggleBrowseView()" ${src === 'tone3000' ? 'style="display:none"' : ''}>${view === 'grid' ? '☰ List' : '▦ Grid'}</button>
+            <button type="button" class="rb-browse-viewbtn" onclick="rbStudioCloseSwap()" title="Close browser">✕</button>
         </div>
-        <div id="rb-swap-list" class="rb-swap-list" onscroll="rbStudioScheduleCarousel()"></div>`;
+        ${kind === 'pedal' || kind === 'rack' || kind === 'amp' || kind === 'cab' ? `<div class="rb-browse-board" id="rb-browse-board" ${kind === 'pedal' || kind === 'rack' ? 'data-rb-dnd="pedals"' : ''}></div>` : ''}
+        <div class="rb-browse-source" id="rb-browse-source">
+            <button type="button" class="rb-browse-srcbtn${src === 'library' ? ' on' : ''}"
+                    onclick="rbStudioBrowseSetSource('library')">Library</button>
+            <button type="button" class="rb-browse-srcbtn${src === 'tone3000' ? ' on' : ''}"
+                    onclick="rbStudioBrowseSetSource('tone3000')">tone3000</button>
+            <div class="rb-inst-toggle" title="Only show gear for this instrument">${rbStudioInstrumentToggleHtml()}</div>
+        </div>
+        <div id="rb-browse-library">
+            <div class="rb-swap-head">
+                <input type="text" placeholder="Search ${_kindLabel}…" value="${rbEsc(_savedSearch)}"
+                       oninput="rbState._swapSearch=this.value; rbStudioRenderSwapList(this.value)">
+            </div>
+            <div class="rb-browse-tags" id="rb-browse-tags"></div>
+            <div id="rb-swap-list" class="rb-swap-list ${view === 'list' ? 'rb-browse-list' : 'rb-browse-grid'}"></div>
+        </div>
+        <div id="rb-browse-t3k" class="hidden"></div>
+        <div class="rb-browse-status" id="rb-browse-status">Pick one to audition — stay here and keep browsing</div>`;
     room.classList.add('rb-swap-active');
+    rbStudioRenderBrowseTags();
     rbStudioRenderSwapList(_savedSearch);
-    rbStudioPinSwapRail();   // pin to the viewport's right edge (covers the host's margin)
+    rbStudioBrowseApplySourceUi();
+    try { rbStudioBrowseRenderOverlayBoard(); } catch (_) {}
+    rbStudioPinSwapRail();
     if (!rbState._swapResizeHooked) {
         rbState._swapResizeHooked = true;
         window.addEventListener('resize', () => { try { rbStudioPinSwapRail(); } catch (_) {} });
@@ -6666,12 +7176,898 @@ async function rbStudioOpenSwap(idx, kind) {
     requestAnimationFrame(() => panel.classList.add('rb-swap-open'));
 }
 
+function rbStudioBrowseT3kCategory(kind) {
+    kind = kind || rbState._swapKind || 'amp';
+    if (kind === 'cab') return 'ir';
+    if (kind === 'rack') return 'outboard';
+    if (kind === 'pedal') return 'pedal';
+    return 'amp';
+}
+
+function rbStudioBrowseSetSource(src) {
+    rbState._browseSource = (src === 'tone3000') ? 'tone3000' : 'library';
+    rbStudioBrowseApplySourceUi();
+}
+
+function rbStudioBrowseApplySourceUi() {
+    const src = rbState._browseSource === 'tone3000' ? 'tone3000' : 'library';
+    const lib = document.getElementById('rb-browse-library');
+    const t3k = document.getElementById('rb-browse-t3k');
+    const viewBtn = document.getElementById('rb-browse-viewbtn');
+    document.querySelectorAll('#rb-browse-source > .rb-browse-srcbtn').forEach(btn => {
+        const isT3k = /tone3000/i.test(btn.textContent || '');
+        btn.classList.toggle('on', src === 'tone3000' ? isT3k : !isT3k);
+    });
+    if (lib) lib.classList.toggle('hidden', src !== 'library');
+    if (t3k) t3k.classList.toggle('hidden', src !== 'tone3000');
+    if (viewBtn) viewBtn.style.display = src === 'library' ? '' : 'none';
+    if (src === 'tone3000') {
+        rbStudioBrowseMountTone3000();
+        const kind = rbState._swapKind || 'amp';
+        const hint = kind === 'amp'
+            ? 'Search is the whole tone3000 catalog. All / Amp / IR only narrows it. Check “Includes the cab” when the capture already has the speaker.'
+            : (kind === 'cab'
+                ? 'Preview swaps the cab. Your amp stays.'
+                : (kind === 'rack'
+                    ? 'Preview adds a rack after the amp. Save or Discard.'
+                    : 'Preview adds a pedal on the pedalboard.'));
+        rbStudioBrowseSetStatus(hint);
+    } else {
+        rbStudioBrowseSetStatus('Pick one to audition — stay here and keep browsing');
+    }
+}
+
+function rbStudioBrowseMountTone3000() {
+    const host = document.getElementById('rb-browse-t3k');
+    if (!host) return;
+    const kind = rbState._swapKind || 'amp';
+    const cat = rbStudioBrowseT3kCategory(kind);
+    rbT3kMount({
+        id: 'browse',
+        containerId: 'rb-browse-t3k',
+        forceCategory: cat,
+        initialCat: '',
+        inRigPreview: true,
+        allowDir: true,
+        allowDirExts: kind === 'cab' ? ['wav', 'nam'] : ['nam', 'wav'],
+        onPreview: async (file, fileKind, name) => {
+            rbStudioDropPreviewCapture(file, fileKind, name);
+        },
+        onUse: async (file, fileKind, name) => {
+            const staged = rbStudioBrowseFindStaging();
+            if (staged && staged.piece && staged.piece._uploaded_file === file) {
+                await rbStudioBrowseCommitStaging();
+                return;
+            }
+            await rbStudioBrowseStageIntoFocus(file, fileKind, name);
+            await rbStudioBrowseCommitStaging();
+        },
+        onDir: async (path, fileKind) => {
+            // Absolute paths must be copied into the library first.
+            let file = path, kind = fileKind;
+            try {
+                const catMap = { amp: 'amp', pedal: 'pedal', rack: 'rack', cab: 'cab', ir: 'cab' };
+                const r = await fetch(`${window.RB_API}/import_local_model`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        path, kind: fileKind,
+                        category: catMap[rbStudioBrowseT3kCategory(kind)] || catMap[kind] || 'amp',
+                    }),
+                });
+                const d = await r.json();
+                if (!r.ok || !d.file) throw new Error(d.error || 'import failed');
+                file = d.file; kind = d.kind || fileKind;
+            } catch (e) {
+                rbStudioBrowseSetStatus(`Import failed: ${e.message || e}`);
+                return;
+            }
+            await rbStudioBrowseStageIntoFocus(file, kind, null);
+            await rbStudioBrowseCommitStaging();
+        },
+    });
+}
+
+// Browser category → chain slot. Pedal browser Preview always INSERTS a new
+// temporary pedal on the board (Discard clears the previous temp first).
+function rbStudioBrowseFocusPlacement() {
+    const swapKind = rbState._swapKind || 'amp';
+    const focusIdx = rbState._studioFocusIdx;
+    const chain = rbStudioCurrentChain();
+    const focused = (typeof focusIdx === 'number' && focusIdx >= 0) ? chain[focusIdx] : null;
+
+    if (swapKind === 'cab') return { slot: 'cab', afterIdx: null, replaceIdx: null };
+
+    if (swapKind === 'amp') {
+        if (focused && !focused._previewStaging
+            && ((focused.category || focused.rs_category || '').toLowerCase() === 'amp'
+                || (focused.slot || '').toLowerCase() === 'amp')) {
+            return { slot: 'amp', afterIdx: null, replaceIdx: focusIdx };
+        }
+        return { slot: 'amp', afterIdx: null, replaceIdx: null };
+    }
+
+    if (swapKind === 'rack') {
+        // Always insert a temp rack from the rack browser (same idea as pedals).
+        return { slot: 'rack', afterIdx: null, replaceIdx: null };
+    }
+
+    // Pedal browser → always a new temp pedal on the pedalboard.
+    return { slot: 'pre_pedal', afterIdx: null, replaceIdx: null };
+}
+
+// Where a tone3000 capture belongs in the rig. tone3000 does not tag this.
+// The capture name usually does: "D.I." is an amp head, "4x12" / "with cab"
+// is the amp and speaker together, a .wav is only the cab.
+function rbCaptureTryAs(name, fileKind, swapKind) {
+    if (swapKind === 'cab' || fileKind === 'ir' || /\.wav$/i.test(String(name || ''))) return 'cab';
+    if (swapKind === 'pedal' || swapKind === 'rack') return swapKind;
+    const n = String(name || '');
+    if (/\bD\.?\s*I\.?\b/i.test(n) || /\b(no[\s-]*cab|direct|amp[\s-]*only|preamp|head)\b/i.test(n)) return 'amp';
+    if (/\bcab\b/i.test(n) || /\b(combo|4x12|2x12|1x12|speaker)\b/i.test(n) || /\bwith\s+cab\b/i.test(n)) return 'combo';
+    return 'amp';
+}
+
+function rbStudioRestoreCabBypass() {
+    const snap = rbState._browseCabBypassSnap;
+    rbState._browseCabBypassSnap = null;
+    if (!snap || typeof snap.idx !== 'number') return;
+    const p = rbStudioCurrentChain()[snap.idx];
+    if (!p) return;
+    p._bypassed = !!snap.bypassed;
+    p.bypassed = !!snap.bypassed;
+    if (p.assigned) p.assigned.bypassed = !!snap.bypassed;
+}
+
+function rbStudioCabForCombo(role) {
+    if (role !== 'combo') {
+        rbStudioRestoreCabBypass();
+        return;
+    }
+    const cab = (rbStudioGroupDefault().cab || [])[0];
+    if (!cab || !cab.p) return;
+    if (!rbState._browseCabBypassSnap) {
+        rbState._browseCabBypassSnap = { idx: cab.idx, bypassed: rbStudioIsBypassed(cab.p) };
+    }
+    cab.p._bypassed = true;
+    cab.p.bypassed = true;
+    if (cab.p.assigned) cab.p.assigned.bypassed = true;
+}
+
+// Preview from the open browser: pedal/rack → new card on that board,
+// amp head → the amp (cab stays), amp+cab → the amp with the cab turned off,
+// cab/IR → the cab (amp stays). Temporary until Save or Discard.
+function rbStudioDropPreviewCapture(file, rawKind, name, role) {
+    const note = (msg) => {
+        const el = document.getElementById('rb-browse-board-note');
+        if (el) el.textContent = msg || '';
+        try { rbStudioBrowseSetStatus(msg); } catch (_) {}
+    };
+    if (!file) { note('Preview failed — no file came back'); return; }
+    const swapKind = rbState._swapKind || 'pedal';
+    const place = role || rbCaptureTryAs(name, rawKind, swapKind);
+    const isCab = place === 'cab';
+    const isAmp = place === 'amp' || place === 'combo';
+    const isRack = place === 'rack' || (!isCab && !isAmp && swapKind === 'rack');
+    const fileKind = isCab && (rawKind === 'ir' || /\.wav$/i.test(file)) ? 'ir' : 'nam';
+    const label = name || (isCab ? 'Cab / IR' : isAmp ? 'Amp' : isRack ? 'Rack' : 'Pedal');
+    const chain = rbStudioCurrentChain();
+
+    const prev = rbState._browsePreviewRole;
+    const prevWasCab = prev === 'cab';
+    if (prev && prevWasCab !== isCab && rbState._browsePreviewSnap) {
+        const snap = rbState._browsePreviewSnap;
+        if (!snap.created && typeof snap.idx === 'number' && chain[snap.idx]) {
+            rbStudioBrowseRestorePiece(chain[snap.idx], snap.fields);
+        }
+        rbState._browsePreviewSnap = null;
+    }
+
+    const applyOnto = (piece, slot, category) => {
+        rbStudioBrowseApplyCaptureToPiece(piece, file, fileKind === 'ir' ? 'ir' : 'nam', name || label);
+        piece.slot = slot;
+        piece.category = category;
+        piece.rs_category = category;
+        piece._bypassed = false;
+    };
+
+    if (isAmp || isCab) {
+        rbStudioCabForCombo(place);
+        const g = rbStudioGroupDefault();
+        const existing = (isCab ? g.cab : g.amp)[0];
+        if (existing && existing.p) {
+            if (!existing.p._previewStaging && (!rbState._browsePreviewSnap || rbState._browsePreviewSnap.idx !== existing.idx)) {
+                rbState._browsePreviewSnap = {
+                    idx: existing.idx, created: false,
+                    fields: rbStudioBrowseSnapshotPiece(existing.p),
+                };
+            }
+            applyOnto(existing.p, isCab ? 'cabinet' : 'amp', isCab ? 'cab' : 'amp');
+            rbState._studioFocusIdx = existing.idx;
+        } else {
+            for (let i = chain.length - 1; i >= 0; i--) {
+                if (chain[i] && chain[i]._previewStaging) chain.splice(i, 1);
+            }
+            const piece = {
+                type: label, real_name: label,
+                category: isCab ? 'cab' : 'amp',
+                rs_category: isCab ? 'cab' : 'amp',
+                slot: isCab ? 'cabinet' : 'amp',
+            };
+            applyOnto(piece, piece.slot, piece.category);
+            chain.push(piece);
+            rbState._studioFocusIdx = chain.indexOf(piece);
+        }
+    } else {
+        rbStudioCabForCombo('pedal');
+        for (let i = chain.length - 1; i >= 0; i--) {
+            const p = chain[i];
+            if (p && p._previewStaging && (p.category === 'pedal' || p.category === 'rack' || p.slot === 'pre_pedal' || p.slot === 'post_pedal' || p.slot === 'rack')) {
+                chain.splice(i, 1);
+            }
+        }
+        const piece = {
+            type: label, real_name: label,
+            category: isRack ? 'rack' : 'pedal',
+            rs_category: isRack ? 'rack' : 'pedal',
+            slot: isRack ? 'rack' : 'pre_pedal',
+        };
+        applyOnto(piece, piece.slot, piece.category);
+        chain.push(piece);
+        rbState._studioFocusIdx = chain.indexOf(piece);
+    }
+
+    rbState._browsePreviewRole = place;
+    rbState._swapBusy = false;
+    try { rbStudioBrowseRenderOverlayBoard(); } catch (_) { note('Could not draw the preview'); return; }
+    try { rbStudioBrowseRebuildStripPedals(); } catch (_) {}
+    try { rbStudioBrowseTouchStripLabels(); } catch (_) {}
+    const how = place === 'combo'
+        ? 'as amp+cab — cab is off so the speaker is not doubled'
+        : (place === 'cab' ? 'as cab — your amp stays' : (place === 'amp' ? 'as amp head — your cab stays' : 'on the pedalboard'));
+    note(label + ' ' + how + ' · Save or Discard');
+    try { rbStudioPersist(); } catch (_) {}
+    rbStudioReloadLiveChainAfterSwap().catch(() => {});
+}
+window.rbStudioDropPreviewCapture = rbStudioDropPreviewCapture;
+window.rbStudioDropPreviewPedal = rbStudioDropPreviewCapture;
+
+window.rbStudioTogglePieceBypass = function rbStudioTogglePieceBypass(idx) {
+    const chain = rbStudioCurrentChain();
+    const p = chain[idx];
+    if (!p) return;
+    const next = !rbStudioIsBypassed(p);
+    p._bypassed = next;
+    p.bypassed = next;
+    if (p.assigned) p.assigned.bypassed = next;
+    try { rbStudioBrowseRenderOverlayBoard(); } catch (_) {}
+    try { rbStudioBrowseRebuildStripPedals(); } catch (_) {}
+    try { rbStudioBrowseTouchStripLabels(); } catch (_) {}
+    document.querySelectorAll(`[data-amp-idx="${idx}"], [data-pedal-idx="${idx}"]`).forEach(el => {
+        el.classList.toggle('rb-stomp-bypassed', next);
+        el.classList.toggle('rb-pedal-bypassed', next);
+        const btn = el.querySelector('.rb-stomp-power');
+        if (btn) btn.textContent = next ? 'OFF' : 'ON';
+    });
+    try { rbStudioPersist(); } catch (_) {}
+    rbStudioReloadLiveChainAfterSwap().catch(() => {});
+};
+
+function rbStudioBrowseTouchStripLabels() {
+    const g = rbStudioGroupDefault();
+    const amp = g.amp[0];
+    if (amp && amp.p) {
+        const stack = document.querySelector(`#rb-studio-room .rb-amp-stack[data-amp-idx="${amp.idx}"]`)
+            || document.querySelector('#rb-studio-room .rb-amp-stack');
+        if (stack) {
+            const nm = amp.p.real_name || amp.p.type || 'Amp';
+            const n = stack.querySelector('.rb-strip-n');
+            if (n) n.textContent = nm;
+            stack.classList.toggle('rb-amp-preview', !!amp.p._previewStaging);
+            stack.classList.toggle('rb-stomp-bypassed', rbStudioIsBypassed(amp.p));
+            const btn = stack.querySelector('.rb-stomp-power');
+            if (btn) btn.textContent = rbStudioIsBypassed(amp.p) ? 'OFF' : 'ON';
+        }
+    }
+    const cab = g.cab[0];
+    document.querySelectorAll('#rb-studio-room .rb-strip-block').forEach(block => {
+        const k = block.querySelector('.rb-strip-k');
+        if (!k || !/^cab/i.test((k.textContent || '').trim())) return;
+        if (!cab || !cab.p) return;
+        const nm = cab.p.real_name || cab.p.type || 'Cab';
+        const n = block.querySelector('.rb-strip-n');
+        if (n) n.textContent = nm;
+        k.textContent = cab.p._previewStaging ? 'Cab · preview' : (rbStudioIsBypassed(cab.p) ? 'Cab · off' : 'Cab');
+        block.classList.toggle('rb-amp-preview', !!cab.p._previewStaging);
+        const btn = block.querySelector('.rb-stomp-power');
+        if (btn) btn.textContent = rbStudioIsBypassed(cab.p) ? 'OFF' : 'ON';
+    });
+    const rack = (g.rack || [])[0];
+    document.querySelectorAll('#rb-studio-room .rb-strip-block').forEach(block => {
+        const k = block.querySelector('.rb-strip-k');
+        if (!k || !/^post/i.test((k.textContent || '').trim())) return;
+        if (!rack || !rack.p) return;
+        const n = block.querySelector('.rb-strip-n');
+        if (n) n.textContent = rack.p.real_name || rack.p.type || 'Rack';
+        if (/^post$/i.test((k.textContent || '').trim()) || /after the amp/i.test((block.querySelector('.rb-strip-n') || {}).textContent || '')) {
+            k.textContent = 'Post';
+        }
+        block.classList.remove('rb-strip-empty');
+    });
+}
+
+function rbStudioBrowseFindStaging() {
+    const chain = rbStudioCurrentChain();
+    for (let i = 0; i < chain.length; i++) {
+        if (chain[i] && chain[i]._previewStaging) return { piece: chain[i], idx: i };
+    }
+    return null;
+}
+
+function rbStudioBrowseStagingBannerHtml() {
+    const staged = rbStudioBrowseFindStaging();
+    if (!staged) return '';
+    const nm = staged.piece.real_name || staged.piece.type || 'tone3000 capture';
+    const isPedal = ['pre_pedal', 'post_pedal', 'pedal'].includes(String(staged.piece.slot || staged.piece.category || '').toLowerCase())
+        || String(staged.piece.category || '').toLowerCase() === 'pedal';
+    const moveBtns = isPedal
+        ? `<button class="rb-fc-banner-btn" onclick="rbStudioBrowseStagingMove(-1)" title="Earlier in the signal (feeds into later pedals)">◀ Earlier</button>
+           <button class="rb-fc-banner-btn" onclick="rbStudioBrowseStagingMove(1)" title="Later in the signal (fed by earlier pedals)">Later ▶</button>`
+        : '';
+    return `<div class="rb-fc-banner on rb-preview-banner" id="rb-preview-banner">
+        <span class="rb-fc-banner-txt">🎧 Temporary in tone <b>${rbEsc(nm)}</b>${isPedal ? ' — drag to place' : ''} · Save to keep</span>
+        ${moveBtns}
+        <button class="rb-fc-banner-btn" onclick="rbStudioBrowseCommitStaging()">Save</button>
+        <button class="rb-fc-banner-x" onclick="rbStudioBrowseDiscardStaging()" title="Discard preview">Discard</button>
+    </div>`;
+}
+
+window.rbStudioBrowseStagingMove = function rbStudioBrowseStagingMove(delta) {
+    const staged = rbStudioBrowseFindStaging();
+    if (!staged) return;
+    rbState._studioFocusGroup = (String(staged.piece.category || '').toLowerCase() === 'rack') ? 'rack' : 'pedal';
+    const order = rbStudioPedalOrder();
+    const pos = order.indexOf(staged.idx);
+    if (pos < 0) return;
+    rbState._studioFocusIdx = staged.idx;
+    rbState._studioPedalOrder = order;
+    rbState._studioPedalPos = pos;
+    rbStudioMovePedal(delta);
+};
+
+function rbStudioBrowseEnsureStagingBanner() {
+    const room = document.getElementById('rb-studio-room');
+    if (!room) return;
+    // The full-screen pedalboard already includes the banner when it re-renders.
+    if (document.getElementById('rb-browse-board')) {
+        if (!rbStudioBrowseFindStaging()) {
+            try { document.getElementById('rb-preview-banner')?.remove(); } catch (_) {}
+        }
+        return;
+    }
+    const html = rbStudioBrowseStagingBannerHtml();
+    let host = document.getElementById('rb-preview-banner');
+    if (!html) { try { host?.remove(); } catch (_) {} return; }
+    if (host) { host.outerHTML = html; return; }
+    const board = room.querySelector('.rb-strip-board');
+    if (board) board.insertAdjacentHTML('afterbegin', html);
+    else room.insertAdjacentHTML('afterbegin', html);
+}
+
+// Pedals currently on one side of the amp (for insert-position picking).
+function rbStudioBrowsePedalsOnSide(slot) {
+    const wantPost = slot === 'post_pedal';
+    return (rbStudioGroupDefault().pedal || []).filter(e => {
+        if (e.p && e.p._previewStaging) return false;
+        const s = (e.p && e.p.slot || '').toLowerCase();
+        return wantPost ? s === 'post_pedal' : s !== 'post_pedal';
+    });
+}
+
+// Ask where a preview/use capture should sit. Pedalboard drops a temp NAM card;
+// drag-n-drop on the board sets OD→delay (etc.) order.
+function rbStudioBrowsePickPlacement(kindRaw) {
+    return new Promise((resolve) => {
+        try { document.getElementById('rb-browse-place')?.remove(); } catch (_) {}
+        const swapKind = rbState._swapKind || 'amp';
+        const isIr = kindRaw === 'ir' || swapKind === 'cab';
+        const preferred = isIr ? 'cab'
+            : (swapKind === 'amp' ? 'amp'
+                : (swapKind === 'rack' ? 'rack' : 'pre_pedal'));
+
+        const ov = document.createElement('div');
+        ov.id = 'rb-browse-place';
+
+        const finish = (val) => { try { ov.remove(); } catch (_) {} resolve(val); };
+
+        const showZoneStep = () => {
+            const opts = [];
+            opts.push({ id: 'pre_pedal', label: 'Pedalboard · before amp', primary: preferred === 'pre_pedal' });
+            opts.push({ id: 'post_pedal', label: 'Pedalboard · after amp', primary: preferred === 'post_pedal' });
+            opts.push({ id: 'amp', label: 'As the amp', primary: preferred === 'amp' });
+            opts.push({ id: 'rack', label: 'As a rack / post FX', primary: preferred === 'rack' });
+            opts.push({ id: 'cab', label: 'As cab / IR', primary: preferred === 'cab' });
+            ov.innerHTML = `<div class="rb-browse-place-card">
+                <h3>Where should this sit?</h3>
+                <p>Drops a temporary NAM card on the board — drag pedals to set order (e.g. OD into delay), then Save or Discard.</p>
+                <div class="rb-browse-place-actions">
+                    ${opts.map(o => `<button type="button" class="${o.primary ? 'primary' : ''}" data-zone="${o.id}">${rbEsc(o.label)}</button>`).join('')}
+                    <button type="button" class="rb-browse-place-cancel" data-zone="">Cancel</button>
+                </div>
+            </div>`;
+        };
+
+        ov.addEventListener('click', (e) => {
+            if (e.target === ov) { finish(null); return; }
+            const zoneBtn = e.target.closest('[data-zone]');
+            if (!zoneBtn) return;
+            const zone = zoneBtn.getAttribute('data-zone') || null;
+            if (!zone) { finish(null); return; }
+            // Pedalboard: append a temp card; user drag-n-drops for signal order.
+            if (zone === 'pre_pedal' || zone === 'post_pedal') {
+                const side = rbStudioBrowsePedalsOnSide(zone);
+                finish({
+                    slot: zone,
+                    afterIdx: side.length ? side[side.length - 1].idx : null,
+                });
+                return;
+            }
+            finish({ slot: zone, afterIdx: null });
+        });
+
+        document.body.appendChild(ov);
+        showZoneStep();
+    });
+}
+
+async function rbStudioBrowseDiscardStaging(opts) {
+    opts = opts || {};
+    const chain = rbStudioCurrentChain();
+    let changed = false;
+    // In-place amp/cab preview: restore the previous assignment first.
+    const snap = rbState._browsePreviewSnap;
+    if (snap && !snap.created && typeof snap.idx === 'number' && chain[snap.idx]) {
+        rbStudioBrowseRestorePiece(chain[snap.idx], snap.fields);
+        changed = true;
+    }
+    rbState._browsePreviewSnap = null;
+    rbState._browsePreviewRole = null;
+    if (rbState._browseCabBypassSnap) changed = true;
+    rbStudioRestoreCabBypass();
+    // Inserted pedal/rack/cab previews: remove the staging pieces entirely.
+    for (let i = chain.length - 1; i >= 0; i--) {
+        if (chain[i] && chain[i]._previewStaging) { chain.splice(i, 1); changed = true; }
+    }
+    if (!changed) return;
+    try { rbStudioPersist(); } catch (_) {}
+    try { await rbStudioReloadLiveChainAfterSwap(); } catch (_) {}
+    const browserOpen = !!document.getElementById('rb-swap-panel');
+    // Keep the tone3000/component browser up whenever it's open (or noRender).
+    if (opts.noRender || browserOpen) {
+        try { document.getElementById('rb-studio-preview-actions')?.remove(); } catch (_) {}
+        rbState._studioFocusIdx = -1;
+        try { rbStudioBrowsePaintPedalboards(); } catch (_) {}
+        try { rbStudioBrowseTouchStripLabels(); } catch (_) {}
+        try { rbStudioSyncFocusBarActions(); } catch (_) {}
+    } else {
+        try { rbRenderStudioRoom(); } catch (_) {}
+        try { rbStudioSyncFocusBarActions(); } catch (_) {}
+    }
+    try { rbStudioBrowseEnsureStagingBanner(); } catch (_) {}
+    if (!opts.silent) rbStudioBrowseSetStatus('Preview discarded — try another');
+}
+
+async function rbStudioBrowseCommitStaging() {
+    const staged = rbStudioBrowseFindStaging();
+    if (!staged) { rbStudioBrowseSetStatus('Nothing to save'); return; }
+    delete staged.piece._previewStaging;
+    rbState._browsePreviewSnap = null;
+    rbState._browseCabBypassSnap = null;
+    rbState._browsePreviewRole = null;
+    rbState._studioPedalAddMode = false;
+    rbState._studioAmpAddMode = false;
+    try { rbStudioPersist(); } catch (_) {}
+    try { await rbStudioReloadLiveChainAfterSwap(); } catch (_) {}
+    const browserOpen = !!document.getElementById('rb-swap-panel');
+    if (browserOpen) {
+        try { document.getElementById('rb-studio-preview-actions')?.remove(); } catch (_) {}
+        try { rbStudioBrowsePaintPedalboards(); } catch (_) {}
+        try { rbStudioBrowseTouchStripLabels(); } catch (_) {}
+    } else {
+        try { rbRenderStudioRoom(); } catch (_) {}
+    }
+    try { rbStudioBrowseEnsureStagingBanner(); } catch (_) {}
+    try { rbStudioSyncFocusBarActions(); } catch (_) {}
+    rbStudioBrowseSetStatus('Saved to the tone — drag to reorder or Preview another');
+}
+
+// Apply a downloaded NAM/IR onto a chain piece (clears any VST assignment).
+function rbStudioBrowseApplyCaptureToPiece(piece, file, kind, name) {
+    if (!piece) return;
+    const wasVst = !!(piece._vst_path || piece._vst_kind === 'vst'
+        || (piece.assigned && piece.assigned.kind === 'vst'));
+    piece._uploaded_file = file;
+    piece._uploaded_kind = kind;
+    piece.assigned = { kind, file, assigned_mode: 'manual' };
+    piece._vst_path = null; piece._vst_kind = null; piece._vst_format = null;
+    piece._vst_state = null; piece._vst_params = null; piece._vst_logical = null;
+    piece._vst_param_meta = null; piece._vst_slot_id = null; piece._vst_opaque = null;
+    delete piece._custom_ui;
+    if (name) {
+        piece.real_name = name;
+        // Drop the old VST gear id so the card labels as this capture.
+        if (wasVst || !piece.type || /^tone3000_/i.test(String(piece.type))) piece.type = name;
+    }
+    piece._previewStaging = true;
+}
+
+// Stage a tone3000/local capture onto the focused amp/pedal/cab (or insert a
+// new pedal). placement: string slot OR { slot, afterIdx, replaceIdx }.
+async function rbStudioBrowseStageNamIr(file, kindRaw, name, placement) {
+    if (!file || !placement) return;
+    if (rbState._swapBusy) return;
+    const place = (typeof placement === 'string')
+        ? { slot: placement, afterIdx: null, replaceIdx: null }
+        : {
+            slot: placement.slot,
+            afterIdx: placement.afterIdx,
+            replaceIdx: (typeof placement.replaceIdx === 'number') ? placement.replaceIdx : null,
+        };
+    if (!place.slot) return;
+    const kind = (kindRaw === 'ir' || place.slot === 'cab' || /\.wav$/i.test(file)) ? 'ir' : 'nam';
+    rbState._swapBusy = true;
+    rbStudioBrowseSetStatus('Importing into current component…');
+    try {
+        await rbStudioBrowseDiscardStaging({ silent: true, force: true, noRender: true });
+        const chain = rbStudioCurrentChain();
+        const label = name || 'tone3000 capture';
+        let piece;
+        let created = false;
+
+        if (place.slot === 'cab') {
+            let found = null;
+            try { found = rbStudioCabPiece(); } catch (_) {}
+            if (found && found.piece) {
+                rbState._browsePreviewSnap = {
+                    idx: found.pIdx, file, created: false,
+                    fields: rbStudioBrowseSnapshotPiece(found.piece),
+                };
+                piece = found.piece;
+            } else {
+                piece = {
+                    type: 'Cabinet', real_name: label, slot: 'cabinet',
+                    category: 'cab', rs_category: 'cab',
+                };
+                chain.push(piece);
+                created = true;
+            }
+            rbStudioBrowseApplyCaptureToPiece(piece, file, 'ir', name);
+        } else if (place.slot === 'amp') {
+            const replaceIdx = place.replaceIdx;
+            const amps = rbStudioGroupDefault().amp || [];
+            const target = (replaceIdx != null && chain[replaceIdx])
+                ? { p: chain[replaceIdx], idx: replaceIdx }
+                : amps[0];
+            if (target && target.p) {
+                rbState._browsePreviewSnap = {
+                    idx: target.idx, file, created: false,
+                    fields: rbStudioBrowseSnapshotPiece(target.p),
+                };
+                piece = target.p;
+            } else {
+                piece = {
+                    type: name || 'tone3000_amp', real_name: label,
+                    category: 'amp', rs_category: 'amp', slot: 'amp',
+                };
+                chain.push(piece);
+                created = true;
+            }
+            rbStudioBrowseApplyCaptureToPiece(piece, file, kind, name);
+        } else {
+            // Pedalboard / rack — replace focused piece, else INSERT.
+            const isRack = place.slot === 'rack';
+            if (place.replaceIdx != null && chain[place.replaceIdx]) {
+                piece = chain[place.replaceIdx];
+                rbState._browsePreviewSnap = {
+                    idx: place.replaceIdx, file, created: false,
+                    fields: rbStudioBrowseSnapshotPiece(piece),
+                };
+                // Keep slot/category; swap the capture onto this component.
+                if (!isRack && (place.slot === 'pre_pedal' || place.slot === 'post_pedal')) {
+                    piece.slot = place.slot;
+                    piece.category = 'pedal';
+                    piece.rs_category = 'pedal';
+                }
+                rbStudioBrowseApplyCaptureToPiece(piece, file, kind, name);
+            } else {
+                if (isRack) {
+                    const racks = (rbStudioGroupDefault().rack || []).filter(e => !e.p._previewStaging);
+                    if (racks.length >= RB_MAX_RACKS) {
+                        rbStudioBrowseSetStatus('Rack tower is full — discard or remove one first');
+                        rbState._swapBusy = false;
+                        return;
+                    }
+                }
+                piece = {
+                    type: name || ('tone3000_' + (isRack ? 'rack' : 'pedal')),
+                    real_name: label,
+                    category: isRack ? 'rack' : 'pedal',
+                    rs_category: isRack ? 'rack' : 'pedal',
+                    slot: isRack ? 'rack' : place.slot,
+                };
+                rbStudioBrowseApplyCaptureToPiece(piece, file, kind, name);
+                // Append after the last pedal on this side (indices refreshed post-discard).
+                if (isRack) {
+                    chain.push(piece);
+                } else {
+                    const side = rbStudioBrowsePedalsOnSide(place.slot);
+                    if (side.length) chain.splice(side[side.length - 1].idx + 1, 0, piece);
+                    else chain.push(piece);
+                }
+                created = true;
+            }
+        }
+
+        const idx = chain.indexOf(piece);
+        rbState._studioFocusIdx = idx;
+        if (place.slot === 'rack') rbState._studioFocusGroup = 'rack';
+        else if (place.slot === 'pre_pedal' || place.slot === 'post_pedal') rbState._studioFocusGroup = 'pedal';
+
+        // Paint the pedalboard FIRST (overlay + rig) before any reload that
+        // could replace chain state. This is the card the user is looking for.
+        rbStudioBrowsePaintPedalboards();
+        rbStudioBrowseEnsureStagingBanner();
+        rbStudioBrowseSetStatus(piece
+            ? `On the pedalboard: ${piece.real_name || piece.type} — drag to reorder, Save or Discard`
+            : 'Preview failed — pedal was not created');
+
+        try { rbStudioPersist(); } catch (_) {}
+        try { await rbStudioReloadLiveChainAfterSwap(); } catch (_) {}
+        // If a reload swapped the chain array out from under us, put the temp pedal back.
+        try {
+            const live = rbStudioCurrentChain();
+            if (piece && live.indexOf(piece) < 0) {
+                live.push(piece);
+                rbStudioBrowsePaintPedalboards();
+            }
+        } catch (_) {}
+    } catch (e) {
+        console.warn('[rig_builder] stage preview failed', e);
+        rbStudioBrowseSetStatus('Preview failed — try another');
+    }
+    rbState._swapBusy = false;
+}
+
+// Leave the zoomed focus overlay but KEEP the component browser docked so
+// tone3000 search survives and the pedalboard is free for drag-and-drop.
+function rbStudioBrowseExitFocusKeepBrowser() {
+    const room = document.getElementById('rb-studio-room');
+    if (!room) return;
+    room.classList.remove('rb-focus-active', 'rb-pfocus', 'rb-gfocus-pedal', 'rb-gfocus-rack');
+    try { rbTeardownVstEditor(rbAudioApi()); } catch (_) {}
+    try { document.getElementById('rb-pedal-focus')?.remove(); } catch (_) {}
+    try { document.getElementById('rb-studio-focus-bar')?.remove(); } catch (_) {}
+    try { document.getElementById('rb-studio-realui-btn')?.remove(); } catch (_) {}
+    try { document.getElementById('rb-studio-preview-actions')?.remove(); } catch (_) {}
+    rbState._studioPedalAddMode = false;
+    rbState._studioAmpAddMode = false;
+    if (document.getElementById('rb-swap-panel')) room.classList.add('rb-swap-active');
+}
+
+function rbStudioBrowsePrePedals() {
+    const g = rbStudioGroupDefault();
+    const preAll = (g.pedal || []).filter(e => ((e.p.slot || '').toLowerCase() !== 'post_pedal'));
+    const lim = preAll.some(e => e.p && e.p._previewStaging) ? RB_MAX_PEDALS + 1 : RB_MAX_PEDALS;
+    return preAll.slice(0, lim);
+}
+
+// Pedalboard inside the full-screen browser — this is what Preview fills.
+function rbStudioBrowseRenderOverlayBoard() {
+    const host = document.getElementById('rb-browse-board');
+    if (!host) return;
+    const kind = rbState._swapKind || 'pedal';
+    let title = 'Pedalboard';
+    let cards = '';
+    if (kind === 'amp' || kind === 'cab') {
+        title = kind === 'cab' ? 'Cab / IR' : 'Amp';
+        const entry = (rbStudioGroupDefault()[kind === 'cab' ? 'cab' : 'amp'] || [])[0];
+        const nm = entry && entry.p ? (entry.p.real_name || entry.p.type || title) : '';
+        const swapped = !!(entry && entry.p && entry.p._previewStaging);
+        cards = nm
+            ? `<div class="rb-browse-swapline${swapped ? ' on' : ''}">${rbEsc(nm)}${swapped ? ' · swapped in' : ''}</div>`
+            : `<div class="rb-stomp-preview-tag">Preview a ${kind === 'cab' ? 'cab or IR' : 'amp'} to swap this one</div>`;
+    } else {
+        const pedals = kind === 'rack'
+            ? (rbStudioGroupDefault().rack || [])
+            : rbStudioBrowsePrePedals();
+        title = kind === 'rack' ? 'Rack' : 'Pedalboard';
+        cards = pedals.map(pd => rbStudioStripStompHtml(pd)).join('')
+            || '<div class="rb-stomp-preview-tag">Nothing here yet</div>';
+    }
+    const staged = rbStudioBrowseFindStaging();
+    const actions = staged
+        ? `<button type="button" class="rb-preview-save" onclick="rbStudioBrowseCommitStaging()">Save</button>
+           <button type="button" class="rb-preview-discard" onclick="rbStudioBrowseDiscardStaging()">Discard</button>`
+        : '';
+    host.innerHTML = `
+        <div class="rb-browse-board-label">
+            <span>${title}</span>
+            <span id="rb-browse-board-note" style="flex:1;text-transform:none;letter-spacing:0;font-weight:500;color:#9fb0c8"></span>
+            ${actions}
+        </div>
+        <div class="rb-browse-board-row">${cards}</div>`;
+    try { rbStudioBindPedalboardDnD(); } catch (_) {}
+}
+
+// Keep the rig pedalboard and the one inside the browser in sync.
+function rbStudioBrowsePaintPedalboards() {
+    try { rbStudioBrowseRebuildStripPedals(); } catch (_) {}
+    try { rbStudioBrowseRenderOverlayBoard(); } catch (_) {}
+}
+
+// Rebuild only the strip pedalboard cards (browser panel stays mounted).
+function rbStudioBrowseRebuildStripPedals() {
+    const board = document.querySelector('#rb-studio-room .rb-strip-pedals');
+    if (!board) return;
+    const browse = board.querySelector('.rb-stomp-add');
+    const browseHtml = browse ? browse.outerHTML : '';
+    const prePedals = rbStudioBrowsePrePedals();
+    board.innerHTML = prePedals.map(pd => rbStudioStripStompHtml(pd)).join('') + browseHtml;
+    try { rbStudioBindPedalboardDnD(); } catch (_) {}
+}
+
+// Open the pedal component browser over the strip — no +Pedal focus theater.
+async function rbStudioOpenPedalBrowser() {
+    const room = document.getElementById('rb-studio-room');
+    if (!room) return;
+    rbStudioBrowseExitFocusKeepBrowser();
+    rbState._studioFocusGroup = 'pedal';
+    rbState._studioFocusKind = 'pedal';
+    rbState._studioPedalAddMode = true;
+    rbState._studioFocusIdx = -1;
+    rbState._browseSource = rbState._browseSource || 'library';
+    await rbStudioOpenSwap(-1, 'pedal');
+    room.classList.add('rb-swap-active');
+    try { rbStudioPinSwapRail(); } catch (_) {}
+}
+window.rbStudioOpenPedalBrowser = rbStudioOpenPedalBrowser;
+
+// After Preview: show the temp pedal on the board, keep browser, enable DnD.
+function rbStudioBrowseSoftShowStaged(piece, idx, meta) {
+    meta = meta || {};
+    const slot = meta.slot || '';
+    rbStudioBrowseExitFocusKeepBrowser();
+    rbState._studioFocusIdx = idx;
+
+    if (slot === 'pre_pedal' || slot === 'post_pedal' || slot === 'rack') {
+        rbStudioBrowsePaintPedalboards();
+    } else if (slot === 'amp') {
+        const nm = (piece && (piece.real_name || piece.type)) || 'NAM preview';
+        document.querySelectorAll('#rb-studio-room .rb-amp-stack[data-amp-idx]').forEach(el => {
+            const aidx = parseInt(el.getAttribute('data-amp-idx'), 10);
+            if (aidx !== idx) return;
+            el.classList.add('rb-amp-preview');
+            const nameEl = el.querySelector('.rb-strip-n, .rb-amp-name');
+            if (nameEl) nameEl.textContent = nm;
+            if (!el.querySelector('.rb-stomp-preview-actions')) {
+                el.insertAdjacentHTML('beforeend', rbStudioBrowseStagingActionsHtml(true));
+            }
+        });
+    }
+
+    const room = document.getElementById('rb-studio-room');
+    if (room && document.getElementById('rb-swap-panel')) room.classList.add('rb-swap-active');
+    try { rbStudioPinSwapRail(); } catch (_) {}
+    try { rbStudioBrowseRefreshStagingChrome(); } catch (_) {}
+}
+
+function rbStudioBrowseRefreshStagingChrome() {
+    try { rbStudioBrowseEnsureStagingBanner(); } catch (_) {}
+    try { rbStudioSyncFocusBarActions(); } catch (_) {}
+    const staged = rbStudioBrowseFindStaging();
+    if (!staged) return;
+    document.querySelectorAll(`[data-pedal-idx="${staged.idx}"]`).forEach(el => {
+        el.classList.add('rb-stomp-preview', 'rb-stomp-nam');
+        if (!el.querySelector('.rb-stomp-preview-actions')) {
+            el.insertAdjacentHTML('beforeend', rbStudioBrowseStagingActionsHtml(true));
+        }
+    });
+    const amp = document.querySelector(`#rb-studio-room .rb-amp-stack[data-amp-idx="${staged.idx}"]`);
+    if (amp && !amp.querySelector('.rb-stomp-preview-actions')) {
+        amp.classList.add('rb-amp-preview');
+        amp.insertAdjacentHTML('beforeend', rbStudioBrowseStagingActionsHtml(true));
+    }
+}
+
+function rbStudioBrowseStagingActionsHtml(compact) {
+    const cls = compact ? 'rb-stomp-preview-actions' : 'rb-focus-preview-actions';
+    return `<div class="${cls}" onclick="event.stopPropagation()">
+        <button type="button" class="rb-preview-save" onclick="event.stopPropagation();rbStudioBrowseCommitStaging()">Save</button>
+        <button type="button" class="rb-preview-discard" onclick="event.stopPropagation();rbStudioBrowseDiscardStaging()">Discard</button>
+    </div>`;
+}
+window.rbStudioBrowseCommitStaging = rbStudioBrowseCommitStaging;
+window.rbStudioBrowseDiscardStaging = () => rbStudioBrowseDiscardStaging();
+
+function rbStudioBrowseSnapshotPiece(piece) {
+    if (!piece) return null;
+    let assigned = null;
+    try { assigned = piece.assigned ? JSON.parse(JSON.stringify(piece.assigned)) : null; } catch (_) { assigned = piece.assigned || null; }
+    return {
+        type: piece.type,
+        slot: piece.slot,
+        category: piece.category,
+        rs_category: piece.rs_category,
+        real_name: piece.real_name,
+        _uploaded_file: piece._uploaded_file || null,
+        _uploaded_kind: piece._uploaded_kind || null,
+        assigned,
+        _vst_path: piece._vst_path || null,
+        _vst_kind: piece._vst_kind || null,
+        _vst_format: piece._vst_format || null,
+        _vst_state: piece._vst_state || null,
+        _vst_params: piece._vst_params || null,
+        _vst_logical: piece._vst_logical || null,
+        _vst_param_meta: piece._vst_param_meta || null,
+        _vst_slot_id: piece._vst_slot_id || null,
+        _vst_opaque: piece._vst_opaque || null,
+        _custom_ui: piece._custom_ui,
+    };
+}
+
+function rbStudioBrowseRestorePiece(piece, snap) {
+    if (!piece || !snap) return;
+    if (snap.type != null) piece.type = snap.type;
+    if (snap.slot != null) piece.slot = snap.slot;
+    if (snap.category != null) piece.category = snap.category;
+    if (snap.rs_category != null) piece.rs_category = snap.rs_category;
+    piece.real_name = snap.real_name;
+    piece._uploaded_file = snap._uploaded_file;
+    piece._uploaded_kind = snap._uploaded_kind;
+    if (snap.assigned) piece.assigned = snap.assigned; else delete piece.assigned;
+    piece._vst_path = snap._vst_path;
+    piece._vst_kind = snap._vst_kind;
+    piece._vst_format = snap._vst_format;
+    piece._vst_state = snap._vst_state;
+    piece._vst_params = snap._vst_params;
+    piece._vst_logical = snap._vst_logical;
+    piece._vst_param_meta = snap._vst_param_meta;
+    piece._vst_slot_id = snap._vst_slot_id;
+    piece._vst_opaque = snap._vst_opaque;
+    if (snap._custom_ui) piece._custom_ui = snap._custom_ui; else delete piece._custom_ui;
+    delete piece._previewStaging;
+}
+
+// Discard for amp/cab in-place preview snapshots (restore prior assignment).
+async function rbStudioBrowseRevertPreview(opts) {
+    opts = opts || {};
+    const snap = rbState._browsePreviewSnap;
+    if (snap && !snap.created && typeof snap.idx === 'number') {
+        const piece = (rbStudioCurrentChain())[snap.idx];
+        if (piece) rbStudioBrowseRestorePiece(piece, snap.fields);
+    }
+    rbState._browsePreviewSnap = null;
+    await rbStudioBrowseDiscardStaging({ silent: true, force: true });
+    if (!opts.silent) rbStudioBrowseSetStatus('Preview discarded');
+}
+
 function rbStudioPinSwapRail() {
     const room = document.getElementById('rb-studio-room');
     const panel = document.getElementById('rb-swap-panel');
     if (!room || !panel) return;
+    // Full-screen browser over the studio.
+    if (panel.classList.contains('rb-browse-panel')) {
+        const r = room.getBoundingClientRect();
+        panel.style.position = 'fixed';
+        panel.style.left = r.left + 'px';
+        panel.style.right = Math.max(0, window.innerWidth - r.right) + 'px';
+        panel.style.top = r.top + 'px';
+        panel.style.bottom = Math.max(0, window.innerHeight - r.bottom) + 'px';
+        panel.style.width = 'auto';
+        panel.style.height = 'auto';
+        return;
+    }
     const r = room.getBoundingClientRect();
-    const topOff = 60;   // clear the floating ← Room bar so the search stays visible
+    const topOff = 60;
     panel.style.position = 'fixed';
     panel.style.right = '0';
     panel.style.top = (r.top + topOff) + 'px';
@@ -6682,9 +8078,19 @@ function rbStudioPinSwapRail() {
 function rbStudioCloseSwap() {
     const room = document.getElementById('rb-studio-room');
     const panel = document.getElementById('rb-swap-panel');
-    rbState._swapSearch = '';   // reset the persisted rail search when the rail closes
+    // Keep staged tone3000 previews alive when leaving the browser so the user
+    // can move them on the pedalboard, then Save / Discard from the banner.
+    rbState._swapSearch = '';
+    rbState._swapTag = '';
+    rbState._swapBusy = false;
+    rbState._browseSource = 'library';
+    try { delete rbT3kCtxs.browse; } catch (_) {}
     if (room) room.classList.remove('rb-swap-active');
     if (panel) { panel.classList.remove('rb-swap-open'); setTimeout(() => { try { panel.remove(); } catch (_) {} }, 320); }
+    rbState._studioPedalAddMode = false;
+    if (!document.getElementById('rb-studio-cabroom')) {
+        try { rbRenderStudioRoom(); } catch (_) {}
+    }
 }
 
 function rbStudioAmpThumb(g) {
@@ -6699,71 +8105,163 @@ function rbStudioAmpThumb(g) {
     return `<img src="${window.RB_API}/gear_photo/${encodeURIComponent(g.rs_gear)}${(typeof _RB_GEAR_PHOTO_CB !== 'undefined' ? _RB_GEAR_PHOTO_CB : '')}" alt="" loading="lazy" onerror="this.style.opacity=0">`;
 }
 
+function rbStudioInstrument() {
+    const v = rbState.gearInstrumentFilter;
+    return (v === 'guitar' || v === 'bass') ? v : 'all';
+}
+
+function rbStudioInstrumentToggleHtml() {
+    const cur = rbStudioInstrument();
+    return ['all', 'guitar', 'bass'].map(k => {
+        const label = k === 'all' ? 'All' : (k === 'guitar' ? 'Guitar' : 'Bass');
+        return `<button type="button" class="rb-browse-srcbtn${cur === k ? ' on' : ''}" data-rb-inst="${k}" onclick="rbStudioSetInstrument('${k}')">${label}</button>`;
+    }).join('');
+}
+
+// Bassman and Bassbreaker are guitar amps. Everything else with "bass" or a
+// bass-amp brand is bass gear.
+function rbTextIsBassGear(text) {
+    const s = String(text || '');
+    if (/\bbassman\b|\bbassbreaker\b/i.test(s)) return false;
+    return /\bbass\b/i.test(s)
+        || /\b(ampeg|gallien(?:-krueger)?|darkglass|markbass|aguilar|hartke)\b/i.test(s)
+        || /\btrace elliott\b/i.test(s);
+}
+
+function rbStudioGearMatchesInstrument(g) {
+    const want = rbStudioInstrument();
+    if (!want || want === 'all' || !g) return true;
+    let gi = 'guitar';
+    try { gi = rbGearInstrument(g); } catch (_) {}
+    if (gi === 'all') return true;
+    const bassNamed = rbTextIsBassGear((g.real_name || '') + ' ' + (g.rs_gear || ''));
+    if (want === 'guitar') return gi !== 'bass' && !bassNamed;
+    return gi === 'bass' || bassNamed;
+}
+
+window.rbStudioSetInstrument = function rbStudioSetInstrument(value) {
+    value = (value === 'guitar' || value === 'bass') ? value : 'all';
+    rbState.gearInstrumentFilter = value;
+    try { localStorage.setItem('rig_builder.instrumentFx', value); } catch (_) {}
+    const sel = document.getElementById('rb-gear-instrument-filter');
+    if (sel && sel.value !== value) sel.value = value;
+    document.querySelectorAll('[data-rb-inst]').forEach(btn => {
+        btn.classList.toggle('on', btn.getAttribute('data-rb-inst') === value);
+    });
+    try { rbApplyGearFilters(); } catch (_) {}
+    try { rbStudioRenderSwapList(rbState._swapSearch || ''); } catch (_) {}
+    try {
+        Object.keys(rbT3kCtxs).forEach(id => { const c = rbT3kCtxs[id]; if (c) rbT3kRender(c); });
+    } catch (_) {}
+};
+
+function rbStudioBrowseEnsureLocalFiles() {
+    const kind = rbState._swapKind || 'amp';
+    if (rbState._browseLocalKey === kind) return;
+    rbState._browseLocalKey = kind;
+    rbState._browseLocalFiles = [];
+    const cat = { amp: 'amp', pedal: 'pedal', rack: 'rack', cab: 'cab' }[kind] || 'amp';
+    const primary = kind === 'cab' ? 'ir' : 'nam';
+    const urls = [
+        `${window.RB_API}/local_files?kind=${primary}&category=${cat}`,
+        `${window.RB_API}/local_files?kind=${primary}&category=other`,
+    ];
+    if (kind === 'cab') urls.push(`${window.RB_API}/local_files?kind=nam&category=cab`);
+    Promise.all(urls.map(u => fetch(u).then(r => r.json()).catch(() => ({ files: [] })))).then(parts => {
+        if ((rbState._swapKind || 'amp') !== kind) return;
+        const seen = new Set();
+        const files = [];
+        parts.forEach((part, i) => {
+            const k = (kind === 'cab' && i === 2) ? 'nam' : primary;
+            (part.files || []).forEach(f => {
+                const name = f && f.name;
+                if (!name || seen.has(name)) return;
+                seen.add(name);
+                files.push(Object.assign({ kind: k }, f));
+            });
+        });
+        rbState._browseLocalFiles = files;
+        try { rbStudioRenderSwapList(rbState._swapSearch || ''); } catch (_) {}
+    }).catch(() => { rbState._browseLocalFiles = []; });
+}
+
+window.rbStudioPreviewLocalFile = function rbStudioPreviewLocalFile(file, kind, name) {
+    rbStudioDropPreviewCapture(file, kind, name, rbBrowsePreviewRole(null));
+};
+
 function rbStudioRenderSwapList(search) {
     const list = document.getElementById('rb-swap-list');
     if (!list) return;
     const kind = rbState._swapKind || 'amp';
+    if (kind !== 'rack') { try { rbStudioBrowseEnsureLocalFiles(); } catch (_) {} }
     const idx = rbState._studioFocusIdx;
     const cur = (rbStudioCurrentChain())[idx];
     const curGear = cur && cur.type;
     const curBase = (curGear || '').replace(/_[a-z0-9]{2}$/i, '');
     const q = rbNorm(search || '').trim();
+    const tag = rbState._swapTag || '';
+    const busy = rbState._swapBusyGear || '';
     let items;
     if (kind === 'cab') {
         // Cabs aren't VSTs — list the FULL cab catalog (all 49, clone names)
         // instead of the VST-filtered gear_catalog, so any cab is swappable.
         const cabs = (rbState.realCabCatalog && rbState.realCabCatalog.cabs) || {};
         items = Object.entries(cabs)
-            .map(([rs_gear, e]) => ({ rs_gear, real_name: e.name || rs_gear }))
-            .filter(g => !q || rbNorm(g.real_name + ' ' + g.rs_gear).includes(q))
-            // Alphabetical by display name (the catalog's own order is by type —
-            // guitar then bass; the rail should read A→Z like the Gear list).
+            .map(([rs_gear, e]) => ({ rs_gear, real_name: e.name || rs_gear, category: 'cab' }))
+            .filter(g => (!q || rbNorm(g.real_name + ' ' + g.rs_gear).includes(q))
+                      && rbStudioBrowseItemMatchesTag(g, tag)
+                      && rbStudioGearMatchesInstrument(g))
             .sort((a, b) => a.real_name.localeCompare(b.real_name, undefined, { numeric: true, sensitivity: 'base' }));
     } else {
         items = ((rbState.gearCatalog && rbState.gearCatalog[kind]) || [])
-            .filter(g => rbGearHasVst(g) && (!q || rbGearSearchHaystack(g).includes(q)));
+            .filter(g => rbGearHasVst(g)
+                && (!q || rbGearSearchHaystack(g).includes(q))
+                && rbStudioBrowseItemMatchesTag(g, tag)
+                && rbStudioGearMatchesInstrument(g));
     }
-    if (!items.length) {
+    const locals = kind === 'rack'
+        ? []
+        : (rbState._browseLocalFiles || []).filter(f => !q || rbNorm(f.name || '').includes(q));
+    if (!items.length && !locals.length) {
         const label = kind === 'pedal' ? 'pedals' : (kind === 'rack' ? 'racks' : (kind === 'cab' ? 'cabs' : 'amps'));
-        list.innerHTML = `<div style="text-align:center;color:#8893a8;font-size:12px;padding:24px 0">No ${label} found</div>`;
+        const inst = rbStudioInstrument();
+        const why = inst === 'all' ? '' : ` for ${inst}`;
+        list.innerHTML = `<div style="text-align:center;color:#8893a8;font-size:12px;padding:24px 0;grid-column:1/-1">No ${label}${why}.</div>`;
         return;
     }
-    list.innerHTML = items.map(g => {
+    const scrollY = list.scrollTop;
+    const gearHtml = items.map(g => {
         const name = g.real_name || g.rs_gear;
         const isCur = g.rs_gear === curGear || g.rs_gear === curBase;
-        return `<div class="rb-swap-item ${isCur ? 'rb-swap-current' : ''}"
+        const loading = busy && (g.rs_gear === busy || busy.replace(/_[a-z0-9]{2}$/i, '') === g.rs_gear);
+        return `<div class="rb-swap-item ${isCur ? 'rb-swap-current' : ''} ${loading ? 'rb-swap-loading' : ''}"
+                     data-gear="${rbEsc(g.rs_gear)}"
                      onclick="rbStudioSwapToGear(${rbEsc(JSON.stringify(g.rs_gear))})" title="${rbEsc(name)}">
             <span class="rb-swap-thumb">${rbStudioAmpThumb(g)}</span>
             <span class="rb-swap-name">${rbEsc(name)}</span>
         </div>`;
     }).join('');
-    requestAnimationFrame(() => {
-        const curEl = list.querySelector('.rb-swap-item.rb-swap-current') || list.querySelector('.rb-swap-item');
-        if (curEl) curEl.scrollIntoView({ block: 'center' });
-        rbStudioUpdateSwapCarousel();
-    });
+    const localHtml = locals.length
+        ? `<div class="rb-swap-section">Downloaded</div>` + locals.map(f => {
+            const base = String(f.name || '').split('/').pop();
+            return `<div class="rb-swap-item" onclick="rbStudioPreviewLocalFile(${rbEsc(JSON.stringify(f.name))},${rbEsc(JSON.stringify(f.kind || 'nam'))},${rbEsc(JSON.stringify(base))})" title="${rbEsc(f.name)}">
+                <span class="rb-swap-name">${rbEsc(base)}</span>
+            </div>`;
+        }).join('')
+        : '';
+    list.innerHTML = gearHtml + localHtml;
+    // Keep scroll position while filtering/picking so the grid doesn't jump.
+    list.scrollTop = scrollY;
+    if (!busy) {
+        requestAnimationFrame(() => {
+            const curEl = list.querySelector('.rb-swap-item.rb-swap-current');
+            if (curEl && !q && !tag) curEl.scrollIntoView({ block: 'nearest' });
+        });
+    }
 }
 
-function rbStudioScheduleCarousel() {
-    if (rbState._swapRaf) return;
-    rbState._swapRaf = requestAnimationFrame(() => { rbState._swapRaf = null; rbStudioUpdateSwapCarousel(); });
-}
-
-// Center-focus wheel: the item nearest the list centre is full size/opacity,
-// neighbours shrink + fade with distance.
-function rbStudioUpdateSwapCarousel() {
-    const list = document.getElementById('rb-swap-list');
-    if (!list) return;
-    const cr = list.getBoundingClientRect();
-    const mid = cr.top + cr.height / 2;
-    const half = cr.height / 2 || 1;
-    list.querySelectorAll('.rb-swap-item').forEach(it => {
-        const r = it.getBoundingClientRect();
-        const d = Math.min(1, Math.abs((r.top + r.height / 2) - mid) / half);
-        it.style.transform = `scale(${(1 - d * 0.42).toFixed(3)})`;
-        it.style.opacity = (1 - d * 0.78).toFixed(3);
-    });
-}
+function rbStudioScheduleCarousel() { /* grid browser — no carousel scaling */ }
+function rbStudioUpdateSwapCarousel() { /* no-op: kept for older callers */ }
 
 // After a gear swap/add, the live song chain (mega-chain) was built from the OLD
 // rig, so the new gear doesn't sound until the user re-selects the tone. Rebuild it
@@ -6811,90 +8309,148 @@ async function rbStudioReloadLiveChainAfterSwap() {
     } catch (_) {}
 }
 
-function rbStudioSwapToGear(rsGear) {
-    const kind = rbState._swapKind || 'amp';
-    if (kind === 'cab') {
-        // Cabs swap by rs_gear (IR), not by VST. Song: /gear/replace_with via
-        // rbStudioCabSwap, which reopens the Cab Room (re-entering focus + rail).
-        // Explorer: just re-audition the chosen cab.
-        const q = rbState._swapSearch || '';   // keep the query across the rebuild
-        const v = rbState.studioView || {};
-        if (v.source === 'song' && _rbCabRoom['studio'] && _rbCabRoom['studio']._studio) {
-            rbStudioCabSwap(rsGear);
-        } else {
-            // Default / saved tone: we own the chain array directly, so persist
-            // the chosen cab into it (create the cabinet piece if missing) — the
-            // old path only re-auditioned, so the pick never showed in the room,
-            // seeded the node editor, or survived a restart.
-            rbState._lastExploreCab = rsGear;
-            rbStudioCabApplyLocal(rsGear);
+// Refresh the focused amp/pedal face + VST knobs WITHOUT rebuilding the browser.
+function rbStudioRefreshFocusAfterSwap(kind, idx) {
+    const piece = (rbStudioCurrentChain())[idx];
+    if (!piece) return;
+    if (kind === 'amp') {
+        const stack = document.querySelector('#rb-studio-room .rb-amp-stack.rb-amp-focused')
+                   || document.querySelector(`#rb-studio-room .rb-amp-stack[data-amp-idx="${idx}"]`);
+        const face = (stack && stack.querySelector('.rb-amp-face'))
+                  || document.querySelector('#rb-studio-room .rb-amp-face');
+        if (face) {
+            const img = rbStudioPedalImg(piece);
+            face.innerHTML = img ? `<img src="${img}" alt="${rbEsc(piece.real_name || '')}">` : '';
+            try { rbStudioLoadFocusVst(idx, face, 0); } catch (_) {}
         }
-        // The swap rebuilds the room + rail ASYNCHRONOUSLY (monitor reload), which
-        // can wipe the search after we restore it — re-assert it a few times so
-        // the rail keeps showing the searched result instead of jumping to the top.
-        [80, 300, 650].forEach(t => setTimeout(() => {
-            rbState._swapSearch = q;
-            const inp = document.querySelector('#rb-swap-panel .rb-swap-head input');
-            if (inp) { if (inp.value !== q) inp.value = q; try { rbStudioRenderSwapList(q); } catch (_) {} }
-        }, t));
+        // Strip mode keeps the amp tile under the browser — update its label so
+        // Back to rig / Close browser shows the newly picked amp immediately.
+        try {
+            const nm = piece.real_name || piece.type || 'Amp';
+            if (stack) {
+                const label = stack.querySelector('.rb-strip-n');
+                if (label) label.textContent = nm;
+                stack.title = `${nm} — edit / swap`;
+            }
+        } catch (_) {}
         return;
     }
+    if (kind === 'pedal' || kind === 'rack') {
+        // Re-entry path keeps the browser open and only refreshes the pedal face.
+        try { rbStudioFocusPedal(rbState._studioPedalPos || 0); } catch (_) {}
+    }
+}
+
+async function rbStudioSwapToGear(rsGear) {
+    if (rbState._swapBusy) return;
+    const kind = rbState._swapKind || 'amp';
+    const q = rbState._swapSearch || '';
+    const markBusy = (on) => {
+        rbState._swapBusy = !!on;
+        rbState._swapBusyGear = on ? rsGear : '';
+        try { rbStudioRenderSwapList(q); } catch (_) {}
+    };
+
+    if (kind === 'cab') {
+        // Cabs swap by rs_gear (IR). Keep the browser open — fast in-place when
+        // possible; otherwise apply without tearing down the catalog.
+        markBusy(true);
+        rbStudioBrowseSetStatus('Loading cab audio…');
+        try {
+            const v = rbState.studioView || {};
+            if (v.source === 'song' && _rbCabRoom['studio'] && _rbCabRoom['studio']._studio) {
+                // Prefer silent in-place IR replace; fall back to song replace API
+                // without forcing a full cab-room reopen when the fast path works.
+                if (!(await rbStudioFastCabSwapInPlace(rsGear))) {
+                    await rbStudioCabSwapKeepBrowser(rsGear);
+                } else {
+                    // Persist the song cab pick via replace_with so the tone sticks.
+                    // Do not report success if the save fails after audio already moved.
+                    await rbStudioCabSwapPersistOnly(rsGear);
+                }
+            } else {
+                rbState._lastExploreCab = rsGear;
+                await rbStudioCabApplyLocal(rsGear, { reopen: false });
+            }
+            rbStudioBrowseSetStatus('Cab loaded — keep browsing or go Back to rig');
+        } catch (e) {
+            rbStudioBrowseSetStatus('Cab save failed — try another (audio may not stick)');
+        }
+        markBusy(false);
+        rbState._swapSearch = q;
+        const inp = document.querySelector('#rb-swap-panel .rb-swap-head input');
+        if (inp && inp.value !== q) inp.value = q;
+        try { rbStudioRenderSwapList(q); } catch (_) {}
+        return;
+    }
+
     const g = ((rbState.gearCatalog && rbState.gearCatalog[kind]) || []).find(x => x.rs_gear === rsGear);
     if (!g) return;
-    // Add mode (empty pedalboard / rack tower): create a new piece, append it to
-    // the chain, persist, then focus the freshly-added piece.
-    if ((kind === 'pedal' || kind === 'rack') && rbState._studioPedalAddMode) {
-        if (rbStudioPedalOrder().length >= rbStudioFocusMax()) { rbStudioCloseFocus(); return; }
+
+    // Add mode: no piece is focused (the + rack / Browse buttons), so create one.
+    // A focused pedal or rack is a swap of that piece instead.
+    const adding = (kind === 'pedal' || kind === 'rack')
+        && (rbState._studioPedalAddMode || !(rbState._studioFocusIdx >= 0));
+    if (adding) {
+        if (rbStudioPedalOrder().length >= rbStudioFocusMax()) {
+            rbStudioBrowseSetStatus(kind === 'rack' ? 'Rack is full' : 'Pedalboard is full');
+            return;
+        }
         const vp = rbGearVstPath(g);
         if (!vp) return;
+        markBusy(true);
+        rbStudioBrowseSetStatus('Adding + loading audio…');
+        const slot = kind === 'rack' ? 'rack' : 'pre_pedal';
         const newPiece = {
             type: g.rs_gear, real_name: g.real_name || g.rs_gear,
-            category: kind, rs_category: kind, slot: kind === 'rack' ? 'rack' : 'pre_pedal',
+            category: kind, rs_category: kind, slot,
             _vst_kind: 'vst', _vst_path: vp, _vst_format: g.vst_format || 'VST3',
             assigned: { kind: 'vst', vst_path: vp, vst_format: g.vst_format || 'VST3', vst_state: null },
         };
-        if (g.custom && g.ui) newPiece._custom_ui = g.ui;   // show the created face
+        if (g.custom && g.ui) newPiece._custom_ui = g.ui;
         rbStudioCurrentChain().push(newPiece);
-        rbState._studioPedalAddMode = false;
+        rbState._studioFocusIdx = rbStudioCurrentChain().indexOf(newPiece);
         try { rbStudioPersist(); } catch (_) {}
-        rbStudioReloadLiveChainAfterSwap();   // new pedal sounds without re-selecting the tone
-        // Don't re-render the room here — it would wipe the focus layer + rail
-        // (room children). The order already reflects the new piece; the floor
-        // board repaints on close (rbStudioCloseFocus).
-        const order = rbStudioPedalOrder();
-        rbStudioFocusPedal(order.length - 1);
+        try { await rbStudioReloadLiveChainAfterSwap(); } catch (_) {}
+        markBusy(false);
+        try { rbStudioBrowseRenderOverlayBoard(); } catch (_) {}
+        try { rbStudioBrowseTouchStripLabels(); } catch (_) {}
+        rbStudioBrowseSetStatus((g.real_name || g.rs_gear) + ' added — Back to rig to see it on the strip');
         return;
     }
+
     // Amp add-mode: the tone had NO amp (deleted, or a fresh empty chain).
-    // Create a new amp piece and append it — mirrors the pedal/rack add branch;
-    // the plain swap path below requires an existing amp piece to mutate.
     if (kind === 'amp' && rbState._studioAmpAddMode) {
         const vp = rbGearVstPath(g);
         if (!vp) return;
+        markBusy(true);
+        rbStudioBrowseSetStatus('Adding + loading audio…');
         const newPiece = {
             type: g.rs_gear, real_name: g.real_name || g.rs_gear,
             category: 'amp', rs_category: 'amp', slot: 'amp',
             _vst_kind: 'vst', _vst_path: vp, _vst_format: g.vst_format || 'VST3',
             assigned: { kind: 'vst', vst_path: vp, vst_format: g.vst_format || 'VST3', vst_state: null },
         };
-        if (g.custom && g.ui) newPiece._custom_ui = g.ui;   // show the created face
+        if (g.custom && g.ui) newPiece._custom_ui = g.ui;
         rbStudioCurrentChain().push(newPiece);
         rbState._studioAmpAddMode = false;
         try { rbStudioPersist(); } catch (_) {}
-        rbStudioReloadLiveChainAfterSwap();
-        // The amp stack didn't exist, so re-render the room to create it, then
-        // focus the freshly-added amp (rbRenderStudioRoom wipes the swap rail +
-        // focus bar; rbStudioFocusAmp rebuilds them).
+        try { await rbStudioReloadLiveChainAfterSwap(); } catch (_) {}
+        markBusy(false);
         try { rbRenderStudioRoom(); } catch (_) {}
         const added = (rbStudioGroupDefault().amp || [])[0];
         if (added) rbStudioFocusAmp(added.idx); else { try { rbStudioCloseFocus(); } catch (_) {} }
         return;
     }
+
     const idx = rbState._studioFocusIdx;
     const piece = (rbStudioCurrentChain())[idx];
     if (!piece) return;
     const vstPath = rbGearVstPath(g);
     if (!vstPath) return;
+
+    markBusy(true);
+    rbStudioBrowseSetStatus('Loading audio…');
     piece.type = g.rs_gear;
     piece.real_name = g.real_name || g.rs_gear;
     piece.category = kind; piece.rs_category = kind;
@@ -6907,26 +8463,84 @@ function rbStudioSwapToGear(rsGear) {
     piece._vst_state = null; piece._vst_params = null; piece._vst_logical = null;
     piece._vst_param_meta = null; piece._vst_slot_id = null; piece._vst_opaque = null;
     try { rbStudioPersist(); } catch (_) {}
-    rbStudioReloadLiveChainAfterSwap();   // rebuild the live song chain so the swap sounds without re-selecting the tone
-    if (kind === 'amp') {
-        // Show the new amp face immediately, then reload focus (loads its VST +
-        // knobs and re-renders the rail with the new amp centred). Target THIS
-        // amp's stack by its chain index — a bare `.rb-amp-face` grabbed the FIRST
-        // amp, so swapping amp 2 stamped its photo onto amp 1 in a parallel rig
-        // (and both showed the new face until the room was re-rendered).
-        const stack = document.querySelector('#rb-studio-room .rb-amp-stack.rb-amp-focused')
-                   || document.querySelector(`#rb-studio-room .rb-amp-stack[data-amp-idx="${idx}"]`);
-        const face = (stack && stack.querySelector('.rb-amp-face'))
-                  || document.querySelector('#rb-studio-room .rb-amp-face');
-        if (face) { const img = rbStudioPedalImg(piece); face.innerHTML = img ? `<img src="${img}" alt="${rbEsc(piece.real_name)}">` : ''; }
-        rbStudioFocusAmp(idx);
-    } else {
-        // Reload the pedal focus at the same chain position with the new pedal.
-        rbStudioFocusPedal(rbState._studioPedalPos || 0);
+    try {
+        await rbStudioReloadLiveChainAfterSwap();
+        rbStudioBrowseSetStatus('Loaded — keep browsing or go Back to rig');
+    } catch (_) {
+        rbStudioBrowseSetStatus('Audio reload failed — try again');
     }
+    // Keep the browser open: refresh face/knobs in place instead of FocusAmp,
+    // which used to rebuild the whole rail and dump you out of browsing.
+    rbStudioRefreshFocusAfterSwap(kind, idx);
+    markBusy(false);
 }
 // Back-compat alias (older inline handlers).
 function rbStudioSwapToAmp(rsGear) { return rbStudioSwapToGear(rsGear); }
+
+// Song cab pick: persist via replace_with without forcing a cab-room reopen.
+async function rbStudioCabSwapPersistOnly(newBase) {
+    const st = _rbCabRoom['studio'];
+    const info = st && st._studio;
+    const v = rbState.studioView || {};
+    if (!info || v.source !== 'song') return;
+    const tone = rbState.songTones?.tones?.[info.toneIdx];
+    const piece = tone?.chain?.[info.pIdx];
+    if (!tone || !piece) return;
+    const cur = String(piece.type || '');
+    const prevName = piece.real_name;
+    const suf = /_([a-z0-9]{2})$/i.exec(cur);
+    const to = newBase + (suf ? '_' + suf[1] : '');
+    // Never call replace_with without a preset id — omitting it rewrites the cab
+    // across every song that still used the old gear.
+    let presetId = tone.preset_id;
+    if (presetId == null) {
+        presetId = await rbPersistTone(info.toneIdx, rbState.currentSongFile);
+        if (presetId == null) throw new Error('Could not save tone before cab swap');
+        tone.preset_id = presetId;
+    }
+    // Move the highlight immediately, then persist (roll back on failure).
+    piece.type = to;
+    try {
+        const catEntry = (rbState.realCabCatalog && rbState.realCabCatalog.cabs
+                          && rbState.realCabCatalog.cabs[newBase]) || {};
+        piece.real_name = catEntry.name || piece.real_name || newBase;
+        if (st) st._gear = newBase;
+    } catch (_) {}
+    let d;
+    try {
+        const r = await fetch(`${window.RB_API}/gear/replace_with`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ from_rs_gear: cur, to_rs_gear: to, preset_id: presetId }),
+        });
+        d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || r.status);
+        // noop (same cab) is fine; zero updates with a real swap is a failed save.
+        if (!d.noop && !(Number(d.pieces_updated) > 0)) {
+            throw new Error('Cab was not updated in the song preset');
+        }
+    } catch (e) {
+        piece.type = cur;
+        piece.real_name = prevName;
+        try {
+            const oldBase = cur.replace(/_[a-z0-9]{2}$/i, '');
+            if (st) st._gear = oldBase;
+            await rbStudioFastCabSwapInPlace(oldBase);
+        } catch (_) {}
+        throw e;
+    }
+    const fresh = await rbFetchSong(rbState.currentSongFile);
+    if (fresh && !fresh.error) { rbState.songTones = fresh; try { rbSeedBypass(fresh); } catch (_) {} }
+}
+
+// Song cab swap that keeps the component browser mounted (no full reopen dance).
+async function rbStudioCabSwapKeepBrowser(newBase) {
+    if (await rbStudioFastCabSwapInPlace(newBase)) {
+        await rbStudioCabSwapPersistOnly(newBase);
+        return;
+    }
+    // Fall back to the classic reopen path only when in-place IR replace fails.
+    await rbStudioCabSwap(newBase);
+}
 
 // Entry point for the host's main-menu "Studio" item (v3 shell.js): show the
 // Gear tab and land on the Studio room regardless of the last-used tab.
@@ -7211,11 +8825,61 @@ window.rbStudioRenderToneMenu = function rbStudioRenderToneMenu(filter) {
     if (!menu) return;
     rbState._toneMenuFilter = filter || '';
     // Per-song-tone Restore/Remove is NOT here (too hidden) — it's the floating
-    // button next to "⚙ Advanced". This menu only saves the current tone.
+    // button next to "⚙ Advanced". The foot is an explicit Save menu so song
+    // tones can be UPDATED (old UI mostly only offered Save-as-new).
+    const v = rbState.studioView || { source: 'default' };
+    let saveFoot = '';
+    if (v.source === 'song') {
+        const t = rbState.songTones && rbState.songTones.tones && rbState.songTones.tones[v.toneIdx];
+        const label = (t && (t.name || t.key)) || 'Tone';
+        saveFoot = `<div class="rb-tone-save-menu">
+            <div class="rb-tone-save-hint">Editing song tone <b>${rbEsc(label)}</b>. Update writes your chain back to the song.</div>
+            <button class="rb-tone-save-btn primary" onclick="rbStudioUpdateActiveTone()">Update song tone “${rbEsc(label)}”</button>
+            <button class="rb-tone-save-btn rb-tone-save-as" onclick="rbStudioSaveTone()">Save as new studio tone…</button>
+        </div>`;
+    } else if (v.source === 'saved') {
+        saveFoot = `<div class="rb-tone-save-menu">
+            <div class="rb-tone-save-hint">Editing saved tone <b>${rbEsc(v.name || '')}</b>.</div>
+            <button class="rb-tone-save-btn primary" onclick="rbStudioUpdateActiveTone()">Overwrite “${rbEsc(v.name || '')}”</button>
+            <button class="rb-tone-save-btn rb-tone-save-as" onclick="rbStudioSaveTone()">Save as new studio tone…</button>
+        </div>`;
+    } else {
+        saveFoot = `<div class="rb-tone-save-menu">
+            <div class="rb-tone-save-hint">Editing the Default tone (idle / no song).</div>
+            <button class="rb-tone-save-btn primary" onclick="rbStudioUpdateActiveTone()">Update Default tone</button>
+            <button class="rb-tone-save-btn rb-tone-save-as" onclick="rbStudioSaveTone()">Save as new studio tone…</button>
+            <button class="rb-tone-save-btn" onclick="document.getElementById('rb-tone-menu')?.classList.add('hidden');rbOpenNewToneDialog({preferSong:false})">＋ New tone…</button>
+        </div>`;
+    }
     menu.innerHTML = `
         <div class="rb-tone-search"><input type="text" placeholder="Search tones…" value="${rbEsc(filter || '')}" oninput="rbStudioFilterToneList(this.value)"></div>
         <div class="rb-tone-list" id="rb-tone-list">${rbStudioToneListHtml(filter)}</div>
-        <div class="rb-tone-foot"><button class="rb-tone-save" onclick="rbStudioSaveTone()">💾 Save current tone</button></div>`;
+        <div class="rb-tone-foot">${saveFoot}</div>`;
+};
+
+// Explicit Update for the active Studio view (song / saved / default).
+window.rbStudioUpdateActiveTone = async function rbStudioUpdateActiveTone() {
+    try {
+        const p = rbStudioPersist();
+        if (p == null) return;   // nothing to persist / failed before returning a promise
+        const result = (typeof p.then === 'function') ? await p : p;
+        // rbPersistTone resolves null after alerting — don't toast success.
+        if (result === null) return;
+        document.getElementById('rb-tone-menu')?.classList.add('hidden');
+        const v = rbState.studioView || {};
+        const msg = v.source === 'song' ? 'Song tone updated'
+            : (v.source === 'saved' ? 'Saved tone updated' : 'Default tone updated');
+        try {
+            const toast = document.createElement('div');
+            toast.className = 'rb-fc-banner on';
+            toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;';
+            toast.textContent = '✓ ' + msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 1600);
+        } catch (_) {}
+    } catch (e) {
+        alert('Update failed: ' + (e && e.message ? e.message : e));
+    }
 };
 
 // Revert the currently-loaded SONG tone to the song's original bundled gear
@@ -7275,21 +8939,33 @@ window.rbStudioPickTone = function rbStudioPickTone(source, arg) {
     else if (source === 'saved') { const t = (rbState.savedTones || [])[arg]; if (t) rbStudioShowSavedTone(t.name); }
     else if (source === 'song') rbStudioShowSongTone(arg);
 };
-window.rbStudioShowDefault = function rbStudioShowDefault() {
+// Drop an unfinished tone3000 temp pedal before changing tones so it can't
+// stick on the previous rig.
+async function rbStudioDiscardStagingIfAny() {
+    try {
+        if (rbStudioBrowseFindStaging() || rbState._browsePreviewSnap) {
+            await rbStudioBrowseDiscardStaging({ silent: true, force: true });
+        }
+    } catch (_) {}
+}
+window.rbStudioShowDefault = async function rbStudioShowDefault() {
+    await rbStudioDiscardStagingIfAny();
     rbState.studioView = { source: 'default' };
     rbShowTab('studio');
     try { rbRenderStudioRoom(); rbStudioRenderToneChips(); } catch (_) {}
     rbLoadCurrentToneGate();   // this tone's own noise gate (audio-independent)
     rbStudioLoadMonitor();   // reload the live monitor so the switch is heard
 };
-window.rbStudioShowSongTone = function rbStudioShowSongTone(i) {
+window.rbStudioShowSongTone = async function rbStudioShowSongTone(i) {
+    await rbStudioDiscardStagingIfAny();
     rbState.studioView = { source: 'song', toneIdx: i };
     rbShowTab('studio');
     try { rbRenderStudioRoom(); rbStudioRenderToneChips(); } catch (_) {}
     rbLoadCurrentToneGate();   // THIS song tone's own noise gate, not the last one's
     rbStudioLoadMonitor();   // audition the song tone (gear AND sound change together)
 };
-window.rbStudioShowSavedTone = function rbStudioShowSavedTone(name) {
+window.rbStudioShowSavedTone = async function rbStudioShowSavedTone(name) {
+    await rbStudioDiscardStagingIfAny();
     rbState.studioView = { source: 'saved', name };
     rbShowTab('studio');
     try { rbRenderStudioRoom(); rbStudioRenderToneChips(); } catch (_) {}
@@ -8162,20 +9838,25 @@ function rbFullChainPayloadPiece(p) {
 }
 
 function rbStudioChainToPayload(chain) {
-    return (chain || []).map(p => {
+    // Include tone3000 preview/_previewStaging pieces so the live engine can
+    // audition order (OD→delay). Discard removes them; Save to tone only clears
+    // the preview flag. Leaving Studio should discard if still staged.
+    return (chain || []).filter(p => !!p).map(p => {
         const fc = rbFullChainPayloadPiece(p);
         if (fc) return fc;
         const isVst = p._vst_kind === 'vst' || (p.assigned && p.assigned.kind === 'vst' && p.assigned.vst_path);
         const cat = (p.category || p.rs_category || '').toLowerCase();
         const slot = p.slot || (cat === 'amp' ? 'amp' : cat === 'cab' ? 'cabinet' : cat === 'rack' ? 'rack' : 'pre_pedal');
+        // Keep knobs/params so "New tone from current/seed" doesn't drop gain etc.
+        const params = (p.knobs && typeof p.knobs === 'object') ? p.knobs : {};
         if (isVst) {
             return { slot, rs_gear_type: p.type, kind: 'vst', file: null,
                 vst_path: rbEffVstPath(p), vst_format: rbEffVstFormat(p), vst_state: rbEffVstState(p),
-                params: {}, assigned_mode: 'manual', bypassed: !!p._bypassed };
+                params, assigned_mode: 'manual', bypassed: !!p._bypassed };
         }
         const file = rbEffFile(p);
         const kind = rbEffKind(p) || (file ? (cat === 'cab' ? 'ir' : 'nam') : 'none');
-        return { slot, rs_gear_type: p.type, kind, file, params: {}, assigned_mode: 'manual', bypassed: !!p._bypassed };
+        return { slot, rs_gear_type: p.type, kind, file, params, assigned_mode: 'manual', bypassed: !!p._bypassed };
     });
 }
 
@@ -8365,7 +10046,9 @@ const RB_T3K_CATS = [
 ];
 function rbT3kMount(opts) {
     const ctx = Object.assign({
-        query: '', gears: opts.forceCategory || opts.initialCat || '', searching: false,
+        query: '',
+        gears: opts.inRigPreview ? (opts.initialCat || '') : (opts.forceCategory || opts.initialCat || ''),
+        searching: false,
         results: null, expanded: null, captures: {},
     }, opts);
     rbT3kCtxs[opts.id] = ctx;
@@ -8380,15 +10063,17 @@ function rbT3kHtml(ctx) {
     const dirBtn = ctx.allowDir
         ? `<button class="rb-fc-dir" onclick="rbT3kPickDir('${ctx.id}')">📁 Choose from directory…</button>
            <div class="rb-fc-or">— or search tone3000 —</div>` : '';
-    const chips = ctx.forceCategory ? '' : `<div class="rb-t3k-chips">${
+    const chips = (!ctx.forceCategory || ctx.inRigPreview) ? `<div class="rb-t3k-chips">${
         RB_T3K_CATS.map(c => `<button class="rb-t3k-chip ${ctx.gears === c.key ? 'on' : ''}" onclick="rbT3kSetCat('${ctx.id}','${c.key}')">${c.label}</button>`).join('')
-    }</div>`;
+    }</div>${(ctx.inRigPreview && (rbState._swapKind === 'amp') && ctx.gears !== 'ir' && ctx.gears !== 'pedal' && ctx.gears !== 'outboard')
+        ? `<label class="rb-t3k-inccab"><input type="checkbox" ${rbState._browseIncludeCab ? 'checked' : ''} onchange="rbState._browseIncludeCab=this.checked"> Includes the cab — turn the rig cab off while trying this</label>`
+        : ''}` : '';
     let results = '';
     const r = ctx.results;
     if (ctx.searching) results = `<div class="rb-fc-hint">searching tone3000…</div>`;
     else if (r && !r.has_api_access) results = `<div class="rb-fc-hint rb-fc-warn">Connect tone3000 in Setup → tone3000 to search in-app.</div>`;
     else if (r && (!r.candidates || !r.candidates.length)) results = `<div class="rb-fc-hint">No results — try a brand / model.</div>`;
-    else if (r) results = r.candidates.slice(0, 20).map(c => rbT3kCandHtml(ctx, c)).join('');
+    else if (r) results = r.candidates.slice(0, 25).map(c => rbT3kCandHtml(ctx, c)).join('');
     return `${dirBtn}${chips}
         <div class="rb-fc-search">
             <input id="rb-t3k-q-${ctx.id}" type="text" value="${rbEsc(ctx.query || '')}" placeholder="brand / model…"
@@ -8439,11 +10124,19 @@ function rbT3kCapRowsHtml(ctx, toneId, caps) {
     const q = (ctx.capFilter || '').toLowerCase().trim();
     const list = q ? caps.filter(m => (m.name || '').toLowerCase().includes(q)) : caps;
     if (!list.length) return `<div class="rb-fc-hint">no captures match “${rbEsc(ctx.capFilter)}”</div>`;
-    return list.map(m => `<div class="rb-t3k-cap">
+    const mid = (m) => (m.model_id == null ? 'null' : m.model_id);
+    return list.map(m => {
+        const preview = ctx.inRigPreview
+            ? `<button type="button" class="rb-fc-use" onclick="rbT3kPreview('${ctx.id}',this,${toneId},${mid(m)})">▶ Preview</button>`
+            : '';
+        const useLabel = ctx.inRigPreview ? '✓ Use' : '⬇ Download';
+        return `<div class="rb-t3k-cap">
             <span class="rb-t3k-cap-name" title="${rbEsc(m.name)}">${rbEsc(m.name)}</span>
             ${m.size ? `<span class="rb-t3k-cap-size">${rbEsc(m.size)}</span>` : ''}
-            <button class="rb-fc-use" onclick="rbT3kUse('${ctx.id}',this,${toneId},${m.model_id})">⬇ Download</button>
-        </div>`).join('');
+            ${preview}
+            <button class="rb-fc-use" onclick="rbT3kUse('${ctx.id}',this,${toneId},${mid(m)})">${useLabel}</button>
+        </div>`;
+    }).join('');
 }
 window.rbT3kCapFilter = function (id, val) {
     const c = rbT3kCtxs[id]; if (!c) return;
@@ -8452,6 +10145,18 @@ window.rbT3kCapFilter = function (id, val) {
     const host = document.getElementById(`rb-t3k-caplist-${id}`);
     if (host && Array.isArray(caps)) host.innerHTML = rbT3kCapRowsHtml(c, c.expanded, caps);
 };
+function rbBrowsePreviewRole(c) {
+    const chip = ((c && c.gears) || '').toLowerCase();
+    if (chip === 'ir') return 'cab';
+    if (chip === 'pedal') return 'pedal';
+    if (chip === 'outboard') return 'rack';
+    const swap = rbState._swapKind || 'amp';
+    if (swap === 'cab') return 'cab';
+    if (swap === 'pedal') return 'pedal';
+    if (swap === 'rack') return 'rack';
+    if (swap === 'amp' && rbState._browseIncludeCab) return 'combo';
+    return 'amp';
+}
 window.rbT3kSetCat = function (id, key) {
     const c = rbT3kCtxs[id]; if (!c) return;
     c.gears = key; c.expanded = null;
@@ -8465,7 +10170,7 @@ window.rbT3kSearch = async function (id) {
     if (!c.query) return;
     c.searching = true; c.expanded = null; c.captures = {};
     rbT3kRender(c);
-    const params = { rs_gear: '', query_override: c.query, limit: '20' };
+    const params = { rs_gear: '', query_override: c.query, limit: '25' };
     if (c.gears) params.gears_override = c.gears;
     try { c.results = await (await fetch(`${window.RB_API}/search?${new URLSearchParams(params)}`)).json(); }
     catch (e) { c.results = { has_api_access: true, candidates: [] }; }
@@ -8487,29 +10192,73 @@ window.rbT3kToggle = async function (id, toneId) {
     }
     if (c.expanded === toneId) rbT3kRender(c);
 };
+async function rbT3kFetchCandidate(c, toneId, modelId) {
+    const body = { rs_gear: '', tone3000_id: toneId };
+    if (modelId != null && modelId !== 'null') body.model_id = modelId;
+    const picked = (c.gears || '').toLowerCase();
+    const force = picked || (c.forceCategory || '').toLowerCase();
+    if (force === 'ir' || force === 'cab') { body.is_ir = true; body.category = 'cab'; }
+    else if (force === 'pedal') body.category = 'pedal';
+    else if (force === 'outboard' || force === 'rack') body.category = 'rack';
+    else if (force === 'amp' || force === 'full-rig') body.category = 'amp';
+    const r = await fetch(`${window.RB_API}/audition_candidate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!r.ok || !d.file) throw new Error(d.error || 'download failed');
+    let nm;
+    const caps = c.captures[toneId];
+    if (modelId != null && modelId !== 'null' && Array.isArray(caps)) {
+        const m = caps.find(x => x.model_id === modelId);
+        nm = m && m.name;
+    }
+    if (!nm) {
+        const cand = ((c.results && c.results.candidates) || []).find(x => x.id === toneId);
+        nm = cand && cand.title;
+    }
+    return { file: d.file, kind: d.kind || 'nam', name: nm };
+}
+window.rbT3kPreview = async function (id, btn, toneId, modelId) {
+    const c = rbT3kCtxs[id];
+    const note = document.getElementById('rb-browse-board-note');
+    if (note) note.textContent = 'Downloading…';
+    if (!c) {
+        if (note) note.textContent = 'Preview failed — browser context missing';
+        return;
+    }
+    const old = btn && btn.textContent;
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+        const d = await rbT3kFetchCandidate(c, toneId, modelId);
+        const role = id === 'browse' ? rbBrowsePreviewRole(c) : null;
+        if (id === 'browse') {
+            rbStudioDropPreviewCapture(d.file, d.kind, d.name, role);
+        } else if (typeof c.onPreview === 'function') {
+            await c.onPreview(d.file, d.kind, d.name);
+        } else if (typeof c.onUse === 'function') {
+            await c.onUse(d.file, d.kind, d.name);
+        }
+    } catch (e) {
+        const msg = `Preview failed: ${e && e.message ? e.message : e}`;
+        if (note) note.textContent = msg;
+        try { rbStudioBrowseSetStatus(msg); } catch (_) {}
+    }
+    if (btn) { btn.disabled = false; btn.textContent = old || '▶ Preview'; }
+};
 window.rbT3kUse = async function (id, btn, toneId, modelId) {
     const c = rbT3kCtxs[id]; if (!c) return;
     const old = btn.textContent;
     btn.disabled = true; btn.textContent = '…';
-    let d;
     try {
-        const body = { rs_gear: '', tone3000_id: toneId };
-        if (modelId != null) body.model_id = modelId;
-        if (c.gears === 'ir') body.is_ir = true;
-        const r = await fetch(`${window.RB_API}/audition_candidate`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-        });
-        d = await r.json();
-        if (!r.ok || !d.file) throw new Error(d.error || 'download failed');
+        const d = await rbT3kFetchCandidate(c, toneId, modelId);
+        if (id === 'browse') {
+            rbStudioDropPreviewCapture(d.file, d.kind, d.name, rbBrowsePreviewRole(c));
+            await rbStudioBrowseCommitStaging();
+        } else if (typeof c.onUse === 'function') await c.onUse(d.file, d.kind, d.name);
     } catch (e) {
-        btn.disabled = false; btn.textContent = old;
-        return alert(`Couldn't download: ${e.message || e}`);
+        alert(`Couldn't download: ${e.message || e}`);
     }
-    let nm;
-    const caps = c.captures[toneId];
-    if (modelId != null && Array.isArray(caps)) { const m = caps.find(x => x.model_id === modelId); nm = m && m.name; }
-    if (!nm) { const cand = ((c.results && c.results.candidates) || []).find(x => x.id === toneId); nm = cand && cand.title; }
-    c.onUse(d.file, d.kind || 'nam', nm);
+    btn.disabled = false; btn.textContent = old;
 };
 window.rbT3kPickDir = async function (id) {
     const c = rbT3kCtxs[id]; if (!c) return;
@@ -8568,11 +10317,14 @@ function rbFcScopeLabel() {
 }
 
 // Save the current Studio chain as a user-named tone. Electron blocks
-// window.prompt(), so we swap the 💾 Save button for an inline name input.
+// window.prompt(), so we swap the Save-as button for an inline name input.
 window.rbStudioSaveTone = function rbStudioSaveTone() {
     const foot = document.querySelector('#rb-tone-menu .rb-tone-foot');
-    const saveBtn = foot && foot.querySelector('.rb-tone-save');
-    if (!saveBtn || foot.querySelector('.rb-tone-saveinput')) return;
+    if (!foot || foot.querySelector('.rb-tone-saveinput')) return;
+    const saveBtn = foot.querySelector('.rb-tone-save-as')
+        || foot.querySelector('.rb-tone-save-btn:not(.primary)')
+        || foot.querySelector('.rb-tone-save-btn');
+    if (!saveBtn) return;
     const box = document.createElement('div');
     box.className = 'rb-tone-saveinput';
     box.innerHTML = `<input type="text" placeholder="Tone name…">
@@ -8587,11 +10339,17 @@ window.rbStudioSaveTone = function rbStudioSaveTone() {
     box.querySelector('.rb-tone-savecancel').onclick = cancel;
     input.onkeydown = e => { if (e.key === 'Enter') doSave(); else if (e.key === 'Escape') cancel(); };
 };
-async function rbStudioCommitSaveTone(name) {
+async function rbStudioCommitSaveTone(name, piecesPayload) {
+    const pieces = Array.isArray(piecesPayload)
+        ? piecesPayload
+        : rbStudioChainToPayload(rbStudioCurrentChain());
+    // Avoid silently replacing an existing Studio tone (Empty seed would wipe it).
+    const exists = (rbState.savedTones || []).some(t => t && t.name === name);
+    if (exists && !confirm(`A Studio tone named “${name}” already exists. Overwrite it?`)) return;
     try {
         const r = await fetch(`${window.RB_API}/saved_tone/save`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, pieces: rbStudioChainToPayload(rbStudioCurrentChain()) }),
+            body: JSON.stringify({ name, pieces }),
         });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { alert(`Save failed: ${d.error || r.status} — restart the app if you just updated (new backend route).`); return; }
@@ -9493,7 +11251,13 @@ function rbRenderLibrarySongListItem(song, fallbackProviderId) {
 // auto-download re-fetch) or a re-render shows bypass as off.
 function rbSeedBypass(data) {
     if (data && Array.isArray(data.tones)) {
-        data.tones.forEach(t => (t.chain || []).forEach(p => { p._bypassed = !!p.bypassed; }));
+        data.tones.forEach(t => (t.chain || []).forEach(p => {
+            // Prefer the persisted `bypassed` field from /song. When cloning a
+            // live chain for New tone, pieces often only have `_bypassed` — keep
+            // that instead of resetting everything to off.
+            if (Object.prototype.hasOwnProperty.call(p, 'bypassed')) p._bypassed = !!p.bypassed;
+            else if (p._bypassed == null && p.assigned) p._bypassed = !!p.assigned.bypassed;
+        }));
     }
 }
 
@@ -10165,6 +11929,44 @@ function rbSelectPiece(toneIdx, pIdx) {
 // opts: { name?: string, seedSavedId?: string|number }. name → the tone's
 // display name (and key, so it survives a reload). seedSavedId → import that
 // saved Studio tone's chain instead of the Default tone.
+function rbCloneTonePieces(pieces) {
+    try { return JSON.parse(JSON.stringify(Array.isArray(pieces) ? pieces : [])); } catch (_) { return []; }
+}
+
+// Resolve a New-tone seed into a chain array (rich piece objects).
+async function rbResolveToneSeed(opts) {
+    opts = opts || {};
+    if (opts.seedEmpty || opts.seed === 'empty') return [];
+    if (Array.isArray(opts.seedPieces)) return rbCloneTonePieces(opts.seedPieces);
+    if (opts.seed === 'current') {
+        // Flush focused knob edits into the chain before cloning — New tone can
+        // open from the top bar without closing the amp/pedal editor.
+        try {
+            const fidx = rbState._studioFocusIdx;
+            if (typeof fidx === 'number' && fidx >= 0) rbStudioQuickSavePiece(fidx);
+        } catch (_) {}
+        return rbCloneTonePieces(rbStudioCurrentChain());
+    }
+    if (opts.seedSongIdx != null && opts.seedSongIdx !== '') {
+        const st = rbState.songTones;
+        const t = st && Array.isArray(st.tones) ? st.tones[Number(opts.seedSongIdx)] : null;
+        if (t && Array.isArray(t.chain)) return rbCloneTonePieces(t.chain);
+    }
+    if (opts.seedSavedId != null && opts.seedSavedId !== '') {
+        const s = (rbState.savedTones || []).find(t => String(t.id) === String(opts.seedSavedId));
+        if (s && Array.isArray(s.pieces)) return rbCloneTonePieces(s.pieces);
+    }
+    // Default tone (or explicit seed=default)
+    try {
+        const r = await fetch(`${window.RB_API}/default_tone`);
+        if (r.ok) {
+            const dt = await r.json();
+            if (Array.isArray(dt.pieces)) return rbCloneTonePieces(dt.pieces);
+        }
+    } catch (_) {}
+    return [];
+}
+
 window.rbAddSongTone = async function rbAddSongTone(filename, opts) {
     opts = opts || {};
     filename = filename || (rbState.songTones && rbState.songTones.filename) || rbState.currentSongFile;
@@ -10173,18 +11975,10 @@ window.rbAddSongTone = async function rbAddSongTone(filename, opts) {
     rbState.songTones.filename = rbState.songTones.filename || filename;
     if (!Array.isArray(rbState.songTones.tones)) rbState.songTones.tones = [];
     const tones = rbState.songTones.tones;
-    // Seed the chain: import a saved Studio tone's pieces, or fall back to the
-    // Default tone. Empty seed just means the user builds it up piece by piece.
-    let pieces = [];
-    if (opts.seedSavedId != null && opts.seedSavedId !== '') {
-        const s = (rbState.savedTones || []).find(t => String(t.id) === String(opts.seedSavedId));
-        if (s && Array.isArray(s.pieces)) pieces = s.pieces;
-    } else {
-        try {
-            const r = await fetch(`${window.RB_API}/default_tone`);
-            if (r.ok) { const dt = await r.json(); if (Array.isArray(dt.pieces)) pieces = dt.pieces; }
-        } catch (_) {}
-    }
+    // Seed the chain: empty / current / song tone / saved tone / Default.
+    const pieces = await rbResolveToneSeed(opts);
+    // Round-trip bypass for clones that only carried `_bypassed` (live chain).
+    pieces.forEach(p => { if (p && p.bypassed == null) p.bypassed = !!p._bypassed; });
     // Key + display name. A user-typed name becomes BOTH the key and the name
     // (get_song shows a non-sentinel tone_key verbatim, so the name survives a
     // reload). No name → "__default__" for the first tone on a tone-less song,
@@ -10226,33 +12020,74 @@ window.rbAddSongTone = async function rbAddSongTone(filename, opts) {
     try { rbRenderToneHotkeysUI(); } catch (_) {}   // reads rbState.songTones — now has the new tone
 };
 
-// Small modal to name a new tone and optionally import a saved Studio tone as
-// its starting chain. Every "＋ Add tone" affordance opens this.
+// Small modal to name a new tone and choose a starting chain (empty / Default /
+// current / song tone / saved tone). Used from Studio "＋ New tone" and the
+// song bar "＋ Add tone".
 window.rbCloseAddToneDialog = function rbCloseAddToneDialog() {
     const o = document.getElementById('rb-addtone-overlay');
     if (o) o.remove();
 };
 window.rbOpenAddToneDialog = function rbOpenAddToneDialog(filename) {
-    filename = filename || (rbState.songTones && rbState.songTones.filename) || rbState.currentSongFile;
-    if (!filename) return;
+    rbOpenNewToneDialog({ filename, preferSong: true });
+};
+window.rbOpenNewToneDialog = function rbOpenNewToneDialog(opts) {
+    opts = opts || {};
     rbCloseAddToneDialog();
-    const seedOptions = ['<option value="">Default tone</option>']
-        .concat((rbState.savedTones || []).map(t => `<option value="${rbEsc(String(t.id))}">${rbEsc(t.name)}</option>`))
-        .join('');
+    // Use the LOADED song state — closing a song clears songTones but may leave
+    // currentSongFile set, which used to still default destination to Song tone.
+    const hasSong = !!(rbState.songTones && Array.isArray(rbState.songTones.tones));
+    const filename = hasSong
+        ? (opts.filename || rbState.songTones.filename || rbState.currentSongFile || '')
+        : '';
+    const songTones = hasSong ? rbState.songTones.tones : [];
+    const saved = rbState.savedTones || [];
+
+    const seedGroups = [];
+    seedGroups.push('<option value="empty">Empty — start from scratch</option>');
+    seedGroups.push('<option value="default">Default tone</option>');
+    seedGroups.push('<option value="current">Current Studio chain</option>');
+    if (songTones.length) {
+        seedGroups.push('<optgroup label="This song">');
+        songTones.forEach((t, i) => {
+            seedGroups.push(`<option value="song:${i}">${rbEsc(t.name || ('Tone ' + (i + 1)))}</option>`);
+        });
+        seedGroups.push('</optgroup>');
+    }
+    if (saved.length) {
+        seedGroups.push('<optgroup label="Saved studio tones">');
+        saved.forEach((t) => {
+            seedGroups.push(`<option value="saved:${rbEsc(String(t.id))}">${rbEsc(t.name)}</option>`);
+        });
+        seedGroups.push('</optgroup>');
+    }
+
+    const destBlock = hasSong ? `
+            <label style="display:block;color:#9fb0cc;font-size:12px;margin-bottom:6px;">Create as</label>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
+                <label style="display:flex;align-items:center;gap:8px;color:#e5e7eb;font-size:13px;cursor:pointer;">
+                    <input type="radio" name="rb-newtone-dest" value="song" ${opts.preferSong !== false ? 'checked' : ''}> Song tone (this song)
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;color:#e5e7eb;font-size:13px;cursor:pointer;">
+                    <input type="radio" name="rb-newtone-dest" value="studio" ${opts.preferSong === false ? 'checked' : ''}> Studio tone (saved library)
+                </label>
+            </div>` : `
+            <p style="color:#9fb0cc;font-size:12px;margin:0 0 14px;">No song loaded — creates a saved Studio tone.</p>`;
+
     const overlay = document.createElement('div');
     overlay.id = 'rb-addtone-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;';
     overlay.onclick = (e) => { if (e.target === overlay) rbCloseAddToneDialog(); };
     overlay.innerHTML = `
-        <div style="width:340px;max-width:92vw;background:#12161e;border:1px solid rgba(120,165,225,.28);border-radius:14px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.6);">
-            <h3 style="color:#fff;font-weight:600;font-size:15px;margin:0 0 12px;">Add a tone to this song</h3>
+        <div style="width:380px;max-width:92vw;background:#12161e;border:1px solid rgba(120,165,225,.28);border-radius:14px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.6);">
+            <h3 style="color:#fff;font-weight:600;font-size:15px;margin:0 0 12px;">New tone</h3>
             <label style="display:block;color:#9fb0cc;font-size:12px;margin-bottom:4px;">Name</label>
             <input id="rb-addtone-name" type="text" placeholder="e.g. Solo, Clean verse…" maxlength="60"
                    style="width:100%;box-sizing:border-box;background:#0b0f16;border:1px solid #33405a;border-radius:9px;padding:8px 10px;color:#e5e7eb;font-size:13px;margin-bottom:12px;">
             <label style="display:block;color:#9fb0cc;font-size:12px;margin-bottom:4px;">Start from</label>
-            <select id="rb-addtone-seed" style="width:100%;box-sizing:border-box;background:#0b0f16;border:1px solid #33405a;border-radius:9px;padding:8px 10px;color:#e5e7eb;font-size:13px;margin-bottom:16px;">
-                ${seedOptions}
+            <select id="rb-addtone-seed" style="width:100%;box-sizing:border-box;background:#0b0f16;border:1px solid #33405a;border-radius:9px;padding:8px 10px;color:#e5e7eb;font-size:13px;margin-bottom:14px;">
+                ${seedGroups.join('')}
             </select>
+            ${destBlock}
             <div style="display:flex;justify-content:flex-end;gap:8px;">
                 <button id="rb-addtone-cancel" style="padding:7px 14px;border-radius:9px;border:1px solid #33405a;background:none;color:#c9d3e5;font-size:13px;cursor:pointer;">Cancel</button>
                 <button id="rb-addtone-create" style="padding:7px 14px;border-radius:9px;border:1px solid rgba(110,200,150,.5);background:rgba(16,120,80,.35);color:#c9f7de;font-size:13px;cursor:pointer;">Create</button>
@@ -10261,10 +12096,32 @@ window.rbOpenAddToneDialog = function rbOpenAddToneDialog(filename) {
     document.body.appendChild(overlay);
     const nameEl = overlay.querySelector('#rb-addtone-name');
     const create = async () => {
-        const name = nameEl.value;
-        const seedSavedId = overlay.querySelector('#rb-addtone-seed').value;
+        const name = (nameEl.value || '').trim();
+        if (!name) { nameEl.focus(); return; }
+        const seedVal = overlay.querySelector('#rb-addtone-seed').value;
+        const destEl = overlay.querySelector('input[name="rb-newtone-dest"]:checked');
+        const dest = hasSong ? ((destEl && destEl.value) || 'song') : 'studio';
+        const seedOpts = {};
+        if (seedVal === 'empty') seedOpts.seedEmpty = true;
+        else if (seedVal === 'default') seedOpts.seed = 'default';
+        else if (seedVal === 'current') seedOpts.seed = 'current';
+        else if (seedVal.startsWith('song:')) seedOpts.seedSongIdx = seedVal.slice(5);
+        else if (seedVal.startsWith('saved:')) seedOpts.seedSavedId = seedVal.slice(6);
         rbCloseAddToneDialog();
-        await rbAddSongTone(filename, { name, seedSavedId });
+        try {
+            if (dest === 'song' && hasSong) {
+                await rbAddSongTone(filename, { name, ...seedOpts });
+                const st = rbState.songTones;
+                if (st && Array.isArray(st.tones) && st.tones.length) {
+                    try { rbStudioShowSongTone(st.tones.length - 1); } catch (_) {}
+                }
+            } else {
+                const pieces = await rbResolveToneSeed(seedOpts);
+                await rbStudioCommitSaveTone(name, rbStudioChainToPayload(pieces));
+            }
+        } catch (e) {
+            alert('Create failed: ' + (e && e.message ? e.message : e));
+        }
     };
     overlay.querySelector('#rb-addtone-create').onclick = create;
     overlay.querySelector('#rb-addtone-cancel').onclick = rbCloseAddToneDialog;
@@ -14368,7 +16225,9 @@ async function rbUploadFile(input, toneIdx, pIdx) {
 async function rbPersistTone(toneIdx, filename) {
     const tone = rbState.songTones.tones[toneIdx];
     filename = filename || rbState.currentSongFile;
-    const pieces = tone.chain.map(p => {
+    // Keep _previewStaging pieces so temp pedalboard previews are audible in
+    // order; Discard / leave-Studio strips them before a "real" save sticks.
+    const pieces = tone.chain.filter(p => !!p).map(p => {
         // Full-chain NAM replaces the whole tone with one baked capture.
         const fc = rbFullChainPayloadPiece(p);
         if (fc) return fc;
@@ -15603,15 +17462,13 @@ window.rbStudioOpenCabRoom = function rbStudioOpenCabRoom() {
     let bar = document.getElementById('rb-studio-focus-bar');
     if (!bar) { bar = document.createElement('div'); bar.id = 'rb-studio-focus-bar'; room.appendChild(bar); }
     bar.className = 'rb-focus-bar2';
-    bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseCabFocus()">← Room</button>
+    bar.innerHTML = `<button class="rb-focus-back" onclick="rbStudioCloseCabFocus()">← Back to rig</button>
         <div class="rb-focus-actions" style="min-width:80px"></div>`;
     requestAnimationFrame(() => bar.classList.add('rb-focus-open'));
-    // The cab room (drawn cab + mic) is the main editor — sits centre-left so
-    // the catalog rail can pin to the right (mirrors amp: gear left, rail right).
+    // Cab room editor sits under the component browser (browser is z:80).
     const ov = document.createElement('div');
     ov.id = 'rb-studio-cabroom';
-    // Centred between the two rails (mic left, catalog right), no panel chrome —
-    // the cab fills the middle like a focused amp/pedal.
+    // Centred cab face; mic rail may dock left. Browser covers while picking.
     ov.style.cssText = 'position:absolute; left:50%; top:8%; transform:translateX(-50%); z-index:60; width:min(46%,520px); height:74%;';
     ov.innerHTML = `<div class="relative" style="height:100%"><div id="rb-cabroom-studio" style="height:100%"></div></div>`;
     room.appendChild(ov);
@@ -15984,9 +17841,12 @@ async function rbStudioFastCabSwapInPlace(base) {
             fit.innerHTML = `${rbCabArtFor(base)}${rbCabSpeakerSilhouettesSvg(entry, a)}`
                 + `<div class="rb-cabmic ${st.angle_deg ? 'rb-cabmic-ang' : ''}" id="rb-cabmic-studio" style="left:${_fx * 100}%;top:${_fy * 100}%">${rbMicOnCabHtml(st.mic, 'studio')}</div>`;
         }
-        // Reflect the pick in the catalog rail (highlight) without rebuilding it.
-        document.querySelectorAll('#rb-swap-rail .rb-swap-item').forEach(el => {
-            try { el.classList.toggle('rb-swap-current', el.dataset && el.dataset.gear && el.dataset.gear.startsWith(base)); } catch (_) {}
+        // Reflect the pick in the catalog browser (highlight) without rebuilding it.
+        document.querySelectorAll('#rb-swap-panel .rb-swap-item').forEach(el => {
+            try {
+                const g = el.dataset && el.dataset.gear;
+                el.classList.toggle('rb-swap-current', !!(g && (g === base || g.startsWith(base + '_'))));
+            } catch (_) {}
         });
         // Also refresh the main Studio-room cab face(s) BEHIND the overlay, so
         // leaving the Cab Room shows the NEW cab at once — this fast path skips
@@ -16244,6 +18104,10 @@ const RB_GEAR_BROWSER_CATS = [
 ];
 
 if (!rbState.gearBrowserCategory) rbState.gearBrowserCategory = 'amp';
+try {
+    const _savedInst = localStorage.getItem('rig_builder.instrumentFx');
+    if (_savedInst === 'guitar' || _savedInst === 'bass' || _savedInst === 'all') rbState.gearInstrumentFilter = _savedInst;
+} catch (_) {}
 if (!rbState.gearInstrumentFilter) rbState.gearInstrumentFilter = 'all';
 
 async function rbLoadCatalog() {
@@ -16451,9 +18315,8 @@ function rbSelectGearCategory(cat) {
 }
 
 function rbSelectGearInstrument(value) {
-    rbState.gearInstrumentFilter = value || 'all';
     rbState.gearSelected = null;
-    rbApplyGearFilters();
+    rbStudioSetInstrument(value || 'all');
 }
 
 function rbSelectGear(rsGear) {
@@ -17233,7 +19096,11 @@ function rbClearGearFilters() {
     if (s) s.value = '';
     if (u) u.checked = false;
     if (i) i.value = 'all';
+    try { localStorage.setItem('rig_builder.instrumentFx', 'all'); } catch (_) {}
     rbState.gearInstrumentFilter = 'all';
+    document.querySelectorAll('[data-rb-inst]').forEach(btn => {
+        btn.classList.toggle('on', btn.getAttribute('data-rb-inst') === 'all');
+    });
     rbState.gearBrowserCategory = 'amp';
     rbState.gearSelected = null;
     rbState.gearCollapsedCats.clear();
